@@ -1623,13 +1623,24 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
         return data;
       };
 
+      // Backups can come from a different Firebase project (e.g. an old environment).
+      // teacherUid values inside the backup belong to that old project's teacher account
+      // and won't match this project's teacher, so lessonBank/schedule/groups queries
+      // (which filter by teacherUid) would silently show nothing. Rewrite teacherUid to
+      // the current logged-in teacher on import so everything shows up correctly.
+      const convertTeacherItem = (itemData) => {
+        const converted = convertItem(itemData);
+        converted.teacherUid = user.uid;
+        return converted;
+      };
+
       // Build a flat list of { path, id, data } write operations across all collections.
       const ops = [];
-      data.lessonBank?.forEach(item => { if(item.id) ops.push({ path: `${publicDataPath}/lessonBank`, id: item.id, data: convertItem(item) }); });
+      data.lessonBank?.forEach(item => { if(item.id) ops.push({ path: `${publicDataPath}/lessonBank`, id: item.id, data: convertTeacherItem(item) }); });
       data.students?.forEach(item => { if(item.id) ops.push({ path: `${publicDataPath}/students`, id: item.id, data: convertItem(item) }); });
-      data.schedule?.forEach(item => { if(item.id) ops.push({ path: `${publicDataPath}/teacherSchedule`, id: item.id, data: convertItem(item) }); });
+      data.schedule?.forEach(item => { if(item.id) ops.push({ path: `${publicDataPath}/teacherSchedule`, id: item.id, data: convertTeacherItem(item) }); });
       data.sessions?.forEach(item => { if(item.id) ops.push({ path: `${publicDataPath}/studySessions`, id: item.id, data: convertItem(item) }); });
-      data.groups?.forEach(item => { if(item.id) ops.push({ path: `${publicDataPath}/studentGroups`, id: item.id, data: convertItem(item) }); });
+      data.groups?.forEach(item => { if(item.id) ops.push({ path: `${publicDataPath}/studentGroups`, id: item.id, data: convertTeacherItem(item) }); });
       data.starAnnouncements?.forEach(item => { if(item.id) ops.push({ path: `${publicDataPath}/starAnnouncements`, id: item.id, data: convertItem(item) }); });
 
       // Firestore allows at most 500 operations per batch. Chunk into groups of 400
