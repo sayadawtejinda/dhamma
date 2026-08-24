@@ -1622,23 +1622,39 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
         });
         return data;
       };
-      
-      const batch = writeBatch(db);
-      
-      data.lessonBank?.forEach(item => { if(item.id) batch.set(doc(db, `${publicDataPath}/lessonBank`, item.id), convertItem(item)); });
-      data.students?.forEach(item => { if(item.id) batch.set(doc(db, `${publicDataPath}/students`, item.id), convertItem(item)); });
-      data.schedule?.forEach(item => { if(item.id) batch.set(doc(db, `${publicDataPath}/teacherSchedule`, item.id), convertItem(item)); });
-      data.sessions?.forEach(item => { if(item.id) batch.set(doc(db, `${publicDataPath}/studySessions`, item.id), convertItem(item)); });
-      data.groups?.forEach(item => { if(item.id) batch.set(doc(db, `${publicDataPath}/studentGroups`, item.id), convertItem(item)); });
-      data.starAnnouncements?.forEach(item => { if(item.id) batch.set(doc(db, `${publicDataPath}/starAnnouncements`, item.id), convertItem(item)); });
-      
-      await batch.commit();
+
+      // Build a flat list of { path, id, data } write operations across all collections.
+      const ops = [];
+      data.lessonBank?.forEach(item => { if(item.id) ops.push({ path: `${publicDataPath}/lessonBank`, id: item.id, data: convertItem(item) }); });
+      data.students?.forEach(item => { if(item.id) ops.push({ path: `${publicDataPath}/students`, id: item.id, data: convertItem(item) }); });
+      data.schedule?.forEach(item => { if(item.id) ops.push({ path: `${publicDataPath}/teacherSchedule`, id: item.id, data: convertItem(item) }); });
+      data.sessions?.forEach(item => { if(item.id) ops.push({ path: `${publicDataPath}/studySessions`, id: item.id, data: convertItem(item) }); });
+      data.groups?.forEach(item => { if(item.id) ops.push({ path: `${publicDataPath}/studentGroups`, id: item.id, data: convertItem(item) }); });
+      data.starAnnouncements?.forEach(item => { if(item.id) ops.push({ path: `${publicDataPath}/starAnnouncements`, id: item.id, data: convertItem(item) }); });
+
+      // Firestore allows at most 500 operations per batch. Chunk into groups of 400
+      // (safety margin) and commit each chunk sequentially so large backups don't
+      // silently fail as a single oversized batch.
+      const CHUNK_SIZE = 400;
+      const totalOps = ops.length;
+      let written = 0;
+      for (let i = 0; i < ops.length; i += CHUNK_SIZE) {
+        const chunk = ops.slice(i, i + CHUNK_SIZE);
+        const batch = writeBatch(db);
+        chunk.forEach(op => {
+          batch.set(doc(db, op.path, op.id), op.data);
+        });
+        await batch.commit();
+        written += chunk.length;
+      }
 
       if (!teacherConfigData?.hasDeclinedTrophyReset) {
          setShowTrophyResetPrompt(true);
       }
+      alert(`Import complete. ${written} of ${totalOps} records restored.`);
     } catch (error) {
       console.error("Error importing data:", error);
+      alert(`Import failed: ${error.message || error}. Please check the browser console (F12) for details, or contact support.`);
     }
     setImportFileContent(null);
     setIsImporting(false);
