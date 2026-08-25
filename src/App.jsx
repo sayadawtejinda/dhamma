@@ -2417,14 +2417,26 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                 )}
                 <div className="space-y-4 max-h-[600px] overflow-y-auto">
                   {recentSessions.length === 0 ? <p className="text-gray-500 font-medium">No feedback yet.</p> :
-                    recentSessions.map(session => {
+                                        recentSessions.map(session => {
                       const student = students.find(s => s.id === session.studentUid);
+                      const lesson = lessonBank.find(l => l.title === session.lessonTitle);
+                      const lessonKey = lesson ? sanitizeKey(lesson.title) : null;
+                      const completedUnit = (student && lessonKey) ? (student.completedUnits?.[lessonKey] || 0) : 0;
+                      const showNowFinished = typeof session.completedUnit === 'number' && session.completedUnit > 0 && session.completedUnit < completedUnit;
                       return (
                         <div key={session.id} className="bg-white p-4 rounded-lg border border-gray-200">
                           <p className="font-semibold text-gray-900">{session.lessonTitle}</p>
                           <p className="text-sm font-medium text-indigo-700">Student: {student ? student.name : 'Unknown'}</p>
                           <p className="text-sm text-gray-600">Completed: {formatTimestamp(session.endTime)}</p>
                           <p className="text-sm text-gray-600">Duration: {getDuration(session.startTime, session.endTime)}</p>
+                          {lesson && lesson.unitCount > 0 && completedUnit > 0 && (
+                            <p className="text-sm font-bold text-indigo-700 mt-1">
+                              {student ? student.name : 'Student'} completed up to {lesson.unitLabel || 'Chapter'} {completedUnit} / {lesson.unitCount}.
+                              {showNowFinished && (
+                                <> Now finished {lesson.unitLabel || 'Chapter'} {session.completedUnit}.</>
+                              )}
+                            </p>
+                          )}
                           <div className="mt-2 p-3 bg-white rounded-lg border">
                             <p className="text-sm font-semibold">Feedback:</p>
                             <p className="text-sm text-gray-700 mb-1">{session.feedbackNotes || 'N/A'}</p>
@@ -3624,10 +3636,10 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
   ? (lesson.unitCount > 0 ? `Start ${lesson.unitLabel || 'Chapter'} ${nextUnitNumber}` : 'Start Lesson')
   : (lesson.unitCount > 0 ? `Continue ${lesson.unitLabel || 'Chapter'} ${nextUnitNumber}` : 'Continue Lesson');
 
-              const recentAutoSession = mySessions
-                .filter(s => s.lessonTitle === lesson.title && s.endTime && s.feedbackNotes && s.feedbackNotes.startsWith('Automatically submitted'))
+                            const recentCompletedSession = mySessions
+                .filter(s => s.lessonTitle === lesson.title && s.endTime)
                 .sort((a, b) => b.endTime.toDate() - a.endTime.toDate())[0];
-              const canRedoReport = recentAutoSession && (nowTick - recentAutoSession.endTime.toDate().getTime()) < 60 * 60 * 1000;
+              const canRedoReport = recentCompletedSession && (nowTick - recentCompletedSession.endTime.toDate().getTime()) < 60 * 60 * 1000;
 
               return (
                 <div key={lesson.id} ref={index === 0 ? firstLessonRef : null} className={`${divBg} ${divBorder} border p-4 rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center`}>
