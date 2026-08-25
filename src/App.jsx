@@ -3693,7 +3693,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                     </button>
                     {canRedoReport && !activeSession && (
                       <button
-                        onClick={() => handleOpenRedoReport(recentAutoSession)}
+                        onClick={() => handleOpenRedoReport(recentCompletedSession)}
                         className="px-4 py-2 rounded-lg text-white text-sm font-semibold bg-red-500 hover:bg-red-600 shadow-md flex-shrink-0 w-full sm:w-auto"
                       >
                         Report
