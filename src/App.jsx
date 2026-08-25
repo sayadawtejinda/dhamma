@@ -2417,31 +2417,27 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                 )}
                 <div className="space-y-4 max-h-[600px] overflow-y-auto">
                   {recentSessions.length === 0 ? <p className="text-gray-500 font-medium">No feedback yet.</p> :
-                                        recentSessions.map(session => {
+                    recentSessions.map(session => {
                       const student = students.find(s => s.id === session.studentUid);
-                      const lesson = lessonBank.find(l => l.title === session.lessonTitle);
-                      const lessonKey = lesson ? sanitizeKey(lesson.title) : null;
-                      const completedUnit = (student && lessonKey) ? (student.completedUnits?.[lessonKey] || 0) : 0;
-                      const showNowFinished = typeof session.completedUnit === 'number' && session.completedUnit > 0 && session.completedUnit < completedUnit;
                       return (
                         <div key={session.id} className="bg-white p-4 rounded-lg border border-gray-200">
                           <p className="font-semibold text-gray-900">{session.lessonTitle}</p>
                           <p className="text-sm font-medium text-indigo-700">Student: {student ? student.name : 'Unknown'}</p>
                           <p className="text-sm text-gray-600">Completed: {formatTimestamp(session.endTime)}</p>
                           <p className="text-sm text-gray-600">Duration: {getDuration(session.startTime, session.endTime)}</p>
-                          {lesson && lesson.unitCount > 0 && completedUnit > 0 && (
-                            <p className="text-sm font-bold text-indigo-700 mt-1">
-                              {student ? student.name : 'Student'} completed up to {lesson.unitLabel || 'Chapter'} {completedUnit} / {lesson.unitCount}.
-                              {showNowFinished && (
-                                <> Now finished {lesson.unitLabel || 'Chapter'} {session.completedUnit}.</>
-                              )}
-                            </p>
-                          )}
                           <div className="mt-2 p-3 bg-white rounded-lg border">
                             <p className="text-sm font-semibold">Feedback:</p>
                             <p className="text-sm text-gray-700 mb-1">{session.feedbackNotes || 'N/A'}</p>
                             <p className="text-sm font-semibold mt-2">Score:</p>
                             <p className="text-sm text-gray-700">{session.score || 'N/A'}</p>
+                            {session.completedUnit && session.completedUnit > 0 ? (
+                              <p className="text-sm font-semibold text-indigo-600 mt-2">
+                                {student ? student.name : 'This student'} completed up to {session.lessonUnitLabel || 'Chapter'} {Math.max(session.previousCompletedUnit || 0, session.completedUnit)}{session.lessonUnitCount ? ` / ${session.lessonUnitCount}` : ''}.
+                                {session.completedUnit < (session.previousCompletedUnit || 0) && (
+                                  <> Now finished {session.lessonUnitLabel || 'Chapter'} {session.completedUnit}.</>
+                                )}
+                              </p>
+                            ) : null}
                             {session.awardedTrophies && session.awardedTrophies > 0 ? (
                               <p className="text-sm font-semibold text-yellow-600 mt-2">🏆 Trophies Awarded: {session.awardedTrophies}</p>
                             ) : null}
@@ -3043,6 +3039,12 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     const intervalId = setInterval(() => setElapsedTick(Date.now()), 1000);
     return () => clearInterval(intervalId);
   }, [activeSession, showFeedbackModal]);
+  useEffect(() => {
+    // Keeps nowTick fresh so the 1-hour "Report" (redo) button window
+    // expires on its own without requiring a manual page refresh.
+    const intervalId = setInterval(() => setNowTick(Date.now()), 30 * 1000);
+    return () => clearInterval(intervalId);
+  }, []);
 
   const attendanceSummary = useMemo(() => {
     const now = new Date();
@@ -3636,7 +3638,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
   ? (lesson.unitCount > 0 ? `Start ${lesson.unitLabel || 'Chapter'} ${nextUnitNumber}` : 'Start Lesson')
   : (lesson.unitCount > 0 ? `Continue ${lesson.unitLabel || 'Chapter'} ${nextUnitNumber}` : 'Continue Lesson');
 
-                            const recentCompletedSession = mySessions
+              const recentCompletedSession = mySessions
                 .filter(s => s.lessonTitle === lesson.title && s.endTime)
                 .sort((a, b) => b.endTime.toDate() - a.endTime.toDate())[0];
               const canRedoReport = recentCompletedSession && (nowTick - recentCompletedSession.endTime.toDate().getTime()) < 60 * 60 * 1000;
@@ -3654,7 +3656,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                     {lesson.details && <p className={`text-sm ${textPColor} font-medium mt-1`}>Lesson ID: {lesson.details}</p>}
                     {lesson.unitCount > 0 && completedUnitList > 0 && (
                       <p className="text-sm font-bold text-indigo-700 mt-1">
-                        You completed up to {lesson.unitLabel || 'Chapter'} {completedUnitList}.
+                        You completed up to {lesson.unitLabel || 'Chapter'} {completedUnitList}{lesson.unitCount > 0 ? ` / ${lesson.unitCount}` : ''}.
                         {showNowFinished && (
                           <>
                             <br />
