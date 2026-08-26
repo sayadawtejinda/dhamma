@@ -3143,7 +3143,10 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     setCompletedUnitInput(session.completedUnit ? String(session.completedUnit) : '');
     setTodayCompletedInput(session.completedUnit ? String(Math.max(0, session.completedUnit - prevUnit)) : '');
     setTrophyTapCount(0);
-    setFeedbackNotes(session.feedbackNotes && !session.feedbackNotes.startsWith('Automatically submitted') ? session.feedbackNotes : '');
+    const isPlaceholderNote = !session.feedbackNotes
+      || session.feedbackNotes.startsWith('Automatically submitted')
+      || session.feedbackNotes === 'Submitted without writing.';
+    setFeedbackNotes(isPlaceholderNote ? '' : session.feedbackNotes);
     setScore(session.score && session.score !== 'N/A' ? session.score : '');
     setShowFeedbackModal(true);
   };
@@ -3633,7 +3636,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
               const completedUnitList = Math.max(trackedCompletedUnit, derivedCompletedUnit);
               const nextUnitNumber = lesson.unitCount > 0 ? Math.min(lesson.unitCount, completedUnitList + 1) : completedUnitList + 1;
               const latestSessionForLesson = completedSessions.find(s => s.lessonTitle === lesson.title && typeof s.completedUnit === 'number' && s.completedUnit > 0);
-              const showNowFinished = latestSessionForLesson && latestSessionForLesson.completedUnit < completedUnitList;
+              const showNowFinished = !!latestSessionForLesson;
               const buttonText = isNew
   ? (lesson.unitCount > 0 ? `Start ${lesson.unitLabel || 'Chapter'} ${nextUnitNumber}` : 'Start Lesson')
   : (lesson.unitCount > 0 ? `Continue ${lesson.unitLabel || 'Chapter'} ${nextUnitNumber}` : 'Continue Lesson');
@@ -3654,9 +3657,9 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                     </div>
                     <p className={`text-sm ${textPColor}`}>Sent: {formatTimestamp(lesson.sentAt)}</p>
                     {lesson.details && <p className={`text-sm ${textPColor} font-medium mt-1`}>Lesson ID: {lesson.details}</p>}
-                    {lesson.unitCount > 0 && completedUnitList > 0 && (
+                    {lesson.unitCount > 0 && (completedUnitList > 0 || showNowFinished) && (
                       <p className="text-sm font-bold text-indigo-700 mt-1">
-                        You completed up to {lesson.unitLabel || 'Chapter'} {completedUnitList}{lesson.unitCount > 0 ? ` / ${lesson.unitCount}` : ''}.
+                        You completed up to {lesson.unitLabel || 'Chapter'} {Math.max(completedUnitList, latestSessionForLesson?.completedUnit || 0)}{lesson.unitCount > 0 ? ` / ${lesson.unitCount}` : ''}.
                         {showNowFinished && (
                           <>
                             <br />
