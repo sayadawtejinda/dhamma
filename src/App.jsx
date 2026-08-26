@@ -3671,7 +3671,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                         You completed up to {lesson.unitLabel || 'Chapter'} {Math.max(completedUnitList, latestSessionForLesson?.completedUnit || 0)}{lesson.unitCount > 0 ? ` / ${lesson.unitCount}` : ''}.
                         {showNowFinished && (
                           <>
-                            <br />
+                            
                             Now you finished {lesson.unitLabel || 'Chapter'} {latestSessionForLesson.completedUnit}.
                           </>
                         )}
