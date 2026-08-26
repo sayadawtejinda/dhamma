@@ -209,11 +209,12 @@ function StudentAttendanceModal({ isOpen, onClose, student }) {
   useEffect(() => {
     if (isOpen && student?.id) {
       setLoading(true);
-      const q = query(sessionsCollection, where("studentUid", "==", student.id), where("endTime", "!=", null));
+      const q = query(sessionsCollection, where("studentUid", "==", student.id));
       const unsubscribe = onSnapshot(q, (snapshot) => {
         let totalMinutes = 0; 
         const history = snapshot.docs
           .map(doc => doc.data())
+          .filter(s => s.endTime && s.startTime)
           .sort((a, b) => a.startTime.toDate() - b.startTime.toDate()); 
         
         history.forEach(entry => {
@@ -2853,9 +2854,13 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
 
   useEffect(() => {
     if (!studentUid) return;
-    const q = query(lessonsCollection, where("studentUid", "==", studentUid), where("status", "in", ["pending", "started"]));
+    // Query by studentUid only and filter status on the client, so no
+    // composite index is required (see note on the sessions query above).
+    const q = query(lessonsCollection, where("studentUid", "==", studentUid));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const lessonList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const lessonList = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter(l => l.status === 'pending' || l.status === 'started');
       
       if (lessonList.length > prevLessonCount.current && prevLessonCount.current > 0) {
         playSound(1); 
@@ -2893,15 +2898,19 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
 
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    // NOTE: Combining an equality filter (studentUid) with a range filter
+    // (startTime >=) in Firestore requires a composite index. To avoid the
+    // query failing silently when that index is missing, we query by
+    // studentUid only and filter the date range on the client.
     const recentQ = query(
       sessionsCollection,
-      where("studentUid", "==", studentUid),
-      where("startTime", ">=", Timestamp.fromDate(thirtyDaysAgo))
+      where("studentUid", "==", studentUid)
     );
     const unsubRecent = onSnapshot(recentQ, (snapshot) => {
+      const cutoff = thirtyDaysAgo.getTime();
       const sessionList = snapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
-        .filter(s => s.endTime !== null);
+        .filter(s => s.endTime && s.startTime && typeof s.startTime.toDate === 'function' && s.startTime.toDate().getTime() >= cutoff);
       setMySessions(sessionList);
     }, (error) => {
       console.error("Error fetching recent sessions:", error);
