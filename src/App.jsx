@@ -3633,7 +3633,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
               const completedUnitList = Math.max(trackedCompletedUnit, derivedCompletedUnit);
               const nextUnitNumber = lesson.unitCount > 0 ? Math.min(lesson.unitCount, completedUnitList + 1) : completedUnitList + 1;
               const latestSessionForLesson = completedSessions.find(s => s.lessonTitle === lesson.title && typeof s.completedUnit === 'number' && s.completedUnit > 0);
-              const showNowFinished = latestSessionForLesson && latestSessionForLesson.completedUnit < completedUnitList;
+              const showNowFinished = latestSessionForLesson && latestSessionForLesson.completedUnit <= completedUnitList;
               const buttonText = isNew
   ? (lesson.unitCount > 0 ? `Start ${lesson.unitLabel || 'Chapter'} ${nextUnitNumber}` : 'Start Lesson')
   : (lesson.unitCount > 0 ? `Continue ${lesson.unitLabel || 'Chapter'} ${nextUnitNumber}` : 'Continue Lesson');
