@@ -3668,11 +3668,11 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                     {lesson.details && <p className={`text-sm ${textPColor} font-medium mt-1`}>Lesson ID: {lesson.details}</p>}
                     {lesson.unitCount > 0 && (completedUnitList > 0 || showNowFinished) && (
                       <p className="text-sm font-bold text-indigo-700 mt-1">
-                        You completed up to {lesson.unitLabel || 'Chapter'} {Math.max(completedUnitList, latestSessionForLesson?.completedUnit || 0)}{lesson.unitCount > 0 ? ` / ${lesson.unitCount}` : ''}.
+                        You completed up to {lesson.unitLabel || 'Chapter'} {Math.max(completedUnitList, latestSessionForLesson?.completedUnit || 0)}{lesson.unitCount > 0 ? ` / ${lesson.unitCount}` : ''}. 
                         {showNowFinished && (
-                          <>
+                          <> 
                             
-                            Now you finished {lesson.unitLabel || 'Chapter'} {latestSessionForLesson.completedUnit}.
+                          Now you finished {lesson.unitLabel || 'Chapter'} {latestSessionForLesson.completedUnit}.
                           </>
                         )}
                       </p>
