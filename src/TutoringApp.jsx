@@ -115,6 +115,17 @@ const openLink = (url) => {
   window.open(correctedUrl, '_blank', 'noopener,noreferrer');
 };
 
+// Safely extracts just the Class ID from a "smartstudy://" link. Tolerant of
+// the old "smartstudy://CLASSID/LESSONID" format (used briefly before the
+// picker was simplified to class-only) as well as the current
+// "smartstudy://CLASSID" format — always returns just the class ID with no
+// slash, so it's safe to use directly as a Firestore document ID segment.
+const extractSmartStudyClassId = (link) => {
+  if (!link || typeof link !== 'string' || !link.startsWith('smartstudy://')) return null;
+  const rest = link.replace('smartstudy://', '');
+  return rest.split('/')[0] || null;
+};
+
 const sanitizeKey = (key) => {
   if (!key || typeof key !== 'string') return 'unknown_lesson';
   return key.replace(/[\.\#\$\/\[\]]/g, '_');
@@ -2150,7 +2161,7 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                     {lesson.link && lesson.link.startsWith('smartstudy://') && (
                       <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
                         <p className="text-blue-800 font-bold mb-1">Smart Study Progress:</p>
-                        <SmartStudyProgressBadge classId={lesson.link.replace('smartstudy://', '')} studentName={student.name} />
+                        <SmartStudyProgressBadge classId={extractSmartStudyClassId(lesson.link)} studentName={student.name} />
                       </div>
                     )}
                     {lesson.unitCount > 0 && (
@@ -2633,7 +2644,7 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                 </button>
               </div>
               {newBankLessonLink.startsWith('smartstudy://') && (() => {
-                const cId = newBankLessonLink.replace('smartstudy://', '');
+                const cId = extractSmartStudyClassId(newBankLessonLink);
                 return (
                   <div className="mt-2 flex items-center justify-between bg-sky-50 border border-sky-200 rounded-lg px-3 py-2">
                     <span className="text-sm text-sky-800 font-semibold">📚 Smart Study app → Class {cId}</span>
@@ -2798,28 +2809,40 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
 function SmartStudyProgressBadge({ classId, studentName, compact }) {
   const [completedCount, setCompletedCount] = useState(null);
   const [totalCount, setTotalCount] = useState(null);
+  const [badError, setBadError] = useState(false);
 
   useEffect(() => {
     if (!classId || !studentName) return;
-    const q = query(
-      collection(db, 'artifacts', appId, 'public', 'data', 'quizCompletions'),
-      where('classId', '==', classId),
-      where('studentName', '==', studentName)
-    );
-    const unsub = onSnapshot(q, (snap) => {
-      const distinctLessonIds = new Set(snap.docs.map(d => d.data().lessonId));
-      setCompletedCount(distinctLessonIds.size);
-    }, (err) => console.error('Error loading Smart Study completions:', err));
-    return () => unsub();
+    if (classId.includes('/')) { setBadError(true); return; } // defensive: malformed classId should never reach here now, but never let it crash
+    try {
+      const q = query(
+        collection(db, 'artifacts', appId, 'public', 'data', 'quizCompletions'),
+        where('classId', '==', classId),
+        where('studentName', '==', studentName)
+      );
+      const unsub = onSnapshot(q, (snap) => {
+        const distinctLessonIds = new Set(snap.docs.map(d => d.data().lessonId));
+        setCompletedCount(distinctLessonIds.size);
+      }, (err) => console.error('Error loading Smart Study completions:', err));
+      return () => unsub();
+    } catch (err) {
+      console.error('Error setting up Smart Study progress listener:', err);
+      setBadError(true);
+    }
   }, [classId, studentName]);
 
   useEffect(() => {
-    if (!classId) return;
-    getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'classes', classId))
-      .then(snap => setTotalCount(snap.exists() ? (snap.data().lessons || []).length : null))
-      .catch(() => setTotalCount(null));
+    if (!classId || classId.includes('/')) return;
+    try {
+      getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'classes', classId))
+        .then(snap => setTotalCount(snap.exists() ? (snap.data().lessons || []).length : null))
+        .catch(() => setTotalCount(null));
+    } catch (err) {
+      console.error('Error fetching Smart Study class:', err);
+    }
   }, [classId]);
 
+  if (badError) return null;
   if (completedCount === null) return <p className="text-xs text-gray-500 mt-1">Checking Smart Study progress...</p>;
 
   return (
@@ -3246,7 +3269,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
 
   const handleStartLesson = async (lesson) => {
     if (lesson.link && lesson.link.startsWith('smartstudy://')) {
-      const classId = lesson.link.replace('smartstudy://', '');
+      const classId = extractSmartStudyClassId(lesson.link);
       if (onOpenSmartStudy) {
         onOpenSmartStudy({
           mode: 'student',
@@ -3855,7 +3878,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                     <p className={`text-sm ${textPColor}`}>Sent: {formatTimestamp(lesson.sentAt)}</p>
                     {lesson.details && <p className={`text-sm ${textPColor} font-medium mt-1`}>Lesson ID: {lesson.details}</p>}
                     {lesson.link && lesson.link.startsWith('smartstudy://') && (
-                      <SmartStudyProgressBadge classId={lesson.link.replace('smartstudy://', '')} studentName={studentProfile?.name} />
+                      <SmartStudyProgressBadge classId={extractSmartStudyClassId(lesson.link)} studentName={studentProfile?.name} />
                     )}
                     {lesson.unitCount > 0 && (completedUnitList > 0 || showNowFinished) && (
                       <p className="text-sm font-bold text-indigo-700 mt-1">
