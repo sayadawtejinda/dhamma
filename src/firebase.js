@@ -10,8 +10,11 @@ export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 
+// 'debug' floods the console with internal Firestore protocol messages,
+// making it very hard to see real errors or our own diagnostic logs.
+// 'error' only shows things that actually matter.
 try {
-  setLogLevel('debug');
+  setLogLevel('error');
 } catch (e) {
   console.error('Firebase setLogLevel failed:', e);
 }
