@@ -2147,6 +2147,12 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
 
               return (
                   <div className="mb-4 space-y-3">
+                    {lesson.link && lesson.link.startsWith('smartstudy://') && (
+                      <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                        <p className="text-blue-800 font-bold mb-1">Smart Study Progress:</p>
+                        <SmartStudyProgressBadge classId={lesson.link.replace('smartstudy://', '')} studentName={student.name} />
+                      </div>
+                    )}
                     {lesson.unitCount > 0 && (
                       <div className="p-4 bg-indigo-50 rounded-lg border border-indigo-200">
                         <p className="text-indigo-800 font-bold mb-1">Student Progress on this Lesson:</p>
@@ -2783,6 +2789,44 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
         </div>
       )}
     </div>
+  );
+}
+
+// Auto-tracks how many Smart Study lessons a student has completed for a
+// given class, directly from Smart Study's own quizCompletions collection —
+// no manual "Report" needed for smartstudy:// linked lessons.
+function SmartStudyProgressBadge({ classId, studentName, compact }) {
+  const [completedCount, setCompletedCount] = useState(null);
+  const [totalCount, setTotalCount] = useState(null);
+
+  useEffect(() => {
+    if (!classId || !studentName) return;
+    const q = query(
+      collection(db, 'artifacts', appId, 'public', 'data', 'quizCompletions'),
+      where('classId', '==', classId),
+      where('studentName', '==', studentName)
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      const distinctLessonIds = new Set(snap.docs.map(d => d.data().lessonId));
+      setCompletedCount(distinctLessonIds.size);
+    }, (err) => console.error('Error loading Smart Study completions:', err));
+    return () => unsub();
+  }, [classId, studentName]);
+
+  useEffect(() => {
+    if (!classId) return;
+    getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'classes', classId))
+      .then(snap => setTotalCount(snap.exists() ? (snap.data().lessons || []).length : null))
+      .catch(() => setTotalCount(null));
+  }, [classId]);
+
+  if (completedCount === null) return <p className="text-xs text-gray-500 mt-1">Checking Smart Study progress...</p>;
+
+  return (
+    <p className={`font-bold text-blue-700 mt-1 ${compact ? 'text-xs' : 'text-sm'}`}>
+      ✅ Completed {completedCount}{totalCount !== null ? ` / ${totalCount}` : ''} lesson{completedCount === 1 ? '' : 's'} in Smart Study
+      {!compact && <span className="block text-xs font-normal text-blue-500">(auto-tracked — no report needed)</span>}
+    </p>
   );
 }
 
@@ -3810,6 +3854,9 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                     </div>
                     <p className={`text-sm ${textPColor}`}>Sent: {formatTimestamp(lesson.sentAt)}</p>
                     {lesson.details && <p className={`text-sm ${textPColor} font-medium mt-1`}>Lesson ID: {lesson.details}</p>}
+                    {lesson.link && lesson.link.startsWith('smartstudy://') && (
+                      <SmartStudyProgressBadge classId={lesson.link.replace('smartstudy://', '')} studentName={studentProfile?.name} />
+                    )}
                     {lesson.unitCount > 0 && (completedUnitList > 0 || showNowFinished) && (
                       <p className="text-sm font-bold text-indigo-700 mt-1">
                         You completed up to {lesson.unitLabel || 'Chapter'} {Math.max(completedUnitList, latestSessionForLesson?.completedUnit || 0)}{lesson.unitCount > 0 ? ` / ${lesson.unitCount}` : ''}.
@@ -4409,12 +4456,19 @@ function YearAttendanceBoard({ role, targetStudentUid }) {
   }, []);
 
   useEffect(() => {
-    const unsub = onSnapshot(teacherScheduleCollection, (snap) => setTeacherSchedule(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+    // Only this year's schedule is needed here — a single range filter on one
+    // field doesn't require a composite index, and cuts the download size a
+    // lot for classes with years of history.
+    const startOfYear = new Date(new Date().getFullYear(), 0, 1);
+    const q = query(teacherScheduleCollection, where("startTime", ">=", Timestamp.fromDate(startOfYear)));
+    const unsub = onSnapshot(q, (snap) => setTeacherSchedule(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
     return () => unsub();
   }, []);
 
   useEffect(() => {
-    const unsub = onSnapshot(sessionsCollection, (snap) => setSessions(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+    const startOfYear = new Date(new Date().getFullYear(), 0, 1);
+    const q = query(sessionsCollection, where("startTime", ">=", Timestamp.fromDate(startOfYear)));
+    const unsub = onSnapshot(q, (snap) => setSessions(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
     return () => unsub();
   }, []);
 
@@ -4547,12 +4601,16 @@ function TrophyBoard({ role, targetStudentUid, studentProfile }) {
   }, []);
 
   useEffect(() => {
-    const unsub = onSnapshot(teacherScheduleCollection, (snap) => setTeacherSchedule(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+    const startOfYear = new Date(new Date().getFullYear(), 0, 1);
+    const q = query(teacherScheduleCollection, where("startTime", ">=", Timestamp.fromDate(startOfYear)));
+    const unsub = onSnapshot(q, (snap) => setTeacherSchedule(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
     return () => unsub();
   }, []);
 
   useEffect(() => {
-    const unsub = onSnapshot(sessionsCollection, (snap) => setSessions(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+    const startOfYear = new Date(new Date().getFullYear(), 0, 1);
+    const q = query(sessionsCollection, where("startTime", ">=", Timestamp.fromDate(startOfYear)));
+    const unsub = onSnapshot(q, (snap) => setSessions(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
     return () => unsub();
   }, []);
 
@@ -4799,7 +4857,7 @@ export default function TutoringApp({ onOpenSmartStudy }) {
   const [studentProfile, setStudentProfile] = useState(null);
   const [teacherUid, setTeacherUid] = useState(null); 
   const [targetStudentUid, setTargetStudentUid] = useState(null); 
-  const [view, setView] = useState('today'); 
+  const [view, setView] = useState('login'); 
   const [announcements, setAnnouncements] = useState([]); 
   const [starAnnouncements, setStarAnnouncements] = useState([]);
   const [dismissedStars, setDismissedStars] = useState(() => {

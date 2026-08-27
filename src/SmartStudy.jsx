@@ -1806,21 +1806,27 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
               // Build a flat list of { ref, data } write operations, then commit
               // in chunks of 400 (Firestore's 500-per-batch limit) so a single
               // oversized restore or one bad record can't abort the whole thing.
+              // IMPORTANT: every record's classId is force-overridden to the
+              // CURRENT class being imported into — the backup file carries
+              // whatever classId it was originally exported under, which is
+              // often different from the class the teacher is restoring into.
+              // Without this override, restored records silently never match
+              // any query (all filtered by classId) and appear "missing".
               const ops = [];
               (uploadedData.scores || []).forEach(score => {
                 const ref = score.id ? doc(getScoresCollectionRef(), score.id) : doc(getScoresCollectionRef());
-                ops.push({ ref, data: score });
+                ops.push({ ref, data: { ...score, classId } });
               });
               (uploadedData.roster || []).forEach(student => {
                 if (!student.studentName) return;
-                ops.push({ ref: getRosterDocRef(classId, student.studentName), data: student });
+                ops.push({ ref: getRosterDocRef(classId, student.studentName), data: { ...student, classId } });
               });
               (uploadedData.reflections || []).forEach(ref_ => {
                 const ref = ref_.id ? doc(getReflectionsCollectionRef(), ref_.id) : doc(getReflectionsCollectionRef());
-                ops.push({ ref, data: ref_ });
+                ops.push({ ref, data: { ...ref_, classId } });
               });
               Object.entries(uploadedData.hearts || {}).forEach(([studentName, data]) => {
-                ops.push({ ref: getStudentHeartDocRef(classId, studentName), data: { classId, studentName, ...data } });
+                ops.push({ ref: getStudentHeartDocRef(classId, studentName), data: { ...data, classId, studentName } });
               });
               (uploadedData.completions || []).forEach(c => {
                 ops.push({ ref: doc(getCompletionsCollectionRef()), data: { classId, studentName: c.studentName, lessonId: c.lessonId, timestamp: c.timestamp } });
