@@ -523,6 +523,8 @@ const TeacherDashboard = React.memo(({
   const [linkPickerFor, setLinkPickerFor] = useState(null);
   const [tutoringStudents, setTutoringStudents] = useState(null);
   const [linkSearch, setLinkSearch] = useState('');
+  const [showBulkMatch, setShowBulkMatch] = useState(false);
+  const [bulkLinking, setBulkLinking] = useState(false);
 
   const loadTutoringStudents = async () => {
     if (tutoringStudents !== null) return;
@@ -552,6 +554,25 @@ const TeacherDashboard = React.memo(({
     if (aIsWarning && !bIsWarning) return -1; if (!aIsWarning && bIsWarning) return 1;
     return a.joinedAt - b.joinedAt; 
   });
+
+  const bulkNameMatches = (tutoringStudents || [])
+    ? sortedApprovedStudents
+        .filter(s => !s.linkedToTutoring)
+        .map(s => {
+          const match = (tutoringStudents || []).find(ts => ts.name.trim().toLowerCase() === s.studentName.trim().toLowerCase());
+          return match ? { oldName: s.studentName, newName: match.name } : null;
+        })
+        .filter(Boolean)
+    : [];
+
+  const handleLinkAllMatches = async () => {
+    setBulkLinking(true);
+    for (const m of bulkNameMatches) {
+      try { await onLinkStudent(m.oldName, m.newName); } catch (e) { console.error('Bulk link error:', e); }
+    }
+    setBulkLinking(false);
+    setShowBulkMatch(false);
+  };
 
   return (
     <div className="p-8 space-y-8 h-full flex flex-col">
@@ -699,7 +720,38 @@ const TeacherDashboard = React.memo(({
             )}
           </Card>
           <Card className="w-full lg:w-1/3 overflow-y-auto border-4 border-green-200">
-            <h2 className="text-3xl font-bold text-green-600 mb-6 flex items-center"><UserCheck className="w-6 h-6 mr-3" />Approved Students</h2>
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-3xl font-bold text-green-600 flex items-center"><UserCheck className="w-6 h-6 mr-3" />Approved Students</h2>
+              <button
+                onClick={() => { setShowBulkMatch(v => !v); if (!showBulkMatch) loadTutoringStudents(); }}
+                className="text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-full border border-indigo-200"
+              >
+                🔍 Find Matching Names
+              </button>
+            </div>
+            {showBulkMatch && (
+              <div className="mb-6 p-4 bg-indigo-50 border border-indigo-200 rounded-xl">
+                {tutoringStudents === null ? (
+                  <p className="text-sm text-gray-500">Loading Tutoring students...</p>
+                ) : bulkNameMatches.length === 0 ? (
+                  <p className="text-sm text-gray-600">No matching names found among unlinked students.</p>
+                ) : (
+                  <>
+                    <p className="text-sm font-semibold text-indigo-800 mb-2">Found {bulkNameMatches.length} matching name{bulkNameMatches.length === 1 ? '' : 's'}:</p>
+                    <div className="space-y-1 mb-3 max-h-40 overflow-y-auto">
+                      {bulkNameMatches.map((m, i) => (
+                        <p key={i} className="text-sm text-gray-700">
+                          <span className="font-semibold">{m.oldName}</span> → <span className="font-semibold text-indigo-700">{m.newName}</span>
+                        </p>
+                      ))}
+                    </div>
+                    <Button onClick={handleLinkAllMatches} disabled={bulkLinking} className="bg-indigo-600 hover:bg-indigo-700 shadow-indigo-300 px-4 py-2 text-sm">
+                      {bulkLinking ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : `🔗 Link All (${bulkNameMatches.length})`}
+                    </Button>
+                  </>
+                )}
+              </div>
+            )}
             {sortedApprovedStudents.length === 0 ? (<p className="text-gray-500 italic">No approved students.</p>) : (
               <div className="space-y-3">
                 {sortedApprovedStudents.map((student) => {
@@ -2035,24 +2087,21 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
     try {
       const classDocSnap = await getDoc(getClassDocRef(targetId));
       if (!classDocSnap.exists()) { setModal({ message: 'This class does not exist.', type: 'error', visible: true }); return; }
-      const isAutoApprove = classDocSnap.data().autoApprove === true;
       const rosterDocRef = getRosterDocRef(targetId, enteredName);
       const docSnap = await getDoc(rosterDocRef);
       if (docSnap.exists()) {
         const data = docSnap.data();
-        if (data.status === 'approved') {
-          setClassId(targetId); setUserName(enteredName); setView('studentLesson');
-          updateDoc(rosterDocRef, { lastSeen: Date.now() });
-        } else if (data.status === 'pending' && isAutoApprove) {
-          await updateDoc(rosterDocRef, { status: 'approved', lastSeen: Date.now() });
-          setClassId(targetId); setUserName(enteredName); setView('studentLesson');
+        if (data.status !== 'approved' || !data.linkedToTutoring) {
+          // Coming in through Tutoring means this student is already
+          // verified — always approve and mark as linked immediately.
+          await updateDoc(rosterDocRef, { status: 'approved', linkedToTutoring: true, lastSeen: Date.now() });
         } else {
-          setClassId(targetId); setUserName(enteredName); setView('studentWaiting');
           updateDoc(rosterDocRef, { lastSeen: Date.now() });
         }
+        setClassId(targetId); setUserName(enteredName); setView('studentLesson');
       } else {
-        await setDoc(rosterDocRef, { classId: targetId, studentName: enteredName, studentAgeLevel: studentAgeLevel, status: isAutoApprove ? 'approved' : 'pending', joinedAt: Date.now(), lastSeen: Date.now() });
-        setClassId(targetId); setUserName(enteredName); setView(isAutoApprove ? 'studentLesson' : 'studentWaiting');
+        await setDoc(rosterDocRef, { classId: targetId, studentName: enteredName, studentAgeLevel: studentAgeLevel, status: 'approved', linkedToTutoring: true, joinedAt: Date.now(), lastSeen: Date.now() });
+        setClassId(targetId); setUserName(enteredName); setView('studentLesson');
       }
     } catch (error) {
       console.error('Error entering class:', error);

@@ -5088,12 +5088,12 @@ export default function TutoringApp({ onOpenSmartStudy }) {
         }
 
         setRole(null); 
-        setView('today'); 
+        if (view !== 'login') setView('today'); 
       }
     } catch (error) { 
       console.error("Error checking user role:", error);
       setRole(null);
-      setView('today'); 
+      if (view !== 'login') setView('today'); 
     }
   };
 
