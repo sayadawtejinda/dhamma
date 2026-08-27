@@ -2881,7 +2881,6 @@ function SmartStudyProgressBadge({ classId, studentName, compact, autoTrophy }) 
   return (
     <p className={`font-bold text-blue-700 mt-1 ${compact ? 'text-xs' : 'text-sm'}`}>
       ✅ Completed {completedCount}{totalCount !== null ? ` / ${totalCount}` : ''} lesson{completedCount === 1 ? '' : 's'} in Smart Study
-      {!compact && <span className="block text-xs font-normal text-blue-500">(auto-tracked — no report needed)</span>}
     </p>
   );
 }
@@ -3322,6 +3321,25 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       if (lesson.status === 'pending') {
         try { await updateDoc(doc(db, `${publicDataPath}/lessons`, lesson.id), { status: 'started' }); } catch (e) {}
       }
+      // Create a study session for the Smart Study lesson too — so the
+      // student sees the Report button, and study time is captured for
+      // Student Feedback Reports. Progress/trophies are still auto-tracked
+      // via SmartStudyProgressBadge; no manual chapter count is needed.
+      try {
+        const activeCheckQuery = query(sessionsCollection, where("studentUid", "==", studentUid), where("endTime", "==", null));
+        const activeCheckSnap = await getDocs(activeCheckQuery);
+        if (activeCheckSnap.empty) {
+          await addDoc(sessionsCollection, {
+            studentUid: studentUid, lessonId: lesson.id, lessonTitle: lesson.title, lessonLink: lesson.link,
+            lessonTrophyLimit: lesson.trophyLimit || 0,
+            lessonUnitCount: lesson.unitCount || 0,
+            lessonUnitLabel: lesson.unitLabel || 'Chapter',
+            startTime: serverTimestamp(), endTime: null, feedbackNotes: null, score: null, awardedTrophies: 0
+          });
+        }
+      } catch (e) {
+        console.error("Error starting Smart Study session:", e);
+      }
       return;
     }
 
@@ -3610,7 +3628,10 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                 className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="e.g., I finished Algebra Chapter 1."
               ></textarea>
             </div>
-            <div className="mb-6 grid grid-cols-3 gap-2 sm:gap-3">
+            {(() => {
+              const isSmartStudySession = feedbackSession?.lessonLink && feedbackSession.lessonLink.startsWith('smartstudy://');
+              return (
+            <div className={`mb-6 grid ${isSmartStudySession ? 'grid-cols-1' : 'grid-cols-3'} gap-2 sm:gap-3`}>
               <div>
                 <label className="block text-gray-700 mb-2 text-sm">Score</label>
                 <input
@@ -3619,6 +3640,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                 />
               </div>
 
+              {!isSmartStudySession && (
               <div>
                 <label className="block text-gray-700 mb-2 text-sm">Today, completed</label>
                 <input
@@ -3629,7 +3651,9 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                   className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
+              )}
 
+              {!isSmartStudySession && (
               <div className="relative">
                 <label className="block text-gray-700 mb-2 text-sm">
                   {feedbackSession?.lessonUnitLabel || 'Chapter'} No.
@@ -3672,8 +3696,9 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                   )}
                 </div>
               </div>
+              )}
 
-              {parseInt(completedUnitInput) > 0 && (
+              {!isSmartStudySession && parseInt(completedUnitInput) > 0 && (
                 <p className="col-span-3 text-sm font-semibold text-emerald-700 mt-1">
                   {parseInt(completedUnitInput) < previousHighestUnitForModal ? (
                     <>
@@ -3685,6 +3710,8 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                 </p>
               )}
             </div>
+              );
+            })()}
             <div className="flex justify-between items-center flex-wrap gap-3">
               <div className="text-sm font-semibold">
                 {maxAvailableForModal > 0 && (
@@ -3926,15 +3953,28 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                       />
                     )}
                     {lesson.unitCount > 0 && (completedUnitList > 0 || showNowFinished) && (
-                      <p className="text-sm font-bold text-indigo-700 mt-1">
-                        You completed up to {lesson.unitLabel || 'Chapter'} {Math.max(completedUnitList, latestSessionForLesson?.completedUnit || 0)}{lesson.unitCount > 0 ? ` / ${lesson.unitCount}` : ''}.
-                        {showNowFinished && (
-                          <>
-                            <br />
+                      lesson.link && lesson.link.startsWith('smartstudy://') ? (
+                        // For Smart Study lessons the "✅ Completed X / Y lesson in Smart Study"
+                        // badge above already covers overall progress, so we skip the
+                        // "You completed up to Chapter X / Y" line here. We still show
+                        // "Now you finished Chapter X." for the redo (revisiting an old
+                        // lesson) case, matching the previous behavior.
+                        showNowFinished && (
+                          <p className="text-sm font-bold text-indigo-700 mt-1">
                             Now you finished {lesson.unitLabel || 'Chapter'} {latestSessionForLesson.completedUnit}.
-                          </>
-                        )}
-                      </p>
+                          </p>
+                        )
+                      ) : (
+                        <p className="text-sm font-bold text-indigo-700 mt-1">
+                          You completed up to {lesson.unitLabel || 'Chapter'} {Math.max(completedUnitList, latestSessionForLesson?.completedUnit || 0)}{lesson.unitCount > 0 ? ` / ${lesson.unitCount}` : ''}.
+                          {showNowFinished && (
+                            <>
+                              <br />
+                              Now you finished {lesson.unitLabel || 'Chapter'} {latestSessionForLesson.completedUnit}.
+                            </>
+                          )}
+                        </p>
+                      )
                     )}
                     {maxAvailableList > 0 && lesson.unitCount > 0 && (
                       <p className={`text-xs ${textPColor} italic mt-1`}>
