@@ -102,6 +102,12 @@ const openLink = (url) => {
     console.warn("No URL provided to openLink.");
     return;
   }
+  if (url.startsWith('smartstudy://')) {
+    const [, rest] = url.split('smartstudy://');
+    const [classId, lessonId] = rest.split('/');
+    alert(`This lesson lives inside the "Lessons & Quiz" tab.\n\nGo to: Lessons & Quiz → Student → Class ID "${classId}" → find lesson ${lessonId}.\n\n(Automatic jump-to-lesson is coming in a future update.)`);
+    return;
+  }
   let correctedUrl = url;
   if (!url.startsWith('http://') && !url.startsWith('https://')) {
     correctedUrl = `https://${url}`;
@@ -651,6 +657,11 @@ function TeacherDashboard({ user }) {
   const [newBankLessonTrophyLimit, setNewBankLessonTrophyLimit] = useState(0);
   const [newBankLessonUnitLabel, setNewBankLessonUnitLabel] = useState('Chapter');
   const [newBankLessonUnitCount, setNewBankLessonUnitCount] = useState(0);
+  const [showLinkPicker, setShowLinkPicker] = useState(false);
+  const [smartStudyClasses, setSmartStudyClasses] = useState(null); // null = not loaded yet
+  const [pickerActiveClassId, setPickerActiveClassId] = useState(null);
+  const [pickerActiveLessons, setPickerActiveLessons] = useState(null);
+  const [pickerLoading, setPickerLoading] = useState(false);
   const [editingLessonId, setEditingLessonId] = useState(null); 
   const [mergeSourceId, setMergeSourceId] = useState(null); 
   const [mergeTargetId, setMergeTargetId] = useState(null); 
@@ -825,6 +836,47 @@ function TeacherDashboard({ user }) {
       setNewBankLessonUnitCount(0);
     }
   }, [editingLessonId, lessonBank]);
+
+  // --- Smart Study lesson picker (reads directly from Firestore; only loads
+  // the specific class's lessons when the teacher opens it, so this never
+  // loads all Smart Study data up front). ---
+  const loadSmartStudyClassList = async () => {
+    if (smartStudyClasses !== null) return; // already loaded/cached
+    setPickerLoading(true);
+    try {
+      const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'classes'));
+      const list = snap.docs.map(d => ({ classId: d.id, lessonCount: (d.data().lessons || []).length }));
+      list.sort((a, b) => a.classId.localeCompare(b.classId));
+      setSmartStudyClasses(list);
+    } catch (err) {
+      console.error('Error loading Smart Study classes:', err);
+      setSmartStudyClasses([]);
+    }
+    setPickerLoading(false);
+  };
+
+  const openSmartStudyClass = async (classId) => {
+    setPickerActiveClassId(classId);
+    setPickerActiveLessons(null);
+    setPickerLoading(true);
+    try {
+      const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'classes', classId));
+      const lessons = snap.exists() ? (snap.data().lessons || []) : [];
+      setPickerActiveLessons(lessons);
+    } catch (err) {
+      console.error('Error loading Smart Study lessons:', err);
+      setPickerActiveLessons([]);
+    }
+    setPickerLoading(false);
+  };
+
+  const chooseSmartStudyLesson = (classId, lesson) => {
+    setNewBankLessonLink(`smartstudy://${classId}/${lesson.lessonId}`);
+    if (!newBankLessonTitle.trim()) setNewBankLessonTitle(lesson.title || `${classId} ${lesson.lessonId}`);
+    setShowLinkPicker(false);
+    setPickerActiveClassId(null);
+    setPickerActiveLessons(null);
+  };
 
   const handleSaveLessonToBank = async (e) => {
     e.preventDefault();
@@ -2556,9 +2608,97 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
               <label className="block text-gray-700 mb-2">Lesson Title</label>
               <input type="text" value={newBankLessonTitle} onChange={(e) => setNewBankLessonTitle(e.target.value)} placeholder="e.g., Algebra Chapter 1" className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
             </div>
-            <div className="mb-4">
+            <div className="mb-4 relative">
               <label className="block text-gray-700 mb-2">Lesson Link</label>
-              <input type="url" value={newBankLessonLink} onChange={(e) => setNewBankLessonLink(e.target.value)} placeholder="https://..." className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newBankLessonLink.startsWith('smartstudy://') ? '' : newBankLessonLink}
+                  onChange={(e) => setNewBankLessonLink(e.target.value)}
+                  placeholder="https://..."
+                  disabled={newBankLessonLink.startsWith('smartstudy://')}
+                  className="flex-1 p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100"
+                />
+                <button
+                  type="button"
+                  onClick={() => { setShowLinkPicker(v => !v); if (!showLinkPicker) loadSmartStudyClassList(); }}
+                  className="px-4 py-3 rounded-lg bg-sky-600 text-white font-semibold hover:bg-sky-700 shadow-md flex-shrink-0"
+                  title="Choose a Smart Study lesson, or enter a link manually"
+                >
+                  🔗 ▾
+                </button>
+              </div>
+              {newBankLessonLink.startsWith('smartstudy://') && (() => {
+                const [, rest] = newBankLessonLink.split('smartstudy://');
+                const [cId, lId] = rest.split('/');
+                return (
+                  <div className="mt-2 flex items-center justify-between bg-sky-50 border border-sky-200 rounded-lg px-3 py-2">
+                    <span className="text-sm text-sky-800 font-semibold">📚 Smart Study: {cId} → {lId}</span>
+                    <button type="button" onClick={() => setNewBankLessonLink('')} className="text-xs text-red-600 hover:text-red-800 font-semibold">Clear</button>
+                  </div>
+                );
+              })()}
+
+              {showLinkPicker && (
+                <div className="absolute z-20 mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-xl p-3 max-h-96 overflow-y-auto">
+                  {pickerActiveClassId ? (
+                    <div>
+                      <button type="button" onClick={() => { setPickerActiveClassId(null); setPickerActiveLessons(null); }} className="text-sm text-indigo-600 font-semibold mb-3 hover:underline">
+                        ← Back to Class List
+                      </button>
+                      <p className="font-bold text-gray-800 mb-2">Lessons in {pickerActiveClassId}</p>
+                      {pickerLoading ? (
+                        <p className="text-gray-500 text-sm">Loading lessons...</p>
+                      ) : pickerActiveLessons && pickerActiveLessons.length > 0 ? (
+                        <div className="space-y-1">
+                          {pickerActiveLessons.map(lesson => (
+                            <button
+                              type="button"
+                              key={lesson.lessonId}
+                              onClick={() => chooseSmartStudyLesson(pickerActiveClassId, lesson)}
+                              className="w-full text-left p-2 rounded-lg hover:bg-sky-50 border border-transparent hover:border-sky-200"
+                            >
+                              <span className="font-semibold text-gray-800">{lesson.lessonId}:</span> <span className="text-gray-700">{lesson.title}</span>
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-gray-500 text-sm">No lessons in this class yet.</p>
+                      )}
+                    </div>
+                  ) : (
+                    <div>
+                      <button
+                        type="button"
+                        onClick={() => setShowLinkPicker(false)}
+                        className="w-full text-left p-2 rounded-lg hover:bg-gray-50 border border-gray-200 mb-2 font-semibold text-gray-700"
+                      >
+                        ✏️ Input link manually
+                      </button>
+                      <p className="text-xs text-gray-500 font-semibold mt-3 mb-1 uppercase">Or choose from Smart Study</p>
+                      {pickerLoading ? (
+                        <p className="text-gray-500 text-sm p-2">Loading classes...</p>
+                      ) : smartStudyClasses && smartStudyClasses.length > 0 ? (
+                        <div className="space-y-1">
+                          {smartStudyClasses.map(c => (
+                            <button
+                              type="button"
+                              key={c.classId}
+                              onClick={() => openSmartStudyClass(c.classId)}
+                              className="w-full text-left p-2 rounded-lg hover:bg-sky-50 border border-transparent hover:border-sky-200 flex justify-between items-center"
+                            >
+                              <span className="font-semibold text-gray-800">📚 {c.classId}</span>
+                              <span className="text-xs text-gray-500">{c.lessonCount} lesson{c.lessonCount === 1 ? '' : 's'}</span>
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-gray-500 text-sm p-2">No Smart Study classes found yet.</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             <div className="mb-4">
               <label className="block text-gray-700 mb-2">Details / Instructions</label>
@@ -3092,11 +3232,11 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     }
 
     let formattedUrl = lesson.link;
-    if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
+    if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://') && !formattedUrl.startsWith('smartstudy://')) {
       formattedUrl = `https://${formattedUrl}`;
     }
     openLink(formattedUrl);
-    setIsLessonOverlayOpen(true);
+    if (!formattedUrl.startsWith('smartstudy://')) setIsLessonOverlayOpen(true);
     
     try {
       await addDoc(sessionsCollection, {
@@ -3577,9 +3717,9 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
             <button 
               onClick={() => {
                 let url = activeSession.lessonLink;
-                if (!url.startsWith('http://') && !url.startsWith('https://')) url = `https://${url}`;
+                if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('smartstudy://')) url = `https://${url}`;
                 openLink(url);
-                setIsLessonOverlayOpen(true);
+                if (!url.startsWith('smartstudy://')) setIsLessonOverlayOpen(true);
               }} 
               disabled={!activeSession.lessonLink} 
               className="w-full sm:w-1/2 bg-blue-500 text-white p-4 rounded-lg font-bold hover:bg-blue-600 transition-transform transform hover:scale-105 shadow-md disabled:opacity-50"
