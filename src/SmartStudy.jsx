@@ -13,7 +13,8 @@ import {
   addDoc,
   deleteDoc,
   limit,
-  runTransaction
+  runTransaction,
+  writeBatch
 } from 'firebase/firestore';
 import { 
     BookOpen, Users, Award, Sparkles, Loader2, RefreshCw, 
@@ -516,9 +517,28 @@ const TeacherDashboard = React.memo(({
   heartCounts, setSelectedAgeLevel,
   classRoster, handleApproveStudent, handleDeleteStudent,
   autoApprove, handleToggleAutoApprove,
-  completionsList
+  completionsList, onLinkStudent
 }) => {
   const [activeTab, setActiveTab] = useState('lessons'); 
+  const [linkPickerFor, setLinkPickerFor] = useState(null);
+  const [tutoringStudents, setTutoringStudents] = useState(null);
+  const [linkSearch, setLinkSearch] = useState('');
+
+  const loadTutoringStudents = async () => {
+    if (tutoringStudents !== null) return;
+    try {
+      const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'students'));
+      const list = snap.docs
+        .map(d => ({ id: d.id, name: d.data().name, displayId: d.data().displayId, isActive: d.data().isActive }))
+        .filter(s => s.name && s.isActive === true);
+      list.sort((a, b) => a.name.localeCompare(b.name));
+      setTutoringStudents(list);
+    } catch (err) {
+      console.error('Error loading Tutoring students:', err);
+      setTutoringStudents([]);
+    }
+  };
+
   const pendingStudents = classRoster.filter(s => s.status === 'pending');
   const approvedStudentsWithIndex = classRoster
     .filter(s => s.status === 'approved')
@@ -686,33 +706,73 @@ const TeacherDashboard = React.memo(({
                   const timeSinceLastSeen = Date.now() - student.lastSeen;
                   const isOnline = timeSinceLastSeen < 180000;
                   const isWarning = timeSinceLastSeen >= 180000 && timeSinceLastSeen < 480000;
+                  const isPickerOpen = linkPickerFor === student.studentName;
+                  const filteredTutoringStudents = (tutoringStudents || []).filter(s => s.name.toLowerCase().includes(linkSearch.toLowerCase()));
                   return (
-                    <div key={student.studentName} className={`p-3 rounded-xl border flex justify-between items-center transition-colors ${isOnline ? 'bg-green-50 border-green-300' : isWarning ? 'bg-red-50 border-red-300' : 'bg-gray-50 border-gray-200 opacity-80'}`}>
-                      <div className="flex items-center space-x-4">
-                        <span className={`font-black text-2xl w-8 ${isOnline ? 'text-green-700' : isWarning ? 'text-red-700' : 'text-gray-500'}`}>{student.displayIndex}.</span>
-                        <div>
-                          <p className={`font-bold text-lg ${isOnline ? 'text-gray-800' : isWarning ? 'text-red-800' : 'text-gray-600'}`}>{student.studentName}</p>
-                          <div className="flex items-center mt-1">
-                            {isOnline ? (
-                              <>
-                                <span className="w-2.5 h-2.5 bg-green-500 rounded-full mr-2 animate-pulse"></span> 
-                                <span className="text-xs text-green-600 font-bold">Online</span>
-                                {student.currentLessonId && (<span className="ml-2 text-xs text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full border border-blue-200">Viewing: {student.currentLessonId}</span>)}
-                              </>
-                            ) : isWarning ? (
-                              <>
-                                <span className="w-2.5 h-2.5 bg-red-500 rounded-full mr-2 animate-pulse"></span> 
-                                <span className="text-xs text-red-600 font-bold">Inactive (Please warn student)</span>
-                              </>
-                            ) : (
-                              <>
-                                <span className="w-2.5 h-2.5 bg-gray-400 rounded-full mr-2"></span> <span className="text-xs text-gray-500">Offline</span>
-                              </>
-                            )}
+                    <div key={student.studentName} className={`p-3 rounded-xl border transition-colors ${isOnline ? 'bg-green-50 border-green-300' : isWarning ? 'bg-red-50 border-red-300' : 'bg-gray-50 border-gray-200 opacity-80'}`}>
+                      <div className="flex justify-between items-center">
+                        <div className="flex items-center space-x-4">
+                          <span className={`font-black text-2xl w-8 ${isOnline ? 'text-green-700' : isWarning ? 'text-red-700' : 'text-gray-500'}`}>{student.displayIndex}.</span>
+                          <div>
+                            <p className={`font-bold text-lg ${isOnline ? 'text-gray-800' : isWarning ? 'text-red-800' : 'text-gray-600'}`}>
+                              {student.studentName} {student.linkedToTutoring && <span className="text-xs font-semibold text-indigo-600 bg-indigo-100 px-2 py-0.5 rounded-full ml-1">🔗 Linked</span>}
+                            </p>
+                            <div className="flex items-center mt-1">
+                              {isOnline ? (
+                                <>
+                                  <span className="w-2.5 h-2.5 bg-green-500 rounded-full mr-2 animate-pulse"></span> 
+                                  <span className="text-xs text-green-600 font-bold">Online</span>
+                                  {student.currentLessonId && (<span className="ml-2 text-xs text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full border border-blue-200">Viewing: {student.currentLessonId}</span>)}
+                                </>
+                              ) : isWarning ? (
+                                <>
+                                  <span className="w-2.5 h-2.5 bg-red-500 rounded-full mr-2 animate-pulse"></span> 
+                                  <span className="text-xs text-red-600 font-bold">Inactive (Please warn student)</span>
+                                </>
+                              ) : (
+                                <>
+                                  <span className="w-2.5 h-2.5 bg-gray-400 rounded-full mr-2"></span> <span className="text-xs text-gray-500">Offline</span>
+                                </>
+                              )}
+                            </div>
                           </div>
                         </div>
+                        <div className="flex flex-col items-end gap-1">
+                          <Button onClick={() => handleDeleteStudent(student.studentName)} className="bg-red-500 hover:bg-red-600 px-3 py-1.5 text-xs shadow-none">Remove</Button>
+                          <button
+                            onClick={() => { setLinkSearch(''); setLinkPickerFor(isPickerOpen ? null : student.studentName); if (!isPickerOpen) loadTutoringStudents(); }}
+                            className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 hover:underline"
+                          >
+                            🔗 Link to Tutoring
+                          </button>
+                        </div>
                       </div>
-                      <Button onClick={() => handleDeleteStudent(student.studentName)} className="bg-red-500 hover:bg-red-600 px-3 py-1.5 text-xs shadow-none">Remove</Button>
+                      {isPickerOpen && (
+                        <div className="mt-3 p-3 bg-white rounded-lg border border-indigo-200">
+                          <input
+                            type="text" value={linkSearch} onChange={(e) => setLinkSearch(e.target.value)}
+                            placeholder="Search Tutoring students..."
+                            className="w-full p-2 mb-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                          />
+                          {tutoringStudents === null ? (
+                            <p className="text-sm text-gray-500 p-2">Loading students...</p>
+                          ) : filteredTutoringStudents.length === 0 ? (
+                            <p className="text-sm text-gray-500 p-2">No matching students found.</p>
+                          ) : (
+                            <div className="max-h-48 overflow-y-auto space-y-1">
+                              {filteredTutoringStudents.map(ts => (
+                                <button
+                                  key={ts.id}
+                                  onClick={() => { onLinkStudent && onLinkStudent(student.studentName, ts.name); setLinkPickerFor(null); }}
+                                  className="w-full text-left p-2 rounded-lg hover:bg-indigo-50 text-sm border border-transparent hover:border-indigo-200"
+                                >
+                                  <span className="font-semibold text-gray-800">{ts.name}</span> <span className="text-xs text-gray-500">({ts.displayId})</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -1670,6 +1730,53 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
     });
   };
 
+  // Links a Smart Study roster student's name to a Tutoring Dashboard student.
+  // Renames all of their records within THIS class (scores, quiz completions,
+  // reflections, hearts, roster) to the Tutoring name, so their identity is
+  // consistent everywhere from now on.
+  const handleLinkStudentToTutoring = useCallback(async (oldName, newName) => {
+    if (!classId || !oldName || !newName || oldName === newName) return;
+    setIsLoading(true);
+    try {
+      const renameInCollection = async (collectionRef) => {
+        const snap = await getDocs(query(collectionRef, where("classId", "==", classId), where("studentName", "==", oldName)));
+        if (snap.empty) return;
+        const docs = snap.docs;
+        for (let i = 0; i < docs.length; i += 400) {
+          const chunk = docs.slice(i, i + 400);
+          const batch = writeBatch(db);
+          chunk.forEach(d => batch.update(d.ref, { studentName: newName }));
+          await batch.commit();
+        }
+      };
+
+      await renameInCollection(getScoresCollectionRef());
+      await renameInCollection(getCompletionsCollectionRef());
+      await renameInCollection(getReflectionsCollectionRef());
+
+      const oldHeartRef = getStudentHeartDocRef(classId, oldName);
+      const oldHeartSnap = await getDoc(oldHeartRef);
+      if (oldHeartSnap.exists()) {
+        await setDoc(getStudentHeartDocRef(classId, newName), { ...oldHeartSnap.data(), classId, studentName: newName }, { merge: true });
+        await deleteDoc(oldHeartRef);
+      }
+
+      const oldRosterRef = getRosterDocRef(classId, oldName);
+      const oldRosterSnap = await getDoc(oldRosterRef);
+      if (oldRosterSnap.exists()) {
+        await setDoc(getRosterDocRef(classId, newName), { ...oldRosterSnap.data(), studentName: newName, linkedToTutoring: true }, { merge: true });
+        await deleteDoc(oldRosterRef);
+      }
+
+      setModal({ message: `Linked "${oldName}" → "${newName}". All their records in this class now use the Tutoring name.`, type: 'success', visible: true });
+    } catch (err) {
+      console.error('Error linking student:', err);
+      setModal({ message: `Linking failed: ${err.message}`, type: 'error', visible: true });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [classId]);
+
   const handleDownloadLessons = useCallback(() => {
     if (lessons.length === 0 && allScores.length === 0) { setModal({ message: "No data to download.", type: 'error', visible: true }); return; }
     const backupData = { classId: classId, timestamp: new Date().toISOString(), lessons: lessons, scores: allScores, reflections: allReflections, roster: classRoster, hearts: heartCounts, completions: completionsList };
@@ -1695,12 +1802,51 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
             try {
               const lessonsToUpload = Array.isArray(uploadedData) ? uploadedData : uploadedData.lessons;
               await updateDoc(getClassDocRef(classId), { lessons: lessonsToUpload || [] });
-              if (uploadedData.scores) { for (const score of uploadedData.scores) { if (score.id) await setDoc(doc(getScoresCollectionRef(), score.id), score); else await addDoc(getScoresCollectionRef(), score); } }
-              if (uploadedData.roster) { for (const student of uploadedData.roster) { await setDoc(getRosterDocRef(classId, student.studentName), student); } }
-              if (uploadedData.reflections) { for (const ref of uploadedData.reflections) { if (ref.id) await setDoc(doc(getReflectionsCollectionRef(), ref.id), ref); else await addDoc(getReflectionsCollectionRef(), ref); } }
-              if (uploadedData.hearts) { for (const [studentName, data] of Object.entries(uploadedData.hearts)) { await setDoc(getStudentHeartDocRef(classId, studentName), { classId, studentName, ...data }); } }
-              if (uploadedData.completions) { for (const c of uploadedData.completions) { await addDoc(getCompletionsCollectionRef(), { classId, studentName: c.studentName, lessonId: c.lessonId, timestamp: c.timestamp }); } }
-              setModal({ message: "Data restored successfully.", type: 'success', visible: true }); 
+
+              // Build a flat list of { ref, data } write operations, then commit
+              // in chunks of 400 (Firestore's 500-per-batch limit) so a single
+              // oversized restore or one bad record can't abort the whole thing.
+              const ops = [];
+              (uploadedData.scores || []).forEach(score => {
+                const ref = score.id ? doc(getScoresCollectionRef(), score.id) : doc(getScoresCollectionRef());
+                ops.push({ ref, data: score });
+              });
+              (uploadedData.roster || []).forEach(student => {
+                if (!student.studentName) return;
+                ops.push({ ref: getRosterDocRef(classId, student.studentName), data: student });
+              });
+              (uploadedData.reflections || []).forEach(ref_ => {
+                const ref = ref_.id ? doc(getReflectionsCollectionRef(), ref_.id) : doc(getReflectionsCollectionRef());
+                ops.push({ ref, data: ref_ });
+              });
+              Object.entries(uploadedData.hearts || {}).forEach(([studentName, data]) => {
+                ops.push({ ref: getStudentHeartDocRef(classId, studentName), data: { classId, studentName, ...data } });
+              });
+              (uploadedData.completions || []).forEach(c => {
+                ops.push({ ref: doc(getCompletionsCollectionRef()), data: { classId, studentName: c.studentName, lessonId: c.lessonId, timestamp: c.timestamp } });
+              });
+
+              const CHUNK_SIZE = 400;
+              let written = 0;
+              let failedChunks = 0;
+              for (let i = 0; i < ops.length; i += CHUNK_SIZE) {
+                const chunk = ops.slice(i, i + CHUNK_SIZE);
+                try {
+                  const batch = writeBatch(db);
+                  chunk.forEach(op => batch.set(op.ref, op.data));
+                  await batch.commit();
+                  written += chunk.length;
+                } catch (chunkErr) {
+                  console.error('Restore chunk failed:', chunkErr);
+                  failedChunks++;
+                }
+              }
+
+              if (failedChunks > 0) {
+                setModal({ message: `Restore finished with issues: ${written} of ${ops.length} records restored. ${failedChunks} batch(es) failed — check the browser console (F12) for details.`, type: 'error', visible: true });
+              } else {
+                setModal({ message: `Data restored successfully. ${written} of ${ops.length} records restored.`, type: 'success', visible: true }); 
+              }
             } catch (err) { setModal({ message: `Restore failed: ${err.message}`, type: 'error', visible: true }); }
             finally { setIsLoading(false); }
           },
@@ -2063,7 +2209,7 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
       case 'studentWaiting': return <StudentWaitingView handleSetView={handleSetView} userName={userName} isRejected={isRejected} />;
       case 'teacherDashboard':
         if (!classData) return <ClassCreateView classId={classId} handleTeacherCreateClass={handleTeacherCreateClass} isLoading={isLoading} handleSetView={handleSetView} />;
-        return <TeacherDashboard classId={classId} newLesson={newLesson} setNewLesson={setNewLesson} lessons={lessons} isLoading={isLoading} handleSaveLesson={handleSaveLesson} handleFormatLesson={handleFormatLesson} generateQuestions={generateQuestions} handleGenerateAllLevels={handleGenerateAllLevels} handleRegenerateLevel={handleRegenerateLevel} handleEditLesson={handleEditLesson} handleDeleteLesson={handleDeleteLesson} globalLeaderboardScores={globalLeaderboardScores} setSelectedName={setSelectedName} handleSetView={handleSetView} playClickSound={playClickSound} handleDownloadLessons={handleDownloadLessons} handleUploadLessons={handleUploadLessons} fileInputRef={fileInputRef} heartCounts={heartCounts} setSelectedAgeLevel={setSelectedAgeLevel} classRoster={classRoster} handleApproveStudent={handleApproveStudent} handleDeleteStudent={handleDeleteStudent} autoApprove={classData?.autoApprove || false} handleToggleAutoApprove={handleToggleAutoApprove} completionsList={completionsList} />;
+        return <TeacherDashboard classId={classId} newLesson={newLesson} setNewLesson={setNewLesson} lessons={lessons} isLoading={isLoading} handleSaveLesson={handleSaveLesson} handleFormatLesson={handleFormatLesson} generateQuestions={generateQuestions} handleGenerateAllLevels={handleGenerateAllLevels} handleRegenerateLevel={handleRegenerateLevel} handleEditLesson={handleEditLesson} handleDeleteLesson={handleDeleteLesson} globalLeaderboardScores={globalLeaderboardScores} setSelectedName={setSelectedName} handleSetView={handleSetView} playClickSound={playClickSound} handleDownloadLessons={handleDownloadLessons} handleUploadLessons={handleUploadLessons} fileInputRef={fileInputRef} heartCounts={heartCounts} setSelectedAgeLevel={setSelectedAgeLevel} classRoster={classRoster} handleApproveStudent={handleApproveStudent} handleDeleteStudent={handleDeleteStudent} autoApprove={classData?.autoApprove || false} handleToggleAutoApprove={handleToggleAutoApprove} completionsList={completionsList} onLinkStudent={handleLinkStudentToTutoring} />;
       case 'studentLesson':
         if (!classData) return <ClassErrorView classId={classId} handleSetView={handleSetView} />;
         return <StudentLessonView userName={userName} classId={classId} lessons={lessons} globalLeaderboardScores={globalLeaderboardScores} setSelectedName={setSelectedName} handleSetView={handleSetView} setActiveLessonId={setActiveLessonId} setSelectedLessonId={setSelectedLessonId} playClickSound={playClickSound} studentAgeLevel={studentAgeLevel} heartCounts={heartCounts} handleHeartClick={handleHeartClick} setSelectedAgeLevel={setSelectedAgeLevel} mySpendableCredits={mySpendableCredits} handleBuyAirplaneConfirmation={handleBuyAirplaneConfirmation} completionsList={completionsList} allScores={allScores} myTotalLessonsCompletedAllClasses={myTotalLessonsCompletedAllClasses} />;
