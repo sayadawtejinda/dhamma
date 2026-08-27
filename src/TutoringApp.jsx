@@ -2806,7 +2806,7 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
 // Auto-tracks how many Smart Study lessons a student has completed for a
 // given class, directly from Smart Study's own quizCompletions collection —
 // no manual "Report" needed for smartstudy:// linked lessons.
-function SmartStudyProgressBadge({ classId, studentName, compact }) {
+function SmartStudyProgressBadge({ classId, studentName, compact, autoTrophy }) {
   const [completedCount, setCompletedCount] = useState(null);
   const [totalCount, setTotalCount] = useState(null);
   const [badError, setBadError] = useState(false);
@@ -2841,6 +2841,39 @@ function SmartStudyProgressBadge({ classId, studentName, compact }) {
       console.error('Error fetching Smart Study class:', err);
     }
   }, [classId]);
+
+  // Auto-request trophies based on Smart Study completion count — no manual
+  // report needed. Only runs on the student side (autoTrophy prop supplied).
+  // Still goes through the teacher's normal Approve step, same as any other
+  // trophy request, for consistency and safety.
+  useEffect(() => {
+    if (!autoTrophy || completedCount === null) return;
+    const { studentUid, unitCount, trophyLimit, lessonKey, earnedSoFar, alreadyRequested, completedUnitsTracked } = autoTrophy;
+    if (!studentUid || !unitCount || !trophyLimit || alreadyRequested) return;
+    const effectiveUnit = Math.min(unitCount, completedCount);
+    if (effectiveUnit <= completedUnitsTracked && earnedSoFar >= trophyLimit) return;
+    const deservedSoFar = Math.min(trophyLimit, Math.floor((effectiveUnit * trophyLimit) / unitCount));
+    const newlyAvailable = Math.max(0, deservedSoFar - earnedSoFar);
+    if (newlyAvailable <= 0 && effectiveUnit <= completedUnitsTracked) return;
+    (async () => {
+      try {
+        const updateData = {};
+        if (effectiveUnit > completedUnitsTracked) updateData[`completedUnits.${lessonKey}`] = effectiveUnit;
+        if (newlyAvailable > 0) {
+          updateData.trophyRequested = true;
+          updateData.requestedTrophyAmount = newlyAvailable;
+          updateData.requestedTrophyLessonId = null;
+          updateData.requestedTrophyLessonTitle = `Smart Study: ${classId}`;
+          updateData.requestedTrophySessionId = null;
+        }
+        if (Object.keys(updateData).length > 0) {
+          await updateDoc(doc(db, `${publicDataPath}/students`, studentUid), updateData);
+        }
+      } catch (err) {
+        console.error('Error auto-requesting Smart Study trophy:', err);
+      }
+    })();
+  }, [autoTrophy, completedCount, classId]);
 
   if (badError) return null;
   if (completedCount === null) return <p className="text-xs text-gray-500 mt-1">Checking Smart Study progress...</p>;
@@ -3878,7 +3911,19 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                     <p className={`text-sm ${textPColor}`}>Sent: {formatTimestamp(lesson.sentAt)}</p>
                     {lesson.details && <p className={`text-sm ${textPColor} font-medium mt-1`}>Lesson ID: {lesson.details}</p>}
                     {lesson.link && lesson.link.startsWith('smartstudy://') && (
-                      <SmartStudyProgressBadge classId={extractSmartStudyClassId(lesson.link)} studentName={studentProfile?.name} />
+                      <SmartStudyProgressBadge
+                        classId={extractSmartStudyClassId(lesson.link)}
+                        studentName={studentProfile?.name}
+                        autoTrophy={{
+                          studentUid,
+                          unitCount: lesson.unitCount || 0,
+                          trophyLimit: lesson.trophyLimit || 0,
+                          lessonKey: lessonKeyList,
+                          earnedSoFar: previouslyEarnedList,
+                          completedUnitsTracked: trackedCompletedUnit,
+                          alreadyRequested: !!studentProfile?.trophyRequested
+                        }}
+                      />
                     )}
                     {lesson.unitCount > 0 && (completedUnitList > 0 || showNowFinished) && (
                       <p className="text-sm font-bold text-indigo-700 mt-1">

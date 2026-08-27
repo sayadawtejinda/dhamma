@@ -1555,9 +1555,9 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
   
   useEffect(() => {
     if (!isAuthReady || !classId) return;
-    const q = query(getCompletionsCollectionRef(), limit(100));
+    const q = query(getCompletionsCollectionRef(), where("classId", "==", classId));
     const unsub = onSnapshot(q, (snapshot) => {
-      const list = snapshot.docs.map(doc => doc.data()).filter(d => d.classId === classId).sort((a, b) => b.timestamp - a.timestamp);
+      const list = snapshot.docs.map(doc => doc.data()).sort((a, b) => b.timestamp - a.timestamp).slice(0, 100);
       setCompletionsList(list);
       if (list.length > 0) {
         const newCompletion = list[0];
@@ -1789,43 +1789,68 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
   const handleLinkStudentToTutoring = useCallback(async (oldName, newName) => {
     if (!classId || !oldName || !newName || oldName === newName) return;
     setIsLoading(true);
-    try {
-      const renameInCollection = async (collectionRef) => {
+    const results = { scores: null, completions: null, reflections: null, hearts: null, roster: null };
+
+    const renameInCollection = async (collectionRef, label) => {
+      try {
         const snap = await getDocs(query(collectionRef, where("classId", "==", classId), where("studentName", "==", oldName)));
-        if (snap.empty) return;
+        if (snap.empty) { results[label] = 0; return; }
         const docs = snap.docs;
+        let done = 0;
         for (let i = 0; i < docs.length; i += 400) {
           const chunk = docs.slice(i, i + 400);
           const batch = writeBatch(db);
           chunk.forEach(d => batch.update(d.ref, { studentName: newName }));
           await batch.commit();
+          done += chunk.length;
         }
-      };
+        results[label] = done;
+      } catch (err) {
+        console.error(`Error renaming ${label}:`, err);
+        results[label] = `error: ${err.message}`;
+      }
+    };
 
-      await renameInCollection(getScoresCollectionRef());
-      await renameInCollection(getCompletionsCollectionRef());
-      await renameInCollection(getReflectionsCollectionRef());
+    await renameInCollection(getScoresCollectionRef(), 'scores');
+    await renameInCollection(getCompletionsCollectionRef(), 'completions');
+    await renameInCollection(getReflectionsCollectionRef(), 'reflections');
 
+    try {
       const oldHeartRef = getStudentHeartDocRef(classId, oldName);
       const oldHeartSnap = await getDoc(oldHeartRef);
       if (oldHeartSnap.exists()) {
         await setDoc(getStudentHeartDocRef(classId, newName), { ...oldHeartSnap.data(), classId, studentName: newName }, { merge: true });
         await deleteDoc(oldHeartRef);
       }
+      results.hearts = 'ok';
+    } catch (err) {
+      console.error('Error migrating hearts:', err);
+      results.hearts = `error: ${err.message}`;
+    }
 
+    try {
       const oldRosterRef = getRosterDocRef(classId, oldName);
       const oldRosterSnap = await getDoc(oldRosterRef);
       if (oldRosterSnap.exists()) {
         await setDoc(getRosterDocRef(classId, newName), { ...oldRosterSnap.data(), studentName: newName, linkedToTutoring: true }, { merge: true });
         await deleteDoc(oldRosterRef);
+      } else {
+        // No old roster doc found under this name — still mark/create the
+        // new-name roster entry as linked so the badge is accurate.
+        await setDoc(getRosterDocRef(classId, newName), { linkedToTutoring: true }, { merge: true });
       }
-
-      setModal({ message: `Linked "${oldName}" → "${newName}". All their records in this class now use the Tutoring name.`, type: 'success', visible: true });
+      results.roster = 'ok';
     } catch (err) {
-      console.error('Error linking student:', err);
-      setModal({ message: `Linking failed: ${err.message}`, type: 'error', visible: true });
-    } finally {
-      setIsLoading(false);
+      console.error('Error migrating roster:', err);
+      results.roster = `error: ${err.message}`;
+    }
+
+    setIsLoading(false);
+    const failed = Object.entries(results).filter(([, v]) => typeof v === 'string' && v.startsWith('error'));
+    if (failed.length > 0) {
+      setModal({ message: `Linked "${oldName}" → "${newName}" with some issues: ${failed.map(([k, v]) => `${k} (${v})`).join(', ')}. Check the browser console (F12) for details.`, type: 'error', visible: true });
+    } else {
+      setModal({ message: `Linked "${oldName}" → "${newName}". All their records in this class now use the Tutoring name.`, type: 'success', visible: true });
     }
   }, [classId]);
 
