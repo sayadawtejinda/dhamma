@@ -3,6 +3,7 @@ import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { 
   doc, 
   getDoc,
+  getDocs,
   setDoc, 
   onSnapshot, 
   collection, 
@@ -1148,6 +1149,44 @@ const AgeGroupLeaderboardView = React.memo(({ allScores, selectedAgeLevel, handl
   );
 });
 
+const AgeLevelPickerView = React.memo(({ studentAgeLevel, setStudentAgeLevel, onContinue }) => (
+  <Card className="max-w-md mx-auto mt-20 p-8 space-y-6">
+    <h2 className="text-3xl font-bold text-green-600 text-center">Select Your Age Level</h2>
+    <p className="text-sm text-gray-600 text-center bg-gray-100 p-2 rounded-lg">This is asked only once — it will be remembered next time.</p>
+    <Select label="Select Your Age Level" value={studentAgeLevel} onChange={(e) => setStudentAgeLevel(e.target.value)}>
+      <option value="">-- Select your level --</option>
+      {Object.entries(AGE_LEVELS).map(([key, label]) => (<option key={key} value={key}>{label}</option>))}
+    </Select>
+    <Button onClick={onContinue} className="w-full" disabled={!studentAgeLevel}>Continue</Button>
+  </Card>
+));
+
+const ClassPickerView = React.memo(({ classList, highlightClassId, onSelectClass, loading }) => (
+  <div className="p-4 md:p-8 max-w-2xl mx-auto mt-10">
+    <h2 className="text-3xl font-bold text-blue-700 mb-2 text-center">📚 Choose Your Class</h2>
+    {highlightClassId && (
+      <p className="text-gray-600 text-center mb-6">Your teacher assigned <span className="font-bold text-blue-700">{highlightClassId}</span> — tap it below to start.</p>
+    )}
+    {loading ? (
+      <div className="flex justify-center p-8"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div>
+    ) : classList.length === 0 ? (
+      <p className="text-gray-500 italic text-center">No classes found.</p>
+    ) : (
+      <div className="space-y-3">
+        {classList.map(c => (
+          <button
+            key={c}
+            onClick={() => onSelectClass(c)}
+            className={`w-full p-4 rounded-xl border-2 text-left font-bold text-lg transition-all ${c === highlightClassId ? 'bg-blue-100 border-blue-500 text-blue-800 shadow-lg scale-[1.02]' : 'bg-white border-gray-200 text-gray-700 hover:border-blue-300'}`}
+          >
+            {c === highlightClassId ? '⭐ ' : ''}{c}
+          </button>
+        ))}
+      </div>
+    )}
+  </div>
+));
+
 const HomeView = React.memo(({ handleSetView }) => (
   <div className="flex items-center justify-center h-full p-8">
     <Card className="max-w-lg w-full text-center p-10 space-y-8 bg-blue-50">
@@ -1310,7 +1349,7 @@ const QuizView = React.memo(({ quiz, questionNumber, totalQuestions, timerValue,
 
 // --- Core App Component ---
 
-const SmartStudyApp = () => {
+const SmartStudyApp = ({ entryRequest, onExit }) => {
   const [currentUserId, setCurrentUserId] = useState(null);
   const [userName, setUserName] = useState(() => localStorage.getItem('lastUserName') || '');
   const [studentAgeLevel, setStudentAgeLevel] = useState(''); 
@@ -1350,6 +1389,9 @@ const SmartStudyApp = () => {
   const [selectedName, setSelectedName] = useState(null);
   const [selectedLessonId, setSelectedLessonId] = useState(null);
   const [selectedAgeLevel, setSelectedAgeLevel] = useState(null); 
+  const [classPickerList, setClassPickerList] = useState([]);
+  const [classPickerLoading, setClassPickerLoading] = useState(false);
+  const lastHandledEntryRequestRef = useRef(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [currentQuizScore, setCurrentQuizScore] = useState(0);
   const [correctAnswerCount, setCorrectAnswerCount] = useState(0);
@@ -1787,6 +1829,85 @@ const SmartStudyApp = () => {
     } catch (error) { setModal({ message: `Failed: ${error.message}`, type: 'error', visible: true }); } finally { setIsLoading(false); }
   }, [classId, lessons]);
 
+  // --- Entry point coming from the Tutoring Dashboard ("Apps" menu for
+  // teachers, or "Start Lesson" for students). Skips the Home role-choice
+  // screen and, for students, skips manual name entry entirely. ---
+  useEffect(() => {
+    if (!entryRequest) return;
+    const signature = JSON.stringify({ mode: entryRequest.mode, classId: entryRequest.classId, studentName: entryRequest.studentName, ageLevel: entryRequest.ageLevel });
+    if (signature === lastHandledEntryRequestRef.current) return;
+    lastHandledEntryRequestRef.current = signature;
+
+    if (entryRequest.mode === 'teacher') {
+      setView('teacherLogin');
+    } else if (entryRequest.mode === 'student') {
+      setUserName(entryRequest.studentName || '');
+      if (entryRequest.ageLevel) {
+        setStudentAgeLevel(entryRequest.ageLevel);
+        setView('classPicker');
+      } else {
+        setView('ageLevelPicker');
+      }
+    }
+  }, [entryRequest]);
+
+  useEffect(() => {
+    if (view !== 'classPicker') return;
+    setClassPickerLoading(true);
+    getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'classes'))
+      .then(snap => {
+        let ids = snap.docs.map(d => d.id).sort();
+        if (entryRequest?.classId && !ids.includes(entryRequest.classId)) ids = [entryRequest.classId, ...ids];
+        setClassPickerList(ids);
+      })
+      .catch(err => {
+        console.error('Error loading class list:', err);
+        setClassPickerList(entryRequest?.classId ? [entryRequest.classId] : []);
+      })
+      .finally(() => setClassPickerLoading(false));
+  }, [view]);
+
+  const handleAgeLevelContinue = async () => {
+    if (!studentAgeLevel) return;
+    if (entryRequest?.onAgeLevelChosen) {
+      try { await entryRequest.onAgeLevelChosen(studentAgeLevel); } catch (e) { console.error('Error saving age level:', e); }
+    }
+    setView('classPicker');
+  };
+
+  const handleSelectClassFromPicker = useCallback(async (targetId) => {
+    const enteredName = (entryRequest?.studentName || userName || '').trim();
+    if (!enteredName || !studentAgeLevel) { setModal({ message: 'Missing name or age level.', type: 'error', visible: true }); return; }
+    localStorage.setItem('lastClassId', targetId);
+    localStorage.setItem('lastUserName', enteredName);
+    try {
+      const classDocSnap = await getDoc(getClassDocRef(targetId));
+      if (!classDocSnap.exists()) { setModal({ message: 'This class does not exist.', type: 'error', visible: true }); return; }
+      const isAutoApprove = classDocSnap.data().autoApprove === true;
+      const rosterDocRef = getRosterDocRef(targetId, enteredName);
+      const docSnap = await getDoc(rosterDocRef);
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.status === 'approved') {
+          setClassId(targetId); setUserName(enteredName); setView('studentLesson');
+          updateDoc(rosterDocRef, { lastSeen: Date.now() });
+        } else if (data.status === 'pending' && isAutoApprove) {
+          await updateDoc(rosterDocRef, { status: 'approved', lastSeen: Date.now() });
+          setClassId(targetId); setUserName(enteredName); setView('studentLesson');
+        } else {
+          setClassId(targetId); setUserName(enteredName); setView('studentWaiting');
+          updateDoc(rosterDocRef, { lastSeen: Date.now() });
+        }
+      } else {
+        await setDoc(rosterDocRef, { classId: targetId, studentName: enteredName, studentAgeLevel: studentAgeLevel, status: isAutoApprove ? 'approved' : 'pending', joinedAt: Date.now(), lastSeen: Date.now() });
+        setClassId(targetId); setUserName(enteredName); setView(isAutoApprove ? 'studentLesson' : 'studentWaiting');
+      }
+    } catch (error) {
+      console.error('Error entering class:', error);
+      setModal({ message: 'Network error. Please try again.', type: 'error', visible: true });
+    }
+  }, [entryRequest, userName, studentAgeLevel]);
+
   const handleStudentLogin = useCallback(async () => {
     if (!targetClassId || !userName || !studentAgeLevel) { setModal({ message: 'Please enter Class ID, your Name, and select your Age Level.', type: 'error', visible: true }); return; }
     setIsRejected(false); 
@@ -1937,6 +2058,8 @@ const SmartStudyApp = () => {
     switch (view) {
       case 'teacherLogin': return <TeacherLoginView targetClassId={targetClassId} setTargetClassId={setTargetClassId} handleTeacherLogin={handleTeacherLogin} handleSetView={handleSetView} />;
       case 'studentLogin': return <StudentLoginView targetClassId={targetClassId} setTargetClassId={setTargetClassId} userName={userName} setUserName={setUserName} studentAgeLevel={studentAgeLevel} setStudentAgeLevel={setStudentAgeLevel} handleStudentLogin={handleStudentLogin} handleSetView={handleSetView} />;
+      case 'ageLevelPicker': return <AgeLevelPickerView studentAgeLevel={studentAgeLevel} setStudentAgeLevel={setStudentAgeLevel} onContinue={handleAgeLevelContinue} />;
+      case 'classPicker': return <ClassPickerView classList={classPickerList} highlightClassId={entryRequest?.classId} onSelectClass={handleSelectClassFromPicker} loading={classPickerLoading} />;
       case 'studentWaiting': return <StudentWaitingView handleSetView={handleSetView} userName={userName} isRejected={isRejected} />;
       case 'teacherDashboard':
         if (!classData) return <ClassCreateView classId={classId} handleTeacherCreateClass={handleTeacherCreateClass} isLoading={isLoading} handleSetView={handleSetView} />;

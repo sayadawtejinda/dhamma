@@ -640,7 +640,7 @@ function AttendanceReports({ students, teacherSchedule, sessions }) {
   );
 }
 
-function TeacherDashboard({ user }) {
+function TeacherDashboard({ user, onOpenSmartStudy }) {
   const [students, setStudents] = useState([]);
   const [lessonBank, setLessonBank] = useState([]); 
   const [sessions, setSessions] = useState([]); 
@@ -659,8 +659,7 @@ function TeacherDashboard({ user }) {
   const [newBankLessonUnitCount, setNewBankLessonUnitCount] = useState(0);
   const [showLinkPicker, setShowLinkPicker] = useState(false);
   const [smartStudyClasses, setSmartStudyClasses] = useState(null); // null = not loaded yet
-  const [pickerActiveClassId, setPickerActiveClassId] = useState(null);
-  const [pickerActiveLessons, setPickerActiveLessons] = useState(null);
+  const [pickerAppSelected, setPickerAppSelected] = useState(false); // true once "Smart Study app" is chosen, showing Class ID list
   const [pickerLoading, setPickerLoading] = useState(false);
   const [editingLessonId, setEditingLessonId] = useState(null); 
   const [mergeSourceId, setMergeSourceId] = useState(null); 
@@ -837,9 +836,9 @@ function TeacherDashboard({ user }) {
     }
   }, [editingLessonId, lessonBank]);
 
-  // --- Smart Study lesson picker (reads directly from Firestore; only loads
-  // the specific class's lessons when the teacher opens it, so this never
-  // loads all Smart Study data up front). ---
+  // --- Smart Study app picker (reads directly from Firestore; only loads
+  // the class ID list, and only when the teacher opens the picker, so this
+  // never loads all Smart Study lesson content up front). ---
   const loadSmartStudyClassList = async () => {
     if (smartStudyClasses !== null) return; // already loaded/cached
     setPickerLoading(true);
@@ -855,27 +854,11 @@ function TeacherDashboard({ user }) {
     setPickerLoading(false);
   };
 
-  const openSmartStudyClass = async (classId) => {
-    setPickerActiveClassId(classId);
-    setPickerActiveLessons(null);
-    setPickerLoading(true);
-    try {
-      const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'classes', classId));
-      const lessons = snap.exists() ? (snap.data().lessons || []) : [];
-      setPickerActiveLessons(lessons);
-    } catch (err) {
-      console.error('Error loading Smart Study lessons:', err);
-      setPickerActiveLessons([]);
-    }
-    setPickerLoading(false);
-  };
-
-  const chooseSmartStudyLesson = (classId, lesson) => {
-    setNewBankLessonLink(`smartstudy://${classId}/${lesson.lessonId}`);
-    if (!newBankLessonTitle.trim()) setNewBankLessonTitle(lesson.title || `${classId} ${lesson.lessonId}`);
+  const chooseSmartStudyClass = (classId) => {
+    setNewBankLessonLink(`smartstudy://${classId}`);
+    if (!newBankLessonTitle.trim()) setNewBankLessonTitle(`Smart Study: ${classId}`);
     setShowLinkPicker(false);
-    setPickerActiveClassId(null);
-    setPickerActiveLessons(null);
+    setPickerAppSelected(false);
   };
 
   const handleSaveLessonToBank = async (e) => {
@@ -1982,8 +1965,23 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
             Groups
           </button>
           <button onClick={() => setViewMode('settings')} className={`py-2 px-4 font-medium ${viewMode === 'settings' ? 'border-b-2 border-violet-500 text-violet-600' : 'text-gray-600'}`}>Settings</button>
+          <button onClick={() => setViewMode('apps')} className={`py-2 px-4 font-medium ${viewMode === 'apps' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600 hover:text-blue-600'}`}>Apps</button>
         </nav>
       </div>
+
+      {viewMode === 'apps' && (
+        <div className="bg-blue-50/70 backdrop-blur-sm p-6 rounded-xl shadow-lg border border-blue-200 max-w-lg mx-auto">
+          <h3 className="text-xl font-semibold mb-2 text-gray-800">Other Apps</h3>
+          <p className="text-sm text-gray-600 mb-6">Open a connected app. More apps can be added here later.</p>
+          <button
+            onClick={() => onOpenSmartStudy && onOpenSmartStudy({ mode: 'teacher' })}
+            className="w-full flex items-center justify-between bg-white p-4 rounded-xl border-2 border-blue-200 hover:border-blue-400 hover:shadow-md transition-all"
+          >
+            <span className="flex items-center text-lg font-bold text-blue-800">📚 Smart Study app</span>
+            <span className="text-blue-500 text-xl">→</span>
+          </button>
+        </div>
+      )}
 
       {viewMode === 'schedule' && (
          <div className="flex flex-col md:flex-row gap-4 mb-6">
@@ -2629,11 +2627,10 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                 </button>
               </div>
               {newBankLessonLink.startsWith('smartstudy://') && (() => {
-                const [, rest] = newBankLessonLink.split('smartstudy://');
-                const [cId, lId] = rest.split('/');
+                const cId = newBankLessonLink.replace('smartstudy://', '');
                 return (
                   <div className="mt-2 flex items-center justify-between bg-sky-50 border border-sky-200 rounded-lg px-3 py-2">
-                    <span className="text-sm text-sky-800 font-semibold">📚 Smart Study: {cId} → {lId}</span>
+                    <span className="text-sm text-sky-800 font-semibold">📚 Smart Study app → Class {cId}</span>
                     <button type="button" onClick={() => setNewBankLessonLink('')} className="text-xs text-red-600 hover:text-red-800 font-semibold">Clear</button>
                   </div>
                 );
@@ -2641,29 +2638,30 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
 
               {showLinkPicker && (
                 <div className="absolute z-20 mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-xl p-3 max-h-96 overflow-y-auto">
-                  {pickerActiveClassId ? (
+                  {pickerAppSelected ? (
                     <div>
-                      <button type="button" onClick={() => { setPickerActiveClassId(null); setPickerActiveLessons(null); }} className="text-sm text-indigo-600 font-semibold mb-3 hover:underline">
-                        ← Back to Class List
+                      <button type="button" onClick={() => setPickerAppSelected(false)} className="text-sm text-indigo-600 font-semibold mb-3 hover:underline">
+                        ← Back
                       </button>
-                      <p className="font-bold text-gray-800 mb-2">Lessons in {pickerActiveClassId}</p>
+                      <p className="font-bold text-gray-800 mb-2">📚 Smart Study app — choose a Class ID</p>
                       {pickerLoading ? (
-                        <p className="text-gray-500 text-sm">Loading lessons...</p>
-                      ) : pickerActiveLessons && pickerActiveLessons.length > 0 ? (
+                        <p className="text-gray-500 text-sm">Loading classes...</p>
+                      ) : smartStudyClasses && smartStudyClasses.length > 0 ? (
                         <div className="space-y-1">
-                          {pickerActiveLessons.map(lesson => (
+                          {smartStudyClasses.map(c => (
                             <button
                               type="button"
-                              key={lesson.lessonId}
-                              onClick={() => chooseSmartStudyLesson(pickerActiveClassId, lesson)}
-                              className="w-full text-left p-2 rounded-lg hover:bg-sky-50 border border-transparent hover:border-sky-200"
+                              key={c.classId}
+                              onClick={() => chooseSmartStudyClass(c.classId)}
+                              className="w-full text-left p-2 rounded-lg hover:bg-sky-50 border border-transparent hover:border-sky-200 flex justify-between items-center"
                             >
-                              <span className="font-semibold text-gray-800">{lesson.lessonId}:</span> <span className="text-gray-700">{lesson.title}</span>
+                              <span className="font-semibold text-gray-800">{c.classId}</span>
+                              <span className="text-xs text-gray-500">{c.lessonCount} lesson{c.lessonCount === 1 ? '' : 's'}</span>
                             </button>
                           ))}
                         </div>
                       ) : (
-                        <p className="text-gray-500 text-sm">No lessons in this class yet.</p>
+                        <p className="text-gray-500 text-sm">No Smart Study classes found yet.</p>
                       )}
                     </div>
                   ) : (
@@ -2675,26 +2673,14 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                       >
                         ✏️ Input link manually
                       </button>
-                      <p className="text-xs text-gray-500 font-semibold mt-3 mb-1 uppercase">Or choose from Smart Study</p>
-                      {pickerLoading ? (
-                        <p className="text-gray-500 text-sm p-2">Loading classes...</p>
-                      ) : smartStudyClasses && smartStudyClasses.length > 0 ? (
-                        <div className="space-y-1">
-                          {smartStudyClasses.map(c => (
-                            <button
-                              type="button"
-                              key={c.classId}
-                              onClick={() => openSmartStudyClass(c.classId)}
-                              className="w-full text-left p-2 rounded-lg hover:bg-sky-50 border border-transparent hover:border-sky-200 flex justify-between items-center"
-                            >
-                              <span className="font-semibold text-gray-800">📚 {c.classId}</span>
-                              <span className="text-xs text-gray-500">{c.lessonCount} lesson{c.lessonCount === 1 ? '' : 's'}</span>
-                            </button>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-gray-500 text-sm p-2">No Smart Study classes found yet.</p>
-                      )}
+                      <p className="text-xs text-gray-500 font-semibold mt-3 mb-1 uppercase">Or choose app</p>
+                      <button
+                        type="button"
+                        onClick={() => { setPickerAppSelected(true); loadSmartStudyClassList(); }}
+                        className="w-full text-left p-2 rounded-lg hover:bg-sky-50 border border-transparent hover:border-sky-200 font-semibold text-gray-800"
+                      >
+                        📚 Smart Study app
+                      </button>
                     </div>
                   )}
                 </div>
@@ -2800,7 +2786,7 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
   );
 }
 
-function StudentDashboard({ user, studentProfile, studentUid, announcements }) { 
+function StudentDashboard({ user, studentProfile, studentUid, announcements, onOpenSmartStudy, onLogout }) { 
   const [myLessons, setMyLessons] = useState([]);
   const [mySessions, setMySessions] = useState([]);
   const [activeSession, setActiveSession] = useState(null);
@@ -3215,6 +3201,30 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
   }, [mySchedule, mySessions]);
 
   const handleStartLesson = async (lesson) => {
+    if (lesson.link && lesson.link.startsWith('smartstudy://')) {
+      const classId = lesson.link.replace('smartstudy://', '');
+      if (onOpenSmartStudy) {
+        onOpenSmartStudy({
+          mode: 'student',
+          classId,
+          studentName: studentProfile?.name,
+          studentUid,
+          ageLevel: studentProfile?.smartStudyAgeLevel || null,
+          onAgeLevelChosen: async (level) => {
+            try {
+              await updateDoc(doc(db, `${publicDataPath}/students`, studentUid), { smartStudyAgeLevel: level });
+            } catch (e) {
+              console.error('Error saving age level:', e);
+            }
+          }
+        });
+      }
+      if (lesson.status === 'pending') {
+        try { await updateDoc(doc(db, `${publicDataPath}/lessons`, lesson.id), { status: 'started' }); } catch (e) {}
+      }
+      return;
+    }
+
     if (activeSession) {
       return;
     }
@@ -3232,11 +3242,11 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     }
 
     let formattedUrl = lesson.link;
-    if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://') && !formattedUrl.startsWith('smartstudy://')) {
+    if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
       formattedUrl = `https://${formattedUrl}`;
     }
     openLink(formattedUrl);
-    if (!formattedUrl.startsWith('smartstudy://')) setIsLessonOverlayOpen(true);
+    setIsLessonOverlayOpen(true);
     
     try {
       await addDoc(sessionsCollection, {
@@ -3684,6 +3694,20 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                     <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
                     </svg>
                     <span>Edit Profile</span>
+                </button>
+                <button
+                  onClick={() => {
+                    if (window.confirm('Log out? Use this if you are on a borrowed or shared device. You can log back in anytime with your Student ID.')) {
+                      onLogout && onLogout();
+                    }
+                  }}
+                  className="flex items-center justify-center space-x-1 text-gray-600 hover:text-red-700 bg-gray-100 hover:bg-red-50 px-4 py-2.5 rounded-lg font-semibold transition-colors border border-gray-200"
+                  title="Log out of this device (e.g. borrowed/shared device)"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 001 1h6a1 1 0 100-2H4V5h5a1 1 0 000-2H3zm10.293 4.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L14.586 11H7a1 1 0 110-2h7.586l-1.293-1.293a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                  <span>Log Out</span>
                 </button>
               </div>
           </div>
@@ -4768,7 +4792,7 @@ function DeactivatedScreen() {
   );
 }
 
-export default function TutoringApp() {
+export default function TutoringApp({ onOpenSmartStudy }) {
   const [user, setUser] = useState(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [role, setRole] = useState(null); 
@@ -5050,6 +5074,14 @@ export default function TutoringApp() {
     }
   };
   
+  const handleStudentLogout = () => {
+    try { localStorage.removeItem('lastStudentId'); } catch (e) {}
+    setRole(null);
+    setTargetStudentUid(null);
+    setStudentProfile(null);
+    setView('login');
+  };
+
   const handleStudentLoginById = async (displayId, onError) => {
     const q = query(studentsCollection, where("displayId", "==", displayId));
     try {
@@ -5114,7 +5146,7 @@ export default function TutoringApp() {
     switch (view) {
       case 'teacher':
         if (role !== 'teacher') return <TodaySchedule role={role} />; 
-        return <TeacherDashboard user={user} />;
+        return <TeacherDashboard user={user} onOpenSmartStudy={onOpenSmartStudy} />;
       case 'student':
         if (role !== 'student') return <TodaySchedule role={role} />; 
         if (!studentProfile) {
@@ -5124,7 +5156,7 @@ export default function TutoringApp() {
             </div>
           );
         }
-        return <StudentDashboard user={user} studentProfile={studentProfile} studentUid={targetStudentUid} announcements={announcements} />;
+        return <StudentDashboard user={user} studentProfile={studentProfile} studentUid={targetStudentUid} announcements={announcements} onOpenSmartStudy={onOpenSmartStudy} onLogout={handleStudentLogout} />;
       case 'weekly': 
         return <WeeklySchedule role={role} targetStudentUid={targetStudentUid} />;
       case 'attendance':

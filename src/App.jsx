@@ -3,41 +3,37 @@ import TutoringApp from './TutoringApp';
 import SmartStudyApp from './SmartStudy';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('tutoring');
+  const [activeApp, setActiveApp] = useState('tutoring');
+  const [smartStudyRequest, setSmartStudyRequest] = useState(null);
+
+  const openSmartStudy = (request) => {
+    setSmartStudyRequest(request || { mode: 'teacher' });
+    setActiveApp('smartstudy');
+  };
+
+  const closeSmartStudy = () => {
+    setActiveApp('tutoring');
+    setSmartStudyRequest(null);
+  };
 
   return (
     <div className="min-h-screen">
-      <div className="sticky top-0 z-[200] bg-white border-b-2 border-gray-200 shadow-sm">
-        <div className="flex">
-          <button
-            onClick={() => setActiveTab('tutoring')}
-            className={`flex-1 py-3 px-4 font-bold text-sm sm:text-base transition-colors ${
-              activeTab === 'tutoring'
-                ? 'bg-indigo-600 text-white'
-                : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
-            }`}
-          >
-            📅 Tutoring Dashboard
-          </button>
-          <button
-            onClick={() => setActiveTab('smartstudy')}
-            className={`flex-1 py-3 px-4 font-bold text-sm sm:text-base transition-colors ${
-              activeTab === 'smartstudy'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
-            }`}
-          >
-            📚 Lessons & Quiz
-          </button>
-        </div>
+      {/* Both stay mounted so switching apps never loses in-progress state (e.g. an active quiz). */}
+      <div style={{ display: activeApp === 'tutoring' ? 'block' : 'none' }}>
+        <TutoringApp onOpenSmartStudy={openSmartStudy} />
       </div>
-
-      {/* Both stay mounted so switching tabs never loses in-progress state (e.g. an active quiz). */}
-      <div style={{ display: activeTab === 'tutoring' ? 'block' : 'none' }}>
-        <TutoringApp />
-      </div>
-      <div style={{ display: activeTab === 'smartstudy' ? 'block' : 'none' }}>
-        <SmartStudyApp />
+      <div style={{ display: activeApp === 'smartstudy' ? 'block' : 'none' }}>
+        {activeApp === 'smartstudy' && (
+          <div className="fixed top-3 left-3 z-[9999]">
+            <button
+              onClick={closeSmartStudy}
+              className="px-4 py-2 bg-gray-800 text-white rounded-full shadow-lg font-semibold text-sm hover:bg-gray-900"
+            >
+              ← Back to Tutoring Dashboard
+            </button>
+          </div>
+        )}
+        <SmartStudyApp entryRequest={smartStudyRequest} onExit={closeSmartStudy} />
       </div>
     </div>
   );
