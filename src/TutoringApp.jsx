@@ -4957,26 +4957,29 @@ export default function TutoringApp({ onOpenSmartStudy }) {
   
   useEffect(() => {
     if (role === 'student' && targetStudentUid) {
+      console.log('[DIAG] Attaching student profile listener for uid:', targetStudentUid);
       const studentDocRef = doc(db, `${publicDataPath}/students`, targetStudentUid);
       
       const unsubscribe = onSnapshot(studentDocRef, (doc) => {
+        console.log('[DIAG] Student profile snapshot fired. exists:', doc.exists(), 'uid:', targetStudentUid, 'fromCache:', doc.metadata?.fromCache);
         if (doc.exists()) {
           setStudentProfile(doc.data());
         } else {
+          console.warn('[DIAG] Student doc does NOT exist — resetting role/view. uid was:', targetStudentUid);
           setRole(null);
           setTargetStudentUid(null);
           setStudentProfile(null);
-          setView('today'); 
+          if (view !== 'login') setView('today'); 
         }
       }, (error) => {
-        console.error("Error listening to student profile:", error);
+        console.error("[DIAG] Error listening to student profile:", error);
         setRole(null);
         setTargetStudentUid(null);
         setStudentProfile(null);
-        setView('today');
+        if (view !== 'login') setView('today');
       });
 
-      return () => unsubscribe();
+      return () => { console.log('[DIAG] Unsubscribing student profile listener for uid:', targetStudentUid); unsubscribe(); };
     }
   }, [role, targetStudentUid]); 
   
@@ -5059,10 +5062,12 @@ export default function TutoringApp({ onOpenSmartStudy }) {
   }, [displayedStar?.id]);
 
   const checkUserRole = async (uid) => {
-    if (!uid || targetStudentUid) return; 
+    console.log('[DIAG] checkUserRole called. uid:', uid, 'current targetStudentUid:', targetStudentUid, 'current view:', view);
+    if (!uid || targetStudentUid) { console.log('[DIAG] checkUserRole bailed early (no uid, or targetStudentUid already set)'); return; }
 
     try { 
       if (teacherUid && uid === teacherUid) {
+        console.log('[DIAG] checkUserRole: matched as TEACHER');
         setRole('teacher');
         if(view !== 'teacher') setView('teacher');
         return;
@@ -5072,6 +5077,7 @@ export default function TutoringApp({ onOpenSmartStudy }) {
       const studentDoc = await getDoc(studentDocRef);
       
       if (studentDoc.exists()) {
+        console.log('[DIAG] checkUserRole: matched as STUDENT (own uid doc)');
         setRole('student');
         setTargetStudentUid(uid); 
         if(view !== 'student') setView('student');
@@ -5081,17 +5087,19 @@ export default function TutoringApp({ onOpenSmartStudy }) {
 
         if (!linkedSnapshot.empty) {
             const linkedDoc = linkedSnapshot.docs[0];
+            console.log('[DIAG] checkUserRole: matched as STUDENT (linked authorizedUids), doc id:', linkedDoc.id);
             setRole('student');
             setTargetStudentUid(linkedDoc.id); 
             setView('student');
             return; 
         }
 
+        console.log('[DIAG] checkUserRole: NOT recognized as teacher or student. Leaving role null.');
         setRole(null); 
         if (view !== 'login') setView('today'); 
       }
     } catch (error) { 
-      console.error("Error checking user role:", error);
+      console.error("[DIAG] Error checking user role:", error);
       setRole(null);
       if (view !== 'login') setView('today'); 
     }
@@ -5141,28 +5149,33 @@ export default function TutoringApp({ onOpenSmartStudy }) {
   };
 
   const handleStudentLoginById = async (displayId, onError) => {
+    console.log('[DIAG] handleStudentLoginById called with displayId:', displayId);
     const q = query(studentsCollection, where("displayId", "==", displayId));
     try {
       const querySnapshot = await getDocs(q);
       if (querySnapshot.empty) {
+        console.log('[DIAG] No student found with that displayId');
         onError('Invalid Student ID.'); 
       } else {
         const studentDoc = querySnapshot.docs[0];
         const studentData = studentDoc.data();
         const studentDocId = studentDoc.id; 
+        console.log('[DIAG] Found student doc id:', studentDocId, 'isActive:', studentData.isActive, 'current session uid:', user?.uid);
         
         if (studentData.isActive === true || studentData.isActive === 'pending') {
           setRole('student');
           setTargetStudentUid(studentDocId); 
           setView('student');
+          console.log('[DIAG] Set role=student, targetStudentUid=', studentDocId, ', view=student');
 
           if (user && user.uid !== studentDocId) {
             try {
                const studentRef = doc(db, `${publicDataPath}/students`, studentDocId);
                await updateDoc(studentRef, { authorizedUids: arrayUnion(user.uid) });
+               console.log('[DIAG] Linked current session uid to student doc via authorizedUids');
                window.alert("Account Linked Successfully! Next time, you will be logged in automatically with this email.");
             } catch (err) {
-               console.error("Error linking account:", err);
+               console.error("[DIAG] Error linking account:", err);
             }
           }
           
