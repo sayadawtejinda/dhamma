@@ -2853,25 +2853,28 @@ function SmartStudyProgressBadge({ classId, studentName, compact, autoTrophy }) 
       return () => unsubs.forEach(u => u());
     };
 
-    // Look up the classRoster to find the name(s) this student used in Smart Study.
-    // The roster doc key is `classId_encodedName`; we search by classId and collect
-    // all names that are linked (linkedToTutoring: true). If the Tutoring profile
-    // name matches we also include it (catches the case where no rename happened).
-    getDocs(query(
-      collection(db, 'artifacts', appId, 'public', 'data', 'classRoster'),
-      where('classId', '==', classId),
-      where('linkedToTutoring', '==', true)
-    )).then(snap => {
+    // Look up this student's own roster entry (keyed by classId + Tutoring
+    // profile name). When the student first opens Smart Study through Tutoring,
+    // handleSelectClassFromPicker writes a roster doc under their Tutoring name,
+    // so quizCompletions will also carry that name. For legacy students whose
+    // Smart Study name differs we include both names so completions recorded
+    // under either name are counted. We only ever look up THIS student, never
+    // the whole class roster.
+    const thisStudentRosterRef = doc(
+      db, 'artifacts', appId, 'public', 'data', 'classRoster',
+      `${classId}_${encodeURIComponent(studentName)}`
+    );
+    getDoc(thisStudentRosterRef).then(snap => {
       if (cancelled) return;
-      const rosterNames = snap.docs.map(d => d.data().studentName).filter(Boolean);
-      // Always include the Tutoring profile name as a fallback so unlinked
-      // students (who registered in Smart Study with the same name) are covered.
-      const namesToQuery = [...new Set([...rosterNames, studentName])];
+      // The roster doc stores the canonical Smart Study name in studentName.
+      // If it matches the Tutoring name (common case) we query once; if it
+      // differs we include both to catch completions recorded under either name.
+      const rosterStudentName = snap.exists() ? snap.data().studentName : null;
+      const namesToQuery = [...new Set([studentName, rosterStudentName].filter(Boolean))];
       unsubCompletions = subscribeCompletions(namesToQuery);
     }).catch(err => {
       if (cancelled) return;
       console.error('Error loading classRoster for Smart Study badge:', err);
-      // Fall back to the Tutoring profile name only
       unsubCompletions = subscribeCompletions([studentName]);
     });
 
