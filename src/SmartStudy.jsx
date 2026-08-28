@@ -2091,11 +2091,6 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
   // --- Entry point coming from the Tutoring Dashboard ("Apps" menu for
   // teachers, or "Start Lesson" for students). Skips the Home role-choice
   // screen and, for students, skips manual name entry entirely. ---
-  // Keep a ref that always points to the latest handleSelectClassFromPicker
-  // so the classPicker useEffect can call it from an async callback without
-  // suffering from stale-closure issues.
-  const handleSelectClassFromPickerRef = useRef(null);
-
   useEffect(() => {
     if (!entryRequest) return;
     const signature = JSON.stringify({ mode: entryRequest.mode, classId: entryRequest.classId, studentName: entryRequest.studentName, ageLevel: entryRequest.ageLevel });
@@ -2118,27 +2113,17 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
   useEffect(() => {
     if (view !== 'classPicker') return;
     setClassPickerLoading(true);
-    // Capture the target classId synchronously before the async fetch so
-    // the .then() callback always uses the value from this render cycle.
-    const autoSelectClassId = entryRequest?.classId || null;
+    const highlightClassId = entryRequest?.classId || null;
     getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'classes'))
       .then(snap => {
         let ids = snap.docs.map(d => d.id).sort();
-        if (autoSelectClassId && !ids.includes(autoSelectClassId)) ids = [autoSelectClassId, ...ids];
+        // Make sure the teacher-specified class is always in the list
+        if (highlightClassId && !ids.includes(highlightClassId)) ids = [highlightClassId, ...ids];
         setClassPickerList(ids);
-        // Auto-select the lesson's class so the student doesn't have to click.
-        // handleSelectClassFromPickerRef.current is always the latest version,
-        // avoiding stale-closure issues in this async callback.
-        if (autoSelectClassId && handleSelectClassFromPickerRef.current) {
-          handleSelectClassFromPickerRef.current(autoSelectClassId);
-        }
       })
       .catch(err => {
         console.error('Error loading class list:', err);
-        setClassPickerList(autoSelectClassId ? [autoSelectClassId] : []);
-        if (autoSelectClassId && handleSelectClassFromPickerRef.current) {
-          handleSelectClassFromPickerRef.current(autoSelectClassId);
-        }
+        setClassPickerList(highlightClassId ? [highlightClassId] : []);
       })
       .finally(() => setClassPickerLoading(false));
   }, [view]);
@@ -2180,9 +2165,6 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
       setModal({ message: 'Network error. Please try again.', type: 'error', visible: true });
     }
   }, [entryRequest, userName, studentAgeLevel]);
-
-  // Keep the ref in sync so the classPicker useEffect can call the latest version
-  handleSelectClassFromPickerRef.current = handleSelectClassFromPicker;
 
   const handleStudentLogin = useCallback(async () => {
     if (!targetClassId || !userName || !studentAgeLevel) { setModal({ message: 'Please enter Class ID, your Name, and select your Age Level.', type: 'error', visible: true }); return; }

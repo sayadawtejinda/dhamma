@@ -2196,12 +2196,7 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
 
               return (
                   <div className="mb-4 space-y-3">
-                    {lesson.link && lesson.link.startsWith('smartstudy://') && (
-                      <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                        <p className="text-blue-800 font-bold mb-1">Smart Study Progress:</p>
-                        <SmartStudyProgressBadge classId={extractSmartStudyClassId(lesson.link)} studentName={student.name} />
-                      </div>
-                    )}
+
                     {lesson.unitCount > 0 && (
                       <div className="p-4 bg-indigo-50 rounded-lg border border-indigo-200">
                         <p className="text-indigo-800 font-bold mb-1">Student Progress on this Lesson:</p>
@@ -2944,6 +2939,11 @@ function SmartStudyProgressBadge({ classId, studentName, smartStudyNames, compac
       unsubs.forEach(u => u());
     };
   }, [classId, studentName, smartStudyNames]);
+
+  // Notify parent of count changes so lessons can compute 'Start/Continue Lesson X'
+  useEffect(() => {
+    if (completedCount !== null && onCountChange) onCountChange(completedCount);
+  }, [completedCount, onCountChange]);
 
   useEffect(() => {
     if (!classId || classId.includes('/')) return;
@@ -4068,8 +4068,16 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
               const latestSessionForLesson = completedSessions.find(s => s.lessonTitle === lesson.title && typeof s.completedUnit === 'number' && s.completedUnit > 0);
               const showNowFinished = !!latestSessionForLesson;
               const isSmartStudyLesson = !!(lesson.link && lesson.link.startsWith('smartstudy://'));
+              const ssClassIdForBtn = isSmartStudyLesson ? extractSmartStudyClassId(lesson.link) : null;
+              const ssCount = ssClassIdForBtn != null ? (ssCompletionCounts[ssClassIdForBtn] ?? null) : null;
+              // Next SmartStudy lesson number = completions done + 1 (capped at unitCount)
+              const ssNextNum = ssCount !== null
+                ? (lesson.unitCount > 0 ? Math.min(lesson.unitCount, ssCount + 1) : ssCount + 1)
+                : null;
               const buttonText = isSmartStudyLesson
-                ? (isNew ? '▶ Open Smart Study' : '▶ Resume Smart Study')
+                ? (ssNextNum !== null
+                  ? (isNew ? `Start ${lesson.unitLabel || 'Lesson'} ${ssNextNum}` : `Continue ${lesson.unitLabel || 'Lesson'} ${ssNextNum}`)
+                  : (isNew ? `Start ${lesson.unitLabel || 'Lesson'}` : `Continue ${lesson.unitLabel || 'Lesson'}`))
                 : (isNew
                   ? (lesson.unitCount > 0 ? `Start ${lesson.unitLabel || 'Chapter'} ${nextUnitNumber}` : 'Start Lesson')
                   : (lesson.unitCount > 0 ? `Continue ${lesson.unitLabel || 'Chapter'} ${nextUnitNumber}` : 'Continue Lesson'));
@@ -4091,16 +4099,11 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                     <p className={`text-sm ${textPColor}`}>Sent: {formatTimestamp(lesson.sentAt)}</p>
                     {lesson.details && <p className={`text-sm ${textPColor} font-medium mt-1`}>Lesson ID: {lesson.details}</p>}
                     {lesson.link && lesson.link.startsWith('smartstudy://') && (
-                      <>
-                        {extractSmartStudyClassId(lesson.link) && (
-                          <p className="text-xs font-semibold text-blue-600 mb-1">
-                            📚 Class ID: <span className="font-bold">{extractSmartStudyClassId(lesson.link)}</span>
-                          </p>
-                        )}
                       <SmartStudyProgressBadge
                         classId={extractSmartStudyClassId(lesson.link)}
                         studentName={studentProfile?.name}
                         smartStudyNames={studentProfile?.smartStudyNames || null}
+                        onCountChange={(count) => setSsCompletionCounts(prev => ({ ...prev, [extractSmartStudyClassId(lesson.link)]: count }))}
                         autoTrophy={{
                           studentUid,
                           unitCount: lesson.unitCount || 0,
@@ -4111,31 +4114,22 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                           alreadyRequested: !!studentProfile?.trophyRequested
                         }}
                       />
-                      </>
                     )}
-                    {lesson.unitCount > 0 && (completedUnitList > 0 || showNowFinished) && (
-                      lesson.link && lesson.link.startsWith('smartstudy://') ? (
-                        // For Smart Study lessons the "✅ Completed X / Y lesson in Smart Study"
-                        // badge above already covers overall progress, so we skip the
-                        // "You completed up to Chapter X / Y" line here. We still show
-                        // "Now you finished Chapter X." for the redo (revisiting an old
-                        // lesson) case, matching the previous behavior.
-                        showNowFinished && (
-                          <p className="text-sm font-bold text-indigo-700 mt-1">
+                    {lesson.link && lesson.link.startsWith('smartstudy://') && ssCompletionCounts[extractSmartStudyClassId(lesson.link)] > 0 && (
+                      <p className="text-sm font-bold text-indigo-700 mt-1">
+                        Now you finished {lesson.unitLabel || 'Lesson'} {ssCompletionCounts[extractSmartStudyClassId(lesson.link)]}.
+                      </p>
+                    )}
+                    {lesson.unitCount > 0 && (completedUnitList > 0 || showNowFinished) && !(lesson.link && lesson.link.startsWith('smartstudy://')) && (
+                      <p className="text-sm font-bold text-indigo-700 mt-1">
+                        You completed up to {lesson.unitLabel || 'Chapter'} {Math.max(completedUnitList, latestSessionForLesson?.completedUnit || 0)}{lesson.unitCount > 0 ? ` / ${lesson.unitCount}` : ''}.
+                        {showNowFinished && (
+                          <>
+                            <br />
                             Now you finished {lesson.unitLabel || 'Chapter'} {latestSessionForLesson.completedUnit}.
-                          </p>
-                        )
-                      ) : (
-                        <p className="text-sm font-bold text-indigo-700 mt-1">
-                          You completed up to {lesson.unitLabel || 'Chapter'} {Math.max(completedUnitList, latestSessionForLesson?.completedUnit || 0)}{lesson.unitCount > 0 ? ` / ${lesson.unitCount}` : ''}.
-                          {showNowFinished && (
-                            <>
-                              <br />
-                              Now you finished {lesson.unitLabel || 'Chapter'} {latestSessionForLesson.completedUnit}.
-                            </>
-                          )}
-                        </p>
-                      )
+                          </>
+                        )}
+                      </p>
                     )}
                     {maxAvailableList > 0 && lesson.unitCount > 0 && (
                       <p className={`text-xs ${textPColor} italic mt-1`}>
