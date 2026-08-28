@@ -3636,16 +3636,17 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           }
           if (totalPts > 0) setScore(`${totalPts.toLocaleString()} pts`);
 
-         } catch (e) {
+        } catch (e) {
           console.error('Error fetching SmartStudy score for report modal:', e);
         }
 
-        // Auto-fill "Lesson completed" — separate try-catch so score failure
-        // does not block this, and single-field filter avoids composite index.
+        // Auto-fill "Lesson completed" — separate try/catch so a score-fetch
+        // failure never blocks this.  Query by classId only (single-field
+        // filter) so no Firestore composite index is required.
         try {
           const cq = query(
             collection(db, 'artifacts', appId, 'public', 'data', 'quizCompletions'),
-            where('classId', '==', ssClassId)   // classId only — no composite index needed
+            where('classId', '==', ssClassId)
           );
           const csnap = await getDocs(cq);
           const distinctCompletedIds = new Set(
