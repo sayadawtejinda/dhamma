@@ -3634,7 +3634,19 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
             const snap = await getDocs(q);
             snap.docs.forEach(d => { totalPts += (Number(d.data().score) || 0); });
           }
-          if (totalPts > 0) setScore(`${totalPts.toLocaleString()} pts`);
+                    if (totalPts > 0) setScore(`${totalPts.toLocaleString()} pts`);
+          // Also auto-fill "Lesson completed" from quizCompletions count
+          const distinctIds = new Set();
+          for (const name of namesToTry) {
+            const cq = query(
+              collection(db, 'artifacts', appId, 'public', 'data', 'quizCompletions'),
+              where('classId', '==', ssClassId),
+              where('studentName', '==', name)
+            );
+            const csnap = await getDocs(cq);
+            csnap.docs.forEach(d => distinctIds.add(d.data().lessonId));
+          }
+          if (distinctIds.size > 0) handleCompletedUnitChange(String(distinctIds.size));
         } catch (e) {
           console.error('Error fetching SmartStudy score for report modal:', e);
         }
@@ -3880,7 +3892,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
             {(() => {
               const isSmartStudySession = feedbackSession?.lessonLink && feedbackSession.lessonLink.startsWith('smartstudy://');
               return (
-            <div className={`mb-6 grid ${isSmartStudySession ? 'grid-cols-1' : 'grid-cols-3'} gap-2 sm:gap-3`}>
+            <div className={`mb-6 grid grid-cols-3 gap-2 sm:gap-3`}>
               <div>
                 <label className="block text-gray-700 mb-2 text-sm">Score</label>
                 <input
@@ -3889,7 +3901,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                 />
               </div>
 
-              {!isSmartStudySession && (
+              )}
               <div>
                 <label className="block text-gray-700 mb-2 text-sm">Today, completed</label>
                 <input
@@ -3902,10 +3914,9 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
               </div>
               )}
 
-              {!isSmartStudySession && (
-              <div className="relative">
+                           <div className="relative">
                 <label className="block text-gray-700 mb-2 text-sm">
-                  {feedbackSession?.lessonUnitLabel || 'Chapter'} No.
+                  Lesson completed
                 </label>
                 {requestTrophyChecked && (
                   <div className="absolute -top-14 left-1/2 -translate-x-1/2 bg-yellow-100 border border-yellow-300 text-yellow-900 text-sm font-bold px-4 py-2 rounded-xl shadow-lg whitespace-nowrap z-20 animate-bounce">
@@ -3945,9 +3956,8 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                   )}
                 </div>
               </div>
-              )}
-
-              {!isSmartStudySession && parseInt(completedUnitInput) > 0 && (
+              
+              {parseInt(completedUnitInput) > 0 && (
                 <p className="col-span-3 text-sm font-semibold text-emerald-700 mt-1">
                   {parseInt(completedUnitInput) < previousHighestUnitForModal ? (
                     <>
