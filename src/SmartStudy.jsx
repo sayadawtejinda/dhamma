@@ -532,7 +532,7 @@ const TeacherDashboard = React.memo(({
       const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'students'));
       const list = snap.docs
         .map(d => ({ id: d.id, name: d.data().name, displayId: d.data().displayId, isActive: d.data().isActive }))
-        .filter(s => s.name && s.isActive === true);
+        .filter(s => s.name && (s.isActive === true || s.isActive === 'pending'));
       list.sort((a, b) => a.name.localeCompare(b.name));
       setTutoringStudents(list);
     } catch (err) {
@@ -560,7 +560,7 @@ const TeacherDashboard = React.memo(({
         .filter(s => !s.linkedToTutoring)
         .map(s => {
           const match = (tutoringStudents || []).find(ts => ts.name.trim().toLowerCase() === s.studentName.trim().toLowerCase());
-          return match ? { oldName: s.studentName, newName: match.name } : null;
+          return match ? { oldName: s.studentName, newName: match.name, tutoringUid: match.id } : null;
         })
         .filter(Boolean)
     : [];
@@ -568,7 +568,7 @@ const TeacherDashboard = React.memo(({
   const handleLinkAllMatches = async () => {
     setBulkLinking(true);
     for (const m of bulkNameMatches) {
-      try { await onLinkStudent(m.oldName, m.newName); } catch (e) { console.error('Bulk link error:', e); }
+      try { await onLinkStudent(m.oldName, m.newName, m.tutoringUid); } catch (e) { console.error('Bulk link error:', e); }
     }
     setBulkLinking(false);
     setShowBulkMatch(false);
@@ -815,7 +815,7 @@ const TeacherDashboard = React.memo(({
                               {filteredTutoringStudents.map(ts => (
                                 <button
                                   key={ts.id}
-                                  onClick={() => { onLinkStudent && onLinkStudent(student.studentName, ts.name); setLinkPickerFor(null); }}
+                                  onClick={() => { onLinkStudent && onLinkStudent(student.studentName, ts.name, ts.id); setLinkPickerFor(null); }}
                                   className="w-full text-left p-2 rounded-lg hover:bg-indigo-50 text-sm border border-transparent hover:border-indigo-200"
                                 >
                                   <span className="font-semibold text-gray-800">{ts.name}</span> <span className="text-xs text-gray-500">({ts.displayId})</span>
@@ -1786,10 +1786,40 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
   // Renames all of their records within THIS class (scores, quiz completions,
   // reflections, hearts, roster) to the Tutoring name, so their identity is
   // consistent everywhere from now on.
-  const handleLinkStudentToTutoring = useCallback(async (oldName, newName) => {
-    if (!classId || !oldName || !newName || oldName === newName) return;
+  const handleLinkStudentToTutoring = useCallback(async (oldName, newName, tutoringStudentUid) => {
+    if (!classId || !oldName || !newName) return;
     setIsLoading(true);
-    const results = { scores: null, completions: null, reflections: null, hearts: null, roster: null };
+    const results = { scores: null, completions: null, reflections: null, hearts: null, roster: null, profile: null };
+
+    // Always store the SmartStudy name in the Tutoring student profile so
+    // SmartStudyProgressBadge can query quizCompletions under both names —
+    // this makes the count correct even if the rename hasn't finished yet or
+    // the student used a different name before linking.
+    if (tutoringStudentUid && oldName !== newName) {
+      try {
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'students', tutoringStudentUid), {
+          [`smartStudyNames.${classId}`]: oldName
+        });
+        results.profile = 'ok';
+      } catch (err) {
+        console.error('Error storing smartStudyNames in Tutoring profile:', err);
+        results.profile = `error: ${err.message}`;
+      }
+    }
+
+    // If names match there is nothing to rename; just mark as linked and return.
+    if (oldName === newName) {
+      try {
+        await setDoc(getRosterDocRef(classId, newName), { linkedToTutoring: true }, { merge: true });
+        results.roster = 'ok';
+      } catch (err) {
+        console.error('Error marking roster as linked:', err);
+        results.roster = `error: ${err.message}`;
+      }
+      setIsLoading(false);
+      setModal({ message: `Linked "${newName}" to Tutoring.`, type: 'success', visible: true });
+      return;
+    }
 
     const renameInCollection = async (collectionRef, label) => {
       try {
@@ -1835,8 +1865,6 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
         await setDoc(getRosterDocRef(classId, newName), { ...oldRosterSnap.data(), studentName: newName, linkedToTutoring: true }, { merge: true });
         await deleteDoc(oldRosterRef);
       } else {
-        // No old roster doc found under this name — still mark/create the
-        // new-name roster entry as linked so the badge is accurate.
         await setDoc(getRosterDocRef(classId, newName), { linkedToTutoring: true }, { merge: true });
       }
       results.roster = 'ok';

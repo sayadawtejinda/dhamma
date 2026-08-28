@@ -2812,7 +2812,7 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
 // renamed, so we also look up the Smart Study roster name (the name used in
 // quizCompletions) via the classRoster collection and query with whichever
 // name(s) appear there, falling back to the Tutoring name if nothing is found.
-function SmartStudyProgressBadge({ classId, studentName, compact, autoTrophy }) {
+function SmartStudyProgressBadge({ classId, studentName, smartStudyNames, compact, autoTrophy }) {
   const [completedCount, setCompletedCount] = useState(null);
   const [totalCount, setTotalCount] = useState(null);
   const [badError, setBadError] = useState(false);
@@ -2853,36 +2853,52 @@ function SmartStudyProgressBadge({ classId, studentName, compact, autoTrophy }) 
       return () => unsubs.forEach(u => u());
     };
 
-    // Look up this student's own roster entry (keyed by classId + Tutoring
-    // profile name). When the student first opens Smart Study through Tutoring,
-    // handleSelectClassFromPicker writes a roster doc under their Tutoring name,
-    // so quizCompletions will also carry that name. For legacy students whose
-    // Smart Study name differs we include both names so completions recorded
-    // under either name are counted. We only ever look up THIS student, never
-    // the whole class roster.
-    const thisStudentRosterRef = doc(
-      db, 'artifacts', appId, 'public', 'data', 'classRoster',
-      `${classId}_${encodeURIComponent(studentName)}`
-    );
-    getDoc(thisStudentRosterRef).then(snap => {
+    // Build the list of names to query in quizCompletions.
+    //
+    // Priority order:
+    //   1. smartStudyNames[classId] — the SmartStudy name stored on the Tutoring
+    //      student profile at link time. This is the most reliable signal: it
+    //      holds the old SmartStudy name BEFORE rename, so completions recorded
+    //      under EITHER name are found.
+    //   2. classRoster lookup — for students who opened SmartStudy through
+    //      Tutoring (handleSelectClassFromPicker), their roster entry is keyed by
+    //      the Tutoring name and its studentName field matches. Useful as a
+    //      cross-check when smartStudyNames is absent.
+    //   3. Tutoring profile name — always included as fallback (covers the common
+    //      case where both names are identical).
+    const profileSmartStudyName = smartStudyNames?.[classId] || null;
+
+    const buildAndSubscribe = (extraName) => {
       if (cancelled) return;
-      // The roster doc stores the canonical Smart Study name in studentName.
-      // If it matches the Tutoring name (common case) we query once; if it
-      // differs we include both to catch completions recorded under either name.
-      const rosterStudentName = snap.exists() ? snap.data().studentName : null;
-      const namesToQuery = [...new Set([studentName, rosterStudentName].filter(Boolean))];
+      const namesToQuery = [...new Set([studentName, profileSmartStudyName, extraName].filter(Boolean))];
       unsubCompletions = subscribeCompletions(namesToQuery);
-    }).catch(err => {
-      if (cancelled) return;
-      console.error('Error loading classRoster for Smart Study badge:', err);
-      unsubCompletions = subscribeCompletions([studentName]);
-    });
+    };
+
+    if (profileSmartStudyName) {
+      // We already have the SmartStudy name from the profile — no Firestore
+      // lookup needed; start subscribing right away.
+      buildAndSubscribe(null);
+    } else {
+      // Fall back to roster lookup for students who haven't been linked yet
+      // (or whose profile pre-dates the smartStudyNames field).
+      const thisStudentRosterRef = doc(
+        db, 'artifacts', appId, 'public', 'data', 'classRoster',
+        `${classId}_${encodeURIComponent(studentName)}`
+      );
+      getDoc(thisStudentRosterRef).then(snap => {
+        const rosterStudentName = snap.exists() ? snap.data().studentName : null;
+        buildAndSubscribe(rosterStudentName);
+      }).catch(err => {
+        console.error('Error loading classRoster for Smart Study badge:', err);
+        buildAndSubscribe(null);
+      });
+    }
 
     return () => {
       cancelled = true;
       if (unsubCompletions) unsubCompletions();
     };
-  }, [classId, studentName]);
+  }, [classId, studentName, smartStudyNames]);
 
   useEffect(() => {
     if (!classId || classId.includes('/')) return;
@@ -4011,6 +4027,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                       <SmartStudyProgressBadge
                         classId={extractSmartStudyClassId(lesson.link)}
                         studentName={studentProfile?.name}
+                        smartStudyNames={studentProfile?.smartStudyNames || null}
                         autoTrophy={{
                           studentUid,
                           unitCount: lesson.unitCount || 0,
