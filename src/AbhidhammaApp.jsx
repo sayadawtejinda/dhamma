@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { collection, doc, setDoc, updateDoc, arrayUnion, onSnapshot, query, orderBy, serverTimestamp, addDoc, getDoc, where, getDocs, limit, deleteDoc } from 'firebase/firestore';
 import { 
-    BookOpen, Edit2, Zap, RotateCw, Upload, Download, CheckCircle, 
+    BookOpen, Edit2, Zap, RotateCw, CheckCircle, 
     MessageCircle, Send, Heart, Trophy, Timer, Pause, 
     ChevronDown, ChevronRight, Gamepad2, X, ExternalLink, Youtube, Music, User,
     Baby, Compass, Map, Ship, Globe, Sparkles, Image as ImageIcon, Wand2, Lock, CheckCheck,

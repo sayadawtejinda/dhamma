@@ -126,6 +126,13 @@ const extractSmartStudyClassId = (link) => {
   return rest.split('/')[0] || null;
 };
 
+const ABHIDHAMMA_APP_ID = 'lesson-translator-app-v6';
+
+const extractAbhidhammaLessonId = (link) => {
+  if (!link || !link.startsWith('abhidhamma://')) return null;
+  return link.replace('abhidhamma://', '') || null;
+};
+
 const sanitizeKey = (key) => {
   if (!key || typeof key !== 'string') return 'unknown_lesson';
   return key.replace(/[\.\#\$\/\[\]]/g, '_');
@@ -854,18 +861,11 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma }) {
   // --- Smart Study app picker (reads directly from Firestore; only loads
   // the class ID list, and only when the teacher opens the picker, so this
   // never loads all Smart Study lesson content up front). ---
-  const ABHIDHAMMA_APP_ID = 'lesson-translator-app-v6';
-
-  const extractAbhidhammaLessonId = (link) => {
-    if (!link || !link.startsWith('abhidhamma://')) return null;
-    return link.replace('abhidhamma://', '') || null;
-  };
-
   const loadAbhidhammaLessons = async () => {
     if (abhidhammaLessons !== null) return;
     setAbhidhammaLoading(true);
     try {
-      const snap = await getDocs(collection(db, 'artifacts', ABHIDHAMMA_APP_ID, 'public', 'data', 'lessons'));
+      const snap = await getDocs(collection(db, 'artifacts', 'lesson-translator-app-v6', 'public', 'data', 'lessons'));
       const list = snap.docs.map(d => ({ id: d.id, title: d.data().title || d.id }));
       list.sort((a, b) => a.title.localeCompare(b.title));
       setAbhidhammaLessons(list);
@@ -3079,6 +3079,7 @@ function SmartStudyProgressBadge({ classId, studentName, smartStudyNames, compac
 
 function StudentDashboard({ user, studentProfile, studentUid, announcements, onOpenSmartStudy, onOpenAbhidhamma, onLogout }) { 
   const [myLessons, setMyLessons] = useState([]);
+  const [ssCompletionCounts, setSsCompletionCounts] = useState({}); // classId → SmartStudy completedCount
   const [mySessions, setMySessions] = useState([]);
   const [activeSession, setActiveSession] = useState(null);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
