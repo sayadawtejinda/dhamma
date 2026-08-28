@@ -1469,6 +1469,7 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
   const [classId, setClassId] = useState('');
   const [targetClassId, setTargetClassId] = useState(() => localStorage.getItem('lastClassId') || '');
   const [classData, setClassData] = useState(null);
+  const [classDataLoaded, setClassDataLoaded] = useState(false); // true once first Firestore response arrives
   const [lessons, setLessons] = useState([]);
   const [allScores, setAllScores] = useState([]);
   const [allReflections, setAllReflections] = useState([]);
@@ -1533,8 +1534,9 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
 
   useEffect(() => {
     if (!isAuthReady || !classId) return;
+    setClassDataLoaded(false); // reset while new class loads
     const classUnsub = onSnapshot(getClassDocRef(classId), (docSnap) => {
-      if (docSnap.exists()) { const data = docSnap.data(); setClassData(data); setLessons(data.lessons || []); } else { setClassData(null); setLessons([]); }
+      if (docSnap.exists()) { const data = docSnap.data(); setClassData(data); setLessons(data.lessons || []); } else { setClassData(null); setLessons([]); } setClassDataLoaded(true);
     }, (error) => console.error("Error fetching class data:", error));
     const scoresUnsub = onSnapshot(query(getScoresCollectionRef(), where("classId", "==", classId)), (querySnapshot) => {
       const fetchedScores = []; querySnapshot.forEach((doc) => fetchedScores.push({ id: doc.id, ...doc.data() })); setAllScores(fetchedScores);
@@ -2089,6 +2091,11 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
   // --- Entry point coming from the Tutoring Dashboard ("Apps" menu for
   // teachers, or "Start Lesson" for students). Skips the Home role-choice
   // screen and, for students, skips manual name entry entirely. ---
+  // Keep a ref that always points to the latest handleSelectClassFromPicker
+  // so the classPicker useEffect can call it from an async callback without
+  // suffering from stale-closure issues.
+  const handleSelectClassFromPickerRef = useRef(null);
+
   useEffect(() => {
     if (!entryRequest) return;
     const signature = JSON.stringify({ mode: entryRequest.mode, classId: entryRequest.classId, studentName: entryRequest.studentName, ageLevel: entryRequest.ageLevel });
@@ -2098,43 +2105,9 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
     if (entryRequest.mode === 'teacher') {
       setView('teacherLogin');
     } else if (entryRequest.mode === 'student') {
-      const newName = (entryRequest.studentName || '').trim();
-      const newAgeLevel = entryRequest.ageLevel || null;
-      setUserName(newName);
-
-      if (newAgeLevel && entryRequest.classId) {
-        // Both ageLevel and specific classId provided — skip the class picker
-        // entirely and go straight to the lesson view. Navigate IMMEDIATELY so
-        // the student sees the lesson list right away; roster update happens in
-        // the background so there is no "blank/home screen" flash.
-        const targetClassId = entryRequest.classId;
-        setStudentAgeLevel(newAgeLevel);
-        setClassId(targetClassId);
-        setUserName(newName);
-        localStorage.setItem('lastClassId', targetClassId);
-        localStorage.setItem('lastUserName', newName);
-        setView('studentLesson');
-        // Background: ensure roster entry exists and is marked as linked
-        (async () => {
-          try {
-            const rosterDocRef = getRosterDocRef(targetClassId, newName);
-            const docSnap = await getDoc(rosterDocRef);
-            if (docSnap.exists()) {
-              const data = docSnap.data();
-              if (data.status !== 'approved' || !data.linkedToTutoring) {
-                await updateDoc(rosterDocRef, { status: 'approved', linkedToTutoring: true, lastSeen: Date.now() });
-              } else {
-                updateDoc(rosterDocRef, { lastSeen: Date.now() });
-              }
-            } else {
-              await setDoc(rosterDocRef, { classId: targetClassId, studentName: newName, studentAgeLevel: newAgeLevel, status: 'approved', linkedToTutoring: true, joinedAt: Date.now(), lastSeen: Date.now() });
-            }
-          } catch (error) {
-            console.error('Error updating SmartStudy roster from TutoringApp:', error);
-          }
-        })();
-      } else if (newAgeLevel) {
-        setStudentAgeLevel(newAgeLevel);
+      setUserName(entryRequest.studentName || '');
+      if (entryRequest.ageLevel) {
+        setStudentAgeLevel(entryRequest.ageLevel);
         setView('classPicker');
       } else {
         setView('ageLevelPicker');
@@ -2145,15 +2118,27 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
   useEffect(() => {
     if (view !== 'classPicker') return;
     setClassPickerLoading(true);
+    // Capture the target classId synchronously before the async fetch so
+    // the .then() callback always uses the value from this render cycle.
+    const autoSelectClassId = entryRequest?.classId || null;
     getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'classes'))
       .then(snap => {
         let ids = snap.docs.map(d => d.id).sort();
-        if (entryRequest?.classId && !ids.includes(entryRequest.classId)) ids = [entryRequest.classId, ...ids];
+        if (autoSelectClassId && !ids.includes(autoSelectClassId)) ids = [autoSelectClassId, ...ids];
         setClassPickerList(ids);
+        // Auto-select the lesson's class so the student doesn't have to click.
+        // handleSelectClassFromPickerRef.current is always the latest version,
+        // avoiding stale-closure issues in this async callback.
+        if (autoSelectClassId && handleSelectClassFromPickerRef.current) {
+          handleSelectClassFromPickerRef.current(autoSelectClassId);
+        }
       })
       .catch(err => {
         console.error('Error loading class list:', err);
-        setClassPickerList(entryRequest?.classId ? [entryRequest.classId] : []);
+        setClassPickerList(autoSelectClassId ? [autoSelectClassId] : []);
+        if (autoSelectClassId && handleSelectClassFromPickerRef.current) {
+          handleSelectClassFromPickerRef.current(autoSelectClassId);
+        }
       })
       .finally(() => setClassPickerLoading(false));
   }, [view]);
@@ -2195,6 +2180,9 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
       setModal({ message: 'Network error. Please try again.', type: 'error', visible: true });
     }
   }, [entryRequest, userName, studentAgeLevel]);
+
+  // Keep the ref in sync so the classPicker useEffect can call the latest version
+  handleSelectClassFromPickerRef.current = handleSelectClassFromPicker;
 
   const handleStudentLogin = useCallback(async () => {
     if (!targetClassId || !userName || !studentAgeLevel) { setModal({ message: 'Please enter Class ID, your Name, and select your Age Level.', type: 'error', visible: true }); return; }
@@ -2353,6 +2341,7 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
         if (!classData) return <ClassCreateView classId={classId} handleTeacherCreateClass={handleTeacherCreateClass} isLoading={isLoading} handleSetView={handleSetView} />;
         return <TeacherDashboard classId={classId} newLesson={newLesson} setNewLesson={setNewLesson} lessons={lessons} isLoading={isLoading} handleSaveLesson={handleSaveLesson} handleFormatLesson={handleFormatLesson} generateQuestions={generateQuestions} handleGenerateAllLevels={handleGenerateAllLevels} handleRegenerateLevel={handleRegenerateLevel} handleEditLesson={handleEditLesson} handleDeleteLesson={handleDeleteLesson} globalLeaderboardScores={globalLeaderboardScores} setSelectedName={setSelectedName} handleSetView={handleSetView} playClickSound={playClickSound} handleDownloadLessons={handleDownloadLessons} handleUploadLessons={handleUploadLessons} fileInputRef={fileInputRef} heartCounts={heartCounts} setSelectedAgeLevel={setSelectedAgeLevel} classRoster={classRoster} handleApproveStudent={handleApproveStudent} handleDeleteStudent={handleDeleteStudent} autoApprove={classData?.autoApprove || false} handleToggleAutoApprove={handleToggleAutoApprove} completionsList={completionsList} onLinkStudent={handleLinkStudentToTutoring} />;
       case 'studentLesson':
+        if (!classDataLoaded) return <LoadingView />;
         if (!classData) return <ClassErrorView classId={classId} handleSetView={handleSetView} />;
         return <StudentLessonView userName={userName} classId={classId} lessons={lessons} globalLeaderboardScores={globalLeaderboardScores} setSelectedName={setSelectedName} handleSetView={handleSetView} setActiveLessonId={setActiveLessonId} setSelectedLessonId={setSelectedLessonId} playClickSound={playClickSound} studentAgeLevel={studentAgeLevel} heartCounts={heartCounts} handleHeartClick={handleHeartClick} setSelectedAgeLevel={setSelectedAgeLevel} mySpendableCredits={mySpendableCredits} handleBuyAirplaneConfirmation={handleBuyAirplaneConfirmation} completionsList={completionsList} allScores={allScores} myTotalLessonsCompletedAllClasses={myTotalLessonsCompletedAllClasses} />;
       case 'studentReadLesson': return <StudentReadLessonView lessons={lessons} activeLessonId={activeLessonId} globalLeaderboardScores={globalLeaderboardScores} userName={userName} setSelectedName={setSelectedName} handleSetView={handleSetView} setQuizConfirmation={setQuizConfirmation} playClickSound={playClickSound} studentAgeLevel={studentAgeLevel} heartCounts={heartCounts} handleHeartClick={handleHeartClick} setSelectedAgeLevel={setSelectedAgeLevel} allReflections={allReflections} classId={classId} completionsList={completionsList} allScores={allScores} />;

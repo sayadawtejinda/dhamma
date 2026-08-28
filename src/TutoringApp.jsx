@@ -2866,21 +2866,25 @@ function SmartStudyProgressBadge({ classId, studentName, smartStudyNames, compac
     if (!classId || !studentName) return;
     if (classId.includes('/')) { setBadError(true); return; }
 
-    // Build query names synchronously — no async roster fetch that can race
-    // with the effect cleanup and leave completedCount stuck at null forever.
+    // Names we know about synchronously (no Firestore round-trip needed).
+    // smartStudyNames[classId] is the old SmartStudy name stored at link time.
     const profileSmartStudyName = smartStudyNames?.[classId] || null;
-    const namesToQuery = [...new Set([studentName, profileSmartStudyName].filter(Boolean))];
+    const initialNames = [...new Set([studentName, profileSmartStudyName].filter(Boolean))];
 
-    // One onSnapshot per distinct name; shared Set deduplicates lessonIds.
     const distinctIds = new Set();
     const unsubs = [];
+    let live = true; // false once cleanup runs
     let settled = 0;
+    // totalExpected starts at initialNames.length; if a roster fetch adds a
+    // new name later we increment it first so we don't publish prematurely.
+    let totalExpected = initialNames.length;
 
     const trySetCount = () => {
-      if (settled >= namesToQuery.length) setCompletedCount(distinctIds.size);
+      if (settled >= totalExpected) setCompletedCount(distinctIds.size);
     };
 
-    namesToQuery.forEach(name => {
+    const addNameSubscription = (name) => {
+      if (!name || !live) return;
       try {
         const q = query(
           collection(db, 'artifacts', appId, 'public', 'data', 'quizCompletions'),
@@ -2903,9 +2907,42 @@ function SmartStudyProgressBadge({ classId, studentName, smartStudyNames, compac
         settled++;
         trySetCount();
       }
-    });
+    };
 
-    return () => unsubs.forEach(u => u());
+    // Subscribe immediately with known names
+    initialNames.forEach(name => addNameSubscription(name));
+
+    // Also do a non-blocking roster lookup to pick up old-linked students
+    // whose profile pre-dates the smartStudyNames field (they were linked before
+    // smartStudyNames was added, so their old SmartStudy name isn't in the profile
+    // but IS in the roster doc).
+    if (!profileSmartStudyName) {
+      totalExpected++; // hold count until roster check completes
+      const rosterRef = doc(
+        db, 'artifacts', appId, 'public', 'data', 'classRoster',
+        `${classId}_${encodeURIComponent(studentName)}`
+      );
+      getDoc(rosterRef).then(snap => {
+        if (!live) return;
+        const rosterName = snap.exists() ? snap.data().studentName : null;
+        if (rosterName && !initialNames.includes(rosterName)) {
+          // Found a distinct old name — subscribe for it
+          totalExpected++; // one more name to settle
+          addNameSubscription(rosterName);
+        }
+        settled++; // roster check itself is now settled
+        trySetCount();
+      }).catch(() => {
+        if (!live) return;
+        settled++;
+        trySetCount();
+      });
+    }
+
+    return () => {
+      live = false;
+      unsubs.forEach(u => u());
+    };
   }, [classId, studentName, smartStudyNames]);
 
   useEffect(() => {
@@ -2953,13 +2990,7 @@ function SmartStudyProgressBadge({ classId, studentName, smartStudyNames, compac
   }, [autoTrophy, completedCount, classId]);
 
   if (badError) return null;
-  if (completedCount === null) return <p className="text-xs text-gray-500 mt-1">Checking Smart Study progress...</p>;
-
-  return (
-    <p className={`font-bold text-blue-700 mt-1 ${compact ? 'text-xs' : 'text-sm'}`}>
-      ✅ Completed {completedCount}{totalCount !== null ? ` / ${totalCount}` : ''} lesson{completedCount === 1 ? '' : 's'} in Smart Study
-    </p>
-  );
+  if (completedCount === null) return null;
 }
 
 function StudentDashboard({ user, studentProfile, studentUid, announcements, onOpenSmartStudy, onLogout }) { 
@@ -4060,6 +4091,12 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                     <p className={`text-sm ${textPColor}`}>Sent: {formatTimestamp(lesson.sentAt)}</p>
                     {lesson.details && <p className={`text-sm ${textPColor} font-medium mt-1`}>Lesson ID: {lesson.details}</p>}
                     {lesson.link && lesson.link.startsWith('smartstudy://') && (
+                      <>
+                        {extractSmartStudyClassId(lesson.link) && (
+                          <p className="text-xs font-semibold text-blue-600 mb-1">
+                            📚 Class ID: <span className="font-bold">{extractSmartStudyClassId(lesson.link)}</span>
+                          </p>
+                        )}
                       <SmartStudyProgressBadge
                         classId={extractSmartStudyClassId(lesson.link)}
                         studentName={studentProfile?.name}
@@ -4074,6 +4111,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                           alreadyRequested: !!studentProfile?.trophyRequested
                         }}
                       />
+                      </>
                     )}
                     {lesson.unitCount > 0 && (completedUnitList > 0 || showNowFinished) && (
                       lesson.link && lesson.link.startsWith('smartstudy://') ? (
@@ -5418,7 +5456,6 @@ export default function TutoringApp({ onOpenSmartStudy }) {
                const studentRef = doc(db, `${publicDataPath}/students`, studentDocId);
                await updateDoc(studentRef, { authorizedUids: arrayUnion(user.uid) });
                console.log('[DIAG] Linked current session uid to student doc via authorizedUids');
-               window.alert("Account Linked Successfully! Next time, you will be logged in automatically with this email.");
             } catch (err) {
                console.error("[DIAG] Error linking account:", err);
             }
