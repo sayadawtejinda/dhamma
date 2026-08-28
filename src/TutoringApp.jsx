@@ -3636,23 +3636,28 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           }
           if (totalPts > 0) setScore(`${totalPts.toLocaleString()} pts`);
 
-          // Auto-fill "Lesson completed" from quizCompletions distinct lessonIds
-          const distinctCompletedIds = new Set();
-          for (const name of namesToTry) {
-            const cq = query(
-              collection(db, 'artifacts', appId, 'public', 'data', 'quizCompletions'),
-              where('classId', '==', ssClassId),
-              where('studentName', '==', name)
-            );
-            const csnap = await getDocs(cq);
-            csnap.docs.forEach(d => distinctCompletedIds.add(d.data().lessonId));
-          }
+         } catch (e) {
+          console.error('Error fetching SmartStudy score for report modal:', e);
+        }
+
+        // Auto-fill "Lesson completed" — separate try-catch so score failure
+        // does not block this, and single-field filter avoids composite index.
+        try {
+          const cq = query(
+            collection(db, 'artifacts', appId, 'public', 'data', 'quizCompletions'),
+            where('classId', '==', ssClassId)   // classId only — no composite index needed
+          );
+          const csnap = await getDocs(cq);
+          const distinctCompletedIds = new Set(
+            csnap.docs
+              .filter(d => namesToTry.includes(d.data().studentName))
+              .map(d => d.data().lessonId)
+          );
           if (distinctCompletedIds.size > 0) {
-            // Call handleCompletedUnitChange so "Today, completed" also syncs
-            handleCompletedUnitChange(String(distinctCompletedIds.size));
+            setCompletedUnitInput(String(distinctCompletedIds.size));
           }
         } catch (e) {
-          console.error('Error fetching SmartStudy score for report modal:', e);
+          console.error('Error fetching SmartStudy completions for report modal:', e);
         }
       }
     }
