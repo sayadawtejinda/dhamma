@@ -3634,9 +3634,10 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
             const snap = await getDocs(q);
             snap.docs.forEach(d => { totalPts += (Number(d.data().score) || 0); });
           }
-                    if (totalPts > 0) setScore(`${totalPts.toLocaleString()} pts`);
-          // Also auto-fill "Lesson completed" from quizCompletions count
-          const distinctIds = new Set();
+          if (totalPts > 0) setScore(`${totalPts.toLocaleString()} pts`);
+
+          // Auto-fill "Lesson completed" from quizCompletions distinct lessonIds
+          const distinctCompletedIds = new Set();
           for (const name of namesToTry) {
             const cq = query(
               collection(db, 'artifacts', appId, 'public', 'data', 'quizCompletions'),
@@ -3644,9 +3645,12 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
               where('studentName', '==', name)
             );
             const csnap = await getDocs(cq);
-            csnap.docs.forEach(d => distinctIds.add(d.data().lessonId));
+            csnap.docs.forEach(d => distinctCompletedIds.add(d.data().lessonId));
           }
-          if (distinctIds.size > 0) handleCompletedUnitChange(String(distinctIds.size));
+          if (distinctCompletedIds.size > 0) {
+            // Call handleCompletedUnitChange so "Today, completed" also syncs
+            handleCompletedUnitChange(String(distinctCompletedIds.size));
+          }
         } catch (e) {
           console.error('Error fetching SmartStudy score for report modal:', e);
         }
@@ -3889,10 +3893,8 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                 className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="e.g., I finished Algebra Chapter 1."
               ></textarea>
             </div>
-            {(() => {
-              const isSmartStudySession = feedbackSession?.lessonLink && feedbackSession.lessonLink.startsWith('smartstudy://');
-              return (
-            <div className={`mb-6 grid grid-cols-3 gap-2 sm:gap-3`}>
+            {(()=>{ return (
+            <div className="mb-6 grid grid-cols-3 gap-2 sm:gap-3">
               <div>
                 <label className="block text-gray-700 mb-2 text-sm">Score</label>
                 <input
@@ -3901,7 +3903,6 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                 />
               </div>
 
-              )}
               <div>
                 <label className="block text-gray-700 mb-2 text-sm">Today, completed</label>
                 <input
@@ -3912,12 +3913,9 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                   className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
-              )}
 
-                           <div className="relative">
-                <label className="block text-gray-700 mb-2 text-sm">
-                  Lesson completed
-                </label>
+              <div className="relative">
+                <label className="block text-gray-700 mb-2 text-sm">Lesson completed</label>
                 {requestTrophyChecked && (
                   <div className="absolute -top-14 left-1/2 -translate-x-1/2 bg-yellow-100 border border-yellow-300 text-yellow-900 text-sm font-bold px-4 py-2 rounded-xl shadow-lg whitespace-nowrap z-20 animate-bounce">
                     🏆 +{requestTrophyAmount} {requestTrophyAmount > 1 ? 'Trophies' : 'Trophy'}!
@@ -3956,7 +3954,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                   )}
                 </div>
               </div>
-              
+
               {parseInt(completedUnitInput) > 0 && (
                 <p className="col-span-3 text-sm font-semibold text-emerald-700 mt-1">
                   {parseInt(completedUnitInput) < previousHighestUnitForModal ? (

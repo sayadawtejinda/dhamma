@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from 'react';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { 
   doc, 
@@ -2091,11 +2091,13 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
   // --- Entry point coming from the Tutoring Dashboard ("Apps" menu for
   // teachers, or "Start Lesson" for students). Skips the Home role-choice
   // screen and, for students, skips manual name entry entirely. ---
-  useEffect(() => {
+  // useLayoutEffect fires before the browser paints, so the view switches
+  // to classPicker without any visible flash of the previous screen.
+  useLayoutEffect(() => {
     if (!entryRequest) return;
     const signature = JSON.stringify({ mode: entryRequest.mode, classId: entryRequest.classId, studentName: entryRequest.studentName, ageLevel: entryRequest.ageLevel });
-    // Teacher mode: deduplicate to avoid unnecessary re-renders.
-    // Student mode: always re-navigate so the class picker shows immediately.
+    // Teacher mode: deduplicate. Student mode: always re-navigate (no dedup)
+    // so the class picker shows immediately every time.
     if (entryRequest.mode !== 'student' && signature === lastHandledEntryRequestRef.current) return;
     lastHandledEntryRequestRef.current = signature;
 
