@@ -2866,83 +2866,46 @@ function SmartStudyProgressBadge({ classId, studentName, smartStudyNames, compac
     if (!classId || !studentName) return;
     if (classId.includes('/')) { setBadError(true); return; }
 
-    let unsubCompletions = null;
-    let cancelled = false;
-
-    const subscribeCompletions = (namesToQuery) => {
-      // quizCompletions only supports equality filters, so if we have multiple
-      // candidate names we run one snapshot per name and merge the results.
-      const distinctIds = new Set();
-      const unsubs = [];
-      let pendingSnaps = namesToQuery.length;
-      const setCount = () => { if (!cancelled) setCompletedCount(distinctIds.size); };
-
-      namesToQuery.forEach(name => {
-        try {
-          const q = query(
-            collection(db, 'artifacts', appId, 'public', 'data', 'quizCompletions'),
-            where('classId', '==', classId),
-            where('studentName', '==', name)
-          );
-          const unsub = onSnapshot(q, (snap) => {
-            snap.docs.forEach(d => distinctIds.add(d.data().lessonId));
-            pendingSnaps = Math.max(0, pendingSnaps - 1);
-            setCount();
-            pendingSnaps = 0; // subsequent updates come through fine
-          }, (err) => console.error('Error loading Smart Study completions:', err));
-          unsubs.push(unsub);
-        } catch (err) {
-          console.error('Error setting up Smart Study progress listener:', err);
-        }
-      });
-      return () => unsubs.forEach(u => u());
-    };
-
-    // Build the list of names to query in quizCompletions.
-    //
-    // Priority order:
-    //   1. smartStudyNames[classId] — the SmartStudy name stored on the Tutoring
-    //      student profile at link time. This is the most reliable signal: it
-    //      holds the old SmartStudy name BEFORE rename, so completions recorded
-    //      under EITHER name are found.
-    //   2. classRoster lookup — for students who opened SmartStudy through
-    //      Tutoring (handleSelectClassFromPicker), their roster entry is keyed by
-    //      the Tutoring name and its studentName field matches. Useful as a
-    //      cross-check when smartStudyNames is absent.
-    //   3. Tutoring profile name — always included as fallback (covers the common
-    //      case where both names are identical).
+    // Build query names synchronously — no async roster fetch that can race
+    // with the effect cleanup and leave completedCount stuck at null forever.
     const profileSmartStudyName = smartStudyNames?.[classId] || null;
+    const namesToQuery = [...new Set([studentName, profileSmartStudyName].filter(Boolean))];
 
-    const buildAndSubscribe = (extraName) => {
-      if (cancelled) return;
-      const namesToQuery = [...new Set([studentName, profileSmartStudyName, extraName].filter(Boolean))];
-      unsubCompletions = subscribeCompletions(namesToQuery);
+    // One onSnapshot per distinct name; shared Set deduplicates lessonIds.
+    const distinctIds = new Set();
+    const unsubs = [];
+    let settled = 0;
+
+    const trySetCount = () => {
+      if (settled >= namesToQuery.length) setCompletedCount(distinctIds.size);
     };
 
-    if (profileSmartStudyName) {
-      // We already have the SmartStudy name from the profile — no Firestore
-      // lookup needed; start subscribing right away.
-      buildAndSubscribe(null);
-    } else {
-      // Fall back to roster lookup for students who haven't been linked yet
-      // (or whose profile pre-dates the smartStudyNames field).
-      const thisStudentRosterRef = doc(
-        db, 'artifacts', appId, 'public', 'data', 'classRoster',
-        `${classId}_${encodeURIComponent(studentName)}`
-      );
-      getDoc(thisStudentRosterRef).then(snap => {
-        const rosterStudentName = snap.exists() ? snap.data().studentName : null;
-        buildAndSubscribe(rosterStudentName);
-      }).catch(err => {
-        console.error('Error loading classRoster for Smart Study badge:', err);
-        buildAndSubscribe(null);
-      });
-    }
+    namesToQuery.forEach(name => {
+      try {
+        const q = query(
+          collection(db, 'artifacts', appId, 'public', 'data', 'quizCompletions'),
+          where('classId', '==', classId),
+          where('studentName', '==', name)
+        );
+        let firstFire = true;
+        const unsub = onSnapshot(q, (snap) => {
+          snap.docs.forEach(d => distinctIds.add(d.data().lessonId));
+          if (firstFire) { firstFire = false; settled++; }
+          trySetCount();
+        }, (err) => {
+          console.error('Error loading Smart Study completions:', err);
+          if (firstFire) { firstFire = false; settled++; }
+          trySetCount();
+        });
+        unsubs.push(unsub);
+      } catch (err) {
+        console.error('Error setting up Smart Study progress listener:', err);
+        settled++;
+        trySetCount();
+      }
+    });
 
-    return () => {
-      cancelled = true;
-      if (unsubCompletions) unsubCompletions();
-    };
+    return () => unsubs.forEach(u => u());
   }, [classId, studentName, smartStudyNames]);
 
   useEffect(() => {
@@ -4073,9 +4036,12 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
               const nextUnitNumber = lesson.unitCount > 0 ? Math.min(lesson.unitCount, completedUnitList + 1) : completedUnitList + 1;
               const latestSessionForLesson = completedSessions.find(s => s.lessonTitle === lesson.title && typeof s.completedUnit === 'number' && s.completedUnit > 0);
               const showNowFinished = !!latestSessionForLesson;
-              const buttonText = isNew
-  ? (lesson.unitCount > 0 ? `Start ${lesson.unitLabel || 'Chapter'} ${nextUnitNumber}` : 'Start Lesson')
-  : (lesson.unitCount > 0 ? `Continue ${lesson.unitLabel || 'Chapter'} ${nextUnitNumber}` : 'Continue Lesson');
+              const isSmartStudyLesson = !!(lesson.link && lesson.link.startsWith('smartstudy://'));
+              const buttonText = isSmartStudyLesson
+                ? (isNew ? '▶ Open Smart Study' : '▶ Resume Smart Study')
+                : (isNew
+                  ? (lesson.unitCount > 0 ? `Start ${lesson.unitLabel || 'Chapter'} ${nextUnitNumber}` : 'Start Lesson')
+                  : (lesson.unitCount > 0 ? `Continue ${lesson.unitLabel || 'Chapter'} ${nextUnitNumber}` : 'Continue Lesson'));
 
               const recentCompletedSession = mySessions
                 .filter(s => s.lessonTitle === lesson.title && s.endTime)

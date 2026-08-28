@@ -2104,19 +2104,19 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
 
       if (newAgeLevel && entryRequest.classId) {
         // Both ageLevel and specific classId provided — skip the class picker
-        // entirely and go straight to the lesson view. This is the common
-        // "Start Lesson" path from TutoringApp where we know exactly which
-        // class the student should enter.
-        setStudentAgeLevel(newAgeLevel);
+        // entirely and go straight to the lesson view. Navigate IMMEDIATELY so
+        // the student sees the lesson list right away; roster update happens in
+        // the background so there is no "blank/home screen" flash.
         const targetClassId = entryRequest.classId;
+        setStudentAgeLevel(newAgeLevel);
+        setClassId(targetClassId);
+        setUserName(newName);
+        localStorage.setItem('lastClassId', targetClassId);
+        localStorage.setItem('lastUserName', newName);
+        setView('studentLesson');
+        // Background: ensure roster entry exists and is marked as linked
         (async () => {
           try {
-            const classDocSnap = await getDoc(getClassDocRef(targetClassId));
-            if (!classDocSnap.exists()) {
-              // Class not found — fall back to picker
-              setView('classPicker');
-              return;
-            }
             const rosterDocRef = getRosterDocRef(targetClassId, newName);
             const docSnap = await getDoc(rosterDocRef);
             if (docSnap.exists()) {
@@ -2129,14 +2129,8 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
             } else {
               await setDoc(rosterDocRef, { classId: targetClassId, studentName: newName, studentAgeLevel: newAgeLevel, status: 'approved', linkedToTutoring: true, joinedAt: Date.now(), lastSeen: Date.now() });
             }
-            localStorage.setItem('lastClassId', targetClassId);
-            localStorage.setItem('lastUserName', newName);
-            setClassId(targetClassId);
-            setUserName(newName);
-            setView('studentLesson');
           } catch (error) {
-            console.error('Error auto-entering SmartStudy class from TutoringApp:', error);
-            setView('classPicker'); // fallback on error
+            console.error('Error updating SmartStudy roster from TutoringApp:', error);
           }
         })();
       } else if (newAgeLevel) {
