@@ -936,6 +936,17 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma }) {
   const handleSendLesson = async (e) => {
     e.preventDefault();
     const lessonToSend = lessonBank.find(l => l.id === selectedBankLessonId);
+    // For SmartStudy, use the selected class's lesson count as effective
+    // unitCount so student receives correct number even if bank entry not saved.
+    const ssSelectedClass = (sendSmartStudyClassId && smartStudyClasses)
+      ? (smartStudyClasses || []).find(c => c.classId === sendSmartStudyClassId)
+      : null;
+    const effectiveLessonUnitCount = (ssSelectedClass && lessonToSend?.link === 'smartstudy://')
+      ? (ssSelectedClass.lessonCount || 0)
+      : (lessonToSend?.unitCount || 0);
+    const effectiveLessonTrophyLimit = (ssSelectedClass && lessonToSend?.link === 'smartstudy://')
+      ? Math.max(1, Math.floor((ssSelectedClass.lessonCount || 0) / 5))
+      : (lessonToSend?.trophyLimit || 0);
     // For Smart Study lessons stored without a classId, substitute the one
     // chosen in the Send Action class picker.
     const effectiveLessonLink = (() => {
@@ -971,9 +982,9 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma }) {
               title: lessonToSend.title,
               link: effectiveLessonLink,
               details: lessonToSend.details,
-              trophyLimit: lessonToSend.trophyLimit || 0,
+              trophyLimit: effectiveLessonTrophyLimit,
               unitLabel: lessonToSend.unitLabel || 'Chapter',
-              unitCount: lessonToSend.unitCount || 0,
+              unitCount: effectiveLessonUnitCount,
               status: 'pending',
               sentAt: serverTimestamp()
             });
@@ -1009,9 +1020,9 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma }) {
             title: lessonToSend.title,
             link: effectiveLessonLink,
             details: lessonToSend.details,
-            trophyLimit: lessonToSend.trophyLimit || 0,
+            trophyLimit: effectiveLessonTrophyLimit,
             unitLabel: lessonToSend.unitLabel || 'Chapter',
-            unitCount: lessonToSend.unitCount || 0,
+            unitCount: effectiveLessonUnitCount,
             status: 'pending',
             sentAt: serverTimestamp()
           });
@@ -4232,6 +4243,9 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className={`font-semibold text-lg ${textHColor}`}>{lesson.title}</p>
+                      {isSmartStudyLesson && ssClassIdForBtn && (
+                        <span className="text-sm font-semibold text-blue-600 ml-1">— {ssClassIdForBtn}</span>
+                      )}
                       {lesson.unitCount > 0 && completedUnitList >= lesson.unitCount && (
                         <span className="bg-emerald-500 text-white text-xs font-bold px-2 py-1 rounded-full">✅ Completed</span>
                       )}
@@ -4257,7 +4271,8 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                     )}
                     {lesson.link && lesson.link.startsWith('smartstudy://') && ssCompletionCounts[extractSmartStudyClassId(lesson.link)] > 0 && (
                       <p className="text-sm font-bold text-indigo-700 mt-1">
-                        Now you finished {lesson.unitLabel || 'Lesson'} {ssCompletionCounts[extractSmartStudyClassId(lesson.link)]}.
+                        You completed up to {lesson.unitLabel || 'Lesson'} {ssCompletionCounts[extractSmartStudyClassId(lesson.link)]}
+                        {lesson.unitCount > 0 ? ` / ${lesson.unitCount}` : ''}.
                       </p>
                     )}
                     {lesson.unitCount > 0 && (completedUnitList > 0 || showNowFinished) && !(lesson.link && lesson.link.startsWith('smartstudy://')) && (
