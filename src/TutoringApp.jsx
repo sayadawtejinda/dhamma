@@ -3625,6 +3625,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         try {
           const namesToTry = [...new Set([ssName, ssOldName].filter(Boolean))];
           let totalPts = 0;
+          const completedLessonIds = new Set(); // distinct lessonIds = "Lesson completed"
           for (const name of namesToTry) {
             const q = query(
               collection(db, 'artifacts', appId, 'public', 'data', 'scores'),
@@ -3632,33 +3633,20 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
               where('studentName', '==', name)
             );
             const snap = await getDocs(q);
-            snap.docs.forEach(d => { totalPts += (Number(d.data().score) || 0); });
+            snap.docs.forEach(d => {
+              totalPts += (Number(d.data().score) || 0);
+              if (d.data().lessonId) completedLessonIds.add(d.data().lessonId);
+            });
           }
           if (totalPts > 0) setScore(`${totalPts.toLocaleString()} pts`);
-
-        } catch (e) {
-          console.error('Error fetching SmartStudy score for report modal:', e);
-        }
-
-        // Auto-fill "Lesson completed" — separate try/catch so a score-fetch
-        // failure never blocks this.  Query by classId only (single-field
-        // filter) so no Firestore composite index is required.
-        try {
-          const cq = query(
-            collection(db, 'artifacts', appId, 'public', 'data', 'quizCompletions'),
-            where('classId', '==', ssClassId)
-          );
-          const csnap = await getDocs(cq);
-          const distinctCompletedIds = new Set(
-            csnap.docs
-              .filter(d => namesToTry.includes(d.data().studentName))
-              .map(d => d.data().lessonId)
-          );
-          if (distinctCompletedIds.size > 0) {
-            setCompletedUnitInput(String(distinctCompletedIds.size));
+          // SmartStudy computes myLessonsCompleted as distinct lessonIds in scores —
+          // we use the same method so the two numbers always agree.
+          if (completedLessonIds.size > 0) {
+            setCompletedUnitInput(String(completedLessonIds.size));
           }
+
         } catch (e) {
-          console.error('Error fetching SmartStudy completions for report modal:', e);
+          console.error('Error fetching SmartStudy score/completions for report modal:', e);
         }
       }
     }
@@ -3834,8 +3822,12 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
   const previousHighestUnitForModal = feedbackSession ? getEffectivePreviousUnit(activeLessonKeyForModal, feedbackSession) : 0;
 
   const completedSessions = mySessions
-    .filter(s => s.endTime)
-    .sort((a, b) => b.startTime.toDate() - a.startTime.toDate());
+    .filter(s => s.endTime && s.startTime)
+    .sort((a, b) => {
+      const bT = b.startTime?.toDate?.()?.getTime?.() ?? 0;
+      const aT = a.startTime?.toDate?.()?.getTime?.() ?? 0;
+      return bT - aT;
+    });
     
   const availableLessons = myLessons; 
 
@@ -4225,9 +4217,15 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                   : (lesson.unitCount > 0 ? `Continue ${lesson.unitLabel || 'Chapter'} ${nextUnitNumber}` : 'Continue Lesson'));
 
               const recentCompletedSession = mySessions
-                .filter(s => s.lessonTitle === lesson.title && s.endTime)
-                .sort((a, b) => b.endTime.toDate() - a.endTime.toDate())[0];
-              const canRedoReport = recentCompletedSession && (nowTick - recentCompletedSession.endTime.toDate().getTime()) < 60 * 60 * 1000;
+                .filter(s => s.lessonTitle === lesson.title && s.endTime && s.startTime)
+                .sort((a, b) => {
+                  const bT = b.endTime?.toDate?.()?.getTime?.() ?? 0;
+                  const aT = a.endTime?.toDate?.()?.getTime?.() ?? 0;
+                  return bT - aT;
+                })[0];
+              const canRedoReport = recentCompletedSession
+                && recentCompletedSession.endTime?.toDate
+                && (nowTick - recentCompletedSession.endTime.toDate().getTime()) < 60 * 60 * 1000;
 
               return (
                 <div key={lesson.id} ref={index === 0 ? firstLessonRef : null} className={`${divBg} ${divBorder} border p-4 rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center`}>
