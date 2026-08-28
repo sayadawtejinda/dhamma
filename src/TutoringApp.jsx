@@ -2259,19 +2259,21 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
               
               const lessonKey = sanitizeKey(lesson.title);
               const previouslyEarned = student.earnedTrophies?.[lessonKey] || 0;
-              // For SmartStudy lessons, use per-class trophy limit (floor(classLessonCount/5))
-              // so the trophy status reflects the selected class, not the overall bank total.
+              // When a SmartStudy class is selected, use per-class trophy limit and unit count
               const ssClassForTrophy = (sendSmartStudyClassId && smartStudyClasses)
                 ? (smartStudyClasses || []).find(c => c.classId === sendSmartStudyClassId)
                 : null;
+              const effectiveUnitCountForDisplay = ssClassForTrophy
+                ? (ssClassForTrophy.lessonCount || 0)
+                : (lesson.unitCount || 0);
               const maxAvailable = ssClassForTrophy
                 ? Math.max(1, Math.floor((ssClassForTrophy.lessonCount || 0) / 5))
                 : (lesson.trophyLimit || 0);
               const remaining = Math.max(0, maxAvailable - previouslyEarned);
 
               const trackedCompletedUnit = student.completedUnits?.[lessonKey] || 0;
-              const derivedCompletedUnit = (lesson.unitCount > 0 && maxAvailable > 0)
-                ? Math.min(lesson.unitCount, Math.ceil((previouslyEarned * lesson.unitCount) / maxAvailable))
+              const derivedCompletedUnit = (effectiveUnitCountForDisplay > 0 && maxAvailable > 0)
+                ? Math.min(effectiveUnitCountForDisplay, Math.ceil((previouslyEarned * effectiveUnitCountForDisplay) / maxAvailable))
                 : 0;
               const completedUnit = Math.max(trackedCompletedUnit, derivedCompletedUnit);
 
@@ -2285,10 +2287,12 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
 
                     {lesson.unitCount > 0 && (
                       <div className="p-4 bg-indigo-50 rounded-lg border border-indigo-200">
-                        <p className="text-indigo-800 font-bold mb-1">Student Progress on this Lesson:</p>
+                        <p className="text-indigo-800 font-bold mb-1">
+                          Student Progress on this {ssClassForTrophy ? `${ssClassForTrophy.classId} ` : ''}Lesson:
+                        </p>
                         {completedUnit > 0 ? (
                           <p className="text-sm text-indigo-700">
-                            {student.name} completed up to {lesson.unitLabel || 'Chapter'} {completedUnit} / {lesson.unitCount}.
+                            {student.name} completed up to {lesson.unitLabel || 'Lesson'} {completedUnit} / {effectiveUnitCountForDisplay}.
                             {showNowFinished && (
                               <>
                                 {' '}Now finished {lesson.unitLabel || 'Chapter'} {latestSessionForLesson.completedUnit}.
@@ -3841,12 +3845,11 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
   const previouslyEarnedForModal = feedbackSession ? (earnedTrophiesMapForModal[activeLessonKeyForModal] || 0) : 0;
   const maxAvailableForModal = (() => {
     if (!feedbackSession) return 0;
-    // For SmartStudy sessions, recalculate from the class's actual lesson count
-    // so "🏆 0/2" is shown instead of the outdated "🏆 0/7".
-    if (feedbackSession.lessonLink?.startsWith('smartstudy://') && smartStudyClasses) {
-      const ssClassId = extractSmartStudyClassId(feedbackSession.lessonLink);
-      const cls = (smartStudyClasses || []).find(c => c.classId === ssClassId);
-      if (cls) return Math.max(1, Math.floor((cls.lessonCount || 0) / 5));
+    // For SmartStudy sessions, derive trophy limit from the session's unitCount
+    // (set correctly when lesson was sent via effectiveLessonUnitCount).
+    // floor(10 lessons / 5) = 2 trophies — no reference to TeacherDashboard state.
+    if (feedbackSession.lessonLink?.startsWith('smartstudy://') && feedbackSession.lessonUnitCount > 0) {
+      return Math.max(1, Math.floor(feedbackSession.lessonUnitCount / 5));
     }
     return feedbackSession.lessonTrophyLimit || 0;
   })();
