@@ -2094,7 +2094,9 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
   useEffect(() => {
     if (!entryRequest) return;
     const signature = JSON.stringify({ mode: entryRequest.mode, classId: entryRequest.classId, studentName: entryRequest.studentName, ageLevel: entryRequest.ageLevel });
-    if (signature === lastHandledEntryRequestRef.current) return;
+    // Teacher mode: deduplicate to avoid unnecessary re-renders.
+    // Student mode: always re-navigate so the class picker shows immediately.
+    if (entryRequest.mode !== 'student' && signature === lastHandledEntryRequestRef.current) return;
     lastHandledEntryRequestRef.current = signature;
 
     if (entryRequest.mode === 'teacher') {
