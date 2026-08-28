@@ -651,7 +651,7 @@ function AttendanceReports({ students, teacherSchedule, sessions }) {
   );
 }
 
-function TeacherDashboard({ user, onOpenSmartStudy }) {
+function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma }) {
   const [students, setStudents] = useState([]);
   const [lessonBank, setLessonBank] = useState([]); 
   const [sessions, setSessions] = useState([]); 
@@ -685,6 +685,9 @@ function TeacherDashboard({ user, onOpenSmartStudy }) {
   const [selectedStudentUid, setSelectedStudentUid] = useState('');
   const [selectedBankLessonId, setSelectedBankLessonId] = useState('');
   const [sendSmartStudyClassId, setSendSmartStudyClassId] = useState(''); // class chosen in Send Action for smartstudy:// lessons
+  const [sendAbhidhammaLessonId, setSendAbhidhammaLessonId] = useState(''); // lesson chosen in Send Action for abhidhamma:// lessons
+  const [abhidhammaLessons, setAbhidhammaLessons] = useState(null);   // null = not yet loaded
+  const [abhidhammaLoading, setAbhidhammaLoading] = useState(false);
   const [sendTargetType, setSendTargetType] = useState('student'); 
   const [selectedGroupId, setSelectedGroupId] = useState(''); 
   const [sendStudentSearch, setSendStudentSearch] = useState(''); 
@@ -851,6 +854,28 @@ function TeacherDashboard({ user, onOpenSmartStudy }) {
   // --- Smart Study app picker (reads directly from Firestore; only loads
   // the class ID list, and only when the teacher opens the picker, so this
   // never loads all Smart Study lesson content up front). ---
+  const ABHIDHAMMA_APP_ID = 'lesson-translator-app-v6';
+
+  const extractAbhidhammaLessonId = (link) => {
+    if (!link || !link.startsWith('abhidhamma://')) return null;
+    return link.replace('abhidhamma://', '') || null;
+  };
+
+  const loadAbhidhammaLessons = async () => {
+    if (abhidhammaLessons !== null) return;
+    setAbhidhammaLoading(true);
+    try {
+      const snap = await getDocs(collection(db, 'artifacts', ABHIDHAMMA_APP_ID, 'public', 'data', 'lessons'));
+      const list = snap.docs.map(d => ({ id: d.id, title: d.data().title || d.id }));
+      list.sort((a, b) => a.title.localeCompare(b.title));
+      setAbhidhammaLessons(list);
+    } catch (err) {
+      console.error('Error loading Abhidhamma lessons:', err);
+      setAbhidhammaLessons([]);
+    }
+    setAbhidhammaLoading(false);
+  };
+
   const loadSmartStudyClassList = async () => {
     if (smartStudyClasses !== null) return; // already loaded/cached
     setPickerLoading(true);
@@ -913,9 +938,12 @@ function TeacherDashboard({ user, onOpenSmartStudy }) {
     const lessonToSend = lessonBank.find(l => l.id === selectedBankLessonId);
     // For Smart Study lessons stored without a classId, substitute the one
     // chosen in the Send Action class picker.
-    const effectiveLessonLink = (lessonToSend?.link === 'smartstudy://' && sendSmartStudyClassId)
-      ? `smartstudy://${sendSmartStudyClassId}`
-      : (lessonToSend?.link || '');
+    const effectiveLessonLink = (() => {
+      if (!lessonToSend?.link) return '';
+      if (lessonToSend.link === 'smartstudy://' && sendSmartStudyClassId) return `smartstudy://${sendSmartStudyClassId}`;
+      if (lessonToSend.link === 'abhidhamma://' && sendAbhidhammaLessonId) return `abhidhamma://${sendAbhidhammaLessonId}`;
+      return lessonToSend.link;
+    })();
 
     if (!lessonToSend) return;
 
@@ -1997,6 +2025,13 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
             <span className="flex items-center text-lg font-bold text-blue-800">📚 Smart Study app</span>
             <span className="text-blue-500 text-xl">→</span>
           </button>
+          <button
+            onClick={() => onOpenAbhidhamma && onOpenAbhidhamma({ mode: 'teacher' })}
+            className="w-full flex items-center justify-between bg-white p-4 rounded-xl border-2 border-amber-200 hover:border-amber-400 hover:shadow-md transition-all mt-3"
+          >
+            <span className="flex items-center text-lg font-bold text-amber-800">📚 Abhidhamma app</span>
+            <span className="text-amber-500 text-xl">→</span>
+          </button>
         </div>
       )}
 
@@ -2135,7 +2170,7 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
           
           <div className="mb-4">
             <label className="block text-gray-700 mb-2">Select Lesson from Bank</label>
-            <select value={selectedBankLessonId} onChange={(e) => { setSelectedBankLessonId(e.target.value); setSendSmartStudyClassId(''); }} className="w-full p-3 border rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <select value={selectedBankLessonId} onChange={(e) => { setSelectedBankLessonId(e.target.value); setSendSmartStudyClassId(''); setSendAbhidhammaLessonId(''); }} className="w-full p-3 border rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500">
               <option value="" disabled>-- Select a lesson --</option>
               {lessonBank.map(lesson => <option key={lesson.id} value={lesson.id}>{lesson.title} ({lesson.details})</option>)}
             </select>
@@ -2172,6 +2207,39 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
               </div>
             );
           })()}
+
+          {(() => {
+            const selectedLesson = lessonBank.find(l => l.id === selectedBankLessonId);
+            if (!selectedLesson || selectedLesson.link !== 'abhidhamma://') return null;
+            return (
+              <div className="mb-4">
+                <label className="block text-gray-700 mb-2">📚 Abhidhamma app — choose a lesson</label>
+                {abhidhammaLessons === null ? (
+                  <button type="button" onClick={loadAbhidhammaLessons}
+                    className="w-full p-3 border rounded-lg bg-amber-50 text-amber-700 font-semibold hover:bg-amber-100"
+                  >
+                    Load Abhidhamma lessons…
+                  </button>
+                ) : abhidhammaLoading ? (
+                  <p className="text-gray-500 text-sm p-2">Loading lessons…</p>
+                ) : abhidhammaLessons.length === 0 ? (
+                  <p className="text-gray-500 text-sm p-2">No lessons found in Abhidhamma app yet.</p>
+                ) : (
+                  <select
+                    value={sendAbhidhammaLessonId}
+                    onChange={(e) => setSendAbhidhammaLessonId(e.target.value)}
+                    className="w-full p-3 border rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  >
+                    <option value="" disabled>-- Choose a lesson --</option>
+                    {abhidhammaLessons.map(l => (
+                      <option key={l.id} value={l.id}>{l.title}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            );
+          })()}
+
 
           {selectedStudentUid && selectedBankLessonId && sendTargetType === 'student' && (() => {
               const student = students.find(s => s.id === selectedStudentUid);
@@ -2680,11 +2748,17 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                 const cId = extractSmartStudyClassId(newBankLessonLink);
                 return (
                   <div className="mt-2 flex items-center justify-between bg-sky-50 border border-sky-200 rounded-lg px-3 py-2">
-                    <span className="text-sm text-sky-800 font-semibold">📚 Smart Study app → Class {cId}</span>
+                    <span className="text-sm text-sky-800 font-semibold">📚 Smart Study app{cId ? ` → Class ${cId}` : ''}</span>
                     <button type="button" onClick={() => setNewBankLessonLink('')} className="text-xs text-red-600 hover:text-red-800 font-semibold">Clear</button>
                   </div>
                 );
               })()}
+              {newBankLessonLink === 'abhidhamma://' && (
+                <div className="mt-2 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  <span className="text-sm text-amber-800 font-semibold">📚 Abhidhamma app — lesson chosen in Send Action</span>
+                  <button type="button" onClick={() => setNewBankLessonLink('')} className="text-xs text-red-600 hover:text-red-800 font-semibold">Clear</button>
+                </div>
+              )}
 
               {showLinkPicker && (
                 <div className="absolute z-20 mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-xl p-3 max-h-96 overflow-y-auto">
@@ -2727,8 +2801,6 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                       <button
                         type="button"
                         onClick={() => {
-                          // Just mark as Smart Study — class ID is chosen in
-                          // Send Action when the lesson is assigned to a student.
                           setNewBankLessonLink('smartstudy://');
                           if (!newBankLessonTitle.trim()) setNewBankLessonTitle('Smart Study Lesson');
                           setShowLinkPicker(false);
@@ -2737,6 +2809,18 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                         className="w-full text-left p-2 rounded-lg hover:bg-sky-50 border border-transparent hover:border-sky-200 font-semibold text-gray-800"
                       >
                         📚 Smart Study app
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNewBankLessonLink('abhidhamma://');
+                          if (!newBankLessonTitle.trim()) setNewBankLessonTitle('Abhidhamma Lesson');
+                          setShowLinkPicker(false);
+                          setPickerAppSelected(false);
+                        }}
+                        className="w-full text-left p-2 rounded-lg hover:bg-amber-50 border border-transparent hover:border-amber-200 font-semibold text-gray-800 mt-1"
+                      >
+                        📚 Abhidhamma app
                       </button>
                     </div>
                   )}
@@ -2993,7 +3077,7 @@ function SmartStudyProgressBadge({ classId, studentName, smartStudyNames, compac
   if (completedCount === null) return null;
 }
 
-function StudentDashboard({ user, studentProfile, studentUid, announcements, onOpenSmartStudy, onLogout }) { 
+function StudentDashboard({ user, studentProfile, studentUid, announcements, onOpenSmartStudy, onOpenAbhidhamma, onLogout }) { 
   const [myLessons, setMyLessons] = useState([]);
   const [mySessions, setMySessions] = useState([]);
   const [activeSession, setActiveSession] = useState(null);
@@ -3408,6 +3492,37 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
   }, [mySchedule, mySessions]);
 
   const handleStartLesson = async (lesson) => {
+    if (lesson.link && lesson.link.startsWith('abhidhamma://')) {
+      const lessonId = extractAbhidhammaLessonId(lesson.link);
+      if (onOpenAbhidhamma) {
+        const ageGroupMap = { storyteller:'storytellers', explorer:'explorers', adventurer:'adventurers', voyager:'voyagers' };
+        onOpenAbhidhamma({
+          mode: 'student',
+          lessonId,
+          studentName: studentProfile?.name,
+          ageGroup: studentProfile?.smartStudyAgeLevel || null,
+        });
+      }
+      if (lesson.status === 'pending') {
+        try { await updateDoc(doc(db, `${publicDataPath}/lessons`, lesson.id), { status: 'started' }); } catch (e) {}
+      }
+      // Create a session for time-tracking and Report button
+      try {
+        const activeCheckQuery = query(sessionsCollection, where("studentUid", "==", studentUid), where("endTime", "==", null));
+        const activeCheckSnap = await getDocs(activeCheckQuery);
+        if (activeCheckSnap.empty) {
+          await addDoc(sessionsCollection, {
+            studentUid: studentUid, lessonId: lesson.id, lessonTitle: lesson.title, lessonLink: lesson.link,
+            lessonTrophyLimit: lesson.trophyLimit || 0,
+            lessonUnitCount: lesson.unitCount || 0,
+            lessonUnitLabel: lesson.unitLabel || 'Lesson',
+            startTime: serverTimestamp(), endTime: null, feedbackNotes: null, score: null, awardedTrophies: 0
+          });
+        }
+      } catch (e) { console.error("Error starting Abhidhamma session:", e); }
+      return;
+    }
+
     if (lesson.link && lesson.link.startsWith('smartstudy://')) {
       const classId = extractSmartStudyClassId(lesson.link);
       if (onOpenSmartStudy) {
@@ -5113,7 +5228,7 @@ function DeactivatedScreen() {
   );
 }
 
-export default function TutoringApp({ onOpenSmartStudy }) {
+export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma }) {
   const [user, setUser] = useState(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [role, setRole] = useState(null); 
@@ -5493,7 +5608,7 @@ export default function TutoringApp({ onOpenSmartStudy }) {
     switch (view) {
       case 'teacher':
         if (role !== 'teacher') return <TodaySchedule role={role} />; 
-        return <TeacherDashboard user={user} onOpenSmartStudy={onOpenSmartStudy} />;
+        return <TeacherDashboard user={user} onOpenSmartStudy={onOpenSmartStudy} onOpenAbhidhamma={onOpenAbhidhamma} />;
       case 'student':
         if (role !== 'student') return <TodaySchedule role={role} />; 
         if (!studentProfile) {
@@ -5503,7 +5618,7 @@ export default function TutoringApp({ onOpenSmartStudy }) {
             </div>
           );
         }
-        return <StudentDashboard user={user} studentProfile={studentProfile} studentUid={targetStudentUid} announcements={announcements} onOpenSmartStudy={onOpenSmartStudy} onLogout={handleStudentLogout} />;
+        return <StudentDashboard user={user} studentProfile={studentProfile} studentUid={targetStudentUid} announcements={announcements} onOpenSmartStudy={onOpenSmartStudy} onOpenAbhidhamma={onOpenAbhidhamma} onLogout={handleStudentLogout} />;
       case 'weekly': 
         return <WeeklySchedule role={role} targetStudentUid={targetStudentUid} />;
       case 'attendance':
