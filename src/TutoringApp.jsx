@@ -2259,7 +2259,14 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
               
               const lessonKey = sanitizeKey(lesson.title);
               const previouslyEarned = student.earnedTrophies?.[lessonKey] || 0;
-              const maxAvailable = lesson.trophyLimit || 0;
+              // For SmartStudy lessons, use per-class trophy limit (floor(classLessonCount/5))
+              // so the trophy status reflects the selected class, not the overall bank total.
+              const ssClassForTrophy = (sendSmartStudyClassId && smartStudyClasses)
+                ? (smartStudyClasses || []).find(c => c.classId === sendSmartStudyClassId)
+                : null;
+              const maxAvailable = ssClassForTrophy
+                ? Math.max(1, Math.floor((ssClassForTrophy.lessonCount || 0) / 5))
+                : (lesson.trophyLimit || 0);
               const remaining = Math.max(0, maxAvailable - previouslyEarned);
 
               const trackedCompletedUnit = student.completedUnits?.[lessonKey] || 0;
@@ -2296,7 +2303,9 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
 
                     {maxAvailable > 0 && (
                       <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-                        <p className="text-yellow-800 font-bold mb-2">Trophy Status for this Lesson:</p>
+                        <p className="text-yellow-800 font-bold mb-2">
+                          Trophy Status{ssClassForTrophy ? ` for ${ssClassForTrophy.classId}` : ' for this Lesson'}:
+                        </p>
                         <ul className="text-sm text-yellow-700 space-y-1 mb-3">
                           <li>Max Available: <strong>{maxAvailable}</strong></li>
                           <li>Previously Earned: <strong>{previouslyEarned}</strong></li>
@@ -3352,12 +3361,14 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     if (!activeSession || showFeedbackModal) return;
 
     const now = new Date();
+    // Guard: startTime can be null briefly after addDoc with serverTimestamp()
+    if (!activeSession.startTime?.toDate) return;
     const sessionStartTime = activeSession.startTime.toDate();
     
     let relevantScheduleEndTime = null;
     const currentOrLastSchedule = mySchedule
-      .filter(entry => entry.endTime.toDate() > sessionStartTime) 
-      .sort((a, b) => a.endTime.toDate() - b.endTime.toDate())[0]; 
+      .filter(entry => entry.endTime?.toDate && entry.endTime.toDate() > sessionStartTime) 
+      .sort((a, b) => (a.endTime?.toDate?.()?.getTime?.() ?? 0) - (b.endTime?.toDate?.()?.getTime?.() ?? 0))[0]; 
       
     if (currentOrLastSchedule) {
       const scheduleEnd = new Date(currentOrLastSchedule.endTime.toDate().getTime() + 15 * 60 * 1000);
@@ -3525,7 +3536,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         if (activeCheckSnap.empty) {
           await addDoc(sessionsCollection, {
             studentUid: studentUid, lessonId: lesson.id, lessonTitle: lesson.title, lessonLink: lesson.link,
-            lessonTrophyLimit: lesson.trophyLimit || 0,
+            lessonTrophyLimit: effectiveLessonTrophyLimit,
             lessonUnitCount: lesson.unitCount || 0,
             lessonUnitLabel: lesson.unitLabel || 'Lesson',
             startTime: serverTimestamp(), endTime: null, feedbackNotes: null, score: null, awardedTrophies: 0
@@ -3566,7 +3577,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         if (activeCheckSnap.empty) {
           await addDoc(sessionsCollection, {
             studentUid: studentUid, lessonId: lesson.id, lessonTitle: lesson.title, lessonLink: lesson.link,
-            lessonTrophyLimit: lesson.trophyLimit || 0,
+            lessonTrophyLimit: effectiveLessonTrophyLimit,
             lessonUnitCount: lesson.unitCount || 0,
             lessonUnitLabel: lesson.unitLabel || 'Chapter',
             startTime: serverTimestamp(), endTime: null, feedbackNotes: null, score: null, awardedTrophies: 0
@@ -3828,7 +3839,17 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
   const activeLessonKeyForModal = feedbackSession ? sanitizeKey(feedbackSession.lessonTitle) : '';
   const earnedTrophiesMapForModal = studentProfile?.earnedTrophies || {};
   const previouslyEarnedForModal = feedbackSession ? (earnedTrophiesMapForModal[activeLessonKeyForModal] || 0) : 0;
-  const maxAvailableForModal = feedbackSession?.lessonTrophyLimit || 0;
+  const maxAvailableForModal = (() => {
+    if (!feedbackSession) return 0;
+    // For SmartStudy sessions, recalculate from the class's actual lesson count
+    // so "🏆 0/2" is shown instead of the outdated "🏆 0/7".
+    if (feedbackSession.lessonLink?.startsWith('smartstudy://') && smartStudyClasses) {
+      const ssClassId = extractSmartStudyClassId(feedbackSession.lessonLink);
+      const cls = (smartStudyClasses || []).find(c => c.classId === ssClassId);
+      if (cls) return Math.max(1, Math.floor((cls.lessonCount || 0) / 5));
+    }
+    return feedbackSession.lessonTrophyLimit || 0;
+  })();
   const remainingTrophiesForModal = Math.max(0, maxAvailableForModal - previouslyEarnedForModal);
   const previousHighestUnitForModal = feedbackSession ? getEffectivePreviousUnit(activeLessonKeyForModal, feedbackSession) : 0;
 
@@ -4121,7 +4142,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           {activeSession.startTime && typeof activeSession.startTime.toDate === 'function' && (
             <p className="text-sm mb-4 font-semibold">
               Studying for: {(() => {
-                const elapsedMs = Math.max(0, elapsedTick - activeSession.startTime.toDate().getTime());
+                const elapsedMs = activeSession.startTime?.toDate ? Math.max(0, elapsedTick - activeSession.startTime.toDate().getTime()) : 0;
                 const totalSeconds = Math.floor(elapsedMs / 1000);
                 const mins = Math.floor(totalSeconds / 60);
                 const secs = totalSeconds % 60;
