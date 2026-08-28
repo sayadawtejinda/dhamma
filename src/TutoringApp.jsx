@@ -3688,35 +3688,37 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     setTrophyTapCount(0);
     setShowFeedbackModal(true);
 
-    // Auto-fetch SmartStudy total score so the teacher sees it pre-filled.
+    // Auto-fetch SmartStudy Score and Lesson completed so the feedback modal
+    // is pre-filled. Works both when the session link has a classId
+    // (e.g. smartstudy://BUDDHA — fetches that class only) AND when it doesn't
+    // (smartstudy:// — fetches across all classes, same as myTotalLessonsCompletedAllClasses).
     if (activeSession.lessonLink?.startsWith('smartstudy://')) {
-      const ssClassId = extractSmartStudyClassId(activeSession.lessonLink);
+      const ssClassId = extractSmartStudyClassId(activeSession.lessonLink) || null;
       const ssName = studentProfile?.name;
-      const ssOldName = studentProfile?.smartStudyNames?.[ssClassId] || null;
-      if (ssClassId && ssName) {
+      if (ssName) {
         try {
-          const namesToTry = [...new Set([ssName, ssOldName].filter(Boolean))];
+          const allNames = [...new Set([ssName, ...(Object.values(studentProfile?.smartStudyNames || {}))].filter(Boolean))];
           let totalPts = 0;
-          const completedLessonIds = new Set(); // distinct lessonIds = "Lesson completed"
-          for (const name of namesToTry) {
-            const q = query(
-              collection(db, 'artifacts', appId, 'public', 'data', 'scores'),
-              where('classId', '==', ssClassId),
-              where('studentName', '==', name)
-            );
+          const completedLessonIds = new Set(); // key = lessonId (per-class) or "classId-lessonId" (all-class)
+          for (const name of allNames) {
+            // If we have a classId: filter by class (matches myLessonsCompleted in SmartStudy)
+            // If no classId:         query all classes (matches myTotalLessonsCompletedAllClasses)
+            const q = ssClassId
+              ? query(collection(db, 'artifacts', appId, 'public', 'data', 'scores'),
+                  where('classId', '==', ssClassId), where('studentName', '==', name))
+              : query(collection(db, 'artifacts', appId, 'public', 'data', 'scores'),
+                  where('studentName', '==', name));
             const snap = await getDocs(q);
             snap.docs.forEach(d => {
               totalPts += (Number(d.data().score) || 0);
-              if (d.data().lessonId) completedLessonIds.add(d.data().lessonId);
+              const cId = d.data().classId; const lId = d.data().lessonId;
+              if (lId) completedLessonIds.add(ssClassId ? lId : `${cId}-${lId}`);
             });
           }
           if (totalPts > 0) setScore(`${totalPts.toLocaleString()} pts`);
-          // SmartStudy computes myLessonsCompleted as distinct lessonIds in scores —
-          // we use the same method so the two numbers always agree.
           if (completedLessonIds.size > 0) {
             setCompletedUnitInput(String(completedLessonIds.size));
           }
-
         } catch (e) {
           console.error('Error fetching SmartStudy score/completions for report modal:', e);
         }
