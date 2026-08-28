@@ -3726,7 +3726,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     }
   };
 
-  const handleOpenRedoReport = (session) => {
+  const handleOpenRedoReport = async (session) => {
     setRedoSession(session);
     const lessonKey = sanitizeKey(session.lessonTitle);
     const prevUnit = getEffectivePreviousUnit(lessonKey, session);
@@ -3739,6 +3739,36 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     setFeedbackNotes(isPlaceholderNote ? '' : session.feedbackNotes);
     setScore(session.score && session.score !== 'N/A' ? session.score : '');
     setShowFeedbackModal(true);
+
+    // Re-fetch fresh SmartStudy data so redo report always shows current counts
+    if (session.lessonLink?.startsWith('smartstudy://')) {
+      const ssClassId = extractSmartStudyClassId(session.lessonLink) || null;
+      const ssName = studentProfile?.name;
+      if (ssName) {
+        try {
+          const allNames = [...new Set([ssName, ...(Object.values(studentProfile?.smartStudyNames || {}))].filter(Boolean))];
+          let totalPts = 0;
+          const completedIds = new Set();
+          for (const name of allNames) {
+            const q = ssClassId
+              ? query(collection(db, 'artifacts', appId, 'public', 'data', 'scores'),
+                  where('classId', '==', ssClassId), where('studentName', '==', name))
+              : query(collection(db, 'artifacts', appId, 'public', 'data', 'scores'),
+                  where('studentName', '==', name));
+            const snap = await getDocs(q);
+            snap.docs.forEach(d => {
+              totalPts += (Number(d.data().score) || 0);
+              const cId = d.data().classId; const lId = d.data().lessonId;
+              if (lId) completedIds.add(ssClassId ? lId : `${cId}-${lId}`);
+            });
+          }
+          if (totalPts > 0) setScore(`${totalPts.toLocaleString()} pts`);
+          if (completedIds.size > 0) setCompletedUnitInput(String(completedIds.size));
+        } catch (e) {
+          console.error('Error fetching SmartStudy data for redo report:', e);
+        }
+      }
+    }
   };
   
   const handleAutoSubmitSession = async (sessionToSubmit, calculatedEndTime) => { 
