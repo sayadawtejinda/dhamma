@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { collection, doc, setDoc, updateDoc, arrayUnion, onSnapshot, query, orderBy, serverTimestamp, addDoc, getDoc, where, getDocs, limit, deleteDoc } from 'firebase/firestore';
 import { 
-    BookOpen, Edit2, Zap, RotateCw, CheckCircle, 
+    BookOpen, Edit2, Zap, RotateCw, Upload, Download, CheckCircle, 
     MessageCircle, Send, Heart, Trophy, Timer, Pause, 
     ChevronDown, ChevronRight, Gamepad2, X, ExternalLink, Youtube, Music, User,
     Baby, Compass, Map, Ship, Globe, Sparkles, Image as ImageIcon, Wand2, Lock, CheckCheck,
@@ -509,6 +509,71 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
     const handleTeacherLogin = () => { const c=prompt("Enter Abhidhamma Teacher Passcode:"); if(c===TEACHER_PASSCODE){setIsTeacher(true);setCurrentRole('Teacher');localStorage.setItem('abhidhamma_isTeacher','true');showMessage("Logged in as Teacher.");}else showMessage("Incorrect Passcode."); };
     const handleTeacherLogout = () => { setIsTeacher(false);setCurrentRole('Student');localStorage.removeItem('abhidhamma_isTeacher');showMessage("Switched to Student mode."); };
 
+    const handleExportLessons = async () => {
+        setIsLoading(true); showMessage("Exporting...");
+        try {
+            const lessonsSnap = await getDocs(collection(db,'artifacts',ABHIDHAMMA_APP_ID,'public','data','lessons'));
+            const scoresSnap = await getDocs(collection(db,'artifacts',ABHIDHAMMA_APP_ID,'public','data','global_scores'));
+
+            const toMs = (ts) => { if(!ts) return null; if(typeof ts.toMillis==='function') return ts.toMillis(); if(ts.seconds) return ts.seconds*1000; return null; };
+            const exportData = {
+                version: 1,
+                lessons: lessonsSnap.docs.map(d => ({ id:d.id, ...d.data(), timestamp:toMs(d.data().timestamp) })),
+                globalScores: scoresSnap.docs.map(d => ({ id:d.id, ...d.data(), timestamp:toMs(d.data().timestamp) })),
+            };
+            // Include quiz results per lesson per group
+            exportData.quizResults = {};
+            for (const d of lessonsSnap.docs) {
+                for (const g of Object.keys(AGE_GROUPS)) {
+                    const rSnap = await getDocs(collection(db,'artifacts',ABHIDHAMMA_APP_ID,'public','data','lessons',d.id,'quiz',g,'results'));
+                    if(!rSnap.empty) exportData.quizResults[`${d.id}_${g}`] = rSnap.docs.map(r=>({id:r.id,...r.data(),timestamp:toMs(r.data().timestamp)}));
+                }
+            }
+
+            const blob = new Blob([JSON.stringify(exportData, null, 2)], { type:"application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href=url; a.download=`abhidhamma_backup_${new Date().toISOString().slice(0,10)}.json`;
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            showMessage("Exported Successfully!");
+        } catch(e) { console.error(e); showMessage("Error Exporting!"); } finally { setIsLoading(false); }
+    };
+
+    const handleImportLessons = (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const data = JSON.parse(e.target.result);
+                setIsLoading(true);
+                const toDate = (ts) => ts ? new Date(ts) : serverTimestamp();
+                let lCount=0, sCount=0, qrCount=0;
+                for (const l of (data.lessons||[])) {
+                    const {id, timestamp, ...rest} = l;
+                    await setDoc(doc(db,'artifacts',ABHIDHAMMA_APP_ID,'public','data','lessons',id), {...rest, timestamp:toDate(timestamp)});
+                    lCount++;
+                }
+                for (const s of (data.globalScores||[])) {
+                    const {id, timestamp, ...rest} = s;
+                    await setDoc(doc(db,'artifacts',ABHIDHAMMA_APP_ID,'public','data','global_scores',id), {...rest, timestamp:toDate(timestamp)});
+                    sCount++;
+                }
+                for (const [key, rList] of Object.entries(data.quizResults||{})) {
+                    const parts = key.split('_'); const group = parts.pop(); const lessonId = parts.join('_');
+                    for (const r of rList) {
+                        const {id, timestamp, ...rest} = r;
+                        await setDoc(doc(db,'artifacts',ABHIDHAMMA_APP_ID,'public','data','lessons',lessonId,'quiz',group,'results',id), {...rest, timestamp:toDate(timestamp)});
+                        qrCount++;
+                    }
+                }
+                showMessage(`Imported: ${lCount} lessons, ${sCount} scores.`);
+            } catch(error) { showMessage(`Error: ${error.message}`); } finally { setIsLoading(false); }
+            event.target.value='';
+        };
+        reader.readAsText(file);
+    };
+
     const handleSaveLesson = async (e) => {
         e.preventDefault();
         if (!newLessonTitle.trim() || !newLessonContent.trim()) return showMessage("Fields required!");
@@ -585,7 +650,18 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
                 {currentRole==='Teacher' ? (
                     <div className="space-y-6">
                         <div className="bg-gray-800 p-6 rounded-xl shadow-xl border border-gray-700">
-                            <div className="flex justify-between items-center mb-4"><h3 className="text-xl font-bold text-teal-300">{editingLesson?'Edit Lesson':'Add New Lesson'}</h3></div>
+                            <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-bold text-teal-300">{editingLesson?'Edit Lesson':'Add New Lesson'}</h3>
+                <div className="flex gap-2">
+                    <label htmlFor="abhidhamma-import" className="cursor-pointer bg-indigo-600 p-2 rounded hover:bg-indigo-700 transition flex items-center gap-1 text-sm text-white font-semibold">
+                        <input type="file" id="abhidhamma-import" accept=".json" onChange={handleImportLessons} className="hidden"/>
+                        <Upload className="w-4 h-4"/> Import Data
+                    </label>
+                    <button onClick={handleExportLessons} disabled={isLoading} className="bg-pink-600 p-2 rounded hover:bg-pink-700 transition flex items-center gap-1 text-sm text-white font-semibold">
+                        <Download className="w-4 h-4"/> Export Data
+                    </button>
+                </div>
+            </div>
                             <form onSubmit={handleSaveLesson} className="space-y-4">
                                 <input value={newLessonTitle} onChange={e=>setNewLessonTitle(e.target.value)} placeholder="Lesson Title" className="w-full p-3 bg-gray-900 border border-gray-600 rounded text-white focus:border-teal-500 focus:outline-none" disabled={isLoading}/>
                                 <textarea value={newLessonContent} onChange={e=>setNewLessonContent(e.target.value)} placeholder="Lesson Content (Burmese)" rows="6" className="w-full p-3 bg-gray-900 border border-gray-600 rounded text-white focus:border-teal-500 focus:outline-none" disabled={isLoading}/>

@@ -2936,7 +2936,7 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
 // renamed, so we also look up the Smart Study roster name (the name used in
 // quizCompletions) via the classRoster collection and query with whichever
 // name(s) appear there, falling back to the Tutoring name if nothing is found.
-function SmartStudyProgressBadge({ classId, studentName, smartStudyNames, compact, autoTrophy }) {
+function SmartStudyProgressBadge({ classId, studentName, smartStudyNames, compact, autoTrophy, onCountChange }) {
   const [completedCount, setCompletedCount] = useState(null);
   const [totalCount, setTotalCount] = useState(null);
   const [badError, setBadError] = useState(false);
@@ -4130,6 +4130,18 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                           await updateDoc(doc(db, `${publicDataPath}/students`, studentUid), { smartStudyAgeLevel: level });
                         } catch (e) { console.error('Error saving age level:', e); }
                       }
+                    });
+                  }
+                  return;
+                }
+                if (url && url.startsWith('abhidhamma://')) {
+                  if (onOpenAbhidhamma) {
+                    const ageGroupMap = { storyteller:'storytellers', explorer:'explorers', adventurer:'adventurers', voyager:'voyagers' };
+                    onOpenAbhidhamma({
+                      mode: 'student',
+                      lessonId: extractAbhidhammaLessonId(url),
+                      studentName: studentProfile?.name,
+                      ageGroup: studentProfile?.smartStudyAgeLevel || null,
                     });
                   }
                   return;
