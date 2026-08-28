@@ -2806,6 +2806,12 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
 // Auto-tracks how many Smart Study lessons a student has completed for a
 // given class, directly from Smart Study's own quizCompletions collection —
 // no manual "Report" needed for smartstudy:// linked lessons.
+//
+// The studentName passed in is the Tutoring profile name. After a student
+// links their Tutoring & Smart Study accounts the roster entry may have been
+// renamed, so we also look up the Smart Study roster name (the name used in
+// quizCompletions) via the classRoster collection and query with whichever
+// name(s) appear there, falling back to the Tutoring name if nothing is found.
 function SmartStudyProgressBadge({ classId, studentName, compact, autoTrophy }) {
   const [completedCount, setCompletedCount] = useState(null);
   const [totalCount, setTotalCount] = useState(null);
@@ -2813,22 +2819,66 @@ function SmartStudyProgressBadge({ classId, studentName, compact, autoTrophy }) 
 
   useEffect(() => {
     if (!classId || !studentName) return;
-    if (classId.includes('/')) { setBadError(true); return; } // defensive: malformed classId should never reach here now, but never let it crash
-    try {
-      const q = query(
-        collection(db, 'artifacts', appId, 'public', 'data', 'quizCompletions'),
-        where('classId', '==', classId),
-        where('studentName', '==', studentName)
-      );
-      const unsub = onSnapshot(q, (snap) => {
-        const distinctLessonIds = new Set(snap.docs.map(d => d.data().lessonId));
-        setCompletedCount(distinctLessonIds.size);
-      }, (err) => console.error('Error loading Smart Study completions:', err));
-      return () => unsub();
-    } catch (err) {
-      console.error('Error setting up Smart Study progress listener:', err);
-      setBadError(true);
-    }
+    if (classId.includes('/')) { setBadError(true); return; }
+
+    let unsubCompletions = null;
+    let cancelled = false;
+
+    const subscribeCompletions = (namesToQuery) => {
+      // quizCompletions only supports equality filters, so if we have multiple
+      // candidate names we run one snapshot per name and merge the results.
+      const distinctIds = new Set();
+      const unsubs = [];
+      let pendingSnaps = namesToQuery.length;
+      const setCount = () => { if (!cancelled) setCompletedCount(distinctIds.size); };
+
+      namesToQuery.forEach(name => {
+        try {
+          const q = query(
+            collection(db, 'artifacts', appId, 'public', 'data', 'quizCompletions'),
+            where('classId', '==', classId),
+            where('studentName', '==', name)
+          );
+          const unsub = onSnapshot(q, (snap) => {
+            snap.docs.forEach(d => distinctIds.add(d.data().lessonId));
+            pendingSnaps = Math.max(0, pendingSnaps - 1);
+            setCount();
+            pendingSnaps = 0; // subsequent updates come through fine
+          }, (err) => console.error('Error loading Smart Study completions:', err));
+          unsubs.push(unsub);
+        } catch (err) {
+          console.error('Error setting up Smart Study progress listener:', err);
+        }
+      });
+      return () => unsubs.forEach(u => u());
+    };
+
+    // Look up the classRoster to find the name(s) this student used in Smart Study.
+    // The roster doc key is `classId_encodedName`; we search by classId and collect
+    // all names that are linked (linkedToTutoring: true). If the Tutoring profile
+    // name matches we also include it (catches the case where no rename happened).
+    getDocs(query(
+      collection(db, 'artifacts', appId, 'public', 'data', 'classRoster'),
+      where('classId', '==', classId),
+      where('linkedToTutoring', '==', true)
+    )).then(snap => {
+      if (cancelled) return;
+      const rosterNames = snap.docs.map(d => d.data().studentName).filter(Boolean);
+      // Always include the Tutoring profile name as a fallback so unlinked
+      // students (who registered in Smart Study with the same name) are covered.
+      const namesToQuery = [...new Set([...rosterNames, studentName])];
+      unsubCompletions = subscribeCompletions(namesToQuery);
+    }).catch(err => {
+      if (cancelled) return;
+      console.error('Error loading classRoster for Smart Study badge:', err);
+      // Fall back to the Tutoring profile name only
+      unsubCompletions = subscribeCompletions([studentName]);
+    });
+
+    return () => {
+      cancelled = true;
+      if (unsubCompletions) unsubCompletions();
+    };
   }, [classId, studentName]);
 
   useEffect(() => {
@@ -3868,9 +3918,26 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
             <button 
               onClick={() => {
                 let url = activeSession.lessonLink;
-                if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('smartstudy://')) url = `https://${url}`;
+                if (url && url.startsWith('smartstudy://')) {
+                  if (onOpenSmartStudy) {
+                    onOpenSmartStudy({
+                      mode: 'student',
+                      classId: extractSmartStudyClassId(url),
+                      studentName: studentProfile?.name,
+                      studentUid,
+                      ageLevel: studentProfile?.smartStudyAgeLevel || null,
+                      onAgeLevelChosen: async (level) => {
+                        try {
+                          await updateDoc(doc(db, `${publicDataPath}/students`, studentUid), { smartStudyAgeLevel: level });
+                        } catch (e) { console.error('Error saving age level:', e); }
+                      }
+                    });
+                  }
+                  return;
+                }
+                if (!url.startsWith('http://') && !url.startsWith('https://')) url = `https://${url}`;
                 openLink(url);
-                if (!url.startsWith('smartstudy://')) setIsLessonOverlayOpen(true);
+                setIsLessonOverlayOpen(true);
               }} 
               disabled={!activeSession.lessonLink} 
               className="w-full sm:w-1/2 bg-blue-500 text-white p-4 rounded-lg font-bold hover:bg-blue-600 transition-transform transform hover:scale-105 shadow-md disabled:opacity-50"
