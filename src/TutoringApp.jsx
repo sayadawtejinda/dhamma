@@ -684,6 +684,7 @@ function TeacherDashboard({ user, onOpenSmartStudy }) {
   const [sendActionType, setSendActionType] = useState('lesson'); 
   const [selectedStudentUid, setSelectedStudentUid] = useState('');
   const [selectedBankLessonId, setSelectedBankLessonId] = useState('');
+  const [sendSmartStudyClassId, setSendSmartStudyClassId] = useState(''); // class chosen in Send Action for smartstudy:// lessons
   const [sendTargetType, setSendTargetType] = useState('student'); 
   const [selectedGroupId, setSelectedGroupId] = useState(''); 
   const [sendStudentSearch, setSendStudentSearch] = useState(''); 
@@ -910,6 +911,11 @@ function TeacherDashboard({ user, onOpenSmartStudy }) {
   const handleSendLesson = async (e) => {
     e.preventDefault();
     const lessonToSend = lessonBank.find(l => l.id === selectedBankLessonId);
+    // For Smart Study lessons stored without a classId, substitute the one
+    // chosen in the Send Action class picker.
+    const effectiveLessonLink = (lessonToSend?.link === 'smartstudy://' && sendSmartStudyClassId)
+      ? `smartstudy://${sendSmartStudyClassId}`
+      : (lessonToSend?.link || '');
 
     if (!lessonToSend) return;
 
@@ -935,7 +941,7 @@ function TeacherDashboard({ user, onOpenSmartStudy }) {
               studentUid: studentUid,
               teacherUid: user.uid,
               title: lessonToSend.title,
-              link: lessonToSend.link,
+              link: effectiveLessonLink,
               details: lessonToSend.details,
               trophyLimit: lessonToSend.trophyLimit || 0,
               unitLabel: lessonToSend.unitLabel || 'Chapter',
@@ -973,7 +979,7 @@ function TeacherDashboard({ user, onOpenSmartStudy }) {
             studentUid: selectedStudentUid,
             teacherUid: user.uid,
             title: lessonToSend.title,
-            link: lessonToSend.link,
+            link: effectiveLessonLink,
             details: lessonToSend.details,
             trophyLimit: lessonToSend.trophyLimit || 0,
             unitLabel: lessonToSend.unitLabel || 'Chapter',
@@ -2129,11 +2135,43 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
           
           <div className="mb-4">
             <label className="block text-gray-700 mb-2">Select Lesson from Bank</label>
-            <select value={selectedBankLessonId} onChange={(e) => setSelectedBankLessonId(e.target.value)} className="w-full p-3 border rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <select value={selectedBankLessonId} onChange={(e) => { setSelectedBankLessonId(e.target.value); setSendSmartStudyClassId(''); }} className="w-full p-3 border rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500">
               <option value="" disabled>-- Select a lesson --</option>
               {lessonBank.map(lesson => <option key={lesson.id} value={lesson.id}>{lesson.title} ({lesson.details})</option>)}
             </select>
           </div>
+
+          {(() => {
+            const selectedLesson = lessonBank.find(l => l.id === selectedBankLessonId);
+            if (!selectedLesson || selectedLesson.link !== 'smartstudy://') return null;
+            return (
+              <div className="mb-4">
+                <label className="block text-gray-700 mb-2">📚 Smart Study app — choose a Class ID</label>
+                {smartStudyClasses === null ? (
+                  <button type="button" onClick={loadSmartStudyClassList}
+                    className="w-full p-3 border rounded-lg bg-sky-50 text-sky-700 font-semibold hover:bg-sky-100"
+                  >
+                    Load Smart Study classes…
+                  </button>
+                ) : pickerLoading ? (
+                  <p className="text-gray-500 text-sm p-2">Loading classes…</p>
+                ) : smartStudyClasses.length === 0 ? (
+                  <p className="text-gray-500 text-sm p-2">No Smart Study classes found yet.</p>
+                ) : (
+                  <select
+                    value={sendSmartStudyClassId}
+                    onChange={(e) => setSendSmartStudyClassId(e.target.value)}
+                    className="w-full p-3 border rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                  >
+                    <option value="" disabled>-- Choose a class --</option>
+                    {smartStudyClasses.map(c => (
+                      <option key={c.classId} value={c.classId}>{c.classId} ({c.lessonCount} lesson{c.lessonCount === 1 ? '' : 's'})</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            );
+          })()}
 
           {selectedStudentUid && selectedBankLessonId && sendTargetType === 'student' && (() => {
               const student = students.find(s => s.id === selectedStudentUid);
@@ -2693,7 +2731,14 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                       <p className="text-xs text-gray-500 font-semibold mt-3 mb-1 uppercase">Or choose app</p>
                       <button
                         type="button"
-                        onClick={() => { setPickerAppSelected(true); loadSmartStudyClassList(); }}
+                        onClick={() => {
+                          // Just mark as Smart Study — class ID is chosen in
+                          // Send Action when the lesson is assigned to a student.
+                          setNewBankLessonLink('smartstudy://');
+                          if (!newBankLessonTitle.trim()) setNewBankLessonTitle('Smart Study Lesson');
+                          setShowLinkPicker(false);
+                          setPickerAppSelected(false);
+                        }}
                         className="w-full text-left p-2 rounded-lg hover:bg-sky-50 border border-transparent hover:border-sky-200 font-semibold text-gray-800"
                       >
                         📚 Smart Study app
@@ -3459,7 +3504,32 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     setCompletedUnitInput('');
     setTodayCompletedInput('');
     setTrophyTapCount(0);
-    setShowFeedbackModal(true); 
+    setShowFeedbackModal(true);
+
+    // Auto-fetch SmartStudy total score so the teacher sees it pre-filled.
+    if (activeSession.lessonLink?.startsWith('smartstudy://')) {
+      const ssClassId = extractSmartStudyClassId(activeSession.lessonLink);
+      const ssName = studentProfile?.name;
+      const ssOldName = studentProfile?.smartStudyNames?.[ssClassId] || null;
+      if (ssClassId && ssName) {
+        try {
+          const namesToTry = [...new Set([ssName, ssOldName].filter(Boolean))];
+          let totalPts = 0;
+          for (const name of namesToTry) {
+            const q = query(
+              collection(db, 'artifacts', appId, 'public', 'data', 'scores'),
+              where('classId', '==', ssClassId),
+              where('studentName', '==', name)
+            );
+            const snap = await getDocs(q);
+            snap.docs.forEach(d => { totalPts += (Number(d.data().score) || 0); });
+          }
+          if (totalPts > 0) setScore(`${totalPts.toLocaleString()} pts`);
+        } catch (e) {
+          console.error('Error fetching SmartStudy score for report modal:', e);
+        }
+      }
+    }
   };
 
   const handleOpenRedoReport = (session) => {
@@ -5265,6 +5335,20 @@ export default function TutoringApp({ onOpenSmartStudy }) {
         console.log('[DIAG] checkUserRole: matched as TEACHER');
         setRole('teacher');
         if(view !== 'teacher') setView('teacher');
+        return;
+      }
+
+      // If someone explicitly logged in with a displayId (Existing Account flow),
+      // honour that choice on refresh — even if this Firebase auth uid also
+      // belongs to a different student's primary doc.  Keeps "logged out as A,
+      // logged in as B, refresh" from snapping back to A.
+      const savedDisplayId = localStorage.getItem('lastStudentId');
+      if (savedDisplayId) {
+        console.log('[DIAG] checkUserRole: found lastStudentId in localStorage, preferring displayId login:', savedDisplayId);
+        handleStudentLoginById(savedDisplayId, () => {
+          localStorage.removeItem('lastStudentId');
+          setView('login');
+        });
         return;
       }
 

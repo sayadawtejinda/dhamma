@@ -2098,9 +2098,49 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
     if (entryRequest.mode === 'teacher') {
       setView('teacherLogin');
     } else if (entryRequest.mode === 'student') {
-      setUserName(entryRequest.studentName || '');
-      if (entryRequest.ageLevel) {
-        setStudentAgeLevel(entryRequest.ageLevel);
+      const newName = (entryRequest.studentName || '').trim();
+      const newAgeLevel = entryRequest.ageLevel || null;
+      setUserName(newName);
+
+      if (newAgeLevel && entryRequest.classId) {
+        // Both ageLevel and specific classId provided — skip the class picker
+        // entirely and go straight to the lesson view. This is the common
+        // "Start Lesson" path from TutoringApp where we know exactly which
+        // class the student should enter.
+        setStudentAgeLevel(newAgeLevel);
+        const targetClassId = entryRequest.classId;
+        (async () => {
+          try {
+            const classDocSnap = await getDoc(getClassDocRef(targetClassId));
+            if (!classDocSnap.exists()) {
+              // Class not found — fall back to picker
+              setView('classPicker');
+              return;
+            }
+            const rosterDocRef = getRosterDocRef(targetClassId, newName);
+            const docSnap = await getDoc(rosterDocRef);
+            if (docSnap.exists()) {
+              const data = docSnap.data();
+              if (data.status !== 'approved' || !data.linkedToTutoring) {
+                await updateDoc(rosterDocRef, { status: 'approved', linkedToTutoring: true, lastSeen: Date.now() });
+              } else {
+                updateDoc(rosterDocRef, { lastSeen: Date.now() });
+              }
+            } else {
+              await setDoc(rosterDocRef, { classId: targetClassId, studentName: newName, studentAgeLevel: newAgeLevel, status: 'approved', linkedToTutoring: true, joinedAt: Date.now(), lastSeen: Date.now() });
+            }
+            localStorage.setItem('lastClassId', targetClassId);
+            localStorage.setItem('lastUserName', newName);
+            setClassId(targetClassId);
+            setUserName(newName);
+            setView('studentLesson');
+          } catch (error) {
+            console.error('Error auto-entering SmartStudy class from TutoringApp:', error);
+            setView('classPicker'); // fallback on error
+          }
+        })();
+      } else if (newAgeLevel) {
+        setStudentAgeLevel(newAgeLevel);
         setView('classPicker');
       } else {
         setView('ageLevelPicker');
