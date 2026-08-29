@@ -227,7 +227,7 @@ const AbhiLinkToTutoring = ({ classId, approved, onLink }) => {
 };
 
 // ─── Q&A Discussion ────────────────────────────────────────────────────────────
-const AbhiQA = ({ classId, lessonId, isTeacher, userId, userName }) => {
+const AbhiQA = ({ classId, lessonId, isTeacher, userId, userName, suggestedQuestions=[] }) => {
   const [questions,setQs]=useState([]); const [text,setText]=useState(''); const [replyText,setReplyText]=useState({}); const [busy,setBusy]=useState(false);
   useEffect(()=>{
     if(!classId||!lessonId) return;
@@ -257,8 +257,34 @@ const AbhiQA = ({ classId, lessonId, isTeacher, userId, userName }) => {
       else{const lks=data.likes||[];await updateDoc(ref,{likes:lks.includes(userId)?lks.filter(id=>id!==userId):[...lks,userId]});}
     }catch(e){console.error(e);}
   };
+  const [visibleSuggestions, setVisibleSuggestions] = useState(suggestedQuestions.slice(0,3));
+  const [suggestionPool, setSuggestionPool] = useState(suggestedQuestions.slice(3));
+  const handleUseSuggestion = (s, idx) => {
+    setText(s);
+    if (suggestionPool.length > 0) {
+      const ri = Math.floor(Math.random() * suggestionPool.length);
+      const nv = [...visibleSuggestions]; nv[idx] = suggestionPool[ri];
+      setVisibleSuggestions(nv);
+      setSuggestionPool(prev => prev.filter((_,i)=>i!==ri));
+    }
+  };
   return(
     <div className="space-y-4 mt-2">
+      {!isTeacher && visibleSuggestions.length > 0 && (
+        <div className="bg-indigo-900/30 p-3 rounded-xl border border-indigo-500/30">
+          <p className="text-indigo-300 text-xs font-bold mb-2 flex items-center gap-2">
+            <Sparkles className="w-3 h-3"/> Curious? Try asking:
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {visibleSuggestions.map((sq, idx) => (
+              <button key={idx} onClick={() => handleUseSuggestion(sq, idx)}
+                className="text-left text-xs bg-indigo-800/50 hover:bg-indigo-700 text-indigo-100 px-3 py-1.5 rounded-lg border border-indigo-600 transition hover:scale-105 active:scale-95">
+                {sq}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       {questions.map(q=>(
         <div key={q.id} className="p-4 rounded-xl bg-gray-800/50 border border-gray-700/50">
           <div className="flex justify-between items-start mb-2">
@@ -746,7 +772,7 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
           await setDoc(abhiLessonDocRef(tgt,lId),{id:lId,classId:tgt,title:l.title||`Lesson ${i+1}`,burmeseContent:l.burmeseContent||l.content||'',imageBaseUrl:l.imageBaseUrl||imgBase,variants:l.variants||{},createdAt:toDate(l.timestamp)});
         }
         // Roster — use original doc ID if available for accurate restore
-        for(const stu of(data.roster||[])){
+        for(const stu of(data.roster||data.students||[])){
           // Rebuild the correct document ID: classId_encodedStudentName
           const sName=stu.studentName||stu.name||'';
           const docId=`${tgt}_${encodeURIComponent(sName)}`;
@@ -785,7 +811,7 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
         <header className="mb-6 flex flex-wrap gap-4 justify-between items-center bg-gray-800 p-4 rounded-xl shadow-lg border border-gray-700">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-lg font-black text-amber-400">📚 Abhidhamma App</span>
-            {isTeacher&&(<div className="flex gap-2"><button onClick={()=>setRole(r=>r==='Teacher'?'Student':'Teacher')} className={`px-4 py-2 font-bold rounded shadow-lg ${role==='Teacher'?'bg-purple-600':'bg-teal-600'}`}>{role==='Teacher'?'Student View':'Teacher View'}</button><button onClick={()=>{setIsTeacher(false);setRole('Student');localStorage.removeItem('abhidhamma_isTeacher');}} className="px-4 py-2 font-bold rounded bg-red-600 hover:bg-red-700">Logout</button></div>)}
+            {isTeacher&&(<div className="flex gap-2"><button onClick={()=>setRole(r=>r==='Teacher'?'Student':'Teacher')} className={`px-4 py-2 font-bold rounded shadow-lg ${role==='Teacher'?'bg-purple-600':'bg-teal-600'}`}>{role==='Teacher'?'Student View':'Teacher View'}</button></div>)}
             {studentProfile?.status==='approved'&&<span className="bg-gray-700 px-3 py-1 rounded text-gray-300 font-medium flex items-center gap-2"><User className="w-4 h-4"/>{studentProfile.name}</span>}
           </div>
           <div className="flex items-center gap-3">{classId&&<span className="text-gray-400 text-sm font-semibold">· {classId}</span>}<NotificationBell userId={userId}/></div>
