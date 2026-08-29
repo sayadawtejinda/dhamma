@@ -517,7 +517,7 @@ const TeacherDashboard = React.memo(({
   handleDownloadLessonsOnly, handleUploadLessonsOnly, fileInputRefLessonsOnly,
   heartCounts, setSelectedAgeLevel,
   classRoster, handleApproveStudent, handleDeleteStudent,
-  allScores,
+  allScores, studentsWithCompletionsNotApproved, onApproveStudentsWithCompletions,
   autoApprove, handleToggleAutoApprove,
   completionsList, onLinkStudent
 }) => {
@@ -558,32 +558,6 @@ const TeacherDashboard = React.memo(({
   });
 
   // Students from scores/completions who are NOT yet in the approved roster
-  const studentsWithCompletionsNotApproved = useMemo(() => {
-    const approvedNames = new Set(approvedStudentsWithIndex.map(s => s.studentName.toLowerCase()));
-    const fromCompletions = new Set([
-      ...completionsList.map(c => c.studentName),
-      ...allScores.map(s => s.studentName),
-    ]);
-    return [...fromCompletions].filter(name => !approvedNames.has(name.toLowerCase()));
-  }, [completionsList, allScores, approvedStudentsWithIndex]);
-
-  const handleApproveStudentsWithCompletions = useCallback(async () => {
-    if (studentsWithCompletionsNotApproved.length === 0) return;
-    setIsLoading(true);
-    try {
-      for (const name of studentsWithCompletionsNotApproved) {
-        const rRef = getRosterDocRef(classId, name);
-        const snap = await getDoc(rRef);
-        if (snap.exists()) {
-          await updateDoc(rRef, { status: 'approved' });
-        } else {
-          await setDoc(rRef, { classId, studentName: name, status: 'approved', joinedAt: Date.now(), lastSeen: Date.now() });
-        }
-      }
-      setModal({ message: `✅ Approved ${studentsWithCompletionsNotApproved.length} student(s) with completions.`, type: 'success', visible: true });
-    } catch(e) { console.error(e); } finally { setIsLoading(false); }
-  }, [studentsWithCompletionsNotApproved, classId]);
-
   const bulkNameMatches = (tutoringStudents || [])
     ? sortedApprovedStudents
         .filter(s => !s.linkedToTutoring)
@@ -794,7 +768,7 @@ const TeacherDashboard = React.memo(({
                   🔍 {studentsWithCompletionsNotApproved.length} student{studentsWithCompletionsNotApproved.length > 1 ? 's' : ''} have completions but are not yet approved:
                   <span className="font-normal ml-1">{studentsWithCompletionsNotApproved.join(', ')}</span>
                 </p>
-                <button onClick={handleApproveStudentsWithCompletions} className="bg-orange-500 hover:bg-orange-600 text-white text-sm font-bold px-4 py-2 rounded-lg">
+                <button onClick={onApproveStudentsWithCompletions} className="bg-orange-500 hover:bg-orange-600 text-white text-sm font-bold px-4 py-2 rounded-lg">
                   ✅ Approve All & Add to Roster
                 </button>
               </div>
@@ -1864,6 +1838,35 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
   // Renames all of their records within THIS class (scores, quiz completions,
   // reflections, hearts, roster) to the Tutoring name, so their identity is
   // consistent everywhere from now on.
+  // Students with quiz completions/scores not yet in approved roster → shown in Link to Tutoring
+  const studentsWithCompletionsNotApproved = useMemo(() => {
+    const approvedNames = new Set(
+      classRoster.filter(s => s.status === 'approved').map(s => s.studentName.toLowerCase())
+    );
+    const fromData = new Set([
+      ...completionsList.map(c => c.studentName),
+      ...allScores.map(s => s.studentName),
+    ]);
+    return [...fromData].filter(name => !approvedNames.has(name.toLowerCase()));
+  }, [completionsList, allScores, classRoster]);
+
+  const handleApproveStudentsWithCompletions = useCallback(async () => {
+    if (studentsWithCompletionsNotApproved.length === 0) return;
+    setIsLoading(true);
+    try {
+      for (const name of studentsWithCompletionsNotApproved) {
+        const rRef = getRosterDocRef(classId, name);
+        const snap = await getDoc(rRef);
+        if (snap.exists()) {
+          await updateDoc(rRef, { status: 'approved' });
+        } else {
+          await setDoc(rRef, { classId, studentName: name, status: 'approved', joinedAt: Date.now(), lastSeen: Date.now() });
+        }
+      }
+      setModal({ message: `✅ Approved ${studentsWithCompletionsNotApproved.length} student(s).`, type: 'success', visible: true });
+    } catch(e) { console.error(e); } finally { setIsLoading(false); }
+  }, [studentsWithCompletionsNotApproved, classId]);
+
   const handleLinkStudentToTutoring = useCallback(async (oldName, newName, tutoringStudentUid) => {
     if (!classId || !oldName || !newName) return;
     setIsLoading(true);
@@ -2465,7 +2468,7 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
       case 'studentWaiting': return <StudentWaitingView handleSetView={handleSetView} userName={userName} isRejected={isRejected} />;
       case 'teacherDashboard':
         if (!classData) return <ClassCreateView classId={classId} handleTeacherCreateClass={handleTeacherCreateClass} isLoading={isLoading} handleSetView={handleSetView} />;
-        return <TeacherDashboard classId={classId} newLesson={newLesson} setNewLesson={setNewLesson} lessons={lessons} isLoading={isLoading} handleSaveLesson={handleSaveLesson} handleFormatLesson={handleFormatLesson} generateQuestions={generateQuestions} handleGenerateAllLevels={handleGenerateAllLevels} handleRegenerateLevel={handleRegenerateLevel} handleEditLesson={handleEditLesson} handleDeleteLesson={handleDeleteLesson} globalLeaderboardScores={globalLeaderboardScores} setSelectedName={setSelectedName} handleSetView={handleSetView} playClickSound={playClickSound} handleDownloadLessons={handleDownloadLessons} handleUploadLessons={handleUploadLessons} fileInputRef={fileInputRef} handleDownloadLessonsOnly={handleDownloadLessonsOnly} handleUploadLessonsOnly={handleUploadLessonsOnly} fileInputRefLessonsOnly={fileInputRefLessonsOnly} heartCounts={heartCounts} setSelectedAgeLevel={setSelectedAgeLevel} classRoster={classRoster} handleApproveStudent={handleApproveStudent} handleDeleteStudent={handleDeleteStudent} autoApprove={classData?.autoApprove || false} handleToggleAutoApprove={handleToggleAutoApprove} completionsList={completionsList} onLinkStudent={handleLinkStudentToTutoring} allScores={allScores} />;
+        return <TeacherDashboard classId={classId} newLesson={newLesson} setNewLesson={setNewLesson} lessons={lessons} isLoading={isLoading} handleSaveLesson={handleSaveLesson} handleFormatLesson={handleFormatLesson} generateQuestions={generateQuestions} handleGenerateAllLevels={handleGenerateAllLevels} handleRegenerateLevel={handleRegenerateLevel} handleEditLesson={handleEditLesson} handleDeleteLesson={handleDeleteLesson} globalLeaderboardScores={globalLeaderboardScores} setSelectedName={setSelectedName} handleSetView={handleSetView} playClickSound={playClickSound} handleDownloadLessons={handleDownloadLessons} handleUploadLessons={handleUploadLessons} fileInputRef={fileInputRef} handleDownloadLessonsOnly={handleDownloadLessonsOnly} handleUploadLessonsOnly={handleUploadLessonsOnly} fileInputRefLessonsOnly={fileInputRefLessonsOnly} heartCounts={heartCounts} setSelectedAgeLevel={setSelectedAgeLevel} classRoster={classRoster} handleApproveStudent={handleApproveStudent} handleDeleteStudent={handleDeleteStudent} autoApprove={classData?.autoApprove || false} handleToggleAutoApprove={handleToggleAutoApprove} completionsList={completionsList} onLinkStudent={handleLinkStudentToTutoring} allScores={allScores} studentsWithCompletionsNotApproved={studentsWithCompletionsNotApproved} onApproveStudentsWithCompletions={handleApproveStudentsWithCompletions} />;
       case 'studentLesson':
         if (!classDataLoaded) return <LoadingView />;
         if (!classData) return <ClassErrorView classId={classId} handleSetView={handleSetView} />;

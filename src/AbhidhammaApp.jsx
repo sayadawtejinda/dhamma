@@ -235,8 +235,25 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
     if(entryRequest.mode==='teacher'){setIsTeacher(true);setRole('Teacher');localStorage.setItem('abhidhamma_isTeacher','true');}
     else if(entryRequest.mode==='student'&&entryRequest.studentName){
       const am={storyteller:'storytellers',explorer:'explorers',adventurer:'adventurers',voyager:'voyagers'};
-      setStudentProfile({name:entryRequest.studentName,group:entryRequest.ageGroup?(am[entryRequest.ageGroup]||entryRequest.ageGroup):'explorers',status:'approved'});
-      setRole('Student');if(entryRequest.classId)enterClass(entryRequest.classId);
+      const grp=entryRequest.ageGroup?(am[entryRequest.ageGroup]||entryRequest.ageGroup):'explorers';
+      const profile={name:entryRequest.studentName,group:grp,status:'approved'};
+      setStudentProfile(profile);
+      setRole('Student');
+      if(entryRequest.classId){
+        enterClass(entryRequest.classId);
+        // Create/update roster entry so teacher can see this student
+        (async()=>{
+          try{
+            const rRef=abhiRosterDocRef(entryRequest.classId,entryRequest.studentName);
+            const snap=await getDoc(rRef);
+            if(snap.exists()){
+              await updateDoc(rRef,{status:'approved',group:grp,isOnline:true,lastPing:serverTimestamp(),lastSeen:serverTimestamp()});
+            }else{
+              await setDoc(rRef,{classId:entryRequest.classId,studentName:entryRequest.studentName,name:entryRequest.studentName,group:grp,status:'approved',isOnline:true,lastPing:serverTimestamp(),lastSeen:serverTimestamp(),joinedAt:Date.now()});
+            }
+          }catch(e){console.error('Roster create error:',e);}
+        })();
+      }
     }
   },[entryRequest,authReady]);
 
@@ -251,6 +268,29 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
   },[classId,authReady]);
 
   const enterClass = (cId) => { setClassId(cId);setImportClassId(cId);setOpenLessonId(null); };
+
+  // Ping roster every 60s so teacher sees who is online (works for both entry paths)
+  useEffect(()=>{
+    if(!studentProfile||!classId||studentProfile.status!=='approved') return;
+    const name=studentProfile.name;
+    const ping=async()=>{
+      try{
+        const rRef=abhiRosterDocRef(classId,name);
+        await updateDoc(rRef,{isOnline:true,lastPing:serverTimestamp(),lastSeen:serverTimestamp()});
+      }catch(e){
+        // Doc might not exist yet if WelcomeModal hasn't run — create it
+        try{
+          const rRef=abhiRosterDocRef(classId,name);
+          await setDoc(rRef,{classId,studentName:name,name,group:studentProfile.group||'explorers',status:'approved',isOnline:true,lastPing:serverTimestamp(),lastSeen:serverTimestamp(),joinedAt:Date.now()},{merge:true});
+        }catch(e2){console.error('Ping create error:',e2);}
+      }
+    };
+    ping();
+    const interval=setInterval(ping,60000);
+    const handleOffline=()=>{ try{ updateDoc(abhiRosterDocRef(classId,name),{isOnline:false,lastSeen:serverTimestamp()}); }catch(e){} };
+    window.addEventListener('beforeunload',handleOffline);
+    return()=>{ clearInterval(interval); handleOffline(); window.removeEventListener('beforeunload',handleOffline); };
+  },[studentProfile,classId]);
   const createClass = async () => {
     if(!newClassId.trim())return;
     await setDoc(abhiClassDocRef(newClassId.trim()),{classId:newClassId.trim(),autoApprove:false,createdAt:serverTimestamp()},{merge:true});
