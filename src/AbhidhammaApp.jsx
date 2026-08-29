@@ -156,6 +156,72 @@ const AbhiClassRoster = ({ userId, classId }) => {
           <div><h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2 border-b border-gray-700 pb-1">Offline ({offline.length})</h4><div className="flex flex-wrap gap-2">{offline.length===0&&<span className="text-gray-600 text-sm italic">None.</span>}{offline.map(s=><div key={s.id} className={`border px-3 py-1.5 rounded-full flex items-center gap-2 text-sm ${s.isWarning?'bg-red-950/80 border-red-500':'bg-gray-800 border-gray-600 opacity-60 hover:opacity-100'}`}><Circle className={`w-2 h-2 flex-shrink-0 ${s.isWarning?'fill-red-500 text-red-500':'fill-gray-500 text-gray-500'}`}/><span className={`font-bold ${s.isWarning?'text-red-300':'text-gray-400'}`}>#{s.studentNumber}</span><span className={s.isWarning?'text-white':'text-gray-300'}>{s.name}</span><button onClick={e=>remove(e,s.id)} className="text-gray-500 hover:text-red-400"><Trash2 className="w-3 h-3"/></button></div>)}</div></div>
         </div>
       </div>}
+        {/* Link to Tutoring */}
+        {isOpen&&onLink&&(
+          <div className="p-4 border-t border-gray-700 bg-gray-900/30">
+            <AbhiLinkToTutoring classId={classId} approved={students.filter(s=>s.status==='approved')} onLink={onLink}/>
+          </div>
+        )}
+    </div>
+  );
+};
+
+// ─── Link to Tutoring Component ──────────────────────────────────────────────
+const AbhiLinkToTutoring = ({ classId, approved, onLink }) => {
+  const [tutoringStudents,setTutoringStudents]=useState(null);
+  const [pickerFor,setPickerFor]=useState(null);
+  const [search,setSearch]=useState('');
+  const [linking,setLinking]=useState(false);
+  const loadStudents=async()=>{
+    if(tutoringStudents!==null)return;
+    try{
+      const snap=await getDocs(collection(db,'artifacts','dhamma-tutoring-app','public','data','students'));
+      setTutoringStudents(snap.docs.map(d=>({id:d.id,...d.data()})).filter(s=>s.isActive!==false).sort((a,b)=>(a.name||'').localeCompare(b.name||'')));
+    }catch(e){setTutoringStudents([]);}
+  };
+  const unlinked=approved.filter(s=>!s.linkedToTutoring);
+  const filtered=(tutoringStudents||[]).filter(t=>!search||t.name.toLowerCase().includes(search.toLowerCase()));
+  return(
+    <div>
+      <h4 className="text-sm font-bold text-indigo-300 mb-3 flex items-center gap-2">🔗 Link to Tutoring
+        {unlinked.length>0&&<span className="bg-orange-500/20 text-orange-300 text-xs px-2 py-0.5 rounded-full border border-orange-500/30">{unlinked.length} unlinked</span>}
+        {unlinked.length===0&&approved.length>0&&<span className="text-green-400 text-xs">✅ All linked</span>}
+      </h4>
+      <div className="space-y-1 max-h-48 overflow-y-auto">
+        {approved.map(s=>(
+          <div key={s.id} className="flex items-center gap-2 p-2 bg-gray-800 rounded-lg">
+            <span className="flex-1 text-white text-sm">{s.studentName}</span>
+            {s.linkedToTutoring
+              ? <span className="text-xs text-indigo-400 font-bold">🔗 Linked</span>
+              : <button onClick={()=>{setPickerFor(s.studentName);loadStudents();}} className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 py-1 rounded-lg flex-shrink-0">🔗 Link</button>
+            }
+          </div>
+        ))}
+        {approved.length===0&&<p className="text-gray-500 text-xs italic">No approved students yet.</p>}
+      </div>
+      {pickerFor&&(
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-gray-800 rounded-2xl shadow-2xl p-6 w-full max-w-md border border-gray-600">
+            <div className="flex justify-between items-center mb-4">
+              <p className="font-bold text-white text-sm">Link "<span className="text-indigo-300">{pickerFor}</span>" to TutoringApp student:</p>
+              <button onClick={()=>{setPickerFor(null);setSearch('');}} className="text-gray-400 hover:text-white"><X className="w-5 h-5"/></button>
+            </div>
+            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search TutoringApp student name…"
+              className="w-full p-2 mb-3 bg-gray-900 border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-indigo-400" autoFocus/>
+            {tutoringStudents===null?<p className="text-gray-400 text-sm text-center py-4 animate-pulse">Loading…</p>
+            :filtered.length===0?<p className="text-gray-500 text-sm text-center py-4">No matches.</p>
+            :<div className="space-y-1 max-h-56 overflow-y-auto">
+              {filtered.map(t=>(
+                <button key={t.id} disabled={linking}
+                  onClick={async()=>{setLinking(true);await onLink(pickerFor,t.name,t.id);setLinking(false);setPickerFor(null);setSearch('');}}
+                  className={`w-full text-left p-2.5 rounded-lg text-sm font-semibold transition ${t.name===pickerFor?'bg-green-700 text-white border border-green-500':'bg-gray-700 hover:bg-indigo-700 text-gray-200'}`}>
+                  {t.name}{t.name===pickerFor&&<span className="text-xs text-green-300 ml-2">← same name</span>}
+                </button>
+              ))}
+            </div>}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -356,7 +422,7 @@ const AbhiWelcomeModal = ({ userId, classId, onStudentComplete, onTeacherComplet
 };
 
 // ─── LessonItem ───────────────────────────────────────────────────────────────
-const AbhiLessonItem = ({ lesson, classId, isTeacher, studentAgeGroup, studentName, userId, onEdit, onGenerateVariants, onTakeQuiz, isGenerating, isOpen, onToggle }) => {
+const AbhiLessonItem = ({ lesson, classId, isTeacher, studentAgeGroup, studentName, userId, onEdit, onGenerateVariants, onTakeQuiz, isGenerating, isOpen, onToggle, classImageBase }) => {
   const [tab,setTab]=useState('content');const [isCompleted,setIsCompleted]=useState(false);const [leaderboard,setLb]=useState([]);const [showLb,setShowLb]=useState(false);
   const ref=useRef(null);
   useEffect(()=>{if(isOpen&&ref.current){setTimeout(()=>{const y=ref.current.getBoundingClientRect().top+window.scrollY-80;window.scrollTo({top:y,behavior:'smooth'});},100);}},[isOpen]);
@@ -365,7 +431,7 @@ const AbhiLessonItem = ({ lesson, classId, isTeacher, studentAgeGroup, studentNa
   const variants=lesson.variants||{};const hasJr=variants.storytellers&&variants.explorers;const hasSr=variants.adventurers&&variants.voyagers;
   let dc='',dt=lesson.title,qa=false,qd=null;
   if(!isTeacher&&studentAgeGroup){const v=variants[studentAgeGroup];if(v){dc=v.english;dt=v.englishTitle||lesson.title;qa=!!v.quiz;qd=v.quiz;}else dc='Content not available for your age group yet.';}
-  const imgBase=lesson.imageBaseUrl||DEFAULT_IMG_BASE;
+  const imgBase=lesson.imageBaseUrl||classImageBase||DEFAULT_IMG_BASE;
   return(
     <div ref={ref} className={`relative rounded-xl shadow-md overflow-hidden border mb-4 ${isTeacher?'bg-gray-800 border-gray-700':'bg-gray-700 border-gray-600'}`}>
       {isGenerating&&<div className="absolute inset-0 bg-gray-900/80 z-10 flex flex-col items-center justify-center backdrop-blur-sm rounded-xl"><RotateCw className="w-12 h-12 text-teal-400 animate-spin mb-4"/><p className="text-white font-bold">Generating…</p></div>}
@@ -398,10 +464,12 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
   const [authReady,setAuthReady]=useState(false);const [userId,setUserId]=useState(null);const [isTeacher,setIsTeacher]=useState(false);const [role,setRole]=useState('Student');
   const [classId,setClassId]=useState('');const [classData,setClassData]=useState(null);const [lessons,setLessons]=useState([]);const [allClasses,setAllClasses]=useState([]);
   const [studentProfile,setStudentProfile]=useState(null);const [showWelcome,setShowWelcome]=useState(false);
+  const [classStats,setClassStats]=useState({}); // classId → {completedCount, rank}
   const [activeQuizId,setActiveQuizId]=useState(null);const [activeQuizData,setActiveQuizData]=useState(null);
   const [openLessonId,setOpenLessonId]=useState(null);const [editingLesson,setEditingLesson]=useState(null);
   const [newTitle,setNewTitle]=useState('');const [newContent,setNewContent]=useState('');const [newImgBase,setNewImgBase]=useState(DEFAULT_IMG_BASE);
   const [importClassId,setImportClassId]=useState('');const [newClassId,setNewClassId]=useState('');
+  const [classImageBase,setClassImageBase]=useState(DEFAULT_IMG_BASE); // per-class default image URL
   const [loading,setLoading]=useState(false);const [genId,setGenId]=useState(null);const [msg,setMsg]=useState('');
   const fileRef=useRef(null);const fileLessonsRef=useRef(null);const lastEntry=useRef(null);
 
@@ -448,15 +516,89 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
 
   useEffect(()=>{ return onSnapshot(abhiClassesRef(),snap=>setAllClasses(snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>a.id.localeCompare(b.id)))); },[]);
 
+  // Load per-class stats for student (rank + completedCount)
+  useEffect(()=>{
+    if(!studentProfile||allClasses.length===0)return;
+    const name=studentProfile.name;
+    (async()=>{
+      const stats={};
+      for(const c of allClasses){
+        try{
+          // All scores for this class to compute rank
+          const snap=await getDocs(query(abhiScoresRef(),where('classId','==',c.id)));
+          const byStudent={};
+          snap.docs.forEach(d=>{const {studentName:sn,lessonId:li}=d.data();if(!byStudent[sn])byStudent[sn]=new Set();byStudent[sn].add(li);});
+          const ranked=Object.entries(byStudent).sort((a,b)=>b[1].size-a[1].size);
+          const myIdx=ranked.findIndex(([sn])=>sn===name);
+          stats[c.id]={completedCount:byStudent[name]?.size||0,rank:myIdx>=0?myIdx+1:0,totalLessons:(byStudent[name]?.size||0)};
+        }catch(e){}
+      }
+      setClassStats(stats);
+    })();
+  },[studentProfile,allClasses.length]);
+
   // Load lessons from SUBCOLLECTION (no 1MB limit!)
   useEffect(()=>{
     if(!classId||!authReady)return;
-    const u1=onSnapshot(abhiClassDocRef(classId),snap=>{if(snap.exists())setClassData(snap.data());else setClassData(null);});
+    const u1=onSnapshot(abhiClassDocRef(classId),snap=>{if(snap.exists()){setClassData(snap.data());setClassImageBase(snap.data().imageBaseUrl||DEFAULT_IMG_BASE);}else setClassData(null);});
     const u2=onSnapshot(query(abhiLessonsRef(classId),orderBy('createdAt','asc')),snap=>{setLessons(snap.docs.map(d=>({id:d.id,...d.data()})));});
     return()=>{u1();u2();};
   },[classId,authReady]);
 
   const enterClass = (cId) => { setClassId(cId);setImportClassId(cId);setOpenLessonId(null); };
+
+  // ── Link to Tutoring (same pattern as SmartStudy) ────────────────────────
+  const handleLinkStudentToTutoring = async (oldName, newName, tutoringStudentUid) => {
+    if (!classId || !oldName || !newName) return;
+    setLoading(true);
+    // 1. Store abhidhammaNames in TutoringApp student profile
+    if (tutoringStudentUid && oldName !== newName) {
+      try {
+        await updateDoc(doc(db,'artifacts','dhamma-tutoring-app','public','data','students',tutoringStudentUid),
+          { [`abhidhammaNames.${classId}`]: oldName });
+      } catch(e) { console.error('TutoringApp profile update:', e); }
+    }
+    // 2. If same name — just mark as linked
+    if (oldName === newName) {
+      await setDoc(abhiRosterDocRef(classId,newName),{linkedToTutoring:true},{merge:true});
+      setLoading(false);
+      showMsg(`✅ Linked "${newName}" to Tutoring.`);
+      return;
+    }
+    // 3. Rename scores
+    try {
+      const scoresSnap = await getDocs(query(abhiScoresRef(),where('classId','==',classId),where('studentName','==',oldName)));
+      if (!scoresSnap.empty) {
+        const batch = writeBatch(db);
+        scoresSnap.docs.forEach(d => batch.update(d.ref,{studentName:newName}));
+        await batch.commit();
+      }
+    } catch(e) { console.error('Scores rename:', e); }
+    // 4. Rename quiz results across all lessons
+    try {
+      const lessonsSnap = await getDocs(abhiLessonsRef(classId));
+      for (const lDoc of lessonsSnap.docs) {
+        for (const g of Object.keys(AGE_GROUPS)) {
+          const rSnap = await getDocs(query(abhiResultsRef(classId,lDoc.id,g),where('name','==',oldName)));
+          if (!rSnap.empty) {
+            const batch = writeBatch(db);
+            rSnap.docs.forEach(d => batch.update(d.ref,{name:newName}));
+            await batch.commit();
+          }
+        }
+      }
+    } catch(e) { console.error('Quiz results rename:', e); }
+    // 5. Move roster doc
+    try {
+      const oldRef = abhiRosterDocRef(classId,oldName);
+      const oldSnap = await getDoc(oldRef);
+      const newData = oldSnap.exists() ? {...oldSnap.data(),studentName:newName,name:newName,linkedToTutoring:true} : {linkedToTutoring:true};
+      await setDoc(abhiRosterDocRef(classId,newName),newData,{merge:true});
+      if (oldSnap.exists()) await deleteDoc(oldRef);
+    } catch(e) { console.error('Roster rename:', e); }
+    setLoading(false);
+    showMsg(`✅ Linked "${oldName}" → "${newName}". Records renamed.`);
+  };
 
   // Ping roster every 60s so teacher sees who is online (works for both entry paths)
   useEffect(()=>{
@@ -598,10 +740,12 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
         }
         // Roster — use original doc ID if available for accurate restore
         for(const stu of(data.roster||[])){
-          const docId=stu.id||`${tgt}_${encodeURIComponent(stu.studentName||stu.name||'unknown')}`;
+          // Rebuild the correct document ID: classId_encodedStudentName
+          const sName=stu.studentName||stu.name||'';
+          const docId=`${tgt}_${encodeURIComponent(sName)}`;
           const rRef=doc(db,P(`classRoster/${docId}`));
           const{id,...rData}=stu;
-          await setDoc(rRef,{...rData,classId:tgt,isOnline:false},{merge:true});
+          await setDoc(rRef,{...rData,classId:tgt,studentName:sName,isOnline:false},{merge:true});
         }
         // Scores + Activity
         for(const s of(data.scores||[])){const{id,timestamp,...r}=s;await setDoc(doc(abhiScoresRef(),id||`s${Date.now()}`),{...r,classId:tgt,timestamp:toDate(timestamp)});}
@@ -643,14 +787,9 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
         {/* ── TEACHER VIEW ── */}
         {role==='Teacher'&&(
           <div className="space-y-6">
-            {/* Class Manager */}
-            <div className="bg-gray-800 rounded-xl border border-gray-700 p-4">
-              <h3 className="font-bold text-amber-400 mb-3 flex items-center gap-2"><FolderOpen className="w-5 h-5"/>Class Management</h3>
-              <div className="flex gap-2 mb-3"><input value={newClassId} onChange={e=>setNewClassId(e.target.value)} placeholder="New Class ID" className="flex-1 bg-gray-900 text-white p-2 rounded border border-gray-600 focus:border-amber-500 focus:outline-none text-sm" onKeyDown={e=>e.key==='Enter'&&createClass()}/><button onClick={createClass} disabled={!newClassId.trim()} className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded font-bold text-sm disabled:opacity-50 flex items-center gap-1"><Plus className="w-4 h-4"/>Create</button></div>
-              <div className="flex flex-wrap gap-2">{allClasses.map(c=><button key={c.id} onClick={()=>enterClass(c.id)} className={`px-3 py-1.5 rounded-lg text-sm font-semibold border transition-all ${c.id===classId?'bg-amber-500 text-white border-amber-400':'bg-gray-700 text-gray-300 border-gray-600 hover:border-amber-400'}`}>{c.id}<span className="text-xs opacity-70 ml-1">({lessons.length > 0 && c.id===classId ? lessons.length : '?'})</span></button>)}{allClasses.length===0&&<p className="text-gray-500 text-sm italic">No classes yet.</p>}</div>
-            </div>
+
             {!classId&&<AbhiTeacherClassPicker onSelectClass={enterClass} onCreateClass={enterClass}/>}
-            {classId&&<AbhiClassRoster userId={userId} classId={classId}/>}
+            {classId&&<AbhiClassRoster userId={userId} classId={classId} onLinkStudent={handleLinkStudentToTutoring}/>}
             {classId&&(
               <div className="bg-gray-800 p-6 rounded-xl shadow-xl border border-gray-700">
                 {/* Import/Export bar */}
@@ -663,7 +802,13 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
                     <button onClick={()=>fileRef.current?.click()} className="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1"><Upload className="w-3 h-3"/>📦 Restore All</button>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 mb-4 p-2 bg-gray-900 rounded border border-gray-600"><span className="text-gray-400 text-xs ml-1 whitespace-nowrap">🖼 Image URL:</span><input value={newImgBase} onChange={e=>setNewImgBase(e.target.value)} placeholder={DEFAULT_IMG_BASE} className="flex-1 bg-transparent text-white text-xs focus:outline-none border-b border-gray-600 px-1 focus:border-teal-500"/></div>
+                <div className="flex items-center gap-2 mb-2 p-2 bg-gray-900 rounded border border-amber-600/40">
+                  <span className="text-amber-400 text-xs ml-1 whitespace-nowrap font-semibold">🖼 Class Default Image URL:</span>
+                  <input value={classImageBase} onChange={e=>setClassImageBase(e.target.value)} placeholder={DEFAULT_IMG_BASE}
+                    className="flex-1 bg-transparent text-white text-xs focus:outline-none border-b border-amber-600/40 px-1 focus:border-amber-400"
+                    onBlur={async()=>{ if(classId) await updateDoc(abhiClassDocRef(classId),{imageBaseUrl:classImageBase||DEFAULT_IMG_BASE}).catch(()=>{}); }}/>
+                </div>
+                <div className="flex items-center gap-2 mb-4 p-2 bg-gray-900 rounded border border-gray-600"><span className="text-gray-400 text-xs ml-1 whitespace-nowrap">🖼 Lesson Override URL:</span><input value={newImgBase} onChange={e=>setNewImgBase(e.target.value)} placeholder={classImageBase||DEFAULT_IMG_BASE} className="flex-1 bg-transparent text-white text-xs focus:outline-none border-b border-gray-600 px-1 focus:border-teal-500"/></div>
                 <h3 className="text-xl font-bold text-teal-300 mb-4">{editingLesson?'Edit Lesson':'Add Lesson'} — <span className="text-amber-400">{classId}</span></h3>
                 <form onSubmit={handleSaveLesson} className="space-y-4">
                   <input value={newTitle} onChange={e=>setNewTitle(e.target.value)} placeholder="Lesson Title" className="w-full p-3 bg-gray-900 border border-gray-600 rounded text-white focus:border-teal-500 focus:outline-none" disabled={loading}/>
@@ -675,7 +820,7 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
                 </form>
               </div>
             )}
-            {classId&&(<div className="space-y-4">{lessons.length===0&&<p className="text-center text-gray-500 py-6">No lessons in <strong>{classId}</strong> yet. Import or add a lesson above.</p>}{lessons.map(l=><AbhiLessonItem key={l.id} lesson={l} classId={classId} isTeacher userId={userId} onEdit={lesson=>{setEditingLesson(lesson);setNewTitle(lesson.title);setNewContent(lesson.burmeseContent);setNewImgBase(lesson.imageBaseUrl||DEFAULT_IMG_BASE);window.scrollTo({top:0,behavior:'smooth'});}} onGenerateVariants={handleGenerateVariants} onTakeQuiz={()=>{}} isGenerating={genId===l.id} isOpen={openLessonId===l.id} onToggle={()=>setOpenLessonId(openLessonId===l.id?null:l.id)}/>)}</div>)}
+            {classId&&(<div className="space-y-4">{lessons.length===0&&<p className="text-center text-gray-500 py-6">No lessons in <strong>{classId}</strong> yet. Import or add a lesson above.</p>}{lessons.map(l=><AbhiLessonItem key={l.id} lesson={l} classId={classId} isTeacher userId={userId} onEdit={lesson=>{setEditingLesson(lesson);setNewTitle(lesson.title);setNewContent(lesson.burmeseContent);setNewImgBase(lesson.imageBaseUrl||DEFAULT_IMG_BASE);window.scrollTo({top:0,behavior:'smooth'});}} onGenerateVariants={handleGenerateVariants} classImageBase={classImageBase} onTakeQuiz={()=>{}} isGenerating={genId===l.id} isOpen={openLessonId===l.id} onToggle={()=>setOpenLessonId(openLessonId===l.id?null:l.id)}/>)}</div>)}
           </div>
         )}
 
@@ -704,13 +849,22 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
                   : <div className="space-y-3">
                       {allClasses.map(c => (
                         <button key={c.id} onClick={() => enterClass(c.id)}
-                          className={`w-full p-4 rounded-xl border-2 text-left font-bold text-lg transition-all flex items-center justify-between ${
+                          className={`w-full p-4 rounded-xl border-2 text-left font-bold text-lg transition-all ${
                             c.id===entryRequest?.classId
                               ? 'bg-amber-100 border-amber-500 text-amber-800 shadow-lg scale-[1.02]'
                               : 'bg-white border-gray-200 text-gray-700 hover:border-amber-300 hover:bg-amber-50'
                           }`}>
-                          <span>{c.id===entryRequest?.classId?'⭐ ':''}{c.displayName||c.id}</span>
-                          <span className="text-xs font-normal text-gray-400">{c.id}</span>
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <span>{c.id===entryRequest?.classId?'⭐ ':''}{c.displayName||c.id}</span>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {classStats[c.id]?.rank>0&&(
+                                <span className="text-xs font-bold text-yellow-700 bg-yellow-100 border border-yellow-300 px-2 py-0.5 rounded-full">🏆 Rank #{classStats[c.id].rank}</span>
+                              )}
+                              {classStats[c.id]?.completedCount>0?(
+                                <span className="text-xs font-bold text-blue-700 bg-blue-100 border border-blue-300 px-2 py-0.5 rounded-full">{classStats[c.id].completedCount} completed</span>
+                              ):null}
+                            </div>
+                          </div>
                         </button>
                       ))}
                     </div>
@@ -730,7 +884,7 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
                 {lessons.map(l=>(
                   <AbhiLessonItem key={l.id} lesson={l} classId={classId} isTeacher={false} userId={userId}
                     studentAgeGroup={studentProfile.group} studentName={studentProfile.name}
-                    onGenerateVariants={()=>{}} onEdit={()=>{}}
+                    classImageBase={classImageBase} onGenerateVariants={()=>{}} onEdit={()=>{}}
                     onTakeQuiz={(id,title,data)=>{setActiveQuizId(id);setActiveQuizData(data);}}
                     isGenerating={false} isOpen={openLessonId===l.id}
                     onToggle={()=>setOpenLessonId(openLessonId===l.id?null:l.id)}/>
