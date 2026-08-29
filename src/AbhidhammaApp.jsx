@@ -163,7 +163,8 @@ const AbhiQA = ({ classId, lessonId, isTeacher, userId, userName }) => {
   const [questions,setQs]=useState([]); const [text,setText]=useState(''); const [replyText,setReplyText]=useState({}); const [busy,setBusy]=useState(false);
   useEffect(()=>{
     if(!classId||!lessonId) return;
-    return onSnapshot(query(abhiQRef(classId,lessonId),orderBy('timestamp','asc')),snap=>setQs(snap.docs.map(d=>({id:d.id,...d.data()}))));
+    // No orderBy to avoid composite index requirement; sort client-side
+    return onSnapshot(abhiQRef(classId,lessonId),snap=>setQs(snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(a.timestamp?.seconds||0)-(b.timestamp?.seconds||0))));
   },[classId,lessonId]);
   const ask=async()=>{
     if(!text.trim()||busy)return;setBusy(true);
@@ -249,6 +250,9 @@ const AbhiTeacherClassPicker = ({ onSelectClass, onCreateClass }) => {
                   </button>
                   <button onClick={()=>{setRenaming(c.id);setRenameVal(c.displayName||c.id);}} className="text-gray-400 hover:text-amber-500 p-2" title="Rename display name">
                     <Edit2 className="w-4 h-4"/>
+                  </button>
+                  <button onClick={async()=>{if(!window.confirm(`Delete class "${c.id}"? This only removes the class entry, not the lessons/roster inside.`))return;try{await deleteDoc(abhiClassDocRef(c.id));}catch(e){console.error(e);}}} className="text-gray-400 hover:text-red-500 p-2" title="Delete class entry">
+                    <Trash2 className="w-4 h-4"/>
                   </button>
                 </>
               )}
@@ -519,8 +523,13 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
           const lId=l.id||`imported_${Date.now()}_${i}`;
           await setDoc(abhiLessonDocRef(tgt,lId),{id:lId,classId:tgt,title:l.title||`Lesson ${i+1}`,burmeseContent:l.burmeseContent||l.content||'',imageBaseUrl:l.imageBaseUrl||imgBase,variants:l.variants||{},createdAt:toDate(l.timestamp)});
         }
-        // Roster
-        for(const stu of(data.roster||[])){const rRef=abhiRosterDocRef(tgt,stu.studentName||stu.name||'');await setDoc(rRef,{...stu,classId:tgt},{merge:true});}
+        // Roster — use original doc ID if available for accurate restore
+        for(const stu of(data.roster||[])){
+          const docId=stu.id||`${tgt}_${encodeURIComponent(stu.studentName||stu.name||'unknown')}`;
+          const rRef=doc(db,P(`classRoster/${docId}`));
+          const{id,...rData}=stu;
+          await setDoc(rRef,{...rData,classId:tgt,isOnline:false},{merge:true});
+        }
         // Scores + Activity
         for(const s of(data.scores||[])){const{id,timestamp,...r}=s;await setDoc(doc(abhiScoresRef(),id||`s${Date.now()}`),{...r,classId:tgt,timestamp:toDate(timestamp)});}
         for(const a of(data.activityFeed||[])){const{id,timestamp,...r}=a;await setDoc(doc(abhiActivityRef(),id||`a${Date.now()}`),{...r,timestamp:toDate(timestamp)});}

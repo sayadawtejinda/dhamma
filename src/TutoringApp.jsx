@@ -695,8 +695,8 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma }) {
   // SmartStudy completion counts for the selected student (loaded when student+lesson are selected)
   const [ssStudentClassCount, setSsStudentClassCount] = useState(null);   // per-class (e.g. BUDDHA)
   const [ssStudentTotalCount, setSsStudentTotalCount] = useState(null);   // all classes combined
-  const [sendAbhidhammaLessonId, setSendAbhidhammaLessonId] = useState(''); // lesson chosen in Send Action for abhidhamma:// lessons
-  const [abhidhammaLessons, setAbhidhammaLessons] = useState(null);   // null = not yet loaded
+  const [sendAbhidhammaClassId, setSendAbhidhammaClassId] = useState(''); // class chosen in Send Action for abhidhamma:// lessons
+  const [abhidhammaClasses, setAbhidhammaClasses] = useState(null);   // null = not yet loaded
   const [abhidhammaLoading, setAbhidhammaLoading] = useState(false);
   const [sendTargetType, setSendTargetType] = useState('student'); 
   const [selectedGroupId, setSelectedGroupId] = useState(''); 
@@ -905,17 +905,17 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma }) {
     return () => { isMounted = false; };
   }, [selectedStudentUid, selectedBankLessonId, sendSmartStudyClassId, lessonBank, students]);
 
-  const loadAbhidhammaLessons = async () => {
-    if (abhidhammaLessons !== null) return;
+  const loadAbhidhammaClasses = async () => {
+    if (abhidhammaClasses !== null) return;
     setAbhidhammaLoading(true);
     try {
-      const snap = await getDocs(collection(db, 'artifacts', 'lesson-translator-app-v6', 'public', 'data', 'lessons'));
-      const list = snap.docs.map(d => ({ id: d.id, title: d.data().title || d.id }));
-      list.sort((a, b) => a.title.localeCompare(b.title));
-      setAbhidhammaLessons(list);
+      const snap = await getDocs(collection(db, 'artifacts', 'lesson-translator-app-v6', 'public', 'data', 'classes'));
+      const list = snap.docs.map(d => ({ classId: d.id, displayName: d.data().displayName || d.id }));
+      list.sort((a, b) => a.classId.localeCompare(b.classId));
+      setAbhidhammaClasses(list);
     } catch (err) {
-      console.error('Error loading Abhidhamma lessons:', err);
-      setAbhidhammaLessons([]);
+      console.error('Error loading Abhidhamma classes:', err);
+      setAbhidhammaClasses([]);
     }
     setAbhidhammaLoading(false);
   };
@@ -996,7 +996,7 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma }) {
     const effectiveLessonLink = (() => {
       if (!lessonToSend?.link) return '';
       if (lessonToSend.link === 'smartstudy://' && sendSmartStudyClassId) return `smartstudy://${sendSmartStudyClassId}`;
-      if (lessonToSend.link === 'abhidhamma://' && sendAbhidhammaLessonId) return `abhidhamma://${sendAbhidhammaLessonId}`;
+      if (lessonToSend.link === 'abhidhamma://' && sendAbhidhammaClassId) return `abhidhamma://${sendAbhidhammaClassId}`;
       return lessonToSend.link;
     })();
 
@@ -2225,7 +2225,7 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
           
           <div className="mb-4">
             <label className="block text-gray-700 mb-2">Select Lesson from Bank</label>
-            <select value={selectedBankLessonId} onChange={(e) => { setSelectedBankLessonId(e.target.value); setSendSmartStudyClassId(''); setSendAbhidhammaLessonId(''); }} className="w-full p-3 border rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <select value={selectedBankLessonId} onChange={(e) => { setSelectedBankLessonId(e.target.value); setSendSmartStudyClassId(''); setSendAbhidhammaClassId(''); }} className="w-full p-3 border rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500">
               <option value="" disabled>-- Select a lesson --</option>
               {lessonBank.map(lesson => <option key={lesson.id} value={lesson.id}>{lesson.title} ({lesson.details})</option>)}
             </select>
@@ -2268,26 +2268,26 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
             if (!selectedLesson || selectedLesson.link !== 'abhidhamma://') return null;
             return (
               <div className="mb-4">
-                <label className="block text-gray-700 mb-2">📚 Abhidhamma app — choose a lesson</label>
-                {abhidhammaLessons === null ? (
-                  <button type="button" onClick={loadAbhidhammaLessons}
+                <label className="block text-gray-700 mb-2 font-medium">📚 Abhidhamma app — choose a Class ID</label>
+                {abhidhammaClasses === null ? (
+                  <button type="button" onClick={loadAbhidhammaClasses}
                     className="w-full p-3 border rounded-lg bg-amber-50 text-amber-700 font-semibold hover:bg-amber-100"
                   >
-                    Load Abhidhamma lessons…
+                    Load Abhidhamma classes…
                   </button>
                 ) : abhidhammaLoading ? (
-                  <p className="text-gray-500 text-sm p-2">Loading lessons…</p>
-                ) : abhidhammaLessons.length === 0 ? (
-                  <p className="text-gray-500 text-sm p-2">No lessons found in Abhidhamma app yet.</p>
+                  <p className="text-gray-500 text-sm p-2">Loading classes…</p>
+                ) : abhidhammaClasses.length === 0 ? (
+                  <p className="text-gray-500 text-sm p-2">No Abhidhamma classes found yet.</p>
                 ) : (
                   <select
-                    value={sendAbhidhammaLessonId}
-                    onChange={(e) => setSendAbhidhammaLessonId(e.target.value)}
+                    value={sendAbhidhammaClassId}
+                    onChange={(e) => setSendAbhidhammaClassId(e.target.value)}
                     className="w-full p-3 border rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-amber-500"
                   >
-                    <option value="" disabled>-- Choose a lesson --</option>
-                    {abhidhammaLessons.map(l => (
-                      <option key={l.id} value={l.id}>{l.title}</option>
+                    <option value="" disabled>-- Choose a class --</option>
+                    {abhidhammaClasses.map(c => (
+                      <option key={c.classId} value={c.classId}>{c.displayName || c.classId}</option>
                     ))}
                   </select>
                 )}
@@ -3375,10 +3375,11 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       where("studentUid", "==", studentUid)
     );
     const unsubRecent = onSnapshot(recentQ, (snapshot) => {
-      const cutoff = thirtyDaysAgo.getTime();
+      // Use start of year so the attendance count matches the teacher's view
+      const startOfYear = new Date(new Date().getFullYear(), 0, 1).getTime();
       const sessionList = snapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
-        .filter(s => s.endTime && s.startTime && typeof s.startTime.toDate === 'function' && s.startTime.toDate().getTime() >= cutoff);
+        .filter(s => s.endTime && s.startTime && typeof s.startTime.toDate === 'function' && s.startTime.toDate().getTime() >= startOfYear);
       setMySessions(sessionList);
     }, (error) => {
       console.error("Error fetching recent sessions:", error);
