@@ -309,7 +309,7 @@ const AbhiTeacherClassPicker = ({ onSelectClass, onCreateClass }) => {
             <div key={c.id} className="flex items-center gap-2">
               {renaming===c.id?(
                 <>
-                  <input autoFocus value={renameVal} onChange={e=>setRenameVal(e.target.value)} placeholder="Display name" className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" onKeyDown={e=>{if(e.key==='Enter'){handleRename(c.id,renameVal);}if(e.key==='Escape')setRenaming(null);}}/>
+                  <input autoFocus value={renameVal} onChange={e=>setRenameVal(e.target.value)} placeholder="Display name" className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400" onKeyDown={e=>{if(e.key==='Enter'){handleRename(c.id,renameVal);}if(e.key==='Escape')setRenaming(null);}}/>
                   <button onClick={()=>handleRename(c.id,renameVal)} className="bg-green-500 text-white px-3 py-2 rounded-lg text-sm font-bold hover:bg-green-600">Save</button>
                   <button onClick={()=>setRenaming(null)} className="bg-gray-300 text-gray-700 px-3 py-2 rounded-lg text-sm font-bold hover:bg-gray-400">Cancel</button>
                 </>
@@ -334,7 +334,7 @@ const AbhiTeacherClassPicker = ({ onSelectClass, onCreateClass }) => {
       <div className="border-t pt-4 space-y-3">
         <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Create / Enter Class ID</p>
         <div className="flex gap-2">
-          <input value={newId} onChange={e=>setNewId(e.target.value.toUpperCase())} placeholder="e.g. PARAMI" className="flex-1 border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400 font-mono font-bold" onKeyDown={e=>e.key==='Enter'&&handleCreate()}/>
+          <input value={newId} onChange={e=>setNewId(e.target.value.toUpperCase())} placeholder="e.g. PARAMI" className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400 font-mono font-bold text-gray-900 bg-white placeholder-gray-400" onKeyDown={e=>e.key==='Enter'&&handleCreate()}/>
           <button onClick={handleCreate} disabled={!newId.trim()} className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg font-bold disabled:opacity-50 flex items-center gap-1"><Plus className="w-4 h-4"/>Enter</button>
         </div>
       </div>
@@ -541,7 +541,14 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
   useEffect(()=>{
     if(!classId||!authReady)return;
     const u1=onSnapshot(abhiClassDocRef(classId),snap=>{if(snap.exists()){setClassData(snap.data());setClassImageBase(snap.data().imageBaseUrl||DEFAULT_IMG_BASE);}else setClassData(null);});
-    const u2=onSnapshot(query(abhiLessonsRef(classId),orderBy('createdAt','asc')),snap=>{setLessons(snap.docs.map(d=>({id:d.id,...d.data()})));});
+    const u2=onSnapshot(
+      abhiLessonsRef(classId),
+      snap => setLessons(
+        snap.docs.map(d=>({id:d.id,...d.data()}))
+          .sort((a,b)=>(a.createdAt?.seconds||0)-(b.createdAt?.seconds||0))
+      ),
+      err => console.error('Lessons load error:', err.code, err.message)
+    );
     return()=>{u1();u2();};
   },[classId,authReady]);
 
@@ -778,10 +785,10 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
         <header className="mb-6 flex flex-wrap gap-4 justify-between items-center bg-gray-800 p-4 rounded-xl shadow-lg border border-gray-700">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-lg font-black text-amber-400">📚 Abhidhamma App</span>
-            {isTeacher?(<div className="flex gap-2"><button onClick={()=>setRole(r=>r==='Teacher'?'Student':'Teacher')} className={`px-4 py-2 font-bold rounded shadow-lg ${role==='Teacher'?'bg-purple-600':'bg-teal-600'}`}>{role==='Teacher'?'Student View':'Teacher View'}</button><button onClick={()=>{setIsTeacher(false);setRole('Student');localStorage.removeItem('abhidhamma_isTeacher');}} className="px-4 py-2 font-bold rounded bg-red-600 hover:bg-red-700">Logout</button></div>):(<button onClick={()=>setShowWelcome(true)} className="px-4 py-2 font-bold rounded bg-gray-600 hover:bg-gray-500 flex items-center gap-2"><Key className="w-4 h-4"/>Teacher Login</button>)}
+            {isTeacher&&(<div className="flex gap-2"><button onClick={()=>setRole(r=>r==='Teacher'?'Student':'Teacher')} className={`px-4 py-2 font-bold rounded shadow-lg ${role==='Teacher'?'bg-purple-600':'bg-teal-600'}`}>{role==='Teacher'?'Student View':'Teacher View'}</button><button onClick={()=>{setIsTeacher(false);setRole('Student');localStorage.removeItem('abhidhamma_isTeacher');}} className="px-4 py-2 font-bold rounded bg-red-600 hover:bg-red-700">Logout</button></div>)}
             {studentProfile?.status==='approved'&&<span className="bg-gray-700 px-3 py-1 rounded text-gray-300 font-medium flex items-center gap-2"><User className="w-4 h-4"/>{studentProfile.name}</span>}
           </div>
-          <div className="flex items-center gap-3"><div className="text-gray-400 text-sm font-semibold">{role} View {classId&&`· ${classId}`}</div><NotificationBell userId={userId}/></div>
+          <div className="flex items-center gap-3">{classId&&<span className="text-gray-400 text-sm font-semibold">· {classId}</span>}<NotificationBell userId={userId}/></div>
         </header>
 
         {/* ── TEACHER VIEW ── */}
