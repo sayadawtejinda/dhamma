@@ -4417,35 +4417,10 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                     >
                       {buttonText}
                     </button>
-                    {/* SmartStudy: always show Report (student may have done lessons any time) */}
-                    {isSmartStudyLesson && !activeSession && (
-                      <button
-                        onClick={async () => {
-                          // Create a brief session so handleEndSession can fetch SmartStudy data
-                          try {
-                            const chk = await getDocs(query(sessionsCollection, where("studentUid","==",studentUid), where("endTime","==",null)));
-                            if (chk.empty) {
-                              await addDoc(sessionsCollection, {
-                                studentUid, lessonId: lesson.id, lessonTitle: lesson.title,
-                                lessonLink: lesson.link,
-                                lessonTrophyLimit: lesson.trophyLimit || 0,
-                                lessonUnitCount: lesson.unitCount || 0,
-                                lessonUnitLabel: lesson.unitLabel || 'Lesson',
-                                startTime: serverTimestamp(), endTime: null,
-                                feedbackNotes: null, score: null, awardedTrophies: 0
-                              });
-                            }
-                          } catch(e) { console.error('Report session create:', e); }
-                          // Wait briefly for onSnapshot to pick up the session, then open modal
-                          setTimeout(() => handleEndSession(), 400);
-                        }}
-                        className="px-4 py-2 rounded-lg text-white text-sm font-semibold bg-red-500 hover:bg-red-600 shadow-md flex-shrink-0 w-full sm:w-auto"
-                      >
-                        Report
-                      </button>
-                    )}
-                    {/* Non-SmartStudy: 1-hour redo window as before */}
-                    {!isSmartStudyLesson && canRedoReport && !activeSession && (
+                    {/* 1-hour redo Report window for ALL lessons (including SmartStudy).
+                         This only appears after a session has been submitted and within 1 hour.
+                         For SmartStudy, handleOpenRedoReport also fetches fresh score/completion data. */}
+                    {canRedoReport && !activeSession && (
                       <button
                         onClick={() => handleOpenRedoReport(recentCompletedSession)}
                         className="px-4 py-2 rounded-lg text-white text-sm font-semibold bg-red-500 hover:bg-red-600 shadow-md flex-shrink-0 w-full sm:w-auto"

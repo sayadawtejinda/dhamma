@@ -163,8 +163,11 @@ const AbhiQA = ({ classId, lessonId, isTeacher, userId, userName }) => {
   const [questions,setQs]=useState([]); const [text,setText]=useState(''); const [replyText,setReplyText]=useState({}); const [busy,setBusy]=useState(false);
   useEffect(()=>{
     if(!classId||!lessonId) return;
-    // No orderBy to avoid composite index requirement; sort client-side
-    return onSnapshot(abhiQRef(classId,lessonId),snap=>setQs(snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(a.timestamp?.seconds||0)-(b.timestamp?.seconds||0))));
+    return onSnapshot(
+      abhiQRef(classId, lessonId),
+      snap => setQs(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => (a.timestamp?.seconds||0) - (b.timestamp?.seconds||0))),
+      err => { console.error('AbhiQA snapshot error:', err.code, err.message); }
+    );
   },[classId,lessonId]);
   const ask=async()=>{
     if(!text.trim()||busy)return;setBusy(true);
@@ -175,11 +178,11 @@ const AbhiQA = ({ classId, lessonId, isTeacher, userId, userName }) => {
     const t=replyText[qId];if(!t?.trim()||busy)return;setBusy(true);
     try{
       const r={id:crypto.randomUUID(),userId,userName:userName||(isTeacher?'Teacher':'Student'),role:isTeacher?'Teacher':'Student',text:t.trim(),timestamp:new Date().toISOString(),likes:[]};
-      await updateDoc(doc(db,P(`classes/${classId}/questions/${lessonId}/items/${qId}`)),{replies:arrayUnion(r)});
+      await updateDoc(doc(db, 'artifacts', ABHIDHAMMA_APP_ID, 'public', 'data', 'classes', classId, 'questions', lessonId, 'items', qId), {replies:arrayUnion(r)});
     }catch(e){console.error(e);}finally{setReplyText(prev=>({...prev,[qId]:''}));setBusy(false);}
   };
   const toggleLike=async(qId,replyId=null)=>{
-    const ref=doc(db,P(`classes/${classId}/questions/${lessonId}/items/${qId}`));
+    const ref=doc(db, 'artifacts', ABHIDHAMMA_APP_ID, 'public', 'data', 'classes', classId, 'questions', lessonId, 'items', qId);
     try{
       const snap=await getDoc(ref);const data=snap.data();
       if(replyId){const rs=data.replies.map(r=>r.id===replyId?{...r,likes:r.likes?.includes(userId)?r.likes.filter(id=>id!==userId):[...(r.likes||[]),userId]}:r);await updateDoc(ref,{replies:rs});}
