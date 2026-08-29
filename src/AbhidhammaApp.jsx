@@ -157,7 +157,7 @@ const AbhiClassRoster = ({ userId, classId, onLink }) => {
         </div>
       </div>}
         {/* Link to Tutoring */}
-        {isOpen&&onLink&&(
+        {open&&onLink&&(
           <div className="p-4 border-t border-gray-700 bg-gray-900/30">
             <AbhiLinkToTutoring classId={classId} approved={students.filter(s=>s.status==='approved')} onLink={onLink}/>
           </div>
