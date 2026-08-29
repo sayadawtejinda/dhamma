@@ -381,6 +381,192 @@ const LessonItem = ({ lesson, isTeacher, studentAgeGroup, studentName, onGenerat
     );
 };
 
+const NotificationBell = ({ userId }) => {
+    const [notifications, setNotifications] = useState([]);
+    const [isOpen, setIsOpen] = useState(false);
+    const [lastRead, setLastRead] = useState(() => parseInt(localStorage.getItem(`abhidhamma_notif_${userId}`)) || 0);
+    useEffect(() => {
+        if (!db || !userId) return;
+        const q = query(collection(db,'artifacts',ABHIDHAMMA_APP_ID,'public','data','activity_feed'), orderBy('timestamp','desc'), limit(15));
+        const unsub = onSnapshot(q, snap => setNotifications(snap.docs.map(d=>({id:d.id,...d.data()}))));
+        return () => unsub();
+    }, [userId]);
+    const unreadCount = notifications.filter(n => {
+        const ts = n.timestamp?.toMillis ? n.timestamp.toMillis() : (n.timestamp?.seconds*1000)||0;
+        return ts > lastRead;
+    }).length;
+    const handleToggle = () => {
+        if (!isOpen) { const now=Date.now(); setLastRead(now); localStorage.setItem(`abhidhamma_notif_${userId}`, now); }
+        setIsOpen(!isOpen);
+    };
+    return (
+        <div className="relative">
+            <button onClick={handleToggle} className="p-2 bg-gray-700 hover:bg-gray-600 rounded-full transition relative shadow-lg">
+                <Bell className="w-5 h-5 text-gray-300"/>
+                {unreadCount > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full animate-pulse">{unreadCount > 9 ? '9+' : unreadCount}</span>}
+            </button>
+            {isOpen && (
+                <div className="absolute right-0 mt-2 w-72 max-w-[90vw] bg-gray-800 border border-gray-600 rounded-xl shadow-2xl z-50 overflow-hidden">
+                    <div className="p-3 border-b border-gray-700 flex justify-between items-center">
+                        <h4 className="font-bold text-white text-sm flex items-center gap-2"><Bell className="w-4 h-4 text-indigo-400"/> Notifications</h4>
+                        <button onClick={()=>setIsOpen(false)} className="text-gray-400 hover:text-white"><X className="w-4 h-4"/></button>
+                    </div>
+                    <div className="max-h-64 overflow-y-auto p-2 space-y-2">
+                        {notifications.length===0 ? <p className="text-center text-gray-500 text-xs py-6 italic">No new notifications</p> : notifications.map(n => (
+                            <div key={n.id} className="bg-gray-700/50 p-3 rounded-lg border border-gray-600/50 flex items-start gap-3">
+                                <Trophy className="w-4 h-4 text-yellow-400 mt-1"/>
+                                <div><p className="text-xs font-bold text-white"><span className="text-indigo-300">{n.studentName}</span> finished a quiz!</p><p className="text-[10px] text-gray-400 truncate mt-0.5">{n.lessonTitle}</p></div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+const CompletionToastStack = ({ toasts }) => (
+    <div className="fixed top-24 right-4 z-[70] flex flex-col gap-2 items-end">
+        {toasts.map(t => (
+            <div key={t.id} className="bg-green-600 text-white px-4 py-3 rounded-xl shadow-2xl font-bold flex items-center gap-2 border border-green-400">
+                <CheckCircle className="w-5 h-5"/>
+                <span>Lesson Completed! ({t.count} today)</span>
+            </div>
+        ))}
+    </div>
+);
+
+const FloatingStatsBar = ({ rank, totalLessons }) => {
+    const [pos, setPos] = useState({ x: null, y: 16 });
+    const dragging = useRef(false);
+    const offset = useRef({ x:0, y:0 });
+    const startDrag = (clientX, clientY, el) => { dragging.current=true; const rect=el.getBoundingClientRect(); offset.current={x:clientX-rect.left,y:clientY-rect.top}; };
+    const onMove = (clientX, clientY) => { if(!dragging.current) return; setPos({x:clientX-offset.current.x,y:clientY-offset.current.y}); };
+    const stopDrag = () => { dragging.current=false; };
+    useEffect(() => {
+        const mm = e=>onMove(e.clientX,e.clientY); const tm = e=>{if(e.touches[0])onMove(e.touches[0].clientX,e.touches[0].clientY);};
+        window.addEventListener('mousemove',mm); window.addEventListener('touchmove',tm); window.addEventListener('mouseup',stopDrag); window.addEventListener('touchend',stopDrag);
+        return () => { window.removeEventListener('mousemove',mm); window.removeEventListener('touchmove',tm); window.removeEventListener('mouseup',stopDrag); window.removeEventListener('touchend',stopDrag); };
+    }, []);
+    const style = pos.x===null ? {left:'50%',top:'16px',transform:'translateX(-50%)'} : {left:pos.x+'px',top:pos.y+'px'};
+    return (
+        <div onMouseDown={e=>startDrag(e.clientX,e.clientY,e.currentTarget)} onTouchStart={e=>e.touches[0]&&startDrag(e.touches[0].clientX,e.touches[0].clientY,e.currentTarget)}
+            style={{position:'fixed',zIndex:70,cursor:'grab',...style}} className="bg-gray-800/95 border border-indigo-500 rounded-full shadow-2xl px-5 py-2 flex items-center gap-4 select-none backdrop-blur-md">
+            <span className="flex items-center gap-1 text-yellow-400 font-black"><Trophy className="w-4 h-4"/> #{rank||'-'}</span>
+            <span className="text-gray-500">|</span>
+            <span className="flex items-center gap-1 text-teal-300 font-bold"><BookOpen className="w-4 h-4"/> {totalLessons} Lessons</span>
+        </div>
+    );
+};
+
+const ClassRoster = ({ userId }) => {
+    const [students, setStudents] = useState([]);
+    const [isOpen, setIsOpen] = useState(true);
+    const [nowTime, setNowTime] = useState(Date.now());
+    const [autoApprove, setAutoApprove] = useState(false);
+    useEffect(() => { const i=setInterval(()=>setNowTime(Date.now()),10000); return()=>clearInterval(i); },[]);
+    useEffect(() => {
+        if (!db||!userId) return;
+        const q = query(collection(db,'artifacts',ABHIDHAMMA_APP_ID,'public','data','students'));
+        return onSnapshot(q, snap => {
+            const now=Date.now();
+            setStudents(snap.docs.map(d=>{
+                const data=d.data(); const lp=data.lastPing;
+                if(data.isOnline&&lp){const pm=lp.toMillis?lp.toMillis():(lp.seconds*1000); if((now-pm)/60000>2) return{id:d.id,...data,isOnline:false};}
+                return{id:d.id,...data};
+            }));
+        });
+    },[userId]);
+    useEffect(() => {
+        if(!db) return;
+        const ref=doc(db,'artifacts',ABHIDHAMMA_APP_ID,'public','data','settings','preferences');
+        return onSnapshot(ref, snap=>{ if(snap.exists()) setAutoApprove(snap.data().autoApprove||false); });
+    },[]);
+    const toggleAutoApprove=async(e)=>{e.stopPropagation();await setDoc(doc(db,'artifacts',ABHIDHAMMA_APP_ID,'public','data','settings','preferences'),{autoApprove:!autoApprove},{merge:true});};
+    const handleApprove=async(id,intendedName)=>{
+        const ref=doc(db,'artifacts',ABHIDHAMMA_APP_ID,'public','data','students',id);
+        const snap=await getDoc(ref); if(!snap.exists()) return;
+        const data=snap.data(); let num=data.studentNumber;
+        if(!num){const max=students.filter(s=>s.status==='approved').reduce((m,s)=>s.studentNumber>m?s.studentNumber:m,0); num=max+1;}
+        await updateDoc(ref,{status:'approved',name:intendedName||data.name,pendingName:null,studentNumber:num});
+    };
+    useEffect(()=>{if(autoApprove) students.filter(s=>s.status==='pending').forEach(s=>handleApprove(s.id,s.pendingName||s.name));},[students,autoApprove]);
+    const handleReject=async(id)=>updateDoc(doc(db,'artifacts',ABHIDHAMMA_APP_ID,'public','data','students',id),{status:'rejected',pendingName:null});
+    const handleRemove=async(e,id)=>{e.stopPropagation();try{await deleteDoc(doc(db,'artifacts',ABHIDHAMMA_APP_ID,'public','data','students',id));}catch(err){console.error(err);}};
+    const pending=students.filter(s=>s.status==='pending');
+    const online=students.filter(s=>s.status==='approved'&&s.isOnline).sort((a,b)=>a.studentNumber-b.studentNumber);
+    const offline=students.filter(s=>s.status==='approved'&&!s.isOnline).sort((a,b)=>a.studentNumber-b.studentNumber).map(s=>{
+        let isWarning=false; const ct=s.lastSeen||s.lastPing;
+        if(ct){const ms=ct.toMillis?ct.toMillis():(ct.seconds*1000); const d=(nowTime-ms)/60000; if(d>=3&&d<=8)isWarning=true;}
+        return{...s,isWarning};
+    });
+    return (
+        <div className="bg-gray-800 rounded-xl shadow-xl border border-gray-700 mb-6 overflow-hidden">
+            <div onClick={()=>setIsOpen(!isOpen)} className="p-4 border-b border-gray-700 cursor-pointer flex flex-wrap gap-3 justify-between items-center hover:bg-gray-700 transition">
+                <div className="flex items-center gap-4">
+                    <h3 className="font-bold text-white flex items-center gap-2"><Users className="w-5 h-5 text-indigo-400"/> Class Roster</h3>
+                    <button onClick={toggleAutoApprove} className={`flex items-center gap-1 text-xs px-3 py-1 rounded-full font-bold transition-all ${autoApprove?'bg-green-500/20 text-green-400 border border-green-500/50':'bg-gray-800 text-gray-400 border border-gray-600'}`}>
+                        {autoApprove?<ToggleRight className="w-4 h-4"/>:<ToggleLeft className="w-4 h-4"/>} Auto-Approve
+                    </button>
+                </div>
+                <div className="flex items-center gap-4 text-sm font-semibold">
+                    <span className="text-yellow-400">{pending.length} Pending</span>
+                    <span className="text-green-400">{online.length} Online</span>
+                    <span className="text-gray-400">{online.length+offline.length} Total</span>
+                    {isOpen?<ChevronDown className="w-5 h-5 text-gray-400"/>:<ChevronLeft className="w-5 h-5 text-gray-400"/>}
+                </div>
+            </div>
+            {isOpen && (
+                <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-900/50">
+                    <div className="space-y-3">
+                        <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2">Pending {pending.length>0&&<span className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse inline-block ml-1"></span>}</h4>
+                        {pending.length===0?<p className="text-gray-500 text-sm italic">No pending requests.</p>:null}
+                        {pending.map(s=>(
+                            <div key={s.id} className="bg-gray-800 p-3 rounded-lg border border-yellow-600/30 flex justify-between items-center">
+                                <div><p className="font-bold text-white">{s.pendingName||s.name}</p>{s.pendingName&&<p className="text-xs text-yellow-400">Previous: {s.name}</p>}</div>
+                                <div className="flex gap-2">
+                                    <button onClick={()=>handleApprove(s.id,s.pendingName||s.name)} className="p-2 bg-green-600 hover:bg-green-500 rounded text-white"><UserCheck className="w-4 h-4"/></button>
+                                    <button onClick={()=>handleReject(s.id)} className="p-2 bg-red-600 hover:bg-red-500 rounded text-white"><UserX className="w-4 h-4"/></button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    <div className="space-y-4">
+                        <div>
+                            <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2 border-b border-gray-700 pb-1">Online ({online.length})</h4>
+                            <div className="flex flex-wrap gap-3">
+                                {online.length===0?<span className="text-gray-600 text-sm italic">Nobody online.</span>:null}
+                                {online.map(s=>(
+                                    <div key={s.id} className="bg-indigo-900/60 border border-indigo-500/50 p-2 rounded-xl flex flex-col gap-1 min-w-[150px]">
+                                        <div className="flex items-center justify-between gap-2 text-sm">
+                                            <div className="flex items-center gap-2"><Circle className="w-2 h-2 fill-green-500 text-green-500"/><span className="font-mono font-bold text-indigo-300">#{s.studentNumber}</span><span className="text-white font-semibold truncate max-w-[100px]">{s.name}</span></div>
+                                            <button onClick={e=>handleRemove(e,s.id)} className="text-gray-500 hover:text-red-400"><Trash2 className="w-3 h-3"/></button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                        <div>
+                            <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2 border-b border-gray-700 pb-1">Offline ({offline.length})</h4>
+                            <div className="flex flex-wrap gap-3">
+                                {offline.length===0?<span className="text-gray-600 text-sm italic">No offline students.</span>:null}
+                                {offline.map(s=>(
+                                    <div key={s.id} className={`border px-3 py-1.5 rounded-full flex items-center gap-2 text-sm ${s.isWarning?'bg-red-950/80 border-red-500':'bg-gray-800 border-gray-600 grayscale opacity-60 hover:opacity-100'}`}>
+                                        <Circle className={`w-2 h-2 flex-shrink-0 ${s.isWarning?'fill-red-500 text-red-500':'fill-gray-500 text-gray-500'}`}/>
+                                        <span className={`font-mono font-bold ${s.isWarning?'text-red-300':'text-gray-400'}`}>#{s.studentNumber}</span>
+                                        <span className={`font-semibold ${s.isWarning?'text-white':'text-gray-300'}`}>{s.name}</span>
+                                        <button onClick={e=>handleRemove(e,s.id)} className="ml-1 text-gray-500 hover:text-red-400"><Trash2 className="w-3 h-3"/></button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
 const WelcomeModal = ({ userId, onStudentComplete, onTeacherComplete }) => {
     const [step, setStep] = useState('role_select');
     const [name, setName] = useState('');
@@ -442,6 +628,11 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
     const [studentProfile, setStudentProfile] = useState(null);
     const [openLessonId, setOpenLessonId] = useState(null);
     const [generatingLessonId, setGeneratingLessonId] = useState(null);
+    const [completionToasts, setCompletionToasts] = useState([]);
+    const [studentRank, setStudentRank] = useState(null);
+    const [studentTotalLessons, setStudentTotalLessons] = useState(0);
+    const prevTodayCountRef = useRef(0);
+    const [isIdle, setIsIdle] = useState(false);
     const [showGlobalLeaderboard, setShowGlobalLeaderboard] = useState(false);
     const [globalLeaderboardData, setGlobalLeaderboardData] = useState([]);
     const [loadingGlobalLB, setLoadingGlobalLB] = useState(false);
@@ -618,6 +809,10 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
         <div className="min-h-screen bg-gray-900 text-white font-sans p-4 sm:p-8 pt-16">
             <style>{`.animate-bounce-in{animation:bounceIn 0.5s ease-out}@keyframes bounceIn{0%{transform:scale(0.5);opacity:0}80%{transform:scale(1.05);opacity:1}100%{transform:scale(1)}}`}</style>
 
+            <CompletionToastStack toasts={completionToasts} />
+            {currentRole === 'Student' && studentProfile?.status === 'approved' && (
+                <FloatingStatsBar rank={studentRank} totalLessons={studentTotalLessons} />
+            )}
             {shouldShowWelcome && (
                 <WelcomeModal userId={userId} onStudentComplete={handleStudentOnboarding} onTeacherComplete={()=>{setIsTeacher(true);setCurrentRole('Teacher');localStorage.setItem('abhidhamma_isTeacher','true');}}/>
             )}
@@ -642,6 +837,7 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
                     <div className="flex items-center gap-3">
                         {studentProfile?.status==='approved'&&<button onClick={()=>setShowGlobalLeaderboard(true)} className="p-2 bg-yellow-600/20 text-yellow-400 border border-yellow-500/50 rounded-full hover:bg-yellow-600/40"><Trophy className="w-5 h-5"/></button>}
                         <div className="text-gray-400 text-sm font-semibold">{currentRole} View</div>
+                       <NotificationBell userId={userId} />
                     </div>
                 </header>
 
@@ -649,6 +845,7 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
 
                 {currentRole==='Teacher' ? (
                     <div className="space-y-6">
+                        <ClassRoster userId={userId} />
                         <div className="bg-gray-800 p-6 rounded-xl shadow-xl border border-gray-700">
                             <div className="flex justify-between items-center mb-4">
                 <h3 className="text-xl font-bold text-teal-300">{editingLesson?'Edit Lesson':'Add New Lesson'}</h3>

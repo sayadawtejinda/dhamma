@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { 
   doc, 
@@ -1273,9 +1273,12 @@ const AgeLevelPickerView = React.memo(({ studentAgeLevel, setStudentAgeLevel, on
   </Card>
 ));
 
-const ClassPickerView = React.memo(({ classList, highlightClassId, onSelectClass, loading }) => (
+const ClassPickerView = React.memo(({ classList, highlightClassId, onSelectClass, loading, studentCompletions, myGlobalRank }) => (
   <div className="p-4 md:p-8 max-w-2xl mx-auto mt-10">
     <h2 className="text-3xl font-bold text-blue-700 mb-2 text-center">📚 Choose Your Class</h2>
+    {myGlobalRank > 0 && (
+      <p className="text-center text-yellow-600 font-bold mb-2">🏆 Global Rank: #{myGlobalRank}</p>
+    )}
     {highlightClassId && (
       <p className="text-gray-600 text-center mb-6">Your teacher assigned <span className="font-bold text-blue-700">{highlightClassId}</span> — tap it below to start.</p>
     )}
@@ -1285,15 +1288,24 @@ const ClassPickerView = React.memo(({ classList, highlightClassId, onSelectClass
       <p className="text-gray-500 italic text-center">No classes found.</p>
     ) : (
       <div className="space-y-3">
-        {classList.map(c => (
-          <button
-            key={c}
-            onClick={() => onSelectClass(c)}
-            className={`w-full p-4 rounded-xl border-2 text-left font-bold text-lg transition-all ${c === highlightClassId ? 'bg-blue-100 border-blue-500 text-blue-800 shadow-lg scale-[1.02]' : 'bg-white border-gray-200 text-gray-700 hover:border-blue-300'}`}
-          >
-            {c === highlightClassId ? '⭐ ' : ''}{c}
-          </button>
-        ))}
+        {classList.map(c => {
+          const completedCount = studentCompletions?.[c]?.size || 0;
+          const isHighlight = c === highlightClassId;
+          return (
+            <button
+              key={c}
+              onClick={() => onSelectClass(c)}
+              className={`w-full p-4 rounded-xl border-2 text-left font-bold text-lg transition-all flex items-center justify-between ${isHighlight ? 'bg-blue-100 border-blue-500 text-blue-800 shadow-lg scale-[1.02]' : 'bg-white border-gray-200 text-gray-700 hover:border-blue-300'}`}
+            >
+              <span>{isHighlight ? '⭐ ' : ''}{c}</span>
+              {completedCount > 0 ? (
+                <span className="text-sm font-semibold text-green-600 bg-green-50 border border-green-200 px-2 py-1 rounded-full">
+                  ✅ {completedCount} completed
+                </span>
+              ) : null}
+            </button>
+          );
+        })}
       </div>
     )}
   </div>
@@ -2091,14 +2103,10 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
   // --- Entry point coming from the Tutoring Dashboard ("Apps" menu for
   // teachers, or "Start Lesson" for students). Skips the Home role-choice
   // screen and, for students, skips manual name entry entirely. ---
-  // useLayoutEffect fires before the browser paints, so the view switches
-  // to classPicker without any visible flash of the previous screen.
-  useLayoutEffect(() => {
+  useEffect(() => {
     if (!entryRequest) return;
     const signature = JSON.stringify({ mode: entryRequest.mode, classId: entryRequest.classId, studentName: entryRequest.studentName, ageLevel: entryRequest.ageLevel });
-    // Teacher mode: deduplicate. Student mode: always re-navigate (no dedup)
-    // so the class picker shows immediately every time.
-    if (entryRequest.mode !== 'student' && signature === lastHandledEntryRequestRef.current) return;
+    if (signature === lastHandledEntryRequestRef.current) return;
     lastHandledEntryRequestRef.current = signature;
 
     if (entryRequest.mode === 'teacher') {
@@ -2321,7 +2329,16 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
       case 'teacherLogin': return <TeacherLoginView targetClassId={targetClassId} setTargetClassId={setTargetClassId} handleTeacherLogin={handleTeacherLogin} handleSetView={handleSetView} />;
       case 'studentLogin': return <StudentLoginView targetClassId={targetClassId} setTargetClassId={setTargetClassId} userName={userName} setUserName={setUserName} studentAgeLevel={studentAgeLevel} setStudentAgeLevel={setStudentAgeLevel} handleStudentLogin={handleStudentLogin} handleSetView={handleSetView} />;
       case 'ageLevelPicker': return <AgeLevelPickerView studentAgeLevel={studentAgeLevel} setStudentAgeLevel={setStudentAgeLevel} onContinue={handleAgeLevelContinue} />;
-      case 'classPicker': return <ClassPickerView classList={classPickerList} highlightClassId={entryRequest?.classId} onSelectClass={handleSelectClassFromPicker} loading={classPickerLoading} />;
+      case 'classPicker': {
+        // Build per-class completion map from allMyScoresGlobal (already loaded)
+        const perClassCompletions = {};
+        allMyScoresGlobal.forEach(s => {
+          if (!perClassCompletions[s.classId]) perClassCompletions[s.classId] = new Set();
+          perClassCompletions[s.classId].add(s.lessonId);
+        });
+        const globalRank = globalLeaderboardScores.findIndex(s => s.studentName === userName) + 1;
+        return <ClassPickerView classList={classPickerList} highlightClassId={entryRequest?.classId} onSelectClass={handleSelectClassFromPicker} loading={classPickerLoading} studentCompletions={perClassCompletions} myGlobalRank={globalRank > 0 ? globalRank : 0} />;
+      }
       case 'studentWaiting': return <StudentWaitingView handleSetView={handleSetView} userName={userName} isRejected={isRejected} />;
       case 'teacherDashboard':
         if (!classData) return <ClassCreateView classId={classId} handleTeacherCreateClass={handleTeacherCreateClass} isLoading={isLoading} handleSetView={handleSetView} />;
