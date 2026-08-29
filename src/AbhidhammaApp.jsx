@@ -567,33 +567,44 @@ const ClassRoster = ({ userId }) => {
     );
 };
 
-const WelcomeModal = ({ onStudentComplete, onTeacherComplete }) => {
-    // Simplified: no role selection, no name entry — just pick age group and enter.
-    // Teacher login is via the header button (not this modal).
-    const [selectedGroup, setSelectedGroup] = useState(() => {
-        // Restore last used age group from localStorage
-        return localStorage.getItem('abhidhamma_ageGroup') || null;
-    });
+const WelcomeModal = ({ userId, onStudentComplete, onTeacherComplete }) => {
+    const [step, setStep] = useState('role_select');
+    const [name, setName] = useState('');
+    const [selectedGroup, setSelectedGroup] = useState(null);
+    const [passcode, setPasscode] = useState('');
+    const [error, setError] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const handleStudentSubmit = async () => {
+        if (!name.trim() || !selectedGroup) return;
+        setIsSubmitting(true);
+        try {
+            const studentRef = doc(db,'artifacts',ABHIDHAMMA_APP_ID,'public','data','students',userId);
+            const snap = await getDoc(studentRef);
+            if (snap.exists() && snap.data().status === 'approved') {
+                onStudentComplete({...snap.data(), name: snap.data().name, group: snap.data().group||selectedGroup});
+            } else {
+                await setDoc(studentRef, { userId, name: name.trim(), group: selectedGroup, status: 'pending', timestamp: serverTimestamp() }, { merge: true });
+                setStep('waiting_approval');
+            }
+        } catch(e) { console.error(e); } finally { setIsSubmitting(false); }
+    };
+
+    useEffect(() => {
+        if (!userId || step !== 'waiting_approval') return;
+        const unsub = onSnapshot(doc(db,'artifacts',ABHIDHAMMA_APP_ID,'public','data','students',userId), snap => {
+            if (snap.exists()) { const data = snap.data(); if (data.status==='approved') onStudentComplete({...data}); else if (data.status==='rejected') setStep('role_select'); }
+        });
+        return () => unsub();
+    }, [userId, step]);
+
     return (
         <div className="fixed inset-0 bg-gray-900 z-[60] flex items-center justify-center p-4">
             <div className="bg-indigo-900/90 border border-indigo-500 p-8 rounded-2xl shadow-2xl max-w-md w-full text-center">
-                <Globe className="w-16 h-16 mx-auto text-cyan-400 mb-4 animate-pulse"/>
-                <h2 className="text-3xl font-black text-white mb-2">📚 Abhidhamma</h2>
-                <p className="text-indigo-300 mb-6">Choose your age group to begin</p>
-                <div className="grid grid-cols-2 gap-3 mb-6">
-                    {Object.entries(AGE_GROUPS).map(([key,info])=>(
-                        <button key={key} onClick={()=>setSelectedGroup(key)}
-                            className={`p-4 rounded-xl border-2 flex flex-col items-center gap-2 transition ${selectedGroup===key?'bg-cyan-500 border-cyan-300 text-white scale-105 shadow-lg':'bg-gray-800 border-gray-600 text-gray-400 hover:bg-gray-700 hover:border-gray-500'}`}>
-                            {info.icon}
-                            <span className="text-xs font-bold">{info.label}</span>
-                        </button>
-                    ))}
-                </div>
-                <button onClick={()=>{ if(!selectedGroup) return; localStorage.setItem('abhidhamma_ageGroup', selectedGroup); onStudentComplete({ group: selectedGroup, status: 'approved' }); }}
-                    disabled={!selectedGroup}
-                    className="w-full bg-green-500 hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black text-xl py-4 rounded-xl shadow-[0_4px_0_rgb(21,128,61)] active:shadow-none active:translate-y-1 transition">
-                    ENTER
-                </button>
+                {step==='role_select'&&<div><Globe className="w-16 h-16 mx-auto text-cyan-400 mb-4 animate-pulse"/><h2 className="text-3xl font-black text-white mb-8">📚 Abhidhamma App</h2><div className="space-y-4"><button onClick={()=>setStep('student_setup')} className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xl py-4 rounded-xl shadow-lg flex items-center justify-center gap-3"><User className="w-6 h-6"/> Student</button><button onClick={()=>setStep('teacher_login')} className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold text-xl py-4 rounded-xl shadow-lg flex items-center justify-center gap-3"><Key className="w-6 h-6"/> Teacher</button></div></div>}
+                {step==='student_setup'&&<div><User className="w-16 h-16 mx-auto text-cyan-400 mb-4"/><h2 className="text-3xl font-black text-white mb-4">Student Setup</h2><input className="w-full p-4 rounded-xl text-black font-bold text-center text-xl mb-4 focus:ring-4 ring-cyan-400 outline-none" placeholder="Enter Your Full Name" value={name} onChange={e=>setName(e.target.value)}/><div className="grid grid-cols-2 gap-3 mb-6">{Object.entries(AGE_GROUPS).map(([key,info])=><button key={key} onClick={()=>setSelectedGroup(key)} className={`p-3 rounded-lg border flex flex-col items-center gap-2 transition ${selectedGroup===key?'bg-cyan-500 border-cyan-300 text-white scale-105':'bg-gray-800 border-gray-600 text-gray-400 hover:bg-gray-700'}`}>{info.icon}<span className="text-xs font-bold">{info.label}</span></button>)}</div><button onClick={handleStudentSubmit} disabled={!name||!selectedGroup||isSubmitting} className="w-full bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white font-black text-xl py-4 rounded-xl">{isSubmitting?<RotateCw className="w-6 h-6 mx-auto animate-spin"/>:"ENTER"}</button></div>}
+                {step==='waiting_approval'&&<div><Lock className="w-16 h-16 mx-auto text-yellow-400 mb-4 animate-pulse"/><h2 className="text-2xl font-black text-white mb-4">Waiting for Approval...</h2><RotateCw className="w-8 h-8 mx-auto text-cyan-400 animate-spin"/></div>}
+                {step==='teacher_login'&&<div><Wand2 className="w-16 h-16 mx-auto text-purple-400 mb-4 animate-pulse"/><h2 className="text-3xl font-black text-white mb-4">Teacher Login</h2><input type="password" className="w-full p-4 rounded-xl text-black font-bold text-center text-xl mb-4 focus:ring-4 ring-purple-400 outline-none" placeholder="Passcode" value={passcode} onChange={e=>{setPasscode(e.target.value);setError('');}} onKeyDown={e=>e.key==='Enter'&&(passcode===TEACHER_PASSCODE?onTeacherComplete():setError('Incorrect Passcode.'))}/>{error&&<p className="text-red-400 mb-4 text-sm font-bold">{error}</p>}<button onClick={()=>passcode===TEACHER_PASSCODE?onTeacherComplete():setError('Incorrect Passcode.')} className="w-full bg-purple-500 hover:bg-purple-600 text-white font-black text-xl py-4 rounded-xl">LOGIN</button></div>}
             </div>
         </div>
     );
@@ -739,8 +750,7 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
                 // Lessons
                 for (const l of (data.lessons||[])) {
                     const {id,timestamp,...rest}=l;
-                    const withClass = importClassId.trim() ? {...rest, classId: importClassId.trim().toUpperCase()} : rest;
-                    await setDoc(doc(db,'artifacts',ABHIDHAMMA_APP_ID,'public','data','lessons',id),{...withClass,timestamp:toDate(timestamp)});
+                    await setDoc(doc(db,'artifacts',ABHIDHAMMA_APP_ID,'public','data','lessons',id),{...rest,timestamp:toDate(timestamp)});
                     lCount++;
                 }
                 // Global scores
@@ -870,15 +880,12 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
                             <div className="flex justify-between items-center mb-4">
                 <h3 className="text-xl font-bold text-teal-300">{editingLesson?'Edit Lesson':'Add New Lesson'}</h3>
                 <div className="flex gap-2">
-                    <div className="flex items-center gap-1 bg-gray-900 border border-gray-600 rounded p-1">
-                        <input type="text" value={importClassId} onChange={e=>setImportClassId(e.target.value.toUpperCase())} placeholder="CLASS ID" className="bg-transparent text-white text-xs font-mono font-bold w-20 focus:outline-none px-1" title="Class ID tag for imported lessons"/>
-                        <label className="cursor-pointer bg-indigo-600 px-2 py-1 rounded hover:bg-indigo-700 flex items-center gap-1 text-xs text-white font-semibold">
-                            <input type="file" accept=".json" onChange={handleImportLessons} className="hidden"/>
-                            <Upload className="w-3 h-3"/> Import
-                        </label>
-                    </div>
+                    <label htmlFor="abhidhamma-import" className="cursor-pointer bg-indigo-600 p-2 rounded hover:bg-indigo-700 transition flex items-center gap-1 text-sm text-white font-semibold">
+                        <input type="file" id="abhidhamma-import" accept=".json" onChange={handleImportLessons} className="hidden"/>
+                        <Upload className="w-4 h-4"/> Import Data
+                    </label>
                     <button onClick={handleExportLessons} disabled={isLoading} className="bg-pink-600 p-2 rounded hover:bg-pink-700 transition flex items-center gap-1 text-sm text-white font-semibold">
-                        <Download className="w-4 h-4"/> Export
+                        <Download className="w-4 h-4"/> Export Data
                     </button>
                 </div>
             </div>
