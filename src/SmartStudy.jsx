@@ -514,6 +514,7 @@ const TeacherDashboard = React.memo(({
   handleEditLesson, handleDeleteLesson, globalLeaderboardScores, 
   setSelectedName, handleSetView, playClickSound,
   handleDownloadLessons, handleUploadLessons, fileInputRef,
+  handleDownloadLessonsOnly, handleUploadLessonsOnly, fileInputRefLessonsOnly,
   heartCounts, setSelectedAgeLevel,
   classRoster, handleApproveStudent, handleDeleteStudent,
   autoApprove, handleToggleAutoApprove,
@@ -655,11 +656,18 @@ const TeacherDashboard = React.memo(({
           <div className="w-full lg:w-1/2 flex flex-col gap-8 overflow-hidden">
             <Card className="flex-1 overflow-y-auto">
               <input type="file" ref={fileInputRef} onChange={handleUploadLessons} accept=".json" className="hidden" />
-              <h2 className="text-3xl font-bold text-green-600 mb-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <input type="file" ref={fileInputRefLessonsOnly} onChange={handleUploadLessonsOnly} accept=".json" className="hidden" />
+              <h2 className="text-3xl font-bold text-green-600 mb-4 flex flex-col items-start gap-3">
                 <span className="flex items-center"><FileText className="w-6 h-6 mr-3" />Lesson List</span>
-                <div className="flex space-x-2">
-                  <Button onClick={handleDownloadLessons} className="bg-gray-500 hover:bg-gray-600 shadow-lg shadow-gray-300 px-3 py-1 text-sm flex items-center"><Download className="w-4 h-4 mr-1" />Download Data</Button>
-                  <Button onClick={() => fileInputRef.current?.click()} className="bg-gray-500 hover:bg-gray-600 shadow-lg shadow-gray-300 px-3 py-1 text-sm flex items-center"><Upload className="w-4 h-4 mr-1" />Restore Data</Button>
+                <div className="flex flex-wrap gap-2 w-full">
+                  <div className="flex gap-1">
+                    <Button onClick={handleDownloadLessonsOnly} className="bg-blue-500 hover:bg-blue-600 px-3 py-1 text-xs flex items-center"><Download className="w-3 h-3 mr-1" />📚 Lessons Only</Button>
+                    <Button onClick={() => fileInputRefLessonsOnly.current?.click()} className="bg-blue-500 hover:bg-blue-600 px-3 py-1 text-xs flex items-center"><Upload className="w-3 h-3 mr-1" />📚 Import Lessons</Button>
+                  </div>
+                  <div className="flex gap-1">
+                    <Button onClick={handleDownloadLessons} className="bg-gray-500 hover:bg-gray-600 px-3 py-1 text-xs flex items-center"><Download className="w-3 h-3 mr-1" />📦 Full Backup</Button>
+                    <Button onClick={() => fileInputRef.current?.click()} className="bg-gray-500 hover:bg-gray-600 px-3 py-1 text-xs flex items-center"><Upload className="w-3 h-3 mr-1" />📦 Restore All</Button>
+                  </div>
                 </div>
               </h2>
               <div className="space-y-4">
@@ -1546,6 +1554,7 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
   const timerId = useRef(null);
   const clickSoundRef = useRef(null);
   const fileInputRef = useRef(null);
+  const fileInputRefLessonsOnly = useRef(null);
 
   useEffect(() => {
     const initAuth = async () => {
@@ -1912,6 +1921,16 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
     }
   }, [classId]);
 
+  const handleDownloadLessonsOnly = useCallback(() => {
+    if (lessons.length === 0) { setModal({ message: "No lessons to download.", type: 'error', visible: true }); return; }
+    const data = { classId, timestamp: new Date().toISOString(), lessons };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const href = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = href; link.download = `lessons-only-${classId}-${Date.now()}.json`;
+    document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(href);
+  }, [lessons, classId]);
+
   const handleDownloadLessons = useCallback(() => {
     if (lessons.length === 0 && allScores.length === 0) { setModal({ message: "No data to download.", type: 'error', visible: true }); return; }
     const backupData = { classId: classId, timestamp: new Date().toISOString(), lessons: lessons, scores: allScores, reflections: allReflections, roster: classRoster, hearts: heartCounts, completions: completionsList };
@@ -1921,6 +1940,34 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
     link.href = href; link.download = `backup-data-${classId}-${Date.now()}.json`; 
     document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(href);
   }, [lessons, classId, allScores, allReflections, classRoster, heartCounts, completionsList]); 
+
+  const handleUploadLessonsOnly = useCallback((event) => {
+    const file = event.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const uploadedData = JSON.parse(e.target.result);
+        setConfirmationModal({
+          message: "This will overwrite ONLY the lessons for this class. Student records (scores, roster, completions) will NOT be touched. Are you sure?",
+          confirmText: "Upload Lessons Only",
+          onConfirm: async () => {
+            setIsLoading(true);
+            setConfirmationModal({ message: '', onConfirm: null });
+            try {
+              const lessonsToUpload = Array.isArray(uploadedData) ? uploadedData : (uploadedData.lessons || []);
+              await updateDoc(getClassDocRef(classId), { lessons: lessonsToUpload });
+              setModal({ message: `✅ Imported ${lessonsToUpload.length} lessons. Student records untouched.`, type: 'success', visible: true });
+            } catch (err) {
+              console.error(err);
+              setModal({ message: `Error: ${err.message}`, type: 'error', visible: true });
+            } finally { setIsLoading(false); }
+          }
+        });
+      } catch (err) { setModal({ message: `Parse error: ${err.message}`, type: 'error', visible: true }); }
+      event.target.value = '';
+    };
+    reader.readAsText(file);
+  }, [classId]);
 
   const handleUploadLessons = useCallback((event) => {
     const file = event.target.files[0]; 
@@ -2130,11 +2177,10 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
     } else if (entryRequest.mode === 'student') {
       setUserName(entryRequest.studentName || '');
       if (entryRequest.ageLevel) {
-        setStudentAgeLevel(entryRequest.ageLevel);
-        setView('classPicker');
-      } else {
-        setView('ageLevelPicker');
+        setStudentAgeLevel(entryRequest.ageLevel); // pre-select but always show picker
       }
+      // Always show ageLevelPicker so student can confirm or change their level.
+      setView('ageLevelPicker');
     }
   }, [entryRequest]);
 
@@ -2380,7 +2426,7 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
       case 'studentWaiting': return <StudentWaitingView handleSetView={handleSetView} userName={userName} isRejected={isRejected} />;
       case 'teacherDashboard':
         if (!classData) return <ClassCreateView classId={classId} handleTeacherCreateClass={handleTeacherCreateClass} isLoading={isLoading} handleSetView={handleSetView} />;
-        return <TeacherDashboard classId={classId} newLesson={newLesson} setNewLesson={setNewLesson} lessons={lessons} isLoading={isLoading} handleSaveLesson={handleSaveLesson} handleFormatLesson={handleFormatLesson} generateQuestions={generateQuestions} handleGenerateAllLevels={handleGenerateAllLevels} handleRegenerateLevel={handleRegenerateLevel} handleEditLesson={handleEditLesson} handleDeleteLesson={handleDeleteLesson} globalLeaderboardScores={globalLeaderboardScores} setSelectedName={setSelectedName} handleSetView={handleSetView} playClickSound={playClickSound} handleDownloadLessons={handleDownloadLessons} handleUploadLessons={handleUploadLessons} fileInputRef={fileInputRef} heartCounts={heartCounts} setSelectedAgeLevel={setSelectedAgeLevel} classRoster={classRoster} handleApproveStudent={handleApproveStudent} handleDeleteStudent={handleDeleteStudent} autoApprove={classData?.autoApprove || false} handleToggleAutoApprove={handleToggleAutoApprove} completionsList={completionsList} onLinkStudent={handleLinkStudentToTutoring} />;
+        return <TeacherDashboard classId={classId} newLesson={newLesson} setNewLesson={setNewLesson} lessons={lessons} isLoading={isLoading} handleSaveLesson={handleSaveLesson} handleFormatLesson={handleFormatLesson} generateQuestions={generateQuestions} handleGenerateAllLevels={handleGenerateAllLevels} handleRegenerateLevel={handleRegenerateLevel} handleEditLesson={handleEditLesson} handleDeleteLesson={handleDeleteLesson} globalLeaderboardScores={globalLeaderboardScores} setSelectedName={setSelectedName} handleSetView={handleSetView} playClickSound={playClickSound} handleDownloadLessons={handleDownloadLessons} handleUploadLessons={handleUploadLessons} fileInputRef={fileInputRef} handleDownloadLessonsOnly={handleDownloadLessonsOnly} handleUploadLessonsOnly={handleUploadLessonsOnly} fileInputRefLessonsOnly={fileInputRefLessonsOnly} heartCounts={heartCounts} setSelectedAgeLevel={setSelectedAgeLevel} classRoster={classRoster} handleApproveStudent={handleApproveStudent} handleDeleteStudent={handleDeleteStudent} autoApprove={classData?.autoApprove || false} handleToggleAutoApprove={handleToggleAutoApprove} completionsList={completionsList} onLinkStudent={handleLinkStudentToTutoring} />;
       case 'studentLesson':
         if (!classDataLoaded) return <LoadingView />;
         if (!classData) return <ClassErrorView classId={classId} handleSetView={handleSetView} />;
