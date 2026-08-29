@@ -34,6 +34,8 @@ const abhiRosterRef      = ()            => collection(db, P('classRoster'));
 const abhiScoresRef      = ()            => collection(db, P('scores'));
 const abhiActivityRef    = ()            => collection(db, P('activity_feed'));
 const abhiResultsRef     = (cId,lId,g)   => collection(db, P(`classes/${cId}/quizResults/${lId}/${g}`));
+const abhiQRef           = (cId, lId)    =>
+    collection(db, 'artifacts', ABHIDHAMMA_APP_ID, 'public', 'data', 'classes', cId, 'questions', lId, 'items');
 
 // ─── AI generation ────────────────────────────────────────────────────────────
 const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=`;
@@ -274,7 +276,68 @@ const AbhiTeacherClassPicker = ({ onSelectClass, onCreateClass }) => {
   );
 };
 
-// ─── WelcomeModal ─────────────────────────────────────────────────────────────
+// ─── Student: age-group picker (no name, no approval) ──────────────────────
+const AbhiAgeGroupPicker = ({ onComplete }) => {
+  const [grp, setGrp] = useState(() => localStorage.getItem('abhidhamma_ageGroup') || null);
+  return (
+    <div className="fixed inset-0 bg-gray-900 z-[60] flex items-center justify-center p-4">
+      <div className="bg-indigo-900/90 border border-indigo-500 p-8 rounded-2xl shadow-2xl max-w-md w-full text-center">
+        <Globe className="w-16 h-16 mx-auto text-cyan-400 mb-4 animate-pulse"/>
+        <h2 className="text-3xl font-black text-white mb-2">📚 Abhidhamma</h2>
+        <p className="text-indigo-300 mb-6">Choose your age group to continue</p>
+        <div className="grid grid-cols-2 gap-3 mb-6">
+          {Object.entries(AGE_GROUPS).map(([k,v]) => (
+            <button key={k} onClick={() => setGrp(k)}
+              className={`p-4 rounded-xl border-2 flex flex-col items-center gap-2 transition ${
+                grp===k
+                  ? 'bg-cyan-500 border-cyan-300 text-white scale-105 shadow-lg'
+                  : 'bg-gray-800 border-gray-600 text-gray-400 hover:bg-gray-700 hover:border-gray-500'
+              }`}>
+              {v.icon}
+              <span className="text-xs font-bold">{v.label}</span>
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={() => {
+            if (!grp) return;
+            localStorage.setItem('abhidhamma_ageGroup', grp);
+            onComplete(grp);
+          }}
+          disabled={!grp}
+          className="w-full bg-green-500 hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black text-xl py-4 rounded-xl shadow-[0_4px_0_rgb(21,128,61)] active:shadow-none active:translate-y-1 transition">
+          ENTER
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// ─── Teacher: passcode-only modal ────────────────────────────────────────────
+const AbhiTeacherLogin = ({ onComplete, onClose }) => {
+  const [pass, setPass] = useState(''); const [err, setErr] = useState('');
+  const tryLogin = () => { if (pass === TEACHER_PASSCODE) onComplete(); else setErr('Incorrect passcode.'); };
+  return (
+    <div className="fixed inset-0 bg-gray-900/80 z-[60] flex items-center justify-center p-4">
+      <div className="bg-purple-900/95 border border-purple-500 p-8 rounded-2xl shadow-2xl max-w-sm w-full text-center relative">
+        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-white"><X className="w-6 h-6"/></button>
+        <Wand2 className="w-16 h-16 mx-auto text-purple-400 mb-4 animate-pulse"/>
+        <h2 className="text-3xl font-black text-white mb-4">Teacher Login</h2>
+        <input type="password" autoFocus
+          className="w-full p-4 rounded-xl text-black font-bold text-center text-xl mb-4 focus:ring-4 ring-purple-400 outline-none"
+          placeholder="Passcode" value={pass}
+          onChange={e => { setPass(e.target.value); setErr(''); }}
+          onKeyDown={e => e.key === 'Enter' && tryLogin()}/>
+        {err && <p className="text-red-400 mb-4 text-sm font-bold">{err}</p>}
+        <button onClick={tryLogin} disabled={!pass}
+          className="w-full bg-purple-500 hover:bg-purple-600 disabled:opacity-50 text-white font-black text-xl py-4 rounded-xl">
+          LOGIN
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const AbhiWelcomeModal = ({ userId, classId, onStudentComplete, onTeacherComplete }) => {
   const [step,setStep]=useState('role_select');const [name,setName]=useState('');const [grp,setGrp]=useState(null);const [pass,setPass]=useState('');const [err,setErr]=useState('');const [busy,setBusy]=useState(false);
   const handleSubmit=async()=>{if(!name.trim()||!grp)return;setBusy(true);try{const rRef=abhiRosterDocRef(classId,name.trim());const cRef=abhiClassDocRef(classId);const[rSnap,cSnap]=await Promise.all([getDoc(rRef),getDoc(cRef)]);const aa=cSnap.exists()?cSnap.data().autoApprove:false;const status=aa?'approved':'pending';if(rSnap.exists()){const d=rSnap.data();if(d.status==='approved'){onStudentComplete({...d});return;}await updateDoc(rRef,{pendingName:name.trim(),group:grp,status});}else{await setDoc(rRef,{classId,studentName:name.trim(),name:name.trim(),group:grp,status,joinedAt:Date.now()});}if(aa){const s=await getDoc(rRef);onStudentComplete({...s.data()});}else setStep('waiting');}catch(e){console.error(e);}finally{setBusy(false);}};
@@ -346,6 +409,13 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
 
   useEffect(()=>{ const u=onAuthStateChanged(auth,usr=>{setUserId(usr?usr.uid:null);setAuthReady(true);}); return()=>u(); },[]);
   useEffect(()=>{ if(localStorage.getItem('abhidhamma_isTeacher')==='true'){setIsTeacher(true);setRole('Teacher');} },[]);
+
+  // Restore saved age group profile on load
+  useEffect(()=>{
+    if (!userId || entryRequest?.studentName) return;
+    const saved = localStorage.getItem(`abhidhamma_profile_${userId}`);
+    if (saved) try { setStudentProfile(JSON.parse(saved)); } catch(e) {}
+  }, [userId]);
 
   useLayoutEffect(()=>{
     if(!entryRequest||!authReady)return;
@@ -555,7 +625,8 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
       <style>{`.animate-bounce-in{animation:bounceIn .5s ease-out}@keyframes bounceIn{0%{transform:scale(.5);opacity:0}80%{transform:scale(1.05);opacity:1}100%{transform:scale(1)}}`}</style>
       <input type="file" ref={fileLessonsRef} onChange={handleImportLessonsOnly} accept=".json" className="hidden"/>
       <input type="file" ref={fileRef}        onChange={handleImportFull}         accept=".json" className="hidden"/>
-      {showWelcome&&<AbhiWelcomeModal userId={userId} classId={classId} onStudentComplete={p=>{setStudentProfile(p);setShowWelcome(false);}} onTeacherComplete={()=>{setIsTeacher(true);setRole('Teacher');localStorage.setItem('abhidhamma_isTeacher','true');setShowWelcome(false);}}/>}
+      {/* Teacher login modal (opens via header "Teacher Login" button) */}
+      {showWelcome&&<AbhiTeacherLogin onComplete={()=>{setIsTeacher(true);setRole('Teacher');localStorage.setItem('abhidhamma_isTeacher','true');setShowWelcome(false);}} onClose={()=>setShowWelcome(false)}/>}
       {activeQuizId&&activeQuizData&&<QuizModule classId={classId} lessonId={activeQuizId} lessonTitle={lessons.find(l=>l.id===activeQuizId)?.title||''} userId={userId} userName={studentProfile?.name||'Student'} ageGroup={studentProfile?.group} quizData={activeQuizData} onClose={()=>{setActiveQuizId(null);setActiveQuizData(null);}}/>}
       {msg&&<div className="fixed top-4 left-1/2 -translate-x-1/2 bg-blue-600 text-white px-6 py-2 rounded-full shadow-xl z-50 font-bold">{msg}</div>}
       <div className="max-w-4xl mx-auto">
@@ -611,17 +682,59 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
         {/* ── STUDENT VIEW ── */}
         {role==='Student'&&(
           <div>
-            {!classId&&(
-              <div className="p-6 max-w-lg mx-auto mt-10"><h2 className="text-3xl font-bold text-amber-700 mb-6 text-center">📚 Choose Your Class</h2>
-                {allClasses.length===0?<p className="text-center text-gray-500 italic">No classes found yet.</p>:<div className="space-y-3">{allClasses.map(c=><button key={c.id} onClick={()=>{if(!studentProfile){setClassId(c.id);setShowWelcome(true);}else enterClass(c.id);}} className={`w-full p-4 rounded-xl border-2 text-left font-bold text-lg transition-all flex items-center justify-between ${c.id===entryRequest?.classId?'bg-amber-100 border-amber-500 text-amber-800 shadow-lg scale-[1.02]':'bg-white border-gray-200 text-gray-700 hover:border-amber-300'}`}><span>{c.id===entryRequest?.classId?'⭐ ':''}{c.id}</span></button>)}</div>}
+            {/* Step 1: No age group yet → show picker (fullscreen) */}
+            {!studentProfile&&(
+              <AbhiAgeGroupPicker onComplete={grp => {
+                const label = AGE_GROUPS[grp]?.label?.split(' ')[0] || 'Student';
+                const p = { group: grp, status: 'approved', name: label };
+                setStudentProfile(p);
+                if (userId) localStorage.setItem(`abhidhamma_profile_${userId}`, JSON.stringify(p));
+              }}/>
+            )}
+
+            {/* Step 2: Has profile, no class → show class list (SmartStudy-style) */}
+            {studentProfile&&!classId&&(
+              <div className="p-6 max-w-lg mx-auto mt-10">
+                <h2 className="text-3xl font-bold text-amber-700 mb-2 text-center">📚 Choose Your Class</h2>
+                <p className="text-center text-amber-600 text-sm mb-6 font-semibold">
+                  {AGE_GROUPS[studentProfile.group]?.label}
+                </p>
+                {allClasses.length===0
+                  ? <p className="text-center text-gray-500 italic">No classes found yet.</p>
+                  : <div className="space-y-3">
+                      {allClasses.map(c => (
+                        <button key={c.id} onClick={() => enterClass(c.id)}
+                          className={`w-full p-4 rounded-xl border-2 text-left font-bold text-lg transition-all flex items-center justify-between ${
+                            c.id===entryRequest?.classId
+                              ? 'bg-amber-100 border-amber-500 text-amber-800 shadow-lg scale-[1.02]'
+                              : 'bg-white border-gray-200 text-gray-700 hover:border-amber-300 hover:bg-amber-50'
+                          }`}>
+                          <span>{c.id===entryRequest?.classId?'⭐ ':''}{c.displayName||c.id}</span>
+                          <span className="text-xs font-normal text-gray-400">{c.id}</span>
+                        </button>
+                      ))}
+                    </div>
+                }
               </div>
             )}
-            {classId&&!studentProfile&&!showWelcome&&<div className="text-center mt-10"><button onClick={()=>setShowWelcome(true)} className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-4 px-8 rounded-xl text-xl">Enter Class</button></div>}
-            {classId&&studentProfile&&(
+
+            {/* Step 3: Has profile + class → show lessons */}
+            {studentProfile&&classId&&(
               <div className="space-y-4">
-                <div className="flex items-center justify-between mb-4"><h2 className="text-2xl font-bold text-white">Class: <span className="text-amber-400">{classId}</span></h2><button onClick={()=>{setClassId('');setClassData(null);setLessons([]);}} className="text-sm text-gray-400 hover:text-white underline">← Change Class</button></div>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-2xl font-bold text-white">Class: <span className="text-amber-400">{classId}</span></h2>
+                  <button onClick={()=>{setClassId('');setClassData(null);setLessons([]);}}
+                    className="text-sm text-gray-400 hover:text-white underline">← Change Class</button>
+                </div>
                 {lessons.length===0&&<p className="text-center text-gray-500 py-6">No lessons yet.</p>}
-                {lessons.map(l=><AbhiLessonItem key={l.id} lesson={l} classId={classId} isTeacher={false} userId={userId} studentAgeGroup={studentProfile.group} studentName={studentProfile.name} onGenerateVariants={()=>{}} onEdit={()=>{}} onTakeQuiz={(id,title,data)=>{setActiveQuizId(id);setActiveQuizData(data);}} isGenerating={false} isOpen={openLessonId===l.id} onToggle={()=>setOpenLessonId(openLessonId===l.id?null:l.id)}/>)}
+                {lessons.map(l=>(
+                  <AbhiLessonItem key={l.id} lesson={l} classId={classId} isTeacher={false} userId={userId}
+                    studentAgeGroup={studentProfile.group} studentName={studentProfile.name}
+                    onGenerateVariants={()=>{}} onEdit={()=>{}}
+                    onTakeQuiz={(id,title,data)=>{setActiveQuizId(id);setActiveQuizData(data);}}
+                    isGenerating={false} isOpen={openLessonId===l.id}
+                    onToggle={()=>setOpenLessonId(openLessonId===l.id?null:l.id)}/>
+                ))}
               </div>
             )}
           </div>
