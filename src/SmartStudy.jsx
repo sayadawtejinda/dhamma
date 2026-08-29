@@ -1358,14 +1358,56 @@ const HomeView = React.memo(({ handleSetView }) => (
   </div>
 ));
 
-const TeacherLoginView = React.memo(({ targetClassId, setTargetClassId, handleTeacherLogin, handleSetView }) => (
-  <Card className="max-w-md mx-auto mt-20 p-8 space-y-6">
-    <h2 className="text-3xl font-bold text-blue-600 text-center">Teacher Login</h2>
-    <Input label="Class ID" value={targetClassId} onChange={(e) => setTargetClassId(e.target.value)} placeholder="E.g., DHAMMA" />
-    <Button onClick={handleTeacherLogin} className="w-full">Enter Class</Button>
-    <Button onClick={() => handleSetView('home')} className="w-full bg-gray-400 hover:bg-gray-500 shadow-none">Back</Button>
-  </Card>
-));
+const TeacherLoginView = React.memo(({ targetClassId, setTargetClassId, handleTeacherLogin, handleSetView, allTeacherClasses, isLoading, onRenameClass }) => {
+  const [renaming, setRenaming] = React.useState(null); // classId being renamed
+  const [newDisplayName, setNewDisplayName] = React.useState('');
+  return (
+    <div className="max-w-lg mx-auto mt-10 p-6 space-y-6">
+      <h2 className="text-3xl font-bold text-blue-600 text-center">Teacher — Choose Class</h2>
+      {/* Existing classes */}
+      {allTeacherClasses.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Existing Classes</p>
+          {allTeacherClasses.map(c => (
+            <div key={c.id} className="flex items-center gap-2">
+              {renaming === c.id ? (
+                <>
+                  <input autoFocus value={newDisplayName} onChange={e => setNewDisplayName(e.target.value)}
+                    placeholder="New display name" className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    onKeyDown={e => { if(e.key==='Enter'){onRenameClass(c.id,newDisplayName);setRenaming(null);} if(e.key==='Escape')setRenaming(null); }}
+                  />
+                  <button onClick={()=>{onRenameClass(c.id,newDisplayName);setRenaming(null);}} className="bg-green-500 text-white px-3 py-2 rounded-lg text-sm font-bold hover:bg-green-600">Save</button>
+                  <button onClick={()=>setRenaming(null)} className="bg-gray-300 text-gray-700 px-3 py-2 rounded-lg text-sm font-bold hover:bg-gray-400">Cancel</button>
+                </>
+              ) : (
+                <>
+                  <button onClick={()=>{setTargetClassId(c.id); handleTeacherLogin(c.id);}} className={`flex-1 p-3 rounded-xl border-2 text-left font-bold text-lg transition-all flex items-center justify-between ${c.id===targetClassId?'bg-blue-100 border-blue-500 text-blue-800 shadow-lg':'bg-white border-gray-200 text-gray-700 hover:border-blue-300'}`}>
+                    <span>{c.displayName || c.id}</span>
+                    {c.displayName && <span className="text-xs font-normal text-gray-400 ml-2">({c.id})</span>}
+                  </button>
+                  <button onClick={()=>{setRenaming(c.id);setNewDisplayName(c.displayName||c.id);}} className="text-gray-400 hover:text-blue-500 p-2" title="Rename (display name only)">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                  </button>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      {/* Create new class */}
+      <div className="border-t pt-4 space-y-3">
+        <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Create / Enter Class ID</p>
+        <div className="flex gap-2">
+          <input value={targetClassId} onChange={e=>setTargetClassId(e.target.value.toUpperCase())} placeholder="E.g., DHAMMA" className="flex-1 border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400 font-mono font-bold" onKeyDown={e=>e.key==='Enter'&&handleTeacherLogin()}/>
+          <Button onClick={()=>handleTeacherLogin()} disabled={!targetClassId||isLoading} className="bg-blue-500 hover:bg-blue-600">
+            {isLoading?<Loader2 className="w-4 h-4 animate-spin"/>:'Enter'}
+          </Button>
+        </div>
+      </div>
+      <Button onClick={()=>handleSetView('home')} className="w-full bg-gray-400 hover:bg-gray-500 shadow-none">Back to Home</Button>
+    </div>
+  );
+});
 
 const StudentLoginView = React.memo(({ targetClassId, setTargetClassId, userName, setUserName, studentAgeLevel, setStudentAgeLevel, handleStudentLogin, handleSetView }) => (
   <Card className="max-w-md mx-auto mt-20 p-8 space-y-6">
@@ -1782,9 +1824,27 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
     return `L${Math.max(0, ...lessonNumbers) + 1}`;
   }, [lessons]);
 
-  const handleTeacherLogin = useCallback(async () => {
-    if (!targetClassId) { setModal({ message: 'Please enter a Class ID.', type: 'error', visible: true }); return; }
-    const enteredClassId = targetClassId.toUpperCase().trim();
+  const [allTeacherClasses, setAllTeacherClasses] = useState([]);
+
+  // Load all classes when teacher opens the class picker
+  useEffect(() => {
+    if (view !== 'teacherLogin') return;
+    getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'classes'))
+      .then(snap => setAllTeacherClasses(snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>a.id.localeCompare(b.id))))
+      .catch(() => {});
+  }, [view]);
+
+  const handleRenameClass = useCallback(async (classId, displayName) => {
+    if (!classId || !displayName.trim()) return;
+    try {
+      await updateDoc(getClassDocRef(classId), { displayName: displayName.trim() });
+      setAllTeacherClasses(prev => prev.map(c => c.id === classId ? { ...c, displayName: displayName.trim() } : c));
+    } catch(e) { console.error('Rename error:', e); }
+  }, []);
+
+  const handleTeacherLogin = useCallback(async (overrideId) => {
+    const enteredClassId = (overrideId || targetClassId || '').toUpperCase().trim();
+    if (!enteredClassId) { setModal({ message: 'Please enter a Class ID.', type: 'error', visible: true }); return; }
     setIsLoading(true);
     try {
       const docSnap = await getDoc(getClassDocRef(enteredClassId));
@@ -2461,7 +2521,7 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
   const renderView = () => {
     if (!isAuthReady) return <LoadingView />;
     switch (view) {
-      case 'teacherLogin': return <TeacherLoginView targetClassId={targetClassId} setTargetClassId={setTargetClassId} handleTeacherLogin={handleTeacherLogin} handleSetView={handleSetView} />;
+      case 'teacherLogin': return <TeacherLoginView targetClassId={targetClassId} setTargetClassId={setTargetClassId} handleTeacherLogin={handleTeacherLogin} handleSetView={handleSetView} allTeacherClasses={allTeacherClasses} isLoading={isLoading} onRenameClass={handleRenameClass} />;
       case 'studentLogin': return <StudentLoginView targetClassId={targetClassId} setTargetClassId={setTargetClassId} userName={userName} setUserName={setUserName} studentAgeLevel={studentAgeLevel} setStudentAgeLevel={setStudentAgeLevel} handleStudentLogin={handleStudentLogin} handleSetView={handleSetView} />;
       case 'ageLevelPicker': return <AgeLevelPickerView studentAgeLevel={studentAgeLevel} setStudentAgeLevel={setStudentAgeLevel} onContinue={handleAgeLevelContinue} />;
       case 'classPicker': return <ClassPickerView classList={classPickerList} highlightClassId={entryRequest?.classId} onSelectClass={handleSelectClassFromPicker} loading={classPickerLoading} classPickerInfo={classPickerInfo} />;

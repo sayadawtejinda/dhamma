@@ -158,6 +158,115 @@ const AbhiClassRoster = ({ userId, classId }) => {
   );
 };
 
+// ─── Q&A Discussion ────────────────────────────────────────────────────────────
+const AbhiQA = ({ classId, lessonId, isTeacher, userId, userName }) => {
+  const [questions,setQs]=useState([]); const [text,setText]=useState(''); const [replyText,setReplyText]=useState({}); const [busy,setBusy]=useState(false);
+  useEffect(()=>{
+    if(!classId||!lessonId) return;
+    return onSnapshot(query(abhiQRef(classId,lessonId),orderBy('timestamp','asc')),snap=>setQs(snap.docs.map(d=>({id:d.id,...d.data()}))));
+  },[classId,lessonId]);
+  const ask=async()=>{
+    if(!text.trim()||busy)return;setBusy(true);
+    try{await addDoc(abhiQRef(classId,lessonId),{studentId:userId,studentName:userName||'Student',text:text.trim(),timestamp:serverTimestamp(),replies:[],likes:[]});}
+    catch(e){console.error(e);}finally{setText('');setBusy(false);}
+  };
+  const reply=async(qId)=>{
+    const t=replyText[qId];if(!t?.trim()||busy)return;setBusy(true);
+    try{
+      const r={id:crypto.randomUUID(),userId,userName:userName||(isTeacher?'Teacher':'Student'),role:isTeacher?'Teacher':'Student',text:t.trim(),timestamp:new Date().toISOString(),likes:[]};
+      await updateDoc(doc(db,P(`classes/${classId}/questions/${lessonId}/items/${qId}`)),{replies:arrayUnion(r)});
+    }catch(e){console.error(e);}finally{setReplyText(prev=>({...prev,[qId]:''}));setBusy(false);}
+  };
+  const toggleLike=async(qId,replyId=null)=>{
+    const ref=doc(db,P(`classes/${classId}/questions/${lessonId}/items/${qId}`));
+    try{
+      const snap=await getDoc(ref);const data=snap.data();
+      if(replyId){const rs=data.replies.map(r=>r.id===replyId?{...r,likes:r.likes?.includes(userId)?r.likes.filter(id=>id!==userId):[...(r.likes||[]),userId]}:r);await updateDoc(ref,{replies:rs});}
+      else{const lks=data.likes||[];await updateDoc(ref,{likes:lks.includes(userId)?lks.filter(id=>id!==userId):[...lks,userId]});}
+    }catch(e){console.error(e);}
+  };
+  return(
+    <div className="space-y-4 mt-2">
+      {questions.map(q=>(
+        <div key={q.id} className="p-4 rounded-xl bg-gray-800/50 border border-gray-700/50">
+          <div className="flex justify-between items-start mb-2">
+            <div className="flex-1">
+              <span className="text-xs font-bold px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 mr-2">{q.studentName||'Student'}</span>
+              <span className="text-white font-medium">{q.text}</span>
+            </div>
+            <button onClick={()=>toggleLike(q.id)} className={`flex items-center gap-1 text-xs px-2 py-1 rounded ${q.likes?.includes(userId)?'text-pink-500 bg-pink-500/10':'text-gray-500 hover:bg-gray-700'}`}><Heart className={`w-3 h-3 ${q.likes?.includes(userId)?'fill-current':''}`}/>{q.likes?.length||0}</button>
+          </div>
+          <div className="ml-3 pl-3 border-l-2 border-gray-700 space-y-2 mt-2">
+            {q.replies?.map((r,i)=>(
+              <div key={i} className={`text-sm p-2 rounded-lg ${r.role==='Teacher'?'bg-teal-900/20 border border-teal-800/50':'bg-gray-700/30 border border-gray-600/50'}`}>
+                <span className={`text-xs font-bold mr-1 ${r.role==='Teacher'?'text-teal-400':'text-gray-400'}`}>{r.userName||r.role}:</span>
+                <span className="text-gray-200">{r.text}</span>
+                <button onClick={()=>toggleLike(q.id,r.id)} className={`ml-2 text-xs ${r.likes?.includes(userId)?'text-pink-400':'text-gray-600 hover:text-pink-400'}`}><Heart className={`w-3 h-3 inline ${r.likes?.includes(userId)?'fill-current':''}`}/>{r.likes?.length||0}</button>
+              </div>
+            ))}
+          </div>
+          <div className="mt-2 flex gap-2">
+            <input value={replyText[q.id]||''} onChange={e=>setReplyText(p=>({...p,[q.id]:e.target.value}))} placeholder="Write a reply…" className="flex-1 bg-gray-900 text-white text-sm px-3 py-1.5 rounded-lg border border-gray-600 focus:border-indigo-500 focus:outline-none" onKeyDown={e=>e.key==='Enter'&&reply(q.id)}/>
+            <button onClick={()=>reply(q.id)} disabled={busy} className="p-2 bg-indigo-600 rounded-lg text-white hover:bg-indigo-700"><Send className="w-4 h-4"/></button>
+          </div>
+        </div>
+      ))}
+      <div className="pt-2 border-t border-gray-700">
+        <div className="flex gap-2">
+          <input value={text} onChange={e=>setText(e.target.value)} placeholder="Ask a question…" className="flex-1 bg-gray-900 text-white text-sm p-3 rounded-xl border border-gray-600 focus:border-indigo-500 focus:outline-none" disabled={busy} onKeyDown={e=>e.key==='Enter'&&ask()}/>
+          <button onClick={ask} disabled={busy||!text} className="bg-green-600 px-4 py-2 rounded-xl text-white font-bold hover:bg-green-700">Ask</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── Teacher Class Picker ──────────────────────────────────────────────────────
+const AbhiTeacherClassPicker = ({ onSelectClass, onCreateClass }) => {
+  const [classes,setClasses]=useState([]); const [newId,setNewId]=useState(''); const [renaming,setRenaming]=useState(null); const [renameVal,setRenameVal]=useState('');
+  useEffect(()=>{ return onSnapshot(abhiClassesRef(),snap=>setClasses(snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>a.id.localeCompare(b.id)))); },[]);
+  const handleRename=async(classId,displayName)=>{if(!displayName.trim())return;await updateDoc(abhiClassDocRef(classId),{displayName:displayName.trim()});setRenaming(null);};
+  const handleCreate=async()=>{if(!newId.trim())return;await setDoc(abhiClassDocRef(newId.trim()),{classId:newId.trim(),autoApprove:false,createdAt:serverTimestamp()},{merge:true});onSelectClass(newId.trim());};
+  return(
+    <div className="max-w-lg mx-auto mt-10 p-6 space-y-6">
+      <h2 className="text-3xl font-bold text-amber-700 text-center">Teacher — Choose Class</h2>
+      {classes.length>0&&(
+        <div className="space-y-2">
+          <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Existing Classes</p>
+          {classes.map(c=>(
+            <div key={c.id} className="flex items-center gap-2">
+              {renaming===c.id?(
+                <>
+                  <input autoFocus value={renameVal} onChange={e=>setRenameVal(e.target.value)} placeholder="Display name" className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" onKeyDown={e=>{if(e.key==='Enter'){handleRename(c.id,renameVal);}if(e.key==='Escape')setRenaming(null);}}/>
+                  <button onClick={()=>handleRename(c.id,renameVal)} className="bg-green-500 text-white px-3 py-2 rounded-lg text-sm font-bold hover:bg-green-600">Save</button>
+                  <button onClick={()=>setRenaming(null)} className="bg-gray-300 text-gray-700 px-3 py-2 rounded-lg text-sm font-bold hover:bg-gray-400">Cancel</button>
+                </>
+              ):(
+                <>
+                  <button onClick={()=>onSelectClass(c.id)} className={`flex-1 p-3 rounded-xl border-2 text-left font-bold text-lg transition-all flex items-center justify-between bg-white border-gray-200 text-gray-700 hover:border-amber-400 hover:bg-amber-50`}>
+                    <span>{c.displayName||c.id}</span>
+                    {c.displayName&&<span className="text-xs font-normal text-gray-400 ml-2">({c.id})</span>}
+                  </button>
+                  <button onClick={()=>{setRenaming(c.id);setRenameVal(c.displayName||c.id);}} className="text-gray-400 hover:text-amber-500 p-2" title="Rename display name">
+                    <Edit2 className="w-4 h-4"/>
+                  </button>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="border-t pt-4 space-y-3">
+        <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Create / Enter Class ID</p>
+        <div className="flex gap-2">
+          <input value={newId} onChange={e=>setNewId(e.target.value.toUpperCase())} placeholder="e.g. PARAMI" className="flex-1 border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400 font-mono font-bold" onKeyDown={e=>e.key==='Enter'&&handleCreate()}/>
+          <button onClick={handleCreate} disabled={!newId.trim()} className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg font-bold disabled:opacity-50 flex items-center gap-1"><Plus className="w-4 h-4"/>Enter</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ─── WelcomeModal ─────────────────────────────────────────────────────────────
 const AbhiWelcomeModal = ({ userId, classId, onStudentComplete, onTeacherComplete }) => {
   const [step,setStep]=useState('role_select');const [name,setName]=useState('');const [grp,setGrp]=useState(null);const [pass,setPass]=useState('');const [err,setErr]=useState('');const [busy,setBusy]=useState(false);
@@ -199,12 +308,15 @@ const AbhiLessonItem = ({ lesson, classId, isTeacher, studentAgeGroup, studentNa
           {isTeacher&&<div className="flex items-center gap-1 mr-2" onClick={e=>e.stopPropagation()}><button onClick={()=>onEdit(lesson)} className="p-2 bg-blue-600 rounded hover:bg-blue-700 text-white"><Edit2 className="w-3 h-3"/></button><button onClick={()=>onGenerateVariants(lesson,'junior')} className="px-3 py-1 bg-purple-600 rounded text-white text-xs font-bold flex items-center gap-1 hover:bg-purple-700"><Zap className="w-3 h-3"/>Jr.</button><button onClick={()=>onGenerateVariants(lesson,'senior')} className="px-3 py-1 bg-pink-600 rounded text-white text-xs font-bold flex items-center gap-1 hover:bg-pink-700"><Zap className="w-3 h-3"/>Sr.</button></div>}
         </div>
       </div>
-      {isOpen&&<div className="border-t border-gray-600/50 p-5">
-        {isTeacher?<div className="text-white whitespace-pre-wrap leading-relaxed"><SmartContent text={lesson.burmeseContent} imageBase={imgBase}/></div>
-        :<div className="space-y-4">
-          <div className="text-yellow-100 whitespace-pre-wrap leading-relaxed text-lg"><SmartContent text={dc} imageBase={imgBase}/></div>
-          {qa&&<button onClick={e=>{e.stopPropagation();onTakeQuiz(lesson.id,dt,qd);}} className={`w-full py-3 font-black rounded-xl shadow-lg transform transition hover:scale-[1.02] flex items-center justify-center gap-2 ${isCompleted?'bg-gradient-to-r from-green-600 to-teal-600 text-white':'bg-gradient-to-r from-purple-600 to-indigo-600 text-white'}`}>{isCompleted?<><Trophy className="w-6 h-6"/>QUIZ COMPLETED</>:<><Gamepad2 className="w-6 h-6"/>PLAY QUIZ ({studentAgeGroup})</>}</button>}
-        </div>}
+      {isOpen&&<div className="border-t border-gray-600/50">
+        <div className="flex border-b border-gray-700">
+          <button onClick={()=>setTab('content')} className={`flex-1 py-3 text-sm font-bold flex items-center justify-center gap-2 ${tab==='content'?'text-teal-400 border-b-2 border-teal-400 bg-gray-800':'text-gray-400 hover:text-white'}`}><BookOpen className="w-4 h-4"/>Lesson</button>
+          <button onClick={()=>setTab('discussion')} className={`flex-1 py-3 text-sm font-bold flex items-center justify-center gap-2 ${tab==='discussion'?'text-indigo-400 border-b-2 border-indigo-400 bg-gray-800':'text-gray-400 hover:text-white'}`}><MessageCircle className="w-4 h-4"/>Discussion</button>
+        </div>
+        <div className="p-5">
+          {tab==='content'&&(isTeacher?<div className="text-white whitespace-pre-wrap leading-relaxed"><SmartContent text={lesson.burmeseContent} imageBase={imgBase}/></div>:<div className="space-y-4"><div className="text-yellow-100 whitespace-pre-wrap leading-relaxed text-lg"><SmartContent text={dc} imageBase={imgBase}/></div>{qa&&<button onClick={e=>{e.stopPropagation();onTakeQuiz(lesson.id,dt,qd);}} className={`w-full py-3 font-black rounded-xl shadow-lg transform transition hover:scale-[1.02] flex items-center justify-center gap-2 ${isCompleted?'bg-gradient-to-r from-green-600 to-teal-600 text-white':'bg-gradient-to-r from-purple-600 to-indigo-600 text-white'}`}>{isCompleted?<><Trophy className="w-6 h-6"/>QUIZ COMPLETED</>:<><Gamepad2 className="w-6 h-6"/>PLAY QUIZ</>}</button>}</div>)}
+          {tab==='discussion'&&<AbhiQA classId={classId} lessonId={lesson.id} isTeacher={isTeacher} userId={userId} userName={studentName||'Teacher'}/>}
+        </div>
       </div>}
       {showLb&&<div className="fixed inset-0 bg-gray-900/95 z-50 flex items-center justify-center p-4"><div className="bg-gray-800 w-full max-w-lg rounded-2xl shadow-2xl p-6 border border-gray-700 relative"><button onClick={()=>setShowLb(false)} className="absolute top-4 right-4 text-gray-400 hover:text-white"><X className="w-6 h-6"/></button><div className="text-center mb-6"><Trophy className="w-16 h-16 text-yellow-400 mx-auto mb-2"/><h3 className="text-2xl font-black text-white">{dt}</h3></div><div className="space-y-2 max-h-[60vh] overflow-y-auto">{leaderboard.length===0?<p className="text-center text-gray-500">No scores yet.</p>:leaderboard.map((e,idx)=><div key={idx} className={`flex justify-between items-center p-3 rounded ${e.userId===userId?'bg-indigo-600 border border-indigo-400':'bg-gray-700'}`}><div className="flex items-center gap-3"><span className="font-bold w-6 text-yellow-400">#{idx+1}</span><span className="font-semibold text-white">{e.name}{e.userId===userId&&<span className="text-[10px] bg-white text-indigo-600 px-1.5 py-0.5 rounded-full font-bold ml-2">ME</span>}</span></div><span className="font-mono font-bold text-indigo-300">{e.score} pts</span></div>)}</div></div></div>}
     </div>
@@ -344,7 +456,11 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
       const toMs=ts=>{if(!ts)return null;if(typeof ts.toMillis==='function')return ts.toMillis();if(ts.seconds)return ts.seconds*1000;return null;};
       const[rosterSnap,scoresSnap,actSnap]=await Promise.all([getDocs(query(abhiRosterRef(),where('classId','==',classId))),getDocs(query(abhiScoresRef(),where('classId','==',classId))),getDocs(abhiActivityRef())]);
       const data={version:3,classId,timestamp:new Date().toISOString(),lessons,roster:rosterSnap.docs.map(d=>({id:d.id,...d.data()})),scores:scoresSnap.docs.map(d=>({id:d.id,...d.data(),timestamp:toMs(d.data().timestamp)})),activityFeed:actSnap.docs.map(d=>({id:d.id,...d.data(),timestamp:toMs(d.data().timestamp)})),quizResults:{}};
-      for(const l of lessons){for(const g of Object.keys(AGE_GROUPS)){const rs=await getDocs(abhiResultsRef(classId,l.id,g));if(!rs.empty)data.quizResults[`${l.id}_${g}`]=rs.docs.map(r=>({id:r.id,...r.data(),timestamp:toMs(r.data().timestamp)}));}}
+      data.questions={};
+      for(const l of lessons){
+        const qSnap=await getDocs(query(abhiQRef(classId,l.id),orderBy('timestamp','asc')));
+        if(!qSnap.empty) data.questions[l.id]=qSnap.docs.map(d=>({id:d.id,...d.data()}));
+        for(const g of Object.keys(AGE_GROUPS)){const rs=await getDocs(abhiResultsRef(classId,l.id,g));if(!rs.empty)data.quizResults[`${l.id}_${g}`]=rs.docs.map(r=>({id:r.id,...r.data(),timestamp:toMs(r.data().timestamp)}));}}
       const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`abhidhamma-full-${classId}-${Date.now()}.json`;document.body.appendChild(a);a.click();document.body.removeChild(a);
       showMsg('Full backup exported!');
     }catch(e){console.error(e);showMsg('Error exporting!');}finally{setLoading(false);}
@@ -410,7 +526,9 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
         for(const a of(data.activityFeed||[])){const{id,timestamp,...r}=a;await setDoc(doc(abhiActivityRef(),id||`a${Date.now()}`),{...r,timestamp:toDate(timestamp)});}
         // Quiz results
         for(const[key,rList]of Object.entries(data.quizResults||{})){const parts=key.split('_');const g=parts.pop();const lId=parts.join('_');for(const r of rList){const{id,timestamp,...rest}=r;await setDoc(doc(abhiResultsRef(tgt,lId,g),id||`r${Date.now()}`),{...rest,timestamp:toDate(timestamp)});}}
-        showMsg(`✅ Restored ${raw.length} lessons + student records into "${tgt}".`);
+        // Q&A discussions
+        for(const[lessonId,qList]of Object.entries(data.questions||{})){for(const q of qList){const{id,...rest}=q;await setDoc(doc(abhiQRef(tgt,lessonId),id||`q${Date.now()}`),{...rest});}}
+        showMsg(`✅ Restored ${raw.length} lessons + records + discussions into "${tgt}".`);
         if(!classId)enterClass(tgt);
       }catch(err){console.error(err);showMsg(`Error: ${err.message}`);}
       finally{setLoading(false);event.target.value='';}
@@ -448,6 +566,7 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
               <div className="flex gap-2 mb-3"><input value={newClassId} onChange={e=>setNewClassId(e.target.value)} placeholder="New Class ID" className="flex-1 bg-gray-900 text-white p-2 rounded border border-gray-600 focus:border-amber-500 focus:outline-none text-sm" onKeyDown={e=>e.key==='Enter'&&createClass()}/><button onClick={createClass} disabled={!newClassId.trim()} className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded font-bold text-sm disabled:opacity-50 flex items-center gap-1"><Plus className="w-4 h-4"/>Create</button></div>
               <div className="flex flex-wrap gap-2">{allClasses.map(c=><button key={c.id} onClick={()=>enterClass(c.id)} className={`px-3 py-1.5 rounded-lg text-sm font-semibold border transition-all ${c.id===classId?'bg-amber-500 text-white border-amber-400':'bg-gray-700 text-gray-300 border-gray-600 hover:border-amber-400'}`}>{c.id}<span className="text-xs opacity-70 ml-1">({lessons.length > 0 && c.id===classId ? lessons.length : '?'})</span></button>)}{allClasses.length===0&&<p className="text-gray-500 text-sm italic">No classes yet.</p>}</div>
             </div>
+            {!classId&&<AbhiTeacherClassPicker onSelectClass={enterClass} onCreateClass={enterClass}/>}
             {classId&&<AbhiClassRoster userId={userId} classId={classId}/>}
             {classId&&(
               <div className="bg-gray-800 p-6 rounded-xl shadow-xl border border-gray-700">
