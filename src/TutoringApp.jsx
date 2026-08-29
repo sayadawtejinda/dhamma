@@ -3587,7 +3587,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         if (activeCheckSnap.empty) {
           await addDoc(sessionsCollection, {
             studentUid: studentUid, lessonId: lesson.id, lessonTitle: lesson.title, lessonLink: lesson.link,
-            lessonTrophyLimit: effectiveLessonTrophyLimit,
+            lessonTrophyLimit: lesson.trophyLimit || 0,
             lessonUnitCount: lesson.unitCount || 0,
             lessonUnitLabel: lesson.unitLabel || 'Lesson',
             startTime: serverTimestamp(), endTime: null, feedbackNotes: null, score: null, awardedTrophies: 0
@@ -3628,7 +3628,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         if (activeCheckSnap.empty) {
           await addDoc(sessionsCollection, {
             studentUid: studentUid, lessonId: lesson.id, lessonTitle: lesson.title, lessonLink: lesson.link,
-            lessonTrophyLimit: effectiveLessonTrophyLimit,
+            lessonTrophyLimit: lesson.trophyLimit || 0,
             lessonUnitCount: lesson.unitCount || 0,
             lessonUnitLabel: lesson.unitLabel || 'Chapter',
             startTime: serverTimestamp(), endTime: null, feedbackNotes: null, score: null, awardedTrophies: 0
