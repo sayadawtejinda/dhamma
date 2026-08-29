@@ -362,6 +362,105 @@ const AbhiTeacherClassPicker = ({ onSelectClass, onCreateClass }) => {
   );
 };
 
+// ─── Floating Stats Bar ──────────────────────────────────────────────────────
+const AbhiFloatingStats = ({ rank, totalLessons }) => {
+  const [pos,setPos]=useState({x:null,y:72});
+  const dragging=useRef(false);const offset=useRef({x:0,y:0});
+  const startDrag=(cx,cy,el)=>{dragging.current=true;const rect=el.getBoundingClientRect();offset.current={x:cx-rect.left,y:cy-rect.top};};
+  const onMove=(cx,cy)=>{if(!dragging.current)return;setPos({x:cx-offset.current.x,y:cy-offset.current.y});};
+  const stopDrag=()=>{dragging.current=false;};
+  useEffect(()=>{const mm=e=>onMove(e.clientX,e.clientY);const tm=e=>{if(e.touches[0])onMove(e.touches[0].clientX,e.touches[0].clientY);};window.addEventListener('mousemove',mm);window.addEventListener('touchmove',tm);window.addEventListener('mouseup',stopDrag);window.addEventListener('touchend',stopDrag);return()=>{window.removeEventListener('mousemove',mm);window.removeEventListener('touchmove',tm);window.removeEventListener('mouseup',stopDrag);window.removeEventListener('touchend',stopDrag);};},[]);
+  const style=pos.x===null?{left:'50%',top:`${pos.y}px`,transform:'translateX(-50%)'}:{left:`${pos.x}px`,top:`${pos.y}px`};
+  if(!rank&&!totalLessons) return null;
+  return(
+    <div onMouseDown={e=>startDrag(e.clientX,e.clientY,e.currentTarget)} onTouchStart={e=>e.touches[0]&&startDrag(e.touches[0].clientX,e.touches[0].clientY,e.currentTarget)}
+      style={{position:'fixed',zIndex:70,cursor:'grab',...style}} className="bg-gray-800/95 border border-amber-500 rounded-full shadow-2xl px-5 py-2 flex items-center gap-4 select-none backdrop-blur-md">
+      <span className="flex items-center gap-1 text-yellow-400 font-black"><Trophy className="w-4 h-4"/> #{rank||'-'}</span>
+      <span className="text-gray-500">|</span>
+      <span className="flex items-center gap-1 text-teal-300 font-bold"><BookOpen className="w-4 h-4"/> {totalLessons} Lessons</span>
+    </div>
+  );
+};
+
+// ─── Global & Class Leaderboard Modal ────────────────────────────────────────
+const AbhiLeaderboardModal = ({ classId, studentName, userId, onClose }) => {
+  const [tab,setTab]=useState('global');
+  const [globalData,setGlobalData]=useState(null);
+  const [classData,setClassData]=useState(null);
+
+  useEffect(()=>{
+    if(tab!=='global'||globalData!==null)return;
+    getDocs(abhiScoresRef()).then(snap=>{
+      const byStudent={};
+      snap.docs.forEach(d=>{
+        const dt=d.data();const sn=dt.studentName||dt.name||'?';
+        if(!byStudent[sn])byStudent[sn]={name:sn,lessons:new Set(),totalScore:0,userId:dt.userId};
+        byStudent[sn].lessons.add(`${dt.classId}_${dt.lessonId}`);
+        byStudent[sn].totalScore=(byStudent[sn].totalScore||0)+(dt.score||0);
+      });
+      const ranked=Object.values(byStudent).map(s=>({...s,count:s.lessons.size})).sort((a,b)=>b.count-a.count||b.totalScore-a.totalScore);
+      setGlobalData(ranked);
+    }).catch(e=>console.error('Global LB:',e));
+  },[tab,globalData]);
+
+  useEffect(()=>{
+    if(!classId||tab!=='class'||classData!==null)return;
+    getDocs(query(abhiScoresRef(),where('classId','==',classId))).then(snap=>{
+      const byStudent={};
+      snap.docs.forEach(d=>{
+        const dt=d.data();const sn=dt.studentName||dt.name||'?';
+        if(!byStudent[sn])byStudent[sn]={name:sn,lessons:new Set(),totalScore:0,userId:dt.userId};
+        byStudent[sn].lessons.add(dt.lessonId);
+        byStudent[sn].totalScore=(byStudent[sn].totalScore||0)+(dt.score||0);
+      });
+      const ranked=Object.values(byStudent).map(s=>({...s,count:s.lessons.size})).sort((a,b)=>b.count-a.count||b.totalScore-a.totalScore);
+      setClassData(ranked);
+    }).catch(e=>console.error('Class LB:',e));
+  },[tab,classId,classData]);
+
+  const renderList=(data,isGlobal)=>{
+    if(!data)return<div className="flex justify-center py-8"><RotateCw className="w-8 h-8 animate-spin text-amber-400"/></div>;
+    if(data.length===0)return<p className="text-center text-gray-500 py-6">No data yet.</p>;
+    const medals=['🥇','🥈','🥉'];
+    return(
+      <div className="space-y-2 max-h-[55vh] overflow-y-auto">
+        {data.map((e,idx)=>{
+          const isMe=e.userId===userId||(e.name===studentName);
+          return(
+            <div key={idx} className={`flex items-center gap-3 p-3 rounded-xl ${isMe?'bg-amber-900/40 border border-amber-500':'bg-gray-700/50 border border-gray-600/30'}`}>
+              <span className="w-8 text-center font-black text-lg">{medals[idx]||`#${idx+1}`}</span>
+              <div className="flex-1">
+                <p className="font-bold text-white text-sm">{e.name}{isMe&&<span className="text-[10px] bg-amber-500 text-black px-1.5 py-0.5 rounded-full font-bold ml-2">YOU</span>}</p>
+                <p className="text-xs text-gray-400">{e.count} lesson{e.count!==1?'s':''} • {e.totalScore.toLocaleString()} pts</p>
+              </div>
+              <span className="text-yellow-400 font-bold text-sm">{e.count} 📚</span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  return(
+    <div className="fixed inset-0 bg-gray-900/95 z-50 flex items-center justify-center p-4">
+      <div className="bg-gray-800 w-full max-w-lg rounded-2xl shadow-2xl border border-gray-700">
+        <div className="p-5 border-b border-gray-700 flex justify-between items-center">
+          <h2 className="text-xl font-black text-white flex items-center gap-2"><Trophy className="w-6 h-6 text-yellow-400"/> Champions Board</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-white"><X className="w-6 h-6"/></button>
+        </div>
+        <div className="flex border-b border-gray-700">
+          <button onClick={()=>setTab('global')} className={`flex-1 py-3 text-sm font-bold ${tab==='global'?'text-amber-400 border-b-2 border-amber-400':'text-gray-400 hover:text-white'}`}>🌍 All Classes</button>
+          {classId&&<button onClick={()=>setTab('class')} className={`flex-1 py-3 text-sm font-bold ${tab==='class'?'text-teal-400 border-b-2 border-teal-400':'text-gray-400 hover:text-white'}`}>📚 {classId}</button>}
+        </div>
+        <div className="p-5">
+          {tab==='global'&&renderList(globalData,true)}
+          {tab==='class'&&renderList(classData,false)}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ─── Student: age-group picker (no name, no approval) ──────────────────────
 const AbhiAgeGroupPicker = ({ onComplete }) => {
   const [grp, setGrp] = useState(() => localStorage.getItem('abhidhamma_ageGroup') || null);
@@ -446,6 +545,7 @@ const AbhiLessonItem = ({ lesson, classId, isTeacher, studentAgeGroup, studentNa
   const [tab,setTab]=useState('content');
   const [isCompleted,setIsCompleted]=useState(false);
   const [hasAsked,setHasAsked]=useState(false);
+  const [hasReplied,setHasReplied]=useState(false);
   const [leaderboard,setLb]=useState([]);const [showLb,setShowLb]=useState(false);
   const ref=useRef(null);
   
@@ -458,12 +558,17 @@ const AbhiLessonItem = ({ lesson, classId, isTeacher, studentAgeGroup, studentNa
     return()=>u();
   },[classId,lesson.id,userId,studentAgeGroup]);
   
-  // Track if student has asked a question (quiz unlock requirement)
+  // Track Q&A participation for quiz unlock (ask + reply)
   useEffect(()=>{
     if(!classId||!userId||!lesson.id||isTeacher)return;
     return onSnapshot(abhiQRef(classId,lesson.id),snap=>{
-      const asked=snap.docs.some(d=>d.data().studentId===userId);
-      setHasAsked(asked);
+      let asked=false,replied=false;
+      snap.docs.forEach(d=>{
+        const q=d.data();
+        if(q.studentId===userId) asked=true;
+        if(q.replies) q.replies.forEach(r=>{if(r.userId===userId) replied=true;});
+      });
+      setHasAsked(asked); setHasReplied(replied);
     },err=>console.error('QA track:',err.code));
   },[classId,lesson.id,userId,isTeacher]);
   
@@ -513,13 +618,17 @@ const AbhiLessonItem = ({ lesson, classId, isTeacher, studentAgeGroup, studentNa
             : <div className="space-y-4">
                 <div className="text-yellow-100 whitespace-pre-wrap leading-relaxed text-lg"><SmartContent text={dc} imageBase={imgBase}/></div>
                 {qa&&(()=>{
-                  // Quiz is locked until student asks 1 question in Discussion
-                  const isLocked = !isCompleted && !hasAsked;
+                  // Quiz is locked until student asks 1 question AND replies 1
+                  const isLocked = !isCompleted && (!hasAsked || !hasReplied);
                   return isLocked ? (
                     <div className="bg-gray-800/80 p-4 rounded-xl border border-indigo-600/40 flex flex-col items-center text-center">
                       <Lock className="w-8 h-8 text-indigo-400 mb-2"/>
                       <p className="text-white font-bold text-sm mb-1">Quiz Locked 🔒</p>
-                      <p className="text-gray-400 text-xs mb-3">Ask 1 question in the Discussion tab to unlock the quiz.</p>
+                      <p className="text-gray-400 text-xs mb-3">Complete discussion tasks to unlock:</p>
+                      <div className="flex flex-col gap-1 mb-3 text-xs font-semibold">
+                        <span className={hasAsked?'text-green-400':'text-gray-500'}>{hasAsked?'✅':'○'} Ask 1 Question</span>
+                        <span className={hasReplied?'text-green-400':'text-gray-500'}>{hasReplied?'✅':'○'} Answer 1 Question</span>
+                      </div>
                       <button onClick={()=>setTab('discussion')} className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition">Go to Discussion →</button>
                     </div>
                   ) : (
@@ -545,6 +654,9 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
   const [classId,setClassId]=useState('');const [classData,setClassData]=useState(null);const [lessons,setLessons]=useState([]);const [allClasses,setAllClasses]=useState([]);
   const [studentProfile,setStudentProfile]=useState(null);const [showWelcome,setShowWelcome]=useState(false);
   const [classStats,setClassStats]=useState({}); // classId → {completedCount, rank}
+  const [globalRank,setGlobalRank]=useState(0);     // student's global rank across all classes
+  const [totalLessons,setTotalLessons]=useState(0); // total lessons completed by student
+  const [showLeaderboard,setShowLeaderboard]=useState(false);
   const [activeQuizId,setActiveQuizId]=useState(null);const [activeQuizData,setActiveQuizData]=useState(null);
   const [openLessonId,setOpenLessonId]=useState(null);const [editingLesson,setEditingLesson]=useState(null);
   const [newTitle,setNewTitle]=useState('');const [newContent,setNewContent]=useState('');const [newImgBase,setNewImgBase]=useState(DEFAULT_IMG_BASE);
@@ -595,6 +707,24 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
   },[entryRequest,authReady]);
 
   useEffect(()=>{ return onSnapshot(abhiClassesRef(),snap=>setAllClasses(snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>a.id.localeCompare(b.id)))); },[]);
+
+  // Compute student's global rank + total lessons
+  useEffect(()=>{
+    if(!studentProfile)return;
+    const name=studentProfile.name;
+    (async()=>{
+      try{
+        const snap=await getDocs(abhiScoresRef());
+        // Count distinct classId+lessonId per student
+        const byStudent={};
+        snap.docs.forEach(d=>{const dt=d.data();const sn=dt.studentName||dt.name;if(!sn)return;if(!byStudent[sn])byStudent[sn]=new Set();byStudent[sn].add(`${dt.classId}_${dt.lessonId}`);});
+        const sorted=Object.entries(byStudent).sort((a,b)=>b[1].size-a[1].size);
+        const myIdx=sorted.findIndex(([sn])=>sn===name);
+        setGlobalRank(myIdx>=0?myIdx+1:0);
+        setTotalLessons(byStudent[name]?.size||0);
+      }catch(e){}
+    })();
+  },[studentProfile,classStats]); // re-run after class stats update (quiz completion)
 
   // Load per-class stats for student (rank + completedCount)
   useEffect(()=>{
@@ -858,6 +988,11 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
       <input type="file" ref={fileRef}        onChange={handleImportFull}         accept=".json" className="hidden"/>
       {/* Teacher login modal (opens via header "Teacher Login" button) */}
       {showWelcome&&<AbhiTeacherLogin onComplete={()=>{setIsTeacher(true);setRole('Teacher');localStorage.setItem('abhidhamma_isTeacher','true');setShowWelcome(false);}} onClose={()=>setShowWelcome(false)}/>}
+      {showLeaderboard&&<AbhiLeaderboardModal classId={classId} studentName={studentProfile?.name} userId={userId} onClose={()=>setShowLeaderboard(false)}/>}
+      {/* Floating stats bar — visible to students */}
+      {role==='Student'&&studentProfile&&(totalLessons>0||globalRank>0)&&(
+        <AbhiFloatingStats rank={globalRank} totalLessons={totalLessons}/>
+      )}
       {activeQuizId&&activeQuizData&&<QuizModule classId={classId} lessonId={activeQuizId} lessonTitle={lessons.find(l=>l.id===activeQuizId)?.title||''} userId={userId} userName={studentProfile?.name||'Student'} ageGroup={studentProfile?.group} quizData={activeQuizData} onClose={()=>{setActiveQuizId(null);setActiveQuizData(null);}}/>}
       {msg&&<div className="fixed top-4 left-1/2 -translate-x-1/2 bg-blue-600 text-white px-6 py-2 rounded-full shadow-xl z-50 font-bold">{msg}</div>}
       <div className="max-w-4xl mx-auto">
@@ -868,7 +1003,15 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
             {isTeacher&&(<div className="flex gap-2"><button onClick={()=>setRole(r=>r==='Teacher'?'Student':'Teacher')} className={`px-4 py-2 font-bold rounded shadow-lg ${role==='Teacher'?'bg-purple-600':'bg-teal-600'}`}>{role==='Teacher'?'Student View':'Teacher View'}</button></div>)}
             {studentProfile?.status==='approved'&&<span className="bg-gray-700 px-3 py-1 rounded text-gray-300 font-medium flex items-center gap-2"><User className="w-4 h-4"/>{studentProfile.name}</span>}
           </div>
-          <div className="flex items-center gap-3">{classId&&<span className="text-gray-400 text-sm font-semibold">· {classId}</span>}<NotificationBell userId={userId}/></div>
+          <div className="flex items-center gap-3">
+            {classId&&<span className="text-gray-400 text-sm font-semibold">· {classId}</span>}
+            {role==='Student'&&studentProfile&&(
+              <button onClick={()=>setShowLeaderboard(true)} className="p-2 bg-gray-700 hover:bg-gray-600 rounded-full text-yellow-400 shadow-lg" title="Champions Board">
+                <Trophy className="w-5 h-5"/>
+              </button>
+            )}
+            <NotificationBell userId={userId}/>
+          </div>
         </header>
 
         {/* ── TEACHER VIEW ── */}
