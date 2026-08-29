@@ -93,7 +93,17 @@ const QuizModule = ({ classId,lessonId,lessonTitle,userId,userName,ageGroup,quiz
       setScore(p=>p+pts);setFb(null);setSel(null);setProc(false);
       if(qi+1<quizData.questions.length){setQi(p=>p+1);setShow(false);setTl(30);}
       else{const fs=score+pts;if(nc<8){setState('failed');return;}setState('finished');
-        try{await addDoc(abhiResultsRef(classId,lessonId,ageGroup),{name:userName,score:fs,userId,group:ageGroup,timestamp:serverTimestamp()});await addDoc(abhiActivityRef(),{type:'quiz_completed',studentName:userName,lessonTitle,group:ageGroup,timestamp:serverTimestamp()});}catch(e){console.error(e);}
+        try{
+          // Save quiz result (completion tracking) 
+          await addDoc(abhiResultsRef(classId,lessonId,ageGroup),{name:userName,score:fs,userId,group:ageGroup,timestamp:serverTimestamp()});
+          // Upsert to abhiScoresRef for leaderboard (best score wins)
+          const sRef=doc(abhiScoresRef(),`${userId}_${lessonId}`);
+          const prev=await getDoc(sRef);
+          if(!prev.exists()||prev.data().score<fs){
+            await setDoc(sRef,{classId,lessonId,studentName:userName,name:userName,score:fs,group:ageGroup,userId,timestamp:serverTimestamp()});
+          }
+          await addDoc(abhiActivityRef(),{type:'quiz_completed',studentName:userName,lessonTitle,group:ageGroup,timestamp:serverTimestamp()});
+        }catch(e){console.error(e);}
       }
     },1500);
   };
@@ -228,70 +238,55 @@ const AbhiLinkToTutoring = ({ classId, approved, onLink }) => {
 
 // ─── Q&A Discussion ────────────────────────────────────────────────────────────
 const AbhiQA = ({ classId, lessonId, isTeacher, userId, userName, suggestedQuestions=[] }) => {
-  const [questions,setQs]=useState([]); const [text,setText]=useState(''); const [replyText,setReplyText]=useState({}); const [busy,setBusy]=useState(false);
+  const [questions,setQs]=useState([]);const [text,setText]=useState('');const [replyText,setReplyText]=useState({});const [busy,setBusy]=useState(false);
+  const [visibleSuggestions,setVisibleSuggestions]=useState([]);const [suggestionPool,setSuggestionPool]=useState([]);
+  
+  // Critical: update suggestions when prop changes (prop may arrive after mount)
+  useEffect(()=>{
+    if(suggestedQuestions.length>0){
+      setVisibleSuggestions(suggestedQuestions.slice(0,3));
+      setSuggestionPool(suggestedQuestions.slice(3));
+    }
+  },[suggestedQuestions]);
+  
   useEffect(()=>{
     if(!classId||!lessonId) return;
     return onSnapshot(
       abhiQRef(classId, lessonId),
-      snap => setQs(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => (a.timestamp?.seconds||0) - (b.timestamp?.seconds||0))),
-      err => { console.error('AbhiQA snapshot error:', err.code, err.message); }
+      snap => setQs(snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(a.timestamp?.seconds||0)-(b.timestamp?.seconds||0))),
+      err  => console.error('AbhiQA error:', err.code, err.message)
     );
   },[classId,lessonId]);
-  const ask=async()=>{
-    if(!text.trim()||busy)return;setBusy(true);
-    try{await addDoc(abhiQRef(classId,lessonId),{studentId:userId,studentName:userName||'Student',text:text.trim(),timestamp:serverTimestamp(),replies:[],likes:[]});}
-    catch(e){console.error(e);}finally{setText('');setBusy(false);}
-  };
-  const reply=async(qId)=>{
-    const t=replyText[qId];if(!t?.trim()||busy)return;setBusy(true);
-    try{
-      const r={id:crypto.randomUUID(),userId,userName:userName||(isTeacher?'Teacher':'Student'),role:isTeacher?'Teacher':'Student',text:t.trim(),timestamp:new Date().toISOString(),likes:[]};
-      await updateDoc(doc(db, 'artifacts', ABHIDHAMMA_APP_ID, 'public', 'data', 'classes', classId, 'questions', lessonId, 'items', qId), {replies:arrayUnion(r)});
-    }catch(e){console.error(e);}finally{setReplyText(prev=>({...prev,[qId]:''}));setBusy(false);}
-  };
-  const toggleLike=async(qId,replyId=null)=>{
-    const ref=doc(db, 'artifacts', ABHIDHAMMA_APP_ID, 'public', 'data', 'classes', classId, 'questions', lessonId, 'items', qId);
-    try{
-      const snap=await getDoc(ref);const data=snap.data();
-      if(replyId){const rs=data.replies.map(r=>r.id===replyId?{...r,likes:r.likes?.includes(userId)?r.likes.filter(id=>id!==userId):[...(r.likes||[]),userId]}:r);await updateDoc(ref,{replies:rs});}
-      else{const lks=data.likes||[];await updateDoc(ref,{likes:lks.includes(userId)?lks.filter(id=>id!==userId):[...lks,userId]});}
-    }catch(e){console.error(e);}
-  };
-  const [visibleSuggestions, setVisibleSuggestions] = useState(suggestedQuestions.slice(0,3));
-  const [suggestionPool, setSuggestionPool] = useState(suggestedQuestions.slice(3));
-  const handleUseSuggestion = (s, idx) => {
+
+  const handleUseSuggestion=(s,idx)=>{
     setText(s);
-    if (suggestionPool.length > 0) {
-      const ri = Math.floor(Math.random() * suggestionPool.length);
-      const nv = [...visibleSuggestions]; nv[idx] = suggestionPool[ri];
-      setVisibleSuggestions(nv);
-      setSuggestionPool(prev => prev.filter((_,i)=>i!==ri));
-    }
+    if(suggestionPool.length>0){const ri=Math.floor(Math.random()*suggestionPool.length);const nv=[...visibleSuggestions];nv[idx]=suggestionPool[ri];setVisibleSuggestions(nv);setSuggestionPool(p=>p.filter((_,i)=>i!==ri));}
   };
+  const ask=async()=>{if(!text.trim()||busy)return;setBusy(true);try{await addDoc(abhiQRef(classId,lessonId),{studentId:userId,studentName:userName||'Student',text:text.trim(),timestamp:serverTimestamp(),replies:[],likes:[]});}catch(e){console.error(e);}finally{setText('');setBusy(false);}};
+  const reply=async(qId)=>{const t=replyText[qId];if(!t?.trim()||busy)return;setBusy(true);try{const r={id:crypto.randomUUID(),userId,userName:userName||(isTeacher?'Teacher':'Student'),role:isTeacher?'Teacher':'Student',text:t.trim(),timestamp:new Date().toISOString(),likes:[]};await updateDoc(doc(db,'artifacts',ABHIDHAMMA_APP_ID,'public','data','classes',classId,'questions',lessonId,'items',qId),{replies:arrayUnion(r)});}catch(e){console.error(e);}finally{setReplyText(p=>({...p,[qId]:''}));setBusy(false);}};
+  const toggleLike=async(qId,replyId=null)=>{const ref=doc(db,'artifacts',ABHIDHAMMA_APP_ID,'public','data','classes',classId,'questions',lessonId,'items',qId);try{const snap=await getDoc(ref);const data=snap.data();if(replyId){const rs=data.replies.map(r=>r.id===replyId?{...r,likes:r.likes?.includes(userId)?r.likes.filter(id=>id!==userId):[...(r.likes||[]),userId]}:r);await updateDoc(ref,{replies:rs});}else{const lks=data.likes||[];await updateDoc(ref,{likes:lks.includes(userId)?lks.filter(id=>id!==userId):[...lks,userId]});}}catch(e){console.error(e);}};
+
   return(
     <div className="space-y-4 mt-2">
+      {/* AI Suggested Questions */}
       {!isTeacher && visibleSuggestions.length > 0 && (
         <div className="bg-indigo-900/30 p-3 rounded-xl border border-indigo-500/30">
-          <p className="text-indigo-300 text-xs font-bold mb-2 flex items-center gap-2">
-            <Sparkles className="w-3 h-3"/> Curious? Try asking:
-          </p>
+          <p className="text-indigo-300 text-xs font-bold mb-2 flex items-center gap-2"><Sparkles className="w-3 h-3"/> Curious? Try asking:</p>
           <div className="flex flex-wrap gap-2">
-            {visibleSuggestions.map((sq, idx) => (
-              <button key={idx} onClick={() => handleUseSuggestion(sq, idx)}
-                className="text-left text-xs bg-indigo-800/50 hover:bg-indigo-700 text-indigo-100 px-3 py-1.5 rounded-lg border border-indigo-600 transition hover:scale-105 active:scale-95">
+            {visibleSuggestions.map((sq,idx)=>(
+              <button key={idx} onClick={()=>handleUseSuggestion(sq,idx)}
+                className="text-left text-xs bg-indigo-800/50 hover:bg-indigo-700 text-indigo-100 px-3 py-1.5 rounded-lg border border-indigo-600 transition hover:scale-105 active:scale-95 max-w-[250px]">
                 {sq}
               </button>
             ))}
           </div>
         </div>
       )}
+      {/* Q&A list */}
       {questions.map(q=>(
         <div key={q.id} className="p-4 rounded-xl bg-gray-800/50 border border-gray-700/50">
           <div className="flex justify-between items-start mb-2">
-            <div className="flex-1">
-              <span className="text-xs font-bold px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 mr-2">{q.studentName||'Student'}</span>
-              <span className="text-white font-medium">{q.text}</span>
-            </div>
+            <div className="flex-1"><span className="text-xs font-bold px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 mr-2">{q.studentName||'Student'}</span><span className="text-white font-medium">{q.text}</span></div>
             <button onClick={()=>toggleLike(q.id)} className={`flex items-center gap-1 text-xs px-2 py-1 rounded ${q.likes?.includes(userId)?'text-pink-500 bg-pink-500/10':'text-gray-500 hover:bg-gray-700'}`}><Heart className={`w-3 h-3 ${q.likes?.includes(userId)?'fill-current':''}`}/>{q.likes?.length||0}</button>
           </div>
           <div className="ml-3 pl-3 border-l-2 border-gray-700 space-y-2 mt-2">
@@ -303,12 +298,10 @@ const AbhiQA = ({ classId, lessonId, isTeacher, userId, userName, suggestedQuest
               </div>
             ))}
           </div>
-          <div className="mt-2 flex gap-2">
-            <input value={replyText[q.id]||''} onChange={e=>setReplyText(p=>({...p,[q.id]:e.target.value}))} placeholder="Write a reply…" className="flex-1 bg-gray-900 text-white text-sm px-3 py-1.5 rounded-lg border border-gray-600 focus:border-indigo-500 focus:outline-none" onKeyDown={e=>e.key==='Enter'&&reply(q.id)}/>
-            <button onClick={()=>reply(q.id)} disabled={busy} className="p-2 bg-indigo-600 rounded-lg text-white hover:bg-indigo-700"><Send className="w-4 h-4"/></button>
-          </div>
+          <div className="mt-2 flex gap-2"><input value={replyText[q.id]||''} onChange={e=>setReplyText(p=>({...p,[q.id]:e.target.value}))} placeholder="Write a reply…" className="flex-1 bg-gray-900 text-white text-sm px-3 py-1.5 rounded-lg border border-gray-600 focus:border-indigo-500 focus:outline-none" onKeyDown={e=>e.key==='Enter'&&reply(q.id)}/><button onClick={()=>reply(q.id)} disabled={busy} className="p-2 bg-indigo-600 rounded-lg text-white hover:bg-indigo-700"><Send className="w-4 h-4"/></button></div>
         </div>
       ))}
+      {/* Ask input */}
       <div className="pt-2 border-t border-gray-700">
         <div className="flex gap-2">
           <input value={text} onChange={e=>setText(e.target.value)} placeholder="Ask a question…" className="flex-1 bg-gray-900 text-white text-sm p-3 rounded-xl border border-gray-600 focus:border-indigo-500 focus:outline-none" disabled={busy} onKeyDown={e=>e.key==='Enter'&&ask()}/>
@@ -318,6 +311,7 @@ const AbhiQA = ({ classId, lessonId, isTeacher, userId, userName, suggestedQuest
     </div>
   );
 };
+
 
 // ─── Teacher Class Picker ──────────────────────────────────────────────────────
 const AbhiTeacherClassPicker = ({ onSelectClass, onCreateClass }) => {
@@ -453,7 +447,7 @@ const AbhiLessonItem = ({ lesson, classId, isTeacher, studentAgeGroup, studentNa
   const ref=useRef(null);
   useEffect(()=>{if(isOpen&&ref.current){setTimeout(()=>{const y=ref.current.getBoundingClientRect().top+window.scrollY-80;window.scrollTo({top:y,behavior:'smooth'});},100);}},[isOpen]);
   useEffect(()=>{if(!classId||!userId||!lesson.id||!studentAgeGroup)return;const u=onSnapshot(query(abhiResultsRef(classId,lesson.id,studentAgeGroup),where('userId','==',userId)),snap=>setIsCompleted(!snap.empty));return()=>u();},[classId,lesson.id,userId,studentAgeGroup]);
-  useEffect(()=>{if(!showLb||!classId||!lesson.id)return;getDocs(query(abhiScoresRef(),where('classId','==',classId),where('lessonId','==',lesson.id))).then(snap=>{const s={};snap.docs.forEach(d=>{const dt=d.data();if(!s[dt.userId]||dt.score>s[dt.userId].score)s[dt.userId]=dt;});setLb(Object.values(s).sort((a,b)=>b.score-a.score));});},[showLb,classId,lesson.id]);
+  useEffect(()=>{if(!showLb||!classId||!lesson.id)return;getDocs(query(abhiScoresRef(),where('classId','==',classId),where('lessonId','==',lesson.id))).then(snap=>{const s={};snap.docs.forEach(d=>{const dt=d.data();if(!s[dt.userId]||dt.score>s[dt.userId].score)s[dt.userId]=dt;});setLb(Object.values(s).sort((a,b)=>b.score-a.score));}).catch(e=>console.error('LB:',e));},[showLb,classId,lesson.id]);
   const variants=lesson.variants||{};const hasJr=variants.storytellers&&variants.explorers;const hasSr=variants.adventurers&&variants.voyagers;
   let dc='',dt=lesson.title,qa=false,qd=null;
   if(!isTeacher&&studentAgeGroup){const v=variants[studentAgeGroup];if(v){dc=v.english;dt=v.englishTitle||lesson.title;qa=!!v.quiz;qd=v.quiz;}else dc='Content not available for your age group yet.';}
