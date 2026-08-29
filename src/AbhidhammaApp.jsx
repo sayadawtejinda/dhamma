@@ -127,7 +127,7 @@ const NotificationBell = ({ userId }) => {
 };
 
 // ─── AbhiClassRoster ──────────────────────────────────────────────────────────
-const AbhiClassRoster = ({ userId, classId }) => {
+const AbhiClassRoster = ({ userId, classId, onLink }) => {
   const [students,setStudents]=useState([]);const [open,setOpen]=useState(true);const [now,setNow]=useState(Date.now());const [aa,setAa]=useState(false);
   useEffect(()=>{const i=setInterval(()=>setNow(Date.now()),10000);return()=>clearInterval(i);},[]);
   useEffect(()=>{if(!classId)return;const q=query(abhiRosterRef(),where('classId','==',classId));return onSnapshot(q,snap=>{const n=Date.now();setStudents(snap.docs.map(d=>{const dt=d.data(),lp=dt.lastPing;if(dt.isOnline&&lp){const pm=lp.toMillis?lp.toMillis():(lp.seconds*1000);if((n-pm)/60000>2)return{id:d.id,...dt,isOnline:false};}return{id:d.id,...dt};}));});},[classId]);
@@ -789,7 +789,7 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
           <div className="space-y-6">
 
             {!classId&&<AbhiTeacherClassPicker onSelectClass={enterClass} onCreateClass={enterClass}/>}
-            {classId&&<AbhiClassRoster userId={userId} classId={classId} onLinkStudent={handleLinkStudentToTutoring}/>}
+            {classId&&<AbhiClassRoster userId={userId} classId={classId} onLink={handleLinkStudentToTutoring}/>}
             {classId&&(
               <div className="bg-gray-800 p-6 rounded-xl shadow-xl border border-gray-700">
                 {/* Import/Export bar */}
