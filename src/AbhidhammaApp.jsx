@@ -443,25 +443,63 @@ const AbhiWelcomeModal = ({ userId, classId, onStudentComplete, onTeacherComplet
 
 // ─── LessonItem ───────────────────────────────────────────────────────────────
 const AbhiLessonItem = ({ lesson, classId, isTeacher, studentAgeGroup, studentName, userId, onEdit, onGenerateVariants, onTakeQuiz, isGenerating, isOpen, onToggle, classImageBase }) => {
-  const [tab,setTab]=useState('content');const [isCompleted,setIsCompleted]=useState(false);const [leaderboard,setLb]=useState([]);const [showLb,setShowLb]=useState(false);
+  const [tab,setTab]=useState('content');
+  const [isCompleted,setIsCompleted]=useState(false);
+  const [hasAsked,setHasAsked]=useState(false);
+  const [leaderboard,setLb]=useState([]);const [showLb,setShowLb]=useState(false);
   const ref=useRef(null);
+  
   useEffect(()=>{if(isOpen&&ref.current){setTimeout(()=>{const y=ref.current.getBoundingClientRect().top+window.scrollY-80;window.scrollTo({top:y,behavior:'smooth'});},100);}},[isOpen]);
-  useEffect(()=>{if(!classId||!userId||!lesson.id||!studentAgeGroup)return;const u=onSnapshot(query(abhiResultsRef(classId,lesson.id,studentAgeGroup),where('userId','==',userId)),snap=>setIsCompleted(!snap.empty));return()=>u();},[classId,lesson.id,userId,studentAgeGroup]);
-  useEffect(()=>{if(!showLb||!classId||!lesson.id)return;getDocs(query(abhiScoresRef(),where('classId','==',classId),where('lessonId','==',lesson.id))).then(snap=>{const s={};snap.docs.forEach(d=>{const dt=d.data();if(!s[dt.userId]||dt.score>s[dt.userId].score)s[dt.userId]=dt;});setLb(Object.values(s).sort((a,b)=>b.score-a.score));}).catch(e=>console.error('LB:',e));},[showLb,classId,lesson.id]);
+  
+  // Track quiz completion
+  useEffect(()=>{
+    if(!classId||!userId||!lesson.id||!studentAgeGroup)return;
+    const u=onSnapshot(query(abhiResultsRef(classId,lesson.id,studentAgeGroup),where('userId','==',userId)),snap=>setIsCompleted(!snap.empty));
+    return()=>u();
+  },[classId,lesson.id,userId,studentAgeGroup]);
+  
+  // Track if student has asked a question (quiz unlock requirement)
+  useEffect(()=>{
+    if(!classId||!userId||!lesson.id||isTeacher)return;
+    return onSnapshot(abhiQRef(classId,lesson.id),snap=>{
+      const asked=snap.docs.some(d=>d.data().studentId===userId);
+      setHasAsked(asked);
+    },err=>console.error('QA track:',err.code));
+  },[classId,lesson.id,userId,isTeacher]);
+  
+  // Leaderboard
+  useEffect(()=>{
+    if(!showLb||!classId||!lesson.id)return;
+    getDocs(query(abhiScoresRef(),where('classId','==',classId),where('lessonId','==',lesson.id)))
+      .then(snap=>{const s={};snap.docs.forEach(d=>{const dt=d.data();if(!s[dt.userId]||dt.score>s[dt.userId].score)s[dt.userId]=dt;});setLb(Object.values(s).sort((a,b)=>b.score-a.score));})
+      .catch(e=>console.error('LB:',e));
+  },[showLb,classId,lesson.id]);
+  
   const variants=lesson.variants||{};const hasJr=variants.storytellers&&variants.explorers;const hasSr=variants.adventurers&&variants.voyagers;
-  let dc='',dt=lesson.title,qa=false,qd=null;
-  if(!isTeacher&&studentAgeGroup){const v=variants[studentAgeGroup];if(v){dc=v.english;dt=v.englishTitle||lesson.title;qa=!!v.quiz;qd=v.quiz;}else dc='Content not available for your age group yet.';}
+  let dc='',dt=lesson.title,qa=false,qd=null,discQ=[];
+  if(!isTeacher&&studentAgeGroup){const v=variants[studentAgeGroup];if(v){dc=v.english;dt=v.englishTitle||lesson.title;qa=!!v.quiz;qd=v.quiz;discQ=v.discussionQuestions||[];}else dc='Content not available for your age group yet.';}
   const imgBase=lesson.imageBaseUrl||classImageBase||DEFAULT_IMG_BASE;
+  
   return(
     <div ref={ref} className={`relative rounded-xl shadow-md overflow-hidden border mb-4 ${isTeacher?'bg-gray-800 border-gray-700':'bg-gray-700 border-gray-600'}`}>
       {isGenerating&&<div className="absolute inset-0 bg-gray-900/80 z-10 flex flex-col items-center justify-center backdrop-blur-sm rounded-xl"><RotateCw className="w-12 h-12 text-teal-400 animate-spin mb-4"/><p className="text-white font-bold">Generating…</p></div>}
       <div onClick={onToggle} className="p-4 cursor-pointer hover:bg-gray-600/50 flex justify-between items-center">
         <div className="flex items-center gap-3">{isOpen?<ChevronDown className="w-5 h-5 text-gray-400"/>:<ChevronRight className="w-5 h-5 text-gray-400"/>}
-          <div className="flex flex-col"><h3 className={`text-lg font-bold flex items-center gap-2 ${isTeacher?'text-teal-300':'text-white'}`}>{dt}{isCompleted&&<span className="bg-green-500/20 text-green-400 text-xs px-2 py-0.5 rounded-full flex items-center gap-1 border border-green-500/30"><CheckCheck className="w-3 h-3"/>Done</span>}</h3>{isTeacher&&<span className="text-xs text-gray-500">{hasJr&&hasSr?<span className="text-green-400">✓ Ready</span>:<span className="text-yellow-500">Pending: {!hasJr&&'Jr '}{!hasSr&&'Sr'}</span>}</span>}</div>
+          <div className="flex flex-col">
+            <h3 className={`text-lg font-bold flex items-center gap-2 ${isTeacher?'text-teal-300':'text-white'}`}>
+              {dt}
+              {isCompleted&&<span className="bg-green-500/20 text-green-400 text-xs px-2 py-0.5 rounded-full flex items-center gap-1 border border-green-500/30"><CheckCheck className="w-3 h-3"/>Done</span>}
+            </h3>
+            {isTeacher&&<span className="text-xs text-gray-500">{hasJr&&hasSr?<span className="text-green-400">✓ Ready</span>:<span className="text-yellow-500">Pending: {!hasJr&&'Jr '}{!hasSr&&'Sr'}</span>}</span>}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={e=>{e.stopPropagation();setShowLb(true);}} className="p-2 text-yellow-500 hover:text-yellow-400 rounded-full z-20"><Trophy className="w-5 h-5"/></button>
-          {isTeacher&&<div className="flex items-center gap-1 mr-2" onClick={e=>e.stopPropagation()}><button onClick={()=>onEdit(lesson)} className="p-2 bg-blue-600 rounded hover:bg-blue-700 text-white"><Edit2 className="w-3 h-3"/></button><button onClick={()=>onGenerateVariants(lesson,'junior')} className="px-3 py-1 bg-purple-600 rounded text-white text-xs font-bold flex items-center gap-1 hover:bg-purple-700"><Zap className="w-3 h-3"/>Jr.</button><button onClick={()=>onGenerateVariants(lesson,'senior')} className="px-3 py-1 bg-pink-600 rounded text-white text-xs font-bold flex items-center gap-1 hover:bg-pink-700"><Zap className="w-3 h-3"/>Sr.</button></div>}
+          {isTeacher&&<div className="flex items-center gap-1 mr-2" onClick={e=>e.stopPropagation()}>
+            <button onClick={()=>onEdit(lesson)} className="p-2 bg-blue-600 rounded hover:bg-blue-700 text-white"><Edit2 className="w-3 h-3"/></button>
+            <button onClick={()=>onGenerateVariants(lesson,'junior')} className="px-3 py-1 bg-purple-600 rounded text-white text-xs font-bold flex items-center gap-1 hover:bg-purple-700"><Zap className="w-3 h-3"/>Jr.</button>
+            <button onClick={()=>onGenerateVariants(lesson,'senior')} className="px-3 py-1 bg-pink-600 rounded text-white text-xs font-bold flex items-center gap-1 hover:bg-pink-700"><Zap className="w-3 h-3"/>Sr.</button>
+          </div>}
         </div>
       </div>
       {isOpen&&<div className="border-t border-gray-600/50">
@@ -470,8 +508,30 @@ const AbhiLessonItem = ({ lesson, classId, isTeacher, studentAgeGroup, studentNa
           <button onClick={()=>setTab('discussion')} className={`flex-1 py-3 text-sm font-bold flex items-center justify-center gap-2 ${tab==='discussion'?'text-indigo-400 border-b-2 border-indigo-400 bg-gray-800':'text-gray-400 hover:text-white'}`}><MessageCircle className="w-4 h-4"/>Discussion</button>
         </div>
         <div className="p-5">
-          {tab==='content'&&(isTeacher?<div className="text-white whitespace-pre-wrap leading-relaxed"><SmartContent text={lesson.burmeseContent} imageBase={imgBase}/></div>:<div className="space-y-4"><div className="text-yellow-100 whitespace-pre-wrap leading-relaxed text-lg"><SmartContent text={dc} imageBase={imgBase}/></div>{qa&&<button onClick={e=>{e.stopPropagation();onTakeQuiz(lesson.id,dt,qd);}} className={`w-full py-3 font-black rounded-xl shadow-lg transform transition hover:scale-[1.02] flex items-center justify-center gap-2 ${isCompleted?'bg-gradient-to-r from-green-600 to-teal-600 text-white':'bg-gradient-to-r from-purple-600 to-indigo-600 text-white'}`}>{isCompleted?<><Trophy className="w-6 h-6"/>QUIZ COMPLETED</>:<><Gamepad2 className="w-6 h-6"/>PLAY QUIZ</>}</button>}</div>)}
-          {tab==='discussion'&&<AbhiQA classId={classId} lessonId={lesson.id} isTeacher={isTeacher} userId={userId} userName={studentName||'Teacher'}/>}
+          {tab==='content'&&(isTeacher
+            ? <div className="text-white whitespace-pre-wrap leading-relaxed"><SmartContent text={lesson.burmeseContent} imageBase={imgBase}/></div>
+            : <div className="space-y-4">
+                <div className="text-yellow-100 whitespace-pre-wrap leading-relaxed text-lg"><SmartContent text={dc} imageBase={imgBase}/></div>
+                {qa&&(()=>{
+                  // Quiz is locked until student asks 1 question in Discussion
+                  const isLocked = !isCompleted && !hasAsked;
+                  return isLocked ? (
+                    <div className="bg-gray-800/80 p-4 rounded-xl border border-indigo-600/40 flex flex-col items-center text-center">
+                      <Lock className="w-8 h-8 text-indigo-400 mb-2"/>
+                      <p className="text-white font-bold text-sm mb-1">Quiz Locked 🔒</p>
+                      <p className="text-gray-400 text-xs mb-3">Ask 1 question in the Discussion tab to unlock the quiz.</p>
+                      <button onClick={()=>setTab('discussion')} className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition">Go to Discussion →</button>
+                    </div>
+                  ) : (
+                    <button onClick={e=>{e.stopPropagation();onTakeQuiz(lesson.id,dt,qd);}}
+                      className={`w-full py-3 font-black rounded-xl shadow-lg transform transition hover:scale-[1.02] flex items-center justify-center gap-2 ${isCompleted?'bg-gradient-to-r from-green-600 to-teal-600 text-white':'bg-gradient-to-r from-purple-600 to-indigo-600 text-white'}`}>
+                      {isCompleted?<><Trophy className="w-6 h-6"/>QUIZ COMPLETED</>:<><Gamepad2 className="w-6 h-6"/>PLAY QUIZ</>}
+                    </button>
+                  );
+                })()}
+              </div>
+          )}
+          {tab==='discussion'&&<AbhiQA classId={classId} lessonId={lesson.id} isTeacher={isTeacher} userId={userId} userName={studentName||'Teacher'} suggestedQuestions={discQ}/>}
         </div>
       </div>}
       {showLb&&<div className="fixed inset-0 bg-gray-900/95 z-50 flex items-center justify-center p-4"><div className="bg-gray-800 w-full max-w-lg rounded-2xl shadow-2xl p-6 border border-gray-700 relative"><button onClick={()=>setShowLb(false)} className="absolute top-4 right-4 text-gray-400 hover:text-white"><X className="w-6 h-6"/></button><div className="text-center mb-6"><Trophy className="w-16 h-16 text-yellow-400 mx-auto mb-2"/><h3 className="text-2xl font-black text-white">{dt}</h3></div><div className="space-y-2 max-h-[60vh] overflow-y-auto">{leaderboard.length===0?<p className="text-center text-gray-500">No scores yet.</p>:leaderboard.map((e,idx)=><div key={idx} className={`flex justify-between items-center p-3 rounded ${e.userId===userId?'bg-indigo-600 border border-indigo-400':'bg-gray-700'}`}><div className="flex items-center gap-3"><span className="font-bold w-6 text-yellow-400">#{idx+1}</span><span className="font-semibold text-white">{e.name}{e.userId===userId&&<span className="text-[10px] bg-white text-indigo-600 px-1.5 py-0.5 rounded-full font-bold ml-2">ME</span>}</span></div><span className="font-mono font-bold text-indigo-300">{e.score} pts</span></div>)}</div></div></div>}
