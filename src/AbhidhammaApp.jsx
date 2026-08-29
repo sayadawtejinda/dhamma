@@ -31,14 +31,18 @@ const abhiLessonsRef     = (cId)         => collection(db, P(`classes/${cId}/les
 const abhiLessonDocRef   = (cId, lId)    => doc(db, P(`classes/${cId}/lessons/${lId}`));
 const abhiRosterDocRef   = (cId, name)   => doc(db, P(`classRoster/${cId}_${encodeURIComponent(name)}`));
 const abhiRosterRef      = ()            => collection(db, P('classRoster'));
-const abhiScoresRef      = ()            => collection(db, P('scores'));
+const abhiScoresRef      = ()            =>
+    // Use original global_scores collection that security rules allow
+    collection(db, 'artifacts', ABHIDHAMMA_APP_ID, 'public', 'data', 'global_scores');
 const abhiActivityRef    = ()            => collection(db, P('activity_feed'));
-const abhiResultsRef     = (cId,lId,g)   => collection(db, P(`classes/${cId}/quizResults/${lId}/${g}`));
+const abhiResultsRef     = (cId,lId,g)   =>
+    // Use original path that security rules already allow
+    collection(db, 'artifacts', ABHIDHAMMA_APP_ID, 'public', 'data', 'lessons', lId, 'quiz', g, 'results');
 const abhiQRef           = (cId, lId)    =>
     collection(db, 'artifacts', ABHIDHAMMA_APP_ID, 'public', 'data', 'classes', cId, 'questions', lId, 'items');
 
 // ─── AI generation ────────────────────────────────────────────────────────────
-const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=`;
+const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=`;
 const generateContent = async (prompt, sys) => {
   const payload={contents:[{parts:[{text:prompt}]}],systemInstruction:{parts:[{text:sys}]},generationConfig:{responseMimeType:'application/json'}};
   for(let i=0;i<3;i++){try{const r=await fetch(API_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});if(!r.ok)throw new Error(`HTTP ${r.status}`);const j=await r.json();const t=j.candidates?.[0]?.content?.parts?.[0]?.text;if(t)return JSON.parse(t.replace(/^```json\s*|\s*```$/g,'').trim());throw new Error('No content');}catch(e){if(i===2)throw e;await new Promise(r=>setTimeout(r,1000));}}
@@ -894,7 +898,7 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
       const data={version:3,classId,timestamp:new Date().toISOString(),lessons,roster:rosterSnap.docs.map(d=>({id:d.id,...d.data()})),scores:scoresSnap.docs.map(d=>({id:d.id,...d.data(),timestamp:toMs(d.data().timestamp)})),activityFeed:actSnap.docs.map(d=>({id:d.id,...d.data(),timestamp:toMs(d.data().timestamp)})),quizResults:{}};
       data.questions={};
       for(const l of lessons){
-        const qSnap=await getDocs(query(abhiQRef(classId,l.id),orderBy('timestamp','asc')));
+        const qSnap=await getDocs(abhiQRef(classId,l.id));
         if(!qSnap.empty) data.questions[l.id]=qSnap.docs.map(d=>({id:d.id,...d.data()}));
         for(const g of Object.keys(AGE_GROUPS)){const rs=await getDocs(abhiResultsRef(classId,l.id,g));if(!rs.empty)data.quizResults[`${l.id}_${g}`]=rs.docs.map(r=>({id:r.id,...r.data(),timestamp:toMs(r.data().timestamp)}));}}
       const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`abhidhamma-full-${classId}-${Date.now()}.json`;document.body.appendChild(a);a.click();document.body.removeChild(a);
