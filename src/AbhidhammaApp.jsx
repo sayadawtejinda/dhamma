@@ -621,6 +621,7 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
     const [editingLesson, setEditingLesson] = useState(null);
     const [newLessonTitle, setNewLessonTitle] = useState('');
     const [newLessonContent, setNewLessonContent] = useState('');
+    const [newLessonImageBase, setNewLessonImageBase] = useState('https://raw.githubusercontent.com/nathantun93/dhamma4/main/');
     const [imageInput, setImageInput] = useState('');
     const [message, setMessage] = useState('');
     const [activeQuizLessonId, setActiveQuizLessonId] = useState(null);
@@ -701,32 +702,38 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
     const handleTeacherLogout = () => { setIsTeacher(false);setCurrentRole('Student');localStorage.removeItem('abhidhamma_isTeacher');showMessage("Switched to Student mode."); };
 
     const handleExportLessons = async () => {
-        setIsLoading(true); showMessage("Exporting...");
+        setIsLoading(true); showMessage("Exporting all data...");
         try {
-            const lessonsSnap = await getDocs(collection(db,'artifacts',ABHIDHAMMA_APP_ID,'public','data','lessons'));
-            const scoresSnap = await getDocs(collection(db,'artifacts',ABHIDHAMMA_APP_ID,'public','data','global_scores'));
-
             const toMs = (ts) => { if(!ts) return null; if(typeof ts.toMillis==='function') return ts.toMillis(); if(ts.seconds) return ts.seconds*1000; return null; };
+            const [lessonsSnap,scoresSnap,studentsSnap,activitySnap] = await Promise.all([
+                getDocs(collection(db,'artifacts',ABHIDHAMMA_APP_ID,'public','data','lessons')),
+                getDocs(collection(db,'artifacts',ABHIDHAMMA_APP_ID,'public','data','global_scores')),
+                getDocs(collection(db,'artifacts',ABHIDHAMMA_APP_ID,'public','data','students')),
+                getDocs(collection(db,'artifacts',ABHIDHAMMA_APP_ID,'public','data','activity_feed')),
+            ]);
             const exportData = {
-                version: 1,
-                lessons: lessonsSnap.docs.map(d => ({ id:d.id, ...d.data(), timestamp:toMs(d.data().timestamp) })),
-                globalScores: scoresSnap.docs.map(d => ({ id:d.id, ...d.data(), timestamp:toMs(d.data().timestamp) })),
+                version: 2,
+                lessons: lessonsSnap.docs.map(d=>({id:d.id,...d.data(),timestamp:toMs(d.data().timestamp)})),
+                globalScores: scoresSnap.docs.map(d=>({id:d.id,...d.data(),timestamp:toMs(d.data().timestamp)})),
+                students: studentsSnap.docs.map(d=>({id:d.id,...d.data(),timestamp:toMs(d.data().timestamp),lastSeen:toMs(d.data().lastSeen)})),
+                activityFeed: activitySnap.docs.map(d=>({id:d.id,...d.data(),timestamp:toMs(d.data().timestamp)})),
+                questions: {},
+                quizResults: {},
             };
-            // Include quiz results per lesson per group
-            exportData.quizResults = {};
             for (const d of lessonsSnap.docs) {
+                const qSnap = await getDocs(collection(db,'artifacts',ABHIDHAMMA_APP_ID,'public','data','lessons',d.id,'questions'));
+                if(!qSnap.empty) exportData.questions[d.id]=qSnap.docs.map(q=>({id:q.id,...q.data(),timestamp:toMs(q.data().timestamp)}));
                 for (const g of Object.keys(AGE_GROUPS)) {
                     const rSnap = await getDocs(collection(db,'artifacts',ABHIDHAMMA_APP_ID,'public','data','lessons',d.id,'quiz',g,'results'));
-                    if(!rSnap.empty) exportData.quizResults[`${d.id}_${g}`] = rSnap.docs.map(r=>({id:r.id,...r.data(),timestamp:toMs(r.data().timestamp)}));
+                    if(!rSnap.empty) exportData.quizResults[`${d.id}_${g}`]=rSnap.docs.map(r=>({id:r.id,...r.data(),timestamp:toMs(r.data().timestamp)}));
                 }
             }
-
-            const blob = new Blob([JSON.stringify(exportData, null, 2)], { type:"application/json" });
+            const blob = new Blob([JSON.stringify(exportData,null,2)],{type:"application/json"});
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href=url; a.download=`abhidhamma_backup_${new Date().toISOString().slice(0,10)}.json`;
+            a.href=url; a.download=`abhidhamma_full_backup_${new Date().toISOString().slice(0,10)}.json`;
             document.body.appendChild(a); a.click(); document.body.removeChild(a);
-            showMessage("Exported Successfully!");
+            showMessage("Exported all data successfully!");
         } catch(e) { console.error(e); showMessage("Error Exporting!"); } finally { setIsLoading(false); }
     };
 
@@ -739,26 +746,49 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
                 const data = JSON.parse(e.target.result);
                 setIsLoading(true);
                 const toDate = (ts) => ts ? new Date(ts) : serverTimestamp();
-                let lCount=0, sCount=0, qrCount=0;
+                let lCount=0, sCount=0, stuCount=0, qCount=0, qrCount=0, aCount=0;
+                // Lessons
                 for (const l of (data.lessons||[])) {
-                    const {id, timestamp, ...rest} = l;
-                    await setDoc(doc(db,'artifacts',ABHIDHAMMA_APP_ID,'public','data','lessons',id), {...rest, timestamp:toDate(timestamp)});
+                    const {id,timestamp,...rest}=l;
+                    await setDoc(doc(db,'artifacts',ABHIDHAMMA_APP_ID,'public','data','lessons',id),{...rest,timestamp:toDate(timestamp)});
                     lCount++;
                 }
+                // Global scores
                 for (const s of (data.globalScores||[])) {
-                    const {id, timestamp, ...rest} = s;
-                    await setDoc(doc(db,'artifacts',ABHIDHAMMA_APP_ID,'public','data','global_scores',id), {...rest, timestamp:toDate(timestamp)});
+                    const {id,timestamp,...rest}=s;
+                    await setDoc(doc(db,'artifacts',ABHIDHAMMA_APP_ID,'public','data','global_scores',id),{...rest,timestamp:toDate(timestamp)});
                     sCount++;
                 }
-                for (const [key, rList] of Object.entries(data.quizResults||{})) {
-                    const parts = key.split('_'); const group = parts.pop(); const lessonId = parts.join('_');
+                // Students (preserve approval status, names, etc.)
+                for (const stu of (data.students||[])) {
+                    const {id,timestamp,lastSeen,...rest}=stu;
+                    await setDoc(doc(db,'artifacts',ABHIDHAMMA_APP_ID,'public','data','students',id),{...rest,timestamp:toDate(timestamp),lastSeen:toDate(lastSeen),isOnline:false,currentLesson:null});
+                    stuCount++;
+                }
+                // Activity feed / notifications
+                for (const a of (data.activityFeed||[])) {
+                    const {id,timestamp,...rest}=a;
+                    await setDoc(doc(db,'artifacts',ABHIDHAMMA_APP_ID,'public','data','activity_feed',id),{...rest,timestamp:toDate(timestamp)});
+                    aCount++;
+                }
+                // Q&A per lesson
+                for (const [lessonId,qList] of Object.entries(data.questions||{})) {
+                    for (const q of qList) {
+                        const {id,timestamp,...rest}=q;
+                        await setDoc(doc(db,'artifacts',ABHIDHAMMA_APP_ID,'public','data','lessons',lessonId,'questions',id),{...rest,timestamp:toDate(timestamp)});
+                        qCount++;
+                    }
+                }
+                // Quiz results per lesson per group
+                for (const [key,rList] of Object.entries(data.quizResults||{})) {
+                    const parts=key.split('_'); const group=parts.pop(); const lessonId=parts.join('_');
                     for (const r of rList) {
-                        const {id, timestamp, ...rest} = r;
-                        await setDoc(doc(db,'artifacts',ABHIDHAMMA_APP_ID,'public','data','lessons',lessonId,'quiz',group,'results',id), {...rest, timestamp:toDate(timestamp)});
+                        const {id,timestamp,...rest}=r;
+                        await setDoc(doc(db,'artifacts',ABHIDHAMMA_APP_ID,'public','data','lessons',lessonId,'quiz',group,'results',id),{...rest,timestamp:toDate(timestamp)});
                         qrCount++;
                     }
                 }
-                showMessage(`Imported: ${lCount} lessons, ${sCount} scores.`);
+                showMessage(`Imported: ${lCount} lessons, ${stuCount} students, ${sCount} scores, ${qCount} Q&A, ${aCount} notifications.`);
             } catch(error) { showMessage(`Error: ${error.message}`); } finally { setIsLoading(false); }
             event.target.value='';
         };
@@ -770,7 +800,7 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
         if (!newLessonTitle.trim() || !newLessonContent.trim()) return showMessage("Fields required!");
         setIsLoading(true);
         try {
-            const data = { title: newLessonTitle.trim(), burmeseContent: newLessonContent.trim() };
+            const data = { title: newLessonTitle.trim(), burmeseContent: newLessonContent.trim(), imageBaseUrl: newLessonImageBase.trim() || IMG_BASE_URL };
             if (!editingLesson) { data.timestamp = serverTimestamp(); data.variants = {}; }
             const ref = editingLesson ? doc(db,'artifacts',ABHIDHAMMA_APP_ID,'public','data','lessons',editingLesson.id) : doc(collection(db,'artifacts',ABHIDHAMMA_APP_ID,'public','data','lessons'));
             await setDoc(ref, data, { merge: true });
@@ -861,6 +891,10 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
             </div>
                             <form onSubmit={handleSaveLesson} className="space-y-4">
                                 <input value={newLessonTitle} onChange={e=>setNewLessonTitle(e.target.value)} placeholder="Lesson Title" className="w-full p-3 bg-gray-900 border border-gray-600 rounded text-white focus:border-teal-500 focus:outline-none" disabled={isLoading}/>
+                <div className="flex gap-2 items-center bg-gray-900 p-2 rounded border border-gray-600">
+                    <span className="text-gray-400 text-xs font-semibold ml-2 whitespace-nowrap">🖼 Image Folder URL:</span>
+                    <input value={newLessonImageBase} onChange={e=>setNewLessonImageBase(e.target.value)} placeholder="https://raw.githubusercontent.com/..." className="flex-1 bg-transparent text-white text-sm focus:outline-none border-b border-gray-600 focus:border-teal-500" disabled={isLoading}/>
+                </div>
                                 <textarea value={newLessonContent} onChange={e=>setNewLessonContent(e.target.value)} placeholder="Lesson Content (Burmese)" rows="6" className="w-full p-3 bg-gray-900 border border-gray-600 rounded text-white focus:border-teal-500 focus:outline-none" disabled={isLoading}/>
                                 <div className="flex gap-2 items-center bg-gray-900 p-2 rounded border border-gray-600">
                                     <ImageIcon className="w-4 h-4 text-gray-400 ml-2"/>
@@ -873,7 +907,7 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
                                 </div>
                             </form>
                         </div>
-                        <div className="space-y-4">{lessons.map(l=><LessonItem key={l.id} lesson={l} isTeacher={true} onGenerateVariants={handleGenerateVariants} onEdit={l=>{setEditingLesson(l);setNewLessonTitle(l.title);setNewLessonContent(l.burmeseContent);}} isGenerating={generatingLessonId===l.id} userId={userId} isOpen={openLessonId===l.id} onToggle={()=>setOpenLessonId(openLessonId===l.id?null:l.id)}/>)}</div>
+                        <div className="space-y-4">{lessons.map(l=><LessonItem key={l.id} lesson={l} isTeacher={true} onGenerateVariants={handleGenerateVariants} onEdit={l=>{setEditingLesson(l);setNewLessonTitle(l.title);setNewLessonContent(l.burmeseContent);setNewLessonImageBase(l.imageBaseUrl||IMG_BASE_URL);}} isGenerating={generatingLessonId===l.id} userId={userId} isOpen={openLessonId===l.id} onToggle={()=>setOpenLessonId(openLessonId===l.id?null:l.id)}/>)}</div>
                     </div>
                 ) : (
                     <div className="space-y-6">

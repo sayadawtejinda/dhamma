@@ -1273,12 +1273,9 @@ const AgeLevelPickerView = React.memo(({ studentAgeLevel, setStudentAgeLevel, on
   </Card>
 ));
 
-const ClassPickerView = React.memo(({ classList, highlightClassId, onSelectClass, loading, studentCompletions, myGlobalRank }) => (
+const ClassPickerView = React.memo(({ classList, highlightClassId, onSelectClass, loading, classPickerInfo }) => (
   <div className="p-4 md:p-8 max-w-2xl mx-auto mt-10">
     <h2 className="text-3xl font-bold text-blue-700 mb-2 text-center">📚 Choose Your Class</h2>
-    {myGlobalRank > 0 && (
-      <p className="text-center text-yellow-600 font-bold mb-2">🏆 Global Rank: #{myGlobalRank}</p>
-    )}
     {highlightClassId && (
       <p className="text-gray-600 text-center mb-6">Your teacher assigned <span className="font-bold text-blue-700">{highlightClassId}</span> — tap it below to start.</p>
     )}
@@ -1289,20 +1286,37 @@ const ClassPickerView = React.memo(({ classList, highlightClassId, onSelectClass
     ) : (
       <div className="space-y-3">
         {classList.map(c => {
-          const completedCount = studentCompletions?.[c]?.size || 0;
+          const info = classPickerInfo?.[c];
+          const completedCount = info?.completedCount || 0;
+          const lessonCount = info?.lessonCount || 0;
+          const myRank = info?.myRank || 0;
+          const allDone = lessonCount > 0 && completedCount >= lessonCount;
           const isHighlight = c === highlightClassId;
           return (
             <button
               key={c}
               onClick={() => onSelectClass(c)}
-              className={`w-full p-4 rounded-xl border-2 text-left font-bold text-lg transition-all flex items-center justify-between ${isHighlight ? 'bg-blue-100 border-blue-500 text-blue-800 shadow-lg scale-[1.02]' : 'bg-white border-gray-200 text-gray-700 hover:border-blue-300'}`}
+              className={`w-full p-4 rounded-xl border-2 text-left font-bold text-lg transition-all ${isHighlight ? 'bg-blue-100 border-blue-500 text-blue-800 shadow-lg scale-[1.02]' : 'bg-white border-gray-200 text-gray-700 hover:border-blue-300'}`}
             >
-              <span>{isHighlight ? '⭐ ' : ''}{c}</span>
-              {completedCount > 0 ? (
-                <span className="text-sm font-semibold text-green-600 bg-green-50 border border-green-200 px-2 py-1 rounded-full">
-                  ✅ {completedCount} completed
-                </span>
-              ) : null}
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span>{isHighlight ? '⭐ ' : ''}{c}</span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {myRank > 0 && (
+                    <span className="text-xs font-bold text-yellow-700 bg-yellow-100 border border-yellow-300 px-2 py-0.5 rounded-full">
+                      🏆 Rank #{myRank}
+                    </span>
+                  )}
+                  {allDone ? (
+                    <span className="text-xs font-bold text-green-700 bg-green-100 border border-green-300 px-2 py-0.5 rounded-full">
+                      ✅ all completed
+                    </span>
+                  ) : completedCount > 0 ? (
+                    <span className="text-xs font-bold text-blue-700 bg-blue-100 border border-blue-300 px-2 py-0.5 rounded-full">
+                      {completedCount}{lessonCount > 0 ? ` / ${lessonCount}` : ''} completed
+                    </span>
+                  ) : null}
+                </div>
+              </div>
             </button>
           );
         })}
@@ -1516,6 +1530,8 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
   const [selectedAgeLevel, setSelectedAgeLevel] = useState(null); 
   const [classPickerList, setClassPickerList] = useState([]);
   const [classPickerLoading, setClassPickerLoading] = useState(false);
+  // Per-class: { classId: { lessonCount, myRank, completedCount } }
+  const [classPickerInfo, setClassPickerInfo] = useState({});
   const lastHandledEntryRequestRef = useRef(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [currentQuizScore, setCurrentQuizScore] = useState(0);
@@ -2127,11 +2143,42 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
     setClassPickerLoading(true);
     const highlightClassId = entryRequest?.classId || null;
     getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'classes'))
-      .then(snap => {
+      .then(async snap => {
         let ids = snap.docs.map(d => d.id).sort();
-        // Make sure the teacher-specified class is always in the list
         if (highlightClassId && !ids.includes(highlightClassId)) ids = [highlightClassId, ...ids];
         setClassPickerList(ids);
+
+        // Load per-class lesson counts and student rank (parallel queries)
+        const infoMap = {};
+        await Promise.all(ids.map(async cId => {
+          try {
+            // lesson count from class doc
+            const classDoc = snap.docs.find(d => d.id === cId);
+            const lessonCount = classDoc ? (classDoc.data().lessons || []).length : 0;
+            // student's completions for this class
+            const myCompletions = new Set(
+              allMyScoresGlobal.filter(s => s.classId === cId).map(s => s.lessonId)
+            );
+            const completedCount = myCompletions.size;
+            // per-class rank: count distinct lessonIds per student name in scores
+            const scoresSnap = await getDocs(query(
+              collection(db,'artifacts',appId,'public','data','scores'),
+              where('classId','==',cId)
+            ));
+            const byName = {};
+            scoresSnap.docs.forEach(d => {
+              const n = d.data().studentName; const l = d.data().lessonId;
+              if(n&&l){ if(!byName[n])byName[n]=new Set(); byName[n].add(l); }
+            });
+            const ranked = Object.entries(byName).sort((a,b)=>b[1].size-a[1].size);
+            const myIdx = ranked.findIndex(([n])=> n===userName || (allMyScoresGlobal.some(s=>s.studentName===n&&s.classId===cId)&&allMyScoresGlobal[0]?.studentName===n));
+            // Better: find by studentName matching userName
+            const myRankIdx = ranked.findIndex(([n]) => n === userName);
+            const myRank = myRankIdx >= 0 ? myRankIdx + 1 : 0;
+            infoMap[cId] = { lessonCount, completedCount, myRank };
+          } catch(e) { console.error('class info error:', cId, e); }
+        }));
+        setClassPickerInfo(infoMap);
       })
       .catch(err => {
         console.error('Error loading class list:', err);
@@ -2329,16 +2376,7 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
       case 'teacherLogin': return <TeacherLoginView targetClassId={targetClassId} setTargetClassId={setTargetClassId} handleTeacherLogin={handleTeacherLogin} handleSetView={handleSetView} />;
       case 'studentLogin': return <StudentLoginView targetClassId={targetClassId} setTargetClassId={setTargetClassId} userName={userName} setUserName={setUserName} studentAgeLevel={studentAgeLevel} setStudentAgeLevel={setStudentAgeLevel} handleStudentLogin={handleStudentLogin} handleSetView={handleSetView} />;
       case 'ageLevelPicker': return <AgeLevelPickerView studentAgeLevel={studentAgeLevel} setStudentAgeLevel={setStudentAgeLevel} onContinue={handleAgeLevelContinue} />;
-      case 'classPicker': {
-        // Build per-class completion map from allMyScoresGlobal (already loaded)
-        const perClassCompletions = {};
-        allMyScoresGlobal.forEach(s => {
-          if (!perClassCompletions[s.classId]) perClassCompletions[s.classId] = new Set();
-          perClassCompletions[s.classId].add(s.lessonId);
-        });
-        const globalRank = globalLeaderboardScores.findIndex(s => s.studentName === userName) + 1;
-        return <ClassPickerView classList={classPickerList} highlightClassId={entryRequest?.classId} onSelectClass={handleSelectClassFromPicker} loading={classPickerLoading} studentCompletions={perClassCompletions} myGlobalRank={globalRank > 0 ? globalRank : 0} />;
-      }
+      case 'classPicker': return <ClassPickerView classList={classPickerList} highlightClassId={entryRequest?.classId} onSelectClass={handleSelectClassFromPicker} loading={classPickerLoading} classPickerInfo={classPickerInfo} />;
       case 'studentWaiting': return <StudentWaitingView handleSetView={handleSetView} userName={userName} isRejected={isRejected} />;
       case 'teacherDashboard':
         if (!classData) return <ClassCreateView classId={classId} handleTeacherCreateClass={handleTeacherCreateClass} isLoading={isLoading} handleSetView={handleSetView} />;
