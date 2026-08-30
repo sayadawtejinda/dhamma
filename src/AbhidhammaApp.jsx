@@ -106,7 +106,7 @@ const QuizModule = ({ classId,lessonId,lessonTitle,userId,userName,ageGroup,quiz
           if(!prev.exists()||prev.data().score<fs){
             await setDoc(sRef,{classId,lessonId,studentName:userName,name:userName,score:fs,group:ageGroup,userId,timestamp:serverTimestamp()});
           }
-          await addDoc(abhiActivityRef(),{type:'quiz_completed',studentName:userName,lessonTitle,group:ageGroup,timestamp:serverTimestamp()});
+          await addDoc(abhiActivityRef(),{type:'quiz_completed',classId,studentName:userName,lessonTitle,group:ageGroup,timestamp:serverTimestamp()});
         }catch(e){console.error(e);}
       }
     },1500);
@@ -128,9 +128,9 @@ const QuizModule = ({ classId,lessonId,lessonTitle,userId,userName,ageGroup,quiz
 };
 
 // ─── NotificationBell ─────────────────────────────────────────────────────────
-const NotificationBell = ({ userId }) => {
+const NotificationBell = ({ userId, classId }) => {
   const [n,setN]=useState([]);const [open,setOpen]=useState(false);const [lr,setLr]=useState(()=>parseInt(localStorage.getItem(`abhidhamma_notif_${userId}`))||0);
-  useEffect(()=>{if(!db||!userId)return;const q=query(abhiActivityRef(),orderBy('timestamp','desc'),limit(15));return onSnapshot(q,snap=>setN(snap.docs.map(d=>({id:d.id,...d.data()}))));},[userId]);
+  useEffect(()=>{if(!db||!userId||!classId)return;const q=query(abhiActivityRef(),orderBy('timestamp','desc'),limit(50));return onSnapshot(q,snap=>setN(snap.docs.map(d=>({id:d.id,...d.data()})).filter(x=>x.classId===classId).slice(0,15)));},[userId,classId]);
   const uc=n.filter(x=>{const ts=x.timestamp?.toMillis?x.timestamp.toMillis():(x.timestamp?.seconds*1000)||0;return ts>lr;}).length;
   const toggle=()=>{if(!open){const now=Date.now();setLr(now);localStorage.setItem(`abhidhamma_notif_${userId}`,now);}setOpen(!open);};
   return(
@@ -962,7 +962,12 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
           await setDoc(rRef,{...rData,classId:tgt,studentName:sName,isOnline:false},{merge:true});
         }
         // Scores + Activity
-        for(const s of(data.scores||[])){const{id,timestamp,...r}=s;await setDoc(doc(abhiScoresRef(),id||`s${Date.now()}`),{...r,classId:tgt,timestamp:toDate(timestamp)});}
+        // Restore scores — handle 'scores' and 'globalScores' (old AbhidhammaApp5) — tag with tgt classId
+        for(const s of[...(data.scores||[]),...(data.globalScores||[])]){
+          const{id,timestamp,...r}=s;
+          const docId=id||`${r.userId||'u'}_${r.lessonId||Date.now()}`;
+          await setDoc(doc(abhiScoresRef(),docId),{...r,classId:tgt,timestamp:toDate(timestamp)});
+        }
         for(const a of(data.activityFeed||[])){const{id,timestamp,...r}=a;await setDoc(doc(abhiActivityRef(),id||`a${Date.now()}`),{...r,timestamp:toDate(timestamp)});}
         // Quiz results
         for(const[key,rList]of Object.entries(data.quizResults||{})){const parts=key.split('_');const g=parts.pop();const lId=parts.join('_');for(const r of rList){const{id,timestamp,...rest}=r;await setDoc(doc(abhiResultsRef(tgt,lId,g),id||`r${Date.now()}`),{...rest,timestamp:toDate(timestamp)});}}
@@ -1012,7 +1017,7 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
                 <Trophy className="w-5 h-5"/>
               </button>
             )}
-            {classId&&<NotificationBell userId={userId}/>}
+            {classId&&<NotificationBell userId={userId} classId={classId}/>}
           </div>
         </header>
 
@@ -1052,6 +1057,7 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
                 </form>
               </div>
             )}
+            {classId&&<button onClick={()=>{setClassId('');setLessons([]);setClassData(null);}} className="text-sm text-amber-600 hover:text-amber-800 font-semibold flex items-center gap-1 mb-2"><ChevronLeft className="w-4 h-4"/>Change Class</button>}
             {classId&&(<div className="space-y-4">{lessons.length===0&&<p className="text-center text-gray-500 py-6">No lessons in <strong>{classId}</strong> yet. Import or add a lesson above.</p>}{lessons.map(l=><AbhiLessonItem key={l.id} lesson={l} classId={classId} isTeacher userId={userId} onEdit={lesson=>{setEditingLesson(lesson);setNewTitle(lesson.title);setNewContent(lesson.burmeseContent);setNewImgBase(lesson.imageBaseUrl||DEFAULT_IMG_BASE);window.scrollTo({top:0,behavior:'smooth'});}} onGenerateVariants={handleGenerateVariants} classImageBase={classImageBase} onTakeQuiz={()=>{}} isGenerating={genId===l.id} isOpen={openLessonId===l.id} onToggle={()=>setOpenLessonId(openLessonId===l.id?null:l.id)}/>)}</div>)}
           </div>
         )}
@@ -1059,8 +1065,21 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
         {/* ── STUDENT VIEW ── */}
         {role==='Student'&&(
           <div>
-            {/* Step 1: No age group yet → show picker (fullscreen) */}
-            {!studentProfile&&(
+            {/* Teacher in Student View: bypass picker, show lessons directly */}
+            {isTeacher && !classId && (
+              <div className="p-6 max-w-lg mx-auto mt-10">
+                <h2 className="text-3xl font-bold text-amber-700 mb-2 text-center">📚 Choose Class to Preview</h2>
+                <p className="text-center text-amber-600 text-sm mb-6">{AGE_GROUPS[teacherPreviewGroup]?.label} preview</p>
+                {allClasses.length===0?<p className="text-center text-gray-500 italic">No classes yet.</p>
+                :<div className="space-y-3">{allClasses.map(c=>(
+                  <button key={c.id} onClick={()=>enterClass(c.id)} className="w-full p-4 rounded-xl border-2 text-left font-bold text-lg bg-white border-gray-200 text-gray-700 hover:border-amber-300 hover:bg-amber-50 transition-all flex justify-between items-center">
+                    <span>{c.displayName||c.id}</span><span className="text-xs text-gray-400">{c.id}</span>
+                  </button>
+                ))}</div>}
+              </div>
+            )}
+            {/* Step 1: Real student — No age group yet → show picker (fullscreen) */}
+            {!isTeacher && !studentProfile&&(
               <AbhiAgeGroupPicker onComplete={grp => {
                 const label = AGE_GROUPS[grp]?.label?.split(' ')[0] || 'Student';
                 const p = { group: grp, status: 'approved', name: label };
