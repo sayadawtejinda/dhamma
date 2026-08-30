@@ -397,7 +397,7 @@ const AbhiLeaderboardModal = ({ classId, studentName, userId, onClose }) => {
       const byStudent={};
       snap.docs.forEach(d=>{
         const dt=d.data();
-        if(dt.classId&&dt.classId!==classId)return; // client-side filter
+        if(dt.classId!==classId)return; // strict filter — must match exact class
         const sn=dt.studentName||dt.name||'?';
         if(!byStudent[sn])byStudent[sn]={name:sn,lessons:new Set(),totalScore:0,userId:dt.userId};
         byStudent[sn].lessons.add(dt.lessonId);
@@ -563,8 +563,16 @@ const AbhiLessonItem = ({ lesson, classId, isTeacher, studentAgeGroup, studentNa
   // Leaderboard
   useEffect(()=>{
     if(!showLb||!classId||!lesson.id)return;
-    getDocs(query(abhiScoresRef(),where('classId','==',classId),where('lessonId','==',lesson.id)))
-      .then(snap=>{const s={};snap.docs.forEach(d=>{const dt=d.data();if(!s[dt.userId]||dt.score>s[dt.userId].score)s[dt.userId]=dt;});setLb(Object.values(s).sort((a,b)=>b.score-a.score));})
+    getDocs(abhiScoresRef())
+      .then(snap=>{
+        const s={};
+        snap.docs.forEach(d=>{
+          const dt=d.data();
+          if(dt.classId!==classId||dt.lessonId!==lesson.id)return;
+          if(!s[dt.userId]||dt.score>s[dt.userId].score)s[dt.userId]=dt;
+        });
+        setLb(Object.values(s).sort((a,b)=>b.score-a.score));
+      })
       .catch(e=>console.error('LB:',e));
   },[showLb,classId,lesson.id]);
   
@@ -659,12 +667,12 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
   useEffect(()=>{ const u=onAuthStateChanged(auth,usr=>{setUserId(usr?usr.uid:null);setAuthReady(true);}); return()=>u(); },[]);
   useEffect(()=>{ if(localStorage.getItem('abhidhamma_isTeacher')==='true'){setIsTeacher(true);setRole('Teacher');} },[]);
 
-  // Restore saved age group profile on load
+  // Restore saved age group profile on load (skip if teacher)
   useEffect(()=>{
-    if (!userId || entryRequest?.studentName) return;
+    if (!userId || entryRequest?.studentName || isTeacher) return;
     const saved = localStorage.getItem(`abhidhamma_profile_${userId}`);
     if (saved) try { setStudentProfile(JSON.parse(saved)); } catch(e) {}
-  }, [userId]);
+  }, [userId, isTeacher]);
 
   useLayoutEffect(()=>{
     if(!entryRequest||!authReady)return;
@@ -806,9 +814,9 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
     showMsg(`✅ Linked "${oldName}" → "${newName}". Records renamed.`);
   };
 
-  // Ping roster every 60s so teacher sees who is online (works for both entry paths)
+  // Ping roster every 60s — skip if teacher mode
   useEffect(()=>{
-    if(!studentProfile||!classId||studentProfile.status!=='approved') return;
+    if(!studentProfile||!classId||studentProfile.status!=='approved'||isTeacher) return;
     const name=studentProfile.name;
     const ping=async()=>{
       try{
@@ -979,7 +987,8 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
       {showWelcome&&<AbhiTeacherLogin onComplete={()=>{setIsTeacher(true);setRole('Teacher');localStorage.setItem('abhidhamma_isTeacher','true');setShowWelcome(false);}} onClose={()=>setShowWelcome(false)}/>}
       {showLeaderboard&&<AbhiLeaderboardModal classId={classId} studentName={studentProfile?.name} userId={userId} onClose={()=>setShowLeaderboard(false)}/>}
       {/* Floating stats bar — visible to students */}
-      {role==='Student'&&studentProfile&&(totalLessons>0||globalRank>0)&&(
+      {/* FloatingStats only when inside a class */}
+      {role==='Student'&&studentProfile&&classId&&(totalLessons>0||globalRank>0)&&(
         <AbhiFloatingStats rank={globalRank} totalLessons={totalLessons}/>
       )}
       {activeQuizId&&activeQuizData&&<QuizModule classId={classId} lessonId={activeQuizId} lessonTitle={lessons.find(l=>l.id===activeQuizId)?.title||''} userId={userId} userName={studentProfile?.name||'Student'} ageGroup={studentProfile?.group} quizData={activeQuizData} onClose={()=>{setActiveQuizId(null);setActiveQuizData(null);}}/>}
@@ -997,12 +1006,13 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
           </div>
           <div className="flex items-center gap-3">
             {classId&&<span className="text-gray-400 text-sm font-semibold">· {classId}</span>}
-            {role==='Student'&&studentProfile&&(
+            {/* Trophy + Notification only when inside a class */}
+            {classId&&role==='Student'&&studentProfile&&(
               <button onClick={()=>setShowLeaderboard(true)} className="p-2 bg-gray-700 hover:bg-gray-600 rounded-full text-yellow-400 shadow-lg" title="Champions Board">
                 <Trophy className="w-5 h-5"/>
               </button>
             )}
-            <NotificationBell userId={userId}/>
+            {classId&&<NotificationBell userId={userId}/>}
           </div>
         </header>
 
