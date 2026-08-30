@@ -106,7 +106,7 @@ const QuizModule = ({ classId,lessonId,lessonTitle,userId,userName,ageGroup,quiz
           if(!prev.exists()||prev.data().score<fs){
             await setDoc(sRef,{classId,lessonId,studentName:userName,name:userName,score:fs,group:ageGroup,userId,timestamp:serverTimestamp()});
           }
-          await addDoc(abhiActivityRef(),{type:'quiz_completed',classId,studentName:userName,lessonTitle,group:ageGroup,timestamp:serverTimestamp()});
+          await addDoc(abhiActivityRef(),{type:'quiz_completed',studentName:userName,lessonTitle,group:ageGroup,timestamp:serverTimestamp()});
         }catch(e){console.error(e);}
       }
     },1500);
@@ -128,9 +128,9 @@ const QuizModule = ({ classId,lessonId,lessonTitle,userId,userName,ageGroup,quiz
 };
 
 // ─── NotificationBell ─────────────────────────────────────────────────────────
-const NotificationBell = ({ userId, classId }) => {
+const NotificationBell = ({ userId }) => {
   const [n,setN]=useState([]);const [open,setOpen]=useState(false);const [lr,setLr]=useState(()=>parseInt(localStorage.getItem(`abhidhamma_notif_${userId}`))||0);
-  useEffect(()=>{if(!db||!userId||!classId)return;const q=query(abhiActivityRef(),orderBy('timestamp','desc'),limit(50));return onSnapshot(q,snap=>setN(snap.docs.map(d=>({id:d.id,...d.data()})).filter(x=>x.classId===classId).slice(0,15)));},[userId,classId]);
+  useEffect(()=>{if(!db||!userId)return;const q=query(abhiActivityRef(),orderBy('timestamp','desc'),limit(15));return onSnapshot(q,snap=>setN(snap.docs.map(d=>({id:d.id,...d.data()}))));},[userId]);
   const uc=n.filter(x=>{const ts=x.timestamp?.toMillis?x.timestamp.toMillis():(x.timestamp?.seconds*1000)||0;return ts>lr;}).length;
   const toggle=()=>{if(!open){const now=Date.now();setLr(now);localStorage.setItem(`abhidhamma_notif_${userId}`,now);}setOpen(!open);};
   return(
@@ -1017,7 +1017,7 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
                 <Trophy className="w-5 h-5"/>
               </button>
             )}
-            {classId&&<NotificationBell userId={userId} classId={classId}/>}
+            {classId&&<NotificationBell userId={userId}/>}
           </div>
         </header>
 
@@ -1029,15 +1029,40 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
             {classId&&<AbhiClassRoster userId={userId} classId={classId} onLink={handleLinkStudentToTutoring}/>}
             {classId&&(
               <div className="bg-gray-800 p-6 rounded-xl shadow-xl border border-gray-700">
-                {/* Import/Export bar */}
-                <div className="flex flex-wrap gap-2 mb-4 p-3 bg-gray-900 rounded-lg border border-gray-600">
-                  <div className="flex items-center gap-2 flex-1 min-w-[200px]"><span className="text-gray-400 text-xs whitespace-nowrap">Class ID for import:</span><input value={importClassId} onChange={e=>setImportClassId(e.target.value)} className="flex-1 bg-transparent text-white text-xs focus:outline-none border-b border-gray-600 px-1 focus:border-amber-400"/></div>
-                  <div className="flex flex-wrap gap-1">
-                    <button onClick={handleExportLessonsOnly} disabled={loading} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1"><Download className="w-3 h-3"/>📚 Lessons</button>
-                    <button onClick={()=>fileLessonsRef.current?.click()} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1"><Upload className="w-3 h-3"/>📚 Import Lessons</button>
-                    <button onClick={handleExportFull} disabled={loading} className="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1"><Download className="w-3 h-3"/>📦 Full Backup</button>
-                    <button onClick={()=>fileRef.current?.click()} className="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1"><Upload className="w-3 h-3"/>📦 Restore All</button>
+                {/* Import/Export bar — Import target class shown prominently */}
+                <div className="mb-4 p-3 bg-gray-900 rounded-lg border border-amber-600/30 space-y-3">
+                  {/* Import target class input */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-amber-400 text-xs font-bold whitespace-nowrap shrink-0">📥 Import → Class ID:</span>
+                    <input value={importClassId} onChange={e=>setImportClassId(e.target.value.toUpperCase())}
+                      placeholder="e.g. PARAMI"
+                      className="flex-1 bg-gray-800 text-amber-200 text-sm font-mono font-black px-3 py-1.5 rounded border border-amber-500/40 focus:outline-none focus:border-amber-400 uppercase"
+                      title="All imported data goes to this class ID"/>
+                    {importClassId.trim()&&<span className="text-green-400 text-xs font-bold whitespace-nowrap">Will import to: {importClassId.trim()}</span>}
                   </div>
+                  {/* Import buttons */}
+                  <div className="flex flex-wrap gap-2">
+                    <button onClick={()=>fileLessonsRef.current?.click()} disabled={!importClassId.trim()||loading}
+                      className="bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1"
+                      title="Import lessons only (no student data)">
+                      <Upload className="w-3 h-3"/>📚 Import Lessons
+                    </button>
+                    <button onClick={()=>fileRef.current?.click()} disabled={!importClassId.trim()||loading}
+                      className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1"
+                      title="Restore full backup including student records">
+                      <Upload className="w-3 h-3"/>📦 Restore All
+                    </button>
+                    <span className="text-gray-600 self-center">|</span>
+                    <button onClick={handleExportLessonsOnly} disabled={loading}
+                      className="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1">
+                      <Download className="w-3 h-3"/>📚 Export Lessons
+                    </button>
+                    <button onClick={handleExportFull} disabled={loading}
+                      className="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1">
+                      <Download className="w-3 h-3"/>📦 Full Backup
+                    </button>
+                  </div>
+                  {!importClassId.trim()&&<p className="text-amber-500/70 text-xs">⚠ Enter a Class ID above before importing</p>}
                 </div>
                 <div className="flex items-center gap-2 mb-2 p-2 bg-gray-900 rounded border border-amber-600/40">
                   <span className="text-amber-400 text-xs ml-1 whitespace-nowrap font-semibold">🖼 Class Default Image URL:</span>
