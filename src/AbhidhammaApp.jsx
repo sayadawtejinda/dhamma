@@ -142,43 +142,103 @@ const NotificationBell = ({ userId }) => {
 
 // ─── AbhiClassRoster ──────────────────────────────────────────────────────────
 const AbhiClassRoster = ({ userId, classId, onLink }) => {
-  const [students,setStudents]=useState([]);const [open,setOpen]=useState(true);const [now,setNow]=useState(Date.now());const [aa,setAa]=useState(false);
-  useEffect(()=>{const i=setInterval(()=>setNow(Date.now()),10000);return()=>clearInterval(i);},[]);
-  useEffect(()=>{if(!classId)return;const q=query(abhiRosterRef(),where('classId','==',classId));return onSnapshot(q,snap=>{const n=Date.now();setStudents(snap.docs.map(d=>{const dt=d.data(),lp=dt.lastPing;if(dt.isOnline&&lp){const pm=lp.toMillis?lp.toMillis():(lp.seconds*1000);if((n-pm)/60000>2)return{id:d.id,...dt,isOnline:false};}return{id:d.id,...dt};}));});},[classId]);
-  useEffect(()=>{if(!classId||!db)return;return onSnapshot(abhiClassDocRef(classId),snap=>{if(snap.exists())setAa(snap.data().autoApprove||false);});},[classId]);
+  const [students,setStudents]=useState([]);
+  const [aa,setAa]=useState(false);
+  const [now,setNow]=useState(Date.now());
+  const [open,setOpen]=useState(true);
+
+  useEffect(()=>{ const i=setInterval(()=>setNow(Date.now()),10000); return()=>clearInterval(i); },[]);
+
+  useEffect(()=>{
+    if(!classId)return;
+    const q=query(abhiRosterRef(),where('classId','==',classId));
+    return onSnapshot(q,snap=>{
+      const nowMs=Date.now();
+      setStudents(snap.docs.map(d=>{
+        const dt=d.data();const lp=dt.lastPing;
+        if(dt.isOnline&&lp){const ms=lp.toMillis?lp.toMillis():(lp.seconds*1000);if((nowMs-ms)/60000>2)return{id:d.id,...dt,isOnline:false};}
+        return{id:d.id,...dt};
+      }));
+    });
+  },[classId]);
+
+  useEffect(()=>{
+    if(!classId)return;
+    return onSnapshot(abhiClassDocRef(classId),snap=>{ if(snap.exists())setAa(snap.data().autoApprove||false); });
+  },[classId]);
+
+  // Auto-approve pending when autoApprove is on
+  useEffect(()=>{ if(aa) students.filter(s=>s.status==='pending').forEach(s=>approveStu(s.id,s.studentName)); },[students,aa]);
+
+  const approveStu=async(docId,name)=>{
+    const ref=doc(db,P(`classRoster/${docId}`));const snap=await getDoc(ref);if(!snap.exists())return;
+    const dt=snap.data();let num=dt.studentNumber;
+    if(!num){const max=students.filter(s=>s.status==='approved').reduce((m,s)=>Math.max(m,s.studentNumber||0),0);num=max+1;}
+    await updateDoc(ref,{status:'approved',name:name||dt.name,pendingName:null,studentNumber:num});
+  };
+  const removeStu=async(e,id)=>{e.stopPropagation();if(window.confirm('Remove this student?'))try{await deleteDoc(doc(db,P(`classRoster/${id}`)));}catch(err){console.error(err);}};
   const toggleAA=async e=>{e.stopPropagation();if(!classId)return;await updateDoc(abhiClassDocRef(classId),{autoApprove:!aa});};
-  const approve=async(docId,name)=>{const ref=doc(db,P(`classRoster/${docId}`));const snap=await getDoc(ref);if(!snap.exists())return;const dt=snap.data();let num=dt.studentNumber;if(!num){const max=students.filter(s=>s.status==='approved').reduce((m,s)=>Math.max(m,s.studentNumber||0),0);num=max+1;}await updateDoc(ref,{status:'approved',name:name||dt.name,pendingName:null,studentNumber:num});};
-  useEffect(()=>{if(aa)students.filter(s=>s.status==='pending').forEach(s=>approve(s.id,s.pendingName||s.name));},[students,aa]);
-  const reject=id=>updateDoc(doc(db,P(`classRoster/${id}`)),{status:'rejected',pendingName:null});
-  const remove=async(e,id)=>{e.stopPropagation();try{await deleteDoc(doc(db,P(`classRoster/${id}`)));}catch(err){console.error(err);}};
+
+  const approved=students.filter(s=>s.status==='approved').sort((a,b)=>(a.studentNumber||0)-(b.studentNumber||0));
+  const pending=students.filter(s=>s.status==='pending');
+
   if(!classId)return null;
-  const pending=students.filter(s=>s.status==='pending');const online=students.filter(s=>s.status==='approved'&&s.isOnline).sort((a,b)=>(a.studentNumber||0)-(b.studentNumber||0));const offline=students.filter(s=>s.status==='approved'&&!s.isOnline).sort((a,b)=>(a.studentNumber||0)-(b.studentNumber||0)).map(s=>{let w=false;const ct=s.lastSeen||s.lastPing;if(ct){const ms=ct.toMillis?ct.toMillis():(ct.seconds*1000);const d=(now-ms)/60000;if(d>=3&&d<=8)w=true;}return{...s,isWarning:w};});
   return(
     <div className="bg-gray-800 rounded-xl shadow-xl border border-gray-700 mb-6 overflow-hidden">
-      <div onClick={()=>setOpen(!open)} className="p-4 border-b border-gray-700 cursor-pointer flex flex-wrap gap-3 justify-between items-center hover:bg-gray-700 transition">
-        <div className="flex items-center gap-4"><h3 className="font-bold text-white flex items-center gap-2"><Users className="w-5 h-5 text-indigo-400"/>Roster: {classId}</h3><button onClick={toggleAA} className={`flex items-center gap-1 text-xs px-3 py-1 rounded-full font-bold ${aa?'bg-green-500/20 text-green-400 border border-green-500/50':'bg-gray-800 text-gray-400 border border-gray-600'}`}>{aa?<ToggleRight className="w-4 h-4"/>:<ToggleLeft className="w-4 h-4"/>}Auto-Approve</button></div>
-        <div className="flex items-center gap-4 text-sm font-semibold"><span className="text-yellow-400">{pending.length} Pending</span><span className="text-green-400">{online.length} Online</span><span className="text-gray-400">{online.length+offline.length} Total</span>{open?<ChevronDown className="w-5 h-5 text-gray-400"/>:<ChevronLeft className="w-5 h-5 text-gray-400"/>}</div>
+      <div onClick={()=>setOpen(!open)} className="p-4 border-b border-gray-700 cursor-pointer flex flex-wrap gap-3 justify-between items-center hover:bg-gray-700/50 transition">
+        <div className="flex items-center gap-3 flex-wrap">
+          <h3 className="font-bold text-white flex items-center gap-2"><Users className="w-5 h-5 text-indigo-400"/>Roster: {classId}</h3>
+          <button onClick={toggleAA} className={`flex items-center gap-1 text-xs px-3 py-1 rounded-full font-bold ${aa?'bg-green-500/20 text-green-400 border border-green-500/50':'bg-gray-800 text-gray-400 border border-gray-600'}`} title="Auto-approve new students">
+            {aa?<ToggleRight className="w-4 h-4"/>:<ToggleLeft className="w-4 h-4"/>}Auto-Approve
+          </button>
+        </div>
+        <div className="flex items-center gap-3 text-sm font-semibold">
+          {pending.length>0&&<span className="text-yellow-400 animate-pulse">{pending.length} Pending</span>}
+          <span className="text-green-400">{approved.filter(s=>s.isOnline).length} Online</span>
+          <span className="text-gray-400">{approved.length} Total</span>
+          {open?<ChevronDown className="w-5 h-5 text-gray-400"/>:<ChevronRight className="w-5 h-5 text-gray-400"/>}
+        </div>
       </div>
-      {open&&<div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-900/50">
-        <div className="space-y-3">
-          <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider">Pending {pending.length>0&&<span className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse inline-block ml-1"/>}</h4>
-          {pending.length===0&&<p className="text-gray-500 text-sm italic">None.</p>}
-          {pending.map(s=><div key={s.id} className="bg-gray-800 p-3 rounded-lg border border-yellow-600/30 flex justify-between items-center"><div><p className="font-bold text-white">{s.pendingName||s.name}</p>{s.pendingName&&<p className="text-xs text-yellow-400">Previous: {s.name}</p>}</div><div className="flex gap-2"><button onClick={()=>approve(s.id,s.pendingName||s.name)} className="p-2 bg-green-600 rounded text-white"><UserCheck className="w-4 h-4"/></button><button onClick={()=>reject(s.id)} className="p-2 bg-red-600 rounded text-white"><UserX className="w-4 h-4"/></button></div></div>)}
-        </div>
-        <div className="space-y-4">
-          <div><h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2 border-b border-gray-700 pb-1">Online ({online.length})</h4><div className="flex flex-wrap gap-2">{online.length===0&&<span className="text-gray-600 text-sm italic">Nobody.</span>}{online.map(s=><div key={s.id} className="bg-indigo-900/60 border border-indigo-500/50 px-3 py-1.5 rounded-xl flex items-center gap-2 text-sm"><Circle className="w-2 h-2 fill-green-500 text-green-500"/><span className="font-bold text-indigo-300">#{s.studentNumber}</span><span className="text-white">{s.name}</span><button onClick={e=>remove(e,s.id)} className="text-gray-500 hover:text-red-400"><Trash2 className="w-3 h-3"/></button></div>)}</div></div>
-          <div><h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2 border-b border-gray-700 pb-1">Offline ({offline.length})</h4><div className="flex flex-wrap gap-2">{offline.length===0&&<span className="text-gray-600 text-sm italic">None.</span>}{offline.map(s=><div key={s.id} className={`border px-3 py-1.5 rounded-full flex items-center gap-2 text-sm ${s.isWarning?'bg-red-950/80 border-red-500':'bg-gray-800 border-gray-600 opacity-60 hover:opacity-100'}`}><Circle className={`w-2 h-2 flex-shrink-0 ${s.isWarning?'fill-red-500 text-red-500':'fill-gray-500 text-gray-500'}`}/><span className={`font-bold ${s.isWarning?'text-red-300':'text-gray-400'}`}>#{s.studentNumber}</span><span className={s.isWarning?'text-white':'text-gray-300'}>{s.name}</span><button onClick={e=>remove(e,s.id)} className="text-gray-500 hover:text-red-400"><Trash2 className="w-3 h-3"/></button></div>)}</div></div>
-        </div>
-      </div>}
-        {/* Link to Tutoring */}
-        {open&&onLink&&(
-          <div className="p-4 border-t border-gray-700 bg-gray-900/30">
-            <AbhiLinkToTutoring classId={classId} approved={students.filter(s=>s.status==='approved')} onLink={onLink}/>
+      {open&&<div className="p-4 space-y-2">
+        {/* Pending row */}
+        {pending.map(s=>(
+          <div key={s.id} className="flex items-center gap-2 p-2.5 bg-yellow-900/20 border border-yellow-600/30 rounded-lg">
+            <Circle className="w-2.5 h-2.5 fill-yellow-500 text-yellow-500 shrink-0"/>
+            <span className="flex-1 text-white text-sm font-semibold">{s.pendingName||s.studentName}</span>
+            <span className="text-xs text-yellow-400 font-bold">Pending</span>
+            <button onClick={()=>approveStu(s.id,s.pendingName||s.studentName)} className="p-1 bg-green-600 rounded text-white hover:bg-green-700" title="Approve"><UserCheck className="w-3.5 h-3.5"/></button>
+            <button onClick={e=>removeStu(e,s.id)} className="p-1 bg-red-900/50 rounded text-red-400 hover:bg-red-700 hover:text-white" title="Remove"><Trash2 className="w-3.5 h-3.5"/></button>
           </div>
-        )}
+        ))}
+        {/* Approved students — online/offline + Link to Tutoring in same row */}
+        {approved.map(s=>{
+          const lp=s.lastPing;
+          const pmins=lp?Math.floor((now-(lp.toMillis?lp.toMillis():(lp.seconds*1000)))/60000):null;
+          const isWarn=pmins!==null&&pmins>=3&&pmins<=8;
+          const onlineDot=s.isOnline?'fill-green-500 text-green-500':isWarn?'fill-orange-500 text-orange-500':'fill-gray-500 text-gray-500';
+          return(
+            <div key={s.id} className={`flex items-center gap-2 p-2.5 rounded-lg border ${s.isOnline?'bg-indigo-900/20 border-indigo-700/30':isWarn?'bg-orange-900/20 border-orange-700/30':'bg-gray-700/30 border-gray-600/30'}`}>
+              <Circle className={`w-2.5 h-2.5 shrink-0 ${onlineDot}`}/>
+              <span className="font-bold text-gray-300 text-xs w-5 shrink-0">#{s.studentNumber||'?'}</span>
+              <span className="flex-1 text-white text-sm font-semibold min-w-0 truncate">{s.studentName}</span>
+              {isWarn&&<span className="text-xs text-orange-400 font-bold whitespace-nowrap">Inactive {pmins}m</span>}
+              {/* Link to Tutoring inline */}
+              {s.linkedToTutoring
+                ? <span className="text-xs text-indigo-400 font-bold whitespace-nowrap" title="Linked to TutoringApp">🔗</span>
+                : <span className="text-xs text-gray-600 whitespace-nowrap">○</span>
+              }
+              <button onClick={e=>removeStu(e,s.id)} className="p-1 text-gray-600 hover:text-red-400 shrink-0"><Trash2 className="w-3 h-3"/></button>
+            </div>
+          );
+        })}
+        {approved.length===0&&pending.length===0&&<p className="text-gray-500 text-sm italic text-center py-4">No students yet. Students will appear here when they join.</p>}
+        {/* Link to Tutoring section below */}
+        {onLink&&approved.length>0&&<AbhiLinkToTutoring classId={classId} approved={approved} onLink={onLink}/>}
+      </div>}
     </div>
   );
 };
+
 
 // ─── Link to Tutoring Component ──────────────────────────────────────────────
 const AbhiLinkToTutoring = ({ classId, approved, onLink }) => {
@@ -714,7 +774,7 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
         const snap=await getDocs(abhiScoresRef());
         // Count distinct classId+lessonId per student
         const byStudent={};
-        snap.docs.forEach(d=>{const dt=d.data();const sn=dt.studentName||dt.name;if(!sn)return;if(!byStudent[sn])byStudent[sn]=new Set();byStudent[sn].add(`${dt.classId}_${dt.lessonId}`);});
+        snap.docs.forEach(d=>{const dt=d.data();const sn=dt.studentName||dt.name;if(!sn)return;if(dt.classId&&dt.classId!==classId)return;if(!byStudent[sn])byStudent[sn]=new Set();byStudent[sn].add(dt.lessonId||'?');});
         const sorted=Object.entries(byStudent).sort((a,b)=>b[1].size-a[1].size);
         const myIdx=sorted.findIndex(([sn])=>sn===name);
         setGlobalRank(myIdx>=0?myIdx+1:0);
@@ -734,7 +794,7 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
           // All scores for this class to compute rank
           const snap=await getDocs(query(abhiScoresRef(),where('classId','==',c.id)));
           const byStudent={};
-          snap.docs.forEach(d=>{const {studentName:sn,lessonId:li}=d.data();if(!byStudent[sn])byStudent[sn]=new Set();byStudent[sn].add(li);});
+          snap.docs.forEach(d=>{const {studentName:sn,lessonId:li,classId:ci}=d.data();if(ci&&ci!==c.id)return;if(!byStudent[sn])byStudent[sn]=new Set();byStudent[sn].add(li);});
           const ranked=Object.entries(byStudent).sort((a,b)=>b[1].size-a[1].size);
           const myIdx=ranked.findIndex(([sn])=>sn===name);
           stats[c.id]={completedCount:byStudent[name]?.size||0,rank:myIdx>=0?myIdx+1:0,totalLessons:(byStudent[name]?.size||0)};
@@ -1003,7 +1063,9 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
         <header className="mb-6 flex flex-wrap gap-4 justify-between items-center bg-gray-800 p-4 rounded-xl shadow-lg border border-gray-700">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-lg font-black text-amber-400">📚 Abhidhamma App</span>
-            {isTeacher&&(<div className="flex gap-2">
+            {isTeacher&&(<div className="flex gap-2 flex-wrap items-center">
+              {/* Change Class — always visible in teacher mode */}
+              {classId&&<button onClick={()=>{setClassId('');setLessons([]);setClassData(null);setRole('Teacher');}} className="px-3 py-2 font-bold rounded bg-amber-700 hover:bg-amber-600 text-white text-sm flex items-center gap-1"><ChevronLeft className="w-4 h-4"/>Change Class</button>}
               <button onClick={()=>setRole(r=>r==='Teacher'?'Student':'Teacher')} className={`px-4 py-2 font-bold rounded shadow-lg ${role==='Teacher'?'bg-purple-600':'bg-teal-600'}`}>{role==='Teacher'?'Student View':'Teacher View'}</button>
               {role==='Student'&&<button onClick={()=>setTeacherPreviewGroup(g=>{const ks=Object.keys(AGE_GROUPS);return ks[(ks.indexOf(g)+1)%ks.length];})} className="px-4 py-2 font-bold rounded bg-cyan-700 hover:bg-cyan-600 text-white flex items-center gap-2">{AGE_GROUPS[teacherPreviewGroup]?.icon}{AGE_GROUPS[teacherPreviewGroup]?.label?.split(' ')[0]}</button>}
             </div>)}
@@ -1082,7 +1144,6 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
                 </form>
               </div>
             )}
-            {classId&&<button onClick={()=>{setClassId('');setLessons([]);setClassData(null);}} className="text-sm text-amber-600 hover:text-amber-800 font-semibold flex items-center gap-1 mb-2"><ChevronLeft className="w-4 h-4"/>Change Class</button>}
             {classId&&(<div className="space-y-4">{lessons.length===0&&<p className="text-center text-gray-500 py-6">No lessons in <strong>{classId}</strong> yet. Import or add a lesson above.</p>}{lessons.map(l=><AbhiLessonItem key={l.id} lesson={l} classId={classId} isTeacher userId={userId} onEdit={lesson=>{setEditingLesson(lesson);setNewTitle(lesson.title);setNewContent(lesson.burmeseContent);setNewImgBase(lesson.imageBaseUrl||DEFAULT_IMG_BASE);window.scrollTo({top:0,behavior:'smooth'});}} onGenerateVariants={handleGenerateVariants} classImageBase={classImageBase} onTakeQuiz={()=>{}} isGenerating={genId===l.id} isOpen={openLessonId===l.id} onToggle={()=>setOpenLessonId(openLessonId===l.id?null:l.id)}/>)}</div>)}
           </div>
         )}
