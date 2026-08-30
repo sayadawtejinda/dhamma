@@ -695,6 +695,8 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma }) {
   // SmartStudy completion counts for the selected student (loaded when student+lesson are selected)
   const [ssStudentClassCount, setSsStudentClassCount] = useState(null);   // per-class (e.g. BUDDHA)
   const [ssStudentTotalCount, setSsStudentTotalCount] = useState(null);   // all classes combined
+  const [abhiStudentCount, setAbhiStudentCount] = useState(null);          // abhi lessons completed
+  const [abhiStudentScore, setAbhiStudentScore] = useState(null);          // abhi total score
   const [sendAbhidhammaClassId, setSendAbhidhammaClassId] = useState(''); // class chosen in Send Action for abhidhamma:// lessons
   const [abhidhammaClasses, setAbhidhammaClasses] = useState(null);   // null = not yet loaded
   const [abhidhammaLoading, setAbhidhammaLoading] = useState(false);
@@ -904,6 +906,24 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma }) {
     })();
     return () => { isMounted = false; };
   }, [selectedStudentUid, selectedBankLessonId, sendSmartStudyClassId, lessonBank, students]);
+
+  // Abhidhamma student progress for Assign Lesson section
+  useEffect(()=>{
+    setAbhiStudentCount(null);setAbhiStudentScore(null);
+    if(!sendAbhidhammaClassId||!selectedStudentUid)return;
+    const student=students.find(s=>s.id===selectedStudentUid);if(!student)return;
+    const allNames=[...new Set([student.name,...(Object.values(student?.abhidhammaNames||{}))].filter(Boolean))];
+    (async()=>{
+      let pts=0;const done=new Set();
+      for(const nm of allNames){
+        try{
+          const snap=await getDocs(query(collection(db,'artifacts','lesson-translator-app-v6','public','data','global_scores'),where('classId','==',sendAbhidhammaClassId),where('studentName','==',nm)));
+          snap.docs.forEach(d=>{pts+=(Number(d.data().score)||0);if(d.data().lessonId)done.add(d.data().lessonId);});
+        }catch(e){}
+      }
+      setAbhiStudentScore(pts);setAbhiStudentCount(done.size);
+    })();
+  },[sendAbhidhammaClassId,selectedStudentUid]);
 
   const loadAbhidhammaClasses = async () => {
     if (abhidhammaClasses !== null) return;
@@ -2295,6 +2315,26 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
             );
           })()}
 
+          {/* Abhidhamma student progress (when abhi class selected) */}
+          {(() => {
+            const selectedLesson = lessonBank.find(l => l.id === selectedBankLessonId);
+            if (!selectedStudentUid || !selectedLesson || selectedLesson.link !== 'abhidhamma://' || !sendAbhidhammaClassId) return null;
+            const student = students.find(s => s.id === selectedStudentUid);
+            if (!student) return null;
+            return (
+              <div className="mb-4 space-y-3">
+                <div className="p-4 bg-amber-50 rounded-lg border border-amber-200">
+                  <p className="text-amber-800 font-bold mb-1">Student Progress on "{sendAbhidhammaClassId}" Abhidhamma Class:</p>
+                  {abhiStudentCount===null
+                    ? <p className="text-sm text-amber-600">Loading…</p>
+                    : abhiStudentCount > 0
+                      ? <p className="text-sm text-amber-700">{student.name} completed <strong>{abhiStudentCount}</strong> lesson{abhiStudentCount!==1?'s':''} · Total: <strong>{(abhiStudentScore||0).toLocaleString()} pts</strong></p>
+                      : <p className="text-sm text-amber-600">No progress recorded yet for {sendAbhidhammaClassId}.</p>
+                  }
+                </div>
+              </div>
+            );
+          })()}
 
           {selectedStudentUid && selectedBankLessonId && sendTargetType === 'student' && (() => {
               const student = students.find(s => s.id === selectedStudentUid);
@@ -3725,6 +3765,26 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         }
       }
     }
+    // Abhidhamma: fetch score + lesson count from global_scores
+    if (activeSession.lessonLink?.startsWith('abhidhamma://')) {
+      const abhiClassId = activeSession.lessonLink.replace('abhidhamma://', '');
+      const stuName = studentProfile?.name;
+      if (stuName && abhiClassId) {
+        try {
+          const allNames = [...new Set([stuName, ...(Object.values(studentProfile?.abhidhammaNames||{}))].filter(Boolean))];
+          let totalPts=0; const doneLessons=new Set();
+          for (const nm of allNames) {
+            const snap = await getDocs(query(
+              collection(db,'artifacts','lesson-translator-app-v6','public','data','global_scores'),
+              where('classId','==',abhiClassId), where('studentName','==',nm)
+            ));
+            snap.docs.forEach(d=>{totalPts+=(Number(d.data().score)||0);if(d.data().lessonId)doneLessons.add(d.data().lessonId);});
+          }
+          if(totalPts>0) setScore(`${totalPts.toLocaleString()} pts`);
+          if(doneLessons.size>0) setCompletedUnitInput(String(doneLessons.size));
+        } catch(e) { console.error('Abhi score fetch:', e); }
+      }
+    }
   };
 
   const handleOpenRedoReport = async (session) => {
@@ -3768,6 +3828,23 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         } catch (e) {
           console.error('Error fetching SmartStudy data for redo report:', e);
         }
+      }
+    }
+    // Abhidhamma redo fetch
+    if (session.lessonLink?.startsWith('abhidhamma://')) {
+      const abhiClassId = session.lessonLink.replace('abhidhamma://','');
+      const stuName = studentProfile?.name;
+      if (stuName && abhiClassId) {
+        try {
+          const allNames=[...new Set([stuName,...(Object.values(studentProfile?.abhidhammaNames||{}))].filter(Boolean))];
+          let pts=0; const done=new Set();
+          for(const nm of allNames){
+            const snap=await getDocs(query(collection(db,'artifacts','lesson-translator-app-v6','public','data','global_scores'),where('classId','==',abhiClassId),where('studentName','==',nm)));
+            snap.docs.forEach(d=>{pts+=(Number(d.data().score)||0);if(d.data().lessonId)done.add(d.data().lessonId);});
+          }
+          if(pts>0) setScore(`${pts.toLocaleString()} pts`);
+          if(done.size>0) setCompletedUnitInput(String(done.size));
+        }catch(e){console.error('Abhi redo:',e);}
       }
     }
   };

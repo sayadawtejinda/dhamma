@@ -388,31 +388,17 @@ const AbhiFloatingStats = ({ rank, totalLessons }) => {
 
 // ─── Global & Class Leaderboard Modal ────────────────────────────────────────
 const AbhiLeaderboardModal = ({ classId, studentName, userId, onClose }) => {
-  const [tab,setTab]=useState('global');
-  const [globalData,setGlobalData]=useState(null);
   const [classData,setClassData]=useState(null);
 
   useEffect(()=>{
-    if(tab!=='global'||globalData!==null)return;
+    if(!classId||classData!==null)return;
+    // Load all scores and filter client-side (no Firestore index needed)
     getDocs(abhiScoresRef()).then(snap=>{
       const byStudent={};
       snap.docs.forEach(d=>{
-        const dt=d.data();const sn=dt.studentName||dt.name||'?';
-        if(!byStudent[sn])byStudent[sn]={name:sn,lessons:new Set(),totalScore:0,userId:dt.userId};
-        byStudent[sn].lessons.add(`${dt.classId}_${dt.lessonId}`);
-        byStudent[sn].totalScore=(byStudent[sn].totalScore||0)+(dt.score||0);
-      });
-      const ranked=Object.values(byStudent).map(s=>({...s,count:s.lessons.size})).sort((a,b)=>b.count-a.count||b.totalScore-a.totalScore);
-      setGlobalData(ranked);
-    }).catch(e=>console.error('Global LB:',e));
-  },[tab,globalData]);
-
-  useEffect(()=>{
-    if(!classId||tab!=='class'||classData!==null)return;
-    getDocs(query(abhiScoresRef(),where('classId','==',classId))).then(snap=>{
-      const byStudent={};
-      snap.docs.forEach(d=>{
-        const dt=d.data();const sn=dt.studentName||dt.name||'?';
+        const dt=d.data();
+        if(dt.classId&&dt.classId!==classId)return; // client-side filter
+        const sn=dt.studentName||dt.name||'?';
         if(!byStudent[sn])byStudent[sn]={name:sn,lessons:new Set(),totalScore:0,userId:dt.userId};
         byStudent[sn].lessons.add(dt.lessonId);
         byStudent[sn].totalScore=(byStudent[sn].totalScore||0)+(dt.score||0);
@@ -420,7 +406,7 @@ const AbhiLeaderboardModal = ({ classId, studentName, userId, onClose }) => {
       const ranked=Object.values(byStudent).map(s=>({...s,count:s.lessons.size})).sort((a,b)=>b.count-a.count||b.totalScore-a.totalScore);
       setClassData(ranked);
     }).catch(e=>console.error('Class LB:',e));
-  },[tab,classId,classData]);
+  },[classId,classData]);
 
   const renderList=(data,isGlobal)=>{
     if(!data)return<div className="flex justify-center py-8"><RotateCw className="w-8 h-8 animate-spin text-amber-400"/></div>;
@@ -452,13 +438,11 @@ const AbhiLeaderboardModal = ({ classId, studentName, userId, onClose }) => {
           <h2 className="text-xl font-black text-white flex items-center gap-2"><Trophy className="w-6 h-6 text-yellow-400"/> Champions Board</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-white"><X className="w-6 h-6"/></button>
         </div>
-        <div className="flex border-b border-gray-700">
-          <button onClick={()=>setTab('global')} className={`flex-1 py-3 text-sm font-bold ${tab==='global'?'text-amber-400 border-b-2 border-amber-400':'text-gray-400 hover:text-white'}`}>🌍 All Classes</button>
-          {classId&&<button onClick={()=>setTab('class')} className={`flex-1 py-3 text-sm font-bold ${tab==='class'?'text-teal-400 border-b-2 border-teal-400':'text-gray-400 hover:text-white'}`}>📚 {classId}</button>}
+        <div className="p-1 bg-teal-900/30 border-b border-gray-700">
+          <p className="text-center text-teal-400 text-sm font-bold py-2">📚 {classId} — Class Standings</p>
         </div>
         <div className="p-5">
-          {tab==='global'&&renderList(globalData,true)}
-          {tab==='class'&&renderList(classData,false)}
+          {renderList(classData,false)}
         </div>
       </div>
     </div>
@@ -665,7 +649,8 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
   const [openLessonId,setOpenLessonId]=useState(null);const [editingLesson,setEditingLesson]=useState(null);
   const [newTitle,setNewTitle]=useState('');const [newContent,setNewContent]=useState('');const [newImgBase,setNewImgBase]=useState(DEFAULT_IMG_BASE);
   const [importClassId,setImportClassId]=useState('');const [newClassId,setNewClassId]=useState('');
-  const [classImageBase,setClassImageBase]=useState(DEFAULT_IMG_BASE); // per-class default image URL
+  const [classImageBase,setClassImageBase]=useState(DEFAULT_IMG_BASE);
+  const [teacherPreviewGroup,setTeacherPreviewGroup]=useState('storytellers'); // teacher preview mode age group // per-class default image URL
   const [loading,setLoading]=useState(false);const [genId,setGenId]=useState(null);const [msg,setMsg]=useState('');
   const fileRef=useRef(null);const fileLessonsRef=useRef(null);const lastEntry=useRef(null);
 
@@ -1004,7 +989,10 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
         <header className="mb-6 flex flex-wrap gap-4 justify-between items-center bg-gray-800 p-4 rounded-xl shadow-lg border border-gray-700">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-lg font-black text-amber-400">📚 Abhidhamma App</span>
-            {isTeacher&&(<div className="flex gap-2"><button onClick={()=>setRole(r=>r==='Teacher'?'Student':'Teacher')} className={`px-4 py-2 font-bold rounded shadow-lg ${role==='Teacher'?'bg-purple-600':'bg-teal-600'}`}>{role==='Teacher'?'Student View':'Teacher View'}</button></div>)}
+            {isTeacher&&(<div className="flex gap-2">
+              <button onClick={()=>setRole(r=>r==='Teacher'?'Student':'Teacher')} className={`px-4 py-2 font-bold rounded shadow-lg ${role==='Teacher'?'bg-purple-600':'bg-teal-600'}`}>{role==='Teacher'?'Student View':'Teacher View'}</button>
+              {role==='Student'&&<button onClick={()=>setTeacherPreviewGroup(g=>{const ks=Object.keys(AGE_GROUPS);return ks[(ks.indexOf(g)+1)%ks.length];})} className="px-4 py-2 font-bold rounded bg-cyan-700 hover:bg-cyan-600 text-white flex items-center gap-2">{AGE_GROUPS[teacherPreviewGroup]?.icon}{AGE_GROUPS[teacherPreviewGroup]?.label?.split(' ')[0]}</button>}
+            </div>)}
             {studentProfile?.status==='approved'&&<span className="bg-gray-700 px-3 py-1 rounded text-gray-300 font-medium flex items-center gap-2"><User className="w-4 h-4"/>{studentProfile.name}</span>}
           </div>
           <div className="flex items-center gap-3">
@@ -1116,8 +1104,10 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
                 </div>
                 {lessons.length===0&&<p className="text-center text-gray-500 py-6">No lessons yet.</p>}
                 {lessons.map(l=>(
-                  <AbhiLessonItem key={l.id} lesson={l} classId={classId} isTeacher={false} userId={userId}
-                    studentAgeGroup={studentProfile.group} studentName={studentProfile.name}
+                  <AbhiLessonItem key={l.id} lesson={l} classId={classId}
+                    isTeacher={false} userId={userId}
+                    studentAgeGroup={isTeacher ? teacherPreviewGroup : studentProfile.group}
+                    studentName={isTeacher ? (AGE_GROUPS[teacherPreviewGroup]?.label||'Preview') : studentProfile.name}
                     classImageBase={classImageBase} onGenerateVariants={()=>{}} onEdit={()=>{}}
                     onTakeQuiz={(id,title,data)=>{setActiveQuizId(id);setActiveQuizData(data);}}
                     isGenerating={false} isOpen={openLessonId===l.id}
