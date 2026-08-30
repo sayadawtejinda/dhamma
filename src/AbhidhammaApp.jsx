@@ -130,7 +130,7 @@ const QuizModule = ({ classId,lessonId,lessonTitle,userId,userName,ageGroup,quiz
 // ─── NotificationBell ─────────────────────────────────────────────────────────
 const NotificationBell = ({ userId }) => {
   const [n,setN]=useState([]);const [open,setOpen]=useState(false);const [lr,setLr]=useState(()=>parseInt(localStorage.getItem(`abhidhamma_notif_${userId}`))||0);
-  useEffect(()=>{if(!db||!userId)return;const q=query(abhiActivityRef(),orderBy('timestamp','desc'),limit(15));return onSnapshot(q,snap=>setN(snap.docs.map(d=>({id:d.id,...d.data()})).filter(n=>!classId||n.classId===classId)));},[userId,classId]);
+  useEffect(()=>{if(!db||!userId)return;const q=query(abhiActivityRef(),orderBy('timestamp','desc'),limit(15));return onSnapshot(q,snap=>setN(snap.docs.map(d=>({id:d.id,...d.data()}))));},[userId]);
   const uc=n.filter(x=>{const ts=x.timestamp?.toMillis?x.timestamp.toMillis():(x.timestamp?.seconds*1000)||0;return ts>lr;}).length;
   const toggle=()=>{if(!open){const now=Date.now();setLr(now);localStorage.setItem(`abhidhamma_notif_${userId}`,now);}setOpen(!open);};
   return(
@@ -406,7 +406,7 @@ const AbhiTeacherClassPicker = ({ onSelectClass, onCreateClass }) => {
                   <button onClick={()=>{setRenaming(c.id);setRenameVal(c.displayName||c.id);}} className="text-gray-400 hover:text-amber-500 p-2" title="Rename display name">
                     <Edit2 className="w-4 h-4"/>
                   </button>
-                  <button onClick={async()=>{if(!window.confirm(`Delete class "${c.id}" + ALL lessons, roster & scores? Cannot be undone.`))return;try{const[lSnap,rSnap]=await Promise.all([getDocs(abhiLessonsRef(c.id)),getDocs(query(abhiRosterRef(),where('classId','==',c.id)))]);await Promise.all([...lSnap.docs.map(d=>deleteDoc(d.ref)),...rSnap.docs.map(d=>deleteDoc(d.ref)),deleteDoc(abhiClassDocRef(c.id))]);}catch(e){console.error(e);}}} className="text-gray-400 hover:text-red-500 p-2" title="Delete class + all contents">
+                  <button onClick={async()=>{if(!window.confirm(`Delete class "${c.id}"? This only removes the class entry, not the lessons/roster inside.`))return;try{await deleteDoc(abhiClassDocRef(c.id));}catch(e){console.error(e);}}} className="text-gray-400 hover:text-red-500 p-2" title="Delete class entry">
                     <Trash2 className="w-4 h-4"/>
                   </button>
                 </>
