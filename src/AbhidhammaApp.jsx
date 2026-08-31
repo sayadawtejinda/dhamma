@@ -577,8 +577,8 @@ const AbhiLeaderboardModal = ({ classId, studentName, userId, onClose }) => {
 };
 
 // ─── Student: age-group picker (no name, no approval) ──────────────────────
-const AbhiAgeGroupPicker = ({ onComplete }) => {
-  const [grp, setGrp] = useState(() => localStorage.getItem('abhidhamma_ageGroup') || null);
+const AbhiAgeGroupPicker = ({ onComplete, initialGroup }) => {
+  const [grp, setGrp] = useState(() => initialGroup || localStorage.getItem('abhidhamma_ageGroup') || null);
   return (
     <div className="fixed inset-0 bg-gray-900 z-[60] flex items-center justify-center p-4">
       <div className="bg-indigo-900/90 border border-indigo-500 p-8 rounded-2xl shadow-2xl max-w-md w-full text-center">
@@ -646,7 +646,27 @@ const AbhiLessonItem = ({ lesson, classId, isTeacher, studentAgeGroup, studentNa
   const [hasAsked,setHasAsked]=useState(false);
   const [hasReplied,setHasReplied]=useState(false);
   const [leaderboard,setLb]=useState([]);const [showLb,setShowLb]=useState(false);
+  const [imgUrlDraft,setImgUrlDraft]=useState(lesson.imageBaseUrl||'');
+  const [imgSaving,setImgSaving]=useState(false);
+  const [imgSaved,setImgSaved]=useState(false);
   const ref=useRef(null);
+  
+  // Keep the draft in sync with the live saved value (e.g. after a save round-trips through Firestore)
+  useEffect(()=>{ setImgUrlDraft(lesson.imageBaseUrl||''); },[lesson.imageBaseUrl]);
+
+  // Save just this lesson's image override directly — independent of the Title/Content edit form,
+  // so it can't be lost by forgetting to press "Edit" first or by an empty title/content blocking submit.
+  const saveImgUrl = async () => {
+    if(!classId||!lesson.id)return;
+    setImgSaving(true);
+    try{
+      const norm=normalizeImgBaseUrl(imgUrlDraft);
+      await updateDoc(abhiLessonDocRef(classId,lesson.id),{imageBaseUrl:norm||''});
+      setImgUrlDraft(norm||'');
+      setImgSaved(true);setTimeout(()=>setImgSaved(false),2500);
+    }catch(e){console.error('Image URL save:',e);}
+    finally{setImgSaving(false);}
+  };
   
   useEffect(()=>{if(isOpen&&ref.current){setTimeout(()=>{const y=ref.current.getBoundingClientRect().top+window.scrollY-80;window.scrollTo({top:y,behavior:'smooth'});},100);}},[isOpen]);
   
@@ -729,7 +749,20 @@ const AbhiLessonItem = ({ lesson, classId, isTeacher, studentAgeGroup, studentNa
         </div>
         <div className="p-5">
           {tab==='content'&&(isTeacher
-            ? <div className="text-white whitespace-pre-wrap leading-relaxed"><SmartContent text={lesson.burmeseContent} imageBase={imgBase}/></div>
+            ? <div className="space-y-3">
+                <div className="flex items-center gap-2 p-2 bg-gray-900 rounded border border-gray-700" onClick={e=>e.stopPropagation()}>
+                  <span className="text-gray-400 text-xs whitespace-nowrap">🖼 Image URL:</span>
+                  <input value={imgUrlDraft} onChange={e=>{setImgUrlDraft(e.target.value);setImgSaved(false);}}
+                    placeholder={classImageBase||DEFAULT_IMG_BASE}
+                    className="flex-1 bg-transparent text-white text-xs focus:outline-none border-b border-gray-600 px-1 focus:border-teal-500"/>
+                  <button onClick={saveImgUrl} disabled={imgSaving} type="button"
+                    className="text-xs font-bold px-2 py-1 bg-teal-600 hover:bg-teal-700 rounded text-white disabled:opacity-50 whitespace-nowrap">
+                    {imgSaving?'Saving…':'Save'}
+                  </button>
+                  {imgSaved&&<CheckCircle className="w-4 h-4 text-green-400 shrink-0"/>}
+                </div>
+                <div className="text-white whitespace-pre-wrap leading-relaxed"><SmartContent text={lesson.burmeseContent} imageBase={imgBase}/></div>
+              </div>
             : <div className="space-y-4">
                 <div className="text-yellow-100 whitespace-pre-wrap leading-relaxed text-lg"><SmartContent text={dc} imageBase={imgBase}/></div>
                 {qa&&(()=>{
@@ -771,9 +804,8 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
   const [role,setRole]=useState(()=>localStorage.getItem('abhidhamma_isTeacher')==='true'?'Teacher':'Student');
   const [classId,setClassId]=useState('');const [classData,setClassData]=useState(null);const [lessons,setLessons]=useState([]);const [allClasses,setAllClasses]=useState([]);
   const [studentProfile,setStudentProfile]=useState(null);const [showWelcome,setShowWelcome]=useState(false);
-  const [classStats,setClassStats]=useState({}); // classId → {completedCount, rank}
-  const [globalRank,setGlobalRank]=useState(0);     // student's global rank across all classes
-  const [totalLessons,setTotalLessons]=useState(0); // total lessons completed by student
+  const [pendingEntry,setPendingEntry]=useState(null); // {name, group, classId} known from a deep-link, before age group is confirmed
+  const [classStats,setClassStats]=useState({}); // classId → {completedCount, totalLessons, rank}
   const [showLeaderboard,setShowLeaderboard]=useState(false);
   const [activeQuizId,setActiveQuizId]=useState(null);const [activeQuizData,setActiveQuizData]=useState(null);
   const [openLessonId,setOpenLessonId]=useState(null);const [editingLesson,setEditingLesson]=useState(null);
@@ -789,12 +821,9 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
   useEffect(()=>{ const u=onAuthStateChanged(auth,usr=>{setUserId(usr?usr.uid:null);setAuthReady(true);}); return()=>u(); },[]);
   // isTeacher & role initialized from localStorage in useState lazy initializer above
 
-  // Restore saved age group profile on load (skip if teacher)
-  useEffect(()=>{
-    if (!userId || entryRequest?.studentName || isTeacher) return;
-    const saved = localStorage.getItem(`abhidhamma_profile_${userId}`);
-    if (saved) try { setStudentProfile(JSON.parse(saved)); } catch(e) {}
-  }, [userId, isTeacher]);
+  // Note: we intentionally do NOT auto-restore a cached age-group profile and skip the picker anymore —
+  // students should reconfirm their age group each time they open the app, since it can change as they
+  // grow. AbhiAgeGroupPicker still pre-selects their last choice from localStorage as a convenience.
 
   useLayoutEffect(()=>{
     if(!entryRequest||!authReady)return;
@@ -804,48 +833,18 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
     else if(entryRequest.mode==='student'&&entryRequest.studentName){
       const am={storyteller:'storytellers',explorer:'explorers',adventurer:'adventurers',voyager:'voyagers'};
       const grp=entryRequest.ageGroup?(am[entryRequest.ageGroup]||entryRequest.ageGroup):'explorers';
-      const profile={name:entryRequest.studentName,group:grp,status:'approved'};
-      setStudentProfile(profile);
+      // Name (and suggested class/group) is already known — remember it, but still show the age-group
+      // picker first so the student can confirm/update their group before landing on Choose Your Class.
+      setPendingEntry({name:entryRequest.studentName,group:grp,classId:entryRequest.classId||''});
       setRole('Student');
-      if(entryRequest.classId){
-        enterClass(entryRequest.classId);
-        // Create/update roster entry so teacher can see this student
-        (async()=>{
-          try{
-            const rRef=abhiRosterDocRef(entryRequest.classId,entryRequest.studentName);
-            const snap=await getDoc(rRef);
-            if(snap.exists()){
-              await updateDoc(rRef,{status:'approved',group:grp,isOnline:true,lastPing:serverTimestamp(),lastSeen:serverTimestamp()});
-            }else{
-              await setDoc(rRef,{classId:entryRequest.classId,studentName:entryRequest.studentName,name:entryRequest.studentName,group:grp,status:'approved',isOnline:true,lastPing:serverTimestamp(),lastSeen:serverTimestamp(),joinedAt:Date.now()});
-            }
-          }catch(e){console.error('Roster create error:',e);}
-        })();
-      }
     }
   },[entryRequest,authReady]);
 
   useEffect(()=>{ return onSnapshot(abhiClassesRef(),snap=>setAllClasses(snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>a.id.localeCompare(b.id)))); },[]);
 
-  // Compute student's global rank + total lessons
-  useEffect(()=>{
-    if(!studentProfile)return;
-    const name=studentProfile.name;
-    (async()=>{
-      try{
-        const snap=await getDocs(abhiScoresRef());
-        // Count distinct classId+lessonId per student
-        const byStudent={};
-        snap.docs.forEach(d=>{const dt=d.data();const sn=dt.studentName||dt.name;if(!sn)return;if(dt.classId!==classId)return;if(!byStudent[sn])byStudent[sn]=new Set();byStudent[sn].add(dt.lessonId||'?');});
-        const sorted=Object.entries(byStudent).sort((a,b)=>b[1].size-a[1].size);
-        const myIdx=sorted.findIndex(([sn])=>sn===name);
-        setGlobalRank(myIdx>=0?myIdx+1:0);
-        setTotalLessons(byStudent[name]?.size||0);
-      }catch(e){}
-    })();
-  },[studentProfile,classStats]); // re-run after class stats update (quiz completion)
-
-  // Load per-class stats for student (rank + completedCount)
+  // Load per-class stats for student: rank, lessons they've completed, and the class's total lesson
+  // count (so the UI can show "9 / 10 completed" or "✅ all completed"). Also drives the floating
+  // rank/lessons badge for whichever class is currently open (classStats[classId]).
   useEffect(()=>{
     if(!studentProfile||allClasses.length===0)return;
     const name=studentProfile.name;
@@ -853,18 +852,20 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
       const stats={};
       for(const c of allClasses){
         try{
-          // All scores for this class to compute rank
-          const snap=await getDocs(query(abhiScoresRef(),where('classId','==',c.id)));
+          const [scoresSnap,lessonsSnap]=await Promise.all([
+            getDocs(query(abhiScoresRef(),where('classId','==',c.id))),
+            getDocs(abhiLessonsRef(c.id)),
+          ]);
           const byStudent={};
-          snap.docs.forEach(d=>{const {studentName:sn,lessonId:li,classId:ci}=d.data();if(ci!==c.id||!li)return;if(!byStudent[sn])byStudent[sn]=new Set();byStudent[sn].add(li);});
+          scoresSnap.docs.forEach(d=>{const {studentName:sn,lessonId:li,classId:ci}=d.data();if(ci!==c.id||!li)return;if(!byStudent[sn])byStudent[sn]=new Set();byStudent[sn].add(li);});
           const ranked=Object.entries(byStudent).sort((a,b)=>b[1].size-a[1].size);
           const myIdx=ranked.findIndex(([sn])=>sn===name);
-          stats[c.id]={completedCount:byStudent[name]?.size||0,rank:myIdx>=0?myIdx+1:0,totalLessons:(byStudent[name]?.size||0)};
+          stats[c.id]={completedCount:byStudent[name]?.size||0,totalLessons:lessonsSnap.size,rank:myIdx>=0?myIdx+1:0};
         }catch(e){}
       }
       setClassStats(stats);
     })();
-  },[studentProfile,allClasses.length]);
+  },[studentProfile,allClasses.length,classId]);
 
   // Load lessons from SUBCOLLECTION (no 1MB limit!)
   useEffect(()=>{
@@ -1130,10 +1131,9 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
       {/* Teacher login modal (opens via header "Teacher Login" button) */}
       {showWelcome&&<AbhiTeacherLogin onComplete={()=>{setIsTeacher(true);setRole('Teacher');localStorage.setItem('abhidhamma_isTeacher','true');setShowWelcome(false);}} onClose={()=>setShowWelcome(false)}/>}
       {showLeaderboard&&<AbhiLeaderboardModal classId={classId} studentName={studentProfile?.name} userId={userId} onClose={()=>setShowLeaderboard(false)}/>}
-      {/* Floating stats bar — visible to students */}
-      {/* FloatingStats only when inside a class */}
-      {role==='Student'&&studentProfile&&classId&&(totalLessons>0||globalRank>0)&&(
-        <AbhiFloatingStats rank={globalRank} totalLessons={totalLessons}/>
+      {/* Floating stats bar — visible to students, shows rank + completed lessons for the open class */}
+      {role==='Student'&&studentProfile&&classId&&((classStats[classId]?.completedCount>0)||(classStats[classId]?.rank>0))&&(
+        <AbhiFloatingStats rank={classStats[classId]?.rank||0} totalLessons={classStats[classId]?.completedCount||0}/>
       )}
       {activeQuizId&&activeQuizData&&<QuizModule classId={classId} lessonId={activeQuizId} lessonTitle={lessons.find(l=>l.id===activeQuizId)?.title||''} userId={userId} userName={studentProfile?.name||'Student'} ageGroup={studentProfile?.group} quizData={activeQuizData} onClose={()=>{setActiveQuizId(null);setActiveQuizData(null);}}/>}
       {msg&&<div className="fixed top-4 left-1/2 -translate-x-1/2 bg-blue-600 text-white px-6 py-2 rounded-full shadow-xl z-50 font-bold">{msg}</div>}
@@ -1274,11 +1274,16 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
                 ))}</div>}
               </div>
             )}
-            {/* Step 1: Real student only (isTeacher guard prevents flash on teacher accounts) */}
+            {/* Step 1: Real student only (isTeacher guard prevents flash on teacher accounts).
+                Always shown on open (even for a known deep-link student) so they can confirm/update
+                their age group as they grow — no name field needed since the name is already known. */}
             {!isTeacher && !studentProfile&&(
-              <AbhiAgeGroupPicker onComplete={grp => {
+              <AbhiAgeGroupPicker initialGroup={pendingEntry?.group} onComplete={grp => {
+                let cachedName=null;
+                if(userId){try{cachedName=JSON.parse(localStorage.getItem(`abhidhamma_profile_${userId}`)||'null')?.name||null;}catch(e){}}
                 const label = AGE_GROUPS[grp]?.label?.split(' ')[0] || 'Student';
-                const p = { group: grp, status: 'approved', name: label };
+                const name = pendingEntry?.name || cachedName || label;
+                const p = { group: grp, status: 'approved', name };
                 setStudentProfile(p);
                 if (userId) localStorage.setItem(`abhidhamma_profile_${userId}`, JSON.stringify(p));
               }}/>
@@ -1294,26 +1299,32 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
                 {allClasses.length===0
                   ? <p className="text-center text-gray-500 italic">No classes found yet.</p>
                   : <div className="space-y-3">
-                      {allClasses.map(c => (
+                      {allClasses.map(c => {
+                        const stat=classStats[c.id];
+                        const allDone=stat&&stat.totalLessons>0&&stat.completedCount>=stat.totalLessons;
+                        return(
                         <button key={c.id} onClick={() => enterClass(c.id)}
                           className={`w-full p-4 rounded-xl border-2 text-left font-bold text-lg transition-all ${
-                            c.id===entryRequest?.classId
+                            c.id===(pendingEntry?.classId||entryRequest?.classId)
                               ? 'bg-amber-100 border-amber-500 text-amber-800 shadow-lg scale-[1.02]'
                               : 'bg-white border-gray-200 text-gray-700 hover:border-amber-300 hover:bg-amber-50'
                           }`}>
                           <div className="flex items-center justify-between gap-2 flex-wrap">
-                            <span>{c.id===entryRequest?.classId?'⭐ ':''}{c.displayName||c.id}</span>
+                            <span>{c.id===(pendingEntry?.classId||entryRequest?.classId)?'⭐ ':''}{c.displayName||c.id}</span>
                             <div className="flex items-center gap-2 flex-wrap">
-                              {classStats[c.id]?.rank>0&&(
-                                <span className="text-xs font-bold text-yellow-700 bg-yellow-100 border border-yellow-300 px-2 py-0.5 rounded-full">🏆 Rank #{classStats[c.id].rank}</span>
+                              {stat?.rank>0&&(
+                                <span className="text-xs font-bold text-yellow-700 bg-yellow-100 border border-yellow-300 px-2 py-0.5 rounded-full">🏆 Rank #{stat.rank}</span>
                               )}
-                              {classStats[c.id]?.completedCount>0?(
-                                <span className="text-xs font-bold text-blue-700 bg-blue-100 border border-blue-300 px-2 py-0.5 rounded-full">{classStats[c.id].completedCount} completed</span>
-                              ):null}
+                              {stat?.completedCount>0&&(
+                                allDone
+                                  ? <span className="text-xs font-bold text-green-700 bg-green-100 border border-green-300 px-2 py-0.5 rounded-full">✅ all completed</span>
+                                  : <span className="text-xs font-bold text-blue-700 bg-blue-100 border border-blue-300 px-2 py-0.5 rounded-full">{stat.completedCount}{stat.totalLessons?` / ${stat.totalLessons}`:''} completed</span>
+                              )}
                             </div>
                           </div>
                         </button>
-                      ))}
+                        );
+                      })}
                     </div>
                 }
               </div>
