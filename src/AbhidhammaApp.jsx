@@ -155,13 +155,20 @@ const NotificationBell = ({ userId, classId }) => {
   );
 };
 
-// ─── AbhiClassRoster ──────────────────────────────────────────────────────────
+// ─── AbhiClassRoster (now also includes Link-to-Tutoring, merged into one list) ─
 const AbhiClassRoster = ({ userId, classId, onLink }) => {
   const [students,setStudents]=useState([]);
   const [aa,setAa]=useState(false);
   const [now,setNow]=useState(Date.now());
   const [open,setOpen]=useState(true);
   const [studentStats,setStudentStats]=useState({}); // studentName → {rank, completed}
+  // ── Link-to-Tutoring state (merged in from the old separate section) ──
+  const [tutoringStudents,setTutoringStudents]=useState(null);
+  const [pickerFor,setPickerFor]=useState(null);
+  const [search,setSearch]=useState('');
+  const [linking,setLinking]=useState(false);
+  const [syncing,setSyncing]=useState(false);
+  const [syncMsg,setSyncMsg]=useState('');
 
   useEffect(()=>{ const i=setInterval(()=>setNow(Date.now()),10000); return()=>clearInterval(i); },[]);
 
@@ -215,6 +222,48 @@ const AbhiClassRoster = ({ userId, classId, onLink }) => {
 
   const approved=students.filter(s=>s.status==='approved').sort((a,b)=>(a.studentNumber||0)-(b.studentNumber||0));
   const pending=students.filter(s=>s.status==='pending');
+  const unlinked=approved.filter(s=>!s.linkedToTutoring);
+
+  // Load the TutoringApp student list once, on demand (picker or bulk-link)
+  const loadTutoringStudents=async()=>{
+    if(tutoringStudents!==null)return tutoringStudents;
+    try{
+      const snap=await getDocs(collection(db,'artifacts','dhamma-tutoring-app','public','data','students'));
+      const list=snap.docs.map(d=>({id:d.id,...d.data()})).filter(s=>s.isActive!==false).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+      setTutoringStudents(list);
+      return list;
+    }catch(e){setTutoringStudents([]);return[];}
+  };
+
+  // Bulk-link: match TutoringApp names to Roster names automatically, and pull in any
+  // TutoringApp student who isn't in this class's Roster yet — all in one click.
+  const bulkLinkMatching=async()=>{
+    setSyncing(true);
+    try{
+      const list=await loadTutoringStudents();
+      const rosterByLower={};
+      approved.forEach(s=>{ if(s.studentName) rosterByLower[s.studentName.trim().toLowerCase()]=s; });
+      let nextNum=approved.reduce((m,s)=>Math.max(m,s.studentNumber||0),0)+1;
+      const toLink=[],toAdd=[];
+      list.forEach(t=>{
+        if(!t.name)return;
+        const match=rosterByLower[t.name.trim().toLowerCase()];
+        if(match){ if(!match.linkedToTutoring) toLink.push(match.studentName); }
+        else toAdd.push(t.name);
+      });
+      if(toLink.length===0&&toAdd.length===0){ setSyncMsg('No matching names found.'); setTimeout(()=>setSyncMsg(''),3000); return; }
+      if(!window.confirm(`Link ${toLink.length} matching student(s) and add ${toAdd.length} new student(s) from Tutoring?`))return;
+      const batch=writeBatch(db);
+      toLink.forEach(name=>batch.set(abhiRosterDocRef(classId,name),{linkedToTutoring:true},{merge:true}));
+      toAdd.forEach(name=>{ batch.set(abhiRosterDocRef(classId,name),{classId,studentName:name,name,status:'approved',studentNumber:nextNum++,linkedToTutoring:true},{merge:true}); });
+      await batch.commit();
+      setSyncMsg(`✅ Linked ${toLink.length}, added ${toAdd.length}.`);
+      setTimeout(()=>setSyncMsg(''),4000);
+    }catch(e){console.error('Bulk link:',e);setSyncMsg('❌ Error — see console.');setTimeout(()=>setSyncMsg(''),4000);}
+    finally{setSyncing(false);}
+  };
+
+  const filtered=(tutoringStudents||[]).filter(t=>!search||t.name.toLowerCase().includes(search.toLowerCase()));
 
   if(!classId)return null;
   return(
@@ -225,9 +274,17 @@ const AbhiClassRoster = ({ userId, classId, onLink }) => {
           <button onClick={toggleAA} className={`flex items-center gap-1 text-xs px-3 py-1 rounded-full font-bold ${aa?'bg-green-500/20 text-green-400 border border-green-500/50':'bg-gray-800 text-gray-400 border border-gray-600'}`} title="Auto-approve new students">
             {aa?<ToggleRight className="w-4 h-4"/>:<ToggleLeft className="w-4 h-4"/>}Auto-Approve
           </button>
+          {onLink&&(
+            <button onClick={e=>{e.stopPropagation();bulkLinkMatching();}} disabled={syncing}
+              className="flex items-center gap-1 text-xs px-3 py-1 rounded-full font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/50 disabled:opacity-50" title="Auto-link students whose name matches a TutoringApp student, and pull in any TutoringApp student missing from this Roster">
+              {syncing?'Linking…':'🔗 Link All Matching Names'}
+            </button>
+          )}
+          {syncMsg&&<span className="text-xs text-indigo-300 font-semibold">{syncMsg}</span>}
         </div>
         <div className="flex items-center gap-3 text-sm font-semibold">
           {pending.length>0&&<span className="text-yellow-400 animate-pulse">{pending.length} Pending</span>}
+          {onLink&&unlinked.length>0&&<span className="text-orange-300 text-xs bg-orange-500/20 px-2 py-0.5 rounded-full border border-orange-500/30">{unlinked.length} unlinked</span>}
           <span className="text-green-400">{approved.filter(s=>s.isOnline).length} Online</span>
           <span className="text-gray-400">{approved.length} Total</span>
           {open?<ChevronDown className="w-5 h-5 text-gray-400"/>:<ChevronRight className="w-5 h-5 text-gray-400"/>}
@@ -244,7 +301,7 @@ const AbhiClassRoster = ({ userId, classId, onLink }) => {
             <button onClick={e=>removeStu(e,s.id)} className="p-1 bg-red-900/50 rounded text-red-400 hover:bg-red-700 hover:text-white" title="Remove"><Trash2 className="w-3.5 h-3.5"/></button>
           </div>
         ))}
-        {/* Approved students — online/offline + Link to Tutoring in same row */}
+        {/* Approved students — online/offline + rank + Link-to-Tutoring, all in one row */}
         {approved.map(s=>{
           const lp=s.lastPing;
           const pmins=lp?Math.floor((now-(lp.toMillis?lp.toMillis():(lp.seconds*1000)))/60000):null;
@@ -262,57 +319,18 @@ const AbhiClassRoster = ({ userId, classId, onLink }) => {
               <span className="font-bold text-gray-300 text-xs w-5 shrink-0">#{s.studentNumber||'?'}</span>
               <span className="flex-1 text-white text-sm font-semibold min-w-0 truncate">{s.studentName}</span>
               {isWarn&&<span className="text-xs text-orange-400 font-bold whitespace-nowrap">Inactive {pmins}m</span>}
-              {/* Link to Tutoring inline */}
-              {s.linkedToTutoring
-                ? <span className="text-xs text-indigo-400 font-bold whitespace-nowrap" title="Linked to TutoringApp">🔗</span>
-                : <span className="text-xs text-gray-600 whitespace-nowrap">○</span>
-              }
+              {/* Link to Tutoring — merged in here instead of a separate list below */}
+              {onLink&&(s.linkedToTutoring
+                ? <span className="text-xs text-indigo-400 font-bold whitespace-nowrap" title="Linked to TutoringApp">🔗 Linked</span>
+                : <button onClick={()=>{setPickerFor(s.studentName);loadTutoringStudents();}} className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-2 py-1 rounded-lg whitespace-nowrap flex-shrink-0">🔗 Link</button>
+              )}
               <button onClick={e=>removeStu(e,s.id)} className="p-1 text-gray-600 hover:text-red-400 shrink-0"><Trash2 className="w-3 h-3"/></button>
             </div>
           );
         })}
         {approved.length===0&&pending.length===0&&<p className="text-gray-500 text-sm italic text-center py-4">No students yet. Students will appear here when they join.</p>}
-        {/* Link to Tutoring section below */}
-        {onLink&&approved.length>0&&<AbhiLinkToTutoring classId={classId} approved={approved} onLink={onLink}/>}
       </div>}
-    </div>
-  );
-};
-
-
-// ─── Link to Tutoring Component ──────────────────────────────────────────────
-const AbhiLinkToTutoring = ({ classId, approved, onLink }) => {
-  const [tutoringStudents,setTutoringStudents]=useState(null);
-  const [pickerFor,setPickerFor]=useState(null);
-  const [search,setSearch]=useState('');
-  const [linking,setLinking]=useState(false);
-  const loadStudents=async()=>{
-    if(tutoringStudents!==null)return;
-    try{
-      const snap=await getDocs(collection(db,'artifacts','dhamma-tutoring-app','public','data','students'));
-      setTutoringStudents(snap.docs.map(d=>({id:d.id,...d.data()})).filter(s=>s.isActive!==false).sort((a,b)=>(a.name||'').localeCompare(b.name||'')));
-    }catch(e){setTutoringStudents([]);}
-  };
-  const unlinked=approved.filter(s=>!s.linkedToTutoring);
-  const filtered=(tutoringStudents||[]).filter(t=>!search||t.name.toLowerCase().includes(search.toLowerCase()));
-  return(
-    <div>
-      <h4 className="text-sm font-bold text-indigo-300 mb-3 flex items-center gap-2">🔗 Link to Tutoring
-        {unlinked.length>0&&<span className="bg-orange-500/20 text-orange-300 text-xs px-2 py-0.5 rounded-full border border-orange-500/30">{unlinked.length} unlinked</span>}
-        {unlinked.length===0&&approved.length>0&&<span className="text-green-400 text-xs">✅ All linked</span>}
-      </h4>
-      <div className="space-y-1 max-h-48 overflow-y-auto">
-        {approved.map(s=>(
-          <div key={s.id} className="flex items-center gap-2 p-2 bg-gray-800 rounded-lg">
-            <span className="flex-1 text-white text-sm">{s.studentName}</span>
-            {s.linkedToTutoring
-              ? <span className="text-xs text-indigo-400 font-bold">🔗 Linked</span>
-              : <button onClick={()=>{setPickerFor(s.studentName);loadStudents();}} className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 py-1 rounded-lg flex-shrink-0">🔗 Link</button>
-            }
-          </div>
-        ))}
-        {approved.length===0&&<p className="text-gray-500 text-xs italic">No approved students yet.</p>}
-      </div>
+      {/* Individual link picker modal (opened from the 🔗 Link button on a row) */}
       {pickerFor&&(
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
           <div className="bg-gray-800 rounded-2xl shadow-2xl p-6 w-full max-w-md border border-gray-600">
