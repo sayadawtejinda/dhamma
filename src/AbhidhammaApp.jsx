@@ -16,6 +16,21 @@ const DEFAULT_IMG_BASE  = 'https://raw.githubusercontent.com/nathantun93/dhamma4
 const AUDIO_BASE_URL    = 'https://raw.githubusercontent.com/nathantun93/bell/main/';
 const TEACHER_PASSCODE  = '1';
 
+// Normalize an image-base URL the teacher pastes into "Class Default Image URL" / "Lesson Override URL".
+// Auto-fixes the #1 reason pasted image links break: a normal github.com page link (blob/tree) instead
+// of the raw.githubusercontent.com link, and a missing trailing slash (which mangles filename concatenation).
+const normalizeImgBaseUrl = (url) => {
+  let u = (url || '').trim();
+  if (!u) return u;
+  const blobMatch = u.match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/(?:blob|tree)\/([^/]+)\/?(.*)$/i);
+  if (blobMatch) {
+    const [, ghUser, ghRepo, ghBranch, ghRest] = blobMatch;
+    u = `https://raw.githubusercontent.com/${ghUser}/${ghRepo}/${ghBranch}/${ghRest}`;
+  }
+  if (!u.endsWith('/')) u += '/';
+  return u;
+};
+
 const AGE_GROUPS = {
   storytellers: { label: 'Storytellers (5-)',  icon: <Baby className="w-4 h-4"/>, length:'short (~150w)'  },
   explorers:    { label: 'Explorers (6-8)',     icon: <Compass className="w-4 h-4"/>, length:'medium (~300w)' },
@@ -146,8 +161,27 @@ const AbhiClassRoster = ({ userId, classId, onLink }) => {
   const [aa,setAa]=useState(false);
   const [now,setNow]=useState(Date.now());
   const [open,setOpen]=useState(true);
+  const [studentStats,setStudentStats]=useState({}); // studentName → {rank, completed}
 
   useEffect(()=>{ const i=setInterval(()=>setNow(Date.now()),10000); return()=>clearInterval(i); },[]);
+
+  // Per-student rank + completed-lesson count for this class, shown as a floating badge on each row
+  useEffect(()=>{
+    if(!classId)return;
+    return onSnapshot(query(abhiScoresRef(),where('classId','==',classId)),snap=>{
+      const byStudent={};
+      snap.docs.forEach(d=>{
+        const dt=d.data();const sn=dt.studentName||dt.name;
+        if(!sn||!dt.lessonId)return;
+        if(!byStudent[sn])byStudent[sn]=new Set();
+        byStudent[sn].add(dt.lessonId);
+      });
+      const ranked=Object.entries(byStudent).sort((a,b)=>b[1].size-a[1].size);
+      const stats={};
+      ranked.forEach(([sn,set],idx)=>{stats[sn]={rank:idx+1,completed:set.size};});
+      setStudentStats(stats);
+    },err=>console.error('Roster stats:',err.code));
+  },[classId]);
 
   useEffect(()=>{
     if(!classId)return;
@@ -216,8 +250,14 @@ const AbhiClassRoster = ({ userId, classId, onLink }) => {
           const pmins=lp?Math.floor((now-(lp.toMillis?lp.toMillis():(lp.seconds*1000)))/60000):null;
           const isWarn=pmins!==null&&pmins>=3&&pmins<=8;
           const onlineDot=s.isOnline?'fill-green-500 text-green-500':isWarn?'fill-orange-500 text-orange-500':'fill-gray-500 text-gray-500';
+          const stat=studentStats[s.studentName];
           return(
-            <div key={s.id} className={`flex items-center gap-2 p-2.5 rounded-lg border ${s.isOnline?'bg-indigo-900/20 border-indigo-700/30':isWarn?'bg-orange-900/20 border-orange-700/30':'bg-gray-700/30 border-gray-600/30'}`}>
+            <div key={s.id} className={`relative mt-3 first:mt-0 flex items-center gap-2 p-2.5 rounded-lg border ${s.isOnline?'bg-indigo-900/20 border-indigo-700/30':isWarn?'bg-orange-900/20 border-orange-700/30':'bg-gray-700/30 border-gray-600/30'}`}>
+              {stat&&(
+                <span className="absolute -top-2.5 right-2 flex items-center gap-1 text-[10px] font-black text-gray-900 bg-gradient-to-r from-amber-400 to-yellow-400 px-2 py-0.5 rounded-full shadow border border-amber-300 whitespace-nowrap">
+                  🏆#{stat.rank} · {stat.completed} done
+                </span>
+              )}
               <Circle className={`w-2.5 h-2.5 shrink-0 ${onlineDot}`}/>
               <span className="font-bold text-gray-300 text-xs w-5 shrink-0">#{s.studentNumber||'?'}</span>
               <span className="flex-1 text-white text-sm font-semibold min-w-0 truncate">{s.studentName}</span>
@@ -610,11 +650,19 @@ const AbhiLessonItem = ({ lesson, classId, isTeacher, studentAgeGroup, studentNa
   
   useEffect(()=>{if(isOpen&&ref.current){setTimeout(()=>{const y=ref.current.getBoundingClientRect().top+window.scrollY-80;window.scrollTo({top:y,behavior:'smooth'});},100);}},[isOpen]);
   
-  // Track quiz completion
+  // Track quiz completion. Primary source is the per-group "results" collection, but restored/imported
+  // backups sometimes only carry the leaderboard "scores" doc (no matching results doc) — treat a
+  // matching score (same classId + lessonId + userId) as completed too, so restored students show Done.
   useEffect(()=>{
     if(!classId||!userId||!lesson.id||!studentAgeGroup)return;
-    const u=onSnapshot(query(abhiResultsRef(classId,lesson.id,studentAgeGroup),where('userId','==',userId)),snap=>setIsCompleted(!snap.empty));
-    return()=>u();
+    let fromResults=false,fromScores=false;
+    const recompute=()=>setIsCompleted(fromResults||fromScores);
+    const u1=onSnapshot(query(abhiResultsRef(classId,lesson.id,studentAgeGroup),where('userId','==',userId)),snap=>{fromResults=!snap.empty;recompute();});
+    const u2=onSnapshot(query(abhiScoresRef(),where('userId','==',userId)),snap=>{
+      fromScores=snap.docs.some(d=>{const dt=d.data();return dt.classId===classId&&dt.lessonId===lesson.id;});
+      recompute();
+    },err=>console.error('Score completion track:',err.code));
+    return()=>{u1();u2();};
   },[classId,lesson.id,userId,studentAgeGroup]);
   
   // Track Q&A participation for quiz unlock (ask + reply)
@@ -933,7 +981,7 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
     setLoading(true);
     try{
       const lId=editingLesson?editingLesson.id:`lesson_${Date.now()}`;
-      const entry={id:lId,classId,title:newTitle.trim(),burmeseContent:newContent.trim(),imageBaseUrl:newImgBase.trim()||DEFAULT_IMG_BASE,variants:editingLesson?.variants||{},createdAt:editingLesson?.createdAt||serverTimestamp()};
+      const entry={id:lId,classId,title:newTitle.trim(),burmeseContent:newContent.trim(),imageBaseUrl:normalizeImgBaseUrl(newImgBase)||DEFAULT_IMG_BASE,variants:editingLesson?.variants||{},createdAt:editingLesson?.createdAt||serverTimestamp()};
       await setDoc(abhiLessonDocRef(classId,lId),entry,{merge:true});
       setNewTitle('');setNewContent('');setNewImgBase(DEFAULT_IMG_BASE);setEditingLesson(null);showMsg('Saved!');
     }catch(err){console.error(err);showMsg('Error saving.');}finally{setLoading(false);}
@@ -994,7 +1042,7 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
         const data=JSON.parse(e.target.result);setLoading(true);
         const raw=Array.isArray(data)?data:(data.lessons||[]);
         if(raw.length===0){showMsg('No lessons found.');return;}
-        const imgBase=data.imageBaseUrl||newImgBase||DEFAULT_IMG_BASE;
+        const imgBase=normalizeImgBaseUrl(data.imageBaseUrl||newImgBase)||DEFAULT_IMG_BASE;
 
         // Check existing lessons to avoid duplicates
         const existSnap=await getDocs(abhiLessonsRef(tgt));
@@ -1007,7 +1055,7 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
         for(const[i,l]of raw.entries()){
           const lId=l.id||`imported_${Date.now()}_${i}`;
           if(existIds.has(lId)){skipped++;continue;}
-          const entry={id:lId,classId:tgt,title:l.title||`Lesson ${i+1}`,burmeseContent:l.burmeseContent||l.content||'',imageBaseUrl:l.imageBaseUrl||imgBase,variants:l.variants||{},createdAt:l.timestamp||serverTimestamp()};
+          const entry={id:lId,classId:tgt,title:l.title||`Lesson ${i+1}`,burmeseContent:l.burmeseContent||l.content||'',imageBaseUrl:normalizeImgBaseUrl(l.imageBaseUrl)||imgBase,variants:l.variants||{},createdAt:l.timestamp||serverTimestamp()};
           // Store each lesson as its own document — no 1MB limit!
           await setDoc(abhiLessonDocRef(tgt,lId),entry);
           added++;
@@ -1031,12 +1079,12 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
         const data=JSON.parse(e.target.result);setLoading(true);
         const toDate=ts=>ts?new Date(ts):serverTimestamp();
         const raw=Array.isArray(data)?data:(data.lessons||[]);
-        const imgBase=data.imageBaseUrl||newImgBase||DEFAULT_IMG_BASE;
+        const imgBase=normalizeImgBaseUrl(data.imageBaseUrl||newImgBase)||DEFAULT_IMG_BASE;
         await setDoc(abhiClassDocRef(tgt),{classId:tgt,autoApprove:false,createdAt:serverTimestamp()},{merge:true});
         try{
           for(const[i,l]of raw.entries()){
             const lId=l.id||`imported_${Date.now()}_${i}`;
-            await setDoc(abhiLessonDocRef(tgt,lId),{id:lId,classId:tgt,title:l.title||`Lesson ${i+1}`,burmeseContent:l.burmeseContent||l.content||'',imageBaseUrl:l.imageBaseUrl||imgBase,variants:l.variants||{},createdAt:toDate(l.timestamp)});
+            await setDoc(abhiLessonDocRef(tgt,lId),{id:lId,classId:tgt,title:l.title||`Lesson ${i+1}`,burmeseContent:l.burmeseContent||l.content||'',imageBaseUrl:normalizeImgBaseUrl(l.imageBaseUrl)||imgBase,variants:l.variants||{},createdAt:toDate(l.timestamp)});
           }
         }catch(err){console.error('Lessons restore:',err);errors.push('lessons');}
         try{
@@ -1192,7 +1240,7 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
                   <span className="text-amber-400 text-xs ml-1 whitespace-nowrap font-semibold">🖼 Class Default Image URL:</span>
                   <input value={classImageBase} onChange={e=>setClassImageBase(e.target.value)} placeholder={DEFAULT_IMG_BASE}
                     className="flex-1 bg-transparent text-white text-xs focus:outline-none border-b border-amber-600/40 px-1 focus:border-amber-400"
-                    onBlur={async()=>{ if(classId) await updateDoc(abhiClassDocRef(classId),{imageBaseUrl:classImageBase||DEFAULT_IMG_BASE}).catch(()=>{}); }}/>
+                    onBlur={async()=>{ if(!classId) return; const norm=normalizeImgBaseUrl(classImageBase)||DEFAULT_IMG_BASE; setClassImageBase(norm); await updateDoc(abhiClassDocRef(classId),{imageBaseUrl:norm}).catch(()=>{}); }}/>
                 </div>
                 <div className="flex items-center gap-2 mb-4 p-2 bg-gray-900 rounded border border-gray-600"><span className="text-gray-400 text-xs ml-1 whitespace-nowrap">🖼 Lesson Override URL:</span><input value={newImgBase} onChange={e=>setNewImgBase(e.target.value)} placeholder={classImageBase||DEFAULT_IMG_BASE} className="flex-1 bg-transparent text-white text-xs focus:outline-none border-b border-gray-600 px-1 focus:border-teal-500"/></div>
                 <h3 className="text-xl font-bold text-teal-300 mb-4">{editingLesson?'Edit Lesson':'Add Lesson'} — <span className="text-amber-400">{classId}</span></h3>
