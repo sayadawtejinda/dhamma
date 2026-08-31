@@ -907,7 +907,7 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma }) {
     return () => { isMounted = false; };
   }, [selectedStudentUid, selectedBankLessonId, sendSmartStudyClassId, lessonBank, students]);
 
-  // Abhidhamma student progress for Assign Lesson section
+  // Abhidhamma student progress for Assign Lesson — handles old & new format
   useEffect(()=>{
     setAbhiStudentCount(null);setAbhiStudentScore(null);
     if(!sendAbhidhammaClassId||!selectedStudentUid)return;
@@ -915,10 +915,11 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma }) {
     const allNames=[...new Set([student.name,...(Object.values(student?.abhidhammaNames||{}))].filter(Boolean))];
     (async()=>{
       let pts=0;const done=new Set();
+      const ABHI_COL=collection(db,'artifacts','lesson-translator-app-v6','public','data','global_scores');
       for(const nm of allNames){
         try{
-          const snap=await getDocs(query(collection(db,'artifacts','lesson-translator-app-v6','public','data','global_scores'),where('classId','==',sendAbhidhammaClassId),where('studentName','==',nm)));
-          snap.docs.forEach(d=>{pts+=(Number(d.data().score)||0);if(d.data().lessonId)done.add(d.data().lessonId);});
+          const [s1,s2]=await Promise.all([getDocs(query(ABHI_COL,where('name','==',nm))),getDocs(query(ABHI_COL,where('studentName','==',nm)))]);
+          [...s1.docs,...s2.docs].forEach(d=>{const dt=d.data();if(dt.classId&&dt.classId!==sendAbhidhammaClassId)return;pts+=(Number(dt.score)||0);if(dt.lessonId)done.add(dt.lessonId);});
         }catch(e){}
       }
       setAbhiStudentScore(pts);setAbhiStudentCount(done.size);
@@ -3766,19 +3767,28 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       }
     }
     // Abhidhamma: fetch score + lesson count from global_scores
+    // Handles both new format (has classId) and old AbhidhammaApp5 format (no classId)
     if (activeSession.lessonLink?.startsWith('abhidhamma://')) {
       const abhiClassId = activeSession.lessonLink.replace('abhidhamma://', '');
       const stuName = studentProfile?.name;
-      if (stuName && abhiClassId) {
+      if (stuName) {
         try {
           const allNames = [...new Set([stuName, ...(Object.values(studentProfile?.abhidhammaNames||{}))].filter(Boolean))];
           let totalPts=0; const doneLessons=new Set();
+          const ABHI_COL = collection(db,'artifacts','lesson-translator-app-v6','public','data','global_scores');
           for (const nm of allNames) {
-            const snap = await getDocs(query(
-              collection(db,'artifacts','lesson-translator-app-v6','public','data','global_scores'),
-              where('classId','==',abhiClassId), where('studentName','==',nm)
-            ));
-            snap.docs.forEach(d=>{totalPts+=(Number(d.data().score)||0);if(d.data().lessonId)doneLessons.add(d.data().lessonId);});
+            // Try with name field (old AbhidhammaApp5 used 'name', new uses 'studentName')
+            const [snap1, snap2] = await Promise.all([
+              getDocs(query(ABHI_COL, where('name','==',nm))),
+              getDocs(query(ABHI_COL, where('studentName','==',nm)))
+            ]);
+            [...snap1.docs, ...snap2.docs].forEach(d=>{
+              const dt=d.data();
+              // Include if classId matches OR if no classId (old format)
+              if(dt.classId && dt.classId !== abhiClassId) return;
+              totalPts += (Number(dt.score)||0);
+              if(dt.lessonId) doneLessons.add(dt.lessonId);
+            });
           }
           if(totalPts>0) setScore(`${totalPts.toLocaleString()} pts`);
           if(doneLessons.size>0) setCompletedUnitInput(String(doneLessons.size));
@@ -3830,17 +3840,18 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         }
       }
     }
-    // Abhidhamma redo fetch
+    // Abhidhamma redo fetch — handle old and new format
     if (session.lessonLink?.startsWith('abhidhamma://')) {
       const abhiClassId = session.lessonLink.replace('abhidhamma://','');
       const stuName = studentProfile?.name;
-      if (stuName && abhiClassId) {
+      if (stuName) {
         try {
           const allNames=[...new Set([stuName,...(Object.values(studentProfile?.abhidhammaNames||{}))].filter(Boolean))];
           let pts=0; const done=new Set();
+          const ABHI_COL=collection(db,'artifacts','lesson-translator-app-v6','public','data','global_scores');
           for(const nm of allNames){
-            const snap=await getDocs(query(collection(db,'artifacts','lesson-translator-app-v6','public','data','global_scores'),where('classId','==',abhiClassId),where('studentName','==',nm)));
-            snap.docs.forEach(d=>{pts+=(Number(d.data().score)||0);if(d.data().lessonId)done.add(d.data().lessonId);});
+            const [s1,s2]=await Promise.all([getDocs(query(ABHI_COL,where('name','==',nm))),getDocs(query(ABHI_COL,where('studentName','==',nm)))]);
+            [...s1.docs,...s2.docs].forEach(d=>{const dt=d.data();if(dt.classId&&dt.classId!==abhiClassId)return;pts+=(Number(dt.score)||0);if(dt.lessonId)done.add(dt.lessonId);});
           }
           if(pts>0) setScore(`${pts.toLocaleString()} pts`);
           if(done.size>0) setCompletedUnitInput(String(done.size));
