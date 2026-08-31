@@ -778,7 +778,7 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
         const snap=await getDocs(abhiScoresRef());
         // Count distinct classId+lessonId per student
         const byStudent={};
-        snap.docs.forEach(d=>{const dt=d.data();const sn=dt.studentName||dt.name;if(!sn)return;if(dt.classId&&dt.classId!==classId)return;if(!byStudent[sn])byStudent[sn]=new Set();byStudent[sn].add(dt.lessonId||'?');});
+        snap.docs.forEach(d=>{const dt=d.data();const sn=dt.studentName||dt.name;if(!sn)return;if(dt.classId!==classId)return;if(!byStudent[sn])byStudent[sn]=new Set();byStudent[sn].add(dt.lessonId||'?');});
         const sorted=Object.entries(byStudent).sort((a,b)=>b[1].size-a[1].size);
         const myIdx=sorted.findIndex(([sn])=>sn===name);
         setGlobalRank(myIdx>=0?myIdx+1:0);
@@ -798,7 +798,7 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
           // All scores for this class to compute rank
           const snap=await getDocs(query(abhiScoresRef(),where('classId','==',c.id)));
           const byStudent={};
-          snap.docs.forEach(d=>{const {studentName:sn,lessonId:li,classId:ci}=d.data();if(ci&&ci!==c.id)return;if(!byStudent[sn])byStudent[sn]=new Set();byStudent[sn].add(li);});
+          snap.docs.forEach(d=>{const {studentName:sn,lessonId:li,classId:ci}=d.data();if(ci!==c.id||!li)return;if(!byStudent[sn])byStudent[sn]=new Set();byStudent[sn].add(li);});
           const ranked=Object.entries(byStudent).sort((a,b)=>b[1].size-a[1].size);
           const myIdx=ranked.findIndex(([sn])=>sn===name);
           stats[c.id]={completedCount:byStudent[name]?.size||0,rank:myIdx>=0?myIdx+1:0,totalLessons:(byStudent[name]?.size||0)};
