@@ -962,7 +962,7 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
     if(!classId){showMsg('Select a class first.');return;}setLoading(true);showMsg('Exporting…');
     try{
       const toMs=ts=>{if(!ts)return null;if(typeof ts.toMillis==='function')return ts.toMillis();if(ts.seconds)return ts.seconds*1000;return null;};
-      const[rosterSnap,scoresSnap,actSnap]=await Promise.all([getDocs(query(abhiRosterRef(),where('classId','==',classId))),getDocs(query(abhiScoresRef(),where('classId','==',classId))),getDocs(abhiActivityRef())]);
+      const[rosterSnap,scoresSnap,actSnap]=await Promise.all([getDocs(query(abhiRosterRef(),where('classId','==',classId))),getDocs(query(abhiScoresRef(),where('classId','==',classId))),getDocs(query(abhiActivityRef(),where('classId','==',classId)))]);
       const data={version:3,classId,timestamp:new Date().toISOString(),lessons,roster:rosterSnap.docs.map(d=>({id:d.id,...d.data()})),scores:scoresSnap.docs.map(d=>({id:d.id,...d.data(),timestamp:toMs(d.data().timestamp)})),activityFeed:actSnap.docs.map(d=>({id:d.id,...d.data(),timestamp:toMs(d.data().timestamp)})),quizResults:{}};
       data.questions={};
       for(const l of lessons){
@@ -1011,44 +1011,50 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
   };
 
   // ── Import Full Backup ───────────────────────────────────────────────────────
-  const handleImportFull = (event) => {
+    const handleImportFull = (event) => {
     const file=event.target.files[0];if(!file)return;
     const tgt=importClassId.trim();if(!tgt){showMsg('Set Class ID for import!');event.target.value='';return;}
     const reader=new FileReader();
     reader.onload=async e=>{
+      const errors=[];
       try{
         const data=JSON.parse(e.target.result);setLoading(true);
         const toDate=ts=>ts?new Date(ts):serverTimestamp();
         const raw=Array.isArray(data)?data:(data.lessons||[]);
         const imgBase=data.imageBaseUrl||newImgBase||DEFAULT_IMG_BASE;
         await setDoc(abhiClassDocRef(tgt),{classId:tgt,autoApprove:false,createdAt:serverTimestamp()},{merge:true});
-        // Lessons → subcollection docs
-        for(const[i,l]of raw.entries()){
-          const lId=l.id||`imported_${Date.now()}_${i}`;
-          await setDoc(abhiLessonDocRef(tgt,lId),{id:lId,classId:tgt,title:l.title||`Lesson ${i+1}`,burmeseContent:l.burmeseContent||l.content||'',imageBaseUrl:l.imageBaseUrl||imgBase,variants:l.variants||{},createdAt:toDate(l.timestamp)});
-        }
-        // Roster — use original doc ID if available for accurate restore
-        for(const stu of(data.roster||data.students||[])){
-          // Rebuild the correct document ID: classId_encodedStudentName
-          const sName=stu.studentName||stu.name||'';
-          const docId=`${tgt}_${encodeURIComponent(sName)}`;
-          const rRef=doc(db,P(`classRoster/${docId}`));
-          const{id,...rData}=stu;
-          await setDoc(rRef,{...rData,classId:tgt,studentName:sName,isOnline:false},{merge:true});
-        }
-        // Scores + Activity
-        // Restore scores — handle 'scores' and 'globalScores' (old AbhidhammaApp5) — tag with tgt classId
-        for(const s of[...(data.scores||[]),...(data.globalScores||[])]){
-          const{id,timestamp,...r}=s;
-          const docId=id||`${r.userId||'u'}_${r.lessonId||Date.now()}`;
-          await setDoc(doc(abhiScoresRef(),docId),{...r,classId:tgt,timestamp:toDate(timestamp)});
-        }
-        for(const a of(data.activityFeed||[])){const{id,timestamp,...r}=a;await setDoc(doc(abhiActivityRef(),id||`a${Date.now()}`),{...r,timestamp:toDate(timestamp)});}
-        // Quiz results
-        for(const[key,rList]of Object.entries(data.quizResults||{})){const parts=key.split('_');const g=parts.pop();const lId=parts.join('_');for(const r of rList){const{id,timestamp,...rest}=r;await setDoc(doc(abhiResultsRef(tgt,lId,g),id||`r${Date.now()}`),{...rest,timestamp:toDate(timestamp)});}}
-        // Q&A discussions
-        for(const[lessonId,qList]of Object.entries(data.questions||{})){for(const q of qList){const{id,...rest}=q;await setDoc(doc(abhiQRef(tgt,lessonId),id||`q${Date.now()}`),{...rest});}}
-        showMsg(`✅ Restored ${raw.length} lesson(s) into "${tgt}". Check console for any errors.`);
+        try{
+          for(const[i,l]of raw.entries()){
+            const lId=l.id||`imported_${Date.now()}_${i}`;
+            await setDoc(abhiLessonDocRef(tgt,lId),{id:lId,classId:tgt,title:l.title||`Lesson ${i+1}`,burmeseContent:l.burmeseContent||l.content||'',imageBaseUrl:l.imageBaseUrl||imgBase,variants:l.variants||{},createdAt:toDate(l.timestamp)});
+          }
+        }catch(err){console.error('Lessons restore:',err);errors.push('lessons');}
+        try{
+          for(const stu of(data.roster||data.students||[])){
+            const sName=stu.studentName||stu.name||'';
+            const docId=`${tgt}_${encodeURIComponent(sName)}`;
+            const rRef=doc(db,P(`classRoster/${docId}`));
+            const{id,...rData}=stu;
+            await setDoc(rRef,{...rData,classId:tgt,studentName:sName,isOnline:false},{merge:true});
+          }
+        }catch(err){console.error('Roster restore:',err);errors.push('roster');}
+        try{
+          for(const s of[...(data.scores||[]),...(data.globalScores||[])]){
+            const{id,timestamp,...r}=s;
+            const docId=id||`${r.userId||'u'}_${r.lessonId||Date.now()}`;
+            await setDoc(doc(abhiScoresRef(),docId),{...r,classId:tgt,timestamp:toDate(timestamp)});
+          }
+        }catch(err){console.error('Scores restore:',err);errors.push('scores');}
+        try{
+          for(const a of(data.activityFeed||[])){const{id,timestamp,...r}=a;await setDoc(doc(abhiActivityRef(),id||`a${Date.now()}_${Math.random().toString(36).slice(2,7)}`),{...r,classId:r.classId||tgt,timestamp:toDate(timestamp)});}
+        }catch(err){console.error('Activity restore:',err);errors.push('notifications');}
+        try{
+          for(const[key,rList]of Object.entries(data.quizResults||{})){const parts=key.split('_');const g=parts.pop();const lId=parts.join('_');if(!lId)continue;for(const r of rList){const{id,timestamp,...rest}=r;await setDoc(doc(abhiResultsRef(tgt,lId,g),id||`r${Date.now()}`),{...rest,timestamp:toDate(timestamp)});}}
+        }catch(err){console.error('Quiz results restore:',err);errors.push('quiz results');}
+        try{
+          for(const[lessonId,qList]of Object.entries(data.questions||{})){for(const q of qList){const{id,...rest}=q;await setDoc(doc(abhiQRef(tgt,lessonId),id||`q${Date.now()}`),{...rest});}}
+        }catch(err){console.error('Q&A restore:',err);errors.push('discussions');}
+        showMsg(errors.length?`⚠ "${tgt}" ထဲ ဝင်ပေမဲ့ ဒီအပိုင်းတွေမှာ error တက်ခဲ့တယ်: ${errors.join(', ')}. Console ကြည့်ပါ။`:`✅ Restored ${raw.length} lesson(s) into "${tgt}".`);
         if(!classId)enterClass(tgt);
       }catch(err){console.error(err);showMsg(`Error: ${err.message}`);}
       finally{setLoading(false);event.target.value='';}
