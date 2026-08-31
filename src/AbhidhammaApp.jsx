@@ -648,6 +648,7 @@ const AbhiLessonItem = ({ lesson, classId, isTeacher, studentAgeGroup, studentNa
   const [leaderboard,setLb]=useState([]);const [showLb,setShowLb]=useState(false);
   const [imgUrlDraft,setImgUrlDraft]=useState(lesson.imageBaseUrl||'');
   const [imgSaving,setImgSaving]=useState(false);
+  const [imgSavingAll,setImgSavingAll]=useState(false);
   const [imgSaved,setImgSaved]=useState(false);
   const ref=useRef(null);
   
@@ -666,6 +667,23 @@ const AbhiLessonItem = ({ lesson, classId, isTeacher, studentAgeGroup, studentNa
       setImgSaved(true);setTimeout(()=>setImgSaved(false),2500);
     }catch(e){console.error('Image URL save:',e);}
     finally{setImgSaving(false);}
+  };
+
+  // Save this image URL to EVERY lesson in the class (folder change applies to all at once)
+  const saveImgUrlToAllLessons = async () => {
+    if(!classId)return;
+    if(!window.confirm('Change the image folder for ALL lessons in this class?'))return;
+    setImgSavingAll(true);
+    try{
+      const norm=normalizeImgBaseUrl(imgUrlDraft);
+      const snap=await getDocs(abhiLessonsRef(classId));
+      const batch=writeBatch(db);
+      snap.docs.forEach(d=>batch.update(d.ref,{imageBaseUrl:norm||''}));
+      await batch.commit();
+      setImgUrlDraft(norm||'');
+      setImgSaved(true);setTimeout(()=>setImgSaved(false),2500);
+    }catch(e){console.error('Image URL save-all:',e);}
+    finally{setImgSavingAll(false);}
   };
   
   useEffect(()=>{if(isOpen&&ref.current){setTimeout(()=>{const y=ref.current.getBoundingClientRect().top+window.scrollY-80;window.scrollTo({top:y,behavior:'smooth'});},100);}},[isOpen]);
@@ -755,9 +773,13 @@ const AbhiLessonItem = ({ lesson, classId, isTeacher, studentAgeGroup, studentNa
                   <input value={imgUrlDraft} onChange={e=>{setImgUrlDraft(e.target.value);setImgSaved(false);}}
                     placeholder={classImageBase||DEFAULT_IMG_BASE}
                     className="flex-1 bg-transparent text-white text-xs focus:outline-none border-b border-gray-600 px-1 focus:border-teal-500"/>
-                  <button onClick={saveImgUrl} disabled={imgSaving} type="button"
+                  <button onClick={saveImgUrl} disabled={imgSaving||imgSavingAll} type="button"
                     className="text-xs font-bold px-2 py-1 bg-teal-600 hover:bg-teal-700 rounded text-white disabled:opacity-50 whitespace-nowrap">
-                    {imgSaving?'Saving…':'Save'}
+                    {imgSaving?'Saving…':'Save (this lesson)'}
+                  </button>
+                  <button onClick={saveImgUrlToAllLessons} disabled={imgSaving||imgSavingAll} type="button"
+                    className="text-xs font-bold px-2 py-1 bg-amber-600 hover:bg-amber-700 rounded text-white disabled:opacity-50 whitespace-nowrap">
+                    {imgSavingAll?'Saving…':'Save to ALL lessons'}
                   </button>
                   {imgSaved&&<CheckCircle className="w-4 h-4 text-green-400 shrink-0"/>}
                 </div>
@@ -1236,13 +1258,6 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
                   </div>
                   {!importClassId.trim()&&<p className="text-amber-500/70 text-xs">⚠ Enter a Class ID above before importing</p>}
                 </div>
-                <div className="flex items-center gap-2 mb-2 p-2 bg-gray-900 rounded border border-amber-600/40">
-                  <span className="text-amber-400 text-xs ml-1 whitespace-nowrap font-semibold">🖼 Class Default Image URL:</span>
-                  <input value={classImageBase} onChange={e=>setClassImageBase(e.target.value)} placeholder={DEFAULT_IMG_BASE}
-                    className="flex-1 bg-transparent text-white text-xs focus:outline-none border-b border-amber-600/40 px-1 focus:border-amber-400"
-                    onBlur={async()=>{ if(!classId) return; const norm=normalizeImgBaseUrl(classImageBase)||DEFAULT_IMG_BASE; setClassImageBase(norm); await updateDoc(abhiClassDocRef(classId),{imageBaseUrl:norm}).catch(()=>{}); }}/>
-                </div>
-                <div className="flex items-center gap-2 mb-4 p-2 bg-gray-900 rounded border border-gray-600"><span className="text-gray-400 text-xs ml-1 whitespace-nowrap">🖼 Lesson Override URL:</span><input value={newImgBase} onChange={e=>setNewImgBase(e.target.value)} placeholder={classImageBase||DEFAULT_IMG_BASE} className="flex-1 bg-transparent text-white text-xs focus:outline-none border-b border-gray-600 px-1 focus:border-teal-500"/></div>
                 <h3 className="text-xl font-bold text-teal-300 mb-4">{editingLesson?'Edit Lesson':'Add Lesson'} — <span className="text-amber-400">{classId}</span></h3>
                 <form onSubmit={handleSaveLesson} className="space-y-4">
                   <input value={newTitle} onChange={e=>setNewTitle(e.target.value)} placeholder="Lesson Title" className="w-full p-3 bg-gray-900 border border-gray-600 rounded text-white focus:border-teal-500 focus:outline-none" disabled={loading}/>
@@ -1333,11 +1348,23 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
             {/* Step 3: Has profile + class → show lessons */}
             {studentProfile&&classId&&(
               <div key={classId} className="space-y-4">
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                   <h2 className="text-2xl font-bold text-white">Class: <span className="text-amber-400">{classId}</span></h2>
                   <button onClick={()=>{setClassId('');setClassData(null);setLessons([]);}}
                     className="text-sm text-gray-400 hover:text-white underline">← Change Class</button>
                 </div>
+                {(classStats[classId]?.rank>0||classStats[classId]?.completedCount>0)&&(
+                  <div className="flex items-center gap-2 flex-wrap mb-4">
+                    {classStats[classId]?.rank>0&&(
+                      <span className="text-xs font-bold text-yellow-700 bg-yellow-100 border border-yellow-300 px-2 py-0.5 rounded-full">🏆 Rank #{classStats[classId].rank}</span>
+                    )}
+                    {classStats[classId]?.completedCount>0&&(
+                      classStats[classId].totalLessons>0&&classStats[classId].completedCount>=classStats[classId].totalLessons
+                        ? <span className="text-xs font-bold text-green-700 bg-green-100 border border-green-300 px-2 py-0.5 rounded-full">✅ all completed</span>
+                        : <span className="text-xs font-bold text-blue-700 bg-blue-100 border border-blue-300 px-2 py-0.5 rounded-full">{classStats[classId].completedCount}{classStats[classId].totalLessons?` / ${classStats[classId].totalLessons}`:''} completed</span>
+                    )}
+                  </div>
+                )}
                 {lessons.length===0&&<p className="text-center text-gray-500 py-6">No lessons yet.</p>}
                 {lessons.map(l=>(
                   <AbhiLessonItem key={l.id} lesson={l} classId={classId}
