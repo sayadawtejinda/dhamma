@@ -128,7 +128,7 @@ const QuizModule = ({ classId,lessonId,lessonTitle,userId,userName,ageGroup,quiz
 };
 
 // ─── NotificationBell ─────────────────────────────────────────────────────────
-const NotificationBell = ({ userId }) => {
+const NotificationBell = ({ userId, classId }) => {
   const [n,setN]=useState([]);const [open,setOpen]=useState(false);const [lr,setLr]=useState(()=>parseInt(localStorage.getItem(`abhidhamma_notif_${userId}`))||0);
   useEffect(()=>{if(!db||!userId)return;const q=query(abhiActivityRef(),orderBy('timestamp','desc'),limit(15));return onSnapshot(q,snap=>setN(snap.docs.map(d=>({id:d.id,...d.data()})).filter(n=>!classId||n.classId===classId)));},[userId,classId]);
   const uc=n.filter(x=>{const ts=x.timestamp?.toMillis?x.timestamp.toMillis():(x.timestamp?.seconds*1000)||0;return ts>lr;}).length;
@@ -1094,7 +1094,7 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
                 <Trophy className="w-5 h-5"/>
               </button>
             )}
-            {classId&&<NotificationBell userId={userId}/>}
+            {classId&&<NotificationBell userId={userId} classId={classId}/>}
           </div>
         </header>
 
