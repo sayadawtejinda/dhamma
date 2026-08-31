@@ -112,23 +112,7 @@ const QuizModule = ({ classId,lessonId,lessonTitle,userId,userName,ageGroup,quiz
     },1500);
   };
   if(state==='failed')return<div className="fixed inset-0 bg-gray-900 z-50 flex items-center justify-center p-4"><div className="bg-gray-800 p-8 rounded-2xl text-center border border-red-500"><div className="text-6xl mb-4">😔</div><h2 className="text-3xl font-bold text-red-400 mb-2">Not Enough Correct!</h2><p className="text-gray-300 mb-6">Need <span className="text-yellow-400 font-black">8+ correct</span> to pass.</p><button onClick={onClose} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-full">Go Back & Review</button></div></div>;
-  if(state==='finished')return(
-    <div className="fixed inset-0 bg-gray-900 z-50 flex items-center justify-center p-4">
-      <div className="bg-gradient-to-b from-gray-800 to-gray-900 p-8 rounded-2xl text-center border-2 border-yellow-500/50 shadow-2xl max-w-md w-full relative overflow-hidden animate-bounce-in">
-        <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-400"/>
-        <Trophy className="w-20 h-20 text-yellow-400 mx-auto mb-4"/>
-        <p className="text-amber-400 text-xs font-black tracking-widest uppercase mb-1">🎓 Certificate of Completion</p>
-        <h2 className="text-2xl font-bold text-white mb-1">{lessonTitle||'Lesson'}</h2>
-        <p className="text-gray-400 text-sm mb-5">Awarded to <span className="text-white font-bold">{userName}</span></p>
-        <div className="flex justify-center gap-8 mb-5">
-          <div><p className="text-3xl font-black text-indigo-400">{score}</p><p className="text-gray-500 text-xs uppercase tracking-wide">Score</p></div>
-          <div><p className="text-3xl font-black text-green-400">{correct}/{quizData.questions.length}</p><p className="text-gray-500 text-xs uppercase tracking-wide">Correct</p></div>
-        </div>
-        <p className="text-gray-500 text-xs mb-6">{new Date().toLocaleDateString()}</p>
-        <button onClick={onClose} className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-full w-full">Finish</button>
-      </div>
-    </div>
-  );
+  if(state==='finished')return<div className="fixed inset-0 bg-gray-900 z-50 flex items-center justify-center p-4"><div className="bg-gray-800 p-8 rounded-2xl text-center"><Trophy className="w-20 h-20 text-yellow-400 mx-auto mb-4"/><h2 className="text-3xl font-bold text-white mb-2">Quiz Completed!</h2><p className="text-gray-400 text-lg mb-6">Score: <span className="text-indigo-400 font-bold">{score}</span></p><button onClick={onClose} className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-full">Finish</button></div></div>;
   return(
     <div className="fixed inset-0 bg-gray-900 z-50 flex flex-col items-center justify-center p-4 overflow-y-auto">
       <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-white"><X className="w-8 h-8"/></button>
@@ -146,18 +130,7 @@ const QuizModule = ({ classId,lessonId,lessonTitle,userId,userName,ageGroup,quiz
 // ─── NotificationBell ─────────────────────────────────────────────────────────
 const NotificationBell = ({ userId, classId }) => {
   const [n,setN]=useState([]);const [open,setOpen]=useState(false);const [lr,setLr]=useState(()=>parseInt(localStorage.getItem(`abhidhamma_notif_${userId}`))||0);
-  useEffect(()=>{
-    if(!db||!userId)return;
-    // IMPORTANT: filter by classId directly in the query (server-side), not via
-    // a global limit(15) + client-side filter. The old approach pulled only the
-    // latest 15 docs across ALL classes, so restoring/adding activity for one
-    // class could push another class's notifications out of that window and
-    // make them appear to "disappear" even though they still existed in Firestore.
-    const q=classId
-      ?query(abhiActivityRef(),where('classId','==',classId),orderBy('timestamp','desc'),limit(15))
-      :query(abhiActivityRef(),orderBy('timestamp','desc'),limit(15));
-    return onSnapshot(q,snap=>setN(snap.docs.map(d=>({id:d.id,...d.data()}))));
-  },[userId,classId]);
+  useEffect(()=>{if(!db||!userId)return;const q=query(abhiActivityRef(),orderBy('timestamp','desc'),limit(15));return onSnapshot(q,snap=>setN(snap.docs.map(d=>({id:d.id,...d.data()})).filter(n=>!classId||n.classId===classId)));},[userId,classId]);
   const uc=n.filter(x=>{const ts=x.timestamp?.toMillis?x.timestamp.toMillis():(x.timestamp?.seconds*1000)||0;return ts>lr;}).length;
   const toggle=()=>{if(!open){const now=Date.now();setLr(now);localStorage.setItem(`abhidhamma_notif_${userId}`,now);}setOpen(!open);};
   return(
@@ -331,7 +304,6 @@ const AbhiLinkToTutoring = ({ classId, approved, onLink }) => {
 const AbhiQA = ({ classId, lessonId, isTeacher, userId, userName, suggestedQuestions=[] }) => {
   const [questions,setQs]=useState([]);const [text,setText]=useState('');const [replyText,setReplyText]=useState({});const [busy,setBusy]=useState(false);
   const [visibleSuggestions,setVisibleSuggestions]=useState([]);const [suggestionPool,setSuggestionPool]=useState([]);
-  const qaTopRef=useRef(null);const qaBottomRef=useRef(null);
   
   // Critical: update suggestions when prop changes (prop may arrive after mount)
   useEffect(()=>{
@@ -359,21 +331,7 @@ const AbhiQA = ({ classId, lessonId, isTeacher, userId, userName, suggestedQuest
   const toggleLike=async(qId,replyId=null)=>{const ref=doc(db,'artifacts',ABHIDHAMMA_APP_ID,'public','data','classes',classId,'questions',lessonId,'items',qId);try{const snap=await getDoc(ref);const data=snap.data();if(replyId){const rs=data.replies.map(r=>r.id===replyId?{...r,likes:r.likes?.includes(userId)?r.likes.filter(id=>id!==userId):[...(r.likes||[]),userId]}:r);await updateDoc(ref,{replies:rs});}else{const lks=data.likes||[];await updateDoc(ref,{likes:lks.includes(userId)?lks.filter(id=>id!==userId):[...lks,userId]});}}catch(e){console.error(e);}};
 
   return(
-    <div className="space-y-4 mt-2 relative">
-      <div ref={qaTopRef}/>
-      {/* Floating quick-scroll icons — only show once there are enough questions to bother scrolling */}
-      {questions.length>3&&(
-        <div className="fixed bottom-24 right-4 z-40 flex flex-col gap-2">
-          <button onClick={()=>qaTopRef.current?.scrollIntoView({behavior:'smooth',block:'start'})}
-            title="အပေါ်ဆုံးသို့" className="p-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-lg border border-indigo-400/30 transition hover:scale-110 active:scale-95">
-            <ArrowUp className="w-4 h-4"/>
-          </button>
-          <button onClick={()=>qaBottomRef.current?.scrollIntoView({behavior:'smooth',block:'end'})}
-            title="အောက်ဆုံးသို့" className="p-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-lg border border-indigo-400/30 transition hover:scale-110 active:scale-95">
-            <ArrowDown className="w-4 h-4"/>
-          </button>
-        </div>
-      )}
+    <div className="space-y-4 mt-2">
       {/* AI Suggested Questions */}
       {!isTeacher && visibleSuggestions.length > 0 && (
         <div className="bg-indigo-900/30 p-3 rounded-xl border border-indigo-500/30">
@@ -414,7 +372,6 @@ const AbhiQA = ({ classId, lessonId, isTeacher, userId, userName, suggestedQuest
           <button onClick={ask} disabled={busy||!text} className="bg-green-600 px-4 py-2 rounded-xl text-white font-bold hover:bg-green-700">Ask</button>
         </div>
       </div>
-      <div ref={qaBottomRef}/>
     </div>
   );
 };
