@@ -695,8 +695,9 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma }) {
   // SmartStudy completion counts for the selected student (loaded when student+lesson are selected)
   const [ssStudentClassCount, setSsStudentClassCount] = useState(null);   // per-class (e.g. BUDDHA)
   const [ssStudentTotalCount, setSsStudentTotalCount] = useState(null);   // all classes combined
-  const [abhiStudentCount, setAbhiStudentCount] = useState(null);          // abhi lessons completed
-  const [abhiStudentScore, setAbhiStudentScore] = useState(null);          // abhi total score
+  const [abhiStudentCount, setAbhiStudentCount] = useState(null);
+  const [abhiStudentScore, setAbhiStudentScore] = useState(null);
+  const [abhiTotalCount,   setAbhiTotalCount]   = useState(null); // total lessons in the abhi class
   const [sendAbhidhammaClassId, setSendAbhidhammaClassId] = useState(''); // class chosen in Send Action for abhidhamma:// lessons
   const [abhidhammaClasses, setAbhidhammaClasses] = useState(null);   // null = not yet loaded
   const [abhidhammaLoading, setAbhidhammaLoading] = useState(false);
@@ -909,8 +910,12 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma }) {
 
   // Abhidhamma student progress for Assign Lesson — handles old & new format
   useEffect(()=>{
-    setAbhiStudentCount(null);setAbhiStudentScore(null);
-    if(!sendAbhidhammaClassId||!selectedStudentUid)return;
+    setAbhiStudentCount(null);setAbhiStudentScore(null);setAbhiTotalCount(null);
+    if(!sendAbhidhammaClassId)return;
+    // Load total lesson count for the class
+    getDocs(collection(db,'artifacts','lesson-translator-app-v6','public','data','classes',sendAbhidhammaClassId,'lessons'))
+      .then(snap=>setAbhiTotalCount(snap.size)).catch(()=>setAbhiTotalCount(0));
+    if(!selectedStudentUid)return;
     const student=students.find(s=>s.id===selectedStudentUid);if(!student)return;
     const allNames=[...new Set([student.name,...(Object.values(student?.abhidhammaNames||{}))].filter(Boolean))];
     (async()=>{
@@ -2317,25 +2322,7 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
           })()}
 
           {/* Abhidhamma student progress (when abhi class selected) */}
-          {(() => {
-            const selectedLesson = lessonBank.find(l => l.id === selectedBankLessonId);
-            if (!selectedStudentUid || !selectedLesson || selectedLesson.link !== 'abhidhamma://' || !sendAbhidhammaClassId) return null;
-            const student = students.find(s => s.id === selectedStudentUid);
-            if (!student) return null;
-            return (
-              <div className="mb-4 space-y-3">
-                <div className="p-4 bg-amber-50 rounded-lg border border-amber-200">
-                  <p className="text-amber-800 font-bold mb-1">Student Progress on "{sendAbhidhammaClassId}" Abhidhamma Class:</p>
-                  {abhiStudentCount===null
-                    ? <p className="text-sm text-amber-600">Loading…</p>
-                    : abhiStudentCount > 0
-                      ? <p className="text-sm text-amber-700">{student.name} completed <strong>{abhiStudentCount}</strong> lesson{abhiStudentCount!==1?'s':''} · Total: <strong>{(abhiStudentScore||0).toLocaleString()} pts</strong></p>
-                      : <p className="text-sm text-amber-600">No progress recorded yet for {sendAbhidhammaClassId}.</p>
-                  }
-                </div>
-              </div>
-            );
-          })()}
+
 
           {selectedStudentUid && selectedBankLessonId && sendTargetType === 'student' && (() => {
               const student = students.find(s => s.id === selectedStudentUid);
@@ -2373,17 +2360,22 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                     {lesson.unitCount > 0 && (
                       <div className="p-4 bg-indigo-50 rounded-lg border border-indigo-200">
                         <p className="text-indigo-800 font-bold mb-1">
-                          Student Progress on this {ssClassForTrophy ? `${ssClassForTrophy.classId} ` : ''}Lesson:
+                          Student Progress on this {lesson.link?.startsWith('abhidhamma://') && sendAbhidhammaClassId ? `${sendAbhidhammaClassId} ` : ssClassForTrophy ? `${ssClassForTrophy.classId} ` : ''}Lesson:
                         </p>
                         {(() => {
-                          // Use live SmartStudy counts when available, fall back to reported counts
-                          const displayedCompleted = ssClassForTrophy
-                            ? (ssStudentClassCount ?? completedUnit)
-                            : (ssStudentTotalCount ?? completedUnit);
-                          const displayedTotal = effectiveUnitCountForDisplay;
+                          const isAbhi = lesson.link?.startsWith('abhidhamma://');
+                          const displayedCompleted = isAbhi
+                            ? (abhiStudentCount ?? completedUnit)
+                            : ssClassForTrophy
+                              ? (ssStudentClassCount ?? completedUnit)
+                              : (ssStudentTotalCount ?? completedUnit);
+                          const displayedTotal = isAbhi
+                            ? (abhiTotalCount ?? effectiveUnitCountForDisplay)
+                            : effectiveUnitCountForDisplay;
+                          const unitLabel = isAbhi ? 'Lesson' : (lesson.unitLabel || 'Lesson');
                           return displayedCompleted > 0 ? (
                             <p className="text-sm text-indigo-700">
-                              {student.name} completed up to {lesson.unitLabel || 'Lesson'} {displayedCompleted} / {displayedTotal}.
+                              {student.name} completed up to {unitLabel} {displayedCompleted} / {displayedTotal}.
                             </p>
                           ) : (
                             <p className="text-sm text-indigo-700">No progress reported yet for this lesson.</p>
@@ -2395,7 +2387,7 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                     {maxAvailable > 0 && (
                       <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
                         <p className="text-yellow-800 font-bold mb-2">
-                          Trophy Status{ssClassForTrophy ? ` for ${ssClassForTrophy.classId}` : ' for this Lesson'}:
+                          Trophy Status{lesson.link?.startsWith('abhidhamma://') && sendAbhidhammaClassId ? ` for ${sendAbhidhammaClassId}` : ssClassForTrophy ? ` for ${ssClassForTrophy.classId}` : ' for this Lesson'}:
                         </p>
                         <ul className="text-sm text-yellow-700 space-y-1 mb-3">
                           <li>Max Available: <strong>{maxAvailable}</strong></li>
