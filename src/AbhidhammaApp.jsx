@@ -106,7 +106,7 @@ const QuizModule = ({ classId,lessonId,lessonTitle,userId,userName,ageGroup,quiz
           if(!prev.exists()||prev.data().score<fs){
             await setDoc(sRef,{classId,lessonId,studentName:userName,name:userName,score:fs,group:ageGroup,userId,timestamp:serverTimestamp()});
           }
-          await addDoc(abhiActivityRef(),{type:'quiz_completed',studentName:userName,lessonTitle,group:ageGroup,timestamp:serverTimestamp()});
+          await addDoc(abhiActivityRef(),{type:'quiz_completed',studentName:userName,lessonTitle,classId,lessonId,group:ageGroup,timestamp:serverTimestamp()});
         }catch(e){console.error(e);}
       }
     },1500);
@@ -130,7 +130,7 @@ const QuizModule = ({ classId,lessonId,lessonTitle,userId,userName,ageGroup,quiz
 // ─── NotificationBell ─────────────────────────────────────────────────────────
 const NotificationBell = ({ userId, classId }) => {
   const [n,setN]=useState([]);const [open,setOpen]=useState(false);const [lr,setLr]=useState(()=>parseInt(localStorage.getItem(`abhidhamma_notif_${userId}`))||0);
-  useEffect(()=>{if(!db||!userId)return;const q=query(abhiActivityRef(),orderBy('timestamp','desc'),limit(15));return onSnapshot(q,snap=>setN(snap.docs.map(d=>({id:d.id,...d.data()})).filter(n=>!classId||n.classId===classId)));},[userId,classId]);
+  useEffect(()=>{if(!db||!userId)return;const q=classId?query(abhiActivityRef(),where('classId','==',classId),orderBy('timestamp','desc'),limit(15)):query(abhiActivityRef(),orderBy('timestamp','desc'),limit(15));return onSnapshot(q,snap=>setN(snap.docs.map(d=>({id:d.id,...d.data()}))));},[userId,classId]);
   const uc=n.filter(x=>{const ts=x.timestamp?.toMillis?x.timestamp.toMillis():(x.timestamp?.seconds*1000)||0;return ts>lr;}).length;
   const toggle=()=>{if(!open){const now=Date.now();setLr(now);localStorage.setItem(`abhidhamma_notif_${userId}`,now);}setOpen(!open);};
   return(
@@ -304,6 +304,9 @@ const AbhiLinkToTutoring = ({ classId, approved, onLink }) => {
 const AbhiQA = ({ classId, lessonId, isTeacher, userId, userName, suggestedQuestions=[] }) => {
   const [questions,setQs]=useState([]);const [text,setText]=useState('');const [replyText,setReplyText]=useState({});const [busy,setBusy]=useState(false);
   const [visibleSuggestions,setVisibleSuggestions]=useState([]);const [suggestionPool,setSuggestionPool]=useState([]);
+  const qaTopRef=useRef(null);const qaBottomRef=useRef(null);
+  const scrollToTop=()=>qaTopRef.current?.scrollIntoView({behavior:'smooth',block:'start'});
+  const scrollToBottom=()=>qaBottomRef.current?.scrollIntoView({behavior:'smooth',block:'end'});
   
   // Critical: update suggestions when prop changes (prop may arrive after mount)
   useEffect(()=>{
@@ -330,8 +333,14 @@ const AbhiQA = ({ classId, lessonId, isTeacher, userId, userName, suggestedQuest
   const reply=async(qId)=>{const t=replyText[qId];if(!t?.trim()||busy)return;setBusy(true);try{const r={id:crypto.randomUUID(),userId,userName:userName||(isTeacher?'Teacher':'Student'),role:isTeacher?'Teacher':'Student',text:t.trim(),timestamp:new Date().toISOString(),likes:[]};await updateDoc(doc(db,'artifacts',ABHIDHAMMA_APP_ID,'public','data','classes',classId,'questions',lessonId,'items',qId),{replies:arrayUnion(r)});}catch(e){console.error(e);}finally{setReplyText(p=>({...p,[qId]:''}));setBusy(false);}};
   const toggleLike=async(qId,replyId=null)=>{const ref=doc(db,'artifacts',ABHIDHAMMA_APP_ID,'public','data','classes',classId,'questions',lessonId,'items',qId);try{const snap=await getDoc(ref);const data=snap.data();if(replyId){const rs=data.replies.map(r=>r.id===replyId?{...r,likes:r.likes?.includes(userId)?r.likes.filter(id=>id!==userId):[...(r.likes||[]),userId]}:r);await updateDoc(ref,{replies:rs});}else{const lks=data.likes||[];await updateDoc(ref,{likes:lks.includes(userId)?lks.filter(id=>id!==userId):[...lks,userId]});}}catch(e){console.error(e);}};
 
-  return(
-    <div className="space-y-4 mt-2">
+    return(
+    <div className="space-y-4 mt-2" ref={qaTopRef}>
+      {questions.length>3&&(
+        <div className="fixed bottom-24 right-4 z-40 flex flex-col gap-2">
+          <button onClick={scrollToTop} className="p-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-lg" title="အပေါ်ဆုံးသို့"><ArrowUp className="w-5 h-5"/></button>
+          <button onClick={scrollToBottom} className="p-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-lg" title="အောက်ဆုံးသို့"><ArrowDown className="w-5 h-5"/></button>
+        </div>
+      )}
       {/* AI Suggested Questions */}
       {!isTeacher && visibleSuggestions.length > 0 && (
         <div className="bg-indigo-900/30 p-3 rounded-xl border border-indigo-500/30">
@@ -372,6 +381,7 @@ const AbhiQA = ({ classId, lessonId, isTeacher, userId, userName, suggestedQuest
           <button onClick={ask} disabled={busy||!text} className="bg-green-600 px-4 py-2 rounded-xl text-white font-bold hover:bg-green-700">Ask</button>
         </div>
       </div>
+      <div ref={qaBottomRef}/>
     </div>
   );
 };
