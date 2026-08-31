@@ -130,7 +130,7 @@ const QuizModule = ({ classId,lessonId,lessonTitle,userId,userName,ageGroup,quiz
 // ─── NotificationBell ─────────────────────────────────────────────────────────
 const NotificationBell = ({ userId }) => {
   const [n,setN]=useState([]);const [open,setOpen]=useState(false);const [lr,setLr]=useState(()=>parseInt(localStorage.getItem(`abhidhamma_notif_${userId}`))||0);
-  useEffect(()=>{if(!db||!userId)return;const q=query(abhiActivityRef(),orderBy('timestamp','desc'),limit(15));return onSnapshot(q,snap=>setN(snap.docs.map(d=>({id:d.id,...d.data()}))));},[userId]);
+  useEffect(()=>{if(!db||!userId)return;const q=query(abhiActivityRef(),orderBy('timestamp','desc'),limit(15));return onSnapshot(q,snap=>setN(snap.docs.map(d=>({id:d.id,...d.data()})).filter(n=>!classId||n.classId===classId)));},[userId,classId]);
   const uc=n.filter(x=>{const ts=x.timestamp?.toMillis?x.timestamp.toMillis():(x.timestamp?.seconds*1000)||0;return ts>lr;}).length;
   const toggle=()=>{if(!open){const now=Date.now();setLr(now);localStorage.setItem(`abhidhamma_notif_${userId}`,now);}setOpen(!open);};
   return(
@@ -168,7 +168,7 @@ const AbhiClassRoster = ({ userId, classId, onLink }) => {
   },[classId]);
 
   // Auto-approve pending when autoApprove is on
-  useEffect(()=>{ if(aa) students.filter(s=>s.status==='pending').forEach(s=>approveStu(s.id,s.studentName)); },[students,aa]);
+  useEffect(()=>{ if(!aa||students.length===0)return; students.filter(s=>s.status==='pending').forEach(s=>{ if(s.id&&s.studentName) approveStu(s.id,s.studentName); }); },[students,aa]);
 
   const approveStu=async(docId,name)=>{
     const ref=doc(db,P(`classRoster/${docId}`));const snap=await getDoc(ref);if(!snap.exists())return;
@@ -382,7 +382,12 @@ const AbhiTeacherClassPicker = ({ onSelectClass, onCreateClass }) => {
   const [classes,setClasses]=useState([]); const [newId,setNewId]=useState(''); const [renaming,setRenaming]=useState(null); const [renameVal,setRenameVal]=useState('');
   useEffect(()=>{ return onSnapshot(abhiClassesRef(),snap=>setClasses(snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>a.id.localeCompare(b.id)))); },[]);
   const handleRename=async(classId,displayName)=>{if(!displayName.trim())return;await updateDoc(abhiClassDocRef(classId),{displayName:displayName.trim()});setRenaming(null);};
-  const handleCreate=async()=>{if(!newId.trim())return;await setDoc(abhiClassDocRef(newId.trim()),{classId:newId.trim(),autoApprove:false,createdAt:serverTimestamp()},{merge:true});onSelectClass(newId.trim());};
+  const handleCreate=async()=>{
+    if(!newId.trim())return;
+    try{ await setDoc(abhiClassDocRef(newId.trim()),{classId:newId.trim(),autoApprove:false,createdAt:serverTimestamp()},{merge:true}); }
+    catch(e){ console.error('Class create:',e); }
+    onSelectClass(newId.trim());
+  };
   return(
     <div className="max-w-lg mx-auto mt-10 p-6 space-y-6">
       <h2 className="text-3xl font-bold text-amber-700 text-center">Teacher — Choose Class</h2>
@@ -406,7 +411,19 @@ const AbhiTeacherClassPicker = ({ onSelectClass, onCreateClass }) => {
                   <button onClick={()=>{setRenaming(c.id);setRenameVal(c.displayName||c.id);}} className="text-gray-400 hover:text-amber-500 p-2" title="Rename display name">
                     <Edit2 className="w-4 h-4"/>
                   </button>
-                  <button onClick={async()=>{if(!window.confirm(`Delete class "${c.id}"? This only removes the class entry, not the lessons/roster inside.`))return;try{await deleteDoc(abhiClassDocRef(c.id));}catch(e){console.error(e);}}} className="text-gray-400 hover:text-red-500 p-2" title="Delete class entry">
+                  <button onClick={async()=>{if(!window.confirm(`Delete class "${c.id}" + ALL lessons, roster & scores? Cannot be undone.`))return;try{
+                      const[lSnap,rSnap,actSnap]=await Promise.all([
+                        getDocs(abhiLessonsRef(c.id)),
+                        getDocs(query(abhiRosterRef(),where('classId','==',c.id))),
+                        getDocs(query(abhiActivityRef(),where('classId','==',c.id)))
+                      ]);
+                      await Promise.all([
+                        ...lSnap.docs.map(d=>deleteDoc(d.ref)),
+                        ...rSnap.docs.map(d=>deleteDoc(d.ref)),
+                        ...actSnap.docs.map(d=>deleteDoc(d.ref)),
+                        deleteDoc(abhiClassDocRef(c.id))
+                      ]);
+                    }catch(e){console.error(e);}}} className="text-gray-400 hover:text-red-500 p-2" title="Delete class + all contents">
                     <Trash2 className="w-4 h-4"/>
                   </button>
                 </>
@@ -571,22 +588,6 @@ const AbhiTeacherLogin = ({ onComplete, onClose }) => {
   );
 };
 
-const AbhiWelcomeModal = ({ userId, classId, onStudentComplete, onTeacherComplete }) => {
-  const [step,setStep]=useState('role_select');const [name,setName]=useState('');const [grp,setGrp]=useState(null);const [pass,setPass]=useState('');const [err,setErr]=useState('');const [busy,setBusy]=useState(false);
-  const handleSubmit=async()=>{if(!name.trim()||!grp)return;setBusy(true);try{const rRef=abhiRosterDocRef(classId,name.trim());const cRef=abhiClassDocRef(classId);const[rSnap,cSnap]=await Promise.all([getDoc(rRef),getDoc(cRef)]);const aa=cSnap.exists()?cSnap.data().autoApprove:false;const status=aa?'approved':'pending';if(rSnap.exists()){const d=rSnap.data();if(d.status==='approved'){onStudentComplete({...d});return;}await updateDoc(rRef,{pendingName:name.trim(),group:grp,status});}else{await setDoc(rRef,{classId,studentName:name.trim(),name:name.trim(),group:grp,status,joinedAt:Date.now()});}if(aa){const s=await getDoc(rRef);onStudentComplete({...s.data()});}else setStep('waiting');}catch(e){console.error(e);}finally{setBusy(false);}};
-  useEffect(()=>{if(!userId||!classId||step!=='waiting')return;return onSnapshot(abhiRosterDocRef(classId,name.trim()),snap=>{if(snap.exists()&&snap.data().status==='approved')onStudentComplete({...snap.data()});else if(snap.exists()&&snap.data().status==='rejected')setStep('role_select');});},[userId,classId,step]);
-  return(
-    <div className="fixed inset-0 bg-gray-900 z-[60] flex items-center justify-center p-4">
-      <div className="bg-amber-900/90 border border-amber-500 p-8 rounded-2xl shadow-2xl max-w-md w-full text-center relative">
-        {step!=='role_select'&&step!=='waiting'&&<button onClick={()=>{setStep('role_select');setErr('');setPass('');}} className="absolute top-4 left-4 text-amber-300 hover:text-white"><ChevronLeft className="w-8 h-8"/></button>}
-        {step==='role_select'&&<div><Globe className="w-16 h-16 mx-auto text-amber-400 mb-4 animate-pulse"/><h2 className="text-3xl font-black text-white mb-8">📚 Abhidhamma App</h2><div className="space-y-4"><button onClick={()=>setStep('student')} className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xl py-4 rounded-xl flex items-center justify-center gap-3"><User className="w-6 h-6"/>Student</button><button onClick={()=>setStep('teacher')} className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold text-xl py-4 rounded-xl flex items-center justify-center gap-3"><Key className="w-6 h-6"/>Teacher</button></div></div>}
-        {step==='student'&&<div><User className="w-16 h-16 mx-auto text-cyan-400 mb-4 animate-pulse"/><h2 className="text-2xl font-black text-white mb-2">Student Setup</h2>{classId&&<p className="text-amber-200 text-sm mb-4">Class: <strong>{classId}</strong></p>}<input className="w-full p-4 rounded-xl text-black font-bold text-center text-xl mb-4 outline-none" placeholder="Your Full Name" value={name} onChange={e=>setName(e.target.value)} disabled={busy}/><div className="grid grid-cols-2 gap-3 mb-6">{Object.entries(AGE_GROUPS).map(([k,v])=><button key={k} onClick={()=>setGrp(k)} disabled={busy} className={`p-3 rounded-lg border flex flex-col items-center gap-2 transition ${grp===k?'bg-cyan-500 border-cyan-300 text-white scale-105':'bg-gray-800 border-gray-600 text-gray-400 hover:bg-gray-700'}`}>{v.icon}<span className="text-xs font-bold">{v.label}</span></button>)}</div><button onClick={handleSubmit} disabled={!name||!grp||busy} className="w-full bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white font-black text-xl py-4 rounded-xl">{busy?<RotateCw className="w-6 h-6 mx-auto animate-spin"/>:'ENTER'}</button></div>}
-        {step==='waiting'&&<div><Lock className="w-16 h-16 mx-auto text-yellow-400 mb-4 animate-pulse"/><h2 className="text-2xl font-black text-white mb-4">Waiting for Approval…</h2><RotateCw className="w-8 h-8 mx-auto text-cyan-400 animate-spin"/></div>}
-        {step==='teacher'&&<div><Wand2 className="w-16 h-16 mx-auto text-purple-400 mb-4 animate-pulse"/><h2 className="text-3xl font-black text-white mb-4">Teacher Login</h2><input type="password" className="w-full p-4 rounded-xl text-black font-bold text-center text-xl mb-4 outline-none" placeholder="Passcode" value={pass} onChange={e=>{setPass(e.target.value);setErr('');}} onKeyDown={e=>e.key==='Enter'&&(pass===TEACHER_PASSCODE?onTeacherComplete():setErr('Incorrect.'))}/>{err&&<p className="text-red-400 mb-4 text-sm font-bold">{err}</p>}<button onClick={()=>pass===TEACHER_PASSCODE?onTeacherComplete():setErr('Incorrect.')} className="w-full bg-purple-500 hover:bg-purple-600 text-white font-black text-xl py-4 rounded-xl">LOGIN</button></div>}
-      </div>
-    </div>
-  );
-};
 
 // ─── LessonItem ───────────────────────────────────────────────────────────────
 const AbhiLessonItem = ({ lesson, classId, isTeacher, studentAgeGroup, studentName, userId, onEdit, onGenerateVariants, onTakeQuiz, isGenerating, isOpen, onToggle, classImageBase }) => {
@@ -706,7 +707,10 @@ const AbhiLessonItem = ({ lesson, classId, isTeacher, studentAgeGroup, studentNa
 
 // ─── Main AbhidhammaApp ───────────────────────────────────────────────────────
 export default function AbhidhammaApp({ entryRequest, onExit }) {
-  const [authReady,setAuthReady]=useState(false);const [userId,setUserId]=useState(null);const [isTeacher,setIsTeacher]=useState(false);const [role,setRole]=useState('Student');
+  const [authReady,setAuthReady]=useState(false);const [userId,setUserId]=useState(null);
+  // Read localStorage immediately so first render already has correct role (no flash/conflict)
+  const [isTeacher,setIsTeacher]=useState(()=>localStorage.getItem('abhidhamma_isTeacher')==='true');
+  const [role,setRole]=useState(()=>localStorage.getItem('abhidhamma_isTeacher')==='true'?'Teacher':'Student');
   const [classId,setClassId]=useState('');const [classData,setClassData]=useState(null);const [lessons,setLessons]=useState([]);const [allClasses,setAllClasses]=useState([]);
   const [studentProfile,setStudentProfile]=useState(null);const [showWelcome,setShowWelcome]=useState(false);
   const [classStats,setClassStats]=useState({}); // classId → {completedCount, rank}
@@ -725,7 +729,7 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
   const showMsg = t => { setMsg(t); setTimeout(()=>setMsg(''),4000); };
 
   useEffect(()=>{ const u=onAuthStateChanged(auth,usr=>{setUserId(usr?usr.uid:null);setAuthReady(true);}); return()=>u(); },[]);
-  useEffect(()=>{ if(localStorage.getItem('abhidhamma_isTeacher')==='true'){setIsTeacher(true);setRole('Teacher');} },[]);
+  // isTeacher & role initialized from localStorage in useState lazy initializer above
 
   // Restore saved age group profile on load (skip if teacher)
   useEffect(()=>{
@@ -819,7 +823,17 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
     return()=>{u1();u2();};
   },[classId,authReady]);
 
-  const enterClass = (cId) => { setClassId(cId);setImportClassId(cId);setOpenLessonId(null); };
+  const enterClass = (cId) => {
+    // Reset all class-specific state to prevent stale data rendering
+    setClassId(cId);
+    setImportClassId(cId);
+    setOpenLessonId(null);
+    setLessons([]);       // clear previous class's lessons
+    setClassData(null);   // clear previous class's data
+    setNewTitle('');
+    setNewContent('');
+    setEditingLesson(null);
+  };
 
   // ── Link to Tutoring (same pattern as SmartStudy) ────────────────────────
   const handleLinkStudentToTutoring = async (oldName, newName, tutoringStudentUid) => {
@@ -839,12 +853,13 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
       showMsg(`✅ Linked "${newName}" to Tutoring.`);
       return;
     }
-    // 3. Rename scores
+    // 3. Rename scores — load all then filter client-side (no composite index needed)
     try {
-      const scoresSnap = await getDocs(query(abhiScoresRef(),where('classId','==',classId),where('studentName','==',oldName)));
-      if (!scoresSnap.empty) {
+      const allScores = await getDocs(abhiScoresRef());
+      const toRename = allScores.docs.filter(d=>{const dt=d.data();return dt.studentName===oldName&&(!dt.classId||dt.classId===classId);});
+      if (toRename.length > 0) {
         const batch = writeBatch(db);
-        scoresSnap.docs.forEach(d => batch.update(d.ref,{studentName:newName}));
+        toRename.forEach(d => batch.update(d.ref,{studentName:newName,name:newName}));
         await batch.commit();
       }
     } catch(e) { console.error('Scores rename:', e); }
@@ -1033,7 +1048,7 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
         for(const[key,rList]of Object.entries(data.quizResults||{})){const parts=key.split('_');const g=parts.pop();const lId=parts.join('_');for(const r of rList){const{id,timestamp,...rest}=r;await setDoc(doc(abhiResultsRef(tgt,lId,g),id||`r${Date.now()}`),{...rest,timestamp:toDate(timestamp)});}}
         // Q&A discussions
         for(const[lessonId,qList]of Object.entries(data.questions||{})){for(const q of qList){const{id,...rest}=q;await setDoc(doc(abhiQRef(tgt,lessonId),id||`q${Date.now()}`),{...rest});}}
-        showMsg(`✅ Restored ${raw.length} lessons + records + discussions into "${tgt}".`);
+        showMsg(`✅ Restored ${raw.length} lesson(s) into "${tgt}". Check console for any errors.`);
         if(!classId)enterClass(tgt);
       }catch(err){console.error(err);showMsg(`Error: ${err.message}`);}
       finally{setLoading(false);event.target.value='';}
@@ -1088,7 +1103,7 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
           <div className="space-y-6">
 
             {!classId&&<AbhiTeacherClassPicker onSelectClass={enterClass} onCreateClass={enterClass}/>}
-            {classId&&<AbhiClassRoster userId={userId} classId={classId} onLink={handleLinkStudentToTutoring}/>}
+            {classId&&<AbhiClassRoster key={classId} userId={userId} classId={classId} onLink={handleLinkStudentToTutoring}/>}
             {classId&&(
               <div className="bg-gray-800 p-6 rounded-xl shadow-xl border border-gray-700">
                 {/* Import/Export bar — Import target class shown prominently */}
@@ -1164,7 +1179,7 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
                 ))}</div>}
               </div>
             )}
-            {/* Step 1: Real student — No age group yet → show picker (fullscreen) */}
+            {/* Step 1: Real student only (isTeacher guard prevents flash on teacher accounts) */}
             {!isTeacher && !studentProfile&&(
               <AbhiAgeGroupPicker onComplete={grp => {
                 const label = AGE_GROUPS[grp]?.label?.split(' ')[0] || 'Student';
@@ -1211,7 +1226,7 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
 
             {/* Step 3: Has profile + class → show lessons */}
             {studentProfile&&classId&&(
-              <div className="space-y-4">
+              <div key={classId} className="space-y-4">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-2xl font-bold text-white">Class: <span className="text-amber-400">{classId}</span></h2>
                   <button onClick={()=>{setClassId('');setClassData(null);setLessons([]);}}
