@@ -136,7 +136,7 @@ const extractAbhidhammaLessonId = (link) => {
 // ── Dhammaschool app (standalone HTML app — opened via window.open, NOT mounted as React component) ──
 const DHAMMASCHOOL_APP_ID = 'dhammaschool-app'; // Firestore appId used inside the HTML app's PATHS.*
 // TODO: replace with the actual hosted URL once the Dhammaschool app app is deployed.
-const DHAMMASCHOOL_APP_URL = 'https://YOUR-DHAMMASCHOOL-URL-HERE';
+const DHAMMASCHOOL_APP_URL = 'https://sayadawtejinda.github.io/dhamma/Dhammaschool.html';
 
 const extractDhammaschoolLessonId = (link) => {
   if (!link || !link.startsWith('dhammaschool://')) return null;
