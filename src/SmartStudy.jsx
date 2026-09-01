@@ -519,7 +519,7 @@ const TeacherDashboard = React.memo(({
   classRoster, handleApproveStudent, handleDeleteStudent,
   allScores, studentsWithCompletionsNotApproved, onApproveStudentsWithCompletions,
   autoApprove, handleToggleAutoApprove,
-  completionsList, onLinkStudent
+  completionsList, onLinkStudent, onUnlinkStudent
 }) => {
   const [activeTab, setActiveTab] = useState('lessons'); 
   const [linkPickerFor, setLinkPickerFor] = useState(null);
@@ -788,7 +788,15 @@ const TeacherDashboard = React.memo(({
                           <span className={`font-black text-2xl w-8 ${isOnline ? 'text-green-700' : isWarning ? 'text-red-700' : 'text-gray-500'}`}>{student.displayIndex}.</span>
                           <div>
                             <p className={`font-bold text-lg ${isOnline ? 'text-gray-800' : isWarning ? 'text-red-800' : 'text-gray-600'}`}>
-                              {student.studentName} {student.linkedToTutoring && <span className="text-xs font-semibold text-indigo-600 bg-indigo-100 px-2 py-0.5 rounded-full ml-1">🔗 Linked</span>}
+                              {student.studentName} {student.linkedToTutoring && (
+  <button
+    onClick={() => onUnlinkStudent && onUnlinkStudent(student.studentName)}
+    className="text-xs font-semibold text-indigo-600 bg-indigo-100 hover:bg-red-100 hover:text-red-600 px-2 py-0.5 rounded-full ml-1"
+    title="Click to unlink"
+  >
+    🔗 Linked
+  </button>
+)}
                             </p>
                             <div className="flex items-center mt-1">
                               {isOnline ? (
@@ -993,22 +1001,29 @@ const StudentReadLessonView = React.memo(({
   const canStartQuiz = lesson.questions && lesson.questions[studentAgeLevel] && lesson.questions[studentAgeLevel].length >= 8;
   const helperText = `Learning about ${lesson?.title || 'this lesson'} is really fun!`;
 
-  const handleCheckReflection = async () => {
+    const handleCheckReflection = async () => {
       if (!reflectionText.trim()) return;
       playClickSound?.(); setIsChecking(true);
+      // Reflection ကို အရင်ဆုံး save လုပ်မယ် — AI feedback fail ဖြစ်လည်း reflection ပျောက်မသွားအောင်
+      try {
+          await addDoc(getReflectionsCollectionRef(), { classId: classId, lessonId: lesson.lessonId, studentName: userName, text: reflectionText, timestamp: Date.now() });
+      } catch (saveErr) {
+          console.error('Error saving reflection:', saveErr);
+          setIsChecking(false);
+          alert('Reflection ကို save မလုပ်နိုင်ပါ။ Internet ချိတ်ဆက်မှုကို စစ်ပြီး ထပ်ကြိုးစားပါ။');
+          return;
+      }
       try {
           const payload = { contents: [{ parts: [{ text: `Lesson Title: ${lesson.title}\nStudent's takeaway: "${reflectionText}"` }] }], systemInstruction: { parts: [{ text: "You are a friendly English teacher. The student read a lesson and wrote a short takeaway. Praise them enthusiastically in English. Tell them their thought is great and encourage them to share it with others. Keep it very short (1-2 sentences). Do not use markdown." }] } };
           const response = await fetchWithRetry(BASE_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
           const feedback = response.candidates?.[0]?.content?.parts?.[0]?.text || 'Great job! Keep up the good work and share what you learned with your friends.';
           setAiFeedback(feedback);
-          await addDoc(getReflectionsCollectionRef(), { classId: classId, lessonId: lesson.lessonId, studentName: userName, text: reflectionText, timestamp: Date.now() });
-          setReflectionCompleted(true);
-          setTimeout(() => { setShowQuizButton(true); }, 10000);
       } catch (e) {
           setAiFeedback('Great job! Keep up the good work and share what you learned with your friends.');
-          setReflectionCompleted(true);
-          setTimeout(() => { setShowQuizButton(true); }, 10000);
-      } finally { setIsChecking(false); }
+      }
+      setReflectionCompleted(true);
+      setTimeout(() => { setShowQuizButton(true); }, 10000);
+      setIsChecking(false);
   };
 
   return (
@@ -2023,6 +2038,16 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
     }
   }, [classId]);
 
+  const handleUnlinkStudent = useCallback(async (studentName) => {
+    if (!classId || !studentName) return;
+    try {
+      await setDoc(getRosterDocRef(classId, studentName), { linkedToTutoring: false }, { merge: true });
+      setModal({ message: `"${studentName}" ကို Tutoring နဲ့ ပြန်ဖြုတ်လိုက်ပါပြီ။`, type: 'success', visible: true });
+    } catch (err) {
+      console.error('Error unlinking student:', err);
+      setModal({ message: `Unlink လုပ်လို့မရပါ: ${err.message}`, type: 'error', visible: true });
+    }
+  }, [classId]);
   const handleDownloadLessonsOnly = useCallback(() => {
     if (lessons.length === 0) { setModal({ message: "No lessons to download.", type: 'error', visible: true }); return; }
     const data = { classId, timestamp: new Date().toISOString(), lessons };
@@ -2528,7 +2553,7 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
       case 'studentWaiting': return <StudentWaitingView handleSetView={handleSetView} userName={userName} isRejected={isRejected} />;
       case 'teacherDashboard':
         if (!classData) return <ClassCreateView classId={classId} handleTeacherCreateClass={handleTeacherCreateClass} isLoading={isLoading} handleSetView={handleSetView} />;
-        return <TeacherDashboard classId={classId} newLesson={newLesson} setNewLesson={setNewLesson} lessons={lessons} isLoading={isLoading} handleSaveLesson={handleSaveLesson} handleFormatLesson={handleFormatLesson} generateQuestions={generateQuestions} handleGenerateAllLevels={handleGenerateAllLevels} handleRegenerateLevel={handleRegenerateLevel} handleEditLesson={handleEditLesson} handleDeleteLesson={handleDeleteLesson} globalLeaderboardScores={globalLeaderboardScores} setSelectedName={setSelectedName} handleSetView={handleSetView} playClickSound={playClickSound} handleDownloadLessons={handleDownloadLessons} handleUploadLessons={handleUploadLessons} fileInputRef={fileInputRef} handleDownloadLessonsOnly={handleDownloadLessonsOnly} handleUploadLessonsOnly={handleUploadLessonsOnly} fileInputRefLessonsOnly={fileInputRefLessonsOnly} heartCounts={heartCounts} setSelectedAgeLevel={setSelectedAgeLevel} classRoster={classRoster} handleApproveStudent={handleApproveStudent} handleDeleteStudent={handleDeleteStudent} autoApprove={classData?.autoApprove || false} handleToggleAutoApprove={handleToggleAutoApprove} completionsList={completionsList} onLinkStudent={handleLinkStudentToTutoring} allScores={allScores} studentsWithCompletionsNotApproved={studentsWithCompletionsNotApproved} onApproveStudentsWithCompletions={handleApproveStudentsWithCompletions} />;
+        return <TeacherDashboard classId={classId} newLesson={newLesson} setNewLesson={setNewLesson} lessons={lessons} isLoading={isLoading} handleSaveLesson={handleSaveLesson} handleFormatLesson={handleFormatLesson} generateQuestions={generateQuestions} handleGenerateAllLevels={handleGenerateAllLevels} handleRegenerateLevel={handleRegenerateLevel} handleEditLesson={handleEditLesson} handleDeleteLesson={handleDeleteLesson} globalLeaderboardScores={globalLeaderboardScores} setSelectedName={setSelectedName} handleSetView={handleSetView} playClickSound={playClickSound} handleDownloadLessons={handleDownloadLessons} handleUploadLessons={handleUploadLessons} fileInputRef={fileInputRef} handleDownloadLessonsOnly={handleDownloadLessonsOnly} handleUploadLessonsOnly={handleUploadLessonsOnly} fileInputRefLessonsOnly={fileInputRefLessonsOnly} heartCounts={heartCounts} setSelectedAgeLevel={setSelectedAgeLevel} classRoster={classRoster} handleApproveStudent={handleApproveStudent} handleDeleteStudent={handleDeleteStudent} autoApprove={classData?.autoApprove || false} handleToggleAutoApprove={handleToggleAutoApprove} completionsList={completionsList} onLinkStudent={handleLinkStudentToTutoring} onUnlinkStudent={handleUnlinkStudent} allScores={allScores} studentsWithCompletionsNotApproved={studentsWithCompletionsNotApproved} onApproveStudentsWithCompletions={handleApproveStudentsWithCompletions} />;
       case 'studentLesson':
         if (!classDataLoaded) return <LoadingView />;
         if (!classData) return <ClassErrorView classId={classId} handleSetView={handleSetView} />;
