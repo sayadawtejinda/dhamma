@@ -86,6 +86,33 @@ const renameStudentRecords = async (classId, oldName, newName) => {
   } catch(e) { console.error('Quiz results rename:', e); }
 };
 
+// Move a roster doc from oldName to newName. Crucially, this does NOT delete the old doc — a
+// student's own device caches its profile name in localStorage and keeps pinging/writing scores
+// under that cached name until it's told otherwise, so simply deleting the old roster doc caused
+// the ping effect to silently recreate it every 60s, splitting the student back into two
+// identities and orphaning every score submitted after the rename. Instead the old doc is
+// replaced with a small {renamedTo} redirect pointer; the student's own client (see the ping
+// effect below) follows that pointer and updates its cached name the next time it checks in.
+const moveRosterDoc = async (classId, oldName, newName, extra={}) => {
+  const oldRef=abhiRosterDocRef(classId,oldName);
+  const oldSnap=await getDoc(oldRef);
+  const newData=oldSnap.exists()?{...oldSnap.data(),studentName:newName,name:newName,...extra}:{...extra};
+  await setDoc(abhiRosterDocRef(classId,newName),newData,{merge:true});
+  await setDoc(oldRef,{renamedTo:newName,classId},{merge:false});
+};
+
+// Hide a leftover roster doc still sitting under a student's old Abhidhamma name after a bulk
+// Find-Matching-Names link. Does NOT touch the (already-correct) new-name roster doc — it just
+// turns the old-name doc into a {renamedTo} redirect pointer, same pattern as moveRosterDoc,
+// so it stops showing up as a second, duplicate student in the roster/score lists.
+const hideOldRosterDoc = async (classId, oldName, newName) => {
+  if (!classId || !oldName || !newName || oldName === newName) return;
+  const oldRef = abhiRosterDocRef(classId, oldName);
+  const oldSnap = await getDoc(oldRef);
+  if (!oldSnap.exists()) return;
+  await setDoc(oldRef, { renamedTo: newName, classId }, { merge: false });
+};
+
 // ─── AI generation ────────────────────────────────────────────────────────────
 const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=`;
 const generateContent = async (prompt, sys) => {
@@ -227,7 +254,7 @@ const AbhiClassRoster = ({ userId, classId, onLink }) => {
     const q=query(abhiRosterRef(),where('classId','==',classId));
     return onSnapshot(q,snap=>{
       const nowMs=Date.now();
-      setStudents(snap.docs.map(d=>{
+      setStudents(snap.docs.filter(d=>!d.data().renamedTo).map(d=>{
         const dt=d.data();const lp=dt.lastPing;
         if(dt.isOnline&&lp){const ms=lp.toMillis?lp.toMillis():(lp.seconds*1000);if((nowMs-ms)/60000>2)return{id:d.id,...dt,isOnline:false};}
         return{id:d.id,...dt};
@@ -305,7 +332,10 @@ const AbhiClassRoster = ({ userId, classId, onLink }) => {
       matchPreview.forEach(m=>batch.set(abhiRosterDocRef(classId,m.rosterName),{linkedToTutoring:true},{merge:true}));
       await batch.commit();
       const renames=matchPreview.filter(m=>m.oldName);
-      for(const m of renames) await renameStudentRecords(classId,m.oldName,m.rosterName);
+      for(const m of renames){
+        await renameStudentRecords(classId,m.oldName,m.rosterName);
+        await hideOldRosterDoc(classId,m.oldName,m.rosterName);
+      }
       setSyncMsg(`✅ Linked ${matchPreview.length} student(s).${renames.length?` (${renames.length} old-name record(s) merged.)`:''}`);
       setMatchPreview(null);
       setTimeout(()=>setSyncMsg(''),4000);
@@ -1028,14 +1058,9 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
     }
     // 3. Rename scores + quiz results (shared helper — same logic bulk-linking reuses)
     await renameStudentRecords(classId, oldName, newName);
-    // 5. Move roster doc
-    try {
-      const oldRef = abhiRosterDocRef(classId,oldName);
-      const oldSnap = await getDoc(oldRef);
-      const newData = oldSnap.exists() ? {...oldSnap.data(),studentName:newName,name:newName,linkedToTutoring:true} : {linkedToTutoring:true};
-      await setDoc(abhiRosterDocRef(classId,newName),newData,{merge:true});
-      if (oldSnap.exists()) await deleteDoc(oldRef);
-    } catch(e) { console.error('Roster rename:', e); }
+    // 5. Move roster doc (leaves a redirect pointer at the old name — see moveRosterDoc)
+    try { await moveRosterDoc(classId, oldName, newName, {linkedToTutoring:true}); }
+    catch(e) { console.error('Roster rename:', e); }
     setLoading(false);
     showMsg(`✅ Linked "${oldName}" → "${newName}". Records renamed.`);
   };
@@ -1047,6 +1072,17 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
     const ping=async()=>{
       try{
         const rRef=abhiRosterDocRef(classId,name);
+        const snap=await getDoc(rRef);
+        if(snap.exists()&&snap.data().renamedTo){
+          // Teacher renamed/linked us server-side since our last check-in — follow the redirect
+          // instead of recreating the old roster doc, so future scores land on the right name.
+          const newName=snap.data().renamedTo;
+          const updated={...studentProfile,name:newName};
+          setStudentProfile(updated);
+          if(userId) localStorage.setItem(`abhidhamma_profile_${userId}`, JSON.stringify(updated));
+          await updateDoc(abhiRosterDocRef(classId,newName),{isOnline:true,lastPing:serverTimestamp(),lastSeen:serverTimestamp()});
+          return;
+        }
         await updateDoc(rRef,{isOnline:true,lastPing:serverTimestamp(),lastSeen:serverTimestamp()});
       }catch(e){
         // Doc might not exist yet if WelcomeModal hasn't run — create it
