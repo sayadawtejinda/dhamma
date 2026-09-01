@@ -1395,7 +1395,7 @@ const HomeView = React.memo(({ handleSetView }) => (
   </div>
 ));
 
-const TeacherLoginView = React.memo(({ targetClassId, setTargetClassId, handleTeacherLogin, handleSetView, allTeacherClasses, isLoading, onRenameClass }) => {
+const TeacherLoginView = React.memo(({ targetClassId, setTargetClassId, handleTeacherLogin, handleSetView, allTeacherClasses, isLoading, onRenameClass, onDeleteClass }) => {
   const [renaming, setRenaming] = React.useState(null); // classId being renamed
   const [newDisplayName, setNewDisplayName] = React.useState('');
   return (
@@ -1422,8 +1422,11 @@ const TeacherLoginView = React.memo(({ targetClassId, setTargetClassId, handleTe
                     <span>{c.displayName || c.id}</span>
                     {c.displayName && <span className="text-xs font-normal text-gray-400 ml-2">({c.id})</span>}
                   </button>
-                  <button onClick={()=>{setRenaming(c.id);setNewDisplayName(c.displayName||c.id);}} className="text-gray-400 hover:text-blue-500 p-2" title="Rename (display name only)">
+                    <button onClick={()=>{setRenaming(c.id);setNewDisplayName(c.displayName||c.id);}} className="text-gray-400 hover:text-blue-500 p-2" title="Rename (display name only)">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                  </button>
+                  <button onClick={()=>onDeleteClass(c.id)} className="text-gray-400 hover:text-red-500 p-2" title="Delete this class">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9.5 4h5a1 1 0 011 1v2h-7V5a1 1 0 011-1z"/></svg>
                   </button>
                 </>
               )}
@@ -1854,7 +1857,25 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
       return { studentName: c.studentName, cumulative, correct };
     });
   }, [allScores, userName]);
-
+  const handleDeleteClass = useCallback((classIdToDelete) => {
+    if (!classIdToDelete) return;
+    setConfirmationModal({
+      message: `"${classIdToDelete}" ကို ဖျက်မှာ သေချာပါသလား? ဒီလုပ်ဆောင်ချက်ကို နောက်ပြန်ဆွဲလို့ မရပါ။`,
+      confirmText: "ဖျက်မယ်",
+      onConfirm: async () => {
+        try {
+          await deleteDoc(getClassDocRef(classIdToDelete));
+          setAllTeacherClasses(prev => prev.filter(c => c.id !== classIdToDelete));
+          setConfirmationModal({ message: '', onConfirm: null });
+        } catch (err) {
+          console.error('Delete class error:', err);
+          setConfirmationModal({ message: '', onConfirm: null });
+          setModal({ message: `Class ဖျက်လို့မရပါ: ${err.message}`, type: 'error', visible: true });
+        }
+      },
+      onCancel: () => setConfirmationModal({ message: '', onConfirm: null })
+    });
+  }, []);
   const generateNewLessonId = useCallback(() => {
     if (lessons.length === 0) return 'L1';
     const lessonNumbers = lessons.map(l => parseInt(l.lessonId.substring(1)) || 0);
@@ -2568,7 +2589,7 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
   const renderView = () => {
     if (!isAuthReady) return <LoadingView />;
     switch (view) {
-      case 'teacherLogin': return <TeacherLoginView targetClassId={targetClassId} setTargetClassId={setTargetClassId} handleTeacherLogin={handleTeacherLogin} handleSetView={handleSetView} allTeacherClasses={allTeacherClasses} isLoading={isLoading} onRenameClass={handleRenameClass} />;
+      case 'teacherLogin': return <TeacherLoginView targetClassId={targetClassId} setTargetClassId={setTargetClassId} handleTeacherLogin={handleTeacherLogin} handleSetView={handleSetView} allTeacherClasses={allTeacherClasses} isLoading={isLoading} onRenameClass={handleRenameClass} onDeleteClass={handleDeleteClass} />;
       case 'studentLogin': return <StudentLoginView targetClassId={targetClassId} setTargetClassId={setTargetClassId} userName={userName} setUserName={setUserName} studentAgeLevel={studentAgeLevel} setStudentAgeLevel={setStudentAgeLevel} handleStudentLogin={handleStudentLogin} handleSetView={handleSetView} />;
       case 'ageLevelPicker': return <AgeLevelPickerView studentAgeLevel={studentAgeLevel} setStudentAgeLevel={setStudentAgeLevel} onContinue={handleAgeLevelContinue} />;
       case 'classPicker': return <ClassPickerView classList={classPickerList} highlightClassId={entryRequest?.classId} onSelectClass={handleSelectClassFromPicker} loading={classPickerLoading} classPickerInfo={classPickerInfo} />;
