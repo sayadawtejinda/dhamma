@@ -242,7 +242,8 @@
         <div id="new-lesson-modal" class="fixed inset-0 bg-slate-900/60 flex justify-center items-center z-50 hidden backdrop-blur-md">
             <div class="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-md border-4 border-green-100">
                 <h2 class="text-2xl font-black text-slate-800 mb-4 text-center">New Dhamma Lesson</h2>
-                <input type="text" id="new-lesson-name-input" placeholder="Lesson Title..." class="input-style mb-6">
+                <input type="text" id="new-lesson-name-input" placeholder="Lesson Title..." class="input-style mb-3">
+                <input type="text" id="new-lesson-classid-input" placeholder="Class ID (e.g. PARAMI)" class="input-style mb-6 uppercase">
                 <div class="flex gap-3">
                     <button id="cancel-lesson-btn" class="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl">Cancel</button>
                     <button id="confirm-new-lesson-btn" class="flex-1 btn-success py-3 font-bold btn-3d">Create</button>
@@ -286,6 +287,12 @@
                                 <span class="font-bold text-slate-700">Lesson Status:</span>
                                 <button id="toggle-public-btn" class="px-4 py-1 rounded-full text-xs font-bold uppercase transition btn-3d">Draft</button>
                             </div>
+                            <!-- Class ID editor (retag old lessons into a class) -->
+                            <div class="flex items-center gap-2 mt-2 pt-2 border-t border-slate-100">
+                                <span class="font-bold text-slate-700 text-sm whitespace-nowrap">Class ID:</span>
+                                <input type="text" id="lesson-classid-input" placeholder="e.g. PARAMI" class="flex-1 bg-white border border-slate-300 rounded-lg px-2 py-1 text-sm font-bold uppercase focus:outline-none focus:ring-2 focus:ring-orange-400">
+                                <button onclick="window.saveLessonClassId()" class="px-3 py-1 bg-orange-100 text-orange-700 rounded-lg text-xs font-bold hover:bg-orange-200">Save</button>
+                            </div>
                             <!-- Language Toggle -->
                             <div class="flex flex-col gap-2 mt-2 pt-2 border-t border-slate-100">
                                 <div class="flex items-center justify-between">
@@ -318,6 +325,10 @@
                             <button id="export-lesson-btn" class="py-2 bg-slate-100 text-slate-700 rounded-xl font-bold hover:bg-slate-200 text-sm"><i class="fas fa-file-export"></i> Export All</button>
                             <button id="import-lesson-btn" class="py-2 bg-slate-100 text-slate-700 rounded-xl font-bold hover:bg-slate-200 text-sm"><i class="fas fa-file-import"></i> Import</button>
                             <input type="file" id="import-lesson-input" accept=".json" class="hidden">
+                        </div>
+                        <div class="mt-2">
+                            <input type="text" id="import-target-classid" placeholder="Import into Class ID (e.g. PARAMI)" class="input-style text-sm uppercase"></input>
+                            <p class="text-xs text-slate-400 mt-1">Old lessons with no Class ID will be tagged with this when imported. Leave blank to keep each lesson's original Class ID (if any).</p>
                         </div>
                     </div>
 
@@ -485,11 +496,23 @@
         <!-- Student View -->
         <div id="student-view" class="hidden">
             
+            <!-- Student Class Picker (shown before lesson library) -->
+            <div id="student-class-picker" class="max-w-2xl mx-auto hidden">
+                <div class="text-center mb-8">
+                    <h2 class="text-3xl font-black text-orange-700 mb-2">📖 Choose Your Class</h2>
+                    <p class="text-slate-600 font-bold">Select a class to see its lessons.</p>
+                </div>
+                <div id="class-picker-grid" class="space-y-3 pb-10">
+                    <div class="text-center py-10 text-slate-400 font-bold">Loading classes...</div>
+                </div>
+            </div>
+
             <!-- Student Library (Selection Screen) -->
-            <div id="student-library" class="max-w-4xl mx-auto">
-                 <div class="text-center mb-8">
+            <div id="student-library" class="max-w-4xl mx-auto hidden">
+                 <div class="text-center mb-8 relative">
+                    <button onclick="window.changeClass()" class="absolute left-0 top-1 text-sm font-bold text-slate-500 hover:text-orange-600 flex items-center gap-1"><i class="fas fa-arrow-left"></i> Change Class</button>
                     <h2 class="text-3xl font-black text-orange-700 mb-2">Available Lessons</h2>
-                    <p class="text-slate-600 font-bold">Choose a lesson to start learning!</p>
+                    <p class="text-slate-600 font-bold">Class: <span id="current-class-label" class="text-orange-600">-</span></p>
                 </div>
                 <div id="student-lesson-grid" class="grid grid-cols-1 md:grid-cols-2 gap-6 pb-10">
                     <!-- Lessons injected here -->
@@ -767,6 +790,7 @@ Question 3..."></textarea>
         let currentLessonId = localStorage.getItem('currentLessonId') || null;
         // --- FIX: Initialize from localStorage to persist across refreshes ---
         let studentCurrentLessonId = localStorage.getItem('studentCurrentLessonId') || null; 
+        let selectedClassId = localStorage.getItem('dhammaschool_classId') || null; // student's chosen class
         let lessonSteps = [];
         let activeLessonId = null; 
         let currentStepIndex = parseInt(localStorage.getItem('currentStepIndex') || '0');
@@ -806,6 +830,7 @@ let bilingualMode = false;
             app: document.getElementById('app-container'),
             teacherView: document.getElementById('teacher-view'),
             studentView: document.getElementById('student-view'),
+            studentClassPicker: document.getElementById('student-class-picker'),
             studentLibrary: document.getElementById('student-library'),
             studentActiveLesson: document.getElementById('student-active-lesson'),
             studentLessonGrid: document.getElementById('student-lesson-grid'),
@@ -883,19 +908,25 @@ let bilingualMode = false;
                             setupListeners();
                             if (!isTeacher) {
                                 // --- START: TutoringApp deep-link auto-entry ---
-                                // Reads ?student=NAME&lesson=LESSONID from the URL (set by
-                                // TutoringApp's "Start Lesson" button) so the student skips
-                                // the "Join Class" name modal and jumps straight into the
-                                // requested lesson, matching SmartStudy/AbhidhammaApp behavior.
+                                // Reads ?student=NAME&classId=CLASSID&lesson=LESSONID from the URL
+                                // (set by TutoringApp's "Start Lesson" button) so the student skips
+                                // the "Join Class" name modal, auto-selects the class, and (if a
+                                // specific lesson was requested) jumps straight into it — matching
+                                // SmartStudy/AbhidhammaApp behavior.
                                 const urlParams = new URLSearchParams(window.location.search);
                                 const paramStudent = urlParams.get('student');
+                                const paramClassId = urlParams.get('classId');
                                 const paramLesson = urlParams.get('lesson');
 
                                 if (paramStudent) {
                                     studentName = paramStudent;
                                     localStorage.setItem('studentName', paramStudent);
                                 }
-                                // --- END: TutoringApp deep-link auto-entry (name part) ---
+                                if (paramClassId) {
+                                    selectedClassId = paramClassId;
+                                    localStorage.setItem('dhammaschool_classId', paramClassId);
+                                }
+                                // --- END: TutoringApp deep-link auto-entry (name + class part) ---
 
                                 if (!studentName) els.nameModal.classList.remove('hidden');
                                 else { 
@@ -908,6 +939,11 @@ let bilingualMode = false;
                                     const tryEnter = setInterval(() => {
                                         if (allLessons[paramLesson]) {
                                             clearInterval(tryEnter);
+                                            // Make sure the lesson's own class is selected too,
+                                            // in case classId param wasn't passed.
+                                            const l = allLessons[paramLesson];
+                                            selectedClassId = (l.classId && l.classId.trim()) ? l.classId.trim() : 'GENERAL';
+                                            localStorage.setItem('dhammaschool_classId', selectedClassId);
                                             window.enterLesson(paramLesson);
                                         }
                                     }, 300);
@@ -950,6 +986,7 @@ let bilingualMode = false;
                                 };
                                 document.getElementById('confirm-new-lesson-btn').onclick = async () => {
                                     const newName = document.getElementById('new-lesson-name-input').value.trim();
+                                    const newClassId = document.getElementById('new-lesson-classid-input').value.trim().toUpperCase();
                                     if (!newName) {
                                         alertMessage('Please enter a lesson name.', 'error');
                                         return;
@@ -960,6 +997,7 @@ let bilingualMode = false;
                                     try {
                                         const ref = await addDoc(collection(db, PATHS.lessons), {
                                             name: newName,
+                                            classId: newClassId || '',
                                             teacherId: userId,
                                             createdAt: new Date().toISOString(),
                                             isPublic: false,
@@ -1317,6 +1355,8 @@ window.renderTeacherScores = function(lessonId) {
                          
                          // --- Load Teacher Note (Wiki Suffix) ---
                          document.getElementById('teacher-wiki-input').value = data.wikiSuffix || '';
+                         // --- Load Class ID ---
+                         document.getElementById('lesson-classid-input').value = data.classId || '';
                          
                          renderTeacherAnswers(lid); // Re-render answers on lesson change
                         renderTeacherScores(lid);
@@ -1336,6 +1376,19 @@ window.renderTeacherScores = function(lessonId) {
         }
         
         // --- SAVE TEACHER NOTE (WIKI) ---
+        window.saveLessonClassId = async () => {
+            if (!currentLessonId) return alertMessage('No lesson selected', 'error');
+            const newClassId = document.getElementById('lesson-classid-input').value.trim().toUpperCase();
+            try {
+                await updateDoc(doc(db, PATHS.lessons, currentLessonId), { classId: newClassId });
+                alertMessage(newClassId ? `Class ID set to "${newClassId}"` : 'Class ID cleared', 'success');
+                renderLessonSelector(); // refresh badge in dropdown
+            } catch (e) {
+                console.error(e);
+                alertMessage('Error saving Class ID', 'error');
+            }
+        };
+
         window.saveWikiLink = async () => {
             if(!currentLessonId) return alertMessage('No lesson selected', 'error');
             const suffix = document.getElementById('teacher-wiki-input').value.trim();
@@ -1623,12 +1676,70 @@ document.getElementById('toggle-audio-btn').onclick = async () => {
         };
         // --- END FIX for Student Navigation Click ---
 
+        // Distinct class IDs found among public lessons (lessons with no classId are grouped under "General")
+        function getDistinctClassIds() {
+            const ids = new Set();
+            studentLibraryLessons.forEach(l => ids.add(l.classId && l.classId.trim() ? l.classId.trim() : 'GENERAL'));
+            return [...ids].sort();
+        }
+
+        function renderClassPicker() {
+            const container = document.getElementById('class-picker-grid');
+            const classIds = getDistinctClassIds();
+            if (classIds.length === 0) {
+                container.innerHTML = '<div class="text-center py-10 text-slate-400 font-bold">No lessons available yet.</div>';
+                return;
+            }
+            // If only one class exists, auto-select it (skip picker) — smoother for small schools
+            if (classIds.length === 1) {
+                window.selectClass(classIds[0]);
+                return;
+            }
+            container.innerHTML = classIds.map(cid => {
+                const count = studentLibraryLessons.filter(l => (l.classId && l.classId.trim() ? l.classId.trim() : 'GENERAL') === cid).length;
+                return `
+                    <button onclick="window.selectClass('${cid}')" class="w-full p-5 rounded-2xl border-2 border-white bg-white shadow-md hover:border-orange-300 transition text-left flex justify-between items-center">
+                        <span class="text-xl font-black text-slate-800"><i class="fas fa-layer-group text-orange-500 mr-2"></i>${cid}</span>
+                        <span class="text-sm font-bold text-orange-600 bg-orange-50 px-3 py-1 rounded-full">${count} lesson${count !== 1 ? 's' : ''}</span>
+                    </button>`;
+            }).join('');
+        }
+
+        window.selectClass = (classId) => {
+            selectedClassId = classId;
+            localStorage.setItem('dhammaschool_classId', classId);
+            els.studentClassPicker.classList.add('hidden');
+            els.studentLibrary.classList.remove('hidden');
+            safeSetText('current-class-label', classId);
+            renderStudentLibrary();
+        };
+
+        window.changeClass = () => {
+            selectedClassId = null;
+            localStorage.removeItem('dhammaschool_classId');
+            els.studentLibrary.classList.add('hidden');
+            els.studentClassPicker.classList.remove('hidden');
+            renderClassPicker();
+        };
+
         function renderStudentLibrary() {
+            // No class chosen yet → show the class picker instead of the lesson grid
+            if (!selectedClassId) {
+                els.studentLibrary.classList.add('hidden');
+                els.studentClassPicker.classList.remove('hidden');
+                renderClassPicker();
+                return;
+            }
+            els.studentClassPicker.classList.add('hidden');
+            els.studentLibrary.classList.remove('hidden');
+            safeSetText('current-class-label', selectedClassId);
+
             const container = els.studentLessonGrid;
-            if(studentLibraryLessons.length === 0) { container.innerHTML = '<div class="text-center col-span-full py-10 text-slate-400 font-bold">No lessons available yet.</div>'; return; }
-            studentLibraryLessons.sort((a, b) => (a.createdAt || "9999").localeCompare(b.createdAt || "9999"));
+            const filtered = studentLibraryLessons.filter(l => (l.classId && l.classId.trim() ? l.classId.trim() : 'GENERAL') === selectedClassId);
+            if(filtered.length === 0) { container.innerHTML = '<div class="text-center col-span-full py-10 text-slate-400 font-bold">No lessons in this class yet.</div>'; return; }
+            filtered.sort((a, b) => (a.createdAt || "9999").localeCompare(b.createdAt || "9999"));
             container.innerHTML = '';
-            studentLibraryLessons.forEach(lesson => {
+            filtered.forEach(lesson => {
                 const count = lesson.steps ? lesson.steps.length : 0;
                 // Use English Title if mode is English
                 const title = (lesson.languageMode === 'en' && lesson.name_en) ? lesson.name_en : lesson.name;
@@ -3153,7 +3264,9 @@ function renderClickableWords(text) {
             els.lessonSelector.innerHTML = '<option value="">Select Lesson</option>';
             const sorted = Object.values(allLessons).sort((a,b) => (a.createdAt || "9999").localeCompare(b.createdAt || "9999"));
             sorted.forEach(l => {
-                const op = document.createElement('option'); op.value = l.id; op.textContent = l.name;
+                const op = document.createElement('option'); op.value = l.id;
+                const cid = l.classId && l.classId.trim() ? l.classId.trim() : null;
+                op.textContent = cid ? `[${cid}] ${l.name}` : l.name;
                 if(l.id === currentLessonId) op.selected = true;
                 els.lessonSelector.appendChild(op);
             });
@@ -3240,8 +3353,13 @@ function renderClickableWords(text) {
                             const q = query(collection(db, PATHS.lessons), where('name', '==', lesson.name));
                             const querySnapshot = await getDocs(q);
 
+                            // Target Class ID from the import UI. If set, it overrides/fills in the
+                            // classId for every imported lesson — this is how old lessons (created
+                            // before Class ID existed) get grouped into a class on import.
+                            const targetClassId = document.getElementById('import-target-classid').value.trim().toUpperCase();
                             const lessonFields = {
                                 name: lesson.name,
+                                classId: targetClassId || lesson.classId || '',
                                 steps: lesson.steps,
                                 isPublic: lesson.isPublic || false,
                                 languageMode: lesson.languageMode || 'mm',
