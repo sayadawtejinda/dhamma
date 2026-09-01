@@ -542,6 +542,28 @@ const TeacherDashboard = React.memo(({
       setTutoringStudents([]);
     }
   };
+  // "Manage Students" tab ကိုဖွင့်တိုင်း — link ထားပြီးသား ကျောင်းသားတွေရဲ့
+  // Tutoring app ထဲက နာမည် ပြောင်းသွားမလား စစ်ပြီး၊ ပြောင်းနေရင် အလိုအလျောက်
+  // ဒီ app ထဲကလည်း နာမည်ကို ပြန် sync လုပ်ပေးမယ် (manual re-link မလိုတော့ပါ)
+  useEffect(() => {
+    if (activeTab !== 'students') return;
+    (async () => {
+      try {
+        const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'students'));
+        const nameById = {};
+        snap.docs.forEach(d => { nameById[d.id] = d.data().name; });
+        const alreadyLinked = sortedApprovedStudents.filter(s => s.linkedToTutoring && s.tutoringStudentUid);
+        for (const s of alreadyLinked) {
+          const currentTutoringName = nameById[s.tutoringStudentUid];
+          if (currentTutoringName && currentTutoringName !== s.studentName) {
+            await onLinkStudent(s.studentName, currentTutoringName, s.tutoringStudentUid);
+          }
+        }
+      } catch (err) {
+        console.error('Error syncing Tutoring name changes:', err);
+      }
+    })();
+  }, [activeTab]);
 
   const pendingStudents = classRoster.filter(s => s.status === 'pending');
   const approvedStudentsWithIndex = classRoster
@@ -1963,10 +1985,10 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
       }
     }
 
-    // If names match there is nothing to rename; just mark as linked and return.
+        // If names match there is nothing to rename; just mark as linked and return.
     if (oldName === newName) {
       try {
-        await setDoc(getRosterDocRef(classId, newName), { linkedToTutoring: true }, { merge: true });
+        await setDoc(getRosterDocRef(classId, newName), { linkedToTutoring: true, tutoringStudentUid: tutoringStudentUid || null }, { merge: true });
         results.roster = 'ok';
       } catch (err) {
         console.error('Error marking roster as linked:', err);
@@ -2014,14 +2036,14 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
       results.hearts = `error: ${err.message}`;
     }
 
-    try {
+        try {
       const oldRosterRef = getRosterDocRef(classId, oldName);
       const oldRosterSnap = await getDoc(oldRosterRef);
       if (oldRosterSnap.exists()) {
-        await setDoc(getRosterDocRef(classId, newName), { ...oldRosterSnap.data(), studentName: newName, linkedToTutoring: true }, { merge: true });
+        await setDoc(getRosterDocRef(classId, newName), { ...oldRosterSnap.data(), studentName: newName, linkedToTutoring: true, tutoringStudentUid: tutoringStudentUid || null }, { merge: true });
         await deleteDoc(oldRosterRef);
       } else {
-        await setDoc(getRosterDocRef(classId, newName), { linkedToTutoring: true }, { merge: true });
+        await setDoc(getRosterDocRef(classId, newName), { linkedToTutoring: true, tutoringStudentUid: tutoringStudentUid || null }, { merge: true });
       }
       results.roster = 'ok';
     } catch (err) {
