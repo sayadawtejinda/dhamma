@@ -133,6 +133,16 @@ const extractAbhidhammaLessonId = (link) => {
   return link.replace('abhidhamma://', '') || null;
 };
 
+// ── Dhammaschool app (standalone HTML app — opened via window.open, NOT mounted as React component) ──
+const DHAMMASCHOOL_APP_ID = 'dhammaschool-app'; // Firestore appId used inside the HTML app's PATHS.*
+// TODO: replace with the actual hosted URL once the Dhammaschool app app is deployed.
+const DHAMMASCHOOL_APP_URL = 'https://YOUR-DHAMMASCHOOL-URL-HERE';
+
+const extractDhammaschoolLessonId = (link) => {
+  if (!link || !link.startsWith('dhammaschool://')) return null;
+  return link.replace('dhammaschool://', '') || null;
+};
+
 const sanitizeKey = (key) => {
   if (!key || typeof key !== 'string') return 'unknown_lesson';
   return key.replace(/[\.\#\$\/\[\]]/g, '_');
@@ -699,6 +709,10 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma }) {
   const [abhiStudentScore, setAbhiStudentScore] = useState(null);
   const [abhiTotalCount,   setAbhiTotalCount]   = useState(null); // total lessons in the abhi class
   const [sendAbhidhammaClassId, setSendAbhidhammaClassId] = useState(''); // class chosen in Send Action for abhidhamma:// lessons
+  const [sendDhammaschoolLessonId, setSendDhammaschoolLessonId] = useState(''); // lesson chosen in Send Action for dhammaschool:// lessons
+  const [dhammaschoolLessons, setDhammaschoolLessons] = useState(null); // null = not yet loaded
+  const [dhammaschoolLoading, setDhammaschoolLoading] = useState(false);
+  const [dhammaschoolStudentProgress, setDhammaschoolStudentProgress] = useState(null); // { completed:boolean, score:number }
   const [abhidhammaClasses, setAbhidhammaClasses] = useState(null);   // null = not yet loaded
   const [abhidhammaLoading, setAbhidhammaLoading] = useState(false);
   const [sendTargetType, setSendTargetType] = useState('student'); 
@@ -908,6 +922,33 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma }) {
     return () => { isMounted = false; };
   }, [selectedStudentUid, selectedBankLessonId, sendSmartStudyClassId, lessonBank, students]);
 
+  // Dhammaschool app — student completion + score for Assign Lesson
+  useEffect(() => {
+    setDhammaschoolStudentProgress(null);
+    if (!sendDhammaschoolLessonId || !selectedStudentUid) return;
+    const student = students.find(s => s.id === selectedStudentUid);
+    if (!student) return;
+    (async () => {
+      try {
+        const compRef = doc(db, 'artifacts', DHAMMASCHOOL_APP_ID, 'public', 'data', 'lesson_completions', `${sendDhammaschoolLessonId}_${student.id}`);
+        const compSnap = await getDoc(compRef);
+        let bestScore = 0;
+        try {
+          const scoresSnap = await getDocs(query(
+            collection(db, 'artifacts', DHAMMASCHOOL_APP_ID, 'public', 'data', 'game_scores'),
+            where('lessonId', '==', sendDhammaschoolLessonId),
+            where('studentName', '==', student.name)
+          ));
+          scoresSnap.docs.forEach(d => { bestScore = Math.max(bestScore, Number(d.data().score) || 0); });
+        } catch (e) {}
+        setDhammaschoolStudentProgress({ completed: compSnap.exists(), score: bestScore });
+      } catch (e) {
+        console.error('Dhammaschool progress fetch:', e);
+        setDhammaschoolStudentProgress({ completed: false, score: 0 });
+      }
+    })();
+  }, [sendDhammaschoolLessonId, selectedStudentUid]);
+
   // Abhidhamma student progress for Assign Lesson — handles old & new format
   useEffect(()=>{
     setAbhiStudentCount(null);setAbhiStudentScore(null);setAbhiTotalCount(null);
@@ -930,6 +971,23 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma }) {
       setAbhiStudentScore(pts);setAbhiStudentCount(done.size);
     })();
   },[sendAbhidhammaClassId,selectedStudentUid]);
+
+  const loadDhammaschoolLessons = async () => {
+    if (dhammaschoolLessons !== null) return;
+    setDhammaschoolLoading(true);
+    try {
+      const snap = await getDocs(collection(db, 'artifacts', DHAMMASCHOOL_APP_ID, 'public', 'data', 'lessons'));
+      const list = snap.docs
+        .map(d => ({ id: d.id, name: d.data().name || d.id, isPublic: d.data().isPublic || false }))
+        .filter(l => l.isPublic); // only lessons the teacher made public
+      list.sort((a, b) => a.name.localeCompare(b.name));
+      setDhammaschoolLessons(list);
+    } catch (err) {
+      console.error('Error loading Dhammaschool lessons:', err);
+      setDhammaschoolLessons([]);
+    }
+    setDhammaschoolLoading(false);
+  };
 
   const loadAbhidhammaClasses = async () => {
     if (abhidhammaClasses !== null) return;
@@ -2321,6 +2379,58 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
             );
           })()}
 
+          {/* Dhammaschool app — lesson picker (no class-ID concept in this app, just individual public lessons) */}
+          {(() => {
+            const selectedLesson = lessonBank.find(l => l.id === selectedBankLessonId);
+            if (!selectedLesson || selectedLesson.link !== 'dhammaschool://') return null;
+            return (
+              <div className="mb-4">
+                <label className="block text-gray-700 mb-2 font-medium">📖 Dhammaschool app — choose a Lesson</label>
+                {dhammaschoolLessons === null ? (
+                  <button type="button" onClick={loadDhammaschoolLessons}
+                    className="w-full p-3 border rounded-lg bg-orange-50 text-orange-700 font-semibold hover:bg-orange-100"
+                  >
+                    Load Dhammaschool lessons…
+                  </button>
+                ) : dhammaschoolLoading ? (
+                  <p className="text-gray-500 text-sm p-2">Loading lessons…</p>
+                ) : dhammaschoolLessons.length === 0 ? (
+                  <p className="text-gray-500 text-sm p-2">No public lessons found in Dhammaschool app yet.</p>
+                ) : (
+                  <select
+                    value={sendDhammaschoolLessonId}
+                    onChange={(e) => setSendDhammaschoolLessonId(e.target.value)}
+                    className="w-full p-3 border rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  >
+                    <option value="" disabled>-- Choose a lesson --</option>
+                    {dhammaschoolLessons.map(l => (
+                      <option key={l.id} value={l.id}>{l.name}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Dhammaschool app — student progress (completion + score) */}
+          {(() => {
+            const selectedLesson = lessonBank.find(l => l.id === selectedBankLessonId);
+            if (!selectedStudentUid || !selectedLesson || selectedLesson.link !== 'dhammaschool://' || !sendDhammaschoolLessonId) return null;
+            const student = students.find(s => s.id === selectedStudentUid);
+            if (!student) return null;
+            return (
+              <div className="mb-4 p-4 bg-orange-50 rounded-lg border border-orange-200">
+                <p className="text-orange-800 font-bold mb-1">Student Progress on this Dhammaschool Lesson:</p>
+                {dhammaschoolStudentProgress === null
+                  ? <p className="text-sm text-orange-600">Loading…</p>
+                  : dhammaschoolStudentProgress.completed
+                    ? <p className="text-sm text-orange-700">{student.name} completed this lesson · Score: <strong>{(dhammaschoolStudentProgress.score || 0).toLocaleString()} pts</strong></p>
+                    : <p className="text-sm text-orange-600">Not completed yet.</p>
+                }
+              </div>
+            );
+          })()}
+
           {/* Abhidhamma student progress (when abhi class selected) */}
 
 
@@ -2862,6 +2972,12 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                   <button type="button" onClick={() => setNewBankLessonLink('')} className="text-xs text-red-600 hover:text-red-800 font-semibold">Clear</button>
                 </div>
               )}
+              {newBankLessonLink === 'dhammaschool://' && (
+                <div className="mt-2 flex items-center justify-between bg-orange-50 border border-orange-200 rounded-lg px-3 py-2">
+                  <span className="text-sm text-orange-800 font-semibold">📖 Dhammaschool app — lesson chosen in Send Action</span>
+                  <button type="button" onClick={() => setNewBankLessonLink('')} className="text-xs text-red-600 hover:text-red-800 font-semibold">Clear</button>
+                </div>
+              )}
 
               {showLinkPicker && (
                 <div className="absolute z-20 mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-xl p-3 max-h-96 overflow-y-auto">
@@ -2924,6 +3040,18 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                         className="w-full text-left p-2 rounded-lg hover:bg-amber-50 border border-transparent hover:border-amber-200 font-semibold text-gray-800 mt-1"
                       >
                         📚 Abhidhamma app
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNewBankLessonLink('dhammaschool://');
+                          if (!newBankLessonTitle.trim()) setNewBankLessonTitle('Dhammaschool Lesson');
+                          setShowLinkPicker(false);
+                          setPickerAppSelected(false);
+                        }}
+                        className="w-full text-left p-2 rounded-lg hover:bg-orange-50 border border-transparent hover:border-orange-200 font-semibold text-gray-800 mt-1"
+                      >
+                        📖 Dhammaschool app
                       </button>
                     </div>
                   )}
@@ -3599,6 +3727,38 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
   }, [mySchedule, mySessions]);
 
   const handleStartLesson = async (lesson) => {
+    if (lesson.link && lesson.link.startsWith('dhammaschool://')) {
+      const lessonId = extractDhammaschoolLessonId(lesson.link);
+      // Standalone HTML app — open in a new tab with query params.
+      // NOTE: the Dhammaschool app HTML file needs a small addition to read
+      // these params on load (auto-fill student name + jump straight to the
+      // lesson, skipping the "Join Class" name modal), matching how
+      // SmartStudy/AbhidhammaApp auto-enter students. See snippet below.
+      const params = new URLSearchParams({
+        student: studentProfile?.name || '',
+        lesson: lessonId || '',
+      });
+      window.open(`${DHAMMASCHOOL_APP_URL}?${params.toString()}`, '_blank', 'noopener,noreferrer');
+      if (lesson.status === 'pending') {
+        try { await updateDoc(doc(db, `${publicDataPath}/lessons`, lesson.id), { status: 'started' }); } catch (e) {}
+      }
+      // Session for time-tracking + Report button (same pattern as other apps)
+      try {
+        const activeCheckQuery = query(sessionsCollection, where("studentUid", "==", studentUid), where("endTime", "==", null));
+        const activeCheckSnap = await getDocs(activeCheckQuery);
+        if (activeCheckSnap.empty) {
+          await addDoc(sessionsCollection, {
+            studentUid: studentUid, lessonId: lesson.id, lessonTitle: lesson.title, lessonLink: lesson.link,
+            lessonTrophyLimit: lesson.trophyLimit || 0,
+            lessonUnitCount: lesson.unitCount || 0,
+            lessonUnitLabel: lesson.unitLabel || 'Lesson',
+            startTime: serverTimestamp(), endTime: null, feedbackNotes: null, score: null, awardedTrophies: 0
+          });
+        }
+      } catch (e) { console.error("Error starting Dhammaschool session:", e); }
+      return;
+    }
+
     if (lesson.link && lesson.link.startsWith('abhidhamma://')) {
       const lessonId = extractAbhidhammaLessonId(lesson.link);
       if (onOpenAbhidhamma) {
@@ -3758,6 +3918,24 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         }
       }
     }
+    // Dhammaschool app: fetch score + completion for auto-fill
+    if (activeSession.lessonLink?.startsWith('dhammaschool://')) {
+      const dhammaschoolLessonId = activeSession.lessonLink.replace('dhammaschool://', '');
+      const stuName = studentProfile?.name;
+      if (stuName && dhammaschoolLessonId) {
+        try {
+          const scoresSnap = await getDocs(query(
+            collection(db, 'artifacts', DHAMMASCHOOL_APP_ID, 'public', 'data', 'game_scores'),
+            where('lessonId', '==', dhammaschoolLessonId),
+            where('studentName', '==', stuName)
+          ));
+          let bestScore = 0;
+          scoresSnap.docs.forEach(d => { bestScore = Math.max(bestScore, Number(d.data().score) || 0); });
+          if (bestScore > 0) setScore(`${bestScore.toLocaleString()} pts`);
+        } catch (e) { console.error('Dhammaschool score fetch:', e); }
+      }
+    }
+
     // Abhidhamma: fetch score + lesson count from global_scores
     // Handles both new format (has classId) and old AbhidhammaApp5 format (no classId)
     if (activeSession.lessonLink?.startsWith('abhidhamma://')) {
