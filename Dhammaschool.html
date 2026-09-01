@@ -743,8 +743,19 @@ Question 3..."></textarea>
         import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot, collection, query, addDoc, where, getDocs, deleteDoc, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const appId = 'dhammaschool-app'; // Fixed appId — must match DHAMMASCHOOL_APP_ID in TutoringApp.jsx
-        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        // Real Firebase project config (same project used by TutoringApp/SmartStudy/AbhidhammaApp).
+        // __firebase_config only exists inside the Canvas/Studio environment — on GitHub Pages
+        // (or any other real hosting) it's undefined, so we hardcode the actual values here.
+        const firebaseConfig = {
+            apiKey: "AIzaSyCFwHPLW6VnQqgM-ZrisQZZaBLVrm88e9M",
+            authDomain: "myanmardhammaclass.firebaseapp.com",
+            projectId: "myanmardhammaclass",
+            storageBucket: "myanmardhammaclass.firebasestorage.app",
+            messagingSenderId: "779222889065",
+            appId: "1:779222889065:web:8afbe9348c3314bef3a8f8",
+            measurementId: "G-TT9ZJTSMJJ"
+        };
+        const initialAuthToken = null; // Canvas-only token system — always sign in anonymously outside Canvas
 
         let app, db, auth;
         let userId = null;
@@ -847,11 +858,23 @@ let bilingualMode = false;
                 if (storedMatches) completedMatchSteps = JSON.parse(storedMatches);
             } catch (e) { console.warn("Could not load match state"); }
 
-            if (!Object.keys(firebaseConfig).length) return;
+            if (!Object.keys(firebaseConfig).length) {
+                // Safety net: never leave the user stuck on the loading screen
+                console.error('Firebase config is empty — cannot initialize.');
+                els.loadingText.textContent = 'Error: Firebase not configured.';
+                return;
+            }
             try {
                 app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
                 auth = getAuth(app);
+                // Safety timeout: if auth never resolves within 8s (e.g. network/config
+                // issue), stop showing "Loading..." forever and surface an error instead.
+                setTimeout(() => {
+                    if (!els.loader.classList.contains('hidden')) {
+                        els.loadingText.textContent = 'Connection is taking longer than expected. Please refresh.';
+                    }
+                }, 8000);
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
                         userId = user.uid;
@@ -968,7 +991,10 @@ let bilingualMode = false;
                         else await signInAnonymously(auth);
                     }
                 });
-            } catch (e) { els.loader.classList.add('hidden'); }
+            } catch (e) {
+                console.error('Firebase init error:', e);
+                els.loadingText.textContent = 'Error connecting to Firebase: ' + e.message;
+            }
         }
 
         async function checkRole() {
