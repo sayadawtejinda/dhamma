@@ -225,6 +225,7 @@ const AbhiClassRoster = ({ userId, classId, onLink }) => {
   const [tutoringStudents,setTutoringStudents]=useState(null);
   const [pickerFor,setPickerFor]=useState(null);
   const [search,setSearch]=useState('');
+  const [altNames,setAltNames]=useState(''); // comma-separated extra old names to merge in alongside pickerFor
   const [linking,setLinking]=useState(false);
   const [syncing,setSyncing]=useState(false);
   const [syncMsg,setSyncMsg]=useState('');
@@ -442,16 +443,24 @@ const AbhiClassRoster = ({ userId, classId, onLink }) => {
           <div className="bg-gray-800 rounded-2xl shadow-2xl p-6 w-full max-w-md border border-gray-600">
             <div className="flex justify-between items-center mb-4">
               <p className="font-bold text-white text-sm">Link "<span className="text-indigo-300">{pickerFor}</span>" to TutoringApp student:</p>
-              <button onClick={()=>{setPickerFor(null);setSearch('');}} className="text-gray-400 hover:text-white"><X className="w-5 h-5"/></button>
+              <button onClick={()=>{setPickerFor(null);setSearch('');setAltNames('');}} className="text-gray-400 hover:text-white"><X className="w-5 h-5"/></button>
             </div>
             <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search TutoringApp student name…"
               className="w-full p-2 mb-3 bg-gray-900 border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-indigo-400" autoFocus/>
+            <input value={altNames} onChange={e=>setAltNames(e.target.value)}
+              placeholder="Also merge these old name(s), comma-separated — e.g. from an old import"
+              className="w-full p-2 mb-3 bg-gray-900 border border-gray-600 rounded text-white text-xs focus:outline-none focus:border-indigo-400"/>
             {tutoringStudents===null?<p className="text-gray-400 text-sm text-center py-4 animate-pulse">Loading…</p>
             :filtered.length===0?<p className="text-gray-500 text-sm text-center py-4">No matches.</p>
             :<div className="space-y-1 max-h-56 overflow-y-auto">
               {filtered.map(t=>(
                 <button key={t.id} disabled={linking}
-                  onClick={async()=>{setLinking(true);await onLink(pickerFor,t.name,t.id);setLinking(false);setPickerFor(null);setSearch('');}}
+                  onClick={async()=>{
+                    setLinking(true);
+                    const extras=altNames.split(',').map(n=>n.trim()).filter(n=>n&&n!==pickerFor&&n!==t.name);
+                    await onLink(pickerFor,t.name,t.id,extras);
+                    setLinking(false);setPickerFor(null);setSearch('');setAltNames('');
+                  }}
                   className={`w-full text-left p-2.5 rounded-lg text-sm font-semibold transition ${t.name===pickerFor?'bg-green-700 text-white border border-green-500':'bg-gray-700 hover:bg-indigo-700 text-gray-200'}`}>
                   {t.name}{t.name===pickerFor&&<span className="text-xs text-green-300 ml-2">← same name</span>}
                 </button>
@@ -1052,7 +1061,7 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
   };
 
   // ── Link to Tutoring (same pattern as SmartStudy) ────────────────────────
-  const handleLinkStudentToTutoring = async (oldName, newName, tutoringStudentUid) => {
+  const handleLinkStudentToTutoring = async (oldName, newName, tutoringStudentUid, extraOldNames=[]) => {
     if (!classId || !oldName || !newName) return;
     setLoading(true);
     // 1. Store abhidhammaNames in TutoringApp student profile
@@ -1061,6 +1070,14 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
         await updateDoc(doc(db,'artifacts','dhamma-tutoring-app','public','data','students',tutoringStudentUid),
           { [`abhidhammaNames.${classId}`]: oldName });
       } catch(e) { console.error('TutoringApp profile update:', e); }
+    }
+    // 1b. Merge in any extra old-name aliases the teacher typed in (e.g. a name used only in an
+    // old import) — their scores/results get folded into newName the same way oldName's do below.
+    for (const alt of extraOldNames) {
+      if (!alt || alt === newName) continue;
+      await renameStudentRecords(classId, alt, newName);
+      try { await hideOldRosterDoc(classId, alt, newName); }
+      catch(e) { console.error('Alt-name roster hide:', e); }
     }
     // 2. If same name — just mark as linked
     if (oldName === newName) {
