@@ -687,7 +687,7 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma }) {
   const [newBankLessonUnitCount, setNewBankLessonUnitCount] = useState(0);
   const [showLinkPicker, setShowLinkPicker] = useState(false);
   const [smartStudyClasses, setSmartStudyClasses] = useState(null); // null = not loaded yet
-  const [pickerAppSelected, setPickerAppSelected] = useState(false); // true once "Smart Study app" is chosen, showing Class ID list
+  const [pickerAppSelected, setPickerAppSelected] = useState(null); // null | 'smartstudy' | 'abhidhamma' | 'dhammaschool' — which app's Class ID list is showing
   const [pickerLoading, setPickerLoading] = useState(false);
   const [editingLessonId, setEditingLessonId] = useState(null); 
   const [mergeSourceId, setMergeSourceId] = useState(null); 
@@ -1019,7 +1019,14 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma }) {
     setAbhidhammaLoading(true);
     try {
       const snap = await getDocs(collection(db, 'artifacts', 'lesson-translator-app-v6', 'public', 'data', 'classes'));
-      const list = snap.docs.map(d => ({ classId: d.id, displayName: d.data().displayName || d.id }));
+      const list = await Promise.all(snap.docs.map(async d => {
+        let lessonCount = 0;
+        try {
+          const lessonsSnap = await getDocs(collection(db, 'artifacts', 'lesson-translator-app-v6', 'public', 'data', 'classes', d.id, 'lessons'));
+          lessonCount = lessonsSnap.size;
+        } catch (e) {}
+        return { classId: d.id, displayName: d.data().displayName || d.id, lessonCount };
+      }));
       list.sort((a, b) => a.classId.localeCompare(b.classId));
       setAbhidhammaClasses(list);
     } catch (err) {
@@ -1044,11 +1051,31 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma }) {
     setPickerLoading(false);
   };
 
-  const chooseSmartStudyClass = (classId) => {
+  // Auto-fills "Total Number" from the chosen class's actual lesson count —
+  // since the link is now connected to a real class, the teacher no longer
+  // needs to manually count and type this in.
+  const chooseSmartStudyClass = (classId, lessonCount) => {
     setNewBankLessonLink(`smartstudy://${classId}`);
     if (!newBankLessonTitle.trim()) setNewBankLessonTitle(`Smart Study: ${classId}`);
+    if (typeof lessonCount === 'number') setNewBankLessonUnitCount(String(lessonCount));
     setShowLinkPicker(false);
-    setPickerAppSelected(false);
+    setPickerAppSelected(null);
+  };
+
+  const chooseAbhidhammaClass = (classId, lessonCount) => {
+    setNewBankLessonLink(`abhidhamma://${classId}`);
+    if (!newBankLessonTitle.trim()) setNewBankLessonTitle(`Abhidhamma: ${classId}`);
+    if (typeof lessonCount === 'number') setNewBankLessonUnitCount(String(lessonCount));
+    setShowLinkPicker(false);
+    setPickerAppSelected(null);
+  };
+
+  const chooseDhammaschoolClass = (classId, lessonCount) => {
+    setNewBankLessonLink(`dhammaschool://${classId}`);
+    if (!newBankLessonTitle.trim()) setNewBankLessonTitle(`Dhammaschool: ${classId}`);
+    if (typeof lessonCount === 'number') setNewBankLessonUnitCount(String(lessonCount));
+    setShowLinkPicker(false);
+    setPickerAppSelected(null);
   };
 
   const handleSaveLessonToBank = async (e) => {
@@ -1434,6 +1461,26 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
       });
     } catch (error) {
       console.error("Error changing student status:", error);
+    }
+  };
+
+  const handleApproveNameChange = async (studentId, newName) => {
+    if (!newName || !newName.trim()) return;
+    try {
+      await updateDoc(doc(db, `${publicDataPath}/students`, studentId), {
+        name: newName.trim(),
+        pendingName: null
+      });
+    } catch (error) {
+      console.error("Error approving name change:", error);
+    }
+  };
+
+  const handleRejectNameChange = async (studentId) => {
+    try {
+      await updateDoc(doc(db, `${publicDataPath}/students`, studentId), { pendingName: null });
+    } catch (error) {
+      console.error("Error rejecting name change:", error);
     }
   };
 
@@ -2467,15 +2514,28 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
               
               const lessonKey = sanitizeKey(lesson.title);
               const previouslyEarned = student.earnedTrophies?.[lessonKey] || 0;
+              const isAbhiForTrophy = lesson.link?.startsWith('abhidhamma://');
+              const isDhammaschoolForTrophy = lesson.link?.startsWith('dhammaschool://');
               // When a SmartStudy class is selected, use per-class trophy limit and unit count
               const ssClassForTrophy = (sendSmartStudyClassId && smartStudyClasses)
                 ? (smartStudyClasses || []).find(c => c.classId === sendSmartStudyClassId)
                 : null;
-              const effectiveUnitCountForDisplay = ssClassForTrophy
-                ? (ssClassForTrophy.lessonCount || 0)
+              // Same "class-specific" split for Abhidhamma and Dhammaschool: when a class is
+              // chosen in Send Action, the class's own lesson count drives Max Available
+              // (1 trophy per 5 lessons, same ratio as SmartStudy), rather than the
+              // whole-app lesson count entered on the lesson bank entry.
+              const abhiClassForTrophy = (isAbhiForTrophy && sendAbhidhammaClassId && abhiTotalCount != null)
+                ? { classId: sendAbhidhammaClassId, lessonCount: abhiTotalCount }
+                : null;
+              const dhammaschoolClassForTrophy = (isDhammaschoolForTrophy && sendDhammaschoolClassId && dhammaschoolStudentProgress?.totalLessons != null)
+                ? { classId: sendDhammaschoolClassId, lessonCount: dhammaschoolStudentProgress.totalLessons }
+                : null;
+              const anyClassForTrophy = ssClassForTrophy || abhiClassForTrophy || dhammaschoolClassForTrophy;
+              const effectiveUnitCountForDisplay = anyClassForTrophy
+                ? (anyClassForTrophy.lessonCount || 0)
                 : (lesson.unitCount || 0);
-              const maxAvailable = ssClassForTrophy
-                ? Math.max(1, Math.floor((ssClassForTrophy.lessonCount || 0) / 5))
+              const maxAvailable = anyClassForTrophy
+                ? Math.max(1, Math.floor((anyClassForTrophy.lessonCount || 0) / 5))
                 : (lesson.trophyLimit || 0);
               const remaining = Math.max(0, maxAvailable - previouslyEarned);
 
@@ -2496,19 +2556,20 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                     {lesson.unitCount > 0 && (
                       <div className="p-4 bg-indigo-50 rounded-lg border border-indigo-200">
                         <p className="text-indigo-800 font-bold mb-1">
-                          Student Progress on this {lesson.link?.startsWith('abhidhamma://') && sendAbhidhammaClassId ? `${sendAbhidhammaClassId} ` : ssClassForTrophy ? `${ssClassForTrophy.classId} ` : ''}Lesson:
+                          Student Progress on this {anyClassForTrophy ? `${anyClassForTrophy.classId} ` : ''}Lesson:
                         </p>
                         {(() => {
-                          const isAbhi = lesson.link?.startsWith('abhidhamma://');
-                          const displayedCompleted = isAbhi
+                          const displayedCompleted = isAbhiForTrophy
                             ? (abhiStudentCount ?? completedUnit)
-                            : ssClassForTrophy
-                              ? (ssStudentClassCount ?? completedUnit)
-                              : (ssStudentTotalCount ?? completedUnit);
-                          const displayedTotal = isAbhi
+                            : isDhammaschoolForTrophy
+                              ? (dhammaschoolStudentProgress?.completedCount ?? completedUnit)
+                              : ssClassForTrophy
+                                ? (ssStudentClassCount ?? completedUnit)
+                                : (ssStudentTotalCount ?? completedUnit);
+                          const displayedTotal = isAbhiForTrophy
                             ? (abhiTotalCount ?? effectiveUnitCountForDisplay)
                             : effectiveUnitCountForDisplay;
-                          const unitLabel = isAbhi ? 'Lesson' : (lesson.unitLabel || 'Lesson');
+                          const unitLabel = (isAbhiForTrophy || isDhammaschoolForTrophy) ? 'Lesson' : (lesson.unitLabel || 'Lesson');
                           return displayedCompleted > 0 ? (
                             <p className="text-sm text-indigo-700">
                               {student.name} completed up to {unitLabel} {displayedCompleted} / {displayedTotal}.
@@ -2523,7 +2584,7 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                     {maxAvailable > 0 && (
                       <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
                         <p className="text-yellow-800 font-bold mb-2">
-                          Trophy Status{lesson.link?.startsWith('abhidhamma://') && sendAbhidhammaClassId ? ` for ${sendAbhidhammaClassId}` : ssClassForTrophy ? ` for ${ssClassForTrophy.classId}` : ' for this Lesson'}:
+                          Trophy Status{anyClassForTrophy ? ` for ${anyClassForTrophy.classId}` : ' for this Lesson'}:
                         </p>
                         <ul className="text-sm text-yellow-700 space-y-1 mb-3">
                           <li>Max Available: <strong>{maxAvailable}</strong></li>
@@ -2938,6 +2999,15 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                     </div>
                     <p className="text-sm text-gray-600 mt-1">ID: <span className="font-mono bg-gray-100 px-2 py-0.5 rounded-md">{student.displayId}</span></p>
                   </button>
+                  {student.pendingName && (
+                    <div className="w-full sm:w-auto mt-2 sm:mt-0 sm:ml-3 flex items-center gap-2 bg-yellow-50 border border-yellow-300 rounded-lg px-3 py-2">
+                      <span className="text-yellow-800 text-sm font-semibold">
+                        Wants to rename to "<strong>{student.pendingName}</strong>"
+                      </span>
+                      <button onClick={(e) => { e.stopPropagation(); handleApproveNameChange(student.id, student.pendingName); }} className="px-3 py-1 rounded-lg text-xs font-bold text-white bg-emerald-500 hover:bg-emerald-600">Approve</button>
+                      <button onClick={(e) => { e.stopPropagation(); handleRejectNameChange(student.id); }} className="px-3 py-1 rounded-lg text-xs font-bold text-white bg-red-500 hover:bg-red-600">Reject</button>
+                    </div>
+                  )}
                   <div className="flex space-x-3 mt-2 sm:mt-0">
                     <button onClick={() => handleToggleStudentActive(student.id, student.isActive)} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-md ${student.isActive ? 'bg-emerald-500 hover:bg-emerald-600 text-white' : 'bg-gray-200 hover:bg-gray-300 text-red-700'}`}>
                       {student.isActive ? 'Active' : 'Deactivated'}
@@ -2992,45 +3062,91 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                   </div>
                 );
               })()}
-              {newBankLessonLink === 'abhidhamma://' && (
-                <div className="mt-2 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                  <span className="text-sm text-amber-800 font-semibold">📚 Abhidhamma app — lesson chosen in Send Action</span>
-                  <button type="button" onClick={() => setNewBankLessonLink('')} className="text-xs text-red-600 hover:text-red-800 font-semibold">Clear</button>
-                </div>
-              )}
-              {newBankLessonLink === 'dhammaschool://' && (
-                <div className="mt-2 flex items-center justify-between bg-orange-50 border border-orange-200 rounded-lg px-3 py-2">
-                  <span className="text-sm text-orange-800 font-semibold">📖 Dhammaschool app — lesson chosen in Send Action</span>
-                  <button type="button" onClick={() => setNewBankLessonLink('')} className="text-xs text-red-600 hover:text-red-800 font-semibold">Clear</button>
-                </div>
-              )}
+              {newBankLessonLink.startsWith('abhidhamma://') && (() => {
+                const cId = extractAbhidhammaLessonId(newBankLessonLink);
+                return (
+                  <div className="mt-2 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    <span className="text-sm text-amber-800 font-semibold">📚 Abhidhamma app{cId ? ` → Class ${cId}` : ''}</span>
+                    <button type="button" onClick={() => setNewBankLessonLink('')} className="text-xs text-red-600 hover:text-red-800 font-semibold">Clear</button>
+                  </div>
+                );
+              })()}
+              {newBankLessonLink.startsWith('dhammaschool://') && (() => {
+                const cId = extractDhammaschoolClassId(newBankLessonLink);
+                return (
+                  <div className="mt-2 flex items-center justify-between bg-orange-50 border border-orange-200 rounded-lg px-3 py-2">
+                    <span className="text-sm text-orange-800 font-semibold">📖 Dhammaschool app{cId ? ` → Class ${cId}` : ''}</span>
+                    <button type="button" onClick={() => setNewBankLessonLink('')} className="text-xs text-red-600 hover:text-red-800 font-semibold">Clear</button>
+                  </div>
+                );
+              })()}
 
               {showLinkPicker && (
                 <div className="absolute z-20 mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-xl p-3 max-h-96 overflow-y-auto">
                   {pickerAppSelected ? (
                     <div>
-                      <button type="button" onClick={() => setPickerAppSelected(false)} className="text-sm text-indigo-600 font-semibold mb-3 hover:underline">
+                      <button type="button" onClick={() => setPickerAppSelected(null)} className="text-sm text-indigo-600 font-semibold mb-3 hover:underline">
                         ← Back
                       </button>
-                      <p className="font-bold text-gray-800 mb-2">📚 Smart Study app — choose a Class ID</p>
-                      {pickerLoading ? (
-                        <p className="text-gray-500 text-sm">Loading classes...</p>
-                      ) : smartStudyClasses && smartStudyClasses.length > 0 ? (
-                        <div className="space-y-1">
-                          {smartStudyClasses.map(c => (
-                            <button
-                              type="button"
-                              key={c.classId}
-                              onClick={() => chooseSmartStudyClass(c.classId)}
-                              className="w-full text-left p-2 rounded-lg hover:bg-sky-50 border border-transparent hover:border-sky-200 flex justify-between items-center"
-                            >
-                              <span className="font-semibold text-gray-800">{c.classId}</span>
-                              <span className="text-xs text-gray-500">{c.lessonCount} lesson{c.lessonCount === 1 ? '' : 's'}</span>
-                            </button>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-gray-500 text-sm">No Smart Study classes found yet.</p>
+                      {pickerAppSelected === 'smartstudy' && (
+                        <>
+                          <p className="font-bold text-gray-800 mb-2">📚 Smart Study app — choose a Class ID</p>
+                          {pickerLoading ? (
+                            <p className="text-gray-500 text-sm">Loading classes...</p>
+                          ) : smartStudyClasses && smartStudyClasses.length > 0 ? (
+                            <div className="space-y-1">
+                              {smartStudyClasses.map(c => (
+                                <button type="button" key={c.classId} onClick={() => chooseSmartStudyClass(c.classId, c.lessonCount)}
+                                  className="w-full text-left p-2 rounded-lg hover:bg-sky-50 border border-transparent hover:border-sky-200 flex justify-between items-center">
+                                  <span className="font-semibold text-gray-800">{c.classId}</span>
+                                  <span className="text-xs text-gray-500">{c.lessonCount} lesson{c.lessonCount === 1 ? '' : 's'}</span>
+                                </button>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-gray-500 text-sm">No Smart Study classes found yet.</p>
+                          )}
+                        </>
+                      )}
+                      {pickerAppSelected === 'abhidhamma' && (
+                        <>
+                          <p className="font-bold text-gray-800 mb-2">📚 Abhidhamma app — choose a Class ID</p>
+                          {abhidhammaLoading ? (
+                            <p className="text-gray-500 text-sm">Loading classes...</p>
+                          ) : abhidhammaClasses && abhidhammaClasses.length > 0 ? (
+                            <div className="space-y-1">
+                              {abhidhammaClasses.map(c => (
+                                <button type="button" key={c.classId} onClick={() => chooseAbhidhammaClass(c.classId, c.lessonCount)}
+                                  className="w-full text-left p-2 rounded-lg hover:bg-amber-50 border border-transparent hover:border-amber-200 flex justify-between items-center">
+                                  <span className="font-semibold text-gray-800">{c.displayName || c.classId}</span>
+                                  <span className="text-xs text-gray-500">{c.lessonCount} lesson{c.lessonCount === 1 ? '' : 's'}</span>
+                                </button>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-gray-500 text-sm">No Abhidhamma classes found yet.</p>
+                          )}
+                        </>
+                      )}
+                      {pickerAppSelected === 'dhammaschool' && (
+                        <>
+                          <p className="font-bold text-gray-800 mb-2">📖 Dhammaschool app — choose a Class ID</p>
+                          {dhammaschoolLoading ? (
+                            <p className="text-gray-500 text-sm">Loading classes...</p>
+                          ) : dhammaschoolClasses && dhammaschoolClasses.length > 0 ? (
+                            <div className="space-y-1">
+                              {dhammaschoolClasses.map(c => (
+                                <button type="button" key={c.classId} onClick={() => chooseDhammaschoolClass(c.classId, c.lessonCount)}
+                                  className="w-full text-left p-2 rounded-lg hover:bg-orange-50 border border-transparent hover:border-orange-200 flex justify-between items-center">
+                                  <span className="font-semibold text-gray-800">{c.classId}</span>
+                                  <span className="text-xs text-gray-500">{c.lessonCount} lesson{c.lessonCount === 1 ? '' : 's'}</span>
+                                </button>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-gray-500 text-sm">No Dhammaschool classes found yet.</p>
+                          )}
+                        </>
                       )}
                     </div>
                   ) : (
@@ -3045,36 +3161,21 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                       <p className="text-xs text-gray-500 font-semibold mt-3 mb-1 uppercase">Or choose app</p>
                       <button
                         type="button"
-                        onClick={() => {
-                          setNewBankLessonLink('smartstudy://');
-                          if (!newBankLessonTitle.trim()) setNewBankLessonTitle('Smart Study Lesson');
-                          setShowLinkPicker(false);
-                          setPickerAppSelected(false);
-                        }}
+                        onClick={() => { setPickerAppSelected('smartstudy'); loadSmartStudyClassList(); }}
                         className="w-full text-left p-2 rounded-lg hover:bg-sky-50 border border-transparent hover:border-sky-200 font-semibold text-gray-800"
                       >
                         📚 Smart Study app
                       </button>
                       <button
                         type="button"
-                        onClick={() => {
-                          setNewBankLessonLink('abhidhamma://');
-                          if (!newBankLessonTitle.trim()) setNewBankLessonTitle('Abhidhamma Lesson');
-                          setShowLinkPicker(false);
-                          setPickerAppSelected(false);
-                        }}
+                        onClick={() => { setPickerAppSelected('abhidhamma'); loadAbhidhammaClasses(); }}
                         className="w-full text-left p-2 rounded-lg hover:bg-amber-50 border border-transparent hover:border-amber-200 font-semibold text-gray-800 mt-1"
                       >
                         📚 Abhidhamma app
                       </button>
                       <button
                         type="button"
-                        onClick={() => {
-                          setNewBankLessonLink('dhammaschool://');
-                          if (!newBankLessonTitle.trim()) setNewBankLessonTitle('Dhammaschool Lesson');
-                          setShowLinkPicker(false);
-                          setPickerAppSelected(false);
-                        }}
+                        onClick={() => { setPickerAppSelected('dhammaschool'); loadDhammaschoolClasses(); }}
                         className="w-full text-left p-2 rounded-lg hover:bg-orange-50 border border-transparent hover:border-orange-200 font-semibold text-gray-800 mt-1"
                       >
                         📖 Dhammaschool app
@@ -3106,7 +3207,12 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                 </select>
               </div>
               <div>
-                <label className="block text-gray-700 mb-2">Total Number</label>
+                <label className="block text-gray-700 mb-2">
+                  Total Number
+                  {(newBankLessonLink.startsWith('smartstudy://') || newBankLessonLink.startsWith('abhidhamma://') || newBankLessonLink.startsWith('dhammaschool://')) && (
+                    <span className="ml-2 text-xs font-normal text-emerald-600">(auto-filled from class)</span>
+                  )}
+                </label>
                 <input type="number" min="0" value={newBankLessonUnitCount} onChange={(e) => setNewBankLessonUnitCount(e.target.value)} placeholder="e.g., 20" className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
             </div>
@@ -4179,14 +4285,31 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
   };
 
   const handleUpdateStudentName = async () => {
-    if (!editingNameText.trim() || !studentUid) return;
+    const trimmed = editingNameText.trim();
+    if (!trimmed || !studentUid) return;
     
     try {
       const studentDocRef = doc(db, `${publicDataPath}/students`, studentUid);
-      await updateDoc(studentDocRef, { name: editingNameText.trim() });
+      if (trimmed === studentProfile?.name) {
+        // No actual change — just clear any stale pending request
+        await updateDoc(studentDocRef, { pendingName: null });
+      } else {
+        // Name changes require teacher approval — store as pendingName,
+        // the displayed name stays the same until the teacher approves it.
+        await updateDoc(studentDocRef, { pendingName: trimmed });
+      }
       setIsEditingName(false);
     } catch (error) {
       console.error("Error updating student profile:", error);
+    }
+  };
+
+  const handleCancelPendingNameRequest = async () => {
+    if (!studentUid) return;
+    try {
+      await updateDoc(doc(db, `${publicDataPath}/students`, studentUid), { pendingName: null });
+    } catch (error) {
+      console.error("Error cancelling pending name request:", error);
     }
   };
 
@@ -4451,7 +4574,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
               <input type="text" value={editingNameText} onChange={(e) => setEditingNameText(e.target.value)} className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500" />
             </div>
             <div className="flex space-x-3 pt-4 justify-end">
-              <button onClick={() => { setIsEditingName(false); setEditingNameText(studentProfile.name); }} className="px-5 py-2 rounded-lg bg-gray-200 text-gray-800 hover:bg-gray-300">
+              <button onClick={() => { setIsEditingName(false); setEditingNameText(studentProfile.pendingName || studentProfile.name); }} className="px-5 py-2 rounded-lg bg-gray-200 text-gray-800 hover:bg-gray-300">
                 Cancel
               </button>
               <button onClick={handleUpdateStudentName} className="px-5 py-2 rounded-lg bg-emerald-500 text-white font-semibold hover:bg-emerald-600 shadow-md">
@@ -4468,6 +4591,14 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                         <span className="text-4xl font-bold text-yellow-600 px-2 py-1 drop-shadow-sm" title={`${studentProfile.trophyCount} Trophies`}>🏆 {studentProfile.trophyCount}</span>
                     )}
                   </div>
+                  {studentProfile?.pendingName && (
+                    <div className="mb-2 inline-flex items-center gap-2 bg-yellow-50 border border-yellow-300 rounded-lg px-3 py-1.5">
+                      <span className="text-yellow-800 text-sm font-semibold">
+                        ⏳ Name change to "<strong>{studentProfile.pendingName}</strong>" is pending teacher approval.
+                      </span>
+                      <button onClick={handleCancelPendingNameRequest} className="text-xs text-red-600 hover:text-red-800 font-semibold underline">Cancel</button>
+                    </div>
+                  )}
                   <p className="text-gray-600 text-lg mt-2">Your ID: <span className="font-mono bg-gray-100 px-2 py-0.5 rounded-md font-bold text-gray-800">{studentProfile?.displayId}</span></p>
 
                   <div className="flex flex-col sm:flex-row gap-4 mt-4">
@@ -4488,7 +4619,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                   </div>
               </div>
               <div className="flex flex-col sm:flex-row gap-3">
-                <button onClick={() => setIsEditingName(true)} className="flex items-center justify-center space-x-1 text-emerald-600 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-4 py-2.5 rounded-lg font-semibold transition-colors border border-emerald-200">
+                <button onClick={() => { setEditingNameText(studentProfile?.pendingName || studentProfile?.name || ''); setIsEditingName(true); }} className="flex items-center justify-center space-x-1 text-emerald-600 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-4 py-2.5 rounded-lg font-semibold transition-colors border border-emerald-200">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                     <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
                     </svg>
@@ -5988,7 +6119,19 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma }) {
         if (setFormError) setFormError('An error occurred. Please try again.');
       }
     } else if (selectedRole === 'student') {
-      const displayId = uid.substring(0, 6).toUpperCase();
+      // Generate a numeric-only 6-digit display ID (all existing IDs are numeric —
+      // uid.substring(0,6) previously produced alphanumeric IDs since Firebase
+      // anonymous auth UIDs are base62 strings, not numeric).
+      const generateNumericDisplayId = async () => {
+        for (let attempt = 0; attempt < 20; attempt++) {
+          const candidate = String(Math.floor(100000 + Math.random() * 900000)); // 100000-999999
+          const dupSnap = await getDocs(query(studentsCollection, where("displayId", "==", candidate)));
+          if (dupSnap.empty) return candidate;
+        }
+        // Extremely unlikely fallback: timestamp-derived digits
+        return String(Date.now()).slice(-6);
+      };
+      const displayId = await generateNumericDisplayId();
       const newStudentProfile = {
         name: studentName, displayId: displayId, isActive: 'pending', createdAt: serverTimestamp(),
         trophyCount: 0, completedCount: 0, dailySubmissionCount: 0, lastSubmissionDate: null,
