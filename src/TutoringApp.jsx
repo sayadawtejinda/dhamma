@@ -138,6 +138,10 @@ const DHAMMASCHOOL_APP_ID = 'dhammaschool-app'; // Firestore appId used inside t
 // TODO: replace with the actual hosted URL once the Dhammaschool app app is deployed.
 const DHAMMASCHOOL_APP_URL = 'https://sayadawtejinda.github.io/dhamma/Dhammaschool.html';
 
+// ── Myanmar Speaking app (standalone HTML app — opened via window.open, NOT mounted as React component) ──
+// TODO: replace with the actual hosted URL once the Myanmar Speaking app is deployed (same pattern as Dhammaschool app).
+const MYANMAR_SPEAKING_APP_URL = '';
+
 const extractDhammaschoolClassId = (link) => {
   if (!link || !link.startsWith('dhammaschool://')) return null;
   return link.replace('dhammaschool://', '') || null;
@@ -2243,6 +2247,28 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
           >
             <span className="flex items-center text-lg font-bold text-amber-800">📚 Abhidhamma app</span>
             <span className="text-amber-500 text-xl">→</span>
+          </button>
+          {/* Dhammaschool app — standalone HTML app, opens in a new tab (not mounted inline) */}
+          <button
+            onClick={() => window.open(DHAMMASCHOOL_APP_URL, '_blank', 'noopener,noreferrer')}
+            className="w-full flex items-center justify-between bg-white p-4 rounded-xl border-2 border-orange-200 hover:border-orange-400 hover:shadow-md transition-all mt-3"
+          >
+            <span className="flex items-center text-lg font-bold text-orange-800">📖 Dhammaschool app</span>
+            <span className="text-orange-500 text-xl">↗</span>
+          </button>
+          {/* Myanmar Speaking app — standalone HTML app, opens in a new tab (not mounted inline) */}
+          <button
+            onClick={() => {
+              if (!MYANMAR_SPEAKING_APP_URL) {
+                alert('Myanmar Speaking app URL is not set up yet. Ask your developer to host it and add the link.');
+                return;
+              }
+              window.open(MYANMAR_SPEAKING_APP_URL, '_blank', 'noopener,noreferrer');
+            }}
+            className="w-full flex items-center justify-between bg-white p-4 rounded-xl border-2 border-purple-200 hover:border-purple-400 hover:shadow-md transition-all mt-3"
+          >
+            <span className="flex items-center text-lg font-bold text-purple-800">🗣️ Myanmar Speaking app</span>
+            <span className="text-purple-500 text-xl">↗</span>
           </button>
         </div>
       )}
