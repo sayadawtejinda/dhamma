@@ -56,6 +56,36 @@ const abhiResultsRef     = (cId,lId,g)   =>
 const abhiQRef           = (cId, lId)    =>
     collection(db, 'artifacts', ABHIDHAMMA_APP_ID, 'public', 'data', 'classes', cId, 'questions', lId, 'items');
 
+// Rename a student's score / quiz-result records from one name to another. Used when a student's
+// Abhidhamma display name doesn't match the name their records were written under — e.g. the
+// student was renamed in the roster, or TutoringApp/Abhidhamma use slightly different names for
+// the same person. Safe no-op if oldName/newName are missing or identical.
+const renameStudentRecords = async (classId, oldName, newName) => {
+  if (!classId || !oldName || !newName || oldName === newName) return;
+  try {
+    const allScores = await getDocs(abhiScoresRef());
+    const toRename = allScores.docs.filter(d=>{const dt=d.data();return dt.studentName===oldName&&(!dt.classId||dt.classId===classId);});
+    if (toRename.length > 0) {
+      const batch = writeBatch(db);
+      toRename.forEach(d => batch.update(d.ref,{studentName:newName,name:newName}));
+      await batch.commit();
+    }
+  } catch(e) { console.error('Scores rename:', e); }
+  try {
+    const lessonsSnap = await getDocs(abhiLessonsRef(classId));
+    for (const lDoc of lessonsSnap.docs) {
+      for (const g of Object.keys(AGE_GROUPS)) {
+        const rSnap = await getDocs(query(abhiResultsRef(classId,lDoc.id,g),where('name','==',oldName)));
+        if (!rSnap.empty) {
+          const batch = writeBatch(db);
+          rSnap.docs.forEach(d => batch.update(d.ref,{name:newName}));
+          await batch.commit();
+        }
+      }
+    }
+  } catch(e) { console.error('Quiz results rename:', e); }
+};
+
 // ─── AI generation ────────────────────────────────────────────────────────────
 const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=`;
 const generateContent = async (prompt, sys) => {
@@ -169,6 +199,8 @@ const AbhiClassRoster = ({ userId, classId, onLink }) => {
   const [linking,setLinking]=useState(false);
   const [syncing,setSyncing]=useState(false);
   const [syncMsg,setSyncMsg]=useState('');
+  const [finding,setFinding]=useState(false);
+  const [matchPreview,setMatchPreview]=useState(null); // null=not previewed yet; [] or [...] once "Find" has run
 
   useEffect(()=>{ const i=setInterval(()=>setNow(Date.now()),10000); return()=>clearInterval(i); },[]);
 
@@ -235,31 +267,49 @@ const AbhiClassRoster = ({ userId, classId, onLink }) => {
     }catch(e){setTutoringStudents([]);return[];}
   };
 
-  // Bulk-link: match TutoringApp names to Roster names automatically, and pull in any
-  // TutoringApp student who isn't in this class's Roster yet — all in one click.
-  const bulkLinkMatching=async()=>{
-    setSyncing(true);
+  // Step 1 — Find Matching Names: match TutoringApp names against students already in THIS
+  // class's Roster only. Never proposes adding a Tutoring student who hasn't joined the
+  // Abhidhamma app yet — that's a preview for the teacher to review, not an action.
+  const findMatchingNames=async()=>{
+    setFinding(true);
     try{
       const list=await loadTutoringStudents();
       const rosterByLower={};
       approved.forEach(s=>{ if(s.studentName) rosterByLower[s.studentName.trim().toLowerCase()]=s; });
-      let nextNum=approved.reduce((m,s)=>Math.max(m,s.studentNumber||0),0)+1;
-      const toLink=[],toAdd=[];
+      const matches=[];
       list.forEach(t=>{
         if(!t.name)return;
         const match=rosterByLower[t.name.trim().toLowerCase()];
-        if(match){ if(!match.linkedToTutoring) toLink.push(match.studentName); }
-        else toAdd.push(t.name);
+        if(!match||match.linkedToTutoring)return;
+        // If this student was previously linked under a different Abhidhamma name (recorded on
+        // the TutoringApp profile by the individual-link flow), carry that along so Step 2 can
+        // sweep up any of their scores/quiz results still sitting under the old name.
+        const recordedOldName=t.abhidhammaNames?.[classId];
+        const oldName=(recordedOldName&&recordedOldName!==match.studentName)?recordedOldName:null;
+        matches.push({tutoringId:t.id,tutoringName:t.name,rosterName:match.studentName,oldName});
       });
-      if(toLink.length===0&&toAdd.length===0){ setSyncMsg('No matching names found.'); setTimeout(()=>setSyncMsg(''),3000); return; }
-      if(!window.confirm(`Link ${toLink.length} matching student(s) and add ${toAdd.length} new student(s) from Tutoring?`))return;
+      setMatchPreview(matches);
+      if(matches.length===0){ setSyncMsg('No matching names found.'); setTimeout(()=>setSyncMsg(''),3000); }
+    }catch(e){console.error('Find matching:',e);setSyncMsg('❌ Error — see console.');setTimeout(()=>setSyncMsg(''),4000);}
+    finally{setFinding(false);}
+  };
+
+  // Step 2 — Link All Matching Names: only runs after the teacher has reviewed the preview from
+  // Step 1 and confirmed it. Links each matched (already-in-app) student, and renames any
+  // leftover records found under a previously-used Abhidhamma name.
+  const confirmLinkMatches=async()=>{
+    if(!matchPreview||matchPreview.length===0)return;
+    setSyncing(true);
+    try{
       const batch=writeBatch(db);
-      toLink.forEach(name=>batch.set(abhiRosterDocRef(classId,name),{linkedToTutoring:true},{merge:true}));
-      toAdd.forEach(name=>{ batch.set(abhiRosterDocRef(classId,name),{classId,studentName:name,name,status:'approved',studentNumber:nextNum++,linkedToTutoring:true},{merge:true}); });
+      matchPreview.forEach(m=>batch.set(abhiRosterDocRef(classId,m.rosterName),{linkedToTutoring:true},{merge:true}));
       await batch.commit();
-      setSyncMsg(`✅ Linked ${toLink.length}, added ${toAdd.length}.`);
+      const renames=matchPreview.filter(m=>m.oldName);
+      for(const m of renames) await renameStudentRecords(classId,m.oldName,m.rosterName);
+      setSyncMsg(`✅ Linked ${matchPreview.length} student(s).${renames.length?` (${renames.length} old-name record(s) merged.)`:''}`);
+      setMatchPreview(null);
       setTimeout(()=>setSyncMsg(''),4000);
-    }catch(e){console.error('Bulk link:',e);setSyncMsg('❌ Error — see console.');setTimeout(()=>setSyncMsg(''),4000);}
+    }catch(e){console.error('Confirm link:',e);setSyncMsg('❌ Error — see console.');setTimeout(()=>setSyncMsg(''),4000);}
     finally{setSyncing(false);}
   };
 
@@ -274,11 +324,23 @@ const AbhiClassRoster = ({ userId, classId, onLink }) => {
           <button onClick={toggleAA} className={`flex items-center gap-1 text-xs px-3 py-1 rounded-full font-bold ${aa?'bg-green-500/20 text-green-400 border border-green-500/50':'bg-gray-800 text-gray-400 border border-gray-600'}`} title="Auto-approve new students">
             {aa?<ToggleRight className="w-4 h-4"/>:<ToggleLeft className="w-4 h-4"/>}Auto-Approve
           </button>
-          {onLink&&(
-            <button onClick={e=>{e.stopPropagation();bulkLinkMatching();}} disabled={syncing}
-              className="flex items-center gap-1 text-xs px-3 py-1 rounded-full font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/50 disabled:opacity-50" title="Auto-link students whose name matches a TutoringApp student, and pull in any TutoringApp student missing from this Roster">
-              {syncing?'Linking…':'🔗 Link All Matching Names'}
+          {onLink&&matchPreview===null&&(
+            <button onClick={e=>{e.stopPropagation();findMatchingNames();}} disabled={finding}
+              className="flex items-center gap-1 text-xs px-3 py-1 rounded-full font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/50 disabled:opacity-50" title="Preview which students already in this Roster match a TutoringApp student, before linking anything">
+              {finding?'Finding…':'🔍 Find Matching Names'}
             </button>
+          )}
+          {onLink&&matchPreview!==null&&matchPreview.length>0&&(
+            <>
+              <button onClick={e=>{e.stopPropagation();confirmLinkMatches();}} disabled={syncing}
+                className="flex items-center gap-1 text-xs px-3 py-1 rounded-full font-bold bg-indigo-600 text-white border border-indigo-500 disabled:opacity-50" title="Link these matched students (already in the app) to TutoringApp">
+                {syncing?'Linking…':`🔗 Link All Matching Names (${matchPreview.length})`}
+              </button>
+              <button onClick={e=>{e.stopPropagation();setMatchPreview(null);}} disabled={syncing}
+                className="text-xs px-2 py-1 rounded-full font-bold text-gray-400 hover:text-white border border-gray-600 disabled:opacity-50">
+                Cancel
+              </button>
+            </>
           )}
           {syncMsg&&<span className="text-xs text-indigo-300 font-semibold">{syncMsg}</span>}
         </div>
@@ -290,6 +352,18 @@ const AbhiClassRoster = ({ userId, classId, onLink }) => {
           {open?<ChevronDown className="w-5 h-5 text-gray-400"/>:<ChevronRight className="w-5 h-5 text-gray-400"/>}
         </div>
       </div>
+      {open&&matchPreview!==null&&matchPreview.length>0&&(
+        <div className="mx-4 mt-4 p-3 bg-indigo-900/20 border border-indigo-500/40 rounded-lg space-y-1.5">
+          <p className="text-xs font-bold text-indigo-300 mb-2">🔍 {matchPreview.length} match{matchPreview.length===1?'':'es'} found — review, then click "Link All Matching Names" to confirm:</p>
+          {matchPreview.map(m=>(
+            <div key={m.tutoringId} className="text-xs text-gray-300 flex items-center gap-2 flex-wrap">
+              <UserCheck className="w-3.5 h-3.5 text-indigo-400 shrink-0"/>
+              <span className="font-semibold text-white">{m.rosterName}</span>
+              {m.oldName&&<span className="text-amber-300">(old name "{m.oldName}" — scores will be merged)</span>}
+            </div>
+          ))}
+        </div>
+      )}
       {open&&<div className="p-4 space-y-2">
         {/* Pending row */}
         {pending.map(s=>(
@@ -952,30 +1026,8 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
       showMsg(`✅ Linked "${newName}" to Tutoring.`);
       return;
     }
-    // 3. Rename scores — load all then filter client-side (no composite index needed)
-    try {
-      const allScores = await getDocs(abhiScoresRef());
-      const toRename = allScores.docs.filter(d=>{const dt=d.data();return dt.studentName===oldName&&(!dt.classId||dt.classId===classId);});
-      if (toRename.length > 0) {
-        const batch = writeBatch(db);
-        toRename.forEach(d => batch.update(d.ref,{studentName:newName,name:newName}));
-        await batch.commit();
-      }
-    } catch(e) { console.error('Scores rename:', e); }
-    // 4. Rename quiz results across all lessons
-    try {
-      const lessonsSnap = await getDocs(abhiLessonsRef(classId));
-      for (const lDoc of lessonsSnap.docs) {
-        for (const g of Object.keys(AGE_GROUPS)) {
-          const rSnap = await getDocs(query(abhiResultsRef(classId,lDoc.id,g),where('name','==',oldName)));
-          if (!rSnap.empty) {
-            const batch = writeBatch(db);
-            rSnap.docs.forEach(d => batch.update(d.ref,{name:newName}));
-            await batch.commit();
-          }
-        }
-      }
-    } catch(e) { console.error('Quiz results rename:', e); }
+    // 3. Rename scores + quiz results (shared helper — same logic bulk-linking reuses)
+    await renameStudentRecords(classId, oldName, newName);
     // 5. Move roster doc
     try {
       const oldRef = abhiRosterDocRef(classId,oldName);
