@@ -67,7 +67,9 @@ const renameStudentRecords = async (classId, oldName, newName) => {
     const toRename = allScores.docs.filter(d=>{const dt=d.data();return dt.studentName===oldName&&(!dt.classId||dt.classId===classId);});
     if (toRename.length > 0) {
       const batch = writeBatch(db);
-      toRename.forEach(d => batch.update(d.ref,{studentName:newName,name:newName}));
+      // Also backfill classId — some imported/legacy score docs are missing it, which silently
+      // hides them from the roster's "done" count and class stats (both query by classId).
+      toRename.forEach(d => batch.update(d.ref,{studentName:newName,name:newName,classId}));
       await batch.commit();
     }
   } catch(e) { console.error('Scores rename:', e); }
@@ -810,20 +812,31 @@ const AbhiLessonItem = ({ lesson, classId, isTeacher, studentAgeGroup, studentNa
   
   useEffect(()=>{if(isOpen&&ref.current){setTimeout(()=>{const y=ref.current.getBoundingClientRect().top+window.scrollY-80;window.scrollTo({top:y,behavior:'smooth'});},100);}},[isOpen]);
   
-  // Track quiz completion. Primary source is the per-group "results" collection, but restored/imported
-  // backups sometimes only carry the leaderboard "scores" doc (no matching results doc) — treat a
-  // matching score (same classId + lessonId + userId) as completed too, so restored students show Done.
+  // Track quiz completion. Checks BOTH by the live userId (normal case) AND by the student's
+  // current display name (fallback) — imported/linked records often carry an old userId from a
+  // different app/session that will never match this device's live uid, but their studentName
+  // gets kept in sync by the rename/link flows, so matching on name catches those too.
   useEffect(()=>{
-    if(!classId||!userId||!lesson.id||!studentAgeGroup)return;
-    let fromResults=false,fromScores=false;
-    const recompute=()=>setIsCompleted(fromResults||fromScores);
-    const u1=onSnapshot(query(abhiResultsRef(classId,lesson.id,studentAgeGroup),where('userId','==',userId)),snap=>{fromResults=!snap.empty;recompute();});
-    const u2=onSnapshot(query(abhiScoresRef(),where('userId','==',userId)),snap=>{
-      fromScores=snap.docs.some(d=>{const dt=d.data();return dt.classId===classId&&dt.lessonId===lesson.id;});
-      recompute();
-    },err=>console.error('Score completion track:',err.code));
-    return()=>{u1();u2();};
-  },[classId,lesson.id,userId,studentAgeGroup]);
+    if(!classId||!lesson.id||!studentAgeGroup)return;
+    let fromResultsById=false,fromScoresById=false,fromResultsByName=false,fromScoresByName=false;
+    const recompute=()=>setIsCompleted(fromResultsById||fromScoresById||fromResultsByName||fromScoresByName);
+    const subs=[];
+    if(userId){
+      subs.push(onSnapshot(query(abhiResultsRef(classId,lesson.id,studentAgeGroup),where('userId','==',userId)),snap=>{fromResultsById=!snap.empty;recompute();}));
+      subs.push(onSnapshot(query(abhiScoresRef(),where('userId','==',userId)),snap=>{
+        fromScoresById=snap.docs.some(d=>{const dt=d.data();return dt.classId===classId&&dt.lessonId===lesson.id;});
+        recompute();
+      },err=>console.error('Score completion track:',err.code)));
+    }
+    if(studentName){
+      subs.push(onSnapshot(query(abhiResultsRef(classId,lesson.id,studentAgeGroup),where('name','==',studentName)),snap=>{fromResultsByName=!snap.empty;recompute();},err=>console.error('Name completion track:',err.code)));
+      subs.push(onSnapshot(query(abhiScoresRef(),where('studentName','==',studentName)),snap=>{
+        fromScoresByName=snap.docs.some(d=>{const dt=d.data();return dt.classId===classId&&dt.lessonId===lesson.id;});
+        recompute();
+      },err=>console.error('Name score completion track:',err.code)));
+    }
+    return()=>{subs.forEach(u=>u());};
+  },[classId,lesson.id,userId,studentAgeGroup,studentName]);
   
   // Track Q&A participation for quiz unlock (ask + reply)
   useEffect(()=>{
