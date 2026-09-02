@@ -742,6 +742,11 @@ const AbhiFloatingStats = ({ rank, totalLessons }) => {
 // ─── Global & Class Leaderboard Modal ────────────────────────────────────────
 const AbhiLeaderboardModal = ({ classId, studentName, userId, onClose }) => {
   const [classData,setClassData]=useState(null);
+  const meRef=useRef(null);
+
+  useEffect(()=>{
+    if(classData&&meRef.current) setTimeout(()=>meRef.current?.scrollIntoView({behavior:'smooth',block:'center'}),150);
+  },[classData]);
 
   useEffect(()=>{
     if(!classId||classData!==null)return;
@@ -770,7 +775,7 @@ const AbhiLeaderboardModal = ({ classId, studentName, userId, onClose }) => {
         {data.map((e,idx)=>{
           const isMe=e.userId===userId||(e.name===studentName);
           return(
-            <div key={idx} className={`flex items-center gap-3 p-3 rounded-xl ${isMe?'bg-amber-900/40 border border-amber-500':'bg-gray-700/50 border border-gray-600/30'}`}>
+            <div key={idx} ref={isMe?meRef:null} className={`flex items-center gap-3 p-3 rounded-xl ${isMe?'bg-amber-900/40 border border-amber-500':'bg-gray-700/50 border border-gray-600/30'}`}>
               <span className="w-8 text-center font-black text-lg">{medals[idx]||`#${idx+1}`}</span>
               <div className="flex-1">
                 <p className="font-bold text-white text-sm">{e.name}{isMe&&<span className="text-[10px] bg-amber-500 text-black px-1.5 py-0.5 rounded-full font-bold ml-2">YOU</span>}</p>
@@ -877,6 +882,7 @@ const AbhiLessonItem = ({ lesson, classId, isTeacher, studentAgeGroup, studentNa
   const [imgSavingAll,setImgSavingAll]=useState(false);
   const [imgSaved,setImgSaved]=useState(false);
   const ref=useRef(null);
+  const meLbRef=useRef(null);
   
   // Keep the draft in sync with the live saved value (e.g. after a save round-trips through Firestore)
   useEffect(()=>{ setImgUrlDraft(lesson.imageBaseUrl||''); },[lesson.imageBaseUrl]);
@@ -958,7 +964,11 @@ const AbhiLessonItem = ({ lesson, classId, isTeacher, studentAgeGroup, studentNa
         setLb(Object.values(s).sort((a,b)=>b.score-a.score));
       })
       .catch(e=>console.error('LB:',e));
-  },[showLb,classId,lesson.id]);
+   },[showLb,classId,lesson.id]);
+
+  useEffect(()=>{
+    if(showLb&&meLbRef.current) setTimeout(()=>meLbRef.current?.scrollIntoView({behavior:'smooth',block:'center'}),150);
+  },[showLb,leaderboard]);
   
   const variants=lesson.variants||{};const hasJr=variants.storytellers&&variants.explorers;const hasSr=variants.adventurers&&variants.voyagers;
   let dc='',dt=lesson.title,qa=false,qd=null,discQ=[];
@@ -1040,7 +1050,7 @@ const AbhiLessonItem = ({ lesson, classId, isTeacher, studentAgeGroup, studentNa
           {tab==='discussion'&&<AbhiQA classId={classId} lessonId={lesson.id} isTeacher={isTeacher} userId={userId} userName={studentName||'Teacher'} suggestedQuestions={discQ}/>}
         </div>
       </div>}
-      {showLb&&<div className="fixed inset-0 bg-gray-900/95 z-50 flex items-center justify-center p-4"><div className="bg-gray-800 w-full max-w-lg rounded-2xl shadow-2xl p-6 border border-gray-700 relative"><button onClick={()=>setShowLb(false)} className="absolute top-4 right-4 text-gray-400 hover:text-white"><X className="w-6 h-6"/></button><div className="text-center mb-6"><Trophy className="w-16 h-16 text-yellow-400 mx-auto mb-2"/><h3 className="text-2xl font-black text-white">{dt}</h3></div><div className="space-y-2 max-h-[60vh] overflow-y-auto">{leaderboard.length===0?<p className="text-center text-gray-500">No scores yet.</p>:leaderboard.map((e,idx)=><div key={idx} className={`flex justify-between items-center p-3 rounded ${e.userId===userId?'bg-indigo-600 border border-indigo-400':'bg-gray-700'}`}><div className="flex items-center gap-3"><span className="font-bold w-6 text-yellow-400">#{idx+1}</span><span className="font-semibold text-white">{e.name}{e.userId===userId&&<span className="text-[10px] bg-white text-indigo-600 px-1.5 py-0.5 rounded-full font-bold ml-2">ME</span>}</span></div><span className="font-mono font-bold text-indigo-300">{e.score} pts</span></div>)}</div></div></div>}
+      {showLb&&<div className="fixed inset-0 bg-gray-900/95 z-50 flex items-center justify-center p-4"><div className="bg-gray-800 w-full max-w-lg rounded-2xl shadow-2xl p-6 border border-gray-700 relative"><button onClick={()=>setShowLb(false)} className="absolute top-4 right-4 text-gray-400 hover:text-white"><X className="w-6 h-6"/></button><div className="text-center mb-6"><Trophy className="w-16 h-16 text-yellow-400 mx-auto mb-2"/><h3 className="text-2xl font-black text-white">{dt}</h3></div><div className="space-y-2 max-h-[60vh] overflow-y-auto">{leaderboard.length===0?<p className="text-center text-gray-500">No scores yet.</p>:leaderboard.map((e,idx)=><div key={idx} ref={e.userId===userId?meLbRef:null} className={`flex justify-between items-center p-3 rounded ${e.userId===userId?'bg-indigo-600 border border-indigo-400':'bg-gray-700'}`}><div className="flex items-center gap-3"><span className="font-bold w-6 text-yellow-400">#{idx+1}</span><span className="font-semibold text-white">{e.name}{e.userId===userId&&<span className="text-[10px] bg-white text-indigo-600 px-1.5 py-0.5 rounded-full font-bold ml-2">ME</span>}</span></div><span className="font-mono font-bold text-indigo-300">{e.score} pts</span></div>)}</div></div></div>}
     </div>
   );
 };

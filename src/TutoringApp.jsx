@@ -1012,7 +1012,7 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma }) {
   },[sendAbhidhammaClassId,selectedStudentUid]);
 
   const loadDhammaschoolClasses = async () => {
-    if (dhammaschoolClasses !== null) return;
+    if (dhammaschoolClasses !== null) return dhammaschoolClasses;
     setDhammaschoolLoading(true);
     try {
       const snap = await getDocs(collection(db, 'artifacts', DHAMMASCHOOL_APP_ID, 'public', 'data', 'lessons'));
@@ -1027,15 +1027,18 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma }) {
         .map(([classId, lessonCount]) => ({ classId, lessonCount }))
         .sort((a, b) => a.classId.localeCompare(b.classId));
       setDhammaschoolClasses(list);
+      setDhammaschoolLoading(false);
+      return list;
     } catch (err) {
       console.error('Error loading Dhammaschool classes:', err);
       setDhammaschoolClasses([]);
+      setDhammaschoolLoading(false);
+      return [];
     }
-    setDhammaschoolLoading(false);
   };
 
   const loadAbhidhammaClasses = async () => {
-    if (abhidhammaClasses !== null) return;
+    if (abhidhammaClasses !== null) return abhidhammaClasses;
     setAbhidhammaLoading(true);
     try {
       const snap = await getDocs(collection(db, 'artifacts', 'lesson-translator-app-v6', 'public', 'data', 'classes'));
@@ -1049,26 +1052,32 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma }) {
       }));
       list.sort((a, b) => a.classId.localeCompare(b.classId));
       setAbhidhammaClasses(list);
+      setAbhidhammaLoading(false);
+      return list;
     } catch (err) {
       console.error('Error loading Abhidhamma classes:', err);
       setAbhidhammaClasses([]);
+      setAbhidhammaLoading(false);
+      return [];
     }
-    setAbhidhammaLoading(false);
   };
 
   const loadSmartStudyClassList = async () => {
-    if (smartStudyClasses !== null) return; // already loaded/cached
+    if (smartStudyClasses !== null) return smartStudyClasses; // already loaded/cached
     setPickerLoading(true);
     try {
       const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'classes'));
       const list = snap.docs.map(d => ({ classId: d.id, lessonCount: (d.data().lessons || []).length }));
       list.sort((a, b) => a.classId.localeCompare(b.classId));
       setSmartStudyClasses(list);
+      setPickerLoading(false);
+      return list;
     } catch (err) {
       console.error('Error loading Smart Study classes:', err);
       setSmartStudyClasses([]);
+      setPickerLoading(false);
+      return [];
     }
-    setPickerLoading(false);
   };
 
   const handleSaveLessonToBank = async (e) => {
@@ -2455,7 +2464,7 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
             if (!selectedLesson || selectedLesson.link !== 'smartstudy://') return null;
             return (
               <div className="mb-4">
-                <label className="block text-gray-700 mb-2">📚 Smart Study app — choose a Class ID</label>
+                <label className="block text-gray-700 mb-2 font-medium">📚 Smart Study app — choose a Class ID</label>
                 {smartStudyClasses === null ? (
                   <button type="button" onClick={loadSmartStudyClassList}
                     className="w-full p-3 border rounded-lg bg-sky-50 text-sky-700 font-semibold hover:bg-sky-100"
@@ -3192,15 +3201,19 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                   </button>
                   <p className="text-xs text-gray-500 font-semibold mt-3 mb-1 uppercase">Or choose app</p>
                   {/* Class ID is chosen later, at Assign Lesson time — not here.
-                      That way one Lesson Bank entry can be sent to any class,
-                      and the class picked is shown to the student (— CLASSID
-                      badge) exactly like the original SmartStudy behavior. */}
+                      That way one Lesson Bank entry can be sent to any class.
+                      "Total Number" is still auto-filled immediately though —
+                      it's set to the app's whole lesson count (summed across
+                      every class), since Trophy Status and other calculations
+                      key off of it before a specific class is even chosen. */}
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={async () => {
                       setNewBankLessonLink('smartstudy://');
                       if (!newBankLessonTitle.trim()) setNewBankLessonTitle('Smart Study Lesson');
                       setShowLinkPicker(false);
+                      const list = await loadSmartStudyClassList();
+                      setNewBankLessonUnitCount(String((list || []).reduce((sum, c) => sum + (c.lessonCount || 0), 0)));
                     }}
                     className="w-full text-left p-2 rounded-lg hover:bg-sky-50 border border-transparent hover:border-sky-200 font-semibold text-gray-800"
                   >
@@ -3208,10 +3221,12 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={async () => {
                       setNewBankLessonLink('abhidhamma://');
                       if (!newBankLessonTitle.trim()) setNewBankLessonTitle('Abhidhamma Lesson');
                       setShowLinkPicker(false);
+                      const list = await loadAbhidhammaClasses();
+                      setNewBankLessonUnitCount(String((list || []).reduce((sum, c) => sum + (c.lessonCount || 0), 0)));
                     }}
                     className="w-full text-left p-2 rounded-lg hover:bg-amber-50 border border-transparent hover:border-amber-200 font-semibold text-gray-800 mt-1"
                   >
@@ -3219,10 +3234,12 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={async () => {
                       setNewBankLessonLink('dhammaschool://');
                       if (!newBankLessonTitle.trim()) setNewBankLessonTitle('Dhammaschool Lesson');
                       setShowLinkPicker(false);
+                      const list = await loadDhammaschoolClasses();
+                      setNewBankLessonUnitCount(String((list || []).reduce((sum, c) => sum + (c.lessonCount || 0), 0)));
                     }}
                     className="w-full text-left p-2 rounded-lg hover:bg-orange-50 border border-transparent hover:border-orange-200 font-semibold text-gray-800 mt-1"
                   >
@@ -3256,7 +3273,7 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                 <label className="block text-gray-700 mb-2">
                   Total Number
                   {(newBankLessonLink.startsWith('smartstudy://') || newBankLessonLink.startsWith('abhidhamma://') || newBankLessonLink.startsWith('dhammaschool://')) && (
-                    <span className="ml-2 text-xs font-normal text-gray-500">(auto-fills when you pick a class in Assign Lesson)</span>
+                    <span className="ml-2 text-xs font-normal text-emerald-600">(auto-filled: total lessons across the whole app)</span>
                   )}
                 </label>
                 <input type="number" min="0" value={newBankLessonUnitCount} onChange={(e) => setNewBankLessonUnitCount(e.target.value)} placeholder="e.g., 20" className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
