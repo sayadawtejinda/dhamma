@@ -5786,7 +5786,17 @@ function RoleSelection({ user, onSelectRole, onStudentLogin, teacherUid }) {
     <div className="flex justify-center items-center min-h-screen p-4">
       <div className="bg-white/90 backdrop-blur-sm p-8 rounded-xl shadow-2xl border border-gray-200 max-w-md w-full">
         <h2 className="text-2xl font-bold text-center mb-6 text-gray-800">Welcome</h2>
-        
+
+        {/* TEMPORARY DEBUG — remove once the teacher-UID recovery is done.
+            Shows this browser's current Firebase anon UID so it can be pasted
+            into Firestore's artifacts/dhamma-tutoring-app/public/data/config/teacher doc. */}
+        {user?.uid && (
+          <div className="mb-4 p-3 bg-yellow-50 border-2 border-yellow-300 rounded-lg text-center">
+            <p className="text-xs font-semibold text-yellow-700 mb-1">Your current UID (for recovery):</p>
+            <p className="font-mono text-sm text-yellow-900 break-all select-all">{user.uid}</p>
+          </div>
+        )}
+
         {!teacherUid && (
           <>
             <button onClick={() => { setFormError(''); onSelectRole('teacher', '', setFormError); }} className="w-full bg-indigo-500 text-white p-3 rounded-lg font-semibold hover:bg-indigo-600 transition-colors shadow-md">
