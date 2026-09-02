@@ -217,7 +217,10 @@
                     <span id="notif-badge" class="hidden absolute -top-2 -right-2 bg-red-500 text-white text-xs font-black rounded-full w-5 h-5 flex items-center justify-center">0</span>
                 </button>
                 <button id="student-home-btn" onclick="goToLibrary()" class="hidden bg-orange-100 text-orange-600 font-bold py-2 px-4 rounded-xl transition hover:bg-orange-200"><i class="fas fa-home"></i> Home</button>
-                <div id="teacher-badge" class="hidden bg-yellow-100 text-yellow-800 px-4 py-1 rounded-full font-bold text-sm border-2 border-yellow-200"><i class="fas fa-chalkboard-teacher mr-1"></i> Teacher</div>
+                <div id="teacher-badge" class="hidden">
+                    <span class="bg-yellow-100 text-yellow-800 px-4 py-1 rounded-full font-bold text-sm border-2 border-yellow-200"><i class="fas fa-chalkboard-teacher mr-1"></i> Teacher</span>
+                    <button id="exit-teacher-mode-btn" onclick="exitTeacherMode()" class="ml-2 text-xs font-bold text-slate-400 hover:text-orange-600 underline">Switch to Student</button>
+                </div>
             </div>
         </header>
 
@@ -1128,11 +1131,20 @@ let bilingualMode = false;
         // remembered in this browser (not tied to any specific Firebase UID) so
         // refreshing the page doesn't require going back through TutoringApp
         // every time.
+        // Letting a browser "remember" teacher access (see note above) means that
+        // once anyone opens this app as a teacher on a given device, every future
+        // load on that same device — including a student opening their own link —
+        // would otherwise keep showing the teacher page, with no way back. So a
+        // plain student link (?teacher=false, or the exitTeacherMode() button
+        // below) explicitly clears the remembered flag instead of only ever
+        // being able to set it.
         async function checkRole() {
             const urlParams = new URLSearchParams(window.location.search);
             const cameFromTutoringAsTeacher = urlParams.get('teacher') === 'true';
+            const explicitlyStudent = urlParams.get('teacher') === 'false' || urlParams.get('student') === 'true';
             if (cameFromTutoringAsTeacher) localStorage.setItem('dhammaschool_is_teacher', 'true');
-            isTeacher = cameFromTutoringAsTeacher || localStorage.getItem('dhammaschool_is_teacher') === 'true';
+            if (explicitlyStudent) localStorage.removeItem('dhammaschool_is_teacher');
+            isTeacher = !explicitlyStudent && (cameFromTutoringAsTeacher || localStorage.getItem('dhammaschool_is_teacher') === 'true');
 
             safeSetText('user-role-display', isTeacher ? 'Teacher' : 'Student');
             if (isTeacher) {
@@ -3775,13 +3787,23 @@ function renderClickableWords(text) {
                     // 1. Process Lessons
                     for (const lesson of Object.values(lessonsToImport)) {
                         if (lesson.name && lesson.steps) {
-                            const q = query(collection(db, PATHS.lessons), where('name', '==', lesson.name));
-                            const querySnapshot = await getDocs(q);
-
                             // Target Class ID from the import UI. If set, it overrides/fills in the
                             // classId for every imported lesson — this is how old lessons (created
                             // before Class ID existed) get grouped into a class on import.
                             const targetClassId = document.getElementById('import-target-classid').value.trim().toUpperCase();
+
+                            // Match existing lessons by name AND class. Matching by name alone
+                            // would let two different classes that happen to reuse the same
+                            // lesson name (e.g. "Lesson 1") collide — importing into Class B
+                            // could silently overwrite Class A's lesson of the same name and
+                            // re-tag it with Class B's classId. Scoping the lookup to the
+                            // destination class keeps separate classes' imports from mixing.
+                            const matchClassId = targetClassId || (lesson.classId || '').trim().toUpperCase();
+                            const matchConstraints = [where('name', '==', lesson.name)];
+                            if (matchClassId) matchConstraints.push(where('classId', '==', matchClassId));
+                            const q = query(collection(db, PATHS.lessons), ...matchConstraints);
+                            const querySnapshot = await getDocs(q);
+
                             const lessonFields = {
                                 name: lesson.name,
                                 classId: targetClassId || lesson.classId || '',
@@ -3873,6 +3895,14 @@ function renderClickableWords(text) {
                 }
             };
             reader.readAsText(file);
+        };
+
+        window.exitTeacherMode = () => {
+            localStorage.removeItem('dhammaschool_is_teacher');
+            const url = new URL(window.location.href);
+            url.searchParams.delete('teacher');
+            url.searchParams.set('student', 'true');
+            window.location.href = url.toString();
         };
 
         init();
