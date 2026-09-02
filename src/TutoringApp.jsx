@@ -2265,9 +2265,12 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
             <span className="flex items-center text-lg font-bold text-amber-800">📚 Abhidhamma app</span>
             <span className="text-amber-500 text-xl">→</span>
           </button>
-          {/* Dhammaschool app — standalone HTML app, opens in a new tab (not mounted inline) */}
+          {/* Dhammaschool app — standalone HTML app, opens in a new tab (not mounted inline).
+              ?teacher=true tells Dhammaschool to grant teacher access directly — this
+              button only exists inside TutoringApp's own Teacher Dashboard, so reaching
+              it here already means TutoringApp has verified the visitor as its teacher. */}
           <button
-            onClick={() => window.open(DHAMMASCHOOL_APP_URL, '_blank', 'noopener,noreferrer')}
+            onClick={() => window.open(`${DHAMMASCHOOL_APP_URL}?teacher=true`, '_blank', 'noopener,noreferrer')}
             className="w-full flex items-center justify-between bg-white p-4 rounded-xl border-2 border-orange-200 hover:border-orange-400 hover:shadow-md transition-all mt-3"
           >
             <span className="flex items-center text-lg font-bold text-orange-800">📖 Dhammaschool app</span>
