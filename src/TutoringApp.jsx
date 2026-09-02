@@ -142,6 +142,10 @@ const DHAMMASCHOOL_APP_URL = 'https://sayadawtejinda.github.io/dhamma/Dhammascho
 // TODO: replace with the actual hosted URL once the Myanmar Speaking app is deployed (same pattern as Dhammaschool app).
 const MYANMAR_SPEAKING_APP_URL = 'https://sayadawtejinda.github.io/myanmar-wordcraft/';
 
+// ── Myanmar Reader app (standalone HTML app — opened via window.open, NOT mounted as React component) ──
+// TODO: replace with the actual hosted URL once the Myanmar Reader app is deployed (same pattern as Myanmar Speaking app).
+const MYANMAR_READER_APP_URL = '';
+
 const extractDhammaschoolClassId = (link) => {
   if (!link || !link.startsWith('dhammaschool://')) return null;
   return link.replace('dhammaschool://', '') || null;
@@ -2314,6 +2318,20 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
           >
             <span className="flex items-center text-lg font-bold text-purple-800">🗣️ Myanmar Speaking app</span>
             <span className="text-purple-500 text-xl">↗</span>
+          </button>
+          {/* Myanmar Reader app — standalone HTML app, opens in a new tab (not mounted inline) */}
+          <button
+            onClick={() => {
+              if (!MYANMAR_READER_APP_URL) {
+                alert('Myanmar Reader app URL is not set up yet. Ask your developer to host it and add the link.');
+                return;
+              }
+              window.open(MYANMAR_READER_APP_URL, '_blank', 'noopener,noreferrer');
+            }}
+            className="w-full flex items-center justify-between bg-white p-4 rounded-xl border-2 border-teal-200 hover:border-teal-400 hover:shadow-md transition-all mt-3"
+          >
+            <span className="flex items-center text-lg font-bold text-teal-800">📗 Myanmar Reader app</span>
+            <span className="text-teal-500 text-xl">↗</span>
           </button>
         </div>
       )}
