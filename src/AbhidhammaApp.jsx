@@ -1104,27 +1104,40 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
   // Load per-class stats for student: rank, lessons they've completed, and the class's total lesson
   // count (so the UI can show "9 / 10 completed" or "✅ all completed"). Also drives the floating
   // rank/lessons badge for whichever class is currently open (classStats[classId]).
+  // Live (onSnapshot) per class, not a one-off getDocs — so a badge/rank updates immediately right
+  // after a lesson quiz is submitted, instead of only refreshing on next class switch/reload.
+  // Also matches "me" by BOTH studentName AND live userId (like the Champions Board's "YOU" tag and
+  // the per-lesson "Done" check already do) — a name-only match silently shows nothing if a score
+  // doc's studentName field doesn't exactly match the current profile name (stale cache, whitespace,
+  // a rename that only partly propagated, etc.), even though the student clearly did the work.
   useEffect(()=>{
-    if(!studentProfile||allClasses.length===0)return;
+    if(!studentProfile||allClasses.length===0){ setClassStats({}); return; }
     const name=studentProfile.name;
-    (async()=>{
-      const stats={};
-      for(const c of allClasses){
+    const unsubs=allClasses.map(c=>
+      onSnapshot(query(abhiScoresRef(),where('classId','==',c.id)), async scoresSnap=>{
         try{
-          const [scoresSnap,lessonsSnap]=await Promise.all([
-            getDocs(query(abhiScoresRef(),where('classId','==',c.id))),
-            getDocs(abhiLessonsRef(c.id)),
-          ]);
-          const byStudent={};
-          scoresSnap.docs.forEach(d=>{const {studentName:sn,lessonId:li,classId:ci}=d.data();if(ci!==c.id||!li)return;if(!byStudent[sn])byStudent[sn]=new Set();byStudent[sn].add(li);});
+          const lessonsSnap=await getDocs(abhiLessonsRef(c.id));
+          const byStudent={};const myByUid=new Set();
+          scoresSnap.docs.forEach(d=>{
+            const dt=d.data();const li=dt.lessonId;
+            if(dt.classId!==c.id||!li)return;
+            const sn=dt.studentName||dt.name;
+            if(sn){ if(!byStudent[sn])byStudent[sn]=new Set(); byStudent[sn].add(li); }
+            if(userId&&dt.userId===userId) myByUid.add(li);
+          });
+          // Union: whatever's under my exact name, plus anything recorded under my device's userId
+          // even if the name field on that doc doesn't match — so a stale/mismatched name never
+          // hides real progress.
+          const mergedMine=new Set([...(byStudent[name]||[]),...myByUid]);
+          if(mergedMine.size>0) byStudent[name]=mergedMine;
           const ranked=Object.entries(byStudent).sort((a,b)=>b[1].size-a[1].size);
           const myIdx=ranked.findIndex(([sn])=>sn===name);
-          stats[c.id]={completedCount:byStudent[name]?.size||0,totalLessons:lessonsSnap.size,rank:myIdx>=0?myIdx+1:0};
-        }catch(e){}
-      }
-      setClassStats(stats);
-    })();
-  },[studentProfile,allClasses.length,classId]);
+          setClassStats(prev=>({...prev,[c.id]:{completedCount:mergedMine.size,totalLessons:lessonsSnap.size,rank:myIdx>=0?myIdx+1:0}}));
+        }catch(e){ console.error('Class stats load ('+c.id+'):', e.code||e.message||e); }
+      }, err=>console.error('Class stats listener ('+c.id+'):', err.code||err.message||err))
+    );
+    return ()=>unsubs.forEach(u=>u());
+  },[studentProfile,allClasses,userId]);
 
   // Load lessons from SUBCOLLECTION (no 1MB limit!)
   useEffect(()=>{
