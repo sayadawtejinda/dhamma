@@ -708,7 +708,6 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma }) {
   const [newBankLessonUnitCount, setNewBankLessonUnitCount] = useState(0);
   const [showLinkPicker, setShowLinkPicker] = useState(false);
   const [smartStudyClasses, setSmartStudyClasses] = useState(null); // null = not loaded yet
-  const [pickerAppSelected, setPickerAppSelected] = useState(null); // null | 'smartstudy' | 'abhidhamma' | 'dhammaschool' — which app's Class ID list is showing
   const [pickerLoading, setPickerLoading] = useState(false);
   const [editingLessonId, setEditingLessonId] = useState(null); 
   const [mergeSourceId, setMergeSourceId] = useState(null); 
@@ -1072,33 +1071,6 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma }) {
     setPickerLoading(false);
   };
 
-  // Auto-fills "Total Number" from the chosen class's actual lesson count —
-  // since the link is now connected to a real class, the teacher no longer
-  // needs to manually count and type this in.
-  const chooseSmartStudyClass = (classId, lessonCount) => {
-    setNewBankLessonLink(`smartstudy://${classId}`);
-    if (!newBankLessonTitle.trim()) setNewBankLessonTitle(`Smart Study: ${classId}`);
-    if (typeof lessonCount === 'number') setNewBankLessonUnitCount(String(lessonCount));
-    setShowLinkPicker(false);
-    setPickerAppSelected(null);
-  };
-
-  const chooseAbhidhammaClass = (classId, lessonCount) => {
-    setNewBankLessonLink(`abhidhamma://${classId}`);
-    if (!newBankLessonTitle.trim()) setNewBankLessonTitle(`Abhidhamma: ${classId}`);
-    if (typeof lessonCount === 'number') setNewBankLessonUnitCount(String(lessonCount));
-    setShowLinkPicker(false);
-    setPickerAppSelected(null);
-  };
-
-  const chooseDhammaschoolClass = (classId, lessonCount) => {
-    setNewBankLessonLink(`dhammaschool://${classId}`);
-    if (!newBankLessonTitle.trim()) setNewBankLessonTitle(`Dhammaschool: ${classId}`);
-    if (typeof lessonCount === 'number') setNewBankLessonUnitCount(String(lessonCount));
-    setShowLinkPicker(false);
-    setPickerAppSelected(null);
-  };
-
   const handleSaveLessonToBank = async (e) => {
     e.preventDefault();
     if (!newBankLessonTitle || !newBankLessonLink) return;
@@ -1137,19 +1109,23 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma }) {
   const handleSendLesson = async (e) => {
     e.preventDefault();
     const lessonToSend = lessonBank.find(l => l.id === selectedBankLessonId);
-    // For SmartStudy, use the selected class's lesson count as effective
-    // unitCount so student receives correct number even if bank entry not saved.
+    // Use the class chosen right here in Assign Lesson (not anything baked into
+    // the bank entry) to compute the correct lesson count / trophy target —
+    // this is what lets one bank entry be sent to any class, with the right
+    // numbers every time, for all three linked apps.
     const ssSelectedClass = (sendSmartStudyClassId && smartStudyClasses)
       ? (smartStudyClasses || []).find(c => c.classId === sendSmartStudyClassId)
       : null;
-    const effectiveLessonUnitCount = (ssSelectedClass && lessonToSend?.link === 'smartstudy://')
-      ? (ssSelectedClass.lessonCount || 0)
-      : (lessonToSend?.unitCount || 0);
-    const effectiveLessonTrophyLimit = (ssSelectedClass && lessonToSend?.link === 'smartstudy://')
-      ? Math.max(1, Math.floor((ssSelectedClass.lessonCount || 0) / 5))
-      : (lessonToSend?.trophyLimit || 0);
-    // For Smart Study lessons stored without a classId, substitute the one
-    // chosen in the Send Action class picker.
+    const classLessonCountForSend = (() => {
+      if (lessonToSend?.link === 'smartstudy://' && ssSelectedClass) return ssSelectedClass.lessonCount || 0;
+      if (lessonToSend?.link === 'abhidhamma://' && sendAbhidhammaClassId && abhiTotalCount != null) return abhiTotalCount;
+      if (lessonToSend?.link === 'dhammaschool://' && sendDhammaschoolClassId && dhammaschoolStudentProgress?.totalLessons != null) return dhammaschoolStudentProgress.totalLessons;
+      return null;
+    })();
+    const effectiveLessonUnitCount = classLessonCountForSend != null ? classLessonCountForSend : (lessonToSend?.unitCount || 0);
+    const effectiveLessonTrophyLimit = classLessonCountForSend != null ? Math.max(1, Math.floor(classLessonCountForSend / 5)) : (lessonToSend?.trophyLimit || 0);
+    // For lessons stored without a classId, substitute the one chosen here in
+    // the Send Action class picker.
     const effectiveLessonLink = (() => {
       if (!lessonToSend?.link) return '';
       if (lessonToSend.link === 'smartstudy://' && sendSmartStudyClassId) return `smartstudy://${sendSmartStudyClassId}`;
@@ -3170,9 +3146,9 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                 />
                 <button
                   type="button"
-                  onClick={() => { setShowLinkPicker(v => !v); if (!showLinkPicker) loadSmartStudyClassList(); }}
+                  onClick={() => setShowLinkPicker(v => !v)}
                   className="px-4 py-3 rounded-lg bg-sky-600 text-white font-semibold hover:bg-sky-700 shadow-md flex-shrink-0"
-                  title="Choose a Smart Study lesson, or enter a link manually"
+                  title="Choose an app, or enter a link manually"
                 >
                   🔗 ▾
                 </button>
@@ -3207,105 +3183,51 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
 
               {showLinkPicker && (
                 <div className="absolute z-20 mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-xl p-3 max-h-96 overflow-y-auto">
-                  {pickerAppSelected ? (
-                    <div>
-                      <button type="button" onClick={() => setPickerAppSelected(null)} className="text-sm text-indigo-600 font-semibold mb-3 hover:underline">
-                        ← Back
-                      </button>
-                      {pickerAppSelected === 'smartstudy' && (
-                        <>
-                          <p className="font-bold text-gray-800 mb-2">📚 Smart Study app — choose a Class ID</p>
-                          {pickerLoading ? (
-                            <p className="text-gray-500 text-sm">Loading classes...</p>
-                          ) : smartStudyClasses && smartStudyClasses.length > 0 ? (
-                            <div className="space-y-1">
-                              {smartStudyClasses.map(c => (
-                                <button type="button" key={c.classId} onClick={() => chooseSmartStudyClass(c.classId, c.lessonCount)}
-                                  className="w-full text-left p-2 rounded-lg hover:bg-sky-50 border border-transparent hover:border-sky-200 flex justify-between items-center">
-                                  <span className="font-semibold text-gray-800">{c.classId}</span>
-                                  <span className="text-xs text-gray-500">{c.lessonCount} lesson{c.lessonCount === 1 ? '' : 's'}</span>
-                                </button>
-                              ))}
-                            </div>
-                          ) : (
-                            <p className="text-gray-500 text-sm">No Smart Study classes found yet.</p>
-                          )}
-                        </>
-                      )}
-                      {pickerAppSelected === 'abhidhamma' && (
-                        <>
-                          <p className="font-bold text-gray-800 mb-2">📚 Abhidhamma app — choose a Class ID</p>
-                          {abhidhammaLoading ? (
-                            <p className="text-gray-500 text-sm">Loading classes...</p>
-                          ) : abhidhammaClasses && abhidhammaClasses.length > 0 ? (
-                            <div className="space-y-1">
-                              {abhidhammaClasses.map(c => (
-                                <button type="button" key={c.classId} onClick={() => chooseAbhidhammaClass(c.classId, c.lessonCount)}
-                                  className="w-full text-left p-2 rounded-lg hover:bg-amber-50 border border-transparent hover:border-amber-200 flex justify-between items-center">
-                                  <span className="font-semibold text-gray-800">{c.displayName || c.classId}</span>
-                                  <span className="text-xs text-gray-500">{c.lessonCount} lesson{c.lessonCount === 1 ? '' : 's'}</span>
-                                </button>
-                              ))}
-                            </div>
-                          ) : (
-                            <p className="text-gray-500 text-sm">No Abhidhamma classes found yet.</p>
-                          )}
-                        </>
-                      )}
-                      {pickerAppSelected === 'dhammaschool' && (
-                        <>
-                          <p className="font-bold text-gray-800 mb-2">📖 Dhammaschool app — choose a Class ID</p>
-                          {dhammaschoolLoading ? (
-                            <p className="text-gray-500 text-sm">Loading classes...</p>
-                          ) : dhammaschoolClasses && dhammaschoolClasses.length > 0 ? (
-                            <div className="space-y-1">
-                              {dhammaschoolClasses.map(c => (
-                                <button type="button" key={c.classId} onClick={() => chooseDhammaschoolClass(c.classId, c.lessonCount)}
-                                  className="w-full text-left p-2 rounded-lg hover:bg-orange-50 border border-transparent hover:border-orange-200 flex justify-between items-center">
-                                  <span className="font-semibold text-gray-800">{c.classId}</span>
-                                  <span className="text-xs text-gray-500">{c.lessonCount} lesson{c.lessonCount === 1 ? '' : 's'}</span>
-                                </button>
-                              ))}
-                            </div>
-                          ) : (
-                            <p className="text-gray-500 text-sm">No Dhammaschool classes found yet.</p>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  ) : (
-                    <div>
-                      <button
-                        type="button"
-                        onClick={() => setShowLinkPicker(false)}
-                        className="w-full text-left p-2 rounded-lg hover:bg-gray-50 border border-gray-200 mb-2 font-semibold text-gray-700"
-                      >
-                        ✏️ Input link manually
-                      </button>
-                      <p className="text-xs text-gray-500 font-semibold mt-3 mb-1 uppercase">Or choose app</p>
-                      <button
-                        type="button"
-                        onClick={() => { setPickerAppSelected('smartstudy'); loadSmartStudyClassList(); }}
-                        className="w-full text-left p-2 rounded-lg hover:bg-sky-50 border border-transparent hover:border-sky-200 font-semibold text-gray-800"
-                      >
-                        📚 Smart Study app
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => { setPickerAppSelected('abhidhamma'); loadAbhidhammaClasses(); }}
-                        className="w-full text-left p-2 rounded-lg hover:bg-amber-50 border border-transparent hover:border-amber-200 font-semibold text-gray-800 mt-1"
-                      >
-                        📚 Abhidhamma app
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => { setPickerAppSelected('dhammaschool'); loadDhammaschoolClasses(); }}
-                        className="w-full text-left p-2 rounded-lg hover:bg-orange-50 border border-transparent hover:border-orange-200 font-semibold text-gray-800 mt-1"
-                      >
-                        📖 Dhammaschool app
-                      </button>
-                    </div>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => setShowLinkPicker(false)}
+                    className="w-full text-left p-2 rounded-lg hover:bg-gray-50 border border-gray-200 mb-2 font-semibold text-gray-700"
+                  >
+                    ✏️ Input link manually
+                  </button>
+                  <p className="text-xs text-gray-500 font-semibold mt-3 mb-1 uppercase">Or choose app</p>
+                  {/* Class ID is chosen later, at Assign Lesson time — not here.
+                      That way one Lesson Bank entry can be sent to any class,
+                      and the class picked is shown to the student (— CLASSID
+                      badge) exactly like the original SmartStudy behavior. */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewBankLessonLink('smartstudy://');
+                      if (!newBankLessonTitle.trim()) setNewBankLessonTitle('Smart Study Lesson');
+                      setShowLinkPicker(false);
+                    }}
+                    className="w-full text-left p-2 rounded-lg hover:bg-sky-50 border border-transparent hover:border-sky-200 font-semibold text-gray-800"
+                  >
+                    📚 Smart Study app
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewBankLessonLink('abhidhamma://');
+                      if (!newBankLessonTitle.trim()) setNewBankLessonTitle('Abhidhamma Lesson');
+                      setShowLinkPicker(false);
+                    }}
+                    className="w-full text-left p-2 rounded-lg hover:bg-amber-50 border border-transparent hover:border-amber-200 font-semibold text-gray-800 mt-1"
+                  >
+                    📚 Abhidhamma app
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewBankLessonLink('dhammaschool://');
+                      if (!newBankLessonTitle.trim()) setNewBankLessonTitle('Dhammaschool Lesson');
+                      setShowLinkPicker(false);
+                    }}
+                    className="w-full text-left p-2 rounded-lg hover:bg-orange-50 border border-transparent hover:border-orange-200 font-semibold text-gray-800 mt-1"
+                  >
+                    📖 Dhammaschool app
+                  </button>
                 </div>
               )}
             </div>
@@ -3334,7 +3256,7 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                 <label className="block text-gray-700 mb-2">
                   Total Number
                   {(newBankLessonLink.startsWith('smartstudy://') || newBankLessonLink.startsWith('abhidhamma://') || newBankLessonLink.startsWith('dhammaschool://')) && (
-                    <span className="ml-2 text-xs font-normal text-emerald-600">(auto-filled from class)</span>
+                    <span className="ml-2 text-xs font-normal text-gray-500">(auto-fills when you pick a class in Assign Lesson)</span>
                   )}
                 </label>
                 <input type="number" min="0" value={newBankLessonUnitCount} onChange={(e) => setNewBankLessonUnitCount(e.target.value)} placeholder="e.g., 20" className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
@@ -4906,6 +4828,12 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                       <p className={`font-semibold text-lg ${textHColor}`}>{lesson.title}</p>
                       {isSmartStudyLesson && ssClassIdForBtn && (
                         <span className="text-sm font-semibold text-blue-600 ml-1">— {ssClassIdForBtn}</span>
+                      )}
+                      {lesson.link && lesson.link.startsWith('abhidhamma://') && extractAbhidhammaLessonId(lesson.link) && (
+                        <span className="text-sm font-semibold text-amber-600 ml-1">— {extractAbhidhammaLessonId(lesson.link)}</span>
+                      )}
+                      {lesson.link && lesson.link.startsWith('dhammaschool://') && extractDhammaschoolClassId(lesson.link) && (
+                        <span className="text-sm font-semibold text-orange-600 ml-1">— {extractDhammaschoolClassId(lesson.link)}</span>
                       )}
                       {lesson.unitCount > 0 && completedUnitList >= lesson.unitCount && (
                         <span className="bg-emerald-500 text-white text-xs font-bold px-2 py-1 rounded-full">✅ Completed</span>
