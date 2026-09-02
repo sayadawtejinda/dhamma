@@ -234,6 +234,20 @@
                 <input type="text" id="student-name-input" placeholder="Your Name (e.g. Mg Ba)" class="input-style mb-6 text-center text-xl font-bold text-orange-700 placeholder-orange-300">
                 <button id="set-name-btn" class="btn-primary w-full py-4 text-xl font-bold btn-3d shadow-lg">Join Class</button>
                 <p id="name-error" class="text-red-600 text-center mt-2 hidden font-bold">Please enter your name.</p>
+
+                <!-- Alternative: link once by Tutoring Student ID, so name never needs
+                     to be typed again and scores always match TutoringApp exactly. -->
+                <div class="mt-6 pt-6 border-t-2 border-slate-100">
+                    <button id="tutoring-id-toggle-btn" class="w-full text-sm font-bold text-indigo-600 hover:text-indigo-800 hover:underline">
+                        🔗 Already on Tutoring? Enter your Student ID instead
+                    </button>
+                    <div id="tutoring-id-panel" class="hidden mt-4">
+                        <p class="text-xs text-slate-500 mb-2 text-center">This links your name permanently, so your scores always match your Tutoring account and you'll never need to type your name here again.</p>
+                        <input type="text" id="tutoring-id-input" inputmode="numeric" placeholder="Your Tutoring Student ID (e.g. 483920)" class="input-style mb-3 text-center text-lg font-bold text-indigo-700 placeholder-indigo-300">
+                        <button id="tutoring-id-submit-btn" class="w-full py-3 bg-indigo-500 text-white rounded-xl font-bold hover:bg-indigo-600 btn-3d">Link My Account</button>
+                        <p id="tutoring-id-error" class="text-red-600 text-center mt-2 hidden font-bold text-sm">Student ID not found. Please check with your teacher.</p>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -999,6 +1013,39 @@ let bilingualMode = false;
                                     }
                                 };
                                 // --- END FIX ---
+
+                                // Alternative entry: link once by Tutoring Student ID. Once linked,
+                                // studentName is set to the exact Tutoring name and persisted the
+                                // same way as normal name entry — so this modal never shows again
+                                // and all future scores automatically match the Tutoring account.
+                                document.getElementById('tutoring-id-toggle-btn').onclick = () => {
+                                    document.getElementById('tutoring-id-panel').classList.toggle('hidden');
+                                };
+                                document.getElementById('tutoring-id-submit-btn').onclick = async () => {
+                                    const idInput = document.getElementById('tutoring-id-input');
+                                    const idError = document.getElementById('tutoring-id-error');
+                                    const enteredId = idInput.value.trim();
+                                    idError.classList.add('hidden');
+                                    if (!enteredId) return;
+                                    try {
+                                        const snap = await getDocs(query(collection(db, TUTORING_STUDENTS_PATH), where('displayId', '==', enteredId)));
+                                        if (snap.empty) {
+                                            idError.textContent = 'Student ID not found. Please check with your teacher.';
+                                            idError.classList.remove('hidden');
+                                            return;
+                                        }
+                                        const tutoringName = snap.docs[0].data().name;
+                                        studentName = tutoringName;
+                                        localStorage.setItem('studentName', tutoringName);
+                                        localStorage.setItem('dhammaschool_linked_tutoring_id', enteredId);
+                                        safeSetText('current-student-name', studentName);
+                                        els.nameModal.classList.add('hidden');
+                                    } catch (e) {
+                                        console.error('Error looking up Tutoring student:', e);
+                                        idError.textContent = 'Could not check that ID right now. Please try again.';
+                                        idError.classList.remove('hidden');
+                                    }
+                                };
 
                             }
                             // --- START FIX for + New Lesson ---
