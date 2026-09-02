@@ -682,6 +682,23 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma }) {
   const [reportTab, setReportTab] = useState('feedback'); 
   const [showAllReports, setShowAllReports] = useState(false); 
   const [teacherConfigData, setTeacherConfigData] = useState(null);
+  const [recoveryPasscodeInput, setRecoveryPasscodeInput] = useState('');
+  const [recoveryPasscodeSaving, setRecoveryPasscodeSaving] = useState(false);
+
+  const handleSaveRecoveryPasscode = async () => {
+    const code = recoveryPasscodeInput.trim();
+    if (!code) { alert('Please enter a passcode.'); return; }
+    setRecoveryPasscodeSaving(true);
+    try {
+      await setDoc(teacherConfigDoc, { passcode: code }, { merge: true });
+      setRecoveryPasscodeInput('');
+      alert('Recovery passcode saved! Write it down somewhere safe — you\'ll need it if you ever get logged out as teacher.');
+    } catch (error) {
+      console.error('Error saving recovery passcode:', error);
+      alert('Error saving passcode. Please try again.');
+    }
+    setRecoveryPasscodeSaving(false);
+  };
   
   const [newBankLessonTitle, setNewBankLessonTitle] = useState('');
   const [newBankLessonLink, setNewBankLessonLink] = useState('');
@@ -2855,6 +2872,34 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
               className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 disabled:opacity-50"
             />
             {isImporting && <p className="text-indigo-600 mt-4">Importing data, please wait...</p>}
+          </div>
+
+          <div className="mt-8 pt-6 border-t border-violet-200">
+            <h4 className="text-lg font-semibold mb-3 text-gray-700">🔑 Teacher Account Recovery Passcode</h4>
+            <p className="text-sm text-gray-600 mb-2">
+              Teacher access is normally tied to this browser/device. If you ever get logged out (cleared browser data, new device, etc.), this passcode lets you reclaim teacher access instead of needing a database edit.
+            </p>
+            <p className="text-sm font-semibold mb-4">
+              {teacherConfigData?.passcode
+                ? <span className="text-emerald-600">✓ A recovery passcode is set.</span>
+                : <span className="text-red-600">⚠ No recovery passcode set yet — set one now so you're never locked out.</span>}
+            </p>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={recoveryPasscodeInput}
+                onChange={(e) => setRecoveryPasscodeInput(e.target.value)}
+                placeholder={teacherConfigData?.passcode ? 'New passcode (replaces old one)' : 'Choose a passcode'}
+                className="flex-grow p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500"
+              />
+              <button
+                onClick={handleSaveRecoveryPasscode}
+                disabled={recoveryPasscodeSaving}
+                className="px-5 py-3 bg-violet-500 text-white rounded-lg font-semibold hover:bg-violet-600 disabled:opacity-50 flex-shrink-0"
+              >
+                {recoveryPasscodeSaving ? 'Saving...' : (teacherConfigData?.passcode ? 'Change' : 'Set Passcode')}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -5747,11 +5792,23 @@ function TrophyBoard({ role, targetStudentUid, studentProfile }) {
   );
 }
 
-function RoleSelection({ user, onSelectRole, onStudentLogin, teacherUid }) {
+function RoleSelection({ user, onSelectRole, onStudentLogin, teacherUid, onRecoverTeacher }) {
   const [studentName, setStudentName] = useState('');
   const [studentIdLogin, setStudentIdLogin] = useState('');
   const [formError, setFormError] = useState(''); 
   const [view, setView] = useState('new'); 
+  const [showRecovery, setShowRecovery] = useState(false);
+  const [recoveryPasscode, setRecoveryPasscode] = useState('');
+  const [recoverySubmitting, setRecoverySubmitting] = useState(false);
+
+  const handleRecoverySubmit = async (e) => {
+    e.preventDefault();
+    setFormError('');
+    if (!recoveryPasscode.trim()) { setFormError('Please enter the recovery passcode.'); return; }
+    setRecoverySubmitting(true);
+    await onRecoverTeacher(recoveryPasscode.trim(), setFormError);
+    setRecoverySubmitting(false);
+  };
 
   useEffect(() => {
     const savedId = localStorage.getItem('lastStudentId');
@@ -5787,16 +5844,6 @@ function RoleSelection({ user, onSelectRole, onStudentLogin, teacherUid }) {
       <div className="bg-white/90 backdrop-blur-sm p-8 rounded-xl shadow-2xl border border-gray-200 max-w-md w-full">
         <h2 className="text-2xl font-bold text-center mb-6 text-gray-800">Welcome</h2>
 
-        {/* TEMPORARY DEBUG — remove once the teacher-UID recovery is done.
-            Shows this browser's current Firebase anon UID so it can be pasted
-            into Firestore's artifacts/dhamma-tutoring-app/public/data/config/teacher doc. */}
-        {user?.uid && (
-          <div className="mb-4 p-3 bg-yellow-50 border-2 border-yellow-300 rounded-lg text-center">
-            <p className="text-xs font-semibold text-yellow-700 mb-1">Your current UID (for recovery):</p>
-            <p className="font-mono text-sm text-yellow-900 break-all select-all">{user.uid}</p>
-          </div>
-        )}
-
         {!teacherUid && (
           <>
             <button onClick={() => { setFormError(''); onSelectRole('teacher', '', setFormError); }} className="w-full bg-indigo-500 text-white p-3 rounded-lg font-semibold hover:bg-indigo-600 transition-colors shadow-md">
@@ -5806,6 +5853,42 @@ function RoleSelection({ user, onSelectRole, onStudentLogin, teacherUid }) {
               <div className="flex-grow border-t border-gray-300"></div><span className="flex-shrink mx-4 text-gray-500">OR</span><div className="flex-grow border-t border-gray-300"></div>
             </div>
           </>
+        )}
+
+        {/* Teacher account already exists on this app, but this browser/device
+            isn't recognized as it (e.g. cleared storage, new device, another
+            app on the same origin signed this session out). A known recovery
+            passcode re-associates teacher access with this browser instead of
+            needing a manual database fix. */}
+        {teacherUid && (
+          <div className="mb-6 text-center">
+            {!showRecovery ? (
+              <button onClick={() => { setShowRecovery(true); setFormError(''); }} className="text-sm text-indigo-600 hover:text-indigo-800 hover:underline font-semibold">
+                Locked out as Teacher? Recover access
+              </button>
+            ) : (
+              <form onSubmit={handleRecoverySubmit} className="p-4 bg-indigo-50 border border-indigo-200 rounded-lg text-left">
+                <p className="text-sm font-semibold text-indigo-800 mb-2">Enter your Teacher recovery passcode:</p>
+                <input
+                  type="password"
+                  value={recoveryPasscode}
+                  onChange={(e) => setRecoveryPasscode(e.target.value)}
+                  placeholder="Recovery passcode"
+                  autoFocus
+                  className="w-full p-2 border rounded-lg mb-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                {formError && <p className="text-red-500 text-sm mb-2">{formError}</p>}
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => { setShowRecovery(false); setFormError(''); setRecoveryPasscode(''); }} className="flex-1 py-2 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300">
+                    Cancel
+                  </button>
+                  <button type="submit" disabled={recoverySubmitting} className="flex-1 py-2 bg-indigo-500 text-white rounded-lg font-semibold hover:bg-indigo-600 disabled:opacity-50">
+                    {recoverySubmitting ? 'Checking...' : 'Recover Access'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
         )}
 
         <div>
@@ -6138,6 +6221,29 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma }) {
     }
   };
 
+  const handleRecoverTeacherAccess = async (passcode, setFormError) => {
+    if (!user) return;
+    try {
+      const configSnap = await getDoc(teacherConfigDoc);
+      if (!configSnap.exists() || !configSnap.data().passcode) {
+        setFormError('No recovery passcode has been set for this account yet. Ask whoever manages this app to set one, or fix it directly in the database.');
+        return;
+      }
+      if (configSnap.data().passcode !== passcode) {
+        setFormError('Incorrect passcode.');
+        return;
+      }
+      // Correct passcode — reclaim teacher status for this browser/device.
+      await setDoc(teacherConfigDoc, { uid: user.uid }, { merge: true });
+      setTeacherUid(user.uid);
+      setRole('teacher');
+      setView('teacher');
+    } catch (error) {
+      console.error('Error recovering teacher access:', error);
+      setFormError('An error occurred. Please try again.');
+    }
+  };
+
   const handleSelectRole = async (selectedRole, studentName = '', setFormError) => {
     if (!user) return;
     const uid = user.uid;
@@ -6279,7 +6385,7 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma }) {
       case 'trophies':
         return <TrophyBoard role={role} targetStudentUid={targetStudentUid} studentProfile={studentProfile} />;
       case 'login': 
-        return <RoleSelection user={user} onSelectRole={(role, name, setError) => handleSelectRole(role, name, setError)} onStudentLogin={handleStudentLoginById} teacherUid={teacherUid} />;
+        return <RoleSelection user={user} onSelectRole={(role, name, setError) => handleSelectRole(role, name, setError)} onStudentLogin={handleStudentLoginById} teacherUid={teacherUid} onRecoverTeacher={handleRecoverTeacherAccess} />;
       case 'today': 
       default:
         return <TodaySchedule role={role} />;
