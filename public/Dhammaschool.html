@@ -252,13 +252,28 @@
         </div>
         
         <!-- Teacher View -->
+        <!-- Teacher Class Picker (shown right after teacher login) -->
+        <div id="teacher-class-picker" class="hidden max-w-2xl mx-auto">
+            <div class="text-center mb-8">
+                <h2 class="text-3xl font-black text-orange-700 mb-2">📖 Choose a Class</h2>
+                <p class="text-slate-600 font-bold">Pick a class to manage its lessons, import old lessons, and link students.</p>
+            </div>
+            <div id="teacher-class-picker-grid" class="space-y-3 pb-10">
+                <div class="text-center py-10 text-slate-400 font-bold">Loading classes...</div>
+            </div>
+        </div>
+
         <div id="teacher-view" class="hidden">
             <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
                 
                 <!-- Controls -->
                 <div class="lg:col-span-4 space-y-6">
                     <div class="card p-6 border-t-8 border-orange-400">
-                        <h3 class="text-xl font-black text-slate-800 mb-4"><i class="fas fa-book-reader text-orange-500"></i> Class Control</h3>
+                        <div class="flex items-center justify-between mb-2">
+                            <h3 class="text-xl font-black text-slate-800"><i class="fas fa-book-reader text-orange-500"></i> Class Control</h3>
+                            <button onclick="window.backToClassPicker()" class="text-xs font-bold text-orange-600 hover:text-orange-800 hover:underline"><i class="fas fa-arrow-left"></i> All Classes</button>
+                        </div>
+                        <p class="text-sm text-slate-500 font-bold mb-4">Class: <span id="teacher-current-class-label" class="text-orange-600">-</span></p>
                         
                         <!-- Top Action Buttons -->
                         <div class="flex gap-2 mb-4">
@@ -329,6 +344,14 @@
                         <div class="mt-2">
                             <input type="text" id="import-target-classid" placeholder="Import into Class ID (e.g. PARAMI)" class="input-style text-sm uppercase"></input>
                             <p class="text-xs text-slate-400 mt-1">Old lessons with no Class ID will be tagged with this when imported. Leave blank to keep each lesson's original Class ID (if any).</p>
+                        </div>
+                    </div>
+
+                    <!-- Class Roster (students found in this class's scores/completions) -->
+                    <div class="card p-6 border-t-8 border-purple-400">
+                        <h3 class="text-xl font-black text-slate-800 mb-4"><i class="fas fa-users text-purple-500"></i> Class Roster</h3>
+                        <div id="class-roster-list" class="space-y-2 max-h-96 overflow-y-auto">
+                            <p class="text-slate-400 text-sm italic">Loading roster...</p>
                         </div>
                     </div>
 
@@ -763,7 +786,7 @@ Question 3..."></textarea>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot, collection, query, addDoc, where, getDocs, deleteDoc, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot, collection, query, addDoc, where, getDocs, deleteDoc, arrayUnion, arrayRemove, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const appId = 'dhammaschool-app'; // Fixed appId — must match DHAMMASCHOOL_APP_ID in TutoringApp.jsx
         // Real Firebase project config (same project used by TutoringApp/SmartStudy/AbhidhammaApp).
@@ -791,6 +814,9 @@ Question 3..."></textarea>
         // --- FIX: Initialize from localStorage to persist across refreshes ---
         let studentCurrentLessonId = localStorage.getItem('studentCurrentLessonId') || null; 
         let selectedClassId = localStorage.getItem('dhammaschool_classId') || null; // student's chosen class
+        let selectedTeacherClassId = localStorage.getItem('dhammaschool_teacher_classId') || null; // teacher's chosen class
+        let cachedTutoringStudents = null; // cache of TutoringApp students list, loaded once per session
+        let rosterLinkStatus = {}; // { studentName: true } — from roster docs, refreshed per class
         let lessonSteps = [];
         let activeLessonId = null; 
         let currentStepIndex = parseInt(localStorage.getItem('currentStepIndex') || '0');
@@ -831,6 +857,7 @@ let bilingualMode = false;
             teacherView: document.getElementById('teacher-view'),
             studentView: document.getElementById('student-view'),
             studentClassPicker: document.getElementById('student-class-picker'),
+            teacherClassPicker: document.getElementById('teacher-class-picker'),
             studentLibrary: document.getElementById('student-library'),
             studentActiveLesson: document.getElementById('student-active-lesson'),
             studentLessonGrid: document.getElementById('student-lesson-grid'),
@@ -863,8 +890,13 @@ let bilingualMode = false;
             lessons: `/artifacts/${appId}/public/data/lessons`,
             answers: `/artifacts/${appId}/public/data/answers`,
             scores: `/artifacts/${appId}/public/data/game_scores`,
-            completions: `/artifacts/${appId}/public/data/lesson_completions`
+            completions: `/artifacts/${appId}/public/data/lesson_completions`,
+            roster: `/artifacts/${appId}/public/data/roster`
         };
+        // TutoringApp's own Firestore paths (separate app/session) — used only to
+        // search students for the "Link to Tutoring" feature.
+        const TUTORING_APP_ID = 'dhamma-tutoring-app';
+        const TUTORING_STUDENTS_PATH = `/artifacts/${TUTORING_APP_ID}/public/data/students`;
 
         function safeSetText(id, txt) { const el = document.getElementById(id); if(el) el.textContent = txt; }
         
@@ -979,6 +1011,9 @@ let bilingualMode = false;
 
                                 document.getElementById('new-lesson-btn').onclick = () => {
                                     document.getElementById('new-lesson-name-input').value = '';
+                                    // Pre-fill with the currently selected class, so lessons created
+                                    // from a class's page automatically belong to that class.
+                                    document.getElementById('new-lesson-classid-input').value = (selectedTeacherClassId && selectedTeacherClassId !== 'GENERAL') ? selectedTeacherClassId : '';
                                     els.newLessonModal.classList.remove('hidden');
                                 };
                                 document.getElementById('cancel-lesson-btn').onclick = () => {
@@ -1046,7 +1081,12 @@ let bilingualMode = false;
                 document.getElementById('teacher-badge').classList.remove('hidden');
                 studentName = 'Teacher';
                 await requireTeacherPassword();
-                els.teacherView.classList.remove('hidden');
+                if (selectedTeacherClassId) {
+                    els.teacherView.classList.remove('hidden');
+                    safeSetText('teacher-current-class-label', selectedTeacherClassId);
+                } else {
+                    els.teacherClassPicker.classList.remove('hidden');
+                }
             } else {
                 els.studentView.classList.remove('hidden');
                 document.getElementById('student-home-btn').classList.remove('hidden');
@@ -1084,7 +1124,12 @@ let bilingualMode = false;
                     const data = d.data(); const lessonObj = { id: d.id, ...data }; allLessons[d.id] = lessonObj;
                     if (data.isPublic) studentLibraryLessons.push(lessonObj);
                 });
-                if (isTeacher) renderLessonSelector(); else renderStudentLibrary();
+                if (isTeacher) {
+                    renderTeacherClassPicker(); // updates whenever visible; harmless no-op otherwise
+                    renderLessonSelector();
+                } else {
+                    renderStudentLibrary();
+                }
             });
             
             // --- START FIX: Run shared listeners for everyone ---
@@ -3262,7 +3307,12 @@ function renderClickableWords(text) {
 
         function renderLessonSelector() {
             els.lessonSelector.innerHTML = '<option value="">Select Lesson</option>';
-            const sorted = Object.values(allLessons).sort((a,b) => (a.createdAt || "9999").localeCompare(b.createdAt || "9999"));
+            let list = Object.values(allLessons);
+            // If the teacher has picked a class, only show that class's lessons in the dropdown.
+            if (selectedTeacherClassId) {
+                list = list.filter(l => (l.classId && l.classId.trim() ? l.classId.trim() : 'GENERAL') === selectedTeacherClassId);
+            }
+            const sorted = list.sort((a,b) => (a.createdAt || "9999").localeCompare(b.createdAt || "9999"));
             sorted.forEach(l => {
                 const op = document.createElement('option'); op.value = l.id;
                 const cid = l.classId && l.classId.trim() ? l.classId.trim() : null;
@@ -3275,6 +3325,213 @@ function renderClickableWords(text) {
                  updateStatusToggle(allLessons[currentLessonId].isPublic);
             }
         }
+
+        // ── Teacher Class Picker ──────────────────────────────────────────────
+        function getDistinctTeacherClassIds() {
+            const ids = new Set();
+            Object.values(allLessons).forEach(l => ids.add(l.classId && l.classId.trim() ? l.classId.trim() : 'GENERAL'));
+            return [...ids].sort();
+        }
+
+        function renderTeacherClassPicker() {
+            if (!isTeacher || els.teacherClassPicker.classList.contains('hidden')) return; // only render while visible
+            const container = document.getElementById('teacher-class-picker-grid');
+            const classIds = getDistinctTeacherClassIds();
+            if (classIds.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-10">
+                        <p class="text-slate-400 font-bold mb-4">No classes yet.</p>
+                        <button onclick="window.selectTeacherClass('GENERAL')" class="px-6 py-3 bg-orange-500 text-white rounded-xl font-bold hover:bg-orange-600">+ Start with a New Class</button>
+                    </div>`;
+                return;
+            }
+            container.innerHTML = classIds.map(cid => {
+                const count = Object.values(allLessons).filter(l => (l.classId && l.classId.trim() ? l.classId.trim() : 'GENERAL') === cid).length;
+                return `
+                    <button onclick="window.selectTeacherClass('${cid}')" class="w-full p-5 rounded-2xl border-2 border-white bg-white shadow-md hover:border-orange-300 transition text-left flex justify-between items-center">
+                        <span class="text-xl font-black text-slate-800"><i class="fas fa-layer-group text-orange-500 mr-2"></i>${cid}</span>
+                        <span class="text-sm font-bold text-orange-600 bg-orange-50 px-3 py-1 rounded-full">${count} lesson${count !== 1 ? 's' : ''}</span>
+                    </button>`;
+            }).join('');
+        }
+
+        window.selectTeacherClass = (classId) => {
+            selectedTeacherClassId = classId;
+            localStorage.setItem('dhammaschool_teacher_classId', classId);
+            els.teacherClassPicker.classList.add('hidden');
+            els.teacherView.classList.remove('hidden');
+            safeSetText('teacher-current-class-label', classId);
+            document.getElementById('import-target-classid').value = classId === 'GENERAL' ? '' : classId;
+            renderLessonSelector();
+            loadClassRoster(classId);
+        };
+
+        window.backToClassPicker = () => {
+            selectedTeacherClassId = null;
+            localStorage.removeItem('dhammaschool_teacher_classId');
+            els.teacherView.classList.add('hidden');
+            els.teacherClassPicker.classList.remove('hidden');
+            renderTeacherClassPicker();
+        };
+
+        // ── Class Roster + Link to Tutoring ───────────────────────────────────
+        async function loadClassRoster(classId) {
+            const container = document.getElementById('class-roster-list');
+            container.innerHTML = '<p class="text-slate-400 text-sm italic">Loading roster...</p>';
+            try {
+                const classLessonIds = Object.values(allLessons)
+                    .filter(l => (l.classId && l.classId.trim() ? l.classId.trim() : 'GENERAL') === classId)
+                    .map(l => l.id);
+
+                const names = new Set();
+                if (classLessonIds.length > 0) {
+                    // game_scores / lesson_completions are queried in full and filtered client-side
+                    // by lessonId membership, since Firestore doesn't support "IN" with many values reliably.
+                    const [scoresSnap, compSnap] = await Promise.all([
+                        getDocs(collection(db, PATHS.scores)),
+                        getDocs(collection(db, PATHS.completions))
+                    ]);
+                    scoresSnap.docs.forEach(d => {
+                        const data = d.data();
+                        if (classLessonIds.includes(data.lessonId) && data.studentName) names.add(data.studentName);
+                    });
+                    compSnap.docs.forEach(d => {
+                        const data = d.data();
+                        if (classLessonIds.includes(data.lessonId) && data.studentName) names.add(data.studentName);
+                    });
+                }
+
+                // Load roster docs for this class to know link status.
+                rosterLinkStatus = {};
+                try {
+                    const rosterSnap = await getDocs(query(collection(db, PATHS.roster), where('classId', '==', classId)));
+                    rosterSnap.docs.forEach(d => {
+                        const data = d.data();
+                        if (data.linkedToTutoring) rosterLinkStatus[data.studentName] = true;
+                    });
+                } catch (e) { console.error('Error loading roster link status:', e); }
+
+                renderClassRosterList([...names].sort());
+            } catch (e) {
+                console.error('Error loading class roster:', e);
+                container.innerHTML = '<p class="text-red-500 text-sm">Error loading roster.</p>';
+            }
+        }
+
+        function renderClassRosterList(names) {
+            const container = document.getElementById('class-roster-list');
+            if (names.length === 0) {
+                container.innerHTML = '<p class="text-slate-400 text-sm italic">No students found in this class yet.</p>';
+                return;
+            }
+            container.innerHTML = names.map(name => {
+                const isLinked = !!rosterLinkStatus[name];
+                const safeName = name.replace(/'/g, "\\'");
+                return `
+                    <div class="p-3 rounded-xl border border-slate-200 bg-slate-50">
+                        <div class="flex justify-between items-center">
+                            <span class="font-bold text-slate-800">${name} ${isLinked ? '<span class="text-xs font-semibold text-indigo-600 bg-indigo-100 px-2 py-0.5 rounded-full ml-1">🔗 Linked</span>' : ''}</span>
+                            <button onclick="window.toggleLinkPicker('${safeName}')" class="text-xs font-semibold text-indigo-600 hover:text-indigo-800 hover:underline">🔗 Link to Tutoring</button>
+                        </div>
+                        <div id="link-picker-${cssEscape(name)}" class="hidden mt-3 p-3 bg-white rounded-lg border border-indigo-200">
+                            <input type="text" oninput="window.filterTutoringStudents('${safeName}', this.value)" placeholder="Search Tutoring students..." class="w-full p-2 mb-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                            <div id="link-picker-results-${cssEscape(name)}" class="max-h-48 overflow-y-auto space-y-1">
+                                <p class="text-sm text-slate-500 p-2">Loading students...</p>
+                            </div>
+                        </div>
+                    </div>`;
+            }).join('');
+        }
+
+        // Simple helper so student names with spaces/symbols still make valid DOM ids.
+        function cssEscape(str) {
+            return str.replace(/[^a-zA-Z0-9]/g, '_');
+        }
+
+        window.toggleLinkPicker = async (studentName) => {
+            const picker = document.getElementById(`link-picker-${cssEscape(studentName)}`);
+            if (!picker) return;
+            const isOpen = !picker.classList.contains('hidden');
+            // Close all other open pickers first.
+            document.querySelectorAll('[id^="link-picker-"]').forEach(el => el.classList.add('hidden'));
+            if (isOpen) return; // user clicked to close it
+            picker.classList.remove('hidden');
+            if (cachedTutoringStudents === null) {
+                try {
+                    const snap = await getDocs(collection(db, TUTORING_STUDENTS_PATH));
+                    cachedTutoringStudents = snap.docs.map(d => ({ id: d.id, name: d.data().name || '(no name)', displayId: d.data().displayId || '' }));
+                } catch (e) {
+                    console.error('Error loading Tutoring students:', e);
+                    cachedTutoringStudents = [];
+                }
+            }
+            window.filterTutoringStudents(studentName, '');
+        };
+
+        window.filterTutoringStudents = (studentName, filterText) => {
+            const resultsEl = document.getElementById(`link-picker-results-${cssEscape(studentName)}`);
+            if (!resultsEl || cachedTutoringStudents === null) return;
+            const filtered = cachedTutoringStudents.filter(s => s.name.toLowerCase().includes(filterText.toLowerCase()));
+            if (filtered.length === 0) {
+                resultsEl.innerHTML = '<p class="text-sm text-slate-500 p-2">No matching students found.</p>';
+                return;
+            }
+            const safeOld = studentName.replace(/'/g, "\\'");
+            resultsEl.innerHTML = filtered.map(s => {
+                const safeNew = s.name.replace(/'/g, "\\'");
+                return `
+                    <button onclick="window.linkStudentToTutoring('${safeOld}', '${safeNew}')" class="w-full text-left p-2 rounded-lg hover:bg-indigo-50 text-sm border border-transparent hover:border-indigo-200">
+                        <span class="font-semibold text-gray-800">${s.name}</span> <span class="text-xs text-gray-500">(${s.displayId})</span>
+                    </button>`;
+            }).join('');
+        };
+
+        // Links a Dhammaschool student to a TutoringApp student by renaming
+        // studentName to exactly match across this class's game_scores and
+        // lesson_completions docs, then marking a lightweight roster doc as
+        // linked — mirrors SmartStudy/AbhidhammaApp's "Link to Tutoring" flow.
+        window.linkStudentToTutoring = async (oldName, newName) => {
+            if (!selectedTeacherClassId || !oldName || !newName) return;
+            try {
+                const classLessonIds = Object.values(allLessons)
+                    .filter(l => (l.classId && l.classId.trim() ? l.classId.trim() : 'GENERAL') === selectedTeacherClassId)
+                    .map(l => l.id);
+
+                if (oldName !== newName && classLessonIds.length > 0) {
+                    const renameInCollection = async (path) => {
+                        const snap = await getDocs(query(collection(db, path), where('studentName', '==', oldName)));
+                        const docsToRename = snap.docs.filter(d => classLessonIds.includes(d.data().lessonId));
+                        for (let i = 0; i < docsToRename.length; i += 400) {
+                            const chunk = docsToRename.slice(i, i + 400);
+                            const batch = writeBatch(db);
+                            chunk.forEach(d => batch.update(d.ref, { studentName: newName }));
+                            await batch.commit();
+                        }
+                    };
+                    await renameInCollection(PATHS.scores);
+                    await renameInCollection(PATHS.completions);
+
+                    // Move/delete any old roster doc for the previous name.
+                    try {
+                        const oldRosterRef = doc(db, PATHS.roster, `${selectedTeacherClassId}_${oldName}`);
+                        const oldRosterSnap = await getDoc(oldRosterRef);
+                        if (oldRosterSnap.exists()) await deleteDoc(oldRosterRef);
+                    } catch (e) {}
+                }
+
+                await setDoc(doc(db, PATHS.roster, `${selectedTeacherClassId}_${newName}`), {
+                    classId: selectedTeacherClassId,
+                    studentName: newName,
+                    linkedToTutoring: true
+                }, { merge: true });
+
+                alertMessage(`Linked "${newName}" to Tutoring.`, 'success');
+                loadClassRoster(selectedTeacherClassId);
+            } catch (e) {
+                console.error('Error linking student to Tutoring:', e);
+                alertMessage('Error linking student. Please try again.', 'error');
+            }
+        };
         
         function alertMessage(msg, type) {
             const div = document.createElement('div');
