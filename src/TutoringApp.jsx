@@ -1840,6 +1840,46 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
     }
   };
   
+  const [isRepairingData, setIsRepairingData] = useState(false);
+  const handleRepairTeacherUid = async () => {
+    if (!user?.uid) return;
+    setIsRepairingData(true);
+    try {
+      // If teacher access was ever recovered (e.g. after being locked out), the
+      // Firebase UID recognized as "the teacher" can change — but existing
+      // lessonBank/teacherSchedule/studentGroups documents still carry the OLD
+      // uid in their teacherUid field, so the uid-filtered queries that load
+      // them return nothing (data looks "gone" even though it's still there).
+      // This finds every doc in those 3 collections — regardless of its current
+      // teacherUid — and rewrites it to match this session's uid, since this
+      // app supports only one teacher account at a time.
+      const collections = [
+        { ref: lessonBankCollection, path: `${publicDataPath}/lessonBank` },
+        { ref: teacherScheduleCollection, path: `${publicDataPath}/teacherSchedule` },
+        { ref: groupsCollection, path: `${publicDataPath}/studentGroups` },
+      ];
+      let fixedCount = 0;
+      for (const { ref, path } of collections) {
+        const snap = await getDocs(ref);
+        const toFix = snap.docs.filter(d => d.data().teacherUid !== user.uid);
+        for (let i = 0; i < toFix.length; i += 400) {
+          const chunk = toFix.slice(i, i + 400);
+          const batch = writeBatch(db);
+          chunk.forEach(d => batch.update(doc(db, path, d.id), { teacherUid: user.uid }));
+          await batch.commit();
+        }
+        fixedCount += toFix.length;
+      }
+      alert(fixedCount > 0
+        ? `Repaired ${fixedCount} item(s). Your Lesson Bank, Schedule, and Groups should now show up correctly.`
+        : `Nothing needed fixing — all your data already matches this account.`);
+    } catch (error) {
+      console.error('Error repairing teacherUid data:', error);
+      alert('Error while repairing data. Please try again, or let your developer know.');
+    }
+    setIsRepairingData(false);
+  };
+
   const handleExportData = async () => {
     setIsExporting(true);
     try {
@@ -2858,6 +2898,16 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
         <div className="bg-violet-50/70 backdrop-blur-sm p-6 rounded-xl shadow-lg border border-violet-200 max-w-lg mx-auto">
           <h3 className="text-xl font-semibold mb-6 text-gray-800">Data Management</h3>
           <p className="text-sm text-gray-600 mb-6">Your data is stored securely in the cloud. You can download a backup of your data as a JSON file.</p>
+
+          <div className="mb-8 p-4 bg-orange-50 border-2 border-orange-200 rounded-lg">
+            <h4 className="text-lg font-semibold mb-2 text-orange-800">🔧 Missing Lesson Bank / Schedule / Groups?</h4>
+            <p className="text-sm text-gray-700 mb-3">
+              If you were ever locked out and had teacher access recovered, your existing data may still be tagged with your old account ID and won't show up. This finds and re-tags it to your current account — safe to run any time, even if nothing needs fixing.
+            </p>
+            <button onClick={handleRepairTeacherUid} disabled={isRepairingData} className="w-full bg-orange-500 text-white p-3 rounded-lg font-semibold hover:bg-orange-600 transition-transform transform hover:scale-105 shadow-md disabled:opacity-50">
+              {isRepairingData ? 'Repairing...' : 'Repair My Data'}
+            </button>
+          </div>
           
           <div className="mb-8">
             <h4 className="text-lg font-semibold mb-3 text-gray-700">Export Data</h4>
