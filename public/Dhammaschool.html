@@ -324,12 +324,6 @@
                                 <span class="font-bold text-slate-700">Lesson Status:</span>
                                 <button id="toggle-public-btn" class="px-4 py-1 rounded-full text-xs font-bold uppercase transition btn-3d">Draft</button>
                             </div>
-                            <!-- Class ID editor (retag old lessons into a class) -->
-                            <div class="flex items-center gap-2 mt-2 pt-2 border-t border-slate-100">
-                                <span class="font-bold text-slate-700 text-sm whitespace-nowrap">Class ID:</span>
-                                <input type="text" id="lesson-classid-input" placeholder="e.g. PARAMI" class="flex-1 bg-white border border-slate-300 rounded-lg px-2 py-1 text-sm font-bold uppercase focus:outline-none focus:ring-2 focus:ring-orange-400">
-                                <button onclick="window.saveLessonClassId()" class="px-3 py-1 bg-orange-100 text-orange-700 rounded-lg text-xs font-bold hover:bg-orange-200">Save</button>
-                            </div>
                             <!-- Language Toggle -->
                             <div class="flex flex-col gap-2 mt-2 pt-2 border-t border-slate-100">
                                 <div class="flex items-center justify-between">
@@ -1441,8 +1435,6 @@ window.renderTeacherScores = function(lessonId) {
                          
                          // --- Load Teacher Note (Wiki Suffix) ---
                          document.getElementById('teacher-wiki-input').value = data.wikiSuffix || '';
-                         // --- Load Class ID ---
-                         document.getElementById('lesson-classid-input').value = data.classId || '';
                          
                          renderTeacherAnswers(lid); // Re-render answers on lesson change
                         renderTeacherScores(lid);
@@ -1462,19 +1454,6 @@ window.renderTeacherScores = function(lessonId) {
         }
         
         // --- SAVE TEACHER NOTE (WIKI) ---
-        window.saveLessonClassId = async () => {
-            if (!currentLessonId) return alertMessage('No lesson selected', 'error');
-            const newClassId = document.getElementById('lesson-classid-input').value.trim().toUpperCase();
-            try {
-                await updateDoc(doc(db, PATHS.lessons, currentLessonId), { classId: newClassId });
-                alertMessage(newClassId ? `Class ID set to "${newClassId}"` : 'Class ID cleared', 'success');
-                renderLessonSelector(); // refresh badge in dropdown
-            } catch (e) {
-                console.error(e);
-                alertMessage('Error saving Class ID', 'error');
-            }
-        };
-
         window.saveWikiLink = async () => {
             if(!currentLessonId) return alertMessage('No lesson selected', 'error');
             const suffix = document.getElementById('teacher-wiki-input').value.trim();
@@ -3356,8 +3335,7 @@ function renderClickableWords(text) {
             const sorted = list.sort((a,b) => (a.createdAt || "9999").localeCompare(b.createdAt || "9999"));
             sorted.forEach(l => {
                 const op = document.createElement('option'); op.value = l.id;
-                const cid = l.classId && l.classId.trim() ? l.classId.trim() : null;
-                op.textContent = cid ? `[${cid}] ${l.name}` : l.name;
+                op.textContent = l.name;
                 if(l.id === currentLessonId) op.selected = true;
                 els.lessonSelector.appendChild(op);
             });
@@ -3514,17 +3492,25 @@ function renderClickableWords(text) {
 
                 const names = new Set();
                 if (classLessonIds.length > 0) {
-                    // game_scores / lesson_completions are queried in full and filtered client-side
-                    // by lessonId membership, since Firestore doesn't support "IN" with many values reliably.
-                    const [scoresSnap, compSnap] = await Promise.all([
+                    // game_scores / lesson_completions / answers are queried in full and
+                    // filtered client-side by lessonId membership, since Firestore doesn't
+                    // support "IN" with many values reliably. Includes "answers" (discussion
+                    // participation) too, so students who only discussed but never played a
+                    // game/quiz still show up in the roster.
+                    const [scoresSnap, compSnap, answersSnap] = await Promise.all([
                         getDocs(collection(db, PATHS.scores)),
-                        getDocs(collection(db, PATHS.completions))
+                        getDocs(collection(db, PATHS.completions)),
+                        getDocs(collection(db, PATHS.answers))
                     ]);
                     scoresSnap.docs.forEach(d => {
                         const data = d.data();
                         if (classLessonIds.includes(data.lessonId) && data.studentName) names.add(data.studentName);
                     });
                     compSnap.docs.forEach(d => {
+                        const data = d.data();
+                        if (classLessonIds.includes(data.lessonId) && data.studentName) names.add(data.studentName);
+                    });
+                    answersSnap.docs.forEach(d => {
                         const data = d.data();
                         if (classLessonIds.includes(data.lessonId) && data.studentName) names.add(data.studentName);
                     });
@@ -3560,7 +3546,10 @@ function renderClickableWords(text) {
                     <div class="p-3 rounded-xl border border-slate-200 bg-slate-50">
                         <div class="flex justify-between items-center">
                             <span class="font-bold text-slate-800">${name} ${isLinked ? '<span class="text-xs font-semibold text-indigo-600 bg-indigo-100 px-2 py-0.5 rounded-full ml-1">🔗 Linked</span>' : ''}</span>
-                            <button onclick="window.toggleLinkPicker('${safeName}')" class="text-xs font-semibold text-indigo-600 hover:text-indigo-800 hover:underline">🔗 Link to Tutoring</button>
+                            ${isLinked
+                                ? `<button onclick="window.unlinkStudentFromTutoring('${safeName}')" class="text-xs font-semibold text-red-600 hover:text-red-800 hover:underline">✖ Unlink</button>`
+                                : `<button onclick="window.toggleLinkPicker('${safeName}')" class="text-xs font-semibold text-indigo-600 hover:text-indigo-800 hover:underline">🔗 Link to Tutoring</button>`
+                            }
                         </div>
                         <div id="link-picker-${cssEscape(name)}" class="hidden mt-3 p-3 bg-white rounded-lg border border-indigo-200">
                             <input type="text" oninput="window.filterTutoringStudents('${safeName}', this.value)" placeholder="Search Tutoring students..." class="w-full p-2 mb-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
@@ -3585,14 +3574,23 @@ function renderClickableWords(text) {
             document.querySelectorAll('[id^="link-picker-"]').forEach(el => el.classList.add('hidden'));
             if (isOpen) return; // user clicked to close it
             picker.classList.remove('hidden');
+            let loadError = null;
             if (cachedTutoringStudents === null) {
                 try {
                     const snap = await getDocs(collection(db, TUTORING_STUDENTS_PATH));
                     cachedTutoringStudents = snap.docs.map(d => ({ id: d.id, name: d.data().name || '(no name)', displayId: d.data().displayId || '' }));
                 } catch (e) {
                     console.error('Error loading Tutoring students:', e);
-                    cachedTutoringStudents = [];
+                    cachedTutoringStudents = null; // don't cache a failure — allow retry next time
+                    loadError = e;
                 }
+            }
+            if (loadError) {
+                const resultsEl = document.getElementById(`link-picker-results-${cssEscape(studentName)}`);
+                if (resultsEl) {
+                    resultsEl.innerHTML = `<p class="text-sm text-red-600 p-2 font-bold">Could not load Tutoring students: ${loadError.message || loadError.code || 'unknown error'}.<br><span class="font-normal">This is usually a Firestore security-rules issue — the "${TUTORING_STUDENTS_PATH}" collection needs to allow reads from this app.</span></p>`;
+                }
+                return;
             }
             window.filterTutoringStudents(studentName, '');
         };
@@ -3639,6 +3637,7 @@ function renderClickableWords(text) {
                     };
                     await renameInCollection(PATHS.scores);
                     await renameInCollection(PATHS.completions);
+                    await renameInCollection(PATHS.answers);
 
                     // Move/delete any old roster doc for the previous name.
                     try {
@@ -3659,6 +3658,22 @@ function renderClickableWords(text) {
             } catch (e) {
                 console.error('Error linking student to Tutoring:', e);
                 alertMessage('Error linking student. Please try again.', 'error');
+            }
+        };
+
+        // Undo a mistaken link — removes the roster doc's linked flag so the
+        // student can be re-linked to the correct Tutoring student. Does NOT
+        // touch scores/completions/answers, since a previous rename (if any)
+        // is real data and should stay attributed to that name.
+        window.unlinkStudentFromTutoring = async (studentName) => {
+            if (!selectedTeacherClassId || !studentName) return;
+            try {
+                await deleteDoc(doc(db, PATHS.roster, `${selectedTeacherClassId}_${studentName}`));
+                alertMessage(`Unlinked "${studentName}" from Tutoring.`, 'success');
+                loadClassRoster(selectedTeacherClassId);
+            } catch (e) {
+                console.error('Error unlinking student:', e);
+                alertMessage('Error unlinking student. Please try again.', 'error');
             }
         };
         
