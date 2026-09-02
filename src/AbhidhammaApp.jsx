@@ -914,31 +914,21 @@ const AbhiLessonItem = ({ lesson, classId, isTeacher, studentAgeGroup, studentNa
   
   useEffect(()=>{if(isOpen&&ref.current){setTimeout(()=>{const y=ref.current.getBoundingClientRect().top+window.scrollY-80;window.scrollTo({top:y,behavior:'smooth'});},100);}},[isOpen]);
   
-  // Track quiz completion. Checks BOTH by the live userId (normal case) AND by the student's
-  // current display name (fallback) — imported/linked records often carry an old userId from a
-  // different app/session that will never match this device's live uid, but their studentName
-  // gets kept in sync by the rename/link flows, so matching on name catches those too.
+  // Track quiz completion by studentName only — the roster name stays the same across devices,
+  // while userId changes per device/session (that mismatch was hiding "Done" on a new device).
   useEffect(()=>{
-    if(!classId||!lesson.id||!studentAgeGroup)return;
-    let fromResultsById=false,fromScoresById=false,fromResultsByName=false,fromScoresByName=false;
-    const recompute=()=>setIsCompleted(fromResultsById||fromScoresById||fromResultsByName||fromScoresByName);
-    const subs=[];
-    if(userId){
-      subs.push(onSnapshot(query(abhiResultsRef(classId,lesson.id,studentAgeGroup),where('userId','==',userId)),snap=>{fromResultsById=!snap.empty;recompute();}));
-      subs.push(onSnapshot(query(abhiScoresRef(),where('userId','==',userId)),snap=>{
-        fromScoresById=snap.docs.some(d=>{const dt=d.data();return dt.classId===classId&&dt.lessonId===lesson.id;});
-        recompute();
-      },err=>console.error('Score completion track:',err.code)));
-    }
-    if(studentName){
-      subs.push(onSnapshot(query(abhiResultsRef(classId,lesson.id,studentAgeGroup),where('name','==',studentName)),snap=>{fromResultsByName=!snap.empty;recompute();},err=>console.error('Name completion track:',err.code)));
-      subs.push(onSnapshot(query(abhiScoresRef(),where('studentName','==',studentName)),snap=>{
+    if(!classId||!lesson.id||!studentAgeGroup||!studentName)return;
+    let fromResultsByName=false,fromScoresByName=false;
+    const recompute=()=>setIsCompleted(fromResultsByName||fromScoresByName);
+    const subs=[
+      onSnapshot(query(abhiResultsRef(classId,lesson.id,studentAgeGroup),where('name','==',studentName)),snap=>{fromResultsByName=!snap.empty;recompute();},err=>console.error('Name completion track:',err.code)),
+      onSnapshot(query(abhiScoresRef(),where('studentName','==',studentName)),snap=>{
         fromScoresByName=snap.docs.some(d=>{const dt=d.data();return dt.classId===classId&&dt.lessonId===lesson.id;});
         recompute();
-      },err=>console.error('Name score completion track:',err.code)));
-    }
+      },err=>console.error('Name score completion track:',err.code))
+    ];
     return()=>{subs.forEach(u=>u());};
-  },[classId,lesson.id,userId,studentAgeGroup,studentName]);
+  },[classId,lesson.id,studentAgeGroup,studentName]);
   
   // Track Q&A participation for quiz unlock (ask + reply)
   useEffect(()=>{
@@ -1106,10 +1096,8 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
   // rank/lessons badge for whichever class is currently open (classStats[classId]).
   // Live (onSnapshot) per class, not a one-off getDocs — so a badge/rank updates immediately right
   // after a lesson quiz is submitted, instead of only refreshing on next class switch/reload.
-  // Also matches "me" by BOTH studentName AND live userId (like the Champions Board's "YOU" tag and
-  // the per-lesson "Done" check already do) — a name-only match silently shows nothing if a score
-  // doc's studentName field doesn't exactly match the current profile name (stale cache, whitespace,
-  // a rename that only partly propagated, etc.), even though the student clearly did the work.
+  // Matches "me" by studentName only — linkedToTutoring already guarantees the roster name is
+  // correct, so a separate userId match is unnecessary.
   useEffect(()=>{
     if(!studentProfile||allClasses.length===0){ setClassStats({}); return; }
     const name=studentProfile.name;
@@ -1117,27 +1105,21 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
       onSnapshot(query(abhiScoresRef(),where('classId','==',c.id)), async scoresSnap=>{
         try{
           const lessonsSnap=await getDocs(abhiLessonsRef(c.id));
-          const byStudent={};const myByUid=new Set();
+          const byStudent={};
           scoresSnap.docs.forEach(d=>{
             const dt=d.data();const li=dt.lessonId;
             if(dt.classId!==c.id||!li)return;
             const sn=dt.studentName||dt.name;
             if(sn){ if(!byStudent[sn])byStudent[sn]=new Set(); byStudent[sn].add(li); }
-            if(userId&&dt.userId===userId) myByUid.add(li);
           });
-          // Union: whatever's under my exact name, plus anything recorded under my device's userId
-          // even if the name field on that doc doesn't match — so a stale/mismatched name never
-          // hides real progress.
-          const mergedMine=new Set([...(byStudent[name]||[]),...myByUid]);
-          if(mergedMine.size>0) byStudent[name]=mergedMine;
           const ranked=Object.entries(byStudent).sort((a,b)=>b[1].size-a[1].size);
           const myIdx=ranked.findIndex(([sn])=>sn===name);
-          setClassStats(prev=>({...prev,[c.id]:{completedCount:mergedMine.size,totalLessons:lessonsSnap.size,rank:myIdx>=0?myIdx+1:0}}));
+          setClassStats(prev=>({...prev,[c.id]:{completedCount:byStudent[name]?.size||0,totalLessons:lessonsSnap.size,rank:myIdx>=0?myIdx+1:0}}));
         }catch(e){ console.error('Class stats load ('+c.id+'):', e.code||e.message||e); }
       }, err=>console.error('Class stats listener ('+c.id+'):', err.code||err.message||err))
     );
     return ()=>unsubs.forEach(u=>u());
-  },[studentProfile,allClasses,userId]);
+  },[studentProfile,allClasses]);
 
   // Load lessons from SUBCOLLECTION (no 1MB limit!)
   useEffect(()=>{
@@ -1570,16 +1552,16 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
                               ? 'bg-amber-100 border-amber-500 text-amber-800 shadow-lg scale-[1.02]'
                               : 'bg-white border-gray-200 text-gray-700 hover:border-amber-300 hover:bg-amber-50'
                           }`}>
-                          <div className="flex items-center justify-between gap-2 flex-wrap">
-                            <span>{c.id===(pendingEntry?.classId||entryRequest?.classId)?'⭐ ':''}{c.displayName||c.id}</span>
-                            <div className="flex items-center gap-2 flex-wrap">
+                          <div className="flex items-center justify-between gap-2 flex-nowrap">
+                            <span className="truncate min-w-0 flex-1">{c.id===(pendingEntry?.classId||entryRequest?.classId)?'⭐ ':''}{c.displayName||c.id}</span>
+                            <div className="flex items-center gap-2 flex-nowrap shrink-0">
                               {stat?.rank>0&&(
-                                <span className="text-xs font-bold text-yellow-700 bg-yellow-100 border border-yellow-300 px-2 py-0.5 rounded-full">🏆 Rank #{stat.rank}</span>
+                                <span className="text-xs font-bold text-yellow-700 bg-yellow-100 border border-yellow-300 px-2 py-0.5 rounded-full whitespace-nowrap">🏆 Rank #{stat.rank}</span>
                               )}
                               {stat?.completedCount>0&&(
                                 allDone
-                                  ? <span className="text-xs font-bold text-green-700 bg-green-100 border border-green-300 px-2 py-0.5 rounded-full">✅ all completed</span>
-                                  : <span className="text-xs font-bold text-blue-700 bg-blue-100 border border-blue-300 px-2 py-0.5 rounded-full">{stat.completedCount}{stat.totalLessons?` / ${stat.totalLessons}`:''} completed</span>
+                                  ? <span className="text-xs font-bold text-green-700 bg-green-100 border border-green-300 px-2 py-0.5 rounded-full whitespace-nowrap">✅ all completed</span>
+                                  : <span className="text-xs font-bold text-blue-700 bg-blue-100 border border-blue-300 px-2 py-0.5 rounded-full whitespace-nowrap">{stat.completedCount}{stat.totalLessons?` / ${stat.totalLessons}`:''} completed</span>
                               )}
                             </div>
                           </div>
@@ -1599,19 +1581,7 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
                   <button onClick={()=>{setClassId('');setClassData(null);setLessons([]);}}
                     className="text-sm text-gray-400 hover:text-white underline">← Change Class</button>
                 </div>
-                {(classStats[classId]?.rank>0||classStats[classId]?.completedCount>0)&&(
-                  <div className="flex items-center gap-2 flex-wrap mb-4">
-                    {classStats[classId]?.rank>0&&(
-                      <span className="text-xs font-bold text-yellow-700 bg-yellow-100 border border-yellow-300 px-2 py-0.5 rounded-full">🏆 Rank #{classStats[classId].rank}</span>
-                    )}
-                    {classStats[classId]?.completedCount>0&&(
-                      classStats[classId].totalLessons>0&&classStats[classId].completedCount>=classStats[classId].totalLessons
-                        ? <span className="text-xs font-bold text-green-700 bg-green-100 border border-green-300 px-2 py-0.5 rounded-full">✅ all completed</span>
-                        : <span className="text-xs font-bold text-blue-700 bg-blue-100 border border-blue-300 px-2 py-0.5 rounded-full">{classStats[classId].completedCount}{classStats[classId].totalLessons?` / ${classStats[classId].totalLessons}`:''} completed</span>
-                    )}
-                  </div>
-                )}
-                {lessons.length===0&&<p className="text-center text-gray-500 py-6">No lessons yet.</p>}
+                                {lessons.length===0&&<p className="text-center text-gray-500 py-6">No lessons yet.</p>}
                 {lessons.map(l=>(
                   <AbhiLessonItem key={l.id} lesson={l} classId={classId}
                     isTeacher={false} userId={userId}
