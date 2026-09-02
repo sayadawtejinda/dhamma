@@ -792,7 +792,7 @@ Question 3..."></textarea>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot, collection, query, addDoc, where, getDocs, deleteDoc, arrayUnion, arrayRemove, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const appId = 'dhammaschool-app'; // Fixed appId — must match DHAMMASCHOOL_APP_ID in TutoringApp.jsx
@@ -3851,7 +3851,27 @@ function renderClickableWords(text) {
             reader.readAsText(file);
         };
 
-        window.logout = () => { signOut(auth).then(() => { localStorage.clear(); location.reload(); }); };
+        // IMPORTANT: does NOT call signOut(auth) or localStorage.clear().
+        // This app shares its Firebase project (and, when hosted under the same
+        // domain as TutoringApp, the same browser-level anonymous Auth session)
+        // with TutoringApp/SmartStudy/AbhidhammaApp. Calling signOut(auth) here
+        // would destroy that shared anonymous identity for ALL of those apps at
+        // once — including logging the teacher out of TutoringApp, since a brand
+        // new random anonymous UID gets created on the next sign-in and no longer
+        // matches the UID stored as "the teacher" in TutoringApp's Firestore data.
+        // Likewise, localStorage.clear() would wipe every other app's saved data
+        // on this device, not just Dhammaschool's own. So "logout" here only
+        // clears Dhammaschool's own local keys and reloads — it never touches
+        // Firebase Auth or any other app's storage.
+        window.logout = () => {
+            ['studentName', 'currentLessonId', 'studentCurrentLessonId', 'completedMatchSteps',
+             'currentStepIndex', 'dhammaschool_classId', 'dhammaschool_teacher_classId'
+            ].forEach(k => localStorage.removeItem(k));
+            Object.keys(localStorage)
+                .filter(k => k.startsWith('notifLastSeenCount_'))
+                .forEach(k => localStorage.removeItem(k));
+            location.reload();
+        };
         init();
         
         // --- START FIX for Submit/Update Answer ---
