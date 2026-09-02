@@ -155,6 +155,24 @@ const sanitizeKey = (key) => {
   if (!key || typeof key !== 'string') return 'unknown_lesson';
   return key.replace(/[\.\#\$\/\[\]]/g, '_');
 };
+
+// A Lesson Bank entry can be sent to any class at Assign-time (the class isn't
+// baked in when the entry is created), so the same bank entry/title gets reused
+// across many different classes. Trophy tracking keyed on title alone would
+// wrongly lump every class's trophies together under one number — folding the
+// classId into the key keeps each class's trophies separate and correct.
+const extractClassIdFromLink = (link) => {
+  if (!link) return null;
+  if (link.startsWith('smartstudy://')) return extractSmartStudyClassId(link);
+  if (link.startsWith('abhidhamma://')) return extractAbhidhammaLessonId(link);
+  if (link.startsWith('dhammaschool://')) return extractDhammaschoolClassId(link);
+  return null;
+};
+const computeLessonKey = (title, link) => {
+  const classId = extractClassIdFromLink(link);
+  return sanitizeKey(classId ? `${title}_${classId}` : title);
+};
+
 const toLocalDateString = (date) => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -1237,6 +1255,41 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma }) {
     }
   };
 
+  // Substitutes the class chosen in Send Action into a bare bank-entry link
+  // (e.g. 'abhidhamma://' -> 'abhidhamma://BEING_GOOD_AND_BEING_KIND'), matching
+  // what handleSendLesson actually sends to the student.
+  const getEffectiveLinkForSend = (lesson) => {
+    if (!lesson?.link) return '';
+    if (lesson.link === 'smartstudy://' && sendSmartStudyClassId) return `smartstudy://${sendSmartStudyClassId}`;
+    if (lesson.link === 'abhidhamma://' && sendAbhidhammaClassId) return `abhidhamma://${sendAbhidhammaClassId}`;
+    if (lesson.link === 'dhammaschool://' && sendDhammaschoolClassId) return `dhammaschool://${sendDhammaschoolClassId}`;
+    return lesson.link;
+  };
+
+  // Single source of truth for "how many trophies can this lesson give, and
+  // under what key are they tracked" — used identically by the Trophy Status
+  // display and the actual award function, so they can never disagree.
+  const getClassSpecificTrophyInfo = (lesson) => {
+    if (!lesson) return { maxAvailable: 0, unitCount: 0, lessonKey: '', classId: null };
+    const effectiveLink = getEffectiveLinkForSend(lesson);
+    const classId = extractClassIdFromLink(effectiveLink);
+
+    let lessonCount = null;
+    if (lesson.link === 'smartstudy://' && sendSmartStudyClassId && smartStudyClasses) {
+      const c = (smartStudyClasses || []).find(cl => cl.classId === sendSmartStudyClassId);
+      lessonCount = c ? c.lessonCount : null;
+    } else if (lesson.link?.startsWith('abhidhamma://') && sendAbhidhammaClassId && abhiTotalCount != null) {
+      lessonCount = abhiTotalCount;
+    } else if (lesson.link?.startsWith('dhammaschool://') && sendDhammaschoolClassId && dhammaschoolStudentProgress?.totalLessons != null) {
+      lessonCount = dhammaschoolStudentProgress.totalLessons;
+    }
+
+    const maxAvailable = lessonCount != null ? Math.max(1, Math.floor(lessonCount / 5)) : (lesson.trophyLimit || 0);
+    const unitCount = lessonCount != null ? lessonCount : (lesson.unitCount || 0);
+    const lessonKey = computeLessonKey(lesson.title, effectiveLink);
+    return { maxAvailable, unitCount, lessonKey, classId };
+  };
+
   const handleAwardDirectTrophies = async (e) => {
     e.preventDefault();
     const student = students.find(s => s.id === selectedStudentUid);
@@ -1244,9 +1297,8 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma }) {
 
     if (!student || !lesson) return;
 
-    const lessonKey = sanitizeKey(lesson.title);
+    const { maxAvailable, lessonKey } = getClassSpecificTrophyInfo(lesson);
     const previouslyEarned = student.earnedTrophies?.[lessonKey] || 0;
-    const maxAvailable = lesson.trophyLimit || 0;
     const remaining = Math.max(0, maxAvailable - previouslyEarned);
 
     const amountToAward = parseInt(directTrophyAmount);
@@ -1261,7 +1313,7 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma }) {
             const studentDocRef = doc(db, `${publicDataPath}/students`, student.id);
             const newTotalEarned = previouslyEarned + amountToAward;
             const prevCompletedUnit = student.completedUnits?.[lessonKey] || 0;
-            const unitCount = lesson.unitCount || 0;
+            const unitCount = getClassSpecificTrophyInfo(lesson).unitCount;
             let newCompletedUnit = prevCompletedUnit;
 
             const updateData = {
@@ -1513,7 +1565,7 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
     }
   };
 
-  const handleApproveTrophy = async (studentId, studentName, amount = 1, lessonTitle = null, sessionId = null) => {
+  const handleApproveTrophy = async (studentId, studentName, amount = 1, lessonTitle = null, sessionId = null, lessonLink = null) => {
     try {
       const studentDocRef = doc(db, `${publicDataPath}/students`, studentId);
       
@@ -1524,11 +1576,12 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
         requestedTrophyAmount: 0,
         requestedTrophyLessonId: null,
         requestedTrophyLessonTitle: null,
+        requestedTrophyLessonLink: null,
         requestedTrophySessionId: null
       };
       
       if (lessonTitle) {
-        updateData[`earnedTrophies.${sanitizeKey(lessonTitle)}`] = increment(amount);
+        updateData[`earnedTrophies.${computeLessonKey(lessonTitle, lessonLink)}`] = increment(amount);
       }
       
       await updateDoc(studentDocRef, updateData);
@@ -1556,7 +1609,7 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
     }
   };
 
-  const handleRejectTrophy = async (studentId, sessionId, lessonTitle) => {
+  const handleRejectTrophy = async (studentId, sessionId, lessonTitle, lessonLink = null) => {
     try {
       const studentDocRef = doc(db, `${publicDataPath}/students`, studentId);
       const updateData = {
@@ -1564,6 +1617,7 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
         requestedTrophyAmount: 0,
         requestedTrophyLessonId: null,
         requestedTrophyLessonTitle: null,
+        requestedTrophyLessonLink: null,
         requestedTrophySessionId: null
       };
 
@@ -1571,7 +1625,7 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
         const sessionDoc = await getDoc(doc(db, `${publicDataPath}/studySessions`, sessionId));
         if (sessionDoc.exists()) {
           const previousCompletedUnit = sessionDoc.data().previousCompletedUnit || 0;
-          updateData[`completedUnits.${sanitizeKey(lessonTitle)}`] = previousCompletedUnit;
+          updateData[`completedUnits.${computeLessonKey(lessonTitle, lessonLink)}`] = previousCompletedUnit;
         }
       }
 
@@ -2600,19 +2654,12 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
               const student = students.find(s => s.id === selectedStudentUid);
               const lesson = lessonBank.find(l => l.id === selectedBankLessonId);
               if (!student || !lesson) return null;
-              
-              const lessonKey = sanitizeKey(lesson.title);
-              const previouslyEarned = student.earnedTrophies?.[lessonKey] || 0;
+
               const isAbhiForTrophy = lesson.link?.startsWith('abhidhamma://');
               const isDhammaschoolForTrophy = lesson.link?.startsWith('dhammaschool://');
-              // When a SmartStudy class is selected, use per-class trophy limit and unit count
               const ssClassForTrophy = (sendSmartStudyClassId && smartStudyClasses)
                 ? (smartStudyClasses || []).find(c => c.classId === sendSmartStudyClassId)
                 : null;
-              // Same "class-specific" split for Abhidhamma and Dhammaschool: when a class is
-              // chosen in Send Action, the class's own lesson count drives Max Available
-              // (1 trophy per 5 lessons, same ratio as SmartStudy), rather than the
-              // whole-app lesson count entered on the lesson bank entry.
               const abhiClassForTrophy = (isAbhiForTrophy && sendAbhidhammaClassId && abhiTotalCount != null)
                 ? { classId: sendAbhidhammaClassId, lessonCount: abhiTotalCount }
                 : null;
@@ -2623,9 +2670,13 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
               const effectiveUnitCountForDisplay = anyClassForTrophy
                 ? (anyClassForTrophy.lessonCount || 0)
                 : (lesson.unitCount || 0);
-              const maxAvailable = anyClassForTrophy
-                ? Math.max(1, Math.floor((anyClassForTrophy.lessonCount || 0) / 5))
-                : (lesson.trophyLimit || 0);
+
+              // Same class-aware key/limit logic used by the actual award
+              // function (getClassSpecificTrophyInfo) — this is what fixes the
+              // "Previously Earned" number being a cross-class total instead of
+              // this specific class's own trophies.
+              const { maxAvailable, lessonKey } = getClassSpecificTrophyInfo(lesson);
+              const previouslyEarned = student.earnedTrophies?.[lessonKey] || 0;
               const remaining = Math.max(0, maxAvailable - previouslyEarned);
 
               const trackedCompletedUnit = student.completedUnits?.[lessonKey] || 0;
@@ -3069,13 +3120,13 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                       </div>
                       <div className="flex space-x-3 mt-3 sm:mt-0">
                         <button 
-                          onClick={() => handleApproveTrophy(student.id, student.name, amount, student.requestedTrophyLessonTitle, student.requestedTrophySessionId)} 
+                          onClick={() => handleApproveTrophy(student.id, student.name, amount, student.requestedTrophyLessonTitle, student.requestedTrophySessionId, student.requestedTrophyLessonLink)} 
                           className="px-6 py-2 rounded-lg text-sm font-bold text-white shadow-md bg-yellow-500 hover:bg-yellow-600 transition-colors"
                         >
                           Approve
                         </button>
                         <button 
-                          onClick={() => handleRejectTrophy(student.id, student.requestedTrophySessionId, student.requestedTrophyLessonTitle)}
+                          onClick={() => handleRejectTrophy(student.id, student.requestedTrophySessionId, student.requestedTrophyLessonTitle, student.requestedTrophyLessonLink)}
                           className="px-6 py-2 rounded-lg text-sm font-bold text-white shadow-md bg-gray-400 hover:bg-gray-500 transition-colors"
                         >
                           Deny
@@ -3262,6 +3313,42 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                     className="w-full text-left p-2 rounded-lg hover:bg-orange-50 border border-transparent hover:border-orange-200 font-semibold text-gray-800 mt-1"
                   >
                     📖 Dhammaschool app
+                  </button>
+                  {/* Myanmar Speaking app and Myanmar Reader app don't have Firestore-backed
+                      classes/lessons like the other three — they're simple external apps, so
+                      picking them just sets the Lesson Bank link directly to their real hosted
+                      URL. handleStartLesson's generic http(s) fallback opens them like any
+                      other plain link (still gets a study session + Report button, same as
+                      any external URL lesson). */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!MYANMAR_SPEAKING_APP_URL) {
+                        alert('Myanmar Speaking app URL is not set up yet.');
+                        return;
+                      }
+                      setNewBankLessonLink(MYANMAR_SPEAKING_APP_URL);
+                      if (!newBankLessonTitle.trim()) setNewBankLessonTitle('Myanmar Speaking Lesson');
+                      setShowLinkPicker(false);
+                    }}
+                    className="w-full text-left p-2 rounded-lg hover:bg-purple-50 border border-transparent hover:border-purple-200 font-semibold text-gray-800 mt-1"
+                  >
+                    🗣️ Myanmar Speaking app
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!MYANMAR_READER_APP_URL) {
+                        alert('Myanmar Reader app URL is not set up yet.');
+                        return;
+                      }
+                      setNewBankLessonLink(MYANMAR_READER_APP_URL);
+                      if (!newBankLessonTitle.trim()) setNewBankLessonTitle('Myanmar Reader Lesson');
+                      setShowLinkPicker(false);
+                    }}
+                    className="w-full text-left p-2 rounded-lg hover:bg-teal-50 border border-transparent hover:border-teal-200 font-semibold text-gray-800 mt-1"
+                  >
+                    📗 Myanmar Reader app
                   </button>
                 </div>
               )}
@@ -3506,6 +3593,7 @@ function SmartStudyProgressBadge({ classId, studentName, smartStudyNames, compac
           updateData.requestedTrophyAmount = newlyAvailable;
           updateData.requestedTrophyLessonId = null;
           updateData.requestedTrophyLessonTitle = `Smart Study: ${classId}`;
+          updateData.requestedTrophyLessonLink = `smartstudy://${classId}`;
           updateData.requestedTrophySessionId = null;
         }
         if (Object.keys(updateData).length > 0) {
@@ -3561,7 +3649,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     const unitCount = targetSession.lessonUnitCount || 0;
     const trophyLimit = targetSession.lessonTrophyLimit || 0;
 
-    const lessonKey = sanitizeKey(targetSession.lessonTitle);
+    const lessonKey = computeLessonKey(targetSession.lessonTitle, targetSession.lessonLink);
     const previousHighestUnit = getEffectivePreviousUnit(lessonKey, targetSession);
     const enteredUnit = parseInt(value) || 0;
 
@@ -3586,7 +3674,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     setTodayCompletedInput(value);
     const targetSession = redoSession || activeSession;
     if (!targetSession) return;
-    const lessonKey = sanitizeKey(targetSession.lessonTitle);
+    const lessonKey = computeLessonKey(targetSession.lessonTitle, targetSession.lessonLink);
     const previousHighestUnit = getEffectivePreviousUnit(lessonKey, targetSession);
     const unitCount = targetSession.lessonUnitCount || 0;
     const todayCount = parseInt(value) || 0;
@@ -4201,7 +4289,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
 
   const handleOpenRedoReport = async (session) => {
     setRedoSession(session);
-    const lessonKey = sanitizeKey(session.lessonTitle);
+    const lessonKey = computeLessonKey(session.lessonTitle, session.lessonLink);
     const prevUnit = getEffectivePreviousUnit(lessonKey, session);
     setCompletedUnitInput(session.completedUnit ? String(session.completedUnit) : '');
     setTodayCompletedInput(session.completedUnit ? String(Math.max(0, session.completedUnit - prevUnit)) : '');
@@ -4301,7 +4389,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     
     const notes = feedbackNotes.trim() || "Submitted without writing."; 
     
-    const lessonKey = sanitizeKey(targetSession.lessonTitle);
+    const lessonKey = computeLessonKey(targetSession.lessonTitle, targetSession.lessonLink);
     const earnedTrophiesMap = studentProfile.earnedTrophies || {};
     const previouslyEarned = earnedTrophiesMap[lessonKey] || 0;
     const maxAvailable = targetSession.lessonTrophyLimit || 0;
@@ -4335,6 +4423,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           studentUpdateData.requestedTrophyAmount = autoAmount;
           studentUpdateData.requestedTrophyLessonId = targetSession.lessonId;
           studentUpdateData.requestedTrophyLessonTitle = targetSession.lessonTitle;
+          studentUpdateData.requestedTrophyLessonLink = targetSession.lessonLink || null;
           studentUpdateData.requestedTrophySessionId = targetSession.id;
         }
       }
@@ -4426,7 +4515,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
   }
   
   const feedbackSession = redoSession || activeSession;
-  const activeLessonKeyForModal = feedbackSession ? sanitizeKey(feedbackSession.lessonTitle) : '';
+  const activeLessonKeyForModal = feedbackSession ? computeLessonKey(feedbackSession.lessonTitle, feedbackSession.lessonLink) : '';
   const earnedTrophiesMapForModal = studentProfile?.earnedTrophies || {};
   const previouslyEarnedForModal = feedbackSession ? (earnedTrophiesMapForModal[activeLessonKeyForModal] || 0) : 0;
   const maxAvailableForModal = (() => {
@@ -4731,7 +4820,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           <p className="text-lg mb-4">{activeSession.lessonTitle}</p>
           {activeSession.lessonUnitCount > 0 && (
             <p className="text-sm mb-4 font-semibold">
-              Studying {activeSession.lessonUnitLabel || 'Chapter'} {(studentProfile?.completedUnits?.[sanitizeKey(activeSession.lessonTitle)] || 0) + 1}
+              Studying {activeSession.lessonUnitLabel || 'Chapter'} {(studentProfile?.completedUnits?.[computeLessonKey(activeSession.lessonTitle, activeSession.lessonLink)] || 0) + 1}
             </p>
           )}
           
@@ -4816,7 +4905,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
               const textPColor = isNew ? 'text-emerald-700' : 'text-yellow-700';
               const buttonBg = isNew ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-yellow-500 hover:bg-yellow-600';
               
-              const lessonKeyList = sanitizeKey(lesson.title);
+              const lessonKeyList = computeLessonKey(lesson.title, lesson.link);
               const earnedTrophiesMapList = studentProfile?.earnedTrophies || {};
               const previouslyEarnedList = earnedTrophiesMapList[lessonKeyList] || 0;
               const maxAvailableList = lesson.trophyLimit || 0;
