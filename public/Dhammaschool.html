@@ -218,7 +218,6 @@
                 </button>
                 <button id="student-home-btn" onclick="goToLibrary()" class="hidden bg-orange-100 text-orange-600 font-bold py-2 px-4 rounded-xl transition hover:bg-orange-200"><i class="fas fa-home"></i> Home</button>
                 <div id="teacher-badge" class="hidden bg-yellow-100 text-yellow-800 px-4 py-1 rounded-full font-bold text-sm border-2 border-yellow-200"><i class="fas fa-chalkboard-teacher mr-1"></i> Teacher</div>
-                <button onclick="logout()" class="bg-slate-200 hover:bg-red-100 text-slate-700 hover:text-red-600 font-bold py-2 px-4 rounded-xl transition btn-3d"><i class="fas fa-power-off"></i></button>
             </div>
         </header>
 
@@ -612,17 +611,6 @@
                     </div>
                 </div>
             </div>
-        </div>
-    </div>
-    <!-- Teacher Password Modal -->
-    <div id="teacher-password-modal" class="fixed inset-0 bg-slate-900/70 flex justify-center items-center z-[95] hidden backdrop-blur-md">
-        <div class="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-sm border-4 border-orange-100 text-center">
-            <div class="bg-orange-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-white shadow-lg"><i class="fas fa-lock text-4xl text-orange-500"></i></div>
-            <h2 class="text-2xl font-black text-slate-800 mb-2">Teacher Login</h2>
-            <p class="text-slate-600 mb-4 font-bold">Enter password to continue.</p>
-            <input type="password" id="teacher-password-input" class="input-style mb-4 text-center text-xl font-bold" placeholder="Password">
-            <button id="teacher-password-submit-btn" class="btn-primary w-full py-3 font-bold btn-3d">Enter</button>
-            <p id="teacher-password-error" class="text-red-600 text-center mt-2 hidden font-bold">Incorrect password.</p>
         </div>
     </div>
 
@@ -1079,17 +1067,30 @@ let bilingualMode = false;
             }
         }
 
+        // Teacher access no longer depends on matching a stored Firebase UID or a
+        // separate passcode — both broke easily (a device change, cleared browser
+        // storage, or another app on the same origin signing out the shared
+        // anonymous session would silently lock the teacher out, with no way back
+        // in except a manual database edit).
+        //
+        // Instead, teacher access is granted only by arriving here from
+        // TutoringApp's "Other Apps" panel, which appends ?teacher=true to the
+        // link — TutoringApp only shows that button inside its own Teacher
+        // Dashboard, so reaching this URL with that parameter already implies
+        // TutoringApp verified the visitor as its teacher. Once granted, it's
+        // remembered in this browser (not tied to any specific Firebase UID) so
+        // refreshing the page doesn't require going back through TutoringApp
+        // every time.
         async function checkRole() {
-            try {
-                const docSnap = await getDoc(doc(db, PATHS.appState));
-                if (docSnap.exists() && docSnap.data().teacherId === userId) isTeacher = true;
-                else if (!docSnap.exists()) { await setDoc(doc(db, PATHS.appState), { teacherId: userId }); isTeacher = true; }
-            } catch (e) { isTeacher = false; }
+            const urlParams = new URLSearchParams(window.location.search);
+            const cameFromTutoringAsTeacher = urlParams.get('teacher') === 'true';
+            if (cameFromTutoringAsTeacher) localStorage.setItem('dhammaschool_is_teacher', 'true');
+            isTeacher = cameFromTutoringAsTeacher || localStorage.getItem('dhammaschool_is_teacher') === 'true';
+
             safeSetText('user-role-display', isTeacher ? 'Teacher' : 'Student');
             if (isTeacher) {
                 document.getElementById('teacher-badge').classList.remove('hidden');
                 studentName = 'Teacher';
-                await requireTeacherPassword();
                 if (selectedTeacherClassId) {
                     els.teacherView.classList.remove('hidden');
                     safeSetText('teacher-current-class-label', selectedTeacherClassId);
@@ -1100,30 +1101,6 @@ let bilingualMode = false;
                 els.studentView.classList.remove('hidden');
                 document.getElementById('student-home-btn').classList.remove('hidden');
             }
-        }
-
-        function requireTeacherPassword() {
-            return new Promise((resolve) => {
-                const modal = document.getElementById('teacher-password-modal');
-                const input = document.getElementById('teacher-password-input');
-                const err = document.getElementById('teacher-password-error');
-                const btn = document.getElementById('teacher-password-submit-btn');
-                input.value = '';
-                err.classList.add('hidden');
-                els.loader.classList.add('hidden');
-                modal.classList.remove('hidden');
-                const trySubmit = () => {
-                    if (input.value === '1') {
-                        modal.classList.add('hidden');
-                        resolve();
-                    } else {
-                        err.classList.remove('hidden');
-                        input.value = '';
-                    }
-                };
-                btn.onclick = trySubmit;
-                input.onkeydown = (e) => { if (e.key === 'Enter') trySubmit(); };
-            });
         }
 
         function setupListeners() {
@@ -3851,27 +3828,6 @@ function renderClickableWords(text) {
             reader.readAsText(file);
         };
 
-        // IMPORTANT: does NOT call signOut(auth) or localStorage.clear().
-        // This app shares its Firebase project (and, when hosted under the same
-        // domain as TutoringApp, the same browser-level anonymous Auth session)
-        // with TutoringApp/SmartStudy/AbhidhammaApp. Calling signOut(auth) here
-        // would destroy that shared anonymous identity for ALL of those apps at
-        // once — including logging the teacher out of TutoringApp, since a brand
-        // new random anonymous UID gets created on the next sign-in and no longer
-        // matches the UID stored as "the teacher" in TutoringApp's Firestore data.
-        // Likewise, localStorage.clear() would wipe every other app's saved data
-        // on this device, not just Dhammaschool's own. So "logout" here only
-        // clears Dhammaschool's own local keys and reloads — it never touches
-        // Firebase Auth or any other app's storage.
-        window.logout = () => {
-            ['studentName', 'currentLessonId', 'studentCurrentLessonId', 'completedMatchSteps',
-             'currentStepIndex', 'dhammaschool_classId', 'dhammaschool_teacher_classId'
-            ].forEach(k => localStorage.removeItem(k));
-            Object.keys(localStorage)
-                .filter(k => k.startsWith('notifLastSeenCount_'))
-                .forEach(k => localStorage.removeItem(k));
-            location.reload();
-        };
         init();
         
         // --- START FIX for Submit/Update Answer ---
