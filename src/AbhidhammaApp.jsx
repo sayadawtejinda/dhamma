@@ -231,6 +231,10 @@ const AbhiClassRoster = ({ userId, classId, onLink }) => {
   const [syncMsg,setSyncMsg]=useState('');
   const [finding,setFinding]=useState(false);
   const [matchPreview,setMatchPreview]=useState(null); // null=not previewed yet; [] or [...] once "Find" has run
+  const [unlinking,setUnlinking]=useState(null); // studentName currently being unlinked
+  const [checkingRenames,setCheckingRenames]=useState(false);
+  const [renamePreview,setRenamePreview]=useState(null); // null=not checked yet; [] or [...] once "Check Renamed" has run
+  const [resyncing,setResyncing]=useState(null); // studentName currently being resynced
 
   useEffect(()=>{ const i=setInterval(()=>setNow(Date.now()),10000); return()=>clearInterval(i); },[]);
 
@@ -332,7 +336,7 @@ const AbhiClassRoster = ({ userId, classId, onLink }) => {
     setSyncing(true);
     try{
       const batch=writeBatch(db);
-      matchPreview.forEach(m=>batch.set(abhiRosterDocRef(classId,m.rosterName),{linkedToTutoring:true},{merge:true}));
+      matchPreview.forEach(m=>batch.set(abhiRosterDocRef(classId,m.rosterName),{linkedToTutoring:true,tutoringStudentUid:m.tutoringId},{merge:true}));
       await batch.commit();
       const renames=matchPreview.filter(m=>m.oldName);
       for(const m of renames){
@@ -344,6 +348,56 @@ const AbhiClassRoster = ({ userId, classId, onLink }) => {
       setTimeout(()=>setSyncMsg(''),4000);
     }catch(e){console.error('Confirm link:',e);setSyncMsg('❌ Error — see console.');setTimeout(()=>setSyncMsg(''),4000);}
     finally{setSyncing(false);}
+  };
+
+  // Unlink a student from TutoringApp — reverses the 🔗 Link action. Only clears the link flag +
+  // stored TutoringApp id on THIS roster doc; never touches Abhidhamma's own scores/quiz results,
+  // so nothing is lost and the teacher can re-link (to the same or a different student) any time.
+  const handleUnlink=async(name)=>{
+    if(!window.confirm(`Unlink "${name}" from TutoringApp? Their Abhidhamma records are kept — this only removes the connection so you can re-link if needed.`))return;
+    setUnlinking(name);
+    try{ await updateDoc(abhiRosterDocRef(classId,name),{linkedToTutoring:false,tutoringStudentUid:null}); }
+    catch(e){ console.error('Unlink:',e); setSyncMsg('❌ Unlink failed — see console.'); setTimeout(()=>setSyncMsg(''),4000); }
+    finally{ setUnlinking(null); }
+  };
+
+  // Check for TutoringApp renames — every link now stores the TutoringApp student's stable id
+  // (tutoringStudentUid) on the roster doc, so even if that student's name later changes in
+  // TutoringApp, we can still find them by id and notice the mismatch here, instead of the link
+  // silently going stale. Only students already linked (via id) are checked.
+  const checkRenamedLinks=async()=>{
+    setCheckingRenames(true);
+    try{
+      const list=await loadTutoringStudents();
+      const byId={}; list.forEach(t=>{byId[t.id]=t;});
+      const mismatches=[];
+      approved.forEach(s=>{
+        if(!s.linkedToTutoring||!s.tutoringStudentUid)return;
+        const t=byId[s.tutoringStudentUid];
+        if(t&&t.name&&t.name!==s.studentName) mismatches.push({rosterName:s.studentName,tutoringId:s.tutoringStudentUid,newName:t.name});
+      });
+      setRenamePreview(mismatches);
+      if(mismatches.length===0){ setSyncMsg('✅ No renames detected — all linked names are up to date.'); setTimeout(()=>setSyncMsg(''),3000); }
+    }catch(e){console.error('Check renames:',e);setSyncMsg('❌ Error — see console.');setTimeout(()=>setSyncMsg(''),4000);}
+    finally{setCheckingRenames(false);}
+  };
+
+  // Re-sync one mismatch: reuses the same rename+relink flow as a normal Link (renames Abhidhamma's
+  // own scores/roster from the old name to TutoringApp's current name, and re-marks it linked with
+  // the same id) so all history is preserved under the new name.
+  const resyncOne=async(m)=>{
+    if(!onLink)return;
+    setResyncing(m.rosterName);
+    try{
+      await onLink(m.rosterName,m.newName,m.tutoringId,[]);
+      setRenamePreview(prev=>prev?prev.filter(x=>x.rosterName!==m.rosterName):prev);
+    }finally{ setResyncing(null); }
+  };
+  const resyncAll=async()=>{
+    if(!renamePreview||renamePreview.length===0)return;
+    setSyncing(true);
+    try{ for(const m of renamePreview){ await onLink(m.rosterName,m.newName,m.tutoringId,[]); } setRenamePreview([]); setSyncMsg('✅ All renamed links synced.'); setTimeout(()=>setSyncMsg(''),3000); }
+    finally{ setSyncing(false); }
   };
 
   const filtered=(tutoringStudents||[]).filter(t=>!search||t.name.toLowerCase().includes(search.toLowerCase()));
@@ -375,6 +429,24 @@ const AbhiClassRoster = ({ userId, classId, onLink }) => {
               </button>
             </>
           )}
+          {onLink&&approved.some(s=>s.linkedToTutoring)&&renamePreview===null&&(
+            <button onClick={e=>{e.stopPropagation();checkRenamedLinks();}} disabled={checkingRenames}
+              className="flex items-center gap-1 text-xs px-3 py-1 rounded-full font-bold bg-teal-500/20 text-teal-300 border border-teal-500/50 disabled:opacity-50" title="Check whether any linked TutoringApp student has since been renamed there, and offer to sync it here">
+              {checkingRenames?'Checking…':'🔄 Check Renamed'}
+            </button>
+          )}
+          {onLink&&renamePreview!==null&&renamePreview.length>0&&(
+            <>
+              <button onClick={e=>{e.stopPropagation();resyncAll();}} disabled={syncing}
+                className="flex items-center gap-1 text-xs px-3 py-1 rounded-full font-bold bg-teal-600 text-white border border-teal-500 disabled:opacity-50" title="Sync all renamed students — updates Abhidhamma records to their new TutoringApp name">
+                {syncing?'Syncing…':`🔄 Sync All Renames (${renamePreview.length})`}
+              </button>
+              <button onClick={e=>{e.stopPropagation();setRenamePreview(null);}} disabled={syncing}
+                className="text-xs px-2 py-1 rounded-full font-bold text-gray-400 hover:text-white border border-gray-600 disabled:opacity-50">
+                Cancel
+              </button>
+            </>
+          )}
           {syncMsg&&<span className="text-xs text-indigo-300 font-semibold">{syncMsg}</span>}
         </div>
         <div className="flex items-center gap-3 text-sm font-semibold">
@@ -393,6 +465,23 @@ const AbhiClassRoster = ({ userId, classId, onLink }) => {
               <UserCheck className="w-3.5 h-3.5 text-indigo-400 shrink-0"/>
               <span className="font-semibold text-white">{m.rosterName}</span>
               {m.oldName&&<span className="text-amber-300">(old name "{m.oldName}" — scores will be merged)</span>}
+            </div>
+          ))}
+        </div>
+      )}
+      {open&&renamePreview!==null&&renamePreview.length>0&&(
+        <div className="mx-4 mt-4 p-3 bg-teal-900/20 border border-teal-500/40 rounded-lg space-y-1.5">
+          <p className="text-xs font-bold text-teal-300 mb-2">🔄 {renamePreview.length} renamed in TutoringApp — click "Sync" to update the Abhidhamma record (history is kept):</p>
+          {renamePreview.map(m=>(
+            <div key={m.tutoringId} className="text-xs text-gray-300 flex items-center gap-2 flex-wrap">
+              <RefreshCw className="w-3.5 h-3.5 text-teal-400 shrink-0"/>
+              <span className="font-semibold text-white">{m.rosterName}</span>
+              <span className="text-gray-500">→</span>
+              <span className="font-semibold text-teal-300">{m.newName}</span>
+              <button onClick={()=>resyncOne(m)} disabled={resyncing===m.rosterName}
+                className="ml-auto text-xs bg-teal-600 hover:bg-teal-700 text-white font-bold px-2 py-0.5 rounded-lg disabled:opacity-50">
+                {resyncing===m.rosterName?'Syncing…':'Sync'}
+              </button>
             </div>
           ))}
         </div>
@@ -428,7 +517,11 @@ const AbhiClassRoster = ({ userId, classId, onLink }) => {
               {isWarn&&<span className="text-xs text-orange-400 font-bold whitespace-nowrap">Inactive {pmins}m</span>}
               {/* Link to Tutoring — merged in here instead of a separate list below */}
               {onLink&&(s.linkedToTutoring
-                ? <span className="text-xs text-indigo-400 font-bold whitespace-nowrap" title="Linked to TutoringApp">🔗 Linked</span>
+                ? <button onClick={()=>handleUnlink(s.studentName)} disabled={unlinking===s.studentName}
+                    className="text-xs text-indigo-400 hover:text-red-400 font-bold whitespace-nowrap disabled:opacity-50 transition-colors"
+                    title="Linked to TutoringApp — click to unlink">
+                    {unlinking===s.studentName?'Unlinking…':'🔗 Linked'}
+                  </button>
                 : <button onClick={()=>{setPickerFor(s.studentName);loadTutoringStudents();}} className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-2 py-1 rounded-lg whitespace-nowrap flex-shrink-0">🔗 Link</button>
               )}
               <button onClick={e=>removeStu(e,s.id)} className="p-1 text-gray-600 hover:text-red-400 shrink-0"><Trash2 className="w-3 h-3"/></button>
@@ -1064,8 +1157,10 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
   const handleLinkStudentToTutoring = async (oldName, newName, tutoringStudentUid, extraOldNames=[]) => {
     if (!classId || !oldName || !newName) return;
     setLoading(true);
-    // 1. Store abhidhammaNames in TutoringApp student profile
-    if (tutoringStudentUid && oldName !== newName) {
+    // 1. Store abhidhammaNames in TutoringApp student profile. Always write this back (not just on
+    // rename) so TutoringApp's record of "which Abhidhamma name this student is linked under" never
+    // goes stale — this is what lets a later rename on either side be detected and re-synced by id.
+    if (tutoringStudentUid) {
       try {
         await updateDoc(doc(db,'artifacts','dhamma-tutoring-app','public','data','students',tutoringStudentUid),
           { [`abhidhammaNames.${classId}`]: oldName });
@@ -1079,9 +1174,11 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
       try { await hideOldRosterDoc(classId, alt, newName); }
       catch(e) { console.error('Alt-name roster hide:', e); }
     }
-    // 2. If same name — just mark as linked
+    // 2. If same name — just mark as linked. tutoringStudentUid is stored as a stable id so that if
+    // this TutoringApp student is later renamed there, "🔄 Check Renamed" in the roster can still
+    // find them by id and offer to sync the new name in — the link itself never silently breaks.
     if (oldName === newName) {
-      await setDoc(abhiRosterDocRef(classId,newName),{linkedToTutoring:true},{merge:true});
+      await setDoc(abhiRosterDocRef(classId,newName),{linkedToTutoring:true,tutoringStudentUid},{merge:true});
       setLoading(false);
       showMsg(`✅ Linked "${newName}" to Tutoring.`);
       return;
@@ -1089,7 +1186,7 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
     // 3. Rename scores + quiz results (shared helper — same logic bulk-linking reuses)
     await renameStudentRecords(classId, oldName, newName);
     // 5. Move roster doc (leaves a redirect pointer at the old name — see moveRosterDoc)
-    try { await moveRosterDoc(classId, oldName, newName, {linkedToTutoring:true}); }
+    try { await moveRosterDoc(classId, oldName, newName, {linkedToTutoring:true,tutoringStudentUid}); }
     catch(e) { console.error('Roster rename:', e); }
     setLoading(false);
     showMsg(`✅ Linked "${oldName}" → "${newName}". Records renamed.`);
