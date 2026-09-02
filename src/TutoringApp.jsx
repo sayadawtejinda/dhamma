@@ -144,7 +144,7 @@ const MYANMAR_SPEAKING_APP_URL = 'https://sayadawtejinda.github.io/myanmar-wordc
 
 // ── Myanmar Reader app (standalone HTML app — opened via window.open, NOT mounted as React component) ──
 // TODO: replace with the actual hosted URL once the Myanmar Reader app is deployed (same pattern as Myanmar Speaking app).
-const MYANMAR_READER_APP_URL = '';
+const MYANMAR_READER_APP_URL = 'https://sayadawtejinda.github.io/myanmar-reader/';
 
 const extractDhammaschoolClassId = (link) => {
   if (!link || !link.startsWith('dhammaschool://')) return null;
