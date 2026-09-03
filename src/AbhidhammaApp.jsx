@@ -1275,27 +1275,41 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
     if(!studentProfile||!classId||studentProfile.status!=='approved'||isTeacher) return;
     const name=studentProfile.name;
     const ping=async()=>{
-      try{
-        const rRef=abhiRosterDocRef(classId,name);
-        const snap=await getDoc(rRef);
-        if(snap.exists()&&snap.data().renamedTo){
-          // Teacher renamed/linked us server-side since our last check-in — follow the redirect
-          // instead of recreating the old roster doc, so future scores land on the right name.
-          const newName=snap.data().renamedTo;
-          const updated={...studentProfile,name:newName};
-          setStudentProfile(updated);
-          if(userId) localStorage.setItem(`abhidhamma_profile_${userId}`, JSON.stringify(updated));
-          await updateDoc(abhiRosterDocRef(classId,newName),{isOnline:true,lastPing:serverTimestamp(),lastSeen:serverTimestamp()});
-          return;
-        }
-        await updateDoc(rRef,{isOnline:true,lastPing:serverTimestamp(),lastSeen:serverTimestamp()});
-      }catch(e){
-        // Doc might not exist yet if WelcomeModal hasn't run — create it
+      const rRef=abhiRosterDocRef(classId,name);
+      let snap;
+      try{ snap=await getDoc(rRef); }
+      catch(e){ console.error('Ping read error:',e); return; } // can't even read — try again next cycle
+
+      if(snap.exists()&&snap.data().renamedTo){
+        // Teacher renamed/linked us server-side since our last check-in — follow the redirect
+        // instead of recreating the old roster doc, so future scores land on the right name.
+        const newName=snap.data().renamedTo;
+        const updated={...studentProfile,name:newName};
+        setStudentProfile(updated);
+        if(userId) localStorage.setItem(`abhidhamma_profile_${userId}`, JSON.stringify(updated));
         try{
-          const rRef=abhiRosterDocRef(classId,name);
-          await setDoc(rRef,{classId,studentName:name,name,group:studentProfile.group||'explorers',status:'approved',isOnline:true,lastPing:serverTimestamp(),lastSeen:serverTimestamp(),joinedAt:Date.now()},{merge:true});
-        }catch(e2){console.error('Ping create error:',e2);}
+          // setDoc+merge (not updateDoc) so this can't throw just because the new-name
+          // doc happens not to exist yet — a failed updateDoc here used to fall through
+          // to the catch-all below, which recreated the OLD name doc from scratch and
+          // silently undid the rename every ~60s (the "name keeps reverting" bug).
+          await setDoc(abhiRosterDocRef(classId,newName),{isOnline:true,lastPing:serverTimestamp(),lastSeen:serverTimestamp()},{merge:true});
+        }catch(e){ console.error('Ping redirect-target update error:',e); }
+        return;
       }
+
+      if(snap.exists()){
+        try{ await updateDoc(rRef,{isOnline:true,lastPing:serverTimestamp(),lastSeen:serverTimestamp()}); }
+        catch(e){ console.error('Ping heartbeat error:',e); }
+        return;
+      }
+
+      // Doc genuinely doesn't exist yet (first-time student, WelcomeModal hasn't run) — create it.
+      // Only reached when the OLD-name doc truly doesn't exist — never as a fallback after some
+      // other step failed, so it can no longer resurrect a doc that was intentionally turned into
+      // a rename-redirect pointer.
+      try{
+        await setDoc(rRef,{classId,studentName:name,name,group:studentProfile.group||'explorers',status:'approved',isOnline:true,lastPing:serverTimestamp(),lastSeen:serverTimestamp(),joinedAt:Date.now()},{merge:true});
+      }catch(e2){console.error('Ping create error:',e2);}
     };
     ping();
     const interval=setInterval(ping,60000);
@@ -1619,9 +1633,12 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
             {studentProfile&&!classId&&(
               <div className="p-6 max-w-lg mx-auto mt-10">
                 <h2 className="text-3xl font-bold text-amber-700 mb-2 text-center">📚 Choose Your Class</h2>
-                <p className="text-center text-amber-600 text-sm mb-6 font-semibold">
+                <p className="text-center text-amber-600 text-sm mb-2 font-semibold">
                   {AGE_GROUPS[studentProfile.group]?.label}
                 </p>
+                {(pendingEntry?.classId||entryRequest?.classId) && (
+                  <p className="text-gray-600 text-center mb-6">Your teacher assigned <span className="font-bold text-amber-700">{pendingEntry?.classId||entryRequest?.classId}</span> — tap it below to start.</p>
+                )}
                 {allClasses.length===0
                   ? <p className="text-center text-gray-500 italic">No classes found yet.</p>
                   : <div className="space-y-3">
