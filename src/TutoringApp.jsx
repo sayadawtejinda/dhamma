@@ -4242,37 +4242,55 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
 
   // Myanmar Reader sessions are sent as a plain external link (no
   // myanmarreader:// protocol / classId parsing like the other linked apps),
-  // so there's nothing else already pre-filling Score / Lesson completed for
-  // them. This queries Myanmar Reader's own Firestore scores directly —
-  // written live as the student reads (score 0–1000 per chapter+sheet,
-  // isComplete once it crosses 700) — and fills in whichever chapter+sheet
-  // this student has completed most recently, whenever the Report modal for
-  // a Myanmar Reader session opens.
+  // so there's nothing else already pre-filling Score for them. This queries
+  // Myanmar Reader's own Firestore scores directly — written live as the
+  // student reads (score 0–1000 per chapter+sheet, isComplete once it
+  // crosses 700) — and fills in whichever chapter+sheet they most recently
+  // studied (by timestamp), whether or not it's finished; "Lesson completed"
+  // is left blank since Myanmar Reader doesn't have a single linear
+  // chapter-count the way SmartStudy/Abhidhamma do.
+  //
+  // Separately, it counts newly-finished (chapter, sheet) pairs that haven't
+  // been turned into a trophy request yet (one trophy per finished sheet,
+  // Sheet A and Sheet B each count on their own) and reuses the same
+  // requestTrophyChecked/requestTrophyAmount state the other apps' "🏆 +N
+  // Trophy!" badge already reads from, so the UI needs no changes.
+  const [myanmarReaderPendingScoreDocs, setMyanmarReaderPendingScoreDocs] = useState([]);
   useEffect(() => {
     const session = redoSession || activeSession;
-    if (!showFeedbackModal || !session || !studentProfile?.name) return;
-    if (!MYANMAR_READER_APP_URL || !session.lessonLink?.startsWith(MYANMAR_READER_APP_URL)) return;
+    if (!showFeedbackModal || !session || !studentProfile?.name) { setMyanmarReaderPendingScoreDocs([]); return; }
+    if (!MYANMAR_READER_APP_URL || !session.lessonLink?.startsWith(MYANMAR_READER_APP_URL)) { setMyanmarReaderPendingScoreDocs([]); return; }
     (async () => {
       try {
         const snap = await getDocs(query(
           collection(db, 'artifacts', 'myanmar-reader-app', 'public', 'data', 'scores'),
           where('studentName', '==', studentProfile.name)
         ));
-        if (snap.empty) return;
-        let best = null;
+        if (snap.empty) { setMyanmarReaderPendingScoreDocs([]); return; }
+
+        // Most recently studied chapter+sheet, complete or not — this is what
+        // gets reported, matching "report the last chapter they studied."
+        let latest = null;
         snap.docs.forEach(d => {
           const dt = d.data();
-          if (!dt.isComplete) return;
-          if (!best || dt.chapterNum > best.chapterNum || (dt.chapterNum === best.chapterNum && (dt.score||0) > (best.score||0))) best = dt;
+          const ts = dt.timestamp?.toMillis ? dt.timestamp.toMillis() : 0;
+          if (!latest || ts > latest._ts) latest = { ...dt, _ts: ts };
         });
-        if (best) {
-          setScore(`${best.score}/1000`);
-          handleCompletedUnitChange(String(best.chapterNum));
-        }
+        if (latest) setScore(`${latest.score ?? 0}/1000 — ${SHEET_CHAPTER_PREFIX} ${latest.chapterNum} (Sheet ${latest.sheetName})`);
+
+        // Completed sheets not yet requested as a trophy.
+        const pending = snap.docs.filter(d => {
+          const dt = d.data();
+          return dt.isComplete && !dt.trophyRequested;
+        }).map(d => ({ id: d.id, ...d.data() }));
+        setMyanmarReaderPendingScoreDocs(pending);
+        setRequestTrophyAmount(pending.length > 0 ? pending.length : 1);
+        setRequestTrophyChecked(pending.length > 0);
       } catch (e) { console.error('Myanmar Reader auto-fill error:', e); }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showFeedbackModal, redoSession, activeSession, studentProfile?.name]);
+
 
   const attendanceSummary = useMemo(() => {
     const now = new Date();
@@ -4699,18 +4717,44 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       if (enteredUnit > 0) {
         studentUpdateData[`completedUnits.${lessonKey}`] = newHighestUnit;
       }
-      
-      const unitCount = targetSession.lessonUnitCount || 0;
-      if (unitCount > 0 && maxAvailable > 0) {
-        const deservedSoFar = Math.min(maxAvailable, Math.floor((newHighestUnit * maxAvailable) / unitCount));
-        const autoAmount = Math.max(0, deservedSoFar - previouslyEarned);
-        if (autoAmount > 0) {
+
+      const isMyanmarReaderSession = MYANMAR_READER_APP_URL && targetSession.lessonLink?.startsWith(MYANMAR_READER_APP_URL);
+
+      if (isMyanmarReaderSession) {
+        // One trophy per completed sheet (Sheet A and Sheet B each count
+        // separately) that hasn't already been turned into a request —
+        // myanmarReaderPendingScoreDocs was computed when the modal opened.
+        if (myanmarReaderPendingScoreDocs.length > 0) {
           studentUpdateData.trophyRequested = true;
-          studentUpdateData.requestedTrophyAmount = autoAmount;
+          studentUpdateData.requestedTrophyAmount = myanmarReaderPendingScoreDocs.length;
           studentUpdateData.requestedTrophyLessonId = targetSession.lessonId;
           studentUpdateData.requestedTrophyLessonTitle = targetSession.lessonTitle;
           studentUpdateData.requestedTrophyLessonLink = targetSession.lessonLink || null;
           studentUpdateData.requestedTrophySessionId = targetSession.id;
+          // Mark each completed sheet as requested on Myanmar Reader's own
+          // Firestore, so the same completion never gets counted into a
+          // second request in a future session.
+          try {
+            const batch = writeBatch(db);
+            myanmarReaderPendingScoreDocs.forEach(d => {
+              batch.update(doc(db, 'artifacts', 'myanmar-reader-app', 'public', 'data', 'scores', d.id), { trophyRequested: true });
+            });
+            await batch.commit();
+          } catch (e) { console.error('Error marking Myanmar Reader trophies as requested:', e); }
+        }
+      } else {
+        const unitCount = targetSession.lessonUnitCount || 0;
+        if (unitCount > 0 && maxAvailable > 0) {
+          const deservedSoFar = Math.min(maxAvailable, Math.floor((newHighestUnit * maxAvailable) / unitCount));
+          const autoAmount = Math.max(0, deservedSoFar - previouslyEarned);
+          if (autoAmount > 0) {
+            studentUpdateData.trophyRequested = true;
+            studentUpdateData.requestedTrophyAmount = autoAmount;
+            studentUpdateData.requestedTrophyLessonId = targetSession.lessonId;
+            studentUpdateData.requestedTrophyLessonTitle = targetSession.lessonTitle;
+            studentUpdateData.requestedTrophyLessonLink = targetSession.lessonLink || null;
+            studentUpdateData.requestedTrophySessionId = targetSession.id;
+          }
         }
       }
 
@@ -4737,6 +4781,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       setCompletedUnitInput('');
       setTodayCompletedInput('');
       setTrophyTapCount(0);
+      setMyanmarReaderPendingScoreDocs([]);
     }
   };
 
