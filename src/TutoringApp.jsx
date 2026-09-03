@@ -2586,14 +2586,17 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
             <span className="flex items-center text-lg font-bold text-purple-800">🗣️ Myanmar Speaking app</span>
             <span className="text-purple-500 text-xl">↗</span>
           </button>
-          {/* Myanmar Reader app — standalone HTML app, opens in a new tab (not mounted inline) */}
+          {/* Myanmar Reader app — standalone HTML app, opens in a new tab (not mounted inline).
+              ?teacher=true tells it to skip straight to teacher mode, no student ID needed —
+              this button only exists inside TutoringApp's own Teacher Dashboard, so reaching
+              it here already means TutoringApp has verified the visitor as its teacher. */}
           <button
             onClick={() => {
               if (!MYANMAR_READER_APP_URL) {
                 alert('Myanmar Reader app URL is not set up yet. Ask your developer to host it and add the link.');
                 return;
               }
-              window.open(MYANMAR_READER_APP_URL, '_blank', 'noopener,noreferrer');
+              window.open(`${MYANMAR_READER_APP_URL}?teacher=true`, '_blank', 'noopener,noreferrer');
             }}
             className="w-full flex items-center justify-between bg-white p-4 rounded-xl border-2 border-teal-200 hover:border-teal-400 hover:shadow-md transition-all mt-3"
           >
@@ -4236,6 +4239,40 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     const intervalId = setInterval(() => setNowTick(Date.now()), 30 * 1000);
     return () => clearInterval(intervalId);
   }, []);
+
+  // Myanmar Reader sessions are sent as a plain external link (no
+  // myanmarreader:// protocol / classId parsing like the other linked apps),
+  // so there's nothing else already pre-filling Score / Lesson completed for
+  // them. This queries Myanmar Reader's own Firestore scores directly —
+  // written live as the student reads (score 0–1000 per chapter+sheet,
+  // isComplete once it crosses 700) — and fills in whichever chapter+sheet
+  // this student has completed most recently, whenever the Report modal for
+  // a Myanmar Reader session opens.
+  useEffect(() => {
+    const session = redoSession || activeSession;
+    if (!showFeedbackModal || !session || !studentProfile?.name) return;
+    if (!MYANMAR_READER_APP_URL || !session.lessonLink?.startsWith(MYANMAR_READER_APP_URL)) return;
+    (async () => {
+      try {
+        const snap = await getDocs(query(
+          collection(db, 'artifacts', 'myanmar-reader-app', 'public', 'data', 'scores'),
+          where('studentName', '==', studentProfile.name)
+        ));
+        if (snap.empty) return;
+        let best = null;
+        snap.docs.forEach(d => {
+          const dt = d.data();
+          if (!dt.isComplete) return;
+          if (!best || dt.chapterNum > best.chapterNum || (dt.chapterNum === best.chapterNum && (dt.score||0) > (best.score||0))) best = dt;
+        });
+        if (best) {
+          setScore(`${best.score}/1000`);
+          handleCompletedUnitChange(String(best.chapterNum));
+        }
+      } catch (e) { console.error('Myanmar Reader auto-fill error:', e); }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showFeedbackModal, redoSession, activeSession, studentProfile?.name]);
 
   const attendanceSummary = useMemo(() => {
     const now = new Date();
