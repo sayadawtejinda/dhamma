@@ -173,6 +173,16 @@ const computeLessonKey = (title, link) => {
   return sanitizeKey(classId ? `${title}_${classId}` : title);
 };
 
+// How many trophies a class with this many lessons is worth. Matches the
+// teacher's real awarding pattern (confirmed against actual examples):
+// 4 lessons -> 1 trophy, 10 -> 2, 11 -> 2, 29 -> 6 — i.e. round(lessons / 5),
+// not floor(lessons / 5) (floor would give 4->0 and 29->5, both wrong).
+const computeClassTrophyMax = (lessonCount) => {
+  const n = lessonCount || 0;
+  if (n <= 0) return 0;
+  return Math.max(1, Math.round(n / 5));
+};
+
 const toLocalDateString = (date) => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -764,9 +774,44 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma }) {
   const [directTrophyAmount, setDirectTrophyAmount] = useState(1);
   const [previouslyEarnedOverride, setPreviouslyEarnedOverride] = useState('');
   const [isSavingPreviouslyEarned, setIsSavingPreviouslyEarned] = useState(false);
+  const [isReconcilingAllClasses, setIsReconcilingAllClasses] = useState(false);
+  const [wholeAppMaxAvailable, setWholeAppMaxAvailable] = useState(null); // sum of each class's own max-available
   useEffect(() => {
     setPreviouslyEarnedOverride('');
   }, [selectedStudentUid, selectedBankLessonId, sendSmartStudyClassId, sendAbhidhammaClassId, sendDhammaschoolClassId]);
+
+  // When no specific class is chosen, "Max Available" for the whole app must be
+  // the SUM of each class's own max-available (floor(classLessons/5) per class)
+  // — NOT floor(totalLessonsAcrossAllClasses/5) or a manually-typed number.
+  // Flooring per-class first and then summing always gives a number <= flooring
+  // the grand total first (each class's remainder gets thrown away separately
+  // instead of combined), so using the grand-total floor — or an independently
+  // typed "Max Trophies Available" — reliably overstates what the per-class
+  // trophy math actually adds up to. This keeps the whole-app number and the
+  // sum of individual class numbers always in agreement.
+  useEffect(() => {
+    const lesson = lessonBank.find(l => l.id === selectedBankLessonId);
+    if (!lesson) { setWholeAppMaxAvailable(null); return; }
+    if (lesson.link === 'abhidhamma://' && !sendAbhidhammaClassId) {
+      (async () => {
+        const classes = await loadAbhidhammaClasses();
+        setWholeAppMaxAvailable((classes || []).reduce((total, c) => total + computeClassTrophyMax(c.lessonCount), 0));
+      })();
+    } else if (lesson.link === 'smartstudy://' && !sendSmartStudyClassId) {
+      (async () => {
+        const classes = await loadSmartStudyClassList();
+        setWholeAppMaxAvailable((classes || []).reduce((total, c) => total + computeClassTrophyMax(c.lessonCount), 0));
+      })();
+    } else if (lesson.link === 'dhammaschool://' && !sendDhammaschoolClassId) {
+      (async () => {
+        const classes = await loadDhammaschoolClasses();
+        setWholeAppMaxAvailable((classes || []).reduce((total, c) => total + computeClassTrophyMax(c.lessonCount), 0));
+      })();
+    } else {
+      setWholeAppMaxAvailable(null);
+    }
+  }, [selectedBankLessonId, sendAbhidhammaClassId, sendSmartStudyClassId, sendDhammaschoolClassId]);
+
   const [lastTrophyAward, setLastTrophyAward] = useState(null);
   const undoTimerRef = useRef(null);
   
@@ -857,6 +902,45 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma }) {
     });
     return () => unsubscribe();
   }, [user.uid]);
+
+  // Lessons keep getting added to SmartStudy/Abhidhamma, so a whole-app
+  // Lesson Bank entry's "Total Number" and "Max Trophies Available" go stale
+  // over time. This silently refreshes both — from live class data, using the
+  // same round-based trophy formula everywhere — for any SmartStudy/Abhidhamma
+  // entry that hasn't been auto-refreshed in the last 7 days. The teacher can
+  // still open the app picker manually any time for an on-demand refresh.
+  useEffect(() => {
+    if (!lessonBank || lessonBank.length === 0) return;
+    const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+    const now = Date.now();
+
+    const staleEntries = lessonBank.filter(l => {
+      const isWholeAppEntry = l.link === 'smartstudy://' || l.link === 'abhidhamma://';
+      if (!isWholeAppEntry) return false;
+      const lastRefreshed = l.lastAutoRefreshedAt?.toMillis ? l.lastAutoRefreshedAt.toMillis() : 0;
+      return (now - lastRefreshed) > ONE_WEEK_MS;
+    });
+    if (staleEntries.length === 0) return;
+
+    (async () => {
+      for (const entry of staleEntries) {
+        try {
+          const classes = entry.link === 'smartstudy://'
+            ? await fetchFreshSmartStudyClasses()
+            : await fetchFreshAbhidhammaClasses();
+          const totalLessons = (classes || []).reduce((sum, c) => sum + (c.lessonCount || 0), 0);
+          const totalTrophies = (classes || []).reduce((sum, c) => sum + computeClassTrophyMax(c.lessonCount), 0);
+          await updateDoc(doc(db, `${publicDataPath}/lessonBank`, entry.id), {
+            unitCount: totalLessons,
+            trophyLimit: totalTrophies,
+            lastAutoRefreshedAt: serverTimestamp(),
+          });
+        } catch (e) {
+          console.error(`Error auto-refreshing Lesson Bank entry "${entry.title}":`, e);
+        }
+      }
+    })();
+  }, [lessonBank]);
   
   useEffect(() => {
     if (!user?.uid) return;
@@ -1107,6 +1191,25 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma }) {
     }
   };
 
+  // Always-fresh variants (skip the state cache above) — used only by the
+  // weekly Lesson Bank auto-refresh, so a stale in-memory cache from earlier
+  // in the session can never cause it to "refresh" with old numbers.
+  const fetchFreshAbhidhammaClasses = async () => {
+    const snap = await getDocs(collection(db, 'artifacts', 'lesson-translator-app-v6', 'public', 'data', 'classes'));
+    return Promise.all(snap.docs.map(async d => {
+      let lessonCount = 0;
+      try {
+        const lessonsSnap = await getDocs(collection(db, 'artifacts', 'lesson-translator-app-v6', 'public', 'data', 'classes', d.id, 'lessons'));
+        lessonCount = lessonsSnap.size;
+      } catch (e) {}
+      return { classId: d.id, lessonCount };
+    }));
+  };
+  const fetchFreshSmartStudyClasses = async () => {
+    const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'classes'));
+    return snap.docs.map(d => ({ classId: d.id, lessonCount: (d.data().lessons || []).length }));
+  };
+
   const handleSaveLessonToBank = async (e) => {
     e.preventDefault();
     if (!newBankLessonTitle || !newBankLessonLink) return;
@@ -1159,7 +1262,7 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma }) {
       return null;
     })();
     const effectiveLessonUnitCount = classLessonCountForSend != null ? classLessonCountForSend : (lessonToSend?.unitCount || 0);
-    const effectiveLessonTrophyLimit = classLessonCountForSend != null ? Math.max(1, Math.floor(classLessonCountForSend / 5)) : (lessonToSend?.trophyLimit || 0);
+    const effectiveLessonTrophyLimit = classLessonCountForSend != null ? computeClassTrophyMax(classLessonCountForSend) : (lessonToSend?.trophyLimit || 0);
     // For lessons stored without a classId, substitute the one chosen here in
     // the Send Action class picker.
     const effectiveLessonLink = (() => {
@@ -1289,7 +1392,10 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma }) {
       lessonCount = dhammaschoolStudentProgress.totalLessons;
     }
 
-    const maxAvailable = lessonCount != null ? Math.max(1, Math.floor(lessonCount / 5)) : (lesson.trophyLimit || 0);
+    const isLinkedApp = lesson.link === 'smartstudy://' || lesson.link?.startsWith('abhidhamma://') || lesson.link?.startsWith('dhammaschool://');
+    const maxAvailable = lessonCount != null
+      ? computeClassTrophyMax(lessonCount)
+      : (isLinkedApp && wholeAppMaxAvailable != null ? wholeAppMaxAvailable : (lesson.trophyLimit || 0));
     const unitCount = lessonCount != null ? lessonCount : (lesson.unitCount || 0);
     const lessonKey = computeLessonKey(lesson.title, effectiveLink);
     return { maxAvailable, unitCount, lessonKey, classId };
@@ -1330,6 +1436,71 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma }) {
       alert('Error saving. Please try again.');
     }
     setIsSavingPreviouslyEarned(false);
+  };
+
+  // One-click bulk reconciliation: for a student who has fully finished a
+  // class (every lesson done, "all completed" in Abhidhamma), it's safe to
+  // assume the teacher already gave that class's trophies in full — so this
+  // sets Previously Earned = Max Available for every FULLY-completed class in
+  // one pass, without touching classes that are only partially done (those
+  // still need a manual look, since partial trophy history can't be
+  // reconstructed automatically — see handleSetPreviouslyEarned).
+  const handleReconcileAllAbhidhammaClasses = async () => {
+    const student = students.find(s => s.id === selectedStudentUid);
+    const lesson = lessonBank.find(l => l.id === selectedBankLessonId);
+    if (!student || !lesson) return;
+    setIsReconcilingAllClasses(true);
+    try {
+      const classes = await loadAbhidhammaClasses();
+      const allNames = [...new Set([student.name, ...(Object.values(student?.abhidhammaNames || {}))].filter(Boolean))];
+      const ABHI_COL = collection(db, 'artifacts', 'lesson-translator-app-v6', 'public', 'data', 'global_scores');
+
+      const updates = {};
+      const confirmedClassIds = [];
+      const skippedClassIds = [];
+
+      for (const c of (classes || [])) {
+        const totalLessons = c.lessonCount || 0;
+        if (totalLessons === 0) continue;
+
+        const done = new Set();
+        for (const nm of allNames) {
+          try {
+            const [s1, s2] = await Promise.all([
+              getDocs(query(ABHI_COL, where('name', '==', nm))),
+              getDocs(query(ABHI_COL, where('studentName', '==', nm)))
+            ]);
+            [...s1.docs, ...s2.docs].forEach(d => {
+              const dt = d.data();
+              if (dt.classId && dt.classId !== c.classId) return;
+              if (dt.lessonId) done.add(dt.lessonId);
+            });
+          } catch (e) {}
+        }
+
+        if (done.size >= totalLessons) {
+          const classMax = computeClassTrophyMax(totalLessons);
+          const classKey = computeLessonKey(lesson.title, `abhidhamma://${c.classId}`);
+          updates[`earnedTrophies.${classKey}`] = classMax;
+          confirmedClassIds.push(c.classId);
+        } else {
+          skippedClassIds.push(c.classId);
+        }
+      }
+
+      if (Object.keys(updates).length > 0) {
+        await updateDoc(doc(db, `${publicDataPath}/students`, student.id), updates);
+      }
+
+      alert(
+        `Confirmed trophies for ${confirmedClassIds.length} fully-completed class(es):\n${confirmedClassIds.join(', ') || '(none)'}\n\n` +
+        `Skipped ${skippedClassIds.length} not-yet-fully-completed class(es) — check those manually:\n${skippedClassIds.join(', ') || '(none)'}`
+      );
+    } catch (err) {
+      console.error('Error reconciling all classes:', err);
+      alert('Error reconciling. Please try again.');
+    }
+    setIsReconcilingAllClasses(false);
   };
 
   const handleAwardDirectTrophies = async (e) => {
@@ -2794,6 +2965,21 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                             {isSavingPreviouslyEarned ? 'Saving...' : 'Save'}
                           </button>
                         </div>
+
+                        {/* Bulk one-click action: only shows in the "whole app" view (no
+                            specific class chosen) — auto-confirms trophies for every class
+                            this student has fully finished, so the teacher doesn't have to
+                            enter "Fix Previously Earned" one class at a time. */}
+                        {lesson.link === 'abhidhamma://' && !sendAbhidhammaClassId && (
+                          <button
+                            type="button"
+                            disabled={isReconcilingAllClasses}
+                            onClick={handleReconcileAllAbhidhammaClasses}
+                            className="w-full px-3 py-2 bg-yellow-600 text-white rounded-lg text-sm font-bold hover:bg-yellow-700 disabled:opacity-50 mb-3"
+                          >
+                            {isReconcilingAllClasses ? 'Checking every class...' : '⚡ Confirm trophies for every fully-completed class'}
+                          </button>
+                        )}
                         
                         {sendActionType === 'trophy' && remaining > 0 && (
                             <div className="flex items-center space-x-3 mt-3 border-t border-yellow-200 pt-3">
@@ -4587,7 +4773,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     // (set correctly when lesson was sent via effectiveLessonUnitCount).
     // floor(10 lessons / 5) = 2 trophies — no reference to TeacherDashboard state.
     if (feedbackSession.lessonLink?.startsWith('smartstudy://') && feedbackSession.lessonUnitCount > 0) {
-      return Math.max(1, Math.floor(feedbackSession.lessonUnitCount / 5));
+      return computeClassTrophyMax(feedbackSession.lessonUnitCount);
     }
     return feedbackSession.lessonTrophyLimit || 0;
   })();
