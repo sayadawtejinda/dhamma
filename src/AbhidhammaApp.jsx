@@ -112,10 +112,12 @@ const moveRosterDoc = async (classId, oldName, newName, extra={}) => {
       return;
     }
   } catch(e) {}
-  const oldSnap=await getDoc(oldRef);
+    const oldSnap=await getDoc(oldRef);
   const newData=oldSnap.exists()?{...oldSnap.data(),studentName:newName,name:newName,...extra}:{...extra};
-  await setDoc(newRef,newData,{merge:true});
-  await setDoc(oldRef,{renamedTo:newName,classId},{merge:false});
+  const batch=writeBatch(db);
+  batch.set(newRef,newData,{merge:true});
+  batch.set(oldRef,{renamedTo:newName,classId},{merge:false});
+  await batch.commit();
 };
 
 // Hide a leftover roster doc still sitting under a student's old Abhidhamma name after a bulk
