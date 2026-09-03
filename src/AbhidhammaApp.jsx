@@ -107,6 +107,20 @@ const diagnoseClassCompletions = async (classId, studentName) => {
   const matched = filtered.filter(s => currentIds.has(s.lessonId));
   const orphaned = filtered.filter(s => !currentIds.has(s.lessonId));
 
+  // Reproduce the LIVE per-lesson check exactly: it queries where('studentName','==',studentName) —
+  // a strict field match, unlike the loose (studentName||name) fallback used above and in classStats.
+  // If this count is lower than `matched`, some docs only have a `name` field (no `studentName`),
+  // which would make the class-picker's "all completed" badge count them while the per-lesson
+  // "Done" badge's stricter query misses them entirely.
+  let strictMatchCount = null, distinctStudentNameValues = [];
+  if (studentName) {
+    const strictSnap = await getDocs(query(abhiScoresRef(), where('studentName', '==', studentName)));
+    strictMatchCount = strictSnap.docs.filter(d => { const dt = d.data(); return dt.classId === classId && currentIds.has(dt.lessonId); }).length;
+    // Show the raw studentName/name field values on this class's docs so case/whitespace/nickname
+    // mismatches (e.g. "kevin" vs "Kevin", trailing space) are visible even if not an exact filter match.
+    distinctStudentNameValues = Array.from(new Set(scoreDocs.map(s => JSON.stringify({ studentName: s.studentName, name: s.name }))));
+  }
+
   const feedSnap = await getDocs(query(abhiActivityRef(), where('classId', '==', classId)));
   const feedSample = feedSnap.docs.slice(0, 5).map(d => ({ docId: d.id, ...d.data() }));
 
@@ -115,6 +129,9 @@ const diagnoseClassCompletions = async (classId, studentName) => {
     totalCurrentLessons: currentLessons.length,
     totalScoreDocs: scoreDocs.length, totalScoreDocsForStudent: filtered.length,
     matchedCount: matched.length, orphanedCount: orphaned.length,
+    strictStudentNameFieldMatchCount: strictMatchCount,
+    distinctStudentNameValues,
+    matchedSample: matched.slice(0, 3),
     orphanedSample: orphaned.slice(0, 10),
     currentLessonsSample: currentLessons.slice(0, 5),
     activityFeedTotal: feedSnap.size, activityFeedSample: feedSample,
