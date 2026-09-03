@@ -350,7 +350,73 @@ const AbhiClassRoster = ({ userId, classId, onLink }) => {
     finally{setSyncing(false);}
   };
 
-  // Unlink a student from TutoringApp — reverses the 🔗 Link action. Only clears the link flag +
+  // ── Automatic background linking & renaming ──────────────────────────────
+  // Previously the teacher had to manually click "Find Matching Names" → "Link
+  // All" for new students, and "Check Renamed" → "Sync All" whenever a linked
+  // student's TutoringApp name changed. Both now run silently in the
+  // background instead, reusing the exact same rename/link logic above
+  // (renameStudentRecords, moveRosterDoc, hideOldRosterDoc) — so a new student
+  // whose name exactly matches a TutoringApp student gets linked the moment
+  // they show up in the roster, and an existing link's name stays in sync
+  // automatically, without the teacher needing to remember either step.
+  const [autoSyncTick, setAutoSyncTick] = useState(0);
+  useEffect(() => {
+    if (!classId) return;
+    // Refresh the TutoringApp student list periodically (bypassing the
+    // load-once cache) so renames/new students on that side are noticed here
+    // without the teacher having to open the link picker to force a reload.
+    const refreshTutoringStudents = async () => {
+      try {
+        const snap = await getDocs(collection(db, 'artifacts', 'dhamma-tutoring-app', 'public', 'data', 'students'));
+        const list = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(s => s.isActive !== false).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        setTutoringStudents(list);
+      } catch (e) { console.error('Auto-refresh Tutoring students:', e); }
+    };
+    refreshTutoringStudents();
+    const interval = setInterval(() => { refreshTutoringStudents(); setAutoSyncTick(t => t + 1); }, 60000);
+    return () => clearInterval(interval);
+  }, [classId]);
+
+  useEffect(() => {
+    if (!classId || !onLink || tutoringStudents === null) return;
+    (async () => {
+      // Auto-link: any approved-but-unlinked roster student whose name exactly
+      // matches an unlinked TutoringApp student gets linked immediately.
+      const rosterByLower = {};
+      approved.forEach(s => { if (s.studentName) rosterByLower[s.studentName.trim().toLowerCase()] = s; });
+      for (const t of tutoringStudents) {
+        if (!t.name) continue;
+        const match = rosterByLower[t.name.trim().toLowerCase()];
+        if (!match || match.linkedToTutoring) continue;
+        const recordedOldName = t.abhidhammaNames?.[classId];
+        const oldName = (recordedOldName && recordedOldName !== match.studentName) ? recordedOldName : null;
+        try {
+          await setDoc(abhiRosterDocRef(classId, match.studentName), { linkedToTutoring: true, tutoringStudentUid: t.id }, { merge: true });
+          if (oldName) {
+            await renameStudentRecords(classId, oldName, match.studentName);
+            await hideOldRosterDoc(classId, oldName, match.studentName);
+          }
+        } catch (e) { console.error('Auto-link error:', e); }
+      }
+
+      // Auto-resync: any already-linked student whose TutoringApp name has
+      // since changed gets renamed here too, keeping the link current.
+      const byId = {}; tutoringStudents.forEach(t => { byId[t.id] = t; });
+      for (const s of approved) {
+        if (!s.linkedToTutoring || !s.tutoringStudentUid) continue;
+        const t = byId[s.tutoringStudentUid];
+        if (t && t.name && t.name !== s.studentName) {
+          try {
+            await renameStudentRecords(classId, s.studentName, t.name);
+            await moveRosterDoc(classId, s.studentName, t.name, { linkedToTutoring: true, tutoringStudentUid: s.tutoringStudentUid });
+          } catch (e) { console.error('Auto-resync error:', e); }
+        }
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [classId, onLink, tutoringStudents, students, autoSyncTick]);
+
+
   // stored TutoringApp id on THIS roster doc; never touches Abhidhamma's own scores/quiz results,
   // so nothing is lost and the teacher can re-link (to the same or a different student) any time.
   const handleUnlink=async(name)=>{
