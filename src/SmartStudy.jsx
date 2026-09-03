@@ -1395,17 +1395,33 @@ const HomeView = React.memo(({ handleSetView }) => (
   </div>
 ));
 
-const TeacherLoginView = React.memo(({ targetClassId, setTargetClassId, handleTeacherLogin, handleSetView, allTeacherClasses, isLoading, onRenameClass, onDeleteClass }) => {
+const TeacherLoginView = React.memo(({ targetClassId, setTargetClassId, handleTeacherLogin, handleSetView, allTeacherClasses, isLoading, onRenameClass, onDeleteClass, currentUserId, onReclaimAll }) => {
   const [renaming, setRenaming] = React.useState(null); // classId being renamed
   const [newDisplayName, setNewDisplayName] = React.useState('');
+  const mismatchedCount = allTeacherClasses.filter(c => c.teacherId && c.teacherId !== currentUserId).length;
   return (
     <div className="max-w-lg mx-auto mt-10 p-6 space-y-6">
       <h2 className="text-3xl font-bold text-blue-600 text-center">Teacher — Choose Class</h2>
+      {/* Recovery tool: shows up only when this browser's identity doesn't
+          match some existing classes (e.g. after a cleared-storage lockout).
+          See handleReclaimAllClasses for why this is safe to offer here. */}
+      {mismatchedCount > 0 && (
+        <div className="p-3 bg-amber-50 border-2 border-amber-300 rounded-xl">
+          <p className="text-sm text-amber-800 font-semibold mb-2">
+            🔒 {mismatchedCount} class(es) below show as owned by a different browser/device — only reclaim these if they're really yours.
+          </p>
+          <button onClick={onReclaimAll} disabled={isLoading} className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 rounded-lg disabled:opacity-50">
+            🔓 Reclaim All My Classes
+          </button>
+        </div>
+      )}
       {/* Existing classes */}
       {allTeacherClasses.length > 0 && (
         <div className="space-y-2">
           <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Existing Classes</p>
-          {allTeacherClasses.map(c => (
+          {allTeacherClasses.map(c => {
+            const isMismatched = c.teacherId && c.teacherId !== currentUserId;
+            return (
             <div key={c.id} className="flex items-center gap-2">
               {renaming === c.id ? (
                 <>
@@ -1418,8 +1434,8 @@ const TeacherLoginView = React.memo(({ targetClassId, setTargetClassId, handleTe
                 </>
               ) : (
                 <>
-                  <button onClick={()=>{setTargetClassId(c.id); handleTeacherLogin(c.id);}} className={`flex-1 p-3 rounded-xl border-2 text-left font-bold text-lg transition-all flex items-center justify-between ${c.id===targetClassId?'bg-blue-100 border-blue-500 text-blue-800 shadow-lg':'bg-white border-gray-200 text-gray-700 hover:border-blue-300'}`}>
-                    <span>{c.displayName || c.id}</span>
+                  <button onClick={()=>{setTargetClassId(c.id); handleTeacherLogin(c.id);}} className={`flex-1 p-3 rounded-xl border-2 text-left font-bold text-lg transition-all flex items-center justify-between ${c.id===targetClassId?'bg-blue-100 border-blue-500 text-blue-800 shadow-lg':isMismatched?'bg-amber-50 border-amber-200 text-amber-800':'bg-white border-gray-200 text-gray-700 hover:border-blue-300'}`}>
+                    <span>{isMismatched && '🔒 '}{c.displayName || c.id}</span>
                     {c.displayName && <span className="text-xs font-normal text-gray-400 ml-2">({c.id})</span>}
                   </button>
                     <button onClick={()=>{setRenaming(c.id);setNewDisplayName(c.displayName||c.id);}} className="text-gray-400 hover:text-blue-500 p-2" title="Rename (display name only)">
@@ -1431,7 +1447,8 @@ const TeacherLoginView = React.memo(({ targetClassId, setTargetClassId, handleTe
                 </>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
       {/* Create new class */}
@@ -1899,6 +1916,48 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
       setAllTeacherClasses(prev => prev.map(c => c.id === classId ? { ...c, displayName: displayName.trim() } : c));
     } catch(e) { console.error('Rename error:', e); }
   }, []);
+
+  // Recovery tool: if this browser's Firebase anonymous identity ever gets
+  // reset (e.g. cleared storage, a different app on the same origin signing
+  // out the shared session, a new device), every existing class's teacherId
+  // stops matching, and handleTeacherLogin blocks access with "registered by
+  // another teacher" — even though it's really still the same teacher.
+  // allTeacherClasses already lists every class regardless of owner (see the
+  // useEffect above), so this just re-stamps teacherId = currentUserId on
+  // every class that doesn't already match. No lesson data is touched or
+  // deleted — this only fixes the ownership field.
+  const handleReclaimAllClasses = useCallback(async () => {
+    if (!currentUserId) return;
+    const mismatched = allTeacherClasses.filter(c => c.teacherId && c.teacherId !== currentUserId);
+    if (mismatched.length === 0) {
+      setModal({ message: 'All your classes already match this browser — nothing to reclaim.', type: 'success', visible: true });
+      return;
+    }
+    const confirmed = window.confirm(
+      `This will reclaim ${mismatched.length} class(es) for this browser/device:\n\n` +
+      mismatched.map(c => `- ${c.displayName || c.id}`).join('\n') +
+      `\n\nOnly do this if these are really YOUR classes (e.g. you got logged out after clearing browser data). No lessons or student data will be changed — only who "owns" each class.`
+    );
+    if (!confirmed) return;
+
+    setIsLoading(true);
+    try {
+      for (let i = 0; i < mismatched.length; i += 400) {
+        const chunk = mismatched.slice(i, i + 400);
+        const batch = writeBatch(db);
+        chunk.forEach(c => batch.update(getClassDocRef(c.id), { teacherId: currentUserId }));
+        await batch.commit();
+      }
+      setAllTeacherClasses(prev => prev.map(c =>
+        mismatched.some(m => m.id === c.id) ? { ...c, teacherId: currentUserId } : c
+      ));
+      setModal({ message: `Reclaimed ${mismatched.length} class(es). You can now open them normally.`, type: 'success', visible: true });
+    } catch (e) {
+      console.error('Error reclaiming classes:', e);
+      setModal({ message: 'Error reclaiming classes. Please try again.', type: 'error', visible: true });
+    }
+    setIsLoading(false);
+  }, [allTeacherClasses, currentUserId]);
 
   const handleTeacherLogin = useCallback(async (overrideId) => {
     const enteredClassId = (overrideId || targetClassId || '').toUpperCase().trim();
@@ -2589,7 +2648,7 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
   const renderView = () => {
     if (!isAuthReady) return <LoadingView />;
     switch (view) {
-      case 'teacherLogin': return <TeacherLoginView targetClassId={targetClassId} setTargetClassId={setTargetClassId} handleTeacherLogin={handleTeacherLogin} handleSetView={handleSetView} allTeacherClasses={allTeacherClasses} isLoading={isLoading} onRenameClass={handleRenameClass} onDeleteClass={handleDeleteClass} />;
+      case 'teacherLogin': return <TeacherLoginView targetClassId={targetClassId} setTargetClassId={setTargetClassId} handleTeacherLogin={handleTeacherLogin} handleSetView={handleSetView} allTeacherClasses={allTeacherClasses} isLoading={isLoading} onRenameClass={handleRenameClass} onDeleteClass={handleDeleteClass} currentUserId={currentUserId} onReclaimAll={handleReclaimAllClasses} />;
       case 'studentLogin': return <StudentLoginView targetClassId={targetClassId} setTargetClassId={setTargetClassId} userName={userName} setUserName={setUserName} studentAgeLevel={studentAgeLevel} setStudentAgeLevel={setStudentAgeLevel} handleStudentLogin={handleStudentLogin} handleSetView={handleSetView} />;
       case 'ageLevelPicker': return <AgeLevelPickerView studentAgeLevel={studentAgeLevel} setStudentAgeLevel={setStudentAgeLevel} onContinue={handleAgeLevelContinue} />;
       case 'classPicker': return <ClassPickerView classList={classPickerList} highlightClassId={entryRequest?.classId} onSelectClass={handleSelectClassFromPicker} loading={classPickerLoading} classPickerInfo={classPickerInfo} />;
