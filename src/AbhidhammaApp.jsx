@@ -88,6 +88,81 @@ const renameStudentRecords = async (classId, oldName, newName) => {
   } catch(e) { console.error('Quiz results rename:', e); }
 };
 
+// Repairs student quiz-completion records for a class after lessons were deleted and re-added.
+// Root cause: handleSaveLesson gives every NEW lesson a fresh `lesson_${Date.now()}` id (see below) —
+// so if a teacher deletes a class's lessons and re-adds them (even with identical titles/content),
+// every prior score/result record still points at the OLD lesson id. The per-lesson "Done" badge
+// requires an EXACT lessonId match, so it silently disappears — even though the class-picker's
+// completed-count (which just compares raw counts, not actual ids) can still show "all completed".
+// This matches old→new lessons purely by exact title, using the activity_feed log (the only place
+// that recorded both the old lessonId and its lessonTitle together), then:
+//  - rewrites each affected global_scores doc's lessonId to the new id (re-keyed under
+//    `${userId}_${newLessonId}` so the direct doc-id completion check also works)
+//  - copies the per-age-group quiz "results" subcollection docs from the old lesson id to the new one
+// Nothing is deleted from the old paths (old score docs are removed only after being re-written under
+// the new id) — safe to re-run; lessons with no orphaned records are simply skipped.
+const migrateOrphanedLessonCompletions = async (classId, { log = console.log } = {}) => {
+  if (!classId) return { error: 'No classId' };
+  const report = { scannedFeedEntries: 0, titleMatches: 0, scoresFixed: 0, resultsCopied: 0, unmatchedTitles: [] };
+
+  // 1. Current lessons in the class → title -> current id
+  const lessonsSnap = await getDocs(abhiLessonsRef(classId));
+  const currentIds = new Set(lessonsSnap.docs.map(d => d.id));
+  const titleToNewId = {};
+  lessonsSnap.docs.forEach(d => { const t = (d.data().title || '').trim(); if (t) titleToNewId[t] = d.id; });
+
+  // 2. Old lessonId -> title, sourced from the activity feed (only place that recorded both together)
+  const feedSnap = await getDocs(query(abhiActivityRef(), where('classId', '==', classId), where('type', '==', 'quiz_completed')));
+  const oldIdToTitle = {};
+  feedSnap.docs.forEach(d => {
+    const dt = d.data(); report.scannedFeedEntries++;
+    if (dt.lessonId && dt.lessonTitle) oldIdToTitle[dt.lessonId] = dt.lessonTitle.trim();
+  });
+
+  // 3. Build old->new map: only for ids that no longer exist as a current lesson, matched by title
+  const oldToNew = {};
+  const unmatched = new Set();
+  Object.entries(oldIdToTitle).forEach(([oldId, title]) => {
+    if (currentIds.has(oldId)) return; // not orphaned, leave alone
+    const newId = titleToNewId[title];
+    if (newId && newId !== oldId) { oldToNew[oldId] = newId; report.titleMatches++; }
+    else if (!newId) unmatched.add(title);
+  });
+  report.unmatchedTitles = Array.from(unmatched);
+
+  if (Object.keys(oldToNew).length === 0) { log('No orphaned lessons found for', classId, report); return report; }
+
+  // 4. Fix global_scores docs: re-key under the new lessonId, remove the old doc
+  const scoresSnap = await getDocs(query(abhiScoresRef(), where('classId', '==', classId)));
+  let batch = writeBatch(db); let batchOps = 0;
+  for (const d of scoresSnap.docs) {
+    const dt = d.data();
+    const newId = oldToNew[dt.lessonId];
+    if (!newId) continue;
+    const newDocRef = dt.userId ? doc(abhiScoresRef(), `${dt.userId}_${newId}`) : doc(abhiScoresRef());
+    batch.set(newDocRef, { ...dt, lessonId: newId }, { merge: true });
+    batch.delete(d.ref);
+    batchOps += 2; report.scoresFixed++;
+    if (batchOps >= 400) { await batch.commit(); batch = writeBatch(db); batchOps = 0; }
+  }
+  if (batchOps > 0) await batch.commit();
+
+  // 5. Copy quiz results subcollections (per age group) from the old lesson id to the new lesson id
+  for (const [oldId, newId] of Object.entries(oldToNew)) {
+    for (const g of Object.keys(AGE_GROUPS)) {
+      const rSnap = await getDocs(abhiResultsRef(classId, oldId, g));
+      if (rSnap.empty) continue;
+      const rBatch = writeBatch(db);
+      rSnap.docs.forEach(rd => rBatch.set(doc(abhiResultsRef(classId, newId, g), rd.id), rd.data()));
+      await rBatch.commit();
+      report.resultsCopied += rSnap.size;
+    }
+  }
+
+  log('Migration complete for', classId, report);
+  return report;
+};
+
 // Move a roster doc from oldName to newName. Crucially, this does NOT delete the old doc — a
 // student's own device caches its profile name in localStorage and keeps pinging/writing scores
 // under that cached name until it's told otherwise, so simply deleting the old roster doc caused
@@ -1665,6 +1740,23 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
                     <button onClick={handleExportFull} disabled={loading}
                       className="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1">
                       <Download className="w-3 h-3"/>📦 Full Backup
+                    </button>
+                    <span className="text-gray-600 self-center">|</span>
+                    <button onClick={async()=>{
+                        if(!classId)return;
+                        if(!window.confirm(`Re-link old completion records to the current lessons in "${classId}"?\n\nUse this if students' "Done" tags disappeared after lessons were deleted/re-added. Safe to re-run — nothing a student earned is deleted, only re-pointed to the current lesson.`))return;
+                        setLoading(true);showMsg('Fixing completion records…');
+                        try{
+                          const r=await migrateOrphanedLessonCompletions(classId);
+                          if(r.error){showMsg('Error: '+r.error);}
+                          else if(r.scoresFixed===0){showMsg(r.unmatchedTitles.length?`No matches. Unmatched titles: ${r.unmatchedTitles.join(', ')}`:'No orphaned records found — nothing to fix.');}
+                          else{showMsg(`✅ Re-linked ${r.scoresFixed} score record(s), copied ${r.resultsCopied} quiz result(s) across ${r.titleMatches} lesson(s).`);}
+                        }catch(e){console.error(e);showMsg('Error: '+e.message);}
+                        finally{setLoading(false);}
+                      }} disabled={loading||!classId}
+                      className="bg-emerald-700 hover:bg-emerald-600 disabled:opacity-40 text-white px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1"
+                      title="Re-link students' old completion records to the current lessons (fixes missing Done tags after a lesson re-import)">
+                      🔗 Fix Done Tags
                     </button>
                     <span className="text-gray-600 self-center">|</span>
                     <button onClick={async()=>{
