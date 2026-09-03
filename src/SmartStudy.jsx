@@ -64,6 +64,7 @@ const fetchWithRetry = async (url, options, maxRetries = 3) => {
 };
 
 const getClassDocRef = (classId) => doc(db, 'artifacts', appId, 'public', 'data', 'classes', classId);
+const getTeacherPasscodeDocRef = () => doc(db, 'artifacts', appId, 'public', 'data', 'config', 'teacherPasscode');
 const getScoresCollectionRef = () => collection(db, 'artifacts', appId, 'public', 'data', 'scores');
 const getCompletionsCollectionRef = () => collection(db, 'artifacts', appId, 'public', 'data', 'quizCompletions');
 const getGlobalAnnouncementsCollectionRef = () => collection(db, 'artifacts', appId, 'public', 'data', 'globalAnnouncements');
@@ -603,6 +604,9 @@ const TeacherDashboard = React.memo(({
     <div className="p-8 space-y-8 h-full flex flex-col">
       <div className="flex flex-col md:flex-row justify-between md:items-end space-y-4 md:space-y-0">
         <div>
+          <button onClick={() => handleSetView('teacherLogin')} className="text-sm text-blue-500 hover:text-blue-700 font-semibold mb-2 flex items-center gap-1">
+            ← Back to Class List
+          </button>
           <div className="flex items-center gap-3">
             <div>
               <h1 className="text-4xl font-extrabold text-blue-700">Teacher Dashboard: {classId}</h1>
@@ -1383,12 +1387,86 @@ const ClassPickerView = React.memo(({ classList, highlightClassId, onSelectClass
   </div>
 ));
 
+// Gate to teacher mode that doesn't depend on Firebase's browser-tied
+// anonymous UID at all — a shared secret typed once per browser/device
+// (remembered via localStorage) instead. First person to set a passcode
+// registers it for everyone; after that, anyone entering teacher mode on a
+// new device/browser just needs to know that same passcode. This is what
+// makes "reclaiming" access permanent instead of something that has to be
+// redone every time the UID resets.
+const TEACHER_VERIFIED_KEY = 'smartstudy_teacher_verified';
+const TeacherPasscodeView = React.memo(({ onVerified, handleSetView }) => {
+  const [dbPasscode, setDbPasscode] = React.useState(undefined); // undefined = loading, null = none set yet
+  const [inputCode, setInputCode] = React.useState('');
+  const [error, setError] = React.useState('');
+  const [isBusy, setIsBusy] = React.useState(false);
+
+  React.useEffect(() => {
+    getDoc(getTeacherPasscodeDocRef())
+      .then(snap => setDbPasscode(snap.exists() ? (snap.data().code || null) : null))
+      .catch(() => setDbPasscode(null));
+  }, []);
+
+  const isFirstTime = dbPasscode === null;
+
+  const handleSubmit = async () => {
+    if (!inputCode.trim()) return;
+    setError('');
+    setIsBusy(true);
+    try {
+      if (isFirstTime) {
+        await setDoc(getTeacherPasscodeDocRef(), { code: inputCode.trim() });
+      } else if (inputCode !== dbPasscode) {
+        setError('Incorrect passcode.');
+        setIsBusy(false);
+        return;
+      }
+      localStorage.setItem(TEACHER_VERIFIED_KEY, 'true');
+      onVerified();
+    } catch (e) {
+      console.error(e);
+      setError('Something went wrong. Please try again.');
+    }
+    setIsBusy(false);
+  };
+
+  if (dbPasscode === undefined) return <LoadingView />;
+
+  return (
+    <div className="flex items-center justify-center h-full p-8">
+      <Card className="max-w-md w-full text-center p-10 space-y-6 bg-purple-50">
+        <User className="w-16 h-16 text-purple-500 mx-auto" />
+        <h2 className="text-2xl font-bold text-purple-800">{isFirstTime ? 'Set a Teacher Passcode' : 'Teacher Passcode'}</h2>
+        <p className="text-gray-500 text-sm">
+          {isFirstTime
+            ? "This is the first time — choose a passcode. You'll only need to enter it once per browser/device."
+            : "Enter the passcode you set up before. You only need this once per browser/device."}
+        </p>
+        {error && <div className="bg-red-100 text-red-700 p-2 rounded-lg font-semibold text-sm">{error}</div>}
+        <input
+          type="password"
+          value={inputCode}
+          onChange={e => setInputCode(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && handleSubmit()}
+          placeholder="Passcode"
+          autoFocus
+          className="w-full p-3 border-2 border-purple-200 rounded-xl text-center text-xl font-bold tracking-widest focus:outline-none focus:ring-2 focus:ring-purple-400"
+        />
+        <Button onClick={handleSubmit} disabled={isBusy || !inputCode.trim()} className="w-full bg-purple-500 hover:bg-purple-600">
+          {isBusy ? 'Please wait...' : (isFirstTime ? 'Set Passcode & Continue' : 'Enter')}
+        </Button>
+        <button onClick={() => handleSetView('home')} className="text-sm text-gray-400 hover:text-gray-600 underline">← Back</button>
+      </Card>
+    </div>
+  );
+});
+
 const HomeView = React.memo(({ handleSetView }) => (
   <div className="flex items-center justify-center h-full p-8">
     <Card className="max-w-lg w-full text-center p-10 space-y-8 bg-blue-50">
       <h1 className="text-5xl font-extrabold text-blue-700"><span className="block text-6xl mb-2">📚</span>Smart Study</h1>
       <div className="space-y-4">
-        <Button onClick={() => handleSetView('teacherLogin')} className="w-full bg-purple-500 hover:bg-purple-600 shadow-lg shadow-purple-300"><User className="w-5 h-5 mr-2" /> Teacher</Button>
+        <Button onClick={() => handleSetView(localStorage.getItem('smartstudy_teacher_verified') === 'true' ? 'teacherLogin' : 'teacherPasscode')} className="w-full bg-purple-500 hover:bg-purple-600 shadow-lg shadow-purple-300"><User className="w-5 h-5 mr-2" /> Teacher</Button>
         <Button onClick={() => handleSetView('studentLogin')} className="w-full bg-teal-500 hover:bg-teal-600 shadow-lg shadow-teal-300"><Users className="w-5 h-5 mr-2" /> Student</Button>
       </div>
     </Card>
@@ -1965,9 +2043,17 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
     setIsLoading(true);
     try {
       const docSnap = await getDoc(getClassDocRef(enteredClassId));
+      // No more "registered by another teacher" block here — the shared
+      // teacher passcode (TeacherPasscodeView) is now what proves someone is
+      // allowed into teacher mode at all, so it doesn't also need to match a
+      // Firebase anonymous UID per class. That UID used to reset any time the
+      // browser's storage was cleared, another app on the same origin signed
+      // the shared session out, or a different device was used — locking the
+      // real teacher out of their own classes for no good reason. Opportun-
+      // istically re-stamp teacherId to the current UID so the "Existing
+      // Classes" list stays tidy, but it's just bookkeeping now, not a gate.
       if (docSnap.exists() && docSnap.data().teacherId !== currentUserId) {
-        setModal({ message: 'Access Denied: This Class ID is already registered by another teacher.', type: 'error', visible: true });
-        setIsLoading(false); return;
+        try { await updateDoc(getClassDocRef(enteredClassId), { teacherId: currentUserId }); } catch (e) {}
       }
       localStorage.setItem('lastClassId', enteredClassId);
       setClassId(enteredClassId); 
@@ -2648,6 +2734,7 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
   const renderView = () => {
     if (!isAuthReady) return <LoadingView />;
     switch (view) {
+      case 'teacherPasscode': return <TeacherPasscodeView onVerified={() => setView('teacherLogin')} handleSetView={handleSetView} />;
       case 'teacherLogin': return <TeacherLoginView targetClassId={targetClassId} setTargetClassId={setTargetClassId} handleTeacherLogin={handleTeacherLogin} handleSetView={handleSetView} allTeacherClasses={allTeacherClasses} isLoading={isLoading} onRenameClass={handleRenameClass} onDeleteClass={handleDeleteClass} currentUserId={currentUserId} onReclaimAll={handleReclaimAllClasses} />;
       case 'studentLogin': return <StudentLoginView targetClassId={targetClassId} setTargetClassId={setTargetClassId} userName={userName} setUserName={setUserName} studentAgeLevel={studentAgeLevel} setStudentAgeLevel={setStudentAgeLevel} handleStudentLogin={handleStudentLogin} handleSetView={handleSetView} />;
       case 'ageLevelPicker': return <AgeLevelPickerView studentAgeLevel={studentAgeLevel} setStudentAgeLevel={setStudentAgeLevel} onContinue={handleAgeLevelContinue} />;
