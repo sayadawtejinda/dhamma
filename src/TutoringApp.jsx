@@ -762,6 +762,11 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma }) {
   const [sendStudentSearch, setSendStudentSearch] = useState(''); 
   const [isSendDropdownOpen, setIsSendDropdownOpen] = useState(false); 
   const [directTrophyAmount, setDirectTrophyAmount] = useState(1);
+  const [previouslyEarnedOverride, setPreviouslyEarnedOverride] = useState('');
+  const [isSavingPreviouslyEarned, setIsSavingPreviouslyEarned] = useState(false);
+  useEffect(() => {
+    setPreviouslyEarnedOverride('');
+  }, [selectedStudentUid, selectedBankLessonId, sendSmartStudyClassId, sendAbhidhammaClassId, sendDhammaschoolClassId]);
   const [lastTrophyAward, setLastTrophyAward] = useState(null);
   const undoTimerRef = useRef(null);
   
@@ -1288,6 +1293,43 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma }) {
     const unitCount = lessonCount != null ? lessonCount : (lesson.unitCount || 0);
     const lessonKey = computeLessonKey(lesson.title, effectiveLink);
     return { maxAvailable, unitCount, lessonKey, classId };
+  };
+
+  // Lets the teacher directly SET the correct "Previously Earned" baseline for
+  // a specific class — a one-time reconciliation tool. Old trophy totals were
+  // accumulated under a shared title-only key across every class ever sent
+  // under that Lesson Bank entry, so they can't be automatically split back
+  // out per class (trophies were awarded in manual batches, not 1-per-lesson,
+  // so completed-lesson count alone can't reverse-engineer the true number).
+  // The teacher can see "Student Progress" (real completed-lesson count) right
+  // above this to help them judge the right number from memory/records, enter
+  // it once here, and going forward the app tracks that class correctly on
+  // its own — this does NOT add new trophies, it only corrects the stored
+  // starting point so "Remaining to Award" is accurate and nothing gets
+  // double-awarded.
+  const handleSetPreviouslyEarned = async (lessonKey, maxAvailable) => {
+    const student = students.find(s => s.id === selectedStudentUid);
+    if (!student) return;
+    const newValue = parseInt(previouslyEarnedOverride);
+    if (isNaN(newValue) || newValue < 0) {
+      alert('Please enter a valid number (0 or more).');
+      return;
+    }
+    if (newValue > maxAvailable) {
+      alert(`Can't be more than Max Available (${maxAvailable}).`);
+      return;
+    }
+    setIsSavingPreviouslyEarned(true);
+    try {
+      await updateDoc(doc(db, `${publicDataPath}/students`, student.id), {
+        [`earnedTrophies.${lessonKey}`]: newValue
+      });
+      setPreviouslyEarnedOverride('');
+    } catch (err) {
+      console.error('Error setting Previously Earned:', err);
+      alert('Error saving. Please try again.');
+    }
+    setIsSavingPreviouslyEarned(false);
   };
 
   const handleAwardDirectTrophies = async (e) => {
@@ -2731,6 +2773,27 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                           <li>Previously Earned: <strong>{previouslyEarned}</strong></li>
                           <li>Remaining to Award: <strong>{remaining}</strong></li>
                         </ul>
+
+                        {/* One-time correction tool — see handleSetPreviouslyEarned for why
+                            this can't just be auto-recalculated from completed lessons. */}
+                        <div className="flex items-center gap-2 mb-3 pb-3 border-b border-yellow-200">
+                          <label className="text-xs text-yellow-700 font-semibold whitespace-nowrap">Fix Previously Earned:</label>
+                          <input
+                            type="number" min="0" max={maxAvailable}
+                            value={previouslyEarnedOverride}
+                            onChange={(e) => setPreviouslyEarnedOverride(e.target.value)}
+                            placeholder={String(previouslyEarned)}
+                            className="w-20 p-1.5 border-2 border-yellow-300 rounded-lg text-center font-bold text-yellow-900 text-sm"
+                          />
+                          <button
+                            type="button"
+                            disabled={isSavingPreviouslyEarned || previouslyEarnedOverride === ''}
+                            onClick={() => handleSetPreviouslyEarned(lessonKey, maxAvailable)}
+                            className="px-3 py-1.5 bg-yellow-600 text-white rounded-lg text-xs font-bold hover:bg-yellow-700 disabled:opacity-50"
+                          >
+                            {isSavingPreviouslyEarned ? 'Saving...' : 'Save'}
+                          </button>
+                        </div>
                         
                         {sendActionType === 'trophy' && remaining > 0 && (
                             <div className="flex items-center space-x-3 mt-3 border-t border-yellow-200 pt-3">
