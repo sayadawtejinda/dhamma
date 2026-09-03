@@ -1137,6 +1137,12 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
   const [classId,setClassId]=useState('');const [classData,setClassData]=useState(null);const [lessons,setLessons]=useState([]);const [allClasses,setAllClasses]=useState([]);
   const [studentProfile,setStudentProfile]=useState(null);const [showWelcome,setShowWelcome]=useState(false);
   const [pendingEntry,setPendingEntry]=useState(null); // {name, group, classId} known from a deep-link, before age group is confirmed
+  // pendingEntry/entryRequest only carry a classId on the exact visit that came in through
+  // TutoringApp's "Start Lesson" deep-link — reopening the app later (same tab, or a saved
+  // bookmark) loses that info even though the assignment is still current, so the "Choose
+  // Your Class" highlight/hint would silently stop showing. Persisting it means it keeps
+  // showing until the teacher assigns something new (a fresh deep-link overwrites it).
+  const [assignedClassId,setAssignedClassId]=useState(()=>localStorage.getItem('abhidhamma_assigned_classId')||'');
   const [classStats,setClassStats]=useState({}); // classId → {completedCount, totalLessons, rank}
   const [showLeaderboard,setShowLeaderboard]=useState(false);
   const [activeQuizId,setActiveQuizId]=useState(null);const [activeQuizData,setActiveQuizData]=useState(null);
@@ -1169,6 +1175,7 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
       // picker first so the student can confirm/update their group before landing on Choose Your Class.
       setPendingEntry({name:entryRequest.studentName,group:grp,classId:entryRequest.classId||''});
       setRole('Student');
+      if(entryRequest.classId) { setAssignedClassId(entryRequest.classId); localStorage.setItem('abhidhamma_assigned_classId', entryRequest.classId); }
     }
   },[entryRequest,authReady]);
 
@@ -1636,8 +1643,8 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
                 <p className="text-center text-amber-600 text-sm mb-2 font-semibold">
                   {AGE_GROUPS[studentProfile.group]?.label}
                 </p>
-                {(pendingEntry?.classId||entryRequest?.classId) && (
-                  <p className="text-gray-600 text-center mb-6">Your teacher assigned <span className="font-bold text-amber-700">{pendingEntry?.classId||entryRequest?.classId}</span> — tap it below to start.</p>
+                {(pendingEntry?.classId||entryRequest?.classId||assignedClassId) && (
+                  <p className="text-gray-600 text-center mb-6">Your teacher assigned <span className="font-bold text-amber-700">{pendingEntry?.classId||entryRequest?.classId||assignedClassId}</span> — tap it below to start.</p>
                 )}
                 {allClasses.length===0
                   ? <p className="text-center text-gray-500 italic">No classes found yet.</p>
@@ -1648,12 +1655,12 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
                         return(
                         <button key={c.id} onClick={() => enterClass(c.id)}
                           className={`w-full p-4 rounded-xl border-2 text-left font-bold text-lg transition-all ${
-                            c.id===(pendingEntry?.classId||entryRequest?.classId)
+                            c.id===(pendingEntry?.classId||entryRequest?.classId||assignedClassId)
                               ? 'bg-amber-100 border-amber-500 text-amber-800 shadow-lg scale-[1.02]'
                               : 'bg-white border-gray-200 text-gray-700 hover:border-amber-300 hover:bg-amber-50'
                           }`}>
                           <div className="flex items-center justify-between gap-2 flex-nowrap">
-                            <span className="truncate min-w-0 flex-1">{c.id===(pendingEntry?.classId||entryRequest?.classId)?'⭐ ':''}{c.displayName||c.id}</span>
+                            <span className="truncate min-w-0 flex-1">{c.id===(pendingEntry?.classId||entryRequest?.classId||assignedClassId)?'⭐ ':''}{c.displayName||c.id}</span>
                             <div className="flex items-center gap-2 flex-nowrap shrink-0">
                               {stat?.rank>0&&(
                                 <span className="text-xs font-bold text-yellow-700 bg-yellow-100 border border-yellow-300 px-2 py-0.5 rounded-full whitespace-nowrap">🏆 Rank #{stat.rank}</span>
