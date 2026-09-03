@@ -986,21 +986,28 @@ const AbhiLessonItem = ({ lesson, classId, isTeacher, studentAgeGroup, studentNa
   
   useEffect(()=>{if(isOpen&&ref.current){setTimeout(()=>{const y=ref.current.getBoundingClientRect().top+window.scrollY-80;window.scrollTo({top:y,behavior:'smooth'});},100);}},[isOpen]);
   
-  // Track quiz completion by studentName only — the roster name stays the same across devices,
-  // while userId changes per device/session (that mismatch was hiding "Done" on a new device).
+  // Track quiz completion by studentName (primary) AND userId (fallback). Name
+  // is the primary signal because it survives a device change — but if a
+  // student was recently renamed in TutoringApp and the roster hasn't caught
+  // up to the new name yet (a few seconds, or longer if the background
+  // auto-resync effect hasn't run), a name-only check would show "Done" as
+  // missing even though the same device's own quiz submission is sitting
+  // right there under its userId. Checking both means a rename in progress
+  // never makes a real completion disappear from view.
   useEffect(()=>{
     if(!classId||!lesson.id||!studentAgeGroup||!studentName)return;
-    let fromResultsByName=false,fromScoresByName=false;
-    const recompute=()=>setIsCompleted(fromResultsByName||fromScoresByName);
+    let fromResultsByName=false,fromScoresByName=false,fromScoresByUserId=false;
+    const recompute=()=>setIsCompleted(fromResultsByName||fromScoresByName||fromScoresByUserId);
     const subs=[
       onSnapshot(query(abhiResultsRef(classId,lesson.id,studentAgeGroup),where('name','==',studentName)),snap=>{fromResultsByName=!snap.empty;recompute();},err=>console.error('Name completion track:',err.code)),
       onSnapshot(query(abhiScoresRef(),where('studentName','==',studentName)),snap=>{
         fromScoresByName=snap.docs.some(d=>{const dt=d.data();return dt.classId===classId&&dt.lessonId===lesson.id;});
         recompute();
-      },err=>console.error('Name score completion track:',err.code))
+      },err=>console.error('Name score completion track:',err.code)),
+      ...(userId?[onSnapshot(doc(abhiScoresRef(),`${userId}_${lesson.id}`),snap=>{fromScoresByUserId=snap.exists();recompute();},err=>console.error('UserId completion track:',err.code))]:[])
     ];
     return()=>{subs.forEach(u=>u());};
-  },[classId,lesson.id,studentAgeGroup,studentName]);
+  },[classId,lesson.id,studentAgeGroup,studentName,userId]);
   
   // Track Q&A participation for quiz unlock (ask + reply)
   useEffect(()=>{
