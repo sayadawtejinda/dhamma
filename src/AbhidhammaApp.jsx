@@ -513,37 +513,39 @@ const AbhiClassRoster = ({ userId, classId, onLink }) => {
         byNameKey[nameFromId] = d;
       });
 
+      // For every existing redirect A -> B, check whether TutoringApp's
+      // CURRENT canonical name is actually A, not B — meaning the redirect
+      // itself was created backwards. This does NOT require B to also redirect
+      // back to A (a true circular loop); the reported bug was a plain one-way
+      // reversed redirect — "Mabel N" (correct) silently pointing at "Mabel
+      // Naing" (stale), while "Mabel Naing" sat there as an ordinary active
+      // doc with no redirect of its own. Checking every redirect against
+      // TutoringApp's ground truth, regardless of what the target doc looks
+      // like, catches that case too.
       for (const r of redirects) {
         const aName = decodeURIComponent(r.id.slice(classId.length + 1)); // the redirect's own name
-        const bName = r.renamedTo; // where it points
+        const bName = r.renamedTo; // where it currently points
         const bDoc = byNameKey[bName];
-        // Circular pair found: A -> B and B -> A.
-        if (bDoc && bDoc.renamedTo === aName) {
-          // Figure out which one TutoringApp currently considers correct.
-          const activeDoc = bDoc.tutoringStudentUid ? bDoc : (r.tutoringStudentUid ? r : null);
-          const tutoringUid = activeDoc?.tutoringStudentUid;
-          let correctName = null;
-          if (tutoringUid) {
-            try {
-              const tSnap = await getDoc(doc(db,'artifacts','dhamma-tutoring-app','public','data','students',tutoringUid));
-              if (tSnap.exists() && tSnap.data().name) correctName = tSnap.data().name;
-            } catch(e) {}
-          }
-          if (!correctName) continue; // can't safely determine direction — skip
+        if (!bDoc) continue; // target doesn't exist — nothing to compare against
 
-          const wrongName = correctName === aName ? bName : (correctName === bName ? aName : null);
-          if (!wrongName) continue; // neither matches TutoringApp — skip, needs a human look
+        const tutoringUid = bDoc.tutoringStudentUid || r.tutoringStudentUid;
+        if (!tutoringUid) continue; // not a linked student — can't verify direction, skip
 
-          // Rebuild correctly: the doc matching TutoringApp's name becomes active,
-          // the other becomes the redirect pointing to it.
-          const sourceDoc = wrongName === aName ? bDoc : r; // whichever currently holds the real data
-          const correctRef = abhiRosterDocRef(classId, correctName);
-          const wrongRef = abhiRosterDocRef(classId, wrongName);
-          const { id, ref, renamedTo, ...cleanData } = sourceDoc;
-          await setDoc(correctRef, { ...cleanData, studentName: correctName, name: correctName }, { merge: false });
-          await setDoc(wrongRef, { renamedTo: correctName, classId }, { merge: false });
-          fixedCount++;
-        }
+        let correctName = null;
+        try {
+          const tSnap = await getDoc(doc(db,'artifacts','dhamma-tutoring-app','public','data','students',tutoringUid));
+          if (tSnap.exists() && tSnap.data().name) correctName = tSnap.data().name;
+        } catch(e) {}
+        if (!correctName || correctName !== aName) continue; // redirect already points the right way (or unverifiable) — leave it alone
+
+        // TutoringApp says aName is correct, but aName's own doc is the one
+        // redirecting AWAY to bName — backwards. Swap: aName becomes the
+        // active doc (carrying over bDoc's real data), bName becomes the
+        // redirect pointing at aName.
+        const { id, ref, renamedTo, ...cleanData } = bDoc;
+        await setDoc(abhiRosterDocRef(classId, aName), { ...cleanData, studentName: aName, name: aName }, { merge: false });
+        await setDoc(abhiRosterDocRef(classId, bName), { renamedTo: aName, classId }, { merge: false });
+        fixedCount++;
       }
       if(!silent){
         setSyncMsg(fixedCount > 0 ? `✅ Repaired ${fixedCount} reversed link(s).` : 'No reversed links found.');
