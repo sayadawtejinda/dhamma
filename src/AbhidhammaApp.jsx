@@ -88,6 +88,41 @@ const renameStudentRecords = async (classId, oldName, newName) => {
   } catch(e) { console.error('Quiz results rename:', e); }
 };
 
+// Read-only diagnostic — inspects the RAW data for a class so we can figure out exactly why
+// completion records aren't matching, instead of guessing. Prints a report (and returns it) showing:
+//  - how many lessons currently exist in the class
+//  - how many global_scores docs exist for the class, and how many of their lessonId values do/don't
+//    match a CURRENT lesson id (this is the real orphan check — independent of activity_feed)
+//  - a few sample orphaned score docs, raw, so we can see exactly what fields they carry
+//  - a few sample activity_feed docs, raw, so we can see whether lessonId is actually present there
+const diagnoseClassCompletions = async (classId, studentName) => {
+  if (!classId) return { error: 'No classId' };
+  const lessonsSnap = await getDocs(abhiLessonsRef(classId));
+  const currentLessons = lessonsSnap.docs.map(d => ({ id: d.id, title: d.data().title || '' }));
+  const currentIds = new Set(currentLessons.map(l => l.id));
+
+  const scoresSnap = await getDocs(query(abhiScoresRef(), where('classId', '==', classId)));
+  const scoreDocs = scoresSnap.docs.map(d => ({ docId: d.id, ...d.data() }));
+  const filtered = studentName ? scoreDocs.filter(s => (s.studentName || s.name) === studentName) : scoreDocs;
+  const matched = filtered.filter(s => currentIds.has(s.lessonId));
+  const orphaned = filtered.filter(s => !currentIds.has(s.lessonId));
+
+  const feedSnap = await getDocs(query(abhiActivityRef(), where('classId', '==', classId)));
+  const feedSample = feedSnap.docs.slice(0, 5).map(d => ({ docId: d.id, ...d.data() }));
+
+  const report = {
+    classId, studentNameFilter: studentName || '(all students)',
+    totalCurrentLessons: currentLessons.length,
+    totalScoreDocs: scoreDocs.length, totalScoreDocsForStudent: filtered.length,
+    matchedCount: matched.length, orphanedCount: orphaned.length,
+    orphanedSample: orphaned.slice(0, 10),
+    currentLessonsSample: currentLessons.slice(0, 5),
+    activityFeedTotal: feedSnap.size, activityFeedSample: feedSample,
+  };
+  console.log('Completion diagnosis:', report);
+  return report;
+};
+
 // Repairs student quiz-completion records for a class after lessons were deleted and re-added.
 // Root cause: handleSaveLesson gives every NEW lesson a fresh `lesson_${Date.now()}` id (see below) —
 // so if a teacher deletes a class's lessons and re-adds them (even with identical titles/content),
@@ -1740,6 +1775,23 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
                     <button onClick={handleExportFull} disabled={loading}
                       className="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1">
                       <Download className="w-3 h-3"/>📦 Full Backup
+                    </button>
+                    <span className="text-gray-600 self-center">|</span>
+                    <button onClick={async()=>{
+                        if(!classId)return;
+                        const sName=window.prompt('Student name to check (leave blank to check all students):','Kevin');
+                        if(sName===null)return;
+                        setLoading(true);showMsg('Diagnosing…');
+                        try{
+                          const r=await diagnoseClassCompletions(classId, sName.trim()||null);
+                          window.prompt('Copy this and paste it back to Claude (Ctrl/Cmd+C, then Enter):', JSON.stringify(r,null,2));
+                          showMsg(`Checked ${r.totalScoreDocsForStudent} score doc(s): ${r.matchedCount} matched, ${r.orphanedCount} orphaned.`);
+                        }catch(e){console.error(e);showMsg('Error: '+e.message);}
+                        finally{setLoading(false);}
+                      }} disabled={loading||!classId}
+                      className="bg-sky-700 hover:bg-sky-600 disabled:opacity-40 text-white px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1"
+                      title="Inspect raw completion data for this class to figure out why Done tags are missing">
+                      🔍 Diagnose
                     </button>
                     <span className="text-gray-600 self-center">|</span>
                     <button onClick={async()=>{
