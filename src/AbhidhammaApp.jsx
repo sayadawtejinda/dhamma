@@ -97,9 +97,24 @@ const renameStudentRecords = async (classId, oldName, newName) => {
 // effect below) follows that pointer and updates its cached name the next time it checks in.
 const moveRosterDoc = async (classId, oldName, newName, extra={}) => {
   const oldRef=abhiRosterDocRef(classId,oldName);
+  const newRef=abhiRosterDocRef(classId,newName);
+  // Safety net: if newName's own doc is ALREADY a redirect pointing back to
+  // oldName, this rename would silently undo a rename that already happened
+  // correctly in the other direction — e.g. a stale/cached caller trying to
+  // "rename" B back to A right after A was already correctly renamed to B.
+  // Whatever is calling this with the direction reversed is a bug elsewhere,
+  // but skipping here (rather than flip-flopping the student's name back and
+  // forth every time it runs) keeps things stable regardless of the cause.
+  try {
+    const newSnapCheck = await getDoc(newRef);
+    if (newSnapCheck.exists() && newSnapCheck.data().renamedTo === oldName) {
+      console.warn(`moveRosterDoc: refusing to rename "${oldName}" -> "${newName}" in class ${classId} — "${newName}" already redirects to "${oldName}", this would create a rename loop. Check what called this.`);
+      return;
+    }
+  } catch(e) {}
   const oldSnap=await getDoc(oldRef);
   const newData=oldSnap.exists()?{...oldSnap.data(),studentName:newName,name:newName,...extra}:{...extra};
-  await setDoc(abhiRosterDocRef(classId,newName),newData,{merge:true});
+  await setDoc(newRef,newData,{merge:true});
   await setDoc(oldRef,{renamedTo:newName,classId},{merge:false});
 };
 
@@ -112,6 +127,14 @@ const hideOldRosterDoc = async (classId, oldName, newName) => {
   const oldRef = abhiRosterDocRef(classId, oldName);
   const oldSnap = await getDoc(oldRef);
   if (!oldSnap.exists()) return;
+  // Same safety net as moveRosterDoc — never redirect A -> B if B already redirects to A.
+  try {
+    const newSnapCheck = await getDoc(abhiRosterDocRef(classId, newName));
+    if (newSnapCheck.exists() && newSnapCheck.data().renamedTo === oldName) {
+      console.warn(`hideOldRosterDoc: refusing to redirect "${oldName}" -> "${newName}" in class ${classId} — would create a rename loop.`);
+      return;
+    }
+  } catch(e) {}
   await setDoc(oldRef, { renamedTo: newName, classId }, { merge: false });
 };
 
@@ -233,6 +256,7 @@ const AbhiClassRoster = ({ userId, classId, onLink }) => {
   const [matchPreview,setMatchPreview]=useState(null); // null=not previewed yet; [] or [...] once "Find" has run
   const [unlinking,setUnlinking]=useState(null); // studentName currently being unlinked
   const [checkingRenames,setCheckingRenames]=useState(false);
+  const [repairingLoops,setRepairingLoops]=useState(false);
   const [renamePreview,setRenamePreview]=useState(null); // null=not checked yet; [] or [...] once "Check Renamed" has run
   const [resyncing,setResyncing]=useState(null); // studentName currently being resynced
 
@@ -412,6 +436,10 @@ const AbhiClassRoster = ({ userId, classId, onLink }) => {
           } catch (e) { console.error('Auto-resync error:', e); }
         }
       }
+      // Also repair any already-reversed redirect loops from before the
+      // moveRosterDoc/hideOldRosterDoc safety guard existed — silent so it
+      // doesn't pop up a message every 60 seconds when there's nothing to fix.
+      await repairReversedLoops(true);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [classId, onLink, tutoringStudents, students, autoSyncTick]);
@@ -466,6 +494,71 @@ const AbhiClassRoster = ({ userId, classId, onLink }) => {
     finally{ setSyncing(false); }
   };
 
+  // One-off cleanup for a specific bug: a rename redirect that got created
+  // backwards (e.g. "Mabel N" pointing to "Mabel Naing" instead of the other
+  // way around), leaving the OLD name as the active roster doc and the
+  // CURRENT TutoringApp name as a dead-end redirect. moveRosterDoc/
+  // hideOldRosterDoc now refuse to create new loops like this, but this
+  // repairs any that already exist from before that guard was added.
+  const repairReversedLoops = async (silent=false) => {
+    if(!silent) setRepairingLoops(true);
+    let fixedCount = 0;
+    try {
+      const rosterSnap = await getDocs(query(abhiRosterRef(), where('classId','==',classId)));
+      const allDocs = rosterSnap.docs.map(d => ({ id: d.id, ref: d.ref, ...d.data() }));
+      const redirects = allDocs.filter(d => d.renamedTo);
+      const byNameKey = {};
+      allDocs.forEach(d => {
+        const nameFromId = decodeURIComponent(d.id.slice(classId.length + 1));
+        byNameKey[nameFromId] = d;
+      });
+
+      for (const r of redirects) {
+        const aName = decodeURIComponent(r.id.slice(classId.length + 1)); // the redirect's own name
+        const bName = r.renamedTo; // where it points
+        const bDoc = byNameKey[bName];
+        // Circular pair found: A -> B and B -> A.
+        if (bDoc && bDoc.renamedTo === aName) {
+          // Figure out which one TutoringApp currently considers correct.
+          const activeDoc = bDoc.tutoringStudentUid ? bDoc : (r.tutoringStudentUid ? r : null);
+          const tutoringUid = activeDoc?.tutoringStudentUid;
+          let correctName = null;
+          if (tutoringUid) {
+            try {
+              const tSnap = await getDoc(doc(db,'artifacts','dhamma-tutoring-app','public','data','students',tutoringUid));
+              if (tSnap.exists() && tSnap.data().name) correctName = tSnap.data().name;
+            } catch(e) {}
+          }
+          if (!correctName) continue; // can't safely determine direction — skip
+
+          const wrongName = correctName === aName ? bName : (correctName === bName ? aName : null);
+          if (!wrongName) continue; // neither matches TutoringApp — skip, needs a human look
+
+          // Rebuild correctly: the doc matching TutoringApp's name becomes active,
+          // the other becomes the redirect pointing to it.
+          const sourceDoc = wrongName === aName ? bDoc : r; // whichever currently holds the real data
+          const correctRef = abhiRosterDocRef(classId, correctName);
+          const wrongRef = abhiRosterDocRef(classId, wrongName);
+          const { id, ref, renamedTo, ...cleanData } = sourceDoc;
+          await setDoc(correctRef, { ...cleanData, studentName: correctName, name: correctName }, { merge: false });
+          await setDoc(wrongRef, { renamedTo: correctName, classId }, { merge: false });
+          fixedCount++;
+        }
+      }
+      if(!silent){
+        setSyncMsg(fixedCount > 0 ? `✅ Repaired ${fixedCount} reversed link(s).` : 'No reversed links found.');
+        setTimeout(()=>setSyncMsg(''),4000);
+      }
+    } catch(e) {
+      console.error('Repair reversed loops:', e);
+      if(!silent){
+        setSyncMsg('❌ Error — see console.');
+        setTimeout(()=>setSyncMsg(''),4000);
+      }
+    }
+    if(!silent) setRepairingLoops(false);
+  };
+
   const filtered=(tutoringStudents||[]).filter(t=>!search||t.name.toLowerCase().includes(search.toLowerCase()));
 
   if(!classId)return null;
@@ -499,6 +592,12 @@ const AbhiClassRoster = ({ userId, classId, onLink }) => {
             <button onClick={e=>{e.stopPropagation();checkRenamedLinks();}} disabled={checkingRenames}
               className="flex items-center gap-1 text-xs px-3 py-1 rounded-full font-bold bg-teal-500/20 text-teal-300 border border-teal-500/50 disabled:opacity-50" title="Check whether any linked TutoringApp student has since been renamed there, and offer to sync it here">
               {checkingRenames?'Checking…':'🔄 Check Renamed'}
+            </button>
+          )}
+          {onLink&&(
+            <button onClick={e=>{e.stopPropagation();repairReversedLoops();}} disabled={repairingLoops}
+              className="flex items-center gap-1 text-xs px-3 py-1 rounded-full font-bold bg-red-500/20 text-red-300 border border-red-500/50 disabled:opacity-50" title="Fix a rename that got recorded backwards (student's name keeps flip-flopping back to an old value). Safe to click any time — does nothing if there's nothing to fix.">
+              {repairingLoops?'Repairing…':'🔧 Repair Reversed Links'}
             </button>
           )}
           {onLink&&renamePreview!==null&&renamePreview.length>0&&(
