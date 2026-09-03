@@ -384,6 +384,7 @@ const AbhiClassRoster = ({ userId, classId, onLink }) => {
   // they show up in the roster, and an existing link's name stays in sync
   // automatically, without the teacher needing to remember either step.
   const [autoSyncTick, setAutoSyncTick] = useState(0);
+const syncRunning = useRef(false);
   useEffect(() => {
     if (!classId) return;
     // Refresh the TutoringApp student list periodically (bypassing the
@@ -401,9 +402,12 @@ const AbhiClassRoster = ({ userId, classId, onLink }) => {
     return () => clearInterval(interval);
   }, [classId]);
 
-  useEffect(() => {
+    useEffect(() => {
     if (!classId || !onLink || tutoringStudents === null) return;
+    if (syncRunning.current) return; // အရင် run တစ်ခု မပြီးသေးရင် ကျော်ပါ
     (async () => {
+      syncRunning.current = true;
+      try {
       // Auto-link: any approved-but-unlinked roster student whose name exactly
       // matches an unlinked TutoringApp student gets linked immediately.
       const rosterByLower = {};
@@ -439,7 +443,10 @@ const AbhiClassRoster = ({ userId, classId, onLink }) => {
       // Also repair any already-reversed redirect loops from before the
       // moveRosterDoc/hideOldRosterDoc safety guard existed — silent so it
       // doesn't pop up a message every 60 seconds when there's nothing to fix.
-      await repairReversedLoops(true);
+          await repairReversedLoops(true);
+      } finally {
+        syncRunning.current = false;
+      }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [classId, onLink, tutoringStudents, students, autoSyncTick]);
