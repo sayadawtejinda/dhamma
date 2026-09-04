@@ -14,9 +14,20 @@ const MYANMAR_READER_APP_ID = 'myanmar-reader-app';
 // TutoringApp's reports can eventually pull this data in too.
 const TUTORING_APP_ID = 'dhamma-tutoring-app';
 const TUTORING_STUDENTS_PATH = `artifacts/${TUTORING_APP_ID}/public/data/students`;
+const TUTORING_LESSON_BANK_PATH = `artifacts/${TUTORING_APP_ID}/public/data/lessonBank`;
 const READER_ROSTER_PATH = `artifacts/${MYANMAR_READER_APP_ID}/public/data/roster`;
 const READER_SCORES_PATH = `artifacts/${MYANMAR_READER_APP_ID}/public/data/scores`;
 const sanitizeReaderKey = (key) => (key || 'unknown').replace(/[.$#/\[\]]/g, '_');
+// Must match MYANMAR_READER_APP_URL in TutoringApp.jsx — the URL the teacher
+// picks via "📗 Myanmar Reader app" when adding this app to the Lesson Bank.
+// Used only to find which Lesson Bank entries' "Fix Completed Chapter" box
+// (completedUnits on the student doc) applies to this app.
+const READER_APP_PUBLIC_URL = 'https://sayadawtejinda.github.io/myanmar-reader/';
+// Mirrors TutoringApp.jsx's sanitizeKey/computeLessonKey. Myanmar Reader
+// lesson links never get a classId suffix (extractClassIdFromLink there only
+// recognizes smartstudy://, abhidhamma://, dhammaschool:// links), so the key
+// completedUnits is stored under is always just the sanitized lesson title.
+const sanitizeTutoringLessonKey = (key) => (key && typeof key === 'string') ? key.replace(/[.$#/\[\]]/g, '_') : 'unknown_lesson';
 
 // --- DATA STRUCTURES ---
 
@@ -642,6 +653,14 @@ export default function MyanmarReaderApp({ entryRequest, onExit }) {
   const [showOnlinePanel, setShowOnlinePanel] = useState(false);
   const [alreadyCompletedInfo, setAlreadyCompletedInfo] = useState(null); // {chapterNum, sheetName} | null
   const [nowForOnlineCheck, setNowForOnlineCheck] = useState(Date.now()); // ticks so "online" status expires live
+  // Tutoring app integration: a teacher can fill in "Fix Completed Chapter"
+  // on this student in TutoringApp to say "this many chapters (both sheets)
+  // are actually done" — e.g. because they were read outside this app, or to
+  // correct a stale count. We read that back so the reader can jump straight
+  // to the next unread chapter and show earlier ones as already completed.
+  const [tutoringStudentUid, setTutoringStudentUid] = useState(null);
+  const [readerLessonKeys, setReaderLessonKeys] = useState([]); // Lesson Bank key(s) this app's override may be stored under
+  const [teacherCompletedChapters, setTeacherCompletedChapters] = useState(0); // whole chapters (both sheets) the teacher has confirmed done
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (user) => {
@@ -787,10 +806,69 @@ export default function MyanmarReaderApp({ entryRequest, onExit }) {
       if (snap.exists()) {
         const dt = snap.data();
         if (dt.furthestChapter != null) setResumePosition({ chapterNum: dt.furthestChapter, sheetName: dt.furthestSheet || 'A' });
+        setTutoringStudentUid(dt.tutoringStudentUid || null);
       }
     }, e => console.error('Resume position listen error:', e));
     return () => unsub();
   }, [studentName]);
+
+  // Find the Lesson Bank entry/entries (in TutoringApp) that point at this
+  // app, so we know which completedUnits key(s) a "Fix Completed Chapter"
+  // override could be stored under (a teacher could have renamed the title
+  // over time, so we check every match, not just the default title).
+  useEffect(() => {
+    const unsub = onSnapshot(
+      query(collection(db, TUTORING_LESSON_BANK_PATH), where('link', '==', READER_APP_PUBLIC_URL)),
+      (snap) => setReaderLessonKeys(snap.docs.map(d => sanitizeTutoringLessonKey(d.data().title))),
+      e => console.error('Lesson bank lookup error:', e)
+    );
+    return () => unsub();
+  }, []);
+
+  // Listen to the linked Tutoring student doc for "Fix Completed Chapter".
+  useEffect(() => {
+    if (!tutoringStudentUid) { setTeacherCompletedChapters(0); return; }
+    const unsub = onSnapshot(doc(db, TUTORING_STUDENTS_PATH, tutoringStudentUid), (snap) => {
+      if (!snap.exists()) { setTeacherCompletedChapters(0); return; }
+      const completedUnits = snap.data().completedUnits || {};
+      const best = readerLessonKeys.reduce((max, key) => Math.max(max, completedUnits[key] || 0), 0);
+      setTeacherCompletedChapters(best);
+    }, e => console.error('Teacher completed-chapter listen error:', e));
+    return () => unsub();
+  }, [tutoringStudentUid, readerLessonKeys]);
+
+  // If the teacher's confirmed count is further along than what this app has
+  // recorded from actual read-aloud scores, adopt it as the resume point too
+  // — e.g. teacher confirms Chapter 1 done (both sheets) → student opening
+  // the app is pointed at Chapter 2 / Sheet A. Only kicks in once the teacher
+  // has confirmed at least one chapter, so a freshly-linked student who
+  // hasn't read anything yet doesn't get a premature "continue" banner.
+  useEffect(() => {
+    if (!tutoringStudentUid || teacherCompletedChapters <= 0) return;
+    const teacherPosition = { chapterNum: Math.min(TOTAL_CHAPTERS, teacherCompletedChapters + 1), sheetName: 'A' };
+    setResumePosition(prev => {
+      const isFurther = !prev
+        || teacherPosition.chapterNum > prev.chapterNum
+        || (teacherPosition.chapterNum === prev.chapterNum && teacherPosition.sheetName === 'B' && prev.sheetName === 'A');
+      return isFurther ? { ...teacherPosition, _dismissed: prev?._dismissed } : prev;
+    });
+  }, [teacherCompletedChapters, tutoringStudentUid]);
+
+  // Merge the teacher's confirmed count with this app's own record of fully
+  // finished chapters (both sheets, via READER_SCORES_PATH) so "already
+  // completed" checks and the chapter picker reflect whichever is further.
+  let ownCompletedThrough = 0;
+  while (completedFullChapters.has(ownCompletedThrough + 1)) ownCompletedThrough++;
+  const effectiveCompletedThrough = Math.max(ownCompletedThrough, teacherCompletedChapters);
+  const effectiveCompletedFullChapters = effectiveCompletedThrough > ownCompletedThrough
+    ? new Set([...completedFullChapters, ...Array.from({ length: effectiveCompletedThrough }, (_, i) => i + 1)])
+    : completedFullChapters;
+  const effectiveCompletedChapterSheets = effectiveCompletedThrough > 0
+    ? new Set([
+        ...completedChapterSheets,
+        ...Array.from({ length: effectiveCompletedThrough }, (_, i) => i + 1).flatMap(c => [chapterSheetKey(c, 'A'), chapterSheetKey(c, 'B')])
+      ])
+    : completedChapterSheets;
 
   // Keeps this student's live score for the CURRENT chapter+sheet written to
   // Firestore as they read, so the online panel can show "reading Chapter 3
@@ -1592,7 +1670,7 @@ for (let i = 1; i < namesArray.length; i++) {
               {
                 const chNum = getColumnIndex(column);
                 setAlreadyCompletedInfo(
-                  completedChapterSheets.has(chapterSheetKey(chNum, sheetNameParam))
+                  effectiveCompletedChapterSheets.has(chapterSheetKey(chNum, sheetNameParam))
                     ? { chapterNum: chNum, sheetName: sheetNameParam }
                     : null
                 );
@@ -3305,7 +3383,7 @@ useEffect(() => {
                 <option value="" disabled hidden>Sheet</option>
                 {Array.from({length: TOTAL_CHAPTERS}, (_, i) => {
                     const col = getColumnName(i);
-                    return <option key={col} value={col}>{SHEET_CHAPTER_PREFIX} {i + 1}</option>
+                    return <option key={col} value={col}>{SHEET_CHAPTER_PREFIX} {i + 1}{effectiveCompletedFullChapters.has(i + 1) ? ' ✓' : ''}</option>
                 })}
             </select>
         </div>
@@ -3345,7 +3423,7 @@ useEffect(() => {
                                 <option value="" disabled hidden>Sheet</option>
                                 {Array.from({length: TOTAL_CHAPTERS}, (_, i) => {
                                     const col = getColumnName(i);
-                                    return <option key={col} value={col}>{SHEET_CHAPTER_PREFIX} {i + 1}</option>
+                                    return <option key={col} value={col}>{SHEET_CHAPTER_PREFIX} {i + 1}{effectiveCompletedFullChapters.has(i + 1) ? ' ✓' : ''}</option>
                                 })}
                             </select>
                         </div>
@@ -3386,7 +3464,7 @@ useEffect(() => {
                       <option value="" disabled hidden>Sheet</option>
                       {Array.from({length: TOTAL_CHAPTERS}, (_, i) => {
                           const col = getColumnName(i);
-                          return <option key={col} value={col}>{SHEET_CHAPTER_PREFIX} {i + 1}</option>
+                          return <option key={col} value={col}>{SHEET_CHAPTER_PREFIX} {i + 1}{effectiveCompletedFullChapters.has(i + 1) ? ' ✓' : ''}</option>
                       })}
                     </select>
                 </div>
