@@ -64,7 +64,14 @@ const renameStudentRecords = async (classId, oldName, newName) => {
   if (!classId || !oldName || !newName || oldName === newName) return;
   try {
     const allScores = await getDocs(abhiScoresRef());
-    const toRename = allScores.docs.filter(d=>{const dt=d.data();return dt.studentName===oldName&&(!dt.classId||dt.classId===classId);});
+    // Match on (studentName || name) rather than studentName alone — legacy/imported score docs
+    // were sometimes written with only a `name` field and no `studentName` at all (same root cause
+    // that broke the per-lesson "Done" badge — see diagnoseClassCompletions/backfillStudentNameField
+    // above). Filtering on studentName alone silently skipped those docs during rename: the roster
+    // and redirect pointer moved to the new name, but these older scores stayed invisible under the
+    // old name forever, which is exactly the "some places rename, some don't / old scores vanish"
+    // symptom. Matching on either field, and always writing BOTH on the way out, fixes it either way.
+    const toRename = allScores.docs.filter(d=>{const dt=d.data();return (dt.studentName||dt.name)===oldName&&(!dt.classId||dt.classId===classId);});
     if (toRename.length > 0) {
       const batch = writeBatch(db);
       // Also backfill classId — some imported/legacy score docs are missing it, which silently
@@ -86,6 +93,17 @@ const renameStudentRecords = async (classId, oldName, newName) => {
       }
     }
   } catch(e) { console.error('Quiz results rename:', e); }
+  // Activity feed (the "🔔 finished Lesson X" notification log) is otherwise never touched by a
+  // rename, so past notifications kept showing the old name even after everything else moved to the
+  // new one — folded in here so every place in the app is consistent, not just scores/roster.
+  try {
+    const feedSnap = await getDocs(query(abhiActivityRef(), where('classId','==',classId), where('studentName','==',oldName)));
+    if (!feedSnap.empty) {
+      const batch = writeBatch(db);
+      feedSnap.docs.forEach(d => batch.update(d.ref,{studentName:newName}));
+      await batch.commit();
+    }
+  } catch(e) { console.error('Activity feed rename:', e); }
 };
 
 // THE ACTUAL FIX for the missing "Done" tags — confirmed via diagnoseClassCompletions: legacy
@@ -413,6 +431,7 @@ const AbhiClassRoster = ({ userId, classId, onLink }) => {
   const [unlinking,setUnlinking]=useState(null); // studentName currently being unlinked
   const [checkingRenames,setCheckingRenames]=useState(false);
   const [repairingLoops,setRepairingLoops]=useState(false);
+  const [repairingMissedScores,setRepairingMissedScores]=useState(false);
   const [renamePreview,setRenamePreview]=useState(null); // null=not checked yet; [] or [...] once "Check Renamed" has run
   const [resyncing,setResyncing]=useState(null); // studentName currently being resynced
 
@@ -724,6 +743,35 @@ const syncRunning = useRef(false);
     if(!silent) setRepairingLoops(false);
   };
 
+  // One-off repair for renames that already happened while renameStudentRecords had the
+  // strict-studentName-field bug: legacy score docs with only a `name` field (no `studentName`)
+  // were silently skipped, so their scores are still stuck under the OLD name even though the
+  // roster/redirect already moved to the new one. This walks every existing {renamedTo} redirect
+  // in this class and re-runs the (now-fixed) rename — safe/idempotent, does nothing if a student's
+  // records were already fully renamed.
+  const repairMissedScoreRenames = async () => {
+    setRepairingMissedScores(true);
+    try {
+      const rosterSnap = await getDocs(query(abhiRosterRef(), where('classId','==',classId)));
+      const redirects = rosterSnap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter(d => d.renamedTo)
+        .map(d => ({ oldName: decodeURIComponent(d.id.slice(classId.length + 1)), newName: d.renamedTo }))
+        .filter(r => r.oldName && r.newName && r.oldName !== r.newName);
+      for (const r of redirects) {
+        await renameStudentRecords(classId, r.oldName, r.newName);
+      }
+      setSyncMsg(redirects.length > 0 ? `✅ Re-checked ${redirects.length} renamed student(s) for leftover records.` : 'No renamed students found in this class.');
+      setTimeout(()=>setSyncMsg(''),4000);
+    } catch(e) {
+      console.error('Repair missed score renames:', e);
+      setSyncMsg('❌ Error — see console.');
+      setTimeout(()=>setSyncMsg(''),4000);
+    } finally {
+      setRepairingMissedScores(false);
+    }
+  };
+
   const filtered=(tutoringStudents||[]).filter(t=>!search||t.name.toLowerCase().includes(search.toLowerCase()));
 
   if(!classId)return null;
@@ -763,6 +811,12 @@ const syncRunning = useRef(false);
             <button onClick={e=>{e.stopPropagation();repairReversedLoops();}} disabled={repairingLoops}
               className="flex items-center gap-1 text-xs px-3 py-1 rounded-full font-bold bg-red-500/20 text-red-300 border border-red-500/50 disabled:opacity-50" title="Fix a rename that got recorded backwards (student's name keeps flip-flopping back to an old value). Safe to click any time — does nothing if there's nothing to fix.">
               {repairingLoops?'Repairing…':'🔧 Repair Reversed Links'}
+            </button>
+          )}
+          {onLink&&(
+            <button onClick={e=>{e.stopPropagation();repairMissedScoreRenames();}} disabled={repairingMissedScores}
+              className="flex items-center gap-1 text-xs px-3 py-1 rounded-full font-bold bg-amber-500/20 text-amber-300 border border-amber-500/50 disabled:opacity-50" title="Re-checks every already-renamed student in this class for old scores that got left behind under their previous name. Safe to click any time.">
+              {repairingMissedScores?'Repairing…':'🩹 Repair Missed Score Renames'}
             </button>
           )}
           {onLink&&renamePreview!==null&&renamePreview.length>0&&(
