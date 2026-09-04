@@ -704,7 +704,7 @@ function AttendanceReports({ students, teacherSchedule, sessions }) {
   );
 }
 
-function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma }) {
+function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader }) {
   const [students, setStudents] = useState([]);
   const [lessonBank, setLessonBank] = useState([]); 
   const [sessions, setSessions] = useState([]); 
@@ -2322,6 +2322,7 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
   }, [teacherSchedule]);
 
   const pendingStudents = useMemo(() => students.filter(s => s.isActive === 'pending'), [students]);
+  const pendingNameChanges = useMemo(() => students.filter(s => s.pendingName), [students]);
   const currentStudents = useMemo(() => students.filter(s => s.isActive === true || s.isActive === false), [students]);
   const trophyRequests = useMemo(() => students.filter(s => s.trophyRequested === true), [students]);
   
@@ -2558,10 +2559,20 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
           </button>
           <button onClick={() => setViewMode('bank')} className={`py-2 px-4 font-medium ${viewMode === 'bank' ? 'border-b-2 border-sky-500 text-sky-600' : 'text-gray-600 hover:text-sky-600'}`}>Lesson Bank</button>
           <button onClick={() => setViewMode('reports')} className={`py-2 px-4 font-medium ${viewMode === 'reports' ? 'border-b-2 border-amber-500 text-amber-600' : 'text-gray-600 hover:text-amber-600'}`}>Reports</button>
-          <button onClick={() => setViewMode('students')} className={`py-2 px-4 font-medium ${viewMode === 'students' ? 'border-b-2 border-rose-500 text-rose-600' : 'text-gray-600 hover:text-rose-600'}`}>
+          <button onClick={() => setViewMode('students')} className={`relative py-2 px-4 font-medium ${viewMode === 'students' ? 'border-b-2 border-rose-500 text-rose-600' : 'text-gray-600 hover:text-rose-600'}`}>
             Students
             {(pendingStudents.length > 0 || trophyRequests.length > 0) && (
               <span className="ml-2 bg-yellow-400 text-yellow-900 text-xs font-bold px-2 py-1 rounded-full">{pendingStudents.length + trophyRequests.length}</span>
+            )}
+            {/* Small dot specifically for students requesting a name change —
+                separate from the count badge above, which is for approvals
+                and trophy requests, so a rename request never gets missed
+                inside that number. */}
+            {pendingNameChanges.length > 0 && (
+              <span
+                className="absolute top-0.5 right-0.5 w-3 h-3 bg-indigo-500 rounded-full border-2 border-white animate-pulse"
+                title={`${pendingNameChanges.length} student(s) requesting a name change`}
+              ></span>
             )}
           </button>
           <button onClick={() => setViewMode('groups')} className={`py-2 px-4 font-medium ${viewMode === 'groups' ? 'border-b-2 border-cyan-500 text-cyan-600' : 'text-gray-600 hover:text-cyan-600'}`}>
@@ -2615,22 +2626,15 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
             <span className="flex items-center text-lg font-bold text-purple-800">🗣️ Myanmar Speaking app</span>
             <span className="text-purple-500 text-xl">↗</span>
           </button>
-          {/* Myanmar Reader app — standalone HTML app, opens in a new tab (not mounted inline).
-              ?teacher=true tells it to skip straight to teacher mode, no student ID needed —
-              this button only exists inside TutoringApp's own Teacher Dashboard, so reaching
-              it here already means TutoringApp has verified the visitor as its teacher. */}
+          {/* Myanmar Reader app — now mounted inline in the same project as
+              SmartStudy/Abhidhamma, so this switches the view instead of
+              opening a new tab. */}
           <button
-            onClick={() => {
-              if (!MYANMAR_READER_APP_URL) {
-                alert('Myanmar Reader app URL is not set up yet. Ask your developer to host it and add the link.');
-                return;
-              }
-              window.open(`${MYANMAR_READER_APP_URL}?teacher=true`, '_blank', 'noopener,noreferrer');
-            }}
+            onClick={() => onOpenMyanmarReader && onOpenMyanmarReader({ mode: 'teacher' })}
             className="w-full flex items-center justify-between bg-white p-4 rounded-xl border-2 border-teal-200 hover:border-teal-400 hover:shadow-md transition-all mt-3"
           >
             <span className="flex items-center text-lg font-bold text-teal-800">📗 Myanmar Reader app</span>
-            <span className="text-teal-500 text-xl">↗</span>
+            <span className="text-teal-500 text-xl">→</span>
           </button>
         </div>
       )}
@@ -3916,7 +3920,7 @@ function SmartStudyProgressBadge({ classId, studentName, smartStudyNames, compac
   if (completedCount === null) return null;
 }
 
-function StudentDashboard({ user, studentProfile, studentUid, announcements, onOpenSmartStudy, onOpenAbhidhamma, onLogout }) { 
+function StudentDashboard({ user, studentProfile, studentUid, announcements, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onLogout }) { 
   const [myLessons, setMyLessons] = useState([]);
   const [ssCompletionCounts, setSsCompletionCounts] = useState({}); // classId → SmartStudy completedCount
   const [mySessions, setMySessions] = useState([]);
@@ -4533,16 +4537,17 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
       formattedUrl = `https://${formattedUrl}`;
     }
-    // Myanmar Reader has no classId/device-tied identity of its own — it
-    // should always show and record students under the exact name
-    // TutoringApp knows them by, regardless of which device/browser they're
-    // on. Passing it in the URL means Myanmar Reader never has to guess or
-    // cache a name locally for anyone who arrives this way.
-    if (MYANMAR_READER_APP_URL && formattedUrl.startsWith(MYANMAR_READER_APP_URL) && studentProfile?.name) {
-      const sep = formattedUrl.includes('?') ? '&' : '?';
-      formattedUrl = `${formattedUrl}${sep}student=${encodeURIComponent(studentProfile.name)}`;
+    // Myanmar Reader is mounted inline in the same project now (like
+    // SmartStudy/Abhidhamma) — switch to it directly instead of opening a
+    // new tab, passing the student's exact TutoringApp name the same way
+    // the URL param used to (so nothing else about the identity/roster
+    // logic on that side needs to change).
+    const isMyanmarReaderLesson = MYANMAR_READER_APP_URL && formattedUrl.startsWith(MYANMAR_READER_APP_URL);
+    if (isMyanmarReaderLesson && onOpenMyanmarReader && studentProfile?.name) {
+      onOpenMyanmarReader({ studentName: studentProfile.name });
+    } else {
+      openLink(formattedUrl);
     }
-    openLink(formattedUrl);
     setIsLessonOverlayOpen(true);
     
     try {
@@ -5287,6 +5292,11 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                   return;
                 }
                 if (!url.startsWith('http://') && !url.startsWith('https://')) url = `https://${url}`;
+                if (MYANMAR_READER_APP_URL && url.startsWith(MYANMAR_READER_APP_URL) && onOpenMyanmarReader && studentProfile?.name) {
+                  onOpenMyanmarReader({ studentName: studentProfile.name });
+                  setIsLessonOverlayOpen(true);
+                  return;
+                }
                 openLink(url);
                 setIsLessonOverlayOpen(true);
               }} 
@@ -6473,7 +6483,7 @@ function DeactivatedScreen() {
   );
 }
 
-export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma }) {
+export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader }) {
   const [user, setUser] = useState(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [role, setRole] = useState(null); 
@@ -6888,7 +6898,7 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma }) {
     switch (view) {
       case 'teacher':
         if (role !== 'teacher') return <TodaySchedule role={role} />; 
-        return <TeacherDashboard user={user} onOpenSmartStudy={onOpenSmartStudy} onOpenAbhidhamma={onOpenAbhidhamma} />;
+        return <TeacherDashboard user={user} onOpenSmartStudy={onOpenSmartStudy} onOpenAbhidhamma={onOpenAbhidhamma} onOpenMyanmarReader={onOpenMyanmarReader} />;
       case 'student':
         if (role !== 'student') return <TodaySchedule role={role} />; 
         if (!studentProfile) {
@@ -6898,7 +6908,7 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma }) {
             </div>
           );
         }
-        return <StudentDashboard user={user} studentProfile={studentProfile} studentUid={targetStudentUid} announcements={announcements} onOpenSmartStudy={onOpenSmartStudy} onOpenAbhidhamma={onOpenAbhidhamma} onLogout={handleStudentLogout} />;
+        return <StudentDashboard user={user} studentProfile={studentProfile} studentUid={targetStudentUid} announcements={announcements} onOpenSmartStudy={onOpenSmartStudy} onOpenAbhidhamma={onOpenAbhidhamma} onOpenMyanmarReader={onOpenMyanmarReader} onLogout={handleStudentLogout} />;
       case 'weekly': 
         return <WeeklySchedule role={role} targetStudentUid={targetStudentUid} />;
       case 'attendance':

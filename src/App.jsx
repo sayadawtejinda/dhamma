@@ -2,11 +2,22 @@ import React, { useState } from 'react';
 import TutoringApp from './TutoringApp';
 import SmartStudyApp from './SmartStudy';
 import AbhidhammaApp from './AbhidhammaApp';
+import MyanmarReaderApp from './MyanmarReaderApp';
 
 export default function App() {
   const [activeApp, setActiveApp] = useState('tutoring');
   const [smartStudyRequest, setSmartStudyRequest] = useState(null);
   const [abhidhammaRequest, setAbhidhammaRequest] = useState(null);
+  const [myanmarReaderRequest, setMyanmarReaderRequest] = useState(null);
+
+  const openMyanmarReader = (request) => {
+    setMyanmarReaderRequest(request || { mode: 'teacher' });
+    setActiveApp('myanmarreader');
+  };
+  const closeMyanmarReader = () => {
+    setActiveApp('tutoring');
+    setMyanmarReaderRequest(null);
+  };
 
   const openSmartStudy = (request) => {
     setSmartStudyRequest(request || { mode: 'teacher' });
@@ -33,6 +44,7 @@ export default function App() {
         <TutoringApp
           onOpenSmartStudy={openSmartStudy}
           onOpenAbhidhamma={openAbhidhamma}
+          onOpenMyanmarReader={openMyanmarReader}
         />
       </div>
 
@@ -62,6 +74,20 @@ export default function App() {
           </div>
         )}
         <AbhidhammaApp entryRequest={abhidhammaRequest} onExit={closeAbhidhamma} />
+      </div>
+
+      <div style={{ display: activeApp === 'myanmarreader' ? 'block' : 'none' }}>
+        {activeApp === 'myanmarreader' && (
+          <div className="fixed top-3 left-3 z-[9999]">
+            <button
+              onClick={closeMyanmarReader}
+              className="px-4 py-2 bg-gray-800 text-white rounded-full shadow-lg font-semibold text-sm hover:bg-gray-900"
+            >
+              ← Back to Tutoring Dashboard
+            </button>
+          </div>
+        )}
+        <MyanmarReaderApp entryRequest={myanmarReaderRequest} onExit={closeMyanmarReader} />
       </div>
     </div>
   );
