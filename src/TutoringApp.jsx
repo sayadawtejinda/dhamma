@@ -773,11 +773,14 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma }) {
   const [isSendDropdownOpen, setIsSendDropdownOpen] = useState(false); 
   const [directTrophyAmount, setDirectTrophyAmount] = useState(1);
   const [previouslyEarnedOverride, setPreviouslyEarnedOverride] = useState('');
+  const [completedUnitOverride, setCompletedUnitOverride] = useState('');
+  const [isSavingCompletedUnit, setIsSavingCompletedUnit] = useState(false);
   const [isSavingPreviouslyEarned, setIsSavingPreviouslyEarned] = useState(false);
   const [isReconcilingAllClasses, setIsReconcilingAllClasses] = useState(false);
   const [wholeAppMaxAvailable, setWholeAppMaxAvailable] = useState(null); // sum of each class's own max-available
   useEffect(() => {
     setPreviouslyEarnedOverride('');
+    setCompletedUnitOverride('');
   }, [selectedStudentUid, selectedBankLessonId, sendSmartStudyClassId, sendAbhidhammaClassId, sendDhammaschoolClassId]);
 
   // When no specific class is chosen, "Max Available" for the whole app must be
@@ -1436,6 +1439,32 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma }) {
       alert('Error saving. Please try again.');
     }
     setIsSavingPreviouslyEarned(false);
+  };
+
+  // Same idea as handleSetPreviouslyEarned, but for completedUnits — some
+  // lessons (Myanmar Reader in particular) have no live class API to pull
+  // the real progress number from, so completedUnits[lessonKey] is just
+  // whatever was last stored, and can go stale (e.g. Sheet A/Sheet B used to
+  // get double-counted as separate chapters before that was fixed).
+  const handleSetCompletedUnit = async (lessonKey) => {
+    const student = students.find(s => s.id === selectedStudentUid);
+    if (!student) return;
+    const newValue = parseInt(completedUnitOverride);
+    if (isNaN(newValue) || newValue < 0) {
+      alert('Please enter a valid number (0 or more).');
+      return;
+    }
+    setIsSavingCompletedUnit(true);
+    try {
+      await updateDoc(doc(db, `${publicDataPath}/students`, student.id), {
+        [`completedUnits.${lessonKey}`]: newValue
+      });
+      setCompletedUnitOverride('');
+    } catch (err) {
+      console.error('Error setting Completed Unit:', err);
+      alert('Error saving. Please try again.');
+    }
+    setIsSavingCompletedUnit(false);
   };
 
   // One-click bulk reconciliation: for a student who has fully finished a
@@ -2934,6 +2963,32 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                             <p className="text-sm text-indigo-700">No progress reported yet for this lesson.</p>
                           );
                         })()}
+                        {/* One-time correction tool — for lessons like Myanmar Reader that
+                            don't have a live class API to pull the real number from, this
+                            value is just whatever was last stored in completedUnits, which
+                            can go stale (e.g. it briefly counted Sheet A and Sheet B as
+                            separate chapters, doubling the number). Only shown when there's
+                            no live-fetched count overriding it. */}
+                        {!isAbhiForTrophy && !isDhammaschoolForTrophy && !ssClassForTrophy && ssStudentTotalCount == null && (
+                          <div className="flex items-center gap-2 mt-2 pt-2 border-t border-indigo-200">
+                            <label className="text-xs text-indigo-700 font-semibold whitespace-nowrap">Fix Completed Chapter:</label>
+                            <input
+                              type="number" min="0"
+                              value={completedUnitOverride}
+                              onChange={(e) => setCompletedUnitOverride(e.target.value)}
+                              placeholder={String(completedUnit)}
+                              className="w-20 p-1.5 border-2 border-indigo-300 rounded-lg text-center font-bold text-indigo-900 text-sm"
+                            />
+                            <button
+                              type="button"
+                              disabled={isSavingCompletedUnit || completedUnitOverride === ''}
+                              onClick={() => handleSetCompletedUnit(lessonKey)}
+                              className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700 disabled:opacity-50"
+                            >
+                              {isSavingCompletedUnit ? 'Saving...' : 'Save'}
+                            </button>
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -4242,19 +4297,20 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
 
   // Myanmar Reader sessions are sent as a plain external link (no
   // myanmarreader:// protocol / classId parsing like the other linked apps),
-  // so there's nothing else already pre-filling Score for them. This queries
-  // Myanmar Reader's own Firestore scores directly — written live as the
-  // student reads (score 0–1000 per chapter+sheet, isComplete once it
-  // crosses 700) — and fills in whichever chapter+sheet they most recently
-  // studied (by timestamp), whether or not it's finished; "Lesson completed"
-  // is left blank since Myanmar Reader doesn't have a single linear
-  // chapter-count the way SmartStudy/Abhidhamma do.
+  // so there's nothing else already pre-filling Score/Lesson completed for
+  // them. This queries Myanmar Reader's own Firestore scores directly —
+  // written live as the student reads (score 0–1000 per chapter+sheet,
+  // isComplete once it crosses 700) — and fills in whichever chapter+sheet
+  // they most recently studied (by timestamp), whether or not it's finished.
   //
-  // Separately, it counts newly-finished (chapter, sheet) pairs that haven't
-  // been turned into a trophy request yet (one trophy per finished sheet,
-  // Sheet A and Sheet B each count on their own) and reuses the same
-  // requestTrophyChecked/requestTrophyAmount state the other apps' "🏆 +N
-  // Trophy!" badge already reads from, so the UI needs no changes.
+  // A chapter has two sheets (A and B) that must both be finished before it
+  // "counts" — Sheet A alone isn't the chapter being done, so Lesson
+  // completed only fills in once a chapter's pair is both done (using
+  // chapterComplete, stamped by the reader app itself once it detects both
+  // sheets crossed 700), and only a chapter reaching that state is worth a
+  // trophy — 2 at once (one per sheet), not 1 at a time as each sheet
+  // finishes. requestTrophyChecked/requestTrophyAmount are the same state
+  // the other apps' "🏆 +N Trophy!" badge already reads from.
   const [myanmarReaderPendingScoreDocs, setMyanmarReaderPendingScoreDocs] = useState([]);
   useEffect(() => {
     const session = redoSession || activeSession;
@@ -4267,22 +4323,28 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           where('studentName', '==', studentProfile.name)
         ));
         if (snap.empty) { setMyanmarReaderPendingScoreDocs([]); return; }
+        const allDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
         // Most recently studied chapter+sheet, complete or not — this is what
         // gets reported, matching "report the last chapter they studied."
         let latest = null;
-        snap.docs.forEach(d => {
-          const dt = d.data();
+        allDocs.forEach(dt => {
           const ts = dt.timestamp?.toMillis ? dt.timestamp.toMillis() : 0;
           if (!latest || ts > latest._ts) latest = { ...dt, _ts: ts };
         });
-        if (latest) setScore(`${latest.score ?? 0}/1000 — ${SHEET_CHAPTER_PREFIX} ${latest.chapterNum} (Sheet ${latest.sheetName})`);
+        if (latest) setScore(`${latest.score ?? 0}/1000 — Chapter ${latest.chapterNum} (Sheet ${latest.sheetName})`);
 
-        // Completed sheets not yet requested as a trophy.
-        const pending = snap.docs.filter(d => {
-          const dt = d.data();
-          return dt.isComplete && !dt.trophyRequested;
-        }).map(d => ({ id: d.id, ...d.data() }));
+        // Highest chapter where BOTH sheets are done — this, not the raw
+        // sheet count, is what "Lesson completed" shows (avoids the old
+        // doubled 1–58 numbering; it's always a real chapter number, 1–29).
+        const fullChapters = allDocs.filter(d => d.chapterComplete).map(d => d.chapterNum);
+        if (fullChapters.length > 0) handleCompletedUnitChange(String(Math.max(...fullChapters)));
+
+        // Completed sheets that are part of a NOW-complete chapter and
+        // haven't been turned into a trophy request yet — both sheets of a
+        // chapter become pending together, so finishing a chapter always
+        // requests exactly 2 trophies at once.
+        const pending = allDocs.filter(d => d.isComplete && d.chapterComplete && !d.trophyRequested);
         setMyanmarReaderPendingScoreDocs(pending);
         setRequestTrophyAmount(pending.length > 0 ? pending.length : 1);
         setRequestTrophyChecked(pending.length > 0);
