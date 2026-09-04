@@ -50,11 +50,8 @@ const DHAMMASCHOOL_BODY_HTML = `
                     <span id="notif-badge" class="hidden absolute -top-2 -right-2 bg-red-500 text-white text-xs font-black rounded-full w-5 h-5 flex items-center justify-center">0</span>
                 </button>
                 <button id="student-home-btn" onclick="goToLibrary()" class="hidden bg-orange-100 text-orange-600 font-bold py-2 px-4 rounded-xl transition hover:bg-orange-200"><i class="fas fa-home"></i> Home</button>
-                <button id="switch-to-teacher-btn" onclick="switchToTeacherMode()" class="hidden bg-yellow-100 text-yellow-700 font-bold py-2 px-4 rounded-xl transition hover:bg-yellow-200 text-sm"><i class="fas fa-chalkboard-teacher"></i> Switch to Teacher</button>
-                <button id="teacher-login-btn" onclick="openTeacherPasscodeModal()" class="hidden text-xs font-bold text-slate-400 hover:text-orange-600 underline">Teacher? Login</button>
                 <div id="teacher-badge" class="hidden">
                     <span class="bg-yellow-100 text-yellow-800 px-4 py-1 rounded-full font-bold text-sm border-2 border-yellow-200"><i class="fas fa-chalkboard-teacher mr-1"></i> Teacher</span>
-                    <button id="exit-teacher-mode-btn" onclick="exitTeacherMode()" class="ml-2 text-xs font-bold text-slate-400 hover:text-orange-600 underline">Switch to Student</button>
                 </div>
             </div>
         </header>
@@ -102,20 +99,6 @@ const DHAMMASCHOOL_BODY_HTML = `
             </div>
         </div>
 
-        <!-- Teacher Passcode Modal -->
-        <div id="teacher-passcode-modal" class="fixed inset-0 bg-slate-900/60 flex justify-center items-center z-50 hidden backdrop-blur-md">
-            <div class="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-md border-4 border-yellow-100">
-                <h2 class="text-2xl font-black text-slate-800 mb-2 text-center"><i class="fas fa-chalkboard-teacher text-yellow-600"></i> Teacher Login</h2>
-                <p class="text-slate-500 font-bold text-sm text-center mb-4">Enter the teacher passcode to continue.</p>
-                <input type="password" id="teacher-passcode-input" placeholder="Passcode" class="input-style mb-2" autocomplete="off" onkeydown="if(event.key==='Enter') submitTeacherPasscode()">
-                <p id="teacher-passcode-error" class="hidden text-red-500 font-bold text-sm mb-2">Incorrect passcode. Please try again.</p>
-                <div class="flex gap-3 mt-4">
-                    <button id="cancel-teacher-passcode-btn" onclick="closeTeacherPasscodeModal()" class="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl">Cancel</button>
-                    <button id="confirm-teacher-passcode-btn" onclick="submitTeacherPasscode()" class="flex-1 btn-primary py-3 font-bold btn-3d">Enter</button>
-                </div>
-            </div>
-        </div>
-        
         <!-- Teacher View -->
         <!-- Teacher Class Picker (shown right after teacher login) -->
         <div id="teacher-class-picker" class="hidden max-w-2xl mx-auto pb-10">
@@ -1023,6 +1006,26 @@ let bilingualMode = false;
                                     selectedClassId = paramClassId;
                                     localStorage.setItem('dhammaschool_classId', paramClassId);
                                 }
+                                // A student arriving via entryRequest.studentName came straight
+                                // from TutoringApp's "Assign Lesson" — that name IS already the
+                                // authoritative TutoringApp name, so there's no reason to make the
+                                // teacher manually search for and click "🔗 Link to Tutoring" for
+                                // every student who arrives this way. Auto-link them right away.
+                                if (entryRequest?.studentName && paramClassId) {
+                                    (async () => {
+                                        try {
+                                            const tSnap = await getDocs(query(collection(db, TUTORING_STUDENTS_PATH), where('name', '==', entryRequest.studentName)));
+                                            if (!tSnap.empty) {
+                                                await setDoc(doc(db, PATHS.roster, `${paramClassId}_${entryRequest.studentName}`), {
+                                                    classId: paramClassId,
+                                                    studentName: entryRequest.studentName,
+                                                    linkedToTutoring: true,
+                                                    tutoringStudentUid: tSnap.docs[0].id
+                                                }, { merge: true });
+                                            }
+                                        } catch (e) { console.error('Auto-link on deep-link entry error:', e); }
+                                    })();
+                                }
                                 // --- END: TutoringApp deep-link auto-entry (name + class part) ---
 
                                 if (!studentName) els.nameModal.classList.remove('hidden');
@@ -1182,47 +1185,23 @@ let bilingualMode = false;
         // remembered in this browser (not tied to any specific Firebase UID) so
         // refreshing the page doesn't require going back through TutoringApp
         // every time.
-        // Letting a browser "remember" teacher access (see note above) is what a
-        // device-wide flag like dhammaschool_is_teacher is for — but a single flag
-        // that only ever gets SET has no way back for a student opening their own
-        // link on the same device. So this is split into two separate things:
-        //   - dhammaschool_is_teacher: the permanent grant for this device, only
-        //     ever set after the correct teacher passcode is entered (see
-        //     TEACHER_PASSCODE / submitTeacherPasscode below).
-        //   - dhammaschool_view_as_student: a temporary "I'd like to look at the
-        //     student view right now" override, set by the exitTeacherMode()
-        //     button or a plain ?student=true link, and cleared again by
-        //     switchToTeacherMode() or by re-passing the passcode check.
-        // Arriving with ?teacher=true from TutoringApp is treated only as a
-        // *hint* to prompt for the passcode, not as proof of identity by itself —
-        // TutoringApp's own access control has failed before, so this app no
-        // longer trusts the link alone. A device that still holds the permanent
-        // grant but is currently viewing as a student sees a "Switch to Teacher"
-        // shortcut, and a device with no grant at all still has a "Teacher?
-        // Login" link — so getting in (or back in) never requires re-finding a
-        // link from TutoringApp.
+        // Teacher access is now entirely decided by HOW this app was reached.
+        // TutoringApp's "📖 Dhammaschool app" button only exists inside its own
+        // Teacher Dashboard — which already has its own robust, passcode-based
+        // recovery system (see TutoringApp's Settings tab) — so reaching this
+        // app with entryRequest.mode==='teacher' already IS proof of teacher
+        // identity. There's nothing left to lose track of on this side: no
+        // separate passcode, no per-device "remembered" grant, so a teacher
+        // getting logged out of TutoringApp and back in (or opening on a brand
+        // new device) always lands back here as a teacher automatically, with
+        // no lockout possible on Dhammaschool's end. Students always arrive
+        // with entryRequest.studentName set (from "Start Lesson" / Assign
+        // Lesson), so there's no in-app "Switch to Teacher/Student" toggle
+        // needed either — which of the two you get is simply which entry
+        // point you came through.
         async function checkRole() {
             const urlParams = new URLSearchParams(window.location.search);
-            // Same entryRequest-first, URL-param-fallback pattern as the
-            // deep-link section in init() above.
-            const cameFromTutoringAsTeacher = entryRequest?.mode === 'teacher' || urlParams.get('teacher') === 'true';
-            // TutoringApp's "Start Lesson" link passes the student's actual name,
-            // e.g. ?student=Aye+Aye — not the literal text "true". Treat any
-            // non-empty ?student=... value as "this is a student arriving from
-            // Tutoring", the same as the older ?student=true convention.
-            const paramStudentRaw = entryRequest?.studentName || urlParams.get('student');
-            const cameFromTutoringAsStudent = !!paramStudentRaw && paramStudentRaw !== 'true';
-            const explicitlyStudent = urlParams.get('teacher') === 'false' || paramStudentRaw === 'true' || cameFromTutoringAsStudent;
-
-            if (explicitlyStudent) localStorage.setItem('dhammaschool_view_as_student', 'true');
-
-            const hasTeacherPermission = localStorage.getItem('dhammaschool_is_teacher') === 'true';
-            if (cameFromTutoringAsTeacher && hasTeacherPermission) {
-                localStorage.removeItem('dhammaschool_view_as_student');
-            }
-
-            const viewingAsStudent = explicitlyStudent || localStorage.getItem('dhammaschool_view_as_student') === 'true';
-            isTeacher = hasTeacherPermission && !viewingAsStudent;
+            isTeacher = entryRequest?.mode === 'teacher' || urlParams.get('teacher') === 'true';
 
             safeSetText('user-role-display', isTeacher ? 'Teacher' : 'Student');
             if (isTeacher) {
@@ -1237,22 +1216,6 @@ let bilingualMode = false;
             } else {
                 els.studentView.classList.remove('hidden');
                 document.getElementById('student-home-btn').classList.remove('hidden');
-                // Arriving from Tutoring as a named student: this is a student's
-                // own device/session, so never show any way into the teacher
-                // side — no "Switch to Teacher", no "Teacher? Login" link.
-                if (!cameFromTutoringAsStudent) {
-                    if (hasTeacherPermission) {
-                        document.getElementById('switch-to-teacher-btn').classList.remove('hidden');
-                    } else {
-                        document.getElementById('teacher-login-btn').classList.remove('hidden');
-                    }
-                }
-                // Arrived via the TutoringApp teacher link, but this device
-                // hasn't proven the passcode yet — ask for it instead of
-                // trusting the link by itself.
-                if (cameFromTutoringAsTeacher && !hasTeacherPermission) {
-                    openTeacherPasscodeModal();
-                }
             }
         }
 
@@ -4035,64 +3998,6 @@ function renderClickableWords(text) {
                 }
             };
             reader.readAsText(file);
-        };
-
-        // Teacher passcode gate — the sole source of truth for granting teacher
-        // access on a device. CHANGE THIS to your own passcode before sharing
-        // the app. Note this is plain client-side JS: anyone who views the page
-        // source can read it, so treat it as a lightweight gate against
-        // casual/accidental access (e.g. someone guessing the ?teacher=true URL
-        // param), not as strong security for sensitive data.
-        const TEACHER_PASSCODE = "CHANGE_ME_PASSCODE";
-
-        window.openTeacherPasscodeModal = () => {
-            document.getElementById('teacher-passcode-error').classList.add('hidden');
-            document.getElementById('teacher-passcode-input').value = '';
-            document.getElementById('teacher-passcode-modal').classList.remove('hidden');
-            document.getElementById('teacher-passcode-input').focus();
-        };
-
-        window.closeTeacherPasscodeModal = () => {
-            document.getElementById('teacher-passcode-modal').classList.add('hidden');
-            // If we got here via the ?teacher=true link and the user cancels,
-            // drop the param so refreshing the page doesn't re-open the prompt.
-            const url = new URL(window.location.href);
-            if (url.searchParams.get('teacher') === 'true') {
-                url.searchParams.delete('teacher');
-                window.history.replaceState({}, '', url.toString());
-            }
-        };
-
-        window.submitTeacherPasscode = () => {
-            const val = document.getElementById('teacher-passcode-input').value;
-            if (val && val === TEACHER_PASSCODE) {
-                localStorage.setItem('dhammaschool_is_teacher', 'true');
-                localStorage.removeItem('dhammaschool_view_as_student');
-                const url = new URL(window.location.href);
-                url.searchParams.delete('teacher');
-                url.searchParams.delete('student');
-                window.location.href = url.toString();
-            } else {
-                document.getElementById('teacher-passcode-error').classList.remove('hidden');
-            }
-        };
-
-        window.exitTeacherMode = () => {
-            // Only sets the "viewing as student" override — the underlying
-            // teacher grant for this device is left alone, so switchToTeacherMode()
-            // can bring it back without needing the original TutoringApp link.
-            localStorage.setItem('dhammaschool_view_as_student', 'true');
-            const url = new URL(window.location.href);
-            url.searchParams.delete('teacher');
-            url.searchParams.set('student', 'true');
-            window.location.href = url.toString();
-        };
-
-        window.switchToTeacherMode = () => {
-            localStorage.removeItem('dhammaschool_view_as_student');
-            const url = new URL(window.location.href);
-            url.searchParams.delete('student');
-            window.location.href = url.toString();
         };
 
         init();
