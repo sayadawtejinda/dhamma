@@ -607,7 +607,7 @@ export default function MyanmarReaderApp({ entryRequest, onExit }) {
   // arrives as entryRequest={mode:'teacher'}; the standalone deployment
   // (its own separate site) still supports the old ?teacher=true link too,
   // so nothing breaks if that URL is opened directly. ──
-  const [isTeacherMode] = useState(() => entryRequest?.mode === 'teacher' || new URLSearchParams(window.location.search).get('teacher') === 'true');
+  const isTeacherMode = entryRequest?.mode === 'teacher' || new URLSearchParams(window.location.search).get('teacher') === 'true';
 
   // ── Student identity / Tutoring link / trophies ──
   const [userId, setUserId] = useState(null);
