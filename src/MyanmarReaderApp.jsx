@@ -652,7 +652,12 @@ export default function MyanmarReaderApp({ entryRequest, onExit }) {
   }, []);
 
   useEffect(() => {
-    if (isTeacherMode || deepLinkStudentName) return; // teacher, or a name already supplied by the link — never prompt
+    // Teacher, or a name already supplied by the link — never prompt. This also
+    // covers the case where MyanmarReaderApp was mounted (entryRequest=null,
+    // since apps in App.jsx mount once and stay mounted) before the teacher/
+    // student actually opened it: the modal may have already been shown by the
+    // check below, using stale info, so force it closed once we learn better.
+    if (isTeacherMode || deepLinkStudentName) { setShowNameModal(false); return; }
     if (userId && !studentName) setShowNameModal(true);
   }, [userId, studentName, isTeacherMode, deepLinkStudentName]);
 
