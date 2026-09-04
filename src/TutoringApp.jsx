@@ -704,7 +704,7 @@ function AttendanceReports({ students, teacherSchedule, sessions }) {
   );
 }
 
-function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader }) {
+function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool }) {
   const [students, setStudents] = useState([]);
   const [lessonBank, setLessonBank] = useState([]); 
   const [sessions, setSessions] = useState([]); 
@@ -2601,16 +2601,15 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
             <span className="flex items-center text-lg font-bold text-amber-800">📚 Abhidhamma app</span>
             <span className="text-amber-500 text-xl">→</span>
           </button>
-          {/* Dhammaschool app — standalone HTML app, opens in a new tab (not mounted inline).
-              ?teacher=true tells Dhammaschool to grant teacher access directly — this
-              button only exists inside TutoringApp's own Teacher Dashboard, so reaching
-              it here already means TutoringApp has verified the visitor as its teacher. */}
+          {/* Dhammaschool app — now mounted inline in the same project as
+              SmartStudy/Abhidhamma/Myanmar Reader, so this switches the view
+              instead of opening a new tab. */}
           <button
-            onClick={() => window.open(`${DHAMMASCHOOL_APP_URL}?teacher=true`, '_blank', 'noopener,noreferrer')}
+            onClick={() => onOpenDhammaschool && onOpenDhammaschool({ mode: 'teacher' })}
             className="w-full flex items-center justify-between bg-white p-4 rounded-xl border-2 border-orange-200 hover:border-orange-400 hover:shadow-md transition-all mt-3"
           >
             <span className="flex items-center text-lg font-bold text-orange-800">📖 Dhammaschool app</span>
-            <span className="text-orange-500 text-xl">↗</span>
+            <span className="text-orange-500 text-xl">→</span>
           </button>
           {/* Myanmar Speaking app — standalone HTML app, opens in a new tab (not mounted inline) */}
           <button
@@ -3920,7 +3919,7 @@ function SmartStudyProgressBadge({ classId, studentName, smartStudyNames, compac
   if (completedCount === null) return null;
 }
 
-function StudentDashboard({ user, studentProfile, studentUid, announcements, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onLogout }) { 
+function StudentDashboard({ user, studentProfile, studentUid, announcements, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onLogout }) { 
   const [myLessons, setMyLessons] = useState([]);
   const [ssCompletionCounts, setSsCompletionCounts] = useState({}); // classId → SmartStudy completedCount
   const [mySessions, setMySessions] = useState([]);
@@ -4414,15 +4413,14 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
   const handleStartLesson = async (lesson) => {
     if (lesson.link && lesson.link.startsWith('dhammaschool://')) {
       const classId = extractDhammaschoolClassId(lesson.link);
-      // Standalone HTML app — open in a new tab with query params. The app
-      // auto-selects this class and shows all its lessons (student picks
-      // which one to start, mirroring how SmartStudy/AbhidhammaApp hand off
-      // to a class rather than one specific lesson).
-      const params = new URLSearchParams({
-        student: studentProfile?.name || '',
-        classId: classId || '',
-      });
-      window.open(`${DHAMMASCHOOL_APP_URL}?${params.toString()}`, '_blank', 'noopener,noreferrer');
+      // Mounted inline now (same project as SmartStudy/Abhidhamma/Myanmar
+      // Reader) — switch to it directly instead of opening a new tab. The
+      // app auto-selects this class and shows all its lessons (student
+      // picks which one to start, mirroring how SmartStudy/AbhidhammaApp
+      // hand off to a class rather than one specific lesson).
+      if (onOpenDhammaschool) {
+        onOpenDhammaschool({ studentName: studentProfile?.name || '', classId: classId || '' });
+      }
       if (lesson.status === 'pending') {
         try { await updateDoc(doc(db, `${publicDataPath}/lessons`, lesson.id), { status: 'started' }); } catch (e) {}
       }
@@ -5287,6 +5285,15 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                       lessonId: extractAbhidhammaLessonId(url),
                       studentName: studentProfile?.name,
                       ageGroup: studentProfile?.smartStudyAgeLevel || null,
+                    });
+                  }
+                  return;
+                }
+                if (url && url.startsWith('dhammaschool://')) {
+                  if (onOpenDhammaschool) {
+                    onOpenDhammaschool({
+                      studentName: studentProfile?.name || '',
+                      classId: extractDhammaschoolClassId(url) || '',
                     });
                   }
                   return;
@@ -6483,7 +6490,7 @@ function DeactivatedScreen() {
   );
 }
 
-export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader }) {
+export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool }) {
   const [user, setUser] = useState(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [role, setRole] = useState(null); 
@@ -6898,7 +6905,7 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpen
     switch (view) {
       case 'teacher':
         if (role !== 'teacher') return <TodaySchedule role={role} />; 
-        return <TeacherDashboard user={user} onOpenSmartStudy={onOpenSmartStudy} onOpenAbhidhamma={onOpenAbhidhamma} onOpenMyanmarReader={onOpenMyanmarReader} />;
+        return <TeacherDashboard user={user} onOpenSmartStudy={onOpenSmartStudy} onOpenAbhidhamma={onOpenAbhidhamma} onOpenMyanmarReader={onOpenMyanmarReader} onOpenDhammaschool={onOpenDhammaschool} />;
       case 'student':
         if (role !== 'student') return <TodaySchedule role={role} />; 
         if (!studentProfile) {
@@ -6908,7 +6915,7 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpen
             </div>
           );
         }
-        return <StudentDashboard user={user} studentProfile={studentProfile} studentUid={targetStudentUid} announcements={announcements} onOpenSmartStudy={onOpenSmartStudy} onOpenAbhidhamma={onOpenAbhidhamma} onOpenMyanmarReader={onOpenMyanmarReader} onLogout={handleStudentLogout} />;
+        return <StudentDashboard user={user} studentProfile={studentProfile} studentUid={targetStudentUid} announcements={announcements} onOpenSmartStudy={onOpenSmartStudy} onOpenAbhidhamma={onOpenAbhidhamma} onOpenMyanmarReader={onOpenMyanmarReader} onOpenDhammaschool={onOpenDhammaschool} onLogout={handleStudentLogout} />;
       case 'weekly': 
         return <WeeklySchedule role={role} targetStudentUid={targetStudentUid} />;
       case 'attendance':
