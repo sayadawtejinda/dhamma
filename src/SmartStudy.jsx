@@ -613,6 +613,7 @@ const TeacherDashboard = React.memo(({
               <p className="text-xl text-gray-600">Manage Lessons, Quizzes, and Students.</p>
             </div>
             <div className="ml-4"><TeacherNotificationBell completionsList={completionsList} /></div>
+            <button onClick={() => handleSetView('teacherLogin')} className="ml-1 p-2 bg-blue-100 text-blue-700 rounded-full shadow-md hover:bg-blue-200 transition-colors" title="Choose a Different Class"><LayoutGrid className="w-6 h-6" /></button>
           </div>
         </div>
         <div className="flex bg-white rounded-xl shadow-md p-1 border-2 border-blue-100 flex-wrap">
@@ -1485,6 +1486,7 @@ const HomeView = React.memo(({ handleSetView }) => (
 const TeacherLoginView = React.memo(({ targetClassId, setTargetClassId, handleTeacherLogin, handleSetView, allTeacherClasses, isLoading, onRenameClass, onDeleteClass, currentUserId, onReclaimAll, allOnlineRoster }) => {
   const [renaming, setRenaming] = React.useState(null); // classId being renamed
   const [newDisplayName, setNewDisplayName] = React.useState('');
+  const [showActiveStudents, setShowActiveStudents] = React.useState(false); // collapsed by default — opt in to check
   const mismatchedCount = allTeacherClasses.filter(c => c.teacherId && c.teacherId !== currentUserId).length;
 
   // Lesson-title lookup per class, so the online-students panel can show a
@@ -1495,18 +1497,23 @@ const TeacherLoginView = React.memo(({ targetClassId, setTargetClassId, handleTe
     return m;
   }, [allTeacherClasses]);
 
-  // Same online/inactive/offline thresholds and ordering used inside a
-  // single class's student list — applied here across every class at once.
-  const sortedOnlineRoster = React.useMemo(() => {
-    return [...(allOnlineRoster || [])].sort((a, b) => {
-      const aTime = Date.now() - (a.lastSeen || 0); const bTime = Date.now() - (b.lastSeen || 0);
-      const aIsOnline = aTime < 180000; const bIsOnline = bTime < 180000;
-      const aIsWarning = aTime >= 180000 && aTime < 480000; const bIsWarning = bTime >= 180000 && bTime < 480000;
-      if (aIsOnline && !bIsOnline) return -1; if (!aIsOnline && bIsOnline) return 1;
-      if (aIsWarning && !bIsWarning) return -1; if (!aIsWarning && bIsWarning) return 1;
-      return (a.classId || '').localeCompare(b.classId || '') || (a.studentName || '').localeCompare(b.studentName || '');
-    });
+  // Same online/inactive thresholds used inside a single class's student
+  // list — offline students are dropped entirely here (this panel is for
+  // "who's active right now", not a full roster), and inactive ones are
+  // sorted first so they're the first thing the teacher notices.
+  const activeRoster = React.useMemo(() => {
+    return (allOnlineRoster || [])
+      .map(s => {
+        const timeSinceLastSeen = Date.now() - (s.lastSeen || 0);
+        return { ...s, isOnline: timeSinceLastSeen < 180000, isWarning: timeSinceLastSeen >= 180000 && timeSinceLastSeen < 480000 };
+      })
+      .filter(s => s.isOnline || s.isWarning)
+      .sort((a, b) => {
+        if (a.isWarning && !b.isWarning) return -1; if (!a.isWarning && b.isWarning) return 1;
+        return (a.classId || '').localeCompare(b.classId || '') || (a.studentName || '').localeCompare(b.studentName || '');
+      });
   }, [allOnlineRoster]);
+  const warningCount = activeRoster.filter(s => s.isWarning).length;
 
   return (
     <div className="max-w-lg mx-auto mt-10 p-6 space-y-6">
@@ -1560,51 +1567,51 @@ const TeacherLoginView = React.memo(({ targetClassId, setTargetClassId, handleTe
           })}
         </div>
       )}
-      {/* Online students across every class, in one place — same
-          online/inactive/offline pattern as a single class's student list. */}
+      {/* Active students across every class — collapsed by default so it
+          doesn't demand attention every visit; offline students are left
+          out entirely, and anyone gone quiet (inactive) sorts to the top. */}
       <div className="border-t pt-4 space-y-3">
-        <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide flex items-center">
-          <Users className="w-4 h-4 mr-1.5" />Students — All Classes
-        </p>
-        {sortedOnlineRoster.length === 0 ? (
-          <p className="text-sm text-gray-400 italic">No approved students yet.</p>
-        ) : (
-          <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
-            {sortedOnlineRoster.map(student => {
-              const timeSinceLastSeen = Date.now() - (student.lastSeen || 0);
-              const isOnline = timeSinceLastSeen < 180000;
-              const isWarning = timeSinceLastSeen >= 180000 && timeSinceLastSeen < 480000;
-              const lessonTitle = student.currentLessonId
-                ? (classesById[student.classId]?.lessons || []).find(l => l.lessonId === student.currentLessonId)?.title
-                : null;
-              return (
-                <div key={`${student.classId}_${student.studentName}`} className={`p-3 rounded-xl border transition-colors ${isOnline ? 'bg-green-50 border-green-300' : isWarning ? 'bg-red-50 border-red-300' : 'bg-gray-50 border-gray-200 opacity-80'}`}>
-                  <p className={`font-bold text-sm ${isOnline ? 'text-gray-800' : isWarning ? 'text-red-800' : 'text-gray-600'}`}>
-                    {student.studentName}
-                    <span className="ml-2 text-xs font-normal text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full border border-blue-200">{student.classId}</span>
-                  </p>
-                  <div className="flex items-center mt-1 flex-wrap gap-y-1">
-                    {isOnline ? (
-                      <>
-                        <span className="w-2.5 h-2.5 bg-green-500 rounded-full mr-2 animate-pulse"></span>
-                        <span className="text-xs text-green-600 font-bold">Online</span>
-                        {student.currentLessonId && (<span className="ml-2 text-xs text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full border border-blue-200">Viewing: {lessonTitle || student.currentLessonId}</span>)}
-                      </>
-                    ) : isWarning ? (
-                      <>
-                        <span className="w-2.5 h-2.5 bg-red-500 rounded-full mr-2 animate-pulse"></span>
-                        <span className="text-xs text-red-600 font-bold">Inactive (Please warn student)</span>
-                      </>
-                    ) : (
-                      <>
-                        <span className="w-2.5 h-2.5 bg-gray-400 rounded-full mr-2"></span> <span className="text-xs text-gray-500">Offline</span>
-                      </>
-                    )}
+        <button onClick={() => setShowActiveStudents(v => !v)} className="w-full flex items-center justify-between text-sm font-semibold text-gray-500 uppercase tracking-wide hover:text-gray-700">
+          <span className="flex items-center"><Users className="w-4 h-4 mr-1.5" />Active Students — All Classes{activeRoster.length > 0 && ` (${activeRoster.length})`}</span>
+          <span className="flex items-center gap-2 normal-case">
+            {warningCount > 0 && <span className="text-xs font-bold text-red-600 bg-red-100 border border-red-300 px-2 py-0.5 rounded-full animate-pulse">{warningCount} inactive</span>}
+            <ChevronDown className={`w-4 h-4 transition-transform ${showActiveStudents ? 'rotate-180' : ''}`} />
+          </span>
+        </button>
+        {showActiveStudents && (
+          activeRoster.length === 0 ? (
+            <p className="text-sm text-gray-400 italic">No one is online right now.</p>
+          ) : (
+            <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+              {activeRoster.map(student => {
+                const lessonTitle = student.currentLessonId
+                  ? (classesById[student.classId]?.lessons || []).find(l => l.lessonId === student.currentLessonId)?.title
+                  : null;
+                return (
+                  <div key={`${student.classId}_${student.studentName}`} className={`p-3 rounded-xl border transition-colors ${student.isOnline ? 'bg-green-50 border-green-300' : 'bg-red-50 border-red-300'}`}>
+                    <p className={`font-bold text-sm ${student.isOnline ? 'text-gray-800' : 'text-red-800'}`}>
+                      {student.studentName}
+                      <span className="ml-2 text-xs font-normal text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full border border-blue-200">{student.classId}</span>
+                    </p>
+                    <div className="flex items-center mt-1 flex-wrap gap-y-1">
+                      {student.isOnline ? (
+                        <>
+                          <span className="w-2.5 h-2.5 bg-green-500 rounded-full mr-2 animate-pulse"></span>
+                          <span className="text-xs text-green-600 font-bold">Online</span>
+                          {student.currentLessonId && (<span className="ml-2 text-xs text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full border border-blue-200">Viewing: {lessonTitle || student.currentLessonId}</span>)}
+                        </>
+                      ) : (
+                        <>
+                          <span className="w-2.5 h-2.5 bg-red-500 rounded-full mr-2 animate-pulse"></span>
+                          <span className="text-xs text-red-600 font-bold">Inactive (Please warn student)</span>
+                        </>
+                      )}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )
         )}
       </div>
       {/* Create new class */}
@@ -2242,9 +2249,10 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
     } catch(e) { console.error(e); } finally { setIsLoading(false); }
   }, [studentsWithCompletionsNotApproved, classId]);
 
-  const handleLinkStudentToTutoring = useCallback(async (oldName, newName, tutoringStudentUid) => {
-    if (!classId || !oldName || !newName) return;
-    setIsLoading(true);
+  // Core rename logic, parameterized by class so it can run for ANY class —
+  // not just whichever one the teacher currently has open. Silent: no
+  // loading spinner, no modal — callers decide whether/how to surface it.
+  const renameStudentEverywhere = useCallback(async (targetClassId, oldName, newName, tutoringStudentUid) => {
     const results = { scores: null, completions: null, reflections: null, hearts: null, roster: null, profile: null };
 
     // Always store the SmartStudy name in the Tutoring student profile so
@@ -2254,7 +2262,7 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
     if (tutoringStudentUid && oldName !== newName) {
       try {
         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'students', tutoringStudentUid), {
-          [`smartStudyNames.${classId}`]: oldName
+          [`smartStudyNames.${targetClassId}`]: oldName
         });
         results.profile = 'ok';
       } catch (err) {
@@ -2263,23 +2271,21 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
       }
     }
 
-        // If names match there is nothing to rename; just mark as linked and return.
+    // If names match there is nothing to rename; just mark as linked and return.
     if (oldName === newName) {
       try {
-        await setDoc(getRosterDocRef(classId, newName), { linkedToTutoring: true, tutoringStudentUid: tutoringStudentUid || null }, { merge: true });
+        await setDoc(getRosterDocRef(targetClassId, newName), { linkedToTutoring: true, tutoringStudentUid: tutoringStudentUid || null }, { merge: true });
         results.roster = 'ok';
       } catch (err) {
         console.error('Error marking roster as linked:', err);
         results.roster = `error: ${err.message}`;
       }
-      setIsLoading(false);
-      setModal({ message: `Linked "${newName}" to Tutoring.`, type: 'success', visible: true });
-      return;
+      return results;
     }
 
     const renameInCollection = async (collectionRef, label) => {
       try {
-        const snap = await getDocs(query(collectionRef, where("classId", "==", classId), where("studentName", "==", oldName)));
+        const snap = await getDocs(query(collectionRef, where("classId", "==", targetClassId), where("studentName", "==", oldName)));
         if (snap.empty) { results[label] = 0; return; }
         const docs = snap.docs;
         let done = 0;
@@ -2302,10 +2308,10 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
     await renameInCollection(getReflectionsCollectionRef(), 'reflections');
 
     try {
-      const oldHeartRef = getStudentHeartDocRef(classId, oldName);
+      const oldHeartRef = getStudentHeartDocRef(targetClassId, oldName);
       const oldHeartSnap = await getDoc(oldHeartRef);
       if (oldHeartSnap.exists()) {
-        await setDoc(getStudentHeartDocRef(classId, newName), { ...oldHeartSnap.data(), classId, studentName: newName }, { merge: true });
+        await setDoc(getStudentHeartDocRef(targetClassId, newName), { ...oldHeartSnap.data(), classId: targetClassId, studentName: newName }, { merge: true });
         await deleteDoc(oldHeartRef);
       }
       results.hearts = 'ok';
@@ -2314,14 +2320,14 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
       results.hearts = `error: ${err.message}`;
     }
 
-        try {
-      const oldRosterRef = getRosterDocRef(classId, oldName);
+    try {
+      const oldRosterRef = getRosterDocRef(targetClassId, oldName);
       const oldRosterSnap = await getDoc(oldRosterRef);
       if (oldRosterSnap.exists()) {
-        await setDoc(getRosterDocRef(classId, newName), { ...oldRosterSnap.data(), studentName: newName, linkedToTutoring: true, tutoringStudentUid: tutoringStudentUid || null }, { merge: true });
+        await setDoc(getRosterDocRef(targetClassId, newName), { ...oldRosterSnap.data(), studentName: newName, linkedToTutoring: true, tutoringStudentUid: tutoringStudentUid || null }, { merge: true });
         await deleteDoc(oldRosterRef);
       } else {
-        await setDoc(getRosterDocRef(classId, newName), { linkedToTutoring: true, tutoringStudentUid: tutoringStudentUid || null }, { merge: true });
+        await setDoc(getRosterDocRef(targetClassId, newName), { linkedToTutoring: true, tutoringStudentUid: tutoringStudentUid || null }, { merge: true });
       }
       results.roster = 'ok';
     } catch (err) {
@@ -2329,14 +2335,55 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
       results.roster = `error: ${err.message}`;
     }
 
+    return results;
+  }, []);
+
+  // Manual, foreground trigger (link picker / bulk match button) — keeps the
+  // loading spinner and confirmation modal teachers already see today.
+  const handleLinkStudentToTutoring = useCallback(async (oldName, newName, tutoringStudentUid) => {
+    if (!classId || !oldName || !newName) return;
+    setIsLoading(true);
+    const results = await renameStudentEverywhere(classId, oldName, newName, tutoringStudentUid);
     setIsLoading(false);
+    if (oldName === newName) {
+      setModal({ message: `Linked "${newName}" to Tutoring.`, type: 'success', visible: true });
+      return;
+    }
     const failed = Object.entries(results).filter(([, v]) => typeof v === 'string' && v.startsWith('error'));
     if (failed.length > 0) {
       setModal({ message: `Linked "${oldName}" → "${newName}" with some issues: ${failed.map(([k, v]) => `${k} (${v})`).join(', ')}. Check the browser console (F12) for details.`, type: 'error', visible: true });
     } else {
       setModal({ message: `Linked "${oldName}" → "${newName}". All their records in this class now use the Tutoring name.`, type: 'success', visible: true });
     }
-  }, [classId]);
+  }, [classId, renameStudentEverywhere]);
+
+  // Background sync — whenever the teacher is on the Choose Class screen,
+  // quietly re-check every already-linked student across EVERY class (not
+  // just whichever one happens to be open) against their current Tutoring
+  // name, and rename them here if Tutoring has since changed. No spinner,
+  // no modal — this runs without the teacher needing to open that class.
+  useEffect(() => {
+    if (view !== 'teacherLogin') return;
+    (async () => {
+      try {
+        const [studentsSnap, rosterSnap] = await Promise.all([
+          getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'students')),
+          getDocs(query(getRosterCollectionRef(), where('status', '==', 'approved')))
+        ]);
+        const nameById = {};
+        studentsSnap.docs.forEach(d => { nameById[d.id] = d.data().name; });
+        const linked = rosterSnap.docs.map(d => d.data()).filter(s => s.linkedToTutoring && s.tutoringStudentUid && s.classId && s.studentName);
+        for (const s of linked) {
+          const currentTutoringName = nameById[s.tutoringStudentUid];
+          if (currentTutoringName && currentTutoringName !== s.studentName) {
+            await renameStudentEverywhere(s.classId, s.studentName, currentTutoringName, s.tutoringStudentUid);
+          }
+        }
+      } catch (err) {
+        console.error('Error syncing Tutoring names across all classes:', err);
+      }
+    })();
+  }, [view, renameStudentEverywhere]);
 
   const handleUnlinkStudent = useCallback(async (studentName) => {
     if (!classId || !studentName) return;
