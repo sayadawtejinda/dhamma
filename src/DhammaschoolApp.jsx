@@ -195,6 +195,20 @@ const DHAMMASCHOOL_BODY_HTML = `
                                 <span class="font-bold text-slate-700">Lesson Status:</span>
                                 <button id="toggle-public-btn" class="px-4 py-1 rounded-full text-xs font-bold uppercase transition btn-3d">Draft</button>
                             </div>
+                            <!-- Image folder override — each class can point at its own image
+                                 folder now that multiple classes share this one app (previously
+                                 all classes shared a single hardcoded IMAGE_BASE_URL). -->
+                            <div class="mt-2 pt-2 border-t border-slate-100">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-slate-400 text-xs whitespace-nowrap">🖼 Image URL:</span>
+                                    <input type="text" id="lesson-image-url-input" placeholder="https://raw.githubusercontent.com/.../main/" class="flex-1 bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-orange-400">
+                                </div>
+                                <div class="flex gap-2 mt-2">
+                                    <button onclick="window.saveLessonImageUrl()" id="save-lesson-image-btn" class="flex-1 text-xs font-bold px-2 py-1.5 bg-orange-500 hover:bg-orange-600 rounded-lg text-white disabled:opacity-50">Save (this lesson)</button>
+                                    <button onclick="window.saveImageUrlToAllLessons()" id="save-all-image-btn" class="flex-1 text-xs font-bold px-2 py-1.5 bg-amber-600 hover:bg-amber-700 rounded-lg text-white disabled:opacity-50">Save to ALL lessons</button>
+                                </div>
+                                <p id="lesson-image-saved-msg" class="hidden text-xs text-emerald-600 font-bold mt-1">✓ Saved</p>
+                            </div>
                             <!-- Language Toggle -->
                             <div class="flex flex-col gap-2 mt-2 pt-2 border-t border-slate-100">
                                 <div class="flex items-center justify-between">
@@ -924,6 +938,14 @@ let lessonBilingualEnabled = false;
 let bilingualMode = false;
 
         const IMAGE_BASE_URL = "https://raw.githubusercontent.com/nathantun93/dhamma4/main/"; 
+        // Each lesson can override the shared IMAGE_BASE_URL with its own folder
+        // (see saveLessonImageUrl/saveImageUrlToAllLessons) — this is what every
+        // image-rendering spot below should call instead of using IMAGE_BASE_URL
+        // directly, now that multiple classes with different image sets share
+        // this one app.
+        function getCurrentImageBase() {
+            return (currentLessonId && allLessons[currentLessonId] && allLessons[currentLessonId].imageBaseUrl) || IMAGE_BASE_URL;
+        }
 
         const els = {
             loader: document.getElementById('loading-indicator'),
@@ -1652,6 +1674,8 @@ window.renderTeacherScores = function(lessonId) {
                          updateBilingualToggle(lessonBilingualEnabled);
                          updateLanguageControls(data.languageMode);
                          document.getElementById('lesson-actions').classList.remove('hidden'); // Show Edit/Delete
+                         const imgUrlInput = document.getElementById('lesson-image-url-input');
+                         if (imgUrlInput) imgUrlInput.value = data.imageBaseUrl || '';
                          
                          // --- Load Teacher Note (Wiki Suffix) ---
                          document.getElementById('teacher-wiki-input').value = data.wikiSuffix || '';
@@ -1738,6 +1762,80 @@ window.renderTeacherScores = function(lessonId) {
             b.className = "px-4 py-1 rounded-full text-xs font-bold uppercase transition btn-3d " +
                 (enabled ? "bg-green-100 text-green-600 border border-green-200" : "bg-gray-200 text-gray-500 border border-gray-300");
         }
+
+        // Normalize an image-base URL the teacher pastes in — same fix as
+        // AbhidhammaApp's version: auto-converts a normal github.com page link
+        // (blob/tree) into the raw.githubusercontent.com link the <img> tags
+        // actually need, and makes sure it ends with a trailing slash so
+        // filename concatenation doesn't get mangled.
+        function normalizeImgBaseUrl(url) {
+            let u = (url || '').trim();
+            if (!u) return u;
+            const blobMatch = u.match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/(?:blob|tree)\/([^/]+)\/?(.*)$/i);
+            if (blobMatch) {
+                const [, ghUser, ghRepo, ghBranch, ghRest] = blobMatch;
+                u = `https://raw.githubusercontent.com/${ghUser}/${ghRepo}/${ghBranch}/${ghRest}`;
+            }
+            if (!u.endsWith('/')) u += '/';
+            return u;
+        }
+
+        const showImageSavedMsg = () => {
+            const msg = document.getElementById('lesson-image-saved-msg');
+            if (!msg) return;
+            msg.classList.remove('hidden');
+            setTimeout(() => msg.classList.add('hidden'), 2500);
+        };
+
+        // Each class can now have its own image folder — previously every
+        // class shared one hardcoded IMAGE_BASE_URL, which broke once several
+        // classes (each with their own image set) were combined into this one
+        // app. Saving here overrides IMAGE_BASE_URL for just this lesson.
+        window.saveLessonImageUrl = async () => {
+            if (!currentLessonId) return;
+            const input = document.getElementById('lesson-image-url-input');
+            const btn = document.getElementById('save-lesson-image-btn');
+            const norm = normalizeImgBaseUrl(input.value);
+            btn.disabled = true; btn.textContent = 'Saving…';
+            try {
+                await updateDoc(doc(db, PATHS.lessons, currentLessonId), { imageBaseUrl: norm || '' });
+                input.value = norm || '';
+                showImageSavedMsg();
+            } catch (e) {
+                console.error('Image URL save:', e);
+                alertMessage('Error saving image URL.', 'error');
+            }
+            btn.disabled = false; btn.textContent = 'Save (this lesson)';
+        };
+
+        // Bulk version — one folder-URL change applies to every lesson in the
+        // current class at once (e.g. after moving/renaming the image folder).
+        window.saveImageUrlToAllLessons = async () => {
+            if (!selectedTeacherClassId) return;
+            if (!window.confirm('Change the image folder for ALL lessons in this class?')) return;
+            const input = document.getElementById('lesson-image-url-input');
+            const btn = document.getElementById('save-all-image-btn');
+            const norm = normalizeImgBaseUrl(input.value);
+            btn.disabled = true; btn.textContent = 'Saving…';
+            try {
+                const classLessons = Object.values(allLessons).filter(l =>
+                    (l.classId && l.classId.trim() ? l.classId.trim() : 'GENERAL') === selectedTeacherClassId
+                );
+                for (let i = 0; i < classLessons.length; i += 400) {
+                    const chunk = classLessons.slice(i, i + 400);
+                    const batch = writeBatch(db);
+                    chunk.forEach(l => batch.update(doc(db, PATHS.lessons, l.id), { imageBaseUrl: norm || '' }));
+                    await batch.commit();
+                }
+                input.value = norm || '';
+                showImageSavedMsg();
+            } catch (e) {
+                console.error('Image URL save-all:', e);
+                alertMessage('Error saving image URL to all lessons.', 'error');
+            }
+            btn.disabled = false; btn.textContent = 'Save to ALL lessons';
+        };
+
         
         // --- TRANSLATION CONTROLS ---
         function updateLanguageControls(lang) {
@@ -2894,7 +2992,8 @@ function renderClickableWords(text) {
                         let imageHtml = '';
                         if (step.images && step.images.length > 0) {
                             step.images.forEach(imgId => {
-                                imageHtml += `<img src="${IMAGE_BASE_URL}${imgId}.jpg" onerror="this.onerror=null; this.src='${IMAGE_BASE_URL}${imgId}.png';" class="rounded-xl shadow-md mb-4 w-full h-auto" alt="Dhamma Story Image">`;
+                                const _imgBase = getCurrentImageBase();
+                                imageHtml += `<img src="${_imgBase}${imgId}.jpg" onerror="this.onerror=null; this.src='${_imgBase}${imgId}.png';" class="rounded-xl shadow-md mb-4 w-full h-auto" alt="Dhamma Story Image">`;
                             });
                         }
                         // --- END FIX ---
@@ -2943,7 +3042,8 @@ function renderClickableWords(text) {
                         // --- START FIX: Show Question Image (with png fallback) ---
                         let imageHtml = '';
                         if (step.imageUrl) {
-                             imageHtml += `<img src="${IMAGE_BASE_URL}${step.imageUrl}.jpg" onerror="this.onerror=null; this.src='${IMAGE_BASE_URL}${step.imageUrl}.png';" class="rounded-xl shadow-md mb-6 w-full h-auto" alt="Dhamma Question Image">`;
+                             const _imgBase2 = getCurrentImageBase();
+                             imageHtml += `<img src="${_imgBase2}${step.imageUrl}.jpg" onerror="this.onerror=null; this.src='${_imgBase2}${step.imageUrl}.png';" class="rounded-xl shadow-md mb-6 w-full h-auto" alt="Dhamma Question Image">`;
                         }
                         // --- END FIX ---
 
@@ -3377,7 +3477,8 @@ function renderClickableWords(text) {
             let imageHtml = '';
             if (lessonImages.length > 0) {
                 const randomImgId = lessonImages[Math.floor(Math.random() * lessonImages.length)];
-                imageHtml = `<img src="${IMAGE_BASE_URL}${randomImgId}.jpg" onerror="this.onerror=null; this.src='${IMAGE_BASE_URL}${randomImgId}.png';" class="rounded-xl shadow-md mb-6 w-full max-w-sm h-auto max-h-48 object-cover mx-auto" alt="Lesson Image">`;
+                const _imgBase3 = getCurrentImageBase();
+                imageHtml = `<img src="${_imgBase3}${randomImgId}.jpg" onerror="this.onerror=null; this.src='${_imgBase3}${randomImgId}.png';" class="rounded-xl shadow-md mb-6 w-full max-w-sm h-auto max-h-48 object-cover mx-auto" alt="Lesson Image">`;
             }
             
             // --- TRANSLATE QUIZ TEXT ---
@@ -3845,7 +3946,7 @@ function renderClickableWords(text) {
             resultsEl.innerHTML = filtered.map(s => {
                 const safeNew = s.name.replace(/'/g, "\\'");
                 return `
-                    <button onclick="window.linkStudentToTutoring('${safeOld}', '${safeNew}')" class="w-full text-left p-2 rounded-lg hover:bg-indigo-50 text-sm border border-transparent hover:border-indigo-200">
+                    <button onclick="window.linkStudentToTutoring('${safeOld}', '${safeNew}', '${s.id}')" class="w-full text-left p-2 rounded-lg hover:bg-indigo-50 text-sm border border-transparent hover:border-indigo-200">
                         <span class="font-semibold text-gray-800">${s.name}</span> <span class="text-xs text-gray-500">(${s.displayId})</span>
                     </button>`;
             }).join('');
@@ -3855,7 +3956,7 @@ function renderClickableWords(text) {
         // studentName to exactly match across this class's game_scores and
         // lesson_completions docs, then marking a lightweight roster doc as
         // linked — mirrors SmartStudy/AbhidhammaApp's "Link to Tutoring" flow.
-        window.linkStudentToTutoring = async (oldName, newName) => {
+        window.linkStudentToTutoring = async (oldName, newName, tutoringStudentUid) => {
             if (!selectedTeacherClassId || !oldName || !newName) return;
             try {
                 const classLessonIds = Object.values(allLessons)
@@ -3885,10 +3986,16 @@ function renderClickableWords(text) {
                     } catch (e) {}
                 }
 
+                // tutoringStudentUid was previously never saved here at all — the
+                // roster doc only ever got linkedToTutoring:true with no way to
+                // trace back to which TutoringApp student it meant, which is what
+                // made the link effectively not "take" anywhere that needed the
+                // actual id (not just the flag).
                 await setDoc(doc(db, PATHS.roster, `${selectedTeacherClassId}_${newName}`), {
                     classId: selectedTeacherClassId,
                     studentName: newName,
-                    linkedToTutoring: true
+                    linkedToTutoring: true,
+                    tutoringStudentUid: tutoringStudentUid || null
                 }, { merge: true });
 
                 alertMessage(`Linked "${newName}" to Tutoring.`, 'success');
