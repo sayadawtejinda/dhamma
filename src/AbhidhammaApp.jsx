@@ -88,6 +88,33 @@ const renameStudentRecords = async (classId, oldName, newName) => {
   } catch(e) { console.error('Quiz results rename:', e); }
 };
 
+// THE ACTUAL FIX for the missing "Done" tags — confirmed via diagnoseClassCompletions: legacy
+// global_scores docs were written with only a `name` field (no `studentName`), plus an older 3-part
+// doc id `${userId}_${lessonId}_${group}` instead of today's 2-part `${userId}_${lessonId}`. The
+// class-picker's "all completed" badge tolerates either field (`studentName||name`), but the
+// per-lesson "Done" badge's live check queries strictly on `studentName` (see AbhiLessonItem's
+// isCompleted effect), so it silently misses every legacy record even though classId/lessonId line
+// up perfectly. This just copies `name` into `studentName` wherever the latter is missing — nothing
+// else (doc id, lessonId, score, timestamp) is touched — which is enough for the existing Done-check
+// to start matching them. Pass a classId to scope it, or omit to fix every class in one pass. Safe to
+// re-run; docs that already have studentName are left alone.
+const backfillStudentNameField = async (classId) => {
+  const snap = classId
+    ? await getDocs(query(abhiScoresRef(), where('classId', '==', classId)))
+    : await getDocs(abhiScoresRef());
+  const toFix = snap.docs.filter(d => { const dt = d.data(); return !dt.studentName && dt.name; });
+  let batch = writeBatch(db); let ops = 0;
+  for (const d of toFix) {
+    batch.update(d.ref, { studentName: d.data().name });
+    ops++;
+    if (ops >= 400) { await batch.commit(); batch = writeBatch(db); ops = 0; }
+  }
+  if (ops > 0) await batch.commit();
+  const report = { scanned: snap.size, fixed: toFix.length };
+  console.log('studentName backfill:', report);
+  return report;
+};
+
 // Read-only diagnostic — inspects the RAW data for a class so we can figure out exactly why
 // completion records aren't matching, instead of guessing. Prints a report (and returns it) showing:
 //  - how many lessons currently exist in the class
@@ -1792,6 +1819,23 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
                     <button onClick={handleExportFull} disabled={loading}
                       className="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1">
                       <Download className="w-3 h-3"/>📦 Full Backup
+                    </button>
+                    <span className="text-gray-600 self-center">|</span>
+                    <button onClick={async()=>{
+                        const scope=window.confirm('OK = fix ALL classes at once (recommended, one click).\nCancel = fix only the currently open class.');
+                        const target=scope?null:classId;
+                        if(!scope&&!classId){showMsg('Open a class first, or choose "fix ALL classes".');return;}
+                        if(!window.confirm(`Backfill the missing "studentName" field on legacy score records${target?` in "${target}"`:' across ALL classes'}?\n\nThis only ADDS a field where it's missing (copied from the existing "name" field) — nothing is deleted or overwritten.`))return;
+                        setLoading(true);showMsg('Backfilling studentName field…');
+                        try{
+                          const r=await backfillStudentNameField(target);
+                          showMsg(`✅ Scanned ${r.scanned} score record(s), fixed ${r.fixed}. "Done" tags should now appear.`);
+                        }catch(e){console.error(e);showMsg('Error: '+e.message);}
+                        finally{setLoading(false);}
+                      }} disabled={loading}
+                      className="bg-amber-700 hover:bg-amber-600 disabled:opacity-40 text-white px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1"
+                      title="Fix the actual bug: add the missing studentName field to legacy score records so Done tags reappear">
+                      🩹 Backfill studentName
                     </button>
                     <span className="text-gray-600 self-center">|</span>
                     <button onClick={async()=>{
