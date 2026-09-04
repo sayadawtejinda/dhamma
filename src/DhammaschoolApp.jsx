@@ -128,13 +128,6 @@ const DHAMMASCHOOL_BODY_HTML = `
                 <p class="text-xs text-slate-400">Old lessons with no Class ID will be tagged with this when imported. Leave blank to keep each lesson's original Class ID (if any).</p>
             </div>
 
-            <!-- Nuclear option: wipe every class, lesson, and student record in the app -->
-            <div class="card p-5 border-t-8 border-red-500 mb-6">
-                <h3 class="text-lg font-black text-slate-800 mb-2"><i class="fas fa-radiation text-red-500"></i> Delete Everything</h3>
-                <p class="text-xs text-slate-500 mb-3">Permanently erases ALL classes, lessons, scores, completions, answers, and rosters in the whole app. This cannot be undone — use this only if lessons are stuck and you want to start over from a clean import.</p>
-                <button id="delete-everything-btn" onclick="window.deleteEverything()" class="w-full py-2 bg-red-500 text-white rounded-xl font-bold hover:bg-red-600 text-sm"><i class="fas fa-trash-alt"></i> Delete Everything</button>
-            </div>
-
             <div id="teacher-class-picker-grid" class="space-y-3">
                 <div class="text-center py-10 text-slate-400 font-bold">Loading classes...</div>
             </div>
@@ -1323,13 +1316,21 @@ let bilingualMode = false;
             });
         }
 
+        // Which class's notifications are relevant right now — the teacher's
+        // chosen class if signed in as teacher, otherwise the student's own
+        // chosen class. This is what lets the bell work on both sides.
+        function getActiveClassIdForNotifications() {
+            return isTeacher ? selectedTeacherClassId : selectedClassId;
+        }
+
         // Completions belonging only to the currently selected class's lessons —
         // each class has its own notifications, they never mix with other classes.
         function getCompletionsForCurrentClass() {
-            if (!selectedTeacherClassId) return [];
+            const activeClassId = getActiveClassIdForNotifications();
+            if (!activeClassId) return [];
             const classLessonIds = new Set(
                 Object.values(allLessons)
-                    .filter(l => (l.classId && l.classId.trim() ? l.classId.trim() : 'GENERAL') === selectedTeacherClassId)
+                    .filter(l => (l.classId && l.classId.trim() ? l.classId.trim() : 'GENERAL') === activeClassId)
                     .map(l => l.id)
             );
             return allCompletions.filter(c => classLessonIds.has(c.lessonId));
@@ -1337,9 +1338,10 @@ let bilingualMode = false;
 
         function renderNotificationBell() {
             const badge = document.getElementById('notif-badge');
-            if (!selectedTeacherClassId) { badge.classList.add('hidden'); return; } // no class chosen yet
+            const activeClassId = getActiveClassIdForNotifications();
+            if (!activeClassId) { badge.classList.add('hidden'); return; } // no class chosen yet
             const classCompletions = getCompletionsForCurrentClass();
-            const lastSeen = parseInt(localStorage.getItem(`notifLastSeenCount_${selectedTeacherClassId}`) || '0', 10);
+            const lastSeen = parseInt(localStorage.getItem(`notifLastSeenCount_${activeClassId}`) || '0', 10);
             const unseen = Math.max(0, classCompletions.length - lastSeen);
             if (unseen > 0) {
                 badge.textContent = unseen > 99 ? '99+' : unseen;
@@ -1350,7 +1352,8 @@ let bilingualMode = false;
         }
 
         document.getElementById('notif-bell-btn').onclick = () => {
-            if (!selectedTeacherClassId) return; // nothing to show before a class is chosen
+            const activeClassId = getActiveClassIdForNotifications();
+            if (!activeClassId) return; // nothing to show before a class is chosen
             const list = document.getElementById('notif-list');
             const classCompletions = getCompletionsForCurrentClass();
             const sorted = [...classCompletions].sort((a,b) => (b.completedAt || "").localeCompare(a.completedAt || ""));
@@ -1371,7 +1374,7 @@ let bilingualMode = false;
                 }).join('');
             }
             document.getElementById('notif-modal').classList.remove('hidden');
-            localStorage.setItem(`notifLastSeenCount_${selectedTeacherClassId}`, classCompletions.length.toString());
+            localStorage.setItem(`notifLastSeenCount_${activeClassId}`, classCompletions.length.toString());
             renderNotificationBell();
         };
         
@@ -1871,6 +1874,7 @@ document.getElementById('toggle-audio-btn').onclick = async () => {
             els.studentLibrary.classList.remove('hidden');
             safeSetText('current-class-label', classId);
             renderStudentLibrary();
+            renderNotificationBell(); // this class's own unseen-completions count
         };
 
         window.changeClass = () => {
@@ -1879,6 +1883,7 @@ document.getElementById('toggle-audio-btn').onclick = async () => {
             els.studentLibrary.classList.add('hidden');
             els.studentClassPicker.classList.remove('hidden');
             renderClassPicker();
+            renderNotificationBell(); // hides the badge until a class is chosen again
         };
 
         function renderStudentLibrary() {
@@ -3572,52 +3577,6 @@ function renderClickableWords(text) {
             } catch (e) {
                 console.error('Error deleting class:', e);
                 alertMessage('Error deleting class. Some data may remain — please try again.', 'error');
-            }
-        };
-
-        // Nuclear delete: wipes EVERY document in EVERY collection this app
-        // owns (lessons, answers, scores, completions, roster, classes) —
-        // across all classes, not just one. Irreversible — double-confirms
-        // by requiring the teacher to type DELETE.
-        window.deleteEverything = async () => {
-            const warning = `🚨 THIS DELETES EVERYTHING IN THE ENTIRE APP — every class, lesson, student score, completion, answer, and roster link. This cannot be undone.\n\nType DELETE (all caps) to confirm:`;
-            const typed = prompt(warning);
-            if (typed === null) return; // cancelled
-            if (typed.trim() !== 'DELETE') {
-                alertMessage('Confirmation text did not match — nothing was deleted.', 'error');
-                return;
-            }
-            try {
-                els.loader.classList.remove('hidden');
-                els.loadingText.textContent = "Deleting everything... please wait";
-
-                const wipeCollection = async (path) => {
-                    const snap = await getDocs(collection(db, path));
-                    for (let i = 0; i < snap.docs.length; i += 400) {
-                        const chunk = snap.docs.slice(i, i + 400);
-                        const batch = writeBatch(db);
-                        chunk.forEach(d => batch.delete(d.ref));
-                        await batch.commit();
-                    }
-                };
-
-                await wipeCollection(PATHS.lessons);
-                await wipeCollection(PATHS.answers);
-                await wipeCollection(PATHS.scores);
-                await wipeCollection(PATHS.completions);
-                await wipeCollection(PATHS.roster);
-                await wipeCollection(PATHS.classes);
-
-                selectedTeacherClassId = null;
-                localStorage.removeItem('dhammaschool_teacher_classId');
-                window.backToClassPicker();
-                alertMessage('Everything was deleted. You can now import a fresh set of lessons.', 'success');
-            } catch (e) {
-                console.error('Error deleting everything:', e);
-                alertMessage('Error deleting data. Some data may remain — please try again.', 'error');
-            } finally {
-                els.loader.classList.add('hidden');
-                els.loadingText.textContent = "Loading Dhammaschool...";
             }
         };
 
