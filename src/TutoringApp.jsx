@@ -5410,10 +5410,10 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                         <span className="text-sm font-semibold text-blue-600 ml-1">— {ssClassIdForBtn}</span>
                       )}
                       {lesson.link && lesson.link.startsWith('abhidhamma://') && extractAbhidhammaLessonId(lesson.link) && (
-                        <span className="text-sm font-semibold text-amber-600 ml-1">— {extractAbhidhammaLessonId(lesson.link)}</span>
+                        <span className="text-sm font-semibold text-blue-600 ml-1">— {extractAbhidhammaLessonId(lesson.link)}</span>
                       )}
                       {lesson.link && lesson.link.startsWith('dhammaschool://') && extractDhammaschoolClassId(lesson.link) && (
-                        <span className="text-sm font-semibold text-orange-600 ml-1">— {extractDhammaschoolClassId(lesson.link)}</span>
+                        <span className="text-sm font-semibold text-blue-600 ml-1">— {extractDhammaschoolClassId(lesson.link)}</span>
                       )}
                       {lesson.unitCount > 0 && completedUnitList >= lesson.unitCount && (
                         <span className="bg-emerald-500 text-white text-xs font-bold px-2 py-1 rounded-full">✅ Completed</span>
@@ -5438,21 +5438,21 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                         }}
                       />
                     )}
-                    {lesson.link && lesson.link.startsWith('smartstudy://') && ssCompletionCounts[extractSmartStudyClassId(lesson.link)] > 0 && (
+                    {/* One unified message for every app (SmartStudy included) — same
+                        line, not split across a <br/>, so it always reads as a single
+                        clear sentence: "You completed up to X / Y. Now you finished X." */}
+                    {lesson.unitCount > 0 && (
+                      completedUnitList > 0 ||
+                      showNowFinished ||
+                      (lesson.link?.startsWith('smartstudy://') && ssCompletionCounts[extractSmartStudyClassId(lesson.link)] > 0)
+                    ) && (
                       <p className="text-sm font-bold text-indigo-700 mt-1">
-                        You completed up to {lesson.unitLabel || 'Lesson'} {ssCompletionCounts[extractSmartStudyClassId(lesson.link)]}
-                        {lesson.unitCount > 0 ? ` / ${lesson.unitCount}` : ''}.
-                      </p>
-                    )}
-                    {lesson.unitCount > 0 && (completedUnitList > 0 || showNowFinished) && !(lesson.link && lesson.link.startsWith('smartstudy://')) && (
-                      <p className="text-sm font-bold text-indigo-700 mt-1">
-                        You completed up to {lesson.unitLabel || 'Chapter'} {Math.max(completedUnitList, latestSessionForLesson?.completedUnit || 0)}{lesson.unitCount > 0 ? ` / ${lesson.unitCount}` : ''}.
-                        {showNowFinished && (
-                          <>
-                            <br />
-                            Now you finished {lesson.unitLabel || 'Chapter'} {latestSessionForLesson.completedUnit}.
-                          </>
-                        )}
+                        You completed up to {lesson.unitLabel || 'Chapter'} {
+                          lesson.link?.startsWith('smartstudy://')
+                            ? ssCompletionCounts[extractSmartStudyClassId(lesson.link)]
+                            : Math.max(completedUnitList, latestSessionForLesson?.completedUnit || 0)
+                        }{lesson.unitCount > 0 ? ` / ${lesson.unitCount}` : ''}.
+                        {showNowFinished && ` Now you finished ${lesson.unitLabel || 'Chapter'} ${latestSessionForLesson.completedUnit}.`}
                       </p>
                     )}
                     {maxAvailableList > 0 && lesson.unitCount > 0 && (

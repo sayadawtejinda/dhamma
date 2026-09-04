@@ -3713,6 +3713,13 @@ function renderClickableWords(text) {
         async function loadClassRoster(classId) {
             const container = document.getElementById('class-roster-list');
             container.innerHTML = '<p class="text-slate-400 text-sm italic">Loading roster...</p>';
+            // Safety net: if this hangs (network issue, a Firestore rule that
+            // denies silently instead of rejecting, etc.) it no longer sits on
+            // "Loading roster..." forever with no way to tell what's wrong.
+            const withTimeout = (promise, ms, label) => Promise.race([
+                promise,
+                new Promise((_, reject) => setTimeout(() => reject(new Error(`Timed out loading ${label}`)), ms))
+            ]);
             try {
                 const classLessonIds = Object.values(allLessons)
                     .filter(l => (l.classId && l.classId.trim() ? l.classId.trim() : 'GENERAL') === classId)
@@ -3725,11 +3732,11 @@ function renderClickableWords(text) {
                     // support "IN" with many values reliably. Includes "answers" (discussion
                     // participation) too, so students who only discussed but never played a
                     // game/quiz still show up in the roster.
-                    const [scoresSnap, compSnap, answersSnap] = await Promise.all([
+                    const [scoresSnap, compSnap, answersSnap] = await withTimeout(Promise.all([
                         getDocs(collection(db, PATHS.scores)),
                         getDocs(collection(db, PATHS.completions)),
                         getDocs(collection(db, PATHS.answers))
-                    ]);
+                    ]), 12000, 'scores/completions/answers');
                     scoresSnap.docs.forEach(d => {
                         const data = d.data();
                         if (classLessonIds.includes(data.lessonId) && data.studentName) names.add(data.studentName);
@@ -3747,7 +3754,7 @@ function renderClickableWords(text) {
                 // Load roster docs for this class to know link status.
                 rosterLinkStatus = {};
                 try {
-                    const rosterSnap = await getDocs(query(collection(db, PATHS.roster), where('classId', '==', classId)));
+                    const rosterSnap = await withTimeout(getDocs(query(collection(db, PATHS.roster), where('classId', '==', classId))), 12000, 'roster link status');
                     rosterSnap.docs.forEach(d => {
                         const data = d.data();
                         if (data.linkedToTutoring) rosterLinkStatus[data.studentName] = true;
@@ -3757,7 +3764,10 @@ function renderClickableWords(text) {
                 renderClassRosterList([...names].sort());
             } catch (e) {
                 console.error('Error loading class roster:', e);
-                container.innerHTML = '<p class="text-red-500 text-sm">Error loading roster.</p>';
+                // Show the actual error (e.g. Firestore's "permission-denied") instead of a
+                // generic message, since that's what actually tells us what's wrong.
+                const detail = e?.code || e?.message || 'unknown error';
+                container.innerHTML = `<p class="text-red-500 text-sm">Error loading roster: ${detail}</p>`;
             }
         }
 
