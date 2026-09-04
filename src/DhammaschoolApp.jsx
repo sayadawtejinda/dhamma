@@ -767,6 +767,7 @@ export default function DhammaschoolApp({ entryRequest, onExit }) {
     // onclick handlers, Firestore listeners, and localStorage-backed state;
     // it's meant to run exactly once per page, not be torn down and redone.
     if (initializedRef.current) return;
+    if (entryRequest === null) return;
     initializedRef.current = true;
 
         const AUDIO_BASE_URL = "https://raw.githubusercontent.com/nathantun93/bell/main/";
@@ -4057,7 +4058,7 @@ function renderClickableWords(text) {
         };
         // --- END FIX ---
 
-  }, []);
+  }, [entryRequest]);
 
   return (
     <>
