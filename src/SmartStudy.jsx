@@ -734,7 +734,7 @@ const TeacherDashboard = React.memo(({
           <Card className="w-full lg:w-1/3 overflow-y-auto border-4 border-yellow-200">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-3xl font-bold text-yellow-600 flex items-center"><UserPlus className="w-6 h-6 mr-3" />Pending Requests</h2>
-              <button onClick={handleToggleAutoApprove} className={`flex items-center px-4 py-2 rounded-full font-bold text-sm transition-colors shadow-sm ${autoApprove ? 'bg-green-100 text-green-700 border-2 border-green-400' : 'bg-gray-100 text-gray-600 border-2 border-gray-300'}`} title="When ON, new students will enter without waiting.">
+              <button onClick={handleToggleAutoApprove} className={`flex items-center px-4 py-2 rounded-full font-bold text-sm transition-colors shadow-sm ${autoApprove ? 'bg-green-100 text-green-700 border-2 border-green-400' : 'bg-gray-100 text-gray-600 border-2 border-gray-300'}`} title="When ON, this becomes the one open class: every other class's Auto-Approve switches OFF, and students choosing any class land here automatically.">
                  {autoApprove ? <Unlock className="w-4 h-4 mr-2" /> : <Lock className="w-4 h-4 mr-2" />}Auto-Approve: {autoApprove ? 'ON' : 'OFF'}
               </button>
             </div>
@@ -1335,10 +1335,12 @@ const AgeLevelPickerView = React.memo(({ studentAgeLevel, setStudentAgeLevel, on
   </Card>
 ));
 
-const ClassPickerView = React.memo(({ classList, highlightClassId, onSelectClass, loading, classPickerInfo }) => (
+const ClassPickerView = React.memo(({ classList, highlightClassId, onSelectClass, loading, classPickerInfo, openClassId }) => (
   <div className="p-4 md:p-8 max-w-2xl mx-auto mt-10">
     <h2 className="text-3xl font-bold text-blue-700 mb-2 text-center">📚 Choose Your Class</h2>
-    {highlightClassId && (
+    {openClassId ? (
+      <p className="text-gray-600 text-center mb-6">Your teacher has <span className="font-bold text-green-700">{openClassId}</span> open right now — tap any class below and you'll be brought straight there.</p>
+    ) : highlightClassId && (
       <p className="text-gray-600 text-center mb-6">Your teacher assigned <span className="font-bold text-blue-700">{highlightClassId}</span> — tap it below to start.</p>
     )}
     {loading ? (
@@ -1354,15 +1356,21 @@ const ClassPickerView = React.memo(({ classList, highlightClassId, onSelectClass
           const myRank = info?.myRank || 0;
           const allDone = lessonCount > 0 && completedCount >= lessonCount;
           const isHighlight = c === highlightClassId;
+          const isOpen = openClassId ? c === openClassId : false;
           return (
             <button
               key={c}
               onClick={() => onSelectClass(c)}
-              className={`w-full p-4 rounded-xl border-2 text-left font-bold text-lg transition-all ${isHighlight ? 'bg-blue-100 border-blue-500 text-blue-800 shadow-lg scale-[1.02]' : 'bg-white border-gray-200 text-gray-700 hover:border-blue-300'}`}
+              className={`w-full p-4 rounded-xl border-2 text-left font-bold text-lg transition-all ${isOpen ? 'bg-green-50 border-green-500 text-green-800 shadow-lg scale-[1.02]' : isHighlight ? 'bg-blue-100 border-blue-500 text-blue-800 shadow-lg scale-[1.02]' : 'bg-white border-gray-200 text-gray-700 hover:border-blue-300'}`}
             >
               <div className="flex items-center justify-between gap-2 flex-wrap">
-                <span>{isHighlight ? '⭐ ' : ''}{c}</span>
+                <span>{isOpen ? '🔓 ' : isHighlight ? '⭐ ' : ''}{c}</span>
                 <div className="flex items-center gap-2 flex-wrap">
+                  {isOpen && (
+                    <span className="text-xs font-bold text-green-700 bg-green-100 border border-green-300 px-2 py-0.5 rounded-full">
+                      Open now
+                    </span>
+                  )}
                   {myRank > 0 && (
                     <span className="text-xs font-bold text-yellow-700 bg-yellow-100 border border-yellow-300 px-2 py-0.5 rounded-full">
                       🏆 Rank #{myRank}
@@ -1728,6 +1736,7 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
   const [selectedAgeLevel, setSelectedAgeLevel] = useState(null); 
   const [classPickerList, setClassPickerList] = useState([]);
   const [classPickerLoading, setClassPickerLoading] = useState(false);
+  const [openClassId, setOpenClassId] = useState(null); // the one class currently Auto-Approve ON, if any
   // Per-class: { classId: { lessonCount, myRank, completedCount } }
   const [classPickerInfo, setClassPickerInfo] = useState({});
   const lastHandledEntryRequestRef = useRef(null);
@@ -2072,8 +2081,28 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
     if (!classId || !classData) return;
     try {
       const newState = !classData.autoApprove;
-      await updateDoc(getClassDocRef(classId), { autoApprove: newState });
-      setModal({ message: `Auto-Approve is now ${newState ? 'ON' : 'OFF'}.`, type: 'success', visible: true });
+      if (newState) {
+        // Only one class can be "open" (Auto-Approve ON) at a time. Turning
+        // this class ON switches every other class's Auto-Approve OFF, so
+        // there's always a single, unambiguous class students land in.
+        const classesSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'classes'));
+        const batch = writeBatch(db);
+        let sawThisClass = false;
+        classesSnap.docs.forEach(d => {
+          if (d.id === classId) {
+            sawThisClass = true;
+            batch.update(d.ref, { autoApprove: true });
+          } else if (d.data().autoApprove === true) {
+            batch.update(d.ref, { autoApprove: false });
+          }
+        });
+        if (!sawThisClass) batch.update(getClassDocRef(classId), { autoApprove: true });
+        await batch.commit();
+        setModal({ message: `Auto-Approve is now ON for ${classId}. It's the only open class now — every other class's Auto-Approve was switched off.`, type: 'success', visible: true });
+      } else {
+        await updateDoc(getClassDocRef(classId), { autoApprove: false });
+        setModal({ message: `Auto-Approve is now OFF.`, type: 'success', visible: true });
+      }
     } catch (error) { setModal({ message: `Failed to toggle Auto-Approve: ${error.message}`, type: 'error', visible: true }); }
   }, [classId, classData]);
 
@@ -2509,6 +2538,12 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
         if (highlightClassId && !ids.includes(highlightClassId)) ids = [highlightClassId, ...ids];
         setClassPickerList(ids);
 
+        // Whichever single class currently has Auto-Approve ON is the
+        // "open" class — students tapping any class in the picker land
+        // there instead, so the teacher can steer everyone into one class.
+        const openDoc = snap.docs.find(d => d.data().autoApprove === true);
+        setOpenClassId(openDoc ? openDoc.id : null);
+
         // Load per-class lesson counts and student rank (parallel queries)
         const infoMap = {};
         await Promise.all(ids.map(async cId => {
@@ -2544,6 +2579,7 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
       .catch(err => {
         console.error('Error loading class list:', err);
         setClassPickerList(highlightClassId ? [highlightClassId] : []);
+        setOpenClassId(null);
       })
       .finally(() => setClassPickerLoading(false));
   }, [view]);
@@ -2559,12 +2595,17 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
   const handleSelectClassFromPicker = useCallback(async (targetId) => {
     const enteredName = (entryRequest?.studentName || userName || '').trim();
     if (!enteredName || !studentAgeLevel) { setModal({ message: 'Missing name or age level.', type: 'error', visible: true }); return; }
-    localStorage.setItem('lastClassId', targetId);
+    // Whatever class the student tapped, if the teacher currently has one
+    // class "open" (Auto-Approve ON), that's where every student goes —
+    // it lets the teacher steer the whole group into one class regardless
+    // of which button a student happens to press.
+    const actualTargetId = openClassId || targetId;
+    localStorage.setItem('lastClassId', actualTargetId);
     localStorage.setItem('lastUserName', enteredName);
     try {
-      const classDocSnap = await getDoc(getClassDocRef(targetId));
+      const classDocSnap = await getDoc(getClassDocRef(actualTargetId));
       if (!classDocSnap.exists()) { setModal({ message: 'This class does not exist.', type: 'error', visible: true }); return; }
-      const rosterDocRef = getRosterDocRef(targetId, enteredName);
+      const rosterDocRef = getRosterDocRef(actualTargetId, enteredName);
       const docSnap = await getDoc(rosterDocRef);
       if (docSnap.exists()) {
         const data = docSnap.data();
@@ -2575,16 +2616,16 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
         } else {
           updateDoc(rosterDocRef, { lastSeen: Date.now() });
         }
-        setClassId(targetId); setUserName(enteredName); setView('studentLesson');
+        setClassId(actualTargetId); setUserName(enteredName); setView('studentLesson');
       } else {
-        await setDoc(rosterDocRef, { classId: targetId, studentName: enteredName, studentAgeLevel: studentAgeLevel, status: 'approved', linkedToTutoring: true, joinedAt: Date.now(), lastSeen: Date.now() });
-        setClassId(targetId); setUserName(enteredName); setView('studentLesson');
+        await setDoc(rosterDocRef, { classId: actualTargetId, studentName: enteredName, studentAgeLevel: studentAgeLevel, status: 'approved', linkedToTutoring: true, joinedAt: Date.now(), lastSeen: Date.now() });
+        setClassId(actualTargetId); setUserName(enteredName); setView('studentLesson');
       }
     } catch (error) {
       console.error('Error entering class:', error);
       setModal({ message: 'Network error. Please try again.', type: 'error', visible: true });
     }
-  }, [entryRequest, userName, studentAgeLevel]);
+  }, [entryRequest, userName, studentAgeLevel, openClassId]);
 
   const handleStudentLogin = useCallback(async () => {
     if (!targetClassId || !userName || !studentAgeLevel) { setModal({ message: 'Please enter Class ID, your Name, and select your Age Level.', type: 'error', visible: true }); return; }
@@ -2738,7 +2779,7 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
       case 'teacherLogin': return <TeacherLoginView targetClassId={targetClassId} setTargetClassId={setTargetClassId} handleTeacherLogin={handleTeacherLogin} handleSetView={handleSetView} allTeacherClasses={allTeacherClasses} isLoading={isLoading} onRenameClass={handleRenameClass} onDeleteClass={handleDeleteClass} currentUserId={currentUserId} onReclaimAll={handleReclaimAllClasses} />;
       case 'studentLogin': return <StudentLoginView targetClassId={targetClassId} setTargetClassId={setTargetClassId} userName={userName} setUserName={setUserName} studentAgeLevel={studentAgeLevel} setStudentAgeLevel={setStudentAgeLevel} handleStudentLogin={handleStudentLogin} handleSetView={handleSetView} />;
       case 'ageLevelPicker': return <AgeLevelPickerView studentAgeLevel={studentAgeLevel} setStudentAgeLevel={setStudentAgeLevel} onContinue={handleAgeLevelContinue} />;
-      case 'classPicker': return <ClassPickerView classList={classPickerList} highlightClassId={entryRequest?.classId} onSelectClass={handleSelectClassFromPicker} loading={classPickerLoading} classPickerInfo={classPickerInfo} />;
+      case 'classPicker': return <ClassPickerView classList={classPickerList} highlightClassId={entryRequest?.classId} onSelectClass={handleSelectClassFromPicker} loading={classPickerLoading} classPickerInfo={classPickerInfo} openClassId={openClassId} />;
       case 'studentWaiting': return <StudentWaitingView handleSetView={handleSetView} userName={userName} isRejected={isRejected} />;
       case 'teacherDashboard':
         if (!classData) return <ClassCreateView classId={classId} handleTeacherCreateClass={handleTeacherCreateClass} isLoading={isLoading} handleSetView={handleSetView} />;
