@@ -3998,6 +3998,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
 
   const [praiseModalInfo, setPraiseModalInfo] = useState({ isOpen: false, newTrophy: false, totalTrophies: 0, message: '', emoji: '' });
   const [visibleAnnouncements, setVisibleAnnouncements] = useState([]);
+  const [showNotifDropdown, setShowNotifDropdown] = useState(false);
   
   const [isLessonOverlayOpen, setIsLessonOverlayOpen] = useState(false);
   const [heartsAnimGivers, setHeartsAnimGivers] = useState([]);
@@ -4166,18 +4167,28 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
   useEffect(() => {
     if (announcements && studentProfile) {
       const seenIds = studentProfile.seenAnnouncements || [];
-      const unseen = announcements.filter(a => a.studentName !== studentProfile.name && !seenIds.includes(a.id));
-      
-      const latestPerStudent = {};
-      unseen.forEach(a => {
-         if (!latestPerStudent[a.studentName] || a.trophyCount > latestPerStudent[a.studentName].trophyCount) {
-             latestPerStudent[a.studentName] = a;
-         }
-      });
-      
-      setVisibleAnnouncements(Object.values(latestPerStudent));
+      const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+      const nowMs = Date.now();
+      // Shown in the 🔔 dropdown: everyone else's trophy announcements from
+      // the past week, newest first — read or not (so a student can still
+      // glance back at what they already saw), while the red dot only counts
+      // the unseen ones.
+      const recent = announcements
+        .filter(a => a.studentName !== studentProfile.name)
+        .filter(a => {
+          const ms = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : (a.createdAt?.seconds ? a.createdAt.seconds * 1000 : nowMs);
+          return (nowMs - ms) < ONE_WEEK_MS;
+        })
+        .sort((a, b) => {
+          const aMs = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : (a.createdAt?.seconds ? a.createdAt.seconds * 1000 : 0);
+          const bMs = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : (b.createdAt?.seconds ? b.createdAt.seconds * 1000 : 0);
+          return bMs - aMs;
+        })
+        .map(a => ({ ...a, _unseen: !seenIds.includes(a.id) }));
+      setVisibleAnnouncements(recent);
     }
   }, [announcements, studentProfile]);
+  const unreadAnnouncementCount = visibleAnnouncements.filter(a => a._unseen).length;
 
   useEffect(() => {
     if (autoSubmitTimerRef.current) clearTimeout(autoSubmitTimerRef.current);
@@ -5118,38 +5129,50 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         </div>
       )}
       
-      <div className="max-w-4xl mx-auto space-y-4 mb-6">
-        {visibleAnnouncements.length > 1 && (
-          <div className="flex justify-end mb-2">
-            <button onClick={dismissAllAnnouncements} className="text-sm bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-1.5 rounded-lg font-semibold shadow-sm transition-colors">
-              Dismiss All Notifications
-            </button>
+      {/* 🔔 Notifications — fixed top-right, above where the Log Out button
+          sits further down the page. Replaces the old always-visible
+          "Awesome News Update" cards with a compact bell + unread dot, so
+          trophy announcements for OTHER students don't take up permanent
+          space on the dashboard. */}
+      <div className="fixed top-4 right-4 z-[9500]">
+        <button
+          onClick={() => setShowNotifDropdown(v => !v)}
+          className="relative bg-white hover:bg-gray-50 border border-gray-200 rounded-full w-11 h-11 flex items-center justify-center shadow-lg text-xl"
+          title="Notifications"
+        >
+          🔔
+          {unreadAnnouncementCount > 0 && (
+            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center border-2 border-white">
+              {unreadAnnouncementCount > 9 ? '9+' : unreadAnnouncementCount}
+            </span>
+          )}
+        </button>
+        {showNotifDropdown && (
+          <div className="absolute right-0 mt-2 w-80 max-h-96 overflow-y-auto bg-white rounded-xl shadow-2xl border border-gray-200 p-3">
+            <div className="flex justify-between items-center mb-2 px-1">
+              <p className="font-bold text-gray-700 text-sm">Notifications (past week)</p>
+              {visibleAnnouncements.length > 0 && (
+                <button onClick={dismissAllAnnouncements} className="text-xs text-gray-400 hover:text-gray-700 font-semibold">
+                  Dismiss All
+                </button>
+              )}
+            </div>
+            {visibleAnnouncements.length === 0 && (
+              <p className="text-sm text-gray-400 text-center py-6">No notifications this week.</p>
+            )}
+            <div className="space-y-2">
+              {visibleAnnouncements.map(ann => (
+                <div key={ann.id} className={`p-3 rounded-lg border text-sm relative ${ann._unseen ? 'bg-yellow-50 border-yellow-200' : 'bg-gray-50 border-gray-100'}`}>
+                  <button onClick={() => dismissAnnouncement(ann.id)} className="absolute top-1.5 right-1.5 text-gray-300 hover:text-gray-600 text-xs">✕</button>
+                  <p className="font-bold text-yellow-900 pr-4">🎉 {ann.studentName}</p>
+                  <p className="text-yellow-800">earned their <span className="font-black text-yellow-600">{ann.trophyCount}</span>th trophy! 🏆</p>
+                </div>
+              ))}
+            </div>
           </div>
         )}
-        {visibleAnnouncements.map(ann => (
-          <div key={ann.id} className="bg-gradient-to-r from-yellow-50 to-yellow-100 border-l-4 border-yellow-500 p-5 rounded-xl shadow-lg flex flex-col md:flex-row justify-between items-start md:items-center relative overflow-hidden">
-            <div className="absolute -right-4 -top-4 text-7xl opacity-10 pointer-events-none select-none">🌟</div>
-            <div className="flex-1 pr-4 z-10">
-              <p className="text-xs font-bold text-yellow-600 uppercase tracking-widest mb-1 flex items-center">
-                <span className="mr-2">🗞️</span> Awesome News Update
-              </p>
-              <p className="text-xl font-bold text-yellow-900 mb-1">
-                Let's all congratulate {ann.studentName}! 🎉
-              </p>
-              <p className="text-yellow-800 text-base">
-                {ann.studentName} has proudly earned their <span className="font-black text-2xl text-yellow-600 mx-1">{ann.trophyCount}</span>th trophy! 🏆 Keep up the fantastic work!
-              </p>
-            </div>
-            <button
-              onClick={() => dismissAnnouncement(ann.id)}
-              className="mt-4 md:mt-0 whitespace-nowrap text-sm bg-white border border-yellow-300 hover:bg-yellow-50 text-yellow-700 px-5 py-2.5 rounded-lg font-bold shadow-sm transition-all hover:scale-105 active:scale-95 z-10"
-            >
-              Got it!
-            </button>
-          </div>
-        ))}
       </div>
-    
+
       <h2 className="text-3xl font-bold mb-6 text-emerald-700">
         {studentProfile?.name}'s Dashboard
       </h2>
@@ -5460,35 +5483,11 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                     >
                       {buttonText}
                     </button>
-                    {/* SmartStudy: always show Report (student may have done lessons any time) */}
-                    {isSmartStudyLesson && !activeSession && (
-                      <button
-                        onClick={async () => {
-                          // Create a brief session so handleEndSession can fetch SmartStudy data
-                          try {
-                            const chk = await getDocs(query(sessionsCollection, where("studentUid","==",studentUid), where("endTime","==",null)));
-                            if (chk.empty) {
-                              await addDoc(sessionsCollection, {
-                                studentUid, lessonId: lesson.id, lessonTitle: lesson.title,
-                                lessonLink: lesson.link,
-                                lessonTrophyLimit: lesson.trophyLimit || 0,
-                                lessonUnitCount: lesson.unitCount || 0,
-                                lessonUnitLabel: lesson.unitLabel || 'Lesson',
-                                startTime: serverTimestamp(), endTime: null,
-                                feedbackNotes: null, score: null, awardedTrophies: 0
-                              });
-                            }
-                          } catch(e) { console.error('Report session create:', e); }
-                          // Wait briefly for onSnapshot to pick up the session, then open modal
-                          setTimeout(() => handleEndSession(), 400);
-                        }}
-                        className="px-4 py-2 rounded-lg text-white text-sm font-semibold bg-red-500 hover:bg-red-600 shadow-md flex-shrink-0 w-full sm:w-auto"
-                      >
-                        Report
-                      </button>
-                    )}
-                    {/* Non-SmartStudy: 1-hour redo window as before */}
-                    {!isSmartStudyLesson && canRedoReport && !activeSession && (
+                    {/* Same 1-hour "Report" window for every linked app, including
+                        SmartStudy — handleOpenRedoReport already re-fetches fresh
+                        SmartStudy-specific data when needed, so there's no reason
+                        this needed to be a special "always show" case. */}
+                    {canRedoReport && !activeSession && (
                       <button
                         onClick={() => handleOpenRedoReport(recentCompletedSession)}
                         className="px-4 py-2 rounded-lg text-white text-sm font-semibold bg-red-500 hover:bg-red-600 shadow-md flex-shrink-0 w-full sm:w-auto"
@@ -6338,6 +6337,24 @@ function RoleSelection({ user, onSelectRole, onStudentLogin, teacherUid, onRecov
   const [showRecovery, setShowRecovery] = useState(false);
   const [recoveryPasscode, setRecoveryPasscode] = useState('');
   const [recoverySubmitting, setRecoverySubmitting] = useState(false);
+  // Hidden trigger: tapping "Welcome" 5 times reveals the recovery passcode
+  // box directly — no visible "Locked out?" link, so a student or anyone
+  // else looking at this screen has no way to even know a recovery path
+  // exists. Resets if there's a pause between taps (avoids someone stumbling
+  // into it by repeatedly tapping over a long session).
+  const [welcomeTapCount, setWelcomeTapCount] = useState(0);
+  const welcomeTapTimerRef = useRef(null);
+  const handleWelcomeTap = () => {
+    if (welcomeTapTimerRef.current) clearTimeout(welcomeTapTimerRef.current);
+    const next = welcomeTapCount + 1;
+    if (next >= 5) {
+      setShowRecovery(true);
+      setWelcomeTapCount(0);
+      return;
+    }
+    setWelcomeTapCount(next);
+    welcomeTapTimerRef.current = setTimeout(() => setWelcomeTapCount(0), 2000);
+  };
 
   const handleRecoverySubmit = async (e) => {
     e.preventDefault();
@@ -6380,7 +6397,15 @@ function RoleSelection({ user, onSelectRole, onStudentLogin, teacherUid, onRecov
   return (
     <div className="flex justify-center items-center min-h-screen p-4">
       <div className="bg-white/90 backdrop-blur-sm p-8 rounded-xl shadow-2xl border border-gray-200 max-w-md w-full">
-        <h2 className="text-2xl font-bold text-center mb-6 text-gray-800">Welcome</h2>
+        {/* Looks and behaves like a plain heading — no underline, no pointer
+            cursor, no color change — so there's nothing visually suggesting
+            it's tappable. See handleWelcomeTap for what 5 quick taps does. */}
+        <h2
+          onClick={handleWelcomeTap}
+          className="text-2xl font-bold text-center mb-6 text-gray-800 select-none"
+        >
+          Welcome
+        </h2>
 
         {!teacherUid && (
           <>
@@ -6397,14 +6422,10 @@ function RoleSelection({ user, onSelectRole, onStudentLogin, teacherUid, onRecov
             isn't recognized as it (e.g. cleared storage, new device, another
             app on the same origin signed this session out). A known recovery
             passcode re-associates teacher access with this browser instead of
-            needing a manual database fix. */}
-        {teacherUid && (
+            needing a manual database fix. No visible entry point into this —
+            reached only via the 5-tap "Welcome" trigger above, on purpose. */}
+        {teacherUid && showRecovery && (
           <div className="mb-6 text-center">
-            {!showRecovery ? (
-              <button onClick={() => { setShowRecovery(true); setFormError(''); }} className="text-sm text-indigo-600 hover:text-indigo-800 hover:underline font-semibold">
-                Locked out as Teacher? Recover access
-              </button>
-            ) : (
               <form onSubmit={handleRecoverySubmit} className="p-4 bg-indigo-50 border border-indigo-200 rounded-lg text-left">
                 <p className="text-sm font-semibold text-indigo-800 mb-2">Enter your Teacher recovery passcode:</p>
                 <input
@@ -6425,7 +6446,6 @@ function RoleSelection({ user, onSelectRole, onStudentLogin, teacherUid, onRecov
                   </button>
                 </div>
               </form>
-            )}
           </div>
         )}
 
