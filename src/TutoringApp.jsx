@@ -4326,7 +4326,10 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         const allDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
         // Most recently studied chapter+sheet, complete or not — this is what
-        // gets reported, matching "report the last chapter they studied."
+        // gets reported. Re-studying an OLD chapter still updates this (its
+        // timestamp becomes the newest), so Score always reflects whatever
+        // was just done, even if "Lesson completed" (below) stays pointed at
+        // a higher chapter finished earlier.
         let latest = null;
         allDocs.forEach(dt => {
           const ts = dt.timestamp?.toMillis ? dt.timestamp.toMillis() : 0;
@@ -4334,17 +4337,28 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         });
         if (latest) setScore(`${latest.score ?? 0}/1000 — Chapter ${latest.chapterNum} (Sheet ${latest.sheetName})`);
 
-        // Highest chapter where BOTH sheets are done — this, not the raw
-        // sheet count, is what "Lesson completed" shows (avoids the old
-        // doubled 1–58 numbering; it's always a real chapter number, 1–29).
-        const fullChapters = allDocs.filter(d => d.chapterComplete).map(d => d.chapterNum);
+        // Highest chapter where BOTH sheets are done — recomputed directly
+        // from each sheet's own isComplete flag (not the chapterComplete
+        // stamp alone), since older completions from before that stamp
+        // existed wouldn't have it set and would otherwise never show up
+        // here — this is what was silently breaking Lesson completed.
+        const sheetStatus = {}; // chapterNum -> { A: bool, B: bool }
+        allDocs.forEach(dt => {
+          if (dt.chapterNum == null || !dt.sheetName) return;
+          sheetStatus[dt.chapterNum] = sheetStatus[dt.chapterNum] || {};
+          if (dt.isComplete) sheetStatus[dt.chapterNum][dt.sheetName] = true;
+        });
+        const fullChapters = Object.entries(sheetStatus).filter(([, s]) => s.A && s.B).map(([ch]) => parseInt(ch));
         if (fullChapters.length > 0) handleCompletedUnitChange(String(Math.max(...fullChapters)));
 
-        // Completed sheets that are part of a NOW-complete chapter and
-        // haven't been turned into a trophy request yet — both sheets of a
-        // chapter become pending together, so finishing a chapter always
-        // requests exactly 2 trophies at once.
-        const pending = allDocs.filter(d => d.isComplete && d.chapterComplete && !d.trophyRequested);
+        // Completed sheets that are part of a fully-done chapter and haven't
+        // been turned into a trophy request yet — both sheets of a chapter
+        // become pending together, so finishing a chapter always requests
+        // exactly 2 trophies at once. Uses the same robust "both sheets
+        // complete" check as above, not just the chapterComplete stamp.
+        const pending = allDocs.filter(d =>
+          d.isComplete && !d.trophyRequested && d.chapterNum != null && fullChapters.includes(d.chapterNum)
+        );
         setMyanmarReaderPendingScoreDocs(pending);
         setRequestTrophyAmount(pending.length > 0 ? pending.length : 1);
         setRequestTrophyChecked(pending.length > 0);
@@ -4518,6 +4532,15 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     let formattedUrl = lesson.link;
     if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
       formattedUrl = `https://${formattedUrl}`;
+    }
+    // Myanmar Reader has no classId/device-tied identity of its own — it
+    // should always show and record students under the exact name
+    // TutoringApp knows them by, regardless of which device/browser they're
+    // on. Passing it in the URL means Myanmar Reader never has to guess or
+    // cache a name locally for anyone who arrives this way.
+    if (MYANMAR_READER_APP_URL && formattedUrl.startsWith(MYANMAR_READER_APP_URL) && studentProfile?.name) {
+      const sep = formattedUrl.includes('?') ? '&' : '?';
+      formattedUrl = `${formattedUrl}${sep}student=${encodeURIComponent(studentProfile.name)}`;
     }
     openLink(formattedUrl);
     setIsLessonOverlayOpen(true);
