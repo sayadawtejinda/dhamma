@@ -185,81 +185,6 @@ const diagnoseClassCompletions = async (classId, studentName) => {
   return report;
 };
 
-// Repairs student quiz-completion records for a class after lessons were deleted and re-added.
-// Root cause: handleSaveLesson gives every NEW lesson a fresh `lesson_${Date.now()}` id (see below) —
-// so if a teacher deletes a class's lessons and re-adds them (even with identical titles/content),
-// every prior score/result record still points at the OLD lesson id. The per-lesson "Done" badge
-// requires an EXACT lessonId match, so it silently disappears — even though the class-picker's
-// completed-count (which just compares raw counts, not actual ids) can still show "all completed".
-// This matches old→new lessons purely by exact title, using the activity_feed log (the only place
-// that recorded both the old lessonId and its lessonTitle together), then:
-//  - rewrites each affected global_scores doc's lessonId to the new id (re-keyed under
-//    `${userId}_${newLessonId}` so the direct doc-id completion check also works)
-//  - copies the per-age-group quiz "results" subcollection docs from the old lesson id to the new one
-// Nothing is deleted from the old paths (old score docs are removed only after being re-written under
-// the new id) — safe to re-run; lessons with no orphaned records are simply skipped.
-const migrateOrphanedLessonCompletions = async (classId, { log = console.log } = {}) => {
-  if (!classId) return { error: 'No classId' };
-  const report = { scannedFeedEntries: 0, titleMatches: 0, scoresFixed: 0, resultsCopied: 0, unmatchedTitles: [] };
-
-  // 1. Current lessons in the class → title -> current id
-  const lessonsSnap = await getDocs(abhiLessonsRef(classId));
-  const currentIds = new Set(lessonsSnap.docs.map(d => d.id));
-  const titleToNewId = {};
-  lessonsSnap.docs.forEach(d => { const t = (d.data().title || '').trim(); if (t) titleToNewId[t] = d.id; });
-
-  // 2. Old lessonId -> title, sourced from the activity feed (only place that recorded both together)
-  const feedSnap = await getDocs(query(abhiActivityRef(), where('classId', '==', classId), where('type', '==', 'quiz_completed')));
-  const oldIdToTitle = {};
-  feedSnap.docs.forEach(d => {
-    const dt = d.data(); report.scannedFeedEntries++;
-    if (dt.lessonId && dt.lessonTitle) oldIdToTitle[dt.lessonId] = dt.lessonTitle.trim();
-  });
-
-  // 3. Build old->new map: only for ids that no longer exist as a current lesson, matched by title
-  const oldToNew = {};
-  const unmatched = new Set();
-  Object.entries(oldIdToTitle).forEach(([oldId, title]) => {
-    if (currentIds.has(oldId)) return; // not orphaned, leave alone
-    const newId = titleToNewId[title];
-    if (newId && newId !== oldId) { oldToNew[oldId] = newId; report.titleMatches++; }
-    else if (!newId) unmatched.add(title);
-  });
-  report.unmatchedTitles = Array.from(unmatched);
-
-  if (Object.keys(oldToNew).length === 0) { log('No orphaned lessons found for', classId, report); return report; }
-
-  // 4. Fix global_scores docs: re-key under the new lessonId, remove the old doc
-  const scoresSnap = await getDocs(query(abhiScoresRef(), where('classId', '==', classId)));
-  let batch = writeBatch(db); let batchOps = 0;
-  for (const d of scoresSnap.docs) {
-    const dt = d.data();
-    const newId = oldToNew[dt.lessonId];
-    if (!newId) continue;
-    const newDocRef = dt.userId ? doc(abhiScoresRef(), `${dt.userId}_${newId}`) : doc(abhiScoresRef());
-    batch.set(newDocRef, { ...dt, lessonId: newId }, { merge: true });
-    batch.delete(d.ref);
-    batchOps += 2; report.scoresFixed++;
-    if (batchOps >= 400) { await batch.commit(); batch = writeBatch(db); batchOps = 0; }
-  }
-  if (batchOps > 0) await batch.commit();
-
-  // 5. Copy quiz results subcollections (per age group) from the old lesson id to the new lesson id
-  for (const [oldId, newId] of Object.entries(oldToNew)) {
-    for (const g of Object.keys(AGE_GROUPS)) {
-      const rSnap = await getDocs(abhiResultsRef(classId, oldId, g));
-      if (rSnap.empty) continue;
-      const rBatch = writeBatch(db);
-      rSnap.docs.forEach(rd => rBatch.set(doc(abhiResultsRef(classId, newId, g), rd.id), rd.data()));
-      await rBatch.commit();
-      report.resultsCopied += rSnap.size;
-    }
-  }
-
-  log('Migration complete for', classId, report);
-  return report;
-};
-
 // Move a roster doc from oldName to newName. Crucially, this does NOT delete the old doc — a
 // student's own device caches its profile name in localStorage and keeps pinging/writing scores
 // under that cached name until it's told otherwise, so simply deleting the old roster doc caused
@@ -429,11 +354,7 @@ const AbhiClassRoster = ({ userId, classId, onLink }) => {
   const [finding,setFinding]=useState(false);
   const [matchPreview,setMatchPreview]=useState(null); // null=not previewed yet; [] or [...] once "Find" has run
   const [unlinking,setUnlinking]=useState(null); // studentName currently being unlinked
-  const [checkingRenames,setCheckingRenames]=useState(false);
-  const [repairingLoops,setRepairingLoops]=useState(false);
   const [repairingMissedScores,setRepairingMissedScores]=useState(false);
-  const [renamePreview,setRenamePreview]=useState(null); // null=not checked yet; [] or [...] once "Check Renamed" has run
-  const [resyncing,setResyncing]=useState(null); // studentName currently being resynced
 
   useEffect(()=>{ const i=setInterval(()=>setNow(Date.now()),10000); return()=>clearInterval(i); },[]);
 
@@ -483,7 +404,18 @@ const AbhiClassRoster = ({ userId, classId, onLink }) => {
     await updateDoc(ref,{status:'approved',name:name||dt.name,pendingName:null,studentNumber:num});
   };
   const removeStu=async(e,id)=>{e.stopPropagation();if(window.confirm('Remove this student?'))try{await deleteDoc(doc(db,P(`classRoster/${id}`)));}catch(err){console.error(err);}};
-  const toggleAA=async e=>{e.stopPropagation();if(!classId)return;await updateDoc(abhiClassDocRef(classId),{autoApprove:!aa});};
+  // Only one class can be "open" (autoApprove) at a time — turning this one on turns every other
+  // class off, so students always land in whichever single class the teacher currently has open,
+  // no matter which class button they tap (see the student Choose Your Class screen).
+  const toggleAA=async e=>{
+    e.stopPropagation();
+    if(!classId)return;
+    if(aa){ await updateDoc(abhiClassDocRef(classId),{autoApprove:false}); return; }
+    const allSnap=await getDocs(abhiClassesRef());
+    const batch=writeBatch(db);
+    allSnap.docs.forEach(d=>batch.update(d.ref,{autoApprove:d.id===classId}));
+    await batch.commit();
+  };
 
   const approved=students.filter(s=>s.status==='approved').sort((a,b)=>(a.studentNumber||0)-(b.studentNumber||0));
   const pending=students.filter(s=>s.status==='pending');
@@ -618,7 +550,7 @@ const syncRunning = useRef(false);
       // Also repair any already-reversed redirect loops from before the
       // moveRosterDoc/hideOldRosterDoc safety guard existed — silent so it
       // doesn't pop up a message every 60 seconds when there's nothing to fix.
-          await repairReversedLoops(true);
+          await repairReversedLoops();
       } finally {
         syncRunning.current = false;
       }
@@ -637,53 +569,14 @@ const syncRunning = useRef(false);
     finally{ setUnlinking(null); }
   };
 
-  // Check for TutoringApp renames — every link now stores the TutoringApp student's stable id
-  // (tutoringStudentUid) on the roster doc, so even if that student's name later changes in
-  // TutoringApp, we can still find them by id and notice the mismatch here, instead of the link
-  // silently going stale. Only students already linked (via id) are checked.
-  const checkRenamedLinks=async()=>{
-    setCheckingRenames(true);
-    try{
-      const list=await loadTutoringStudents();
-      const byId={}; list.forEach(t=>{byId[t.id]=t;});
-      const mismatches=[];
-      approved.forEach(s=>{
-        if(!s.linkedToTutoring||!s.tutoringStudentUid)return;
-        const t=byId[s.tutoringStudentUid];
-        if(t&&t.name&&t.name!==s.studentName) mismatches.push({rosterName:s.studentName,tutoringId:s.tutoringStudentUid,newName:t.name});
-      });
-      setRenamePreview(mismatches);
-      if(mismatches.length===0){ setSyncMsg('✅ No renames detected — all linked names are up to date.'); setTimeout(()=>setSyncMsg(''),3000); }
-    }catch(e){console.error('Check renames:',e);setSyncMsg('❌ Error — see console.');setTimeout(()=>setSyncMsg(''),4000);}
-    finally{setCheckingRenames(false);}
-  };
-
-  // Re-sync one mismatch: reuses the same rename+relink flow as a normal Link (renames Abhidhamma's
-  // own scores/roster from the old name to TutoringApp's current name, and re-marks it linked with
-  // the same id) so all history is preserved under the new name.
-  const resyncOne=async(m)=>{
-    if(!onLink)return;
-    setResyncing(m.rosterName);
-    try{
-      await onLink(m.rosterName,m.newName,m.tutoringId,[]);
-      setRenamePreview(prev=>prev?prev.filter(x=>x.rosterName!==m.rosterName):prev);
-    }finally{ setResyncing(null); }
-  };
-  const resyncAll=async()=>{
-    if(!renamePreview||renamePreview.length===0)return;
-    setSyncing(true);
-    try{ for(const m of renamePreview){ await onLink(m.rosterName,m.newName,m.tutoringId,[]); } setRenamePreview([]); setSyncMsg('✅ All renamed links synced.'); setTimeout(()=>setSyncMsg(''),3000); }
-    finally{ setSyncing(false); }
-  };
-
   // One-off cleanup for a specific bug: a rename redirect that got created
   // backwards (e.g. "Mabel N" pointing to "Mabel Naing" instead of the other
   // way around), leaving the OLD name as the active roster doc and the
   // CURRENT TutoringApp name as a dead-end redirect. moveRosterDoc/
   // hideOldRosterDoc now refuse to create new loops like this, but this
   // repairs any that already exist from before that guard was added.
-  const repairReversedLoops = async (silent=false) => {
-    if(!silent) setRepairingLoops(true);
+  // Runs silently from the background auto-sync only — no manual button/UI.
+  const repairReversedLoops = async () => {
     let fixedCount = 0;
     try {
       const rosterSnap = await getDocs(query(abhiRosterRef(), where('classId','==',classId)));
@@ -729,18 +622,10 @@ const syncRunning = useRef(false);
         await setDoc(abhiRosterDocRef(classId, bName), { renamedTo: aName, classId }, { merge: false });
         fixedCount++;
       }
-      if(!silent){
-        setSyncMsg(fixedCount > 0 ? `✅ Repaired ${fixedCount} reversed link(s).` : 'No reversed links found.');
-        setTimeout(()=>setSyncMsg(''),4000);
-      }
     } catch(e) {
       console.error('Repair reversed loops:', e);
-      if(!silent){
-        setSyncMsg('❌ Error — see console.');
-        setTimeout(()=>setSyncMsg(''),4000);
-      }
     }
-    if(!silent) setRepairingLoops(false);
+    return fixedCount;
   };
 
   // One-off repair for renames that already happened while renameStudentRecords had the
@@ -780,7 +665,7 @@ const syncRunning = useRef(false);
       <div onClick={()=>setOpen(!open)} className="p-4 border-b border-gray-700 cursor-pointer flex flex-wrap gap-3 justify-between items-center hover:bg-gray-700/50 transition">
         <div className="flex items-center gap-3 flex-wrap">
           <h3 className="font-bold text-white flex items-center gap-2"><Users className="w-5 h-5 text-indigo-400"/>Roster: {classId}</h3>
-          <button onClick={toggleAA} className={`flex items-center gap-1 text-xs px-3 py-1 rounded-full font-bold ${aa?'bg-green-500/20 text-green-400 border border-green-500/50':'bg-gray-800 text-gray-400 border border-gray-600'}`} title="Auto-approve new students">
+          <button onClick={toggleAA} className={`flex items-center gap-1 text-xs px-3 py-1 rounded-full font-bold ${aa?'bg-green-500/20 text-green-400 border border-green-500/50':'bg-gray-800 text-gray-400 border border-gray-600'}`} title="Auto-approve new students & make this the one 'open' class — turning this on turns it off for every other class, and every student is steered into this class regardless of which one they tap">
             {aa?<ToggleRight className="w-4 h-4"/>:<ToggleLeft className="w-4 h-4"/>}Auto-Approve
           </button>
           {onLink&&matchPreview===null&&(
@@ -801,35 +686,11 @@ const syncRunning = useRef(false);
               </button>
             </>
           )}
-          {onLink&&approved.some(s=>s.linkedToTutoring)&&renamePreview===null&&(
-            <button onClick={e=>{e.stopPropagation();checkRenamedLinks();}} disabled={checkingRenames}
-              className="flex items-center gap-1 text-xs px-3 py-1 rounded-full font-bold bg-teal-500/20 text-teal-300 border border-teal-500/50 disabled:opacity-50" title="Check whether any linked TutoringApp student has since been renamed there, and offer to sync it here">
-              {checkingRenames?'Checking…':'🔄 Check Renamed'}
-            </button>
-          )}
-          {onLink&&(
-            <button onClick={e=>{e.stopPropagation();repairReversedLoops();}} disabled={repairingLoops}
-              className="flex items-center gap-1 text-xs px-3 py-1 rounded-full font-bold bg-red-500/20 text-red-300 border border-red-500/50 disabled:opacity-50" title="Fix a rename that got recorded backwards (student's name keeps flip-flopping back to an old value). Safe to click any time — does nothing if there's nothing to fix.">
-              {repairingLoops?'Repairing…':'🔧 Repair Reversed Links'}
-            </button>
-          )}
           {onLink&&(
             <button onClick={e=>{e.stopPropagation();repairMissedScoreRenames();}} disabled={repairingMissedScores}
               className="flex items-center gap-1 text-xs px-3 py-1 rounded-full font-bold bg-amber-500/20 text-amber-300 border border-amber-500/50 disabled:opacity-50" title="Re-checks every already-renamed student in this class for old scores that got left behind under their previous name. Safe to click any time.">
               {repairingMissedScores?'Repairing…':'🩹 Repair Missed Score Renames'}
             </button>
-          )}
-          {onLink&&renamePreview!==null&&renamePreview.length>0&&(
-            <>
-              <button onClick={e=>{e.stopPropagation();resyncAll();}} disabled={syncing}
-                className="flex items-center gap-1 text-xs px-3 py-1 rounded-full font-bold bg-teal-600 text-white border border-teal-500 disabled:opacity-50" title="Sync all renamed students — updates Abhidhamma records to their new TutoringApp name">
-                {syncing?'Syncing…':`🔄 Sync All Renames (${renamePreview.length})`}
-              </button>
-              <button onClick={e=>{e.stopPropagation();setRenamePreview(null);}} disabled={syncing}
-                className="text-xs px-2 py-1 rounded-full font-bold text-gray-400 hover:text-white border border-gray-600 disabled:opacity-50">
-                Cancel
-              </button>
-            </>
           )}
           {syncMsg&&<span className="text-xs text-indigo-300 font-semibold">{syncMsg}</span>}
         </div>
@@ -849,23 +710,6 @@ const syncRunning = useRef(false);
               <UserCheck className="w-3.5 h-3.5 text-indigo-400 shrink-0"/>
               <span className="font-semibold text-white">{m.rosterName}</span>
               {m.oldName&&<span className="text-amber-300">(old name "{m.oldName}" — scores will be merged)</span>}
-            </div>
-          ))}
-        </div>
-      )}
-      {open&&renamePreview!==null&&renamePreview.length>0&&(
-        <div className="mx-4 mt-4 p-3 bg-teal-900/20 border border-teal-500/40 rounded-lg space-y-1.5">
-          <p className="text-xs font-bold text-teal-300 mb-2">🔄 {renamePreview.length} renamed in TutoringApp — click "Sync" to update the Abhidhamma record (history is kept):</p>
-          {renamePreview.map(m=>(
-            <div key={m.tutoringId} className="text-xs text-gray-300 flex items-center gap-2 flex-wrap">
-              <RefreshCw className="w-3.5 h-3.5 text-teal-400 shrink-0"/>
-              <span className="font-semibold text-white">{m.rosterName}</span>
-              <span className="text-gray-500">→</span>
-              <span className="font-semibold text-teal-300">{m.newName}</span>
-              <button onClick={()=>resyncOne(m)} disabled={resyncing===m.rosterName}
-                className="ml-auto text-xs bg-teal-600 hover:bg-teal-700 text-white font-bold px-2 py-0.5 rounded-lg disabled:opacity-50">
-                {resyncing===m.rosterName?'Syncing…':'Sync'}
-              </button>
             </div>
           ))}
         </div>
@@ -1453,6 +1297,9 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
   const [isTeacher,setIsTeacher]=useState(()=>localStorage.getItem('abhidhamma_isTeacher')==='true');
   const [role,setRole]=useState(()=>localStorage.getItem('abhidhamma_isTeacher')==='true'?'Teacher':'Student');
   const [classId,setClassId]=useState('');const [classData,setClassData]=useState(null);const [lessons,setLessons]=useState([]);const [allClasses,setAllClasses]=useState([]);
+  // When a teacher has exactly one class "open" (Auto-Approve on), every student is steered into
+  // that class regardless of which class button they tap — see the Choose Your Class screen below.
+  const openClassId = allClasses.find(c=>c.autoApprove)?.id || null;
   const [studentProfile,setStudentProfile]=useState(null);const [showWelcome,setShowWelcome]=useState(false);
   const [pendingEntry,setPendingEntry]=useState(null); // {name, group, classId} known from a deep-link, before age group is confirmed
   // pendingEntry/entryRequest only carry a classId on the exact visit that came in through
@@ -1911,50 +1758,38 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
                     <span className="text-gray-600 self-center">|</span>
                     <button onClick={async()=>{
                         if(!classId)return;
-                        if(!window.confirm(`Re-link old completion records to the current lessons in "${classId}"?\n\nUse this if students' "Done" tags disappeared after lessons were deleted/re-added. Safe to re-run — nothing a student earned is deleted, only re-pointed to the current lesson.`))return;
-                        setLoading(true);showMsg('Fixing completion records…');
+                        if(!window.confirm(`⚠️ Delete class "${classId}" and everything in it?\n\nThis deletes its lessons, roster, scores, quiz results, and notifications for THIS class only — other classes are untouched.\n\nThis CANNOT be undone!`))return;
+                        const input=window.prompt(`Type ${classId} to confirm:`);
+                        if(input!==classId)return;
+                        setLoading(true);showMsg(`Deleting class ${classId}…`);
                         try{
-                          const r=await migrateOrphanedLessonCompletions(classId);
-                          if(r.error){showMsg('Error: '+r.error);}
-                          else if(r.scoresFixed===0){showMsg(r.unmatchedTitles.length?`No matches. Unmatched titles: ${r.unmatchedTitles.join(', ')}`:'No orphaned records found — nothing to fix.');}
-                          else{showMsg(`✅ Re-linked ${r.scoresFixed} score record(s), copied ${r.resultsCopied} quiz result(s) across ${r.titleMatches} lesson(s).`);}
-                        }catch(e){console.error(e);showMsg('Error: '+e.message);}
-                        finally{setLoading(false);}
-                      }} disabled={loading||!classId}
-                      className="bg-emerald-700 hover:bg-emerald-600 disabled:opacity-40 text-white px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1"
-                      title="Re-link students' old completion records to the current lessons (fixes missing Done tags after a lesson re-import)">
-                      🔗 Fix Done Tags
-                    </button>
-                    <span className="text-gray-600 self-center">|</span>
-                    <button onClick={async()=>{
-                        const confirm1=window.confirm('⚠️ DELETE ALL AbhidhammaApp data?\n\nThis will delete ALL lessons, students, scores, notifications and classes.\n\nThis CANNOT be undone!');
-                        if(!confirm1)return;
-                        const input=window.prompt('Type DELETE to confirm:');
-                        if(input!=='DELETE')return;
-                        setLoading(true);showMsg('Deleting ALL data...');
-                        try{
-                          const [clSnap,rSnap,scSnap,actSnap]=await Promise.all([
-                            getDocs(abhiClassesRef()),
-                            getDocs(abhiRosterRef()),
-                            getDocs(abhiScoresRef()),
-                            getDocs(abhiActivityRef())
+                          const [lessonsSnap,rosterSnap,scoresSnap,activitySnap]=await Promise.all([
+                            getDocs(abhiLessonsRef(classId)),
+                            getDocs(query(abhiRosterRef(),where('classId','==',classId))),
+                            getDocs(query(abhiScoresRef(),where('classId','==',classId))),
+                            getDocs(query(abhiActivityRef(),where('classId','==',classId)))
                           ]);
-                          // Delete all lesson subcollection docs for each class
-                          for(const cl of clSnap.docs){
-                            const lSnap=await getDocs(abhiLessonsRef(cl.id));
-                            await Promise.all(lSnap.docs.map(d=>deleteDoc(d.ref)));
+                          // Quiz results live under a separate top-level lessons/{lessonId}/quiz/{group}/results
+                          // path — delete those for every lesson + age group in this class first.
+                          for(const lDoc of lessonsSnap.docs){
+                            for(const g of Object.keys(AGE_GROUPS)){
+                              const rSnap=await getDocs(abhiResultsRef(classId,lDoc.id,g));
+                              await Promise.all(rSnap.docs.map(d=>deleteDoc(d.ref)));
+                            }
                           }
                           await Promise.all([
-                            ...clSnap.docs.map(d=>deleteDoc(d.ref)),
-                            ...rSnap.docs.map(d=>deleteDoc(d.ref)),
-                            ...scSnap.docs.map(d=>deleteDoc(d.ref)),
-                            ...actSnap.docs.map(d=>deleteDoc(d.ref))
+                            ...lessonsSnap.docs.map(d=>deleteDoc(d.ref)),
+                            ...rosterSnap.docs.map(d=>deleteDoc(d.ref)),
+                            ...scoresSnap.docs.map(d=>deleteDoc(d.ref)),
+                            ...activitySnap.docs.map(d=>deleteDoc(d.ref))
                           ]);
-                          showMsg('✅ All data deleted.');
-                        }catch(e){showMsg('Error: '+e.message);}finally{setLoading(false);}
-                      }} disabled={loading}
-                      className="bg-red-800 hover:bg-red-700 text-white px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1" title="Delete ALL app data permanently">
-                      🗑 Delete ALL
+                          await deleteDoc(abhiClassDocRef(classId));
+                          showMsg(`✅ Deleted class "${classId}" and all its data.`);
+                          setClassId('');
+                        }catch(e){console.error(e);showMsg('Error: '+e.message);}finally{setLoading(false);}
+                      }} disabled={loading||!classId}
+                      className="bg-red-800 hover:bg-red-700 disabled:opacity-40 text-white px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1" title="Delete this class and everything tied to it (lessons, roster, scores, quiz results, notifications) — other classes are untouched">
+                      🗑 Delete This Class
                     </button>
                   </div>
                   {!importClassId.trim()&&<p className="text-amber-500/70 text-xs">⚠ Enter a Class ID above before importing</p>}
@@ -2012,8 +1847,11 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
                 <p className="text-center text-amber-600 text-sm mb-2 font-semibold">
                   {AGE_GROUPS[studentProfile.group]?.label}
                 </p>
-                {(pendingEntry?.classId||entryRequest?.classId||assignedClassId) && (
+                {(pendingEntry?.classId||entryRequest?.classId||assignedClassId) && !openClassId && (
                   <p className="text-gray-600 text-center mb-6">Your teacher assigned <span className="font-bold text-amber-700">{pendingEntry?.classId||entryRequest?.classId||assignedClassId}</span> — tap it below to start.</p>
+                )}
+                {openClassId && (
+                  <p className="text-gray-600 text-center mb-6">Your teacher currently has <span className="font-bold text-amber-700">{allClasses.find(c=>c.id===openClassId)?.displayName||openClassId}</span> open — tap any class below to join it.</p>
                 )}
                 {allClasses.length===0
                   ? <p className="text-center text-gray-500 italic">No classes found yet.</p>
@@ -2022,14 +1860,14 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
                         const stat=classStats[c.id];
                         const allDone=stat&&stat.totalLessons>0&&stat.completedCount>=stat.totalLessons;
                         return(
-                        <button key={c.id} onClick={() => enterClass(c.id)}
+                        <button key={c.id} onClick={() => enterClass(openClassId||c.id)}
                           className={`w-full p-4 rounded-xl border-2 text-left font-bold text-lg transition-all ${
-                            c.id===(pendingEntry?.classId||entryRequest?.classId||assignedClassId)
+                            c.id===(openClassId||pendingEntry?.classId||entryRequest?.classId||assignedClassId)
                               ? 'bg-amber-100 border-amber-500 text-amber-800 shadow-lg scale-[1.02]'
                               : 'bg-white border-gray-200 text-gray-700 hover:border-amber-300 hover:bg-amber-50'
                           }`}>
                           <div className="flex items-center justify-between gap-2 flex-nowrap">
-                            <span className="truncate min-w-0 flex-1">{c.id===(pendingEntry?.classId||entryRequest?.classId||assignedClassId)?'⭐ ':''}{c.displayName||c.id}</span>
+                            <span className="truncate min-w-0 flex-1">{c.id===(openClassId||pendingEntry?.classId||entryRequest?.classId||assignedClassId)?'⭐ ':''}{c.displayName||c.id}</span>
                             <div className="flex items-center gap-2 flex-nowrap shrink-0">
                               {stat?.rank>0&&(
                                 <span className="text-xs font-bold text-yellow-700 bg-yellow-100 border border-yellow-300 px-2 py-0.5 rounded-full whitespace-nowrap">🏆 Rank #{stat.rank}</span>
