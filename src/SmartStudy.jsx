@@ -962,6 +962,7 @@ const StudentLessonView = React.memo(({
           <p className="text-xl text-gray-600">Class ID: {classId}. Select a lesson to begin your journey.</p>
         </div>
         <div className="flex items-center space-x-2 flex-shrink-0">
+          <button onClick={() => { playClickSound?.(); handleSetView('classPicker'); }} className="p-2 bg-blue-100 text-blue-700 rounded-full shadow-md hover:bg-blue-200 transition-colors" title="Choose a Different Class"><LayoutGrid className="w-6 h-6" /></button>
           {myRank > 0 && (
             <DraggableRankBadge myRank={myRank} myLessonsCompleted={myLessonsCompleted} lessons={lessons} allScores={allScores} userName={userName} studentAgeLevel={studentAgeLevel} handleSetView={handleSetView} setActiveLessonId={setActiveLessonId} playClickSound={playClickSound} myTotalLessonsCompletedAllClasses={myTotalLessonsCompletedAllClasses} />
           )}
@@ -1481,10 +1482,32 @@ const HomeView = React.memo(({ handleSetView }) => (
   </div>
 ));
 
-const TeacherLoginView = React.memo(({ targetClassId, setTargetClassId, handleTeacherLogin, handleSetView, allTeacherClasses, isLoading, onRenameClass, onDeleteClass, currentUserId, onReclaimAll }) => {
+const TeacherLoginView = React.memo(({ targetClassId, setTargetClassId, handleTeacherLogin, handleSetView, allTeacherClasses, isLoading, onRenameClass, onDeleteClass, currentUserId, onReclaimAll, allOnlineRoster }) => {
   const [renaming, setRenaming] = React.useState(null); // classId being renamed
   const [newDisplayName, setNewDisplayName] = React.useState('');
   const mismatchedCount = allTeacherClasses.filter(c => c.teacherId && c.teacherId !== currentUserId).length;
+
+  // Lesson-title lookup per class, so the online-students panel can show a
+  // human-readable lesson name instead of a bare lesson id.
+  const classesById = React.useMemo(() => {
+    const m = {};
+    allTeacherClasses.forEach(c => { m[c.id] = c; });
+    return m;
+  }, [allTeacherClasses]);
+
+  // Same online/inactive/offline thresholds and ordering used inside a
+  // single class's student list — applied here across every class at once.
+  const sortedOnlineRoster = React.useMemo(() => {
+    return [...(allOnlineRoster || [])].sort((a, b) => {
+      const aTime = Date.now() - (a.lastSeen || 0); const bTime = Date.now() - (b.lastSeen || 0);
+      const aIsOnline = aTime < 180000; const bIsOnline = bTime < 180000;
+      const aIsWarning = aTime >= 180000 && aTime < 480000; const bIsWarning = bTime >= 180000 && bTime < 480000;
+      if (aIsOnline && !bIsOnline) return -1; if (!aIsOnline && bIsOnline) return 1;
+      if (aIsWarning && !bIsWarning) return -1; if (!aIsWarning && bIsWarning) return 1;
+      return (a.classId || '').localeCompare(b.classId || '') || (a.studentName || '').localeCompare(b.studentName || '');
+    });
+  }, [allOnlineRoster]);
+
   return (
     <div className="max-w-lg mx-auto mt-10 p-6 space-y-6">
       <h2 className="text-3xl font-bold text-blue-600 text-center">Teacher — Choose Class</h2>
@@ -1537,6 +1560,53 @@ const TeacherLoginView = React.memo(({ targetClassId, setTargetClassId, handleTe
           })}
         </div>
       )}
+      {/* Online students across every class, in one place — same
+          online/inactive/offline pattern as a single class's student list. */}
+      <div className="border-t pt-4 space-y-3">
+        <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide flex items-center">
+          <Users className="w-4 h-4 mr-1.5" />Students — All Classes
+        </p>
+        {sortedOnlineRoster.length === 0 ? (
+          <p className="text-sm text-gray-400 italic">No approved students yet.</p>
+        ) : (
+          <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+            {sortedOnlineRoster.map(student => {
+              const timeSinceLastSeen = Date.now() - (student.lastSeen || 0);
+              const isOnline = timeSinceLastSeen < 180000;
+              const isWarning = timeSinceLastSeen >= 180000 && timeSinceLastSeen < 480000;
+              const lessonTitle = student.currentLessonId
+                ? (classesById[student.classId]?.lessons || []).find(l => l.lessonId === student.currentLessonId)?.title
+                : null;
+              return (
+                <div key={`${student.classId}_${student.studentName}`} className={`p-3 rounded-xl border transition-colors ${isOnline ? 'bg-green-50 border-green-300' : isWarning ? 'bg-red-50 border-red-300' : 'bg-gray-50 border-gray-200 opacity-80'}`}>
+                  <p className={`font-bold text-sm ${isOnline ? 'text-gray-800' : isWarning ? 'text-red-800' : 'text-gray-600'}`}>
+                    {student.studentName}
+                    <span className="ml-2 text-xs font-normal text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full border border-blue-200">{student.classId}</span>
+                  </p>
+                  <div className="flex items-center mt-1 flex-wrap gap-y-1">
+                    {isOnline ? (
+                      <>
+                        <span className="w-2.5 h-2.5 bg-green-500 rounded-full mr-2 animate-pulse"></span>
+                        <span className="text-xs text-green-600 font-bold">Online</span>
+                        {student.currentLessonId && (<span className="ml-2 text-xs text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full border border-blue-200">Viewing: {lessonTitle || student.currentLessonId}</span>)}
+                      </>
+                    ) : isWarning ? (
+                      <>
+                        <span className="w-2.5 h-2.5 bg-red-500 rounded-full mr-2 animate-pulse"></span>
+                        <span className="text-xs text-red-600 font-bold">Inactive (Please warn student)</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="w-2.5 h-2.5 bg-gray-400 rounded-full mr-2"></span> <span className="text-xs text-gray-500">Offline</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
       {/* Create new class */}
       <div className="border-t pt-4 space-y-3">
         <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Create / Enter Class ID</p>
@@ -1987,6 +2057,7 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
   }, [lessons]);
 
   const [allTeacherClasses, setAllTeacherClasses] = useState([]);
+  const [allOnlineRoster, setAllOnlineRoster] = useState([]);
 
   // Load all classes when teacher opens the class picker
   useEffect(() => {
@@ -1994,6 +2065,18 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
     getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'classes'))
       .then(snap => setAllTeacherClasses(snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>a.id.localeCompare(b.id))))
       .catch(() => {});
+  }, [view]);
+
+  // Live roster across every class (not just one), so the "Teacher — Choose
+  // Class" screen can show, in one place, every approved student and which
+  // class/lesson they're currently in — same online/inactive/offline pattern
+  // used inside a single class's dashboard.
+  useEffect(() => {
+    if (view !== 'teacherLogin') return;
+    const unsub = onSnapshot(query(getRosterCollectionRef(), where('status', '==', 'approved')), (snap) => {
+      setAllOnlineRoster(snap.docs.map(d => d.data()));
+    }, (error) => console.error('Error fetching all-class roster:', error));
+    return () => unsub();
   }, [view]);
 
   const handleRenameClass = useCallback(async (classId, displayName) => {
@@ -2776,7 +2859,7 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
     if (!isAuthReady) return <LoadingView />;
     switch (view) {
       case 'teacherPasscode': return <TeacherPasscodeView onVerified={() => setView('teacherLogin')} handleSetView={handleSetView} />;
-      case 'teacherLogin': return <TeacherLoginView targetClassId={targetClassId} setTargetClassId={setTargetClassId} handleTeacherLogin={handleTeacherLogin} handleSetView={handleSetView} allTeacherClasses={allTeacherClasses} isLoading={isLoading} onRenameClass={handleRenameClass} onDeleteClass={handleDeleteClass} currentUserId={currentUserId} onReclaimAll={handleReclaimAllClasses} />;
+      case 'teacherLogin': return <TeacherLoginView targetClassId={targetClassId} setTargetClassId={setTargetClassId} handleTeacherLogin={handleTeacherLogin} handleSetView={handleSetView} allTeacherClasses={allTeacherClasses} isLoading={isLoading} onRenameClass={handleRenameClass} onDeleteClass={handleDeleteClass} currentUserId={currentUserId} onReclaimAll={handleReclaimAllClasses} allOnlineRoster={allOnlineRoster} />;
       case 'studentLogin': return <StudentLoginView targetClassId={targetClassId} setTargetClassId={setTargetClassId} userName={userName} setUserName={setUserName} studentAgeLevel={studentAgeLevel} setStudentAgeLevel={setStudentAgeLevel} handleStudentLogin={handleStudentLogin} handleSetView={handleSetView} />;
       case 'ageLevelPicker': return <AgeLevelPickerView studentAgeLevel={studentAgeLevel} setStudentAgeLevel={setStudentAgeLevel} onContinue={handleAgeLevelContinue} />;
       case 'classPicker': return <ClassPickerView classList={classPickerList} highlightClassId={entryRequest?.classId} onSelectClass={handleSelectClassFromPicker} loading={classPickerLoading} classPickerInfo={classPickerInfo} openClassId={openClassId} />;
