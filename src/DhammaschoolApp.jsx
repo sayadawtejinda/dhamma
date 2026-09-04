@@ -56,6 +56,29 @@ const DHAMMASCHOOL_BODY_HTML = `
             </div>
         </header>
 
+        <!-- Floating Online-Students Widget — fixed so it stays visible on any
+             screen (library, lesson, teacher dashboard) for both roles. Badge
+             count is currently-online students; click opens the full list,
+             which also includes students seen within the past week. -->
+        <div id="online-widget-btn" class="fixed top-24 right-3 md:right-6 z-[70] bg-white shadow-lg rounded-full pl-3 pr-4 py-2 flex items-center gap-2 cursor-pointer border-2 border-green-200 hover:border-green-400 transition">
+            <span class="relative flex h-3 w-3">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+            </span>
+            <span class="font-bold text-slate-700 text-sm">Online <span id="online-count-badge">0</span></span>
+        </div>
+
+        <div id="online-list-modal" class="fixed inset-0 bg-slate-900/60 flex justify-center items-center z-[75] hidden backdrop-blur-md">
+            <div class="bg-white p-6 rounded-3xl shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-black text-slate-800"><i class="fas fa-circle text-green-500 text-xs mr-1"></i> Students</h3>
+                    <button onclick="document.getElementById('online-list-modal').classList.add('hidden')" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-red-100 text-slate-500 hover:text-red-600 flex items-center justify-center"><i class="fas fa-times"></i></button>
+                </div>
+                <p class="text-xs text-slate-400 font-bold mb-3">Green dot = online now. Everyone seen in the last 7 days is listed below.</p>
+                <div id="online-list" class="space-y-2 overflow-y-auto flex-grow"></div>
+            </div>
+        </div>
+
         
 
         <!-- Student Modal -->
@@ -888,6 +911,13 @@ export default function DhammaschoolApp({ entryRequest, onExit }) {
         let myCompletedLessonIds = new Set();
         let allCompletions = [];
         let allCompletionsUnsub;
+
+        // --- ONLINE PRESENCE (who's online, from which class, on which lesson) ---
+        let allPresenceRecords = []; // raw docs from PATHS.presence, refreshed live
+        let presenceUnsub;
+        const ONLINE_THRESHOLD_MS = 90 * 1000; // no heartbeat in 90s = treated as offline
+        const PRESENCE_LIST_WINDOW_MS = 7 * 24 * 60 * 60 * 1000; // show last 7 days in the list
+
         let currentLanguageMode = 'mm'; // 'mm' or 'en' - Global/Lesson scope
 let lessonAudioEnabled = false;
 let lessonBilingualEnabled = false;
@@ -937,7 +967,8 @@ let bilingualMode = false;
             scores: `/artifacts/${appId}/public/data/game_scores`,
             completions: `/artifacts/${appId}/public/data/lesson_completions`,
             roster: `/artifacts/${appId}/public/data/roster`,
-            classes: `/artifacts/${appId}/public/data/classes`
+            classes: `/artifacts/${appId}/public/data/classes`,
+            presence: `/artifacts/${appId}/public/data/presence`
         };
         // TutoringApp's own Firestore paths (separate app/session) — used only to
         // search students for the "Link to Tutoring" feature.
@@ -1059,6 +1090,7 @@ let bilingualMode = false;
                                         els.nameModal.classList.add('hidden');
                                         nameError.classList.add('hidden');
                                         // The student library is already being rendered by setupListeners
+                                        updatePresence();
                                     } else {
                                         nameError.classList.remove('hidden');
                                     }
@@ -1247,7 +1279,98 @@ let bilingualMode = false;
                 setupCompletionsListener();
             }
             // --- END FIX ---
+
+            // Online presence: both roles heartbeat their own status and both
+            // roles watch the live list (teacher monitoring, students seeing
+            // classmates). One heartbeat now, then every 20s; the widget also
+            // re-renders every 20s on its own so people age from "online" to
+            // "offline" even without a fresh snapshot event.
+            setupPresenceListener();
+            updatePresence();
+            setInterval(updatePresence, 20000);
+            setInterval(renderOnlineWidget, 20000);
         }
+
+        function setupPresenceListener() {
+            if (presenceUnsub) presenceUnsub();
+            presenceUnsub = onSnapshot(collection(db, PATHS.presence), (snap) => {
+                allPresenceRecords = [];
+                snap.forEach(d => allPresenceRecords.push({ id: d.id, ...d.data() }));
+                renderOnlineWidget();
+            });
+        }
+
+        // Writes this device's current status (who, which class, which lesson).
+        // Called on a timer plus right after any class/lesson change so the
+        // widget feels responsive instead of waiting for the next heartbeat.
+        async function updatePresence() {
+            if (!userId) return;
+            try {
+                const activeLessonIdForPresence = isTeacher ? currentLessonId : studentCurrentLessonId;
+                const lesson = activeLessonIdForPresence ? allLessons[activeLessonIdForPresence] : null;
+                await setDoc(doc(db, PATHS.presence, userId), {
+                    userId,
+                    role: isTeacher ? 'teacher' : 'student',
+                    name: isTeacher ? 'Teacher' : (studentName || 'Student'),
+                    classId: (isTeacher ? selectedTeacherClassId : selectedClassId) || null,
+                    lessonId: activeLessonIdForPresence || null,
+                    lessonName: lesson ? lesson.name : null,
+                    lastActive: new Date().toISOString()
+                }, { merge: true });
+            } catch (e) { console.error('Presence update error:', e); }
+        }
+
+        function renderOnlineWidget() {
+            const badge = document.getElementById('online-count-badge');
+            if (!badge) return;
+            const now = Date.now();
+            const onlineCount = allPresenceRecords.filter(p =>
+                p.role === 'student' && p.lastActive && (now - new Date(p.lastActive).getTime()) <= ONLINE_THRESHOLD_MS
+            ).length;
+            badge.textContent = onlineCount;
+            // Keep an already-open list panel live too.
+            const modal = document.getElementById('online-list-modal');
+            if (modal && !modal.classList.contains('hidden')) renderOnlineList();
+        }
+
+        function renderOnlineList() {
+            const container = document.getElementById('online-list');
+            if (!container) return;
+            const now = Date.now();
+            const records = allPresenceRecords
+                .filter(p => p.role === 'student' && p.name && p.lastActive)
+                .filter(p => (now - new Date(p.lastActive).getTime()) <= PRESENCE_LIST_WINDOW_MS)
+                .map(p => ({ ...p, _isOnline: (now - new Date(p.lastActive).getTime()) <= ONLINE_THRESHOLD_MS }))
+                .sort((a, b) => {
+                    if (a._isOnline !== b._isOnline) return a._isOnline ? -1 : 1;
+                    return new Date(b.lastActive) - new Date(a.lastActive);
+                });
+
+            if (records.length === 0) {
+                container.innerHTML = '<p class="text-center text-slate-400 font-bold py-6">No students seen this week yet.</p>';
+                return;
+            }
+
+            container.innerHTML = records.map(p => {
+                const classLabel = p.classId || 'GENERAL';
+                const statusText = p._isOnline
+                    ? `${classLabel} · ${p.lessonName ? p.lessonName : 'Browsing lessons'}`
+                    : `Last seen ${new Date(p.lastActive).toLocaleString()}`;
+                return `
+                    <div class="flex items-center gap-3 p-3 ${p._isOnline ? 'bg-green-50 border-green-100' : 'bg-slate-50 border-slate-100'} rounded-xl border">
+                        <span class="w-2.5 h-2.5 rounded-full flex-shrink-0 ${p._isOnline ? 'bg-green-500' : 'bg-slate-300'}"></span>
+                        <div class="min-w-0">
+                            <p class="font-bold text-slate-800 truncate">${p.name}</p>
+                            <p class="text-xs text-slate-500 font-bold truncate">${statusText}</p>
+                        </div>
+                    </div>`;
+            }).join('');
+        }
+
+        document.getElementById('online-widget-btn').onclick = () => {
+            renderOnlineList();
+            document.getElementById('online-list-modal').classList.remove('hidden');
+        };
 
         function setupCompletionsListener() {
             if (completionsUnsub) completionsUnsub();
@@ -1776,6 +1899,7 @@ document.getElementById('toggle-audio-btn').onclick = async () => {
             // Clear persistence when leaving lesson
             localStorage.removeItem('studentCurrentLessonId');
             if(answersUnsub) answersUnsub(); if(lessonUnsub) lessonUnsub(); renderStudentLibrary();
+            updatePresence();
         };
 
         window.enterLesson = (lid) => {
@@ -1786,6 +1910,7 @@ document.getElementById('toggle-audio-btn').onclick = async () => {
             answersMap = {};
             els.studentLibrary.classList.add('hidden'); els.studentActiveLesson.classList.remove('hidden');
             setupLessonListener(lid); setupMyAnswersListener();
+            updatePresence();
         };
 
         window.previewAsStudent = () => {
@@ -1875,6 +2000,7 @@ document.getElementById('toggle-audio-btn').onclick = async () => {
             safeSetText('current-class-label', classId);
             renderStudentLibrary();
             renderNotificationBell(); // this class's own unseen-completions count
+            updatePresence();
         };
 
         window.changeClass = () => {
@@ -1884,6 +2010,7 @@ document.getElementById('toggle-audio-btn').onclick = async () => {
             els.studentClassPicker.classList.remove('hidden');
             renderClassPicker();
             renderNotificationBell(); // hides the badge until a class is chosen again
+            updatePresence();
         };
 
         function renderStudentLibrary() {
@@ -3487,6 +3614,7 @@ function renderClickableWords(text) {
             renderLessonSelector();
             loadClassRoster(classId);
             renderNotificationBell(); // this class's own unseen-completions count
+            updatePresence();
         };
 
         window.backToClassPicker = () => {
@@ -3496,6 +3624,7 @@ function renderClickableWords(text) {
             els.teacherClassPicker.classList.remove('hidden');
             renderTeacherClassPicker();
             renderNotificationBell(); // hides the badge until a class is chosen again
+            updatePresence();
         };
 
         window.createNewClass = async () => {
