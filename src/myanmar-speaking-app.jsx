@@ -4966,6 +4966,8 @@ export default function MyanmarSpeakingApp({ entryRequest, onExit }) {
     const [showOnlinePanel, setShowOnlinePanel] = useState(false);
     const [nowForOnlineCheck, setNowForOnlineCheck] = useState(Date.now());
     const minutesWrittenRef = useRef(0);
+    const lastActivityRef = useRef(Date.now());
+    const activeMsRef = useRef(0);
 
     useEffect(() => {
         initializeAuth();
@@ -5030,21 +5032,53 @@ export default function MyanmarSpeakingApp({ entryRequest, onExit }) {
         };
     }, [isAuthReady, userId]);
 
-    // Roster heartbeat — pings this student's presence every 30s while they're
-    // in the student view, and marks them offline when they leave. Mirrors
-    // MyanmarReaderApp.jsx's roster ping so teachers see consistent behavior
-    // across both apps.
+    // Presence + minutes tracking, combined so both respect idle time: if the
+    // student hasn't touched/clicked/typed anything for IDLE_MS, they're
+    // marked offline and minutes stop accumulating (being "in" the app with
+    // an untouched screen shouldn't count as studying or being online).
+    // Activity resumes both the instant they interact again.
     useEffect(() => {
         if (activeRole !== 'student' || !studentName) return;
+        const IDLE_MS = 2 * 60 * 1000; // 2 minutes with no touch/click/key
+        const TICK_MS = 15000;
         const rosterRef = doc(db, ROSTER_PATH, sanitizeSpeakingKey(studentName));
-        const ping = () => setDoc(rosterRef, { studentName, isOnline: true, lastSeen: serverTimestamp() }, { merge: true }).catch(() => {});
-        ping();
-        const interval = setInterval(ping, 30000);
+        let isIdle = false;
+
+        const markActivity = () => { lastActivityRef.current = Date.now(); };
+        const activityEvents = ['touchstart', 'mousedown', 'keydown', 'scroll'];
+        activityEvents.forEach(evt => window.addEventListener(evt, markActivity, { passive: true }));
+
+        const flushMinutes = () => {
+            const activeMinutes = Math.floor(activeMsRef.current / 60000);
+            const delta = activeMinutes - minutesWrittenRef.current;
+            if (delta <= 0) return;
+            minutesWrittenRef.current = activeMinutes;
+            const todayKey = new Date().toISOString().split('T')[0];
+            const minutesRef = doc(db, DAILY_MINUTES_PATH, `${sanitizeSpeakingKey(studentName)}_${todayKey}`);
+            setDoc(minutesRef, { studentName, date: todayKey, minutes: increment(delta) }, { merge: true }).catch(e => console.error('Minutes flush error:', e));
+        };
+
         const goOffline = () => { updateDoc(rosterRef, { isOnline: false, lastSeen: serverTimestamp() }).catch(() => {}); };
+
+        const tick = () => {
+            const idleNow = (Date.now() - lastActivityRef.current) > IDLE_MS;
+            if (idleNow) {
+                if (!isIdle) { isIdle = true; goOffline(); }
+                return; // no ping, no minutes while idle
+            }
+            isIdle = false;
+            setDoc(rosterRef, { studentName, isOnline: true, lastSeen: serverTimestamp() }, { merge: true }).catch(() => {});
+            activeMsRef.current += TICK_MS;
+            flushMinutes();
+        };
+        tick();
+        const interval = setInterval(tick, TICK_MS);
         window.addEventListener('beforeunload', goOffline);
         return () => {
             clearInterval(interval);
+            activityEvents.forEach(evt => window.removeEventListener(evt, markActivity));
             window.removeEventListener('beforeunload', goOffline);
+            flushMinutes();
             goOffline();
         };
     }, [studentName, activeRole]);
@@ -5064,25 +5098,6 @@ export default function MyanmarSpeakingApp({ entryRequest, onExit }) {
         const interval = setInterval(() => setNowForOnlineCheck(Date.now()), 30000);
         return () => clearInterval(interval);
     }, []);
-
-    // Minutes tracking — every 60s, flushes the newly-elapsed minutes (as a
-    // delta, via Firestore increment()) into today's daily_minutes doc, then
-    // flushes any remainder when the session ends. TutoringApp.jsx's Report
-    // button reads this doc to auto-fill "Today, completed".
-    useEffect(() => {
-        if (activeRole !== 'student' || !studentName || !studySessionStart) return;
-        const flush = () => {
-            const elapsedMinutes = Math.floor((Date.now() - studySessionStart) / 60000);
-            const delta = elapsedMinutes - minutesWrittenRef.current;
-            if (delta <= 0) return;
-            minutesWrittenRef.current = elapsedMinutes;
-            const todayKey = new Date().toISOString().split('T')[0];
-            const minutesRef = doc(db, DAILY_MINUTES_PATH, `${sanitizeSpeakingKey(studentName)}_${todayKey}`);
-            setDoc(minutesRef, { studentName, date: todayKey, minutes: increment(delta) }, { merge: true }).catch(e => console.error('Minutes flush error:', e));
-        };
-        const interval = setInterval(flush, 60000);
-        return () => { clearInterval(interval); flush(); };
-    }, [studentName, activeRole, studySessionStart]);
 
     const FIVE_MIN_MS = 5 * 60 * 1000;
     const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;

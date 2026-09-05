@@ -4554,7 +4554,9 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     // the URL param used to (so nothing else about the identity/roster
     // logic on that side needs to change).
     const isMyanmarReaderLesson = MYANMAR_READER_APP_URL && formattedUrl.startsWith(MYANMAR_READER_APP_URL);
-    if (isMyanmarReaderLesson && onOpenMyanmarReader && studentProfile?.name) {
+    if (isMyanmarSpeakingUrl(formattedUrl) && onOpenMyanmarSpeaking && studentProfile?.name) {
+      onOpenMyanmarSpeaking({ studentName: studentProfile.name });
+    } else if (isMyanmarReaderLesson && onOpenMyanmarReader && studentProfile?.name) {
       onOpenMyanmarReader({ studentName: studentProfile.name });
     } else {
       openLink(formattedUrl);

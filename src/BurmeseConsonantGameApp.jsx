@@ -1,4 +1,16 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { doc, setDoc, updateDoc, onSnapshot, collection, serverTimestamp } from 'firebase/firestore';
+import { X } from 'lucide-react';
+import { db } from './firebase';
+
+// Live "who's online" roster — same simple heartbeat pattern as
+// MyanmarReaderApp.jsx's READER_ROSTER_PATH (30s ping, 5-minute online
+// window), shown to both teacher and student. No name-entry screen needed:
+// identity comes from entryRequest.studentName when TutoringApp opens this
+// for a student; when opened for a teacher (no studentName), they just see
+// the panel without appearing in it themselves.
+const BCG_ROSTER_PATH = 'artifacts/burmese-consonant-game-app/public/data/roster';
+const sanitizeBcgKey = (key) => (key || 'unknown').replace(/[.$#/\[\]]/g, '_');
 
 // ── Ported from the standalone "Burmese Consonant Learning Game" HTML app ──
 // Same hybrid approach as ConsonantPracticeApp/DhammaschoolApp: the original
@@ -504,6 +516,57 @@ const BCG_APP_CSS = `
 export default function BurmeseConsonantGameApp({ entryRequest, onExit }) {
   const containerRef = useRef(null);
   const initializedRef = useRef(false);
+  const studentName = entryRequest?.studentName || null;
+  const [onlineStudents, setOnlineStudents] = useState([]);
+  const [showOnlinePanel, setShowOnlinePanel] = useState(false);
+  const [nowForOnlineCheck, setNowForOnlineCheck] = useState(Date.now());
+
+  // Roster heartbeat — only pings when opened for a student (entryRequest
+  // carries their name); a teacher just observes.
+  useEffect(() => {
+    if (!studentName) return;
+    const rosterRef = doc(db, BCG_ROSTER_PATH, sanitizeBcgKey(studentName));
+    const ping = () => setDoc(rosterRef, { studentName, isOnline: true, lastSeen: serverTimestamp() }, { merge: true }).catch(() => {});
+    ping();
+    const interval = setInterval(ping, 30000);
+    const goOffline = () => { updateDoc(rosterRef, { isOnline: false, lastSeen: serverTimestamp() }).catch(() => {}); };
+    window.addEventListener('beforeunload', goOffline);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('beforeunload', goOffline);
+      goOffline();
+    };
+  }, [studentName]);
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, BCG_ROSTER_PATH), (snap) => {
+      setOnlineStudents(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, e => console.error('Burmese Consonant Game roster listen error:', e));
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => setNowForOnlineCheck(Date.now()), 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const isRosterEntryOnline = (s) => {
+    const lastSeenMs = s.lastSeen?.toMillis ? s.lastSeen.toMillis() : (s.lastSeen?.seconds ? s.lastSeen.seconds * 1000 : 0);
+    return lastSeenMs > 0 && (nowForOnlineCheck - lastSeenMs) < 5 * 60 * 1000;
+  };
+  const weeklyRosterList = onlineStudents
+    .filter(s => {
+      const lastSeenMs = s.lastSeen?.toMillis ? s.lastSeen.toMillis() : (s.lastSeen?.seconds ? s.lastSeen.seconds * 1000 : 0);
+      return lastSeenMs > 0 && (nowForOnlineCheck - lastSeenMs) < 7 * 24 * 60 * 60 * 1000;
+    })
+    .map(s => ({ ...s, _isOnlineNow: isRosterEntryOnline(s) }))
+    .sort((a, b) => {
+      if (a._isOnlineNow !== b._isOnlineNow) return b._isOnlineNow ? 1 : -1;
+      const aMs = a.lastSeen?.toMillis ? a.lastSeen.toMillis() : 0;
+      const bMs = b.lastSeen?.toMillis ? b.lastSeen.toMillis() : 0;
+      return bMs - aMs;
+    });
+  const onlineCount = onlineStudents.filter(isRosterEntryOnline).length;
 
   useEffect(() => {
     if (initializedRef.current) return;
@@ -1401,6 +1464,35 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit }) {
         className="bcg-app-root bg-gray-100"
         dangerouslySetInnerHTML={{ __html: BCG_APP_BODY_HTML }}
       />
+      <button
+        onClick={() => setShowOnlinePanel(true)}
+        className="fixed top-3 right-3 z-[9990] flex items-center gap-1 text-sm font-bold bg-white/90 backdrop-blur-sm px-3 py-2 rounded-2xl shadow-lg border border-gray-200 text-emerald-600 hover:underline"
+      >
+        <span className="w-2 h-2 bg-emerald-500 rounded-full inline-block"></span>{onlineCount} online
+      </button>
+      {showOnlinePanel && (
+        <div className="fixed inset-0 z-[9995] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowOnlinePanel(false)}>
+          <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full max-h-[80vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-gray-800">🕷️ Students {onlineCount > 0 && <span className="text-emerald-600">({onlineCount} online)</span>}</h2>
+              <button onClick={() => setShowOnlinePanel(false)} className="text-gray-400 hover:text-gray-700"><X size={22}/></button>
+            </div>
+            <p className="text-xs text-gray-400 mb-3">Showing everyone active in the last 7 days.</p>
+            <div className="space-y-2">
+              {weeklyRosterList.map(s => (
+                <div key={s.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
+                  <div className="flex items-center gap-2">
+                    <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${s._isOnlineNow ? 'bg-emerald-500' : 'bg-gray-300'}`}></span>
+                    <span className="font-bold text-gray-800">{s.studentName}</span>
+                  </div>
+                  <span className="text-xs text-gray-400">{s._isOnlineNow ? 'Online now' : 'Active this week'}</span>
+                </div>
+              ))}
+              {weeklyRosterList.length === 0 && <p className="text-center text-gray-400 py-6">No students active this week yet.</p>}
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
