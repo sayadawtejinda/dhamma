@@ -704,7 +704,7 @@ function AttendanceReports({ students, teacherSchedule, sessions }) {
   );
 }
 
-function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool }) {
+function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenConsonantPractice }) {
   const [students, setStudents] = useState([]);
   const [lessonBank, setLessonBank] = useState([]); 
   const [sessions, setSessions] = useState([]); 
@@ -2611,6 +2611,17 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
             <span className="flex items-center text-lg font-bold text-orange-800">📖 Dhammaschool app</span>
             <span className="text-orange-500 text-xl">→</span>
           </button>
+          {/* Myanmar Consonant Practice — mounted inline like the others above.
+              No teacher/student distinction yet (no Firebase wiring in this
+              app currently — that, plus trophy/score integration, comes in a
+              later pass), so this just switches straight to it. */}
+          <button
+            onClick={() => onOpenConsonantPractice && onOpenConsonantPractice({})}
+            className="w-full flex items-center justify-between bg-white p-4 rounded-xl border-2 border-cyan-200 hover:border-cyan-400 hover:shadow-md transition-all mt-3"
+          >
+            <span className="flex items-center text-lg font-bold text-cyan-800">🔤 Myanmar Consonant Practice</span>
+            <span className="text-cyan-500 text-xl">→</span>
+          </button>
           {/* Myanmar Speaking app — standalone HTML app, opens in a new tab (not mounted inline) */}
           <button
             onClick={() => {
@@ -4349,16 +4360,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           const ts = dt.timestamp?.toMillis ? dt.timestamp.toMillis() : 0;
           if (!latest || ts > latest._ts) latest = { ...dt, _ts: ts };
         });
-        if (latest) {
-          setScore(`${latest.score ?? 0}/1000`);
-          const chapterNoteText = `Chapter ${latest.chapterNum} (Sheet ${latest.sheetName})`;
-          setFeedbackNotes(prev => {
-            const isPlaceholder = !prev || !prev.trim()
-              || prev.startsWith('Automatically submitted')
-              || prev === 'Submitted without writing.';
-            return isPlaceholder ? chapterNoteText : prev;
-          });
-        }
+        if (latest) setScore(`${latest.score ?? 0}/1000 — Chapter ${latest.chapterNum} (Sheet ${latest.sheetName})`);
 
         // Highest chapter where BOTH sheets are done — recomputed directly
         // from each sheet's own isComplete flag (not the chapterComplete
@@ -6519,7 +6521,7 @@ function DeactivatedScreen() {
   );
 }
 
-export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool }) {
+export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenConsonantPractice }) {
   const [user, setUser] = useState(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [role, setRole] = useState(null); 
@@ -6934,7 +6936,7 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpen
     switch (view) {
       case 'teacher':
         if (role !== 'teacher') return <TodaySchedule role={role} />; 
-        return <TeacherDashboard user={user} onOpenSmartStudy={onOpenSmartStudy} onOpenAbhidhamma={onOpenAbhidhamma} onOpenMyanmarReader={onOpenMyanmarReader} onOpenDhammaschool={onOpenDhammaschool} />;
+        return <TeacherDashboard user={user} onOpenSmartStudy={onOpenSmartStudy} onOpenAbhidhamma={onOpenAbhidhamma} onOpenMyanmarReader={onOpenMyanmarReader} onOpenDhammaschool={onOpenDhammaschool} onOpenConsonantPractice={onOpenConsonantPractice} />;
       case 'student':
         if (role !== 'student') return <TodaySchedule role={role} />; 
         if (!studentProfile) {
