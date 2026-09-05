@@ -4263,6 +4263,52 @@ function renderClickableWords(text) {
         };
         // --- END FIX ---
 
+      return () => {
+      delete window.lastImageUrl;
+      delete window.addManualPairRow;
+      delete window.quickSetTF;
+      delete window.renderTeacherAnswers;
+      delete window.renderTeacherScores;
+      delete window.likeAnswer;
+      delete window.saveWikiLink;
+      delete window.openWikiLink;
+      delete window.closeWikiModal;
+      delete window.saveLessonImageUrl;
+      delete window.saveImageUrlToAllLessons;
+      delete window.toggleLanguage;
+      delete window.translateCurrentLesson;
+      delete window.goToLibrary;
+      delete window.enterLesson;
+      delete window.previewAsStudent;
+      delete window.exitPreview;
+      delete window.selectClass;
+      delete window.changeClass;
+      delete window.aiGenQuiz;
+      delete window.stopReadAloud;
+      delete window.readAloudText;
+      delete window.readAloudWord;
+      delete window.resetEditMode;
+      delete window.editStep;
+      delete window.moveStep;
+      delete window.deleteStep;
+      delete window.isDeletingLesson;
+      delete window.editLessonName;
+      delete window.deleteLesson;
+      delete window.startMatchGame;
+      delete window.resetMatchGame;
+      delete window.selectMatchItem;
+      delete window.cancelMatchSelection;
+      delete window.saveAndExitGame;
+      delete window.selectTeacherClass;
+      delete window.backToClassPicker;
+      delete window.createNewClass;
+      delete window.deleteClassCompletely;
+      delete window.toggleLinkPicker;
+      delete window.filterTutoringStudents;
+      delete window.linkStudentToTutoring;
+      delete window.unlinkStudentFromTutoring;
+      delete window.submitDiscussion;
+    };
   }, [entryRequest]);
 
   return (
