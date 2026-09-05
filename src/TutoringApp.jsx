@@ -135,6 +135,8 @@ const extractAbhidhammaLessonId = (link) => {
 
 // ── Dhammaschool app (standalone HTML app — opened via window.open, NOT mounted as React component) ──
 const DHAMMASCHOOL_APP_ID = 'dhammaschool-app'; // Firestore appId used inside the HTML app's PATHS.*
+const MYANMAR_SPEAKING_APP_ID = 'myanmar-speaking-app'; // Firestore appId used inside myanmar-speaking-app.jsx
+const sanitizeMyanmarSpeakingKey = (key) => (key || 'unknown').replace(/[.$#/\[\]]/g, '_');
 // TODO: replace with the actual hosted URL once the Dhammaschool app app is deployed.
 const DHAMMASCHOOL_APP_URL = 'https://sayadawtejinda.github.io/dhamma/Dhammaschool.html';
 
@@ -3914,7 +3916,7 @@ function SmartStudyProgressBadge({ classId, studentName, smartStudyNames, compac
   if (completedCount === null) return null;
 }
 
-function StudentDashboard({ user, studentProfile, studentUid, announcements, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onLogout }) { 
+function StudentDashboard({ user, studentProfile, studentUid, announcements, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenMyanmarSpeaking, onLogout }) {
   const [myLessons, setMyLessons] = useState([]);
   const [ssCompletionCounts, setSsCompletionCounts] = useState({}); // classId → SmartStudy completedCount
   const [mySessions, setMySessions] = useState([]);
@@ -4683,6 +4685,29 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         } catch(e) { console.error('Abhi score fetch:', e); }
       }
     }
+
+    // Myanmar Speaking app: fetch today's studied minutes (written by
+    // myanmar-speaking-app.jsx as the student uses it) and drop it straight
+    // into "Today completed" — there's no chapter/unit structure here, so
+    // minutes studied today is what the teacher reviews before awarding a trophy.
+    if (activeSession.lessonLink && MYANMAR_SPEAKING_APP_URL && activeSession.lessonLink.startsWith(MYANMAR_SPEAKING_APP_URL)) {
+      const stuName = studentProfile?.name;
+      if (stuName) {
+        try {
+          const todayKey = new Date().toISOString().split('T')[0];
+          const docId = `${sanitizeMyanmarSpeakingKey(stuName)}_${todayKey}`;
+          const minutesSnap = await getDoc(doc(db, 'artifacts', MYANMAR_SPEAKING_APP_ID, 'public', 'data', 'daily_minutes', docId));
+          if (minutesSnap.exists() && typeof minutesSnap.data().minutes === 'number') {
+            // Feeds "Today, completed" through the same path as every other
+            // app (adds to the previous cumulative total, capped by the
+            // Lesson Bank's "Total Number") — this only works out to a
+            // sensible trophy calc when the teacher sets that lesson's Unit
+            // Name to "Minute", per the Lesson Bank's Unit Name dropdown.
+            handleTodayCountChange(String(minutesSnap.data().minutes));
+          }
+        } catch (e) { console.error('Myanmar Speaking minutes fetch:', e); }
+      }
+    }
   };
 
   const handleOpenRedoReport = async (session) => {
@@ -5317,6 +5342,11 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                   return;
                 }
                 if (!url.startsWith('http://') && !url.startsWith('https://')) url = `https://${url}`;
+                if (MYANMAR_SPEAKING_APP_URL && url.startsWith(MYANMAR_SPEAKING_APP_URL) && onOpenMyanmarSpeaking && studentProfile?.name) {
+                  onOpenMyanmarSpeaking({ studentName: studentProfile.name });
+                  setIsLessonOverlayOpen(true);
+                  return;
+                }
                 if (MYANMAR_READER_APP_URL && url.startsWith(MYANMAR_READER_APP_URL) && onOpenMyanmarReader && studentProfile?.name) {
                   onOpenMyanmarReader({ studentName: studentProfile.name });
                   setIsLessonOverlayOpen(true);
@@ -6921,7 +6951,7 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpen
             </div>
           );
         }
-        return <StudentDashboard user={user} studentProfile={studentProfile} studentUid={targetStudentUid} announcements={announcements} onOpenSmartStudy={onOpenSmartStudy} onOpenAbhidhamma={onOpenAbhidhamma} onOpenMyanmarReader={onOpenMyanmarReader} onOpenDhammaschool={onOpenDhammaschool} onLogout={handleStudentLogout} />;
+        return <StudentDashboard user={user} studentProfile={studentProfile} studentUid={targetStudentUid} announcements={announcements} onOpenSmartStudy={onOpenSmartStudy} onOpenAbhidhamma={onOpenAbhidhamma} onOpenMyanmarReader={onOpenMyanmarReader} onOpenDhammaschool={onOpenDhammaschool} onOpenMyanmarSpeaking={onOpenMyanmarSpeaking} onLogout={handleStudentLogout} />;
       case 'weekly': 
         return <WeeklySchedule role={role} targetStudentUid={targetStudentUid} />;
       case 'attendance':

@@ -4,7 +4,7 @@ import {
 } from 'firebase/auth';
 import {
     getFirestore, doc, collection, onSnapshot, setDoc, updateDoc, deleteDoc,
-    query, getDocs, where, getDoc
+    query, getDocs, where, getDoc, increment, serverTimestamp
 } from 'firebase/firestore';
 import {
     Plus, Zap, LayoutGrid, CheckSquare, Gamepad2, BookOpen, FileText, Languages,
@@ -33,6 +33,14 @@ const MATCHING_GAMES_COLLECTION_PATH = `artifacts/${appId}/public/data/myanmar_m
 const POEMS_COLLECTION_PATH = `artifacts/${appId}/public/data/myanmar_poems`;
 const WELCOME_QUESTIONS_DOC_PATH = `artifacts/${appId}/public/data/app_settings/welcome_questions`;
 const AUDIO_SETTINGS_DOC_PATH = `artifacts/${appId}/public/data/app_settings/audio`;
+// Per-student, per-day studied-minutes totals — TutoringApp.jsx's "Report"
+// button reads today's doc here to auto-fill the "Today, completed" field
+// (see handleEndSession in TutoringApp.jsx).
+const DAILY_MINUTES_PATH = `artifacts/${appId}/public/data/daily_minutes`;
+// Live "who's online" roster — same pattern as MyanmarReaderApp.jsx's
+// READER_ROSTER_PATH, shown to both teacher and student.
+const ROSTER_PATH = `artifacts/${appId}/public/data/roster`;
+const sanitizeSpeakingKey = (key) => (key || 'unknown').replace(/[.$#/\[\]]/g, '_');
 
 // --- AUDIO CONFIGURATION ---
 const AUDIO_DATA = {
@@ -4654,7 +4662,7 @@ const StudentNameEntry = ({ onComplete, setShowRomanization }) => {
 
     const handleSkipEntirely = () => {
         setShowRomanization(false);
-        onComplete();
+        onComplete(name.trim());
     };
 
     // Auto-play the greeting once, then auto-play each question when questionIndex changes.
@@ -4711,13 +4719,13 @@ const StudentNameEntry = ({ onComplete, setShowRomanization }) => {
                     <p className="text-gray-500 mb-6">You can always switch this later inside any lesson.</p>
                     <div className="space-y-3">
                         <button
-                            onClick={() => { setShowRomanization(false); onComplete(); }}
+                            onClick={() => { setShowRomanization(false); onComplete(name.trim()); }}
                             className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-lg transition duration-200"
                         >
                             Myanmar Script (မြန်မာစာ)
                         </button>
                         <button
-                            onClick={() => { setShowRomanization(true); onComplete(); }}
+                            onClick={() => { setShowRomanization(true); onComplete(name.trim()); }}
                             className="w-full py-4 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-xl text-lg transition duration-200"
                         >
                             Roman Letters (a, b, c...)
@@ -4927,13 +4935,21 @@ const TeacherAuthScreen = ({ dbPasscode, onAuthenticated, onCancel }) => {
     );
 };
 
-export default function MyanmarSpeakingApp({ onExit }) {
+export default function MyanmarSpeakingApp({ entryRequest, onExit }) {
+    // Arrives as entryRequest={ studentName } when opened via TutoringApp's
+    // Assign Lesson / Continue flow — in that case we skip straight to the
+    // student view under their real name instead of asking again, and start
+    // the minutes timer immediately (same idea as MyanmarReaderApp.jsx's
+    // deepLinkStudentName).
+    const deepLinkStudentName = entryRequest?.studentName || null;
+
     const [userId, setUserId] = useState(null);
     const [isAuthReady, setIsAuthReady] = useState(false);
-    
+
     // Roles: null (selection screen), 'student', 'teacher_auth', 'teacher'
-    const [activeRole, setActiveRole] = useState(null); 
+    const [activeRole, setActiveRole] = useState(() => deepLinkStudentName ? 'student' : null);
     const [dbTeacherPasscode, setDbTeacherPasscode] = useState(null);
+    const [studentName, setStudentName] = useState(() => deepLinkStudentName || '');
 
     const [dictionary, setDictionary] = useState({});
     const [categories, setCategories] = useState([]);
@@ -4942,7 +4958,14 @@ export default function MyanmarSpeakingApp({ onExit }) {
     const [poems, setPoems] = useState([]);
     const [welcomeQuestions, setWelcomeQuestions] = useState([]);
     const [showRomanization, setShowRomanization] = useState(false);
-    const [studySessionStart, setStudySessionStart] = useState(null);
+    const [studySessionStart, setStudySessionStart] = useState(() => deepLinkStudentName ? Date.now() : null);
+
+    // Live "who's online" roster, shown to both teacher and student — same
+    // pattern as MyanmarReaderApp.jsx's READER_ROSTER_PATH.
+    const [onlineStudents, setOnlineStudents] = useState([]);
+    const [showOnlinePanel, setShowOnlinePanel] = useState(false);
+    const [nowForOnlineCheck, setNowForOnlineCheck] = useState(Date.now());
+    const minutesWrittenRef = useRef(0);
 
     useEffect(() => {
         initializeAuth();
@@ -5007,6 +5030,80 @@ export default function MyanmarSpeakingApp({ onExit }) {
         };
     }, [isAuthReady, userId]);
 
+    // Roster heartbeat — pings this student's presence every 30s while they're
+    // in the student view, and marks them offline when they leave. Mirrors
+    // MyanmarReaderApp.jsx's roster ping so teachers see consistent behavior
+    // across both apps.
+    useEffect(() => {
+        if (activeRole !== 'student' || !studentName) return;
+        const rosterRef = doc(db, ROSTER_PATH, sanitizeSpeakingKey(studentName));
+        const ping = () => setDoc(rosterRef, { studentName, isOnline: true, lastSeen: serverTimestamp() }, { merge: true }).catch(() => {});
+        ping();
+        const interval = setInterval(ping, 30000);
+        const goOffline = () => { updateDoc(rosterRef, { isOnline: false, lastSeen: serverTimestamp() }).catch(() => {}); };
+        window.addEventListener('beforeunload', goOffline);
+        return () => {
+            clearInterval(interval);
+            window.removeEventListener('beforeunload', goOffline);
+            goOffline();
+        };
+    }, [studentName, activeRole]);
+
+    // Full live roster — same list feeds both the teacher's panel and every
+    // student's own "who else is online" panel.
+    useEffect(() => {
+        const unsub = onSnapshot(collection(db, ROSTER_PATH), (snap) => {
+            setOnlineStudents(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        }, e => console.error('Myanmar Speaking roster listen error:', e));
+        return () => unsub();
+    }, []);
+
+    // Ticks every 30s so "online" (last seen within 5 min) stays current
+    // without a page reload.
+    useEffect(() => {
+        const interval = setInterval(() => setNowForOnlineCheck(Date.now()), 30000);
+        return () => clearInterval(interval);
+    }, []);
+
+    // Minutes tracking — every 60s, flushes the newly-elapsed minutes (as a
+    // delta, via Firestore increment()) into today's daily_minutes doc, then
+    // flushes any remainder when the session ends. TutoringApp.jsx's Report
+    // button reads this doc to auto-fill "Today, completed".
+    useEffect(() => {
+        if (activeRole !== 'student' || !studentName || !studySessionStart) return;
+        const flush = () => {
+            const elapsedMinutes = Math.floor((Date.now() - studySessionStart) / 60000);
+            const delta = elapsedMinutes - minutesWrittenRef.current;
+            if (delta <= 0) return;
+            minutesWrittenRef.current = elapsedMinutes;
+            const todayKey = new Date().toISOString().split('T')[0];
+            const minutesRef = doc(db, DAILY_MINUTES_PATH, `${sanitizeSpeakingKey(studentName)}_${todayKey}`);
+            setDoc(minutesRef, { studentName, date: todayKey, minutes: increment(delta) }, { merge: true }).catch(e => console.error('Minutes flush error:', e));
+        };
+        const interval = setInterval(flush, 60000);
+        return () => { clearInterval(interval); flush(); };
+    }, [studentName, activeRole, studySessionStart]);
+
+    const FIVE_MIN_MS = 5 * 60 * 1000;
+    const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+    const isRosterEntryOnline = (s) => {
+        const lastSeenMs = s.lastSeen?.toMillis ? s.lastSeen.toMillis() : (s.lastSeen?.seconds ? s.lastSeen.seconds * 1000 : 0);
+        return lastSeenMs > 0 && (nowForOnlineCheck - lastSeenMs) < FIVE_MIN_MS;
+    };
+    const weeklyRosterList = onlineStudents
+        .filter(s => {
+            const lastSeenMs = s.lastSeen?.toMillis ? s.lastSeen.toMillis() : (s.lastSeen?.seconds ? s.lastSeen.seconds * 1000 : 0);
+            return lastSeenMs > 0 && (nowForOnlineCheck - lastSeenMs) < ONE_WEEK_MS;
+        })
+        .map(s => ({ ...s, _isOnlineNow: isRosterEntryOnline(s) }))
+        .sort((a, b) => {
+            if (a._isOnlineNow !== b._isOnlineNow) return b._isOnlineNow ? 1 : -1;
+            const aMs = a.lastSeen?.toMillis ? a.lastSeen.toMillis() : 0;
+            const bMs = b.lastSeen?.toMillis ? b.lastSeen.toMillis() : 0;
+            return bMs - aMs;
+        });
+    const onlineCount = onlineStudents.filter(isRosterEntryOnline).length;
+
     const handleSelectTeacher = async () => {
         setIsAuthReady(false);
         try {
@@ -5034,7 +5131,10 @@ export default function MyanmarSpeakingApp({ onExit }) {
     }
 
     if (activeRole === 'student_name') {
-        return <StudentNameEntry onComplete={() => setActiveRole('student')} setShowRomanization={setShowRomanization} />;
+        return <StudentNameEntry
+            onComplete={(enteredName) => { if (enteredName) setStudentName(enteredName); setActiveRole('student'); }}
+            setShowRomanization={setShowRomanization}
+        />;
     }
 
     if (activeRole === 'teacher_auth') {
@@ -5052,10 +5152,43 @@ export default function MyanmarSpeakingApp({ onExit }) {
                     <ArrowRight className="w-5 h-5 mr-2 rotate-180 opacity-50 hover:opacity-100" />
                     Myanmar <span className="text-yellow-400 ml-1">WordCraft</span>
                 </div>
-                <div className="text-sm font-bold bg-indigo-800 px-3 py-1 rounded-full border border-indigo-500">
-                {activeRole === 'teacher' ? '👩‍🏫 Teacher Mode' : '👩‍🎓 Student Mode'}
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => setShowOnlinePanel(true)}
+                        className="flex items-center gap-1 text-sm font-bold bg-indigo-800 px-3 py-1 rounded-full border border-indigo-500 hover:bg-indigo-900"
+                    >
+                        <span className="w-2 h-2 bg-emerald-400 rounded-full inline-block"></span>{onlineCount} online
+                    </button>
+                    <div className="text-sm font-bold bg-indigo-800 px-3 py-1 rounded-full border border-indigo-500">
+                    {activeRole === 'teacher' ? '👩‍🏫 Teacher Mode' : '👩‍🎓 Student Mode'}
+                    </div>
                 </div>
             </header>
+
+            {/* Online Students panel — same view for teacher and every student */}
+            {showOnlinePanel && (
+                <div className="fixed inset-0 z-[9950] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowOnlinePanel(false)}>
+                    <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full max-h-[80vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-between items-center mb-4">
+                            <h2 className="text-xl font-bold text-gray-800">🗣️ Students {onlineCount > 0 && <span className="text-emerald-600">({onlineCount} online)</span>}</h2>
+                            <button onClick={() => setShowOnlinePanel(false)} className="text-gray-400 hover:text-gray-700"><X size={22}/></button>
+                        </div>
+                        <p className="text-xs text-gray-400 mb-3">Showing everyone active in the last 7 days.</p>
+                        <div className="space-y-2">
+                            {weeklyRosterList.map(s => (
+                                <div key={s.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
+                                    <div className="flex items-center gap-2">
+                                        <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${s._isOnlineNow ? 'bg-emerald-500' : 'bg-gray-300'}`}></span>
+                                        <span className="font-bold text-gray-800">{s.studentName}</span>
+                                    </div>
+                                    <span className="text-xs text-gray-400">{s._isOnlineNow ? 'Online now' : 'Active this week'}</span>
+                                </div>
+                            ))}
+                            {weeklyRosterList.length === 0 && <p className="text-center text-gray-400 py-6">No students active this week yet.</p>}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {(activeRole === 'teacher' || activeRole === 'student_preview') && (
                 <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50">
