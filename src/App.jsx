@@ -9,6 +9,8 @@ import BurmeseConsonantGameApp from './BurmeseConsonantGameApp';
 import MyanmarSpeakingApp from './myanmar-speaking-app';
 import MyanmarNumberLearningApp from './MyanmarNumberLearningApp';
 import MyanmarVowelsLearningApp from './MyanmarVowelsLearningApp';
+import AnimalSoundApp from './AnimalSoundApp';
+import BurmeseLearningGamesApp from './BurmeseLearningGamesApp';
 
 export default function App() {
   const [activeApp, setActiveApp] = useState('tutoring');
@@ -21,6 +23,26 @@ export default function App() {
   const [myanmarSpeakingRequest, setMyanmarSpeakingRequest] = useState(null);
   const [numberLearningRequest, setNumberLearningRequest] = useState(null);
   const [vowelsLearningRequest, setVowelsLearningRequest] = useState(null);
+  const [animalSoundRequest, setAnimalSoundRequest] = useState(null);
+  const [burmeseLearningGamesRequest, setBurmeseLearningGamesRequest] = useState(null);
+
+  const openAnimalSound = (request) => {
+    setAnimalSoundRequest(request || {});
+    setActiveApp('animalsound');
+  };
+  const closeAnimalSound = () => {
+    setActiveApp('tutoring');
+    setAnimalSoundRequest(null);
+  };
+
+  const openBurmeseLearningGames = (request) => {
+    setBurmeseLearningGamesRequest(request || {});
+    setActiveApp('burmeselearninggames');
+  };
+  const closeBurmeseLearningGames = () => {
+    setActiveApp('tutoring');
+    setBurmeseLearningGamesRequest(null);
+  };
 
   const openNumberLearning = (request) => {
     setNumberLearningRequest(request || {});
@@ -117,6 +139,8 @@ export default function App() {
           onOpenMyanmarSpeaking={openMyanmarSpeaking}
           onOpenNumberLearning={openNumberLearning}
           onOpenVowelsLearning={openVowelsLearning}
+          onOpenAnimalSound={openAnimalSound}
+          onOpenBurmeseLearningGames={openBurmeseLearningGames}
         />
       </div>
 
@@ -244,6 +268,34 @@ export default function App() {
           </div>
         )}
         <MyanmarVowelsLearningApp entryRequest={vowelsLearningRequest} onExit={closeVowelsLearning} />
+      </div>
+
+      <div style={{ display: activeApp === 'animalsound' ? 'block' : 'none' }}>
+        {activeApp === 'animalsound' && (
+          <div className="fixed top-3 left-3 z-[9999]">
+            <button
+              onClick={closeAnimalSound}
+              className="px-4 py-2 bg-gray-800 text-white rounded-full shadow-lg font-semibold text-sm hover:bg-gray-900"
+            >
+              ← Back to Tutoring Dashboard
+            </button>
+          </div>
+        )}
+        <AnimalSoundApp entryRequest={animalSoundRequest} onExit={closeAnimalSound} />
+      </div>
+
+      <div style={{ display: activeApp === 'burmeselearninggames' ? 'block' : 'none' }}>
+        {activeApp === 'burmeselearninggames' && (
+          <div className="fixed top-3 left-3 z-[9999]">
+            <button
+              onClick={closeBurmeseLearningGames}
+              className="px-4 py-2 bg-gray-800 text-white rounded-full shadow-lg font-semibold text-sm hover:bg-gray-900"
+            >
+              ← Back to Tutoring Dashboard
+            </button>
+          </div>
+        )}
+        <BurmeseLearningGamesApp entryRequest={burmeseLearningGamesRequest} onExit={closeBurmeseLearningGames} />
       </div>
     </div>
   );
