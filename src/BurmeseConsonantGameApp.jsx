@@ -89,7 +89,8 @@ const BCG_APP_BODY_HTML = `
         <div id="main-content-area" class="main-content-area">
             <div id="image-game-container">
                 <div id="image-display-wrapper">
-                    <img id="image-display" src="" alt="Game Image" onerror="this.src='https://via.placeholder.com/200?text=No+Image'">
+                    <img id="image-display" src="" alt="Game Image">
+                    <span id="image-display-fallback" class="hidden text-center font-bold text-gray-500 px-2"></span>
                 </div>
                 <div id="image-game-instruction" class="flex flex-col items-center gap-2">
                     <div id="image-level-badge" class="bg-orange-500 text-white px-4 py-1 rounded-full text-lg font-bold shadow-md uppercase tracking-wide">Level 1</div>
@@ -756,6 +757,7 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit }) {
             imageGameToggleBtn: rootEl.querySelector('#image-game-toggle-btn'),
             imageGameContainer: rootEl.querySelector('#image-game-container'),
             imageDisplay: rootEl.querySelector('#image-display'),
+            imageDisplayFallback: rootEl.querySelector('#image-display-fallback'),
             imageGameInstruction: rootEl.querySelector('#image-game-instruction'),
             imageLevelBadge: rootEl.querySelector('#image-level-badge'),
             imageInstructionText: rootEl.querySelector('#image-instruction-text'),
@@ -1307,6 +1309,30 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit }) {
             showGameStatus(`Picture Game Started! Level 1: First Letter`, 'info');
             askImageQuestion();
         }
+        // The source images live in a separate third-party GitHub repo
+        // (nathantun93/Pic) as a mix of .png/.jpg/.jpeg files. The word list
+        // doesn't record which extension each one uses, so try them in
+        // order; if none load, show the word itself instead of a broken
+        // image (the old fallback pointed at via.placeholder.com, which no
+        // longer exists).
+        function setImageWithFallback(word) {
+            const extensions = ['png', 'jpg', 'jpeg'];
+            let attempt = 0;
+            elements.imageDisplayFallback.classList.add('hidden');
+            elements.imageDisplay.classList.remove('hidden');
+            elements.imageDisplay.onerror = () => {
+                attempt++;
+                if (attempt < extensions.length) {
+                    elements.imageDisplay.src = `https://raw.githubusercontent.com/nathantun93/Pic/main/${encodeURIComponent(word)}.${extensions[attempt]}`;
+                } else {
+                    elements.imageDisplay.onerror = null;
+                    elements.imageDisplay.classList.add('hidden');
+                    elements.imageDisplayFallback.textContent = word;
+                    elements.imageDisplayFallback.classList.remove('hidden');
+                }
+            };
+            elements.imageDisplay.src = `https://raw.githubusercontent.com/nathantun93/Pic/main/${encodeURIComponent(word)}.${extensions[0]}`;
+        }
         function askImageQuestion() {
             if (audioTimer) clearInterval(audioTimer);
             let validWords = [];
@@ -1331,7 +1357,7 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit }) {
             }
             if (!correctCons) { console.warn("Data issue with word:", word); askImageQuestion(); return; }
             correctAnswer = correctCons;
-            elements.imageDisplay.src = `https://raw.githubusercontent.com/nathantun93/Pic/main/${encodeURIComponent(word)}.png`;
+            setImageWithFallback(word);
             let options = [correctAnswer];
             while (options.length < 4) {
                 const randomC = cleanConsonants[Math.floor(Math.random() * cleanConsonants.length)];
