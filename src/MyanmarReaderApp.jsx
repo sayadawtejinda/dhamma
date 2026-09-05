@@ -14,20 +14,19 @@ const MYANMAR_READER_APP_ID = 'myanmar-reader-app';
 // TutoringApp's reports can eventually pull this data in too.
 const TUTORING_APP_ID = 'dhamma-tutoring-app';
 const TUTORING_STUDENTS_PATH = `artifacts/${TUTORING_APP_ID}/public/data/students`;
-const TUTORING_LESSON_BANK_PATH = `artifacts/${TUTORING_APP_ID}/public/data/lessonBank`;
 const READER_ROSTER_PATH = `artifacts/${MYANMAR_READER_APP_ID}/public/data/roster`;
 const READER_SCORES_PATH = `artifacts/${MYANMAR_READER_APP_ID}/public/data/scores`;
 const sanitizeReaderKey = (key) => (key || 'unknown').replace(/[.$#/\[\]]/g, '_');
-// Must match MYANMAR_READER_APP_URL in TutoringApp.jsx — the URL the teacher
-// picks via "📗 Myanmar Reader app" when adding this app to the Lesson Bank.
-// Used only to find which Lesson Bank entries' "Fix Completed Chapter" box
-// (completedUnits on the student doc) applies to this app.
-const READER_APP_PUBLIC_URL = 'https://sayadawtejinda.github.io/myanmar-reader/';
-// Mirrors TutoringApp.jsx's sanitizeKey/computeLessonKey. Myanmar Reader
-// lesson links never get a classId suffix (extractClassIdFromLink there only
-// recognizes smartstudy://, abhidhamma://, dhammaschool:// links), so the key
-// completedUnits is stored under is always just the sanitized lesson title.
-const sanitizeTutoringLessonKey = (key) => (key && typeof key === 'string') ? key.replace(/[.$#/\[\]]/g, '_') : 'unknown_lesson';
+// Key(s) that TutoringApp.jsx's "Fix Completed Chapter" box saves under, on
+// the student doc at completedUnits.<this key>. TutoringApp.jsx derives this
+// from the Lesson Bank entry's title (sanitized, no classId suffix for a
+// plain https:// link) — but that lessonBank collection is scoped per-teacher
+// in Firestore rules, so a student can't query it directly to look the title
+// up (permission-denied). Instead we just check every title this Lesson Bank
+// entry is known to have used: "MyanmarReader" is the title currently in use,
+// "Myanmar Reader Lesson" is TutoringApp.jsx's default for a freshly-added
+// entry. If a teacher renames it to something else, add that title here too.
+const READER_LESSON_KEYS = ['MyanmarReader', 'Myanmar Reader Lesson'];
 
 // --- DATA STRUCTURES ---
 
@@ -659,7 +658,6 @@ export default function MyanmarReaderApp({ entryRequest, onExit }) {
   // correct a stale count. We read that back so the reader can jump straight
   // to the next unread chapter and show earlier ones as already completed.
   const [tutoringStudentUid, setTutoringStudentUid] = useState(null);
-  const [readerLessonKeys, setReaderLessonKeys] = useState([]); // Lesson Bank key(s) this app's override may be stored under
   const [teacherCompletedChapters, setTeacherCompletedChapters] = useState(0); // whole chapters (both sheets) the teacher has confirmed done
 
   useEffect(() => {
@@ -812,30 +810,17 @@ export default function MyanmarReaderApp({ entryRequest, onExit }) {
     return () => unsub();
   }, [studentName]);
 
-  // Find the Lesson Bank entry/entries (in TutoringApp) that point at this
-  // app, so we know which completedUnits key(s) a "Fix Completed Chapter"
-  // override could be stored under (a teacher could have renamed the title
-  // over time, so we check every match, not just the default title).
-  useEffect(() => {
-    const unsub = onSnapshot(
-      query(collection(db, TUTORING_LESSON_BANK_PATH), where('link', '==', READER_APP_PUBLIC_URL)),
-      (snap) => setReaderLessonKeys(snap.docs.map(d => sanitizeTutoringLessonKey(d.data().title))),
-      e => console.error('Lesson bank lookup error:', e)
-    );
-    return () => unsub();
-  }, []);
-
   // Listen to the linked Tutoring student doc for "Fix Completed Chapter".
   useEffect(() => {
     if (!tutoringStudentUid) { setTeacherCompletedChapters(0); return; }
     const unsub = onSnapshot(doc(db, TUTORING_STUDENTS_PATH, tutoringStudentUid), (snap) => {
       if (!snap.exists()) { setTeacherCompletedChapters(0); return; }
       const completedUnits = snap.data().completedUnits || {};
-      const best = readerLessonKeys.reduce((max, key) => Math.max(max, completedUnits[key] || 0), 0);
+      const best = READER_LESSON_KEYS.reduce((max, key) => Math.max(max, completedUnits[key] || 0), 0);
       setTeacherCompletedChapters(best);
     }, e => console.error('Teacher completed-chapter listen error:', e));
     return () => unsub();
-  }, [tutoringStudentUid, readerLessonKeys]);
+  }, [tutoringStudentUid]);
 
   // If the teacher's confirmed count is further along than what this app has
   // recorded from actual read-aloud scores, adopt it as the resume point too

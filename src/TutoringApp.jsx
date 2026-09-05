@@ -4349,7 +4349,16 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           const ts = dt.timestamp?.toMillis ? dt.timestamp.toMillis() : 0;
           if (!latest || ts > latest._ts) latest = { ...dt, _ts: ts };
         });
-        if (latest) setScore(`${latest.score ?? 0}/1000 — Chapter ${latest.chapterNum} (Sheet ${latest.sheetName})`);
+        if (latest) {
+          setScore(`${latest.score ?? 0}/1000`);
+          const chapterNoteText = `Chapter ${latest.chapterNum} (Sheet ${latest.sheetName})`;
+          setFeedbackNotes(prev => {
+            const isPlaceholder = !prev || !prev.trim()
+              || prev.startsWith('Automatically submitted')
+              || prev === 'Submitted without writing.';
+            return isPlaceholder ? chapterNoteText : prev;
+          });
+        }
 
         // Highest chapter where BOTH sheets are done — recomputed directly
         // from each sheet's own isComplete flag (not the chapterComplete
