@@ -704,7 +704,7 @@ function AttendanceReports({ students, teacherSchedule, sessions }) {
   );
 }
 
-function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenConsonantPractice, onOpenBurmeseGame }) {
+function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenConsonantPractice, onOpenBurmeseGame, onOpenMyanmarSpeaking }) {
   const [students, setStudents] = useState([]);
   const [lessonBank, setLessonBank] = useState([]); 
   const [sessions, setSessions] = useState([]); 
@@ -2632,19 +2632,15 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
             <span className="flex items-center text-lg font-bold text-fuchsia-800">🕷️ Burmese Consonant Learning Game</span>
             <span className="text-fuchsia-500 text-xl">→</span>
           </button>
-          {/* Myanmar Speaking app — standalone HTML app, opens in a new tab (not mounted inline) */}
+          {/* Myanmar Speaking app — now mounted inline in the same project as
+              the other apps above, instead of opening the separately-hosted
+              myanmar-wordcraft deployment in a new tab. */}
           <button
-            onClick={() => {
-              if (!MYANMAR_SPEAKING_APP_URL) {
-                alert('Myanmar Speaking app URL is not set up yet. Ask your developer to host it and add the link.');
-                return;
-              }
-              window.open(MYANMAR_SPEAKING_APP_URL, '_blank', 'noopener,noreferrer');
-            }}
+            onClick={() => onOpenMyanmarSpeaking && onOpenMyanmarSpeaking({})}
             className="w-full flex items-center justify-between bg-white p-4 rounded-xl border-2 border-purple-200 hover:border-purple-400 hover:shadow-md transition-all mt-3"
           >
             <span className="flex items-center text-lg font-bold text-purple-800">🗣️ Myanmar Speaking app</span>
-            <span className="text-purple-500 text-xl">↗</span>
+            <span className="text-purple-500 text-xl">→</span>
           </button>
           {/* Myanmar Reader app — now mounted inline in the same project as
               SmartStudy/Abhidhamma, so this switches the view instead of
@@ -6500,7 +6496,7 @@ function DeactivatedScreen() {
   );
 }
 
-export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenConsonantPractice, onOpenBurmeseGame }) {
+export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenConsonantPractice, onOpenBurmeseGame, onOpenMyanmarSpeaking }) {
   const [user, setUser] = useState(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [role, setRole] = useState(null); 
@@ -6915,7 +6911,7 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpen
     switch (view) {
       case 'teacher':
         if (role !== 'teacher') return <TodaySchedule role={role} />; 
-        return <TeacherDashboard user={user} onOpenSmartStudy={onOpenSmartStudy} onOpenAbhidhamma={onOpenAbhidhamma} onOpenMyanmarReader={onOpenMyanmarReader} onOpenDhammaschool={onOpenDhammaschool} onOpenConsonantPractice={onOpenConsonantPractice} onOpenBurmeseGame={onOpenBurmeseGame} />;
+        return <TeacherDashboard user={user} onOpenSmartStudy={onOpenSmartStudy} onOpenAbhidhamma={onOpenAbhidhamma} onOpenMyanmarReader={onOpenMyanmarReader} onOpenDhammaschool={onOpenDhammaschool} onOpenConsonantPractice={onOpenConsonantPractice} onOpenBurmeseGame={onOpenBurmeseGame} onOpenMyanmarSpeaking={onOpenMyanmarSpeaking} />;
       case 'student':
         if (role !== 'student') return <TodaySchedule role={role} />; 
         if (!studentProfile) {

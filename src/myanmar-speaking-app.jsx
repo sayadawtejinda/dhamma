@@ -1,33 +1,27 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { initializeApp } from 'firebase/app';
-import { 
-    getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged 
+import {
+    getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged
 } from 'firebase/auth';
-import { 
-    getFirestore, doc, collection, onSnapshot, setDoc, updateDoc, deleteDoc, 
+import {
+    getFirestore, doc, collection, onSnapshot, setDoc, updateDoc, deleteDoc,
     query, getDocs, where, getDoc
 } from 'firebase/firestore';
-import { 
-    Plus, Zap, LayoutGrid, CheckSquare, Gamepad2, BookOpen, FileText, Languages, 
+import {
+    Plus, Zap, LayoutGrid, CheckSquare, Gamepad2, BookOpen, FileText, Languages,
     ToggleLeft, ToggleRight, Database, Loader2, ArrowRight,
     Edit2, ImageIcon, X, Save, Eye, EyeOff, PlayCircle, GraduationCap,
     Volume2, CheckCircle, AlertCircle, Download, Upload, Ear, Image as ImageIconLucide,
     ArrowBigRight, Square, Lock, KeyRound, UserCircle, Book, Heart
 } from 'lucide-react';
+import { app } from './firebase';
 
-// --- Firebase Initialization and Auth/DB Setup ---
+// --- Firebase Auth/DB Setup ---
+// Reuses the shared Firebase app instance from ./firebase.js instead of
+// calling initializeApp() again with the same project — Firebase throws if
+// the default app is initialized twice, which would crash the whole
+// dashboard since this file's imports load eagerly regardless of which view
+// is currently active.
 const appId = 'myanmar-speaking-app';
-const firebaseConfig = {
-    apiKey: "AIzaSyCFwHPLW6VnQqgM-ZrisQZZaBLVrm88e9M",
-    authDomain: "myanmardhammaclass.firebaseapp.com",
-    projectId: "myanmardhammaclass",
-    storageBucket: "myanmardhammaclass.firebasestorage.app",
-    messagingSenderId: "779222889065",
-    appId: "1:779222889065:web:8afbe9348c3314bef3a8f8",
-    measurementId: "G-TT9ZJTSMJJ"
-};
-
-const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
@@ -4933,7 +4927,7 @@ const TeacherAuthScreen = ({ dbPasscode, onAuthenticated, onCancel }) => {
     );
 };
 
-export default function App() {
+export default function MyanmarSpeakingApp({ onExit }) {
     const [userId, setUserId] = useState(null);
     const [isAuthReady, setIsAuthReady] = useState(false);
     

@@ -6,6 +6,7 @@ import MyanmarReaderApp from './MyanmarReaderApp';
 import DhammaschoolApp from './DhammaschoolApp';
 import ConsonantPracticeApp from './ConsonantPracticeApp';
 import BurmeseConsonantGameApp from './BurmeseConsonantGameApp';
+import MyanmarSpeakingApp from './myanmar-speaking-app';
 
 export default function App() {
   const [activeApp, setActiveApp] = useState('tutoring');
@@ -15,6 +16,16 @@ export default function App() {
   const [dhammaschoolRequest, setDhammaschoolRequest] = useState(null);
   const [consonantPracticeRequest, setConsonantPracticeRequest] = useState(null);
   const [burmeseGameRequest, setBurmeseGameRequest] = useState(null);
+  const [myanmarSpeakingRequest, setMyanmarSpeakingRequest] = useState(null);
+
+  const openMyanmarSpeaking = (request) => {
+    setMyanmarSpeakingRequest(request || {});
+    setActiveApp('myanmarspeaking');
+  };
+  const closeMyanmarSpeaking = () => {
+    setActiveApp('tutoring');
+    setMyanmarSpeakingRequest(null);
+  };
 
   const openBurmeseGame = (request) => {
     setBurmeseGameRequest(request || {});
@@ -81,6 +92,7 @@ export default function App() {
           onOpenDhammaschool={openDhammaschool}
           onOpenConsonantPractice={openConsonantPractice}
           onOpenBurmeseGame={openBurmeseGame}
+          onOpenMyanmarSpeaking={openMyanmarSpeaking}
         />
       </div>
 
@@ -166,6 +178,20 @@ export default function App() {
           </div>
         )}
         <BurmeseConsonantGameApp entryRequest={burmeseGameRequest} onExit={closeBurmeseGame} />
+      </div>
+
+      <div style={{ display: activeApp === 'myanmarspeaking' ? 'block' : 'none' }}>
+        {activeApp === 'myanmarspeaking' && (
+          <div className="fixed top-3 left-3 z-[9999]">
+            <button
+              onClick={closeMyanmarSpeaking}
+              className="px-4 py-2 bg-gray-800 text-white rounded-full shadow-lg font-semibold text-sm hover:bg-gray-900"
+            >
+              ← Back to Tutoring Dashboard
+            </button>
+          </div>
+        )}
+        <MyanmarSpeakingApp entryRequest={myanmarSpeakingRequest} onExit={closeMyanmarSpeaking} />
       </div>
     </div>
   );
