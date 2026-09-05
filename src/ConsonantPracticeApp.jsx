@@ -2084,6 +2084,17 @@ export default function ConsonantPracticeApp({ entryRequest, onExit }) {
             updateGridVisibility();
             setTimeout(() => setHandPosition(0), 100);
         }
+        // onclick="..." attribute တွေက window ပေါ်ကရှာလို့ function တွေကို window ပေါ်တင်ပေးရမယ်
+        window.changeConsonantCount = changeConsonantCount;
+        window.toggleReadAloud = toggleReadAloud;
+        window.cycleWaga = cycleWaga;
+        window.toggleWagaGame = toggleWagaGame;
+        window.toggleMatchingGame = toggleMatchingGame;
+        window.togglePuzzleGame = togglePuzzleGame;
+        window.toggleClickGame = toggleClickGame;
+        window.toggleTypingGame = toggleTypingGame;
+        window.toggleInstructionAudio = toggleInstructionAudio;
+        window.handleGridClick = handleGridClick;
 
         // --- Event Listeners ---
         // Scoped to this app's own container (rootEl), not document.body —
@@ -2111,6 +2122,18 @@ export default function ConsonantPracticeApp({ entryRequest, onExit }) {
         initializeApp();
 
 
+      return () => {
+      delete window.changeConsonantCount;
+      delete window.toggleReadAloud;
+      delete window.cycleWaga;
+      delete window.toggleWagaGame;
+      delete window.toggleMatchingGame;
+      delete window.togglePuzzleGame;
+      delete window.toggleClickGame;
+      delete window.toggleTypingGame;
+      delete window.toggleInstructionAudio;
+      delete window.handleGridClick;
+    };
   }, []);
 
   return (
