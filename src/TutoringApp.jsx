@@ -208,6 +208,7 @@ const teacherScheduleCollection = collection(db, `${publicDataPath}/teacherSched
 const groupsCollection = collection(db, `${publicDataPath}/studentGroups`);
 const announcementsCollection = collection(db, `${publicDataPath}/announcements`);
 const starAnnouncementsCollection = collection(db, `${publicDataPath}/starAnnouncements`);
+const greetingsCollection = collection(db, `${publicDataPath}/greetings`);
 const teacherConfigDoc = doc(configCollection, 'teacher');
 
 // --- Components ---
@@ -849,6 +850,7 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyan
   const [editingEntry, setEditingEntry] = useState(null); 
   const [showTrophyResetPrompt, setShowTrophyResetPrompt] = useState(false);
   const [showStarModal, setShowStarModal] = useState(false);
+  const [greetingToast, setGreetingToast] = useState(null);
   
   const [showConfirmModal, setShowConfirmModal] = useState({
     isOpen: false, title: '', message: '', onConfirm: null, confirmText: 'Confirm', confirmColor: 'bg-indigo-600 hover:bg-indigo-700'
@@ -969,7 +971,35 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyan
     });
     return () => unsubscribe();
   }, [user.uid]);
-  
+
+  // Live "student greeted you" toast — students say Mangalabar when they
+  // enter their dashboard; this only reacts to greetings added AFTER the
+  // listener attaches (skips the initial snapshot) so opening the teacher
+  // dashboard doesn't replay every greeting sent since forever.
+  useEffect(() => {
+    if (!user?.uid) return;
+    let hasLoadedInitial = false;
+    // Not scoped by teacherUid — this app's students/lessons collections
+    // aren't teacher-scoped either (single-teacher deployment), so greetings
+    // follow the same pattern.
+    const unsubscribe = onSnapshot(greetingsCollection, (snapshot) => {
+      if (!hasLoadedInitial) {
+        hasLoadedInitial = true;
+        return;
+      }
+      snapshot.docChanges().forEach(change => {
+        if (change.type === 'added') {
+          const data = change.doc.data();
+          setGreetingToast({ studentName: data.studentName || 'A student' });
+          setTimeout(() => setGreetingToast(null), 5000);
+        }
+      });
+    }, (error) => {
+      console.error("Error listening for greetings: ", error);
+    });
+    return () => unsubscribe();
+  }, [user.uid]);
+
   useEffect(() => {
     const q = query(sessionsCollection); 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -1809,6 +1839,61 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
       if (studentData.earnedTrophies === undefined) dataToUpdate.earnedTrophies = {};
       
       await updateDoc(studentDocRef, dataToUpdate);
+
+      // The "Parami" group runs large enough that the teacher can't manually
+      // re-send every lesson to each new joiner during class — so accepting
+      // here also auto-forwards whatever was sent to the group in the last
+      // 24 hours, instead of leaving the new student with no lesson at all.
+      const paramiGroup = groups.find(g => (g.groupName || '').trim().toLowerCase() === 'parami');
+      if (paramiGroup) {
+        setShowConfirmModal({
+          isOpen: true,
+          title: 'Add to Parami Group?',
+          message: `Add ${studentData?.name || 'this student'} to the "Parami" group?\n\nIf a lesson was sent to Parami in the last 24 hours, it will be sent to them too.`,
+          onConfirm: async () => {
+            setShowConfirmModal({ isOpen: false });
+            try {
+              await handleToggleStudentInGroup(paramiGroup.id, studentId, true);
+
+              const cutoff = Timestamp.fromDate(new Date(Date.now() - 24 * 60 * 60 * 1000));
+              const memberUids = (paramiGroup.studentUids || []).filter(uid => uid !== studentId);
+              let recentLesson = null;
+              for (let i = 0; i < memberUids.length; i += 30) {
+                const chunk = memberUids.slice(i, i + 30);
+                if (chunk.length === 0) continue;
+                const q = query(lessonsCollection, where('studentUid', 'in', chunk), where('sentAt', '>=', cutoff));
+                const snap = await getDocs(q);
+                snap.docs.forEach(d => {
+                  const lessonData = d.data();
+                  if (!lessonData.sentAt) return;
+                  if (!recentLesson || lessonData.sentAt.toMillis() > recentLesson.sentAt.toMillis()) {
+                    recentLesson = lessonData;
+                  }
+                });
+              }
+
+              if (recentLesson) {
+                await addDoc(lessonsCollection, {
+                  studentUid: studentId,
+                  teacherUid: recentLesson.teacherUid,
+                  title: recentLesson.title,
+                  link: recentLesson.link,
+                  details: recentLesson.details,
+                  trophyLimit: recentLesson.trophyLimit,
+                  unitLabel: recentLesson.unitLabel || 'Chapter',
+                  unitCount: recentLesson.unitCount,
+                  status: 'pending',
+                  sentAt: serverTimestamp()
+                });
+              }
+            } catch (e) {
+              console.error('Error adding approved student to Parami group:', e);
+            }
+          },
+          confirmText: 'Add',
+          confirmColor: 'bg-indigo-500 hover:bg-indigo-600'
+        });
+      }
     } catch (error) {
       console.error("Error approving student:", error);
     }
@@ -2522,6 +2607,18 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
         students={students}
         onSend={handleSendStarAnnouncement}
       />
+      {greetingToast && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[9600] max-w-md w-[90%]">
+          <div className="bg-gradient-to-r from-emerald-100 to-teal-100 border-2 border-emerald-400 rounded-2xl shadow-2xl p-4 flex items-center gap-3">
+            <span className="text-3xl">🙏</span>
+            <div className="flex-1">
+              <p className="font-bold text-emerald-900">{greetingToast.studentName}</p>
+              <p className="text-emerald-800 text-sm">Mangalabar ဘုန်းဘုန်း</p>
+            </div>
+            <button onClick={() => setGreetingToast(null)} className="text-emerald-500 hover:text-emerald-800 text-lg">✕</button>
+          </div>
+        </div>
+      )}
       {mergeTargetId && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex justify-center items-center z-50">
           <div className="bg-white p-6 rounded-xl shadow-2xl w-full max-w-md mx-4">
@@ -4124,6 +4221,24 @@ function StudentDashboard({ user, studentProfile, studentUid, announcements, onO
   const [redoSession, setRedoSession] = useState(null);
   const [nowTick, setNowTick] = useState(Date.now());
   const [elapsedTick, setElapsedTick] = useState(Date.now());
+  // Shown once each time a student lands on their dashboard ("enters the
+  // classroom"); initial value true (not a useEffect) is exactly "show on
+  // this mount only" -- switching away and back to 'student' remounts this
+  // component so it reappears next time too, matching a fresh greeting.
+  const [showGreetingPrompt, setShowGreetingPrompt] = useState(true);
+
+  const handleGreetTeacher = async () => {
+    setShowGreetingPrompt(false);
+    try {
+      await addDoc(greetingsCollection, {
+        studentUid,
+        studentName: studentProfile?.name || 'Student',
+        createdAt: serverTimestamp()
+      });
+    } catch (e) {
+      console.error('Error sending greeting:', e);
+    }
+  };
 
 const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     const session = sessionForCalc || activeSession;
@@ -5374,7 +5489,22 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           </form>
         </div>
       )}
-      
+
+      {/* One-time "greet your teacher" prompt, shown each time a student
+          lands on their dashboard. Sends a greeting doc the teacher's
+          dashboard shows as a live toast (see greetingToast in TeacherDashboard). */}
+      {showGreetingPrompt && (
+        <div className="fixed inset-0 bg-black/40 z-[9700] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full text-center">
+            <p className="text-4xl mb-3">🙏</p>
+            <p className="text-lg font-bold text-gray-800 mb-4">Say hello to your teacher! Tap OK to greet: "Mangalabar"</p>
+            <button onClick={handleGreetTeacher} className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl shadow-md">
+              OK
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 🔔 Notifications — fixed top-right, above where the Log Out button
           sits further down the page. Replaces the old always-visible
           "Awesome News Update" cards with a compact bell + unread dot, so
@@ -6805,32 +6935,34 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpen
   const hasShownStarThisSessionRef = useRef(false);
   const [roleCheckDone, setRoleCheckDone] = useState(false);
   const [navIndex, setNavIndex] = useState(0);
+  // These four used to share one bottom-center button with Login/Register,
+  // cycling through all five on every click -- a student trying to log in
+  // could need up to four clicks just to reach the login option. Now they
+  // live in their own small square (below the 🔔), and Login/Register is
+  // its own always-visible button below.
   const navItems = [
-    { label: "Today's Schedule", target: 'today' },
-    { label: 'Weekly Schedule', target: 'weekly' },
-    { label: 'This Year Attended', target: 'attendance' },
-    { label: 'Trophies Awarded', target: 'trophies' },
-    { label: 'Login / Register', target: 'login' }
+    { label: 'Today', target: 'today' },
+    { label: 'Week', target: 'weekly' },
+    { label: 'Year', target: 'attendance' },
+    { label: '🏆', target: 'trophies' }
   ];
   const handleNavClick = () => {
-    const target = navItems[navIndex].target;
-    if (target === 'login') {
-      if (role === 'teacher') {
-        setView('teacher');
-      } else if (role === 'student') {
-        setView('student');
-      } else {
-        const savedId = localStorage.getItem('lastStudentId');
-        if (savedId) {
-          handleStudentLoginById(savedId, () => setView('login'));
-        } else {
-          setView('login');
-        }
-      }
-    } else {
-      setView(target);
-    }
+    setView(navItems[navIndex].target);
     setNavIndex((navIndex + 1) % navItems.length);
+  };
+  const handleLoginButtonClick = () => {
+    if (role === 'teacher') {
+      setView('teacher');
+    } else if (role === 'student') {
+      setView('student');
+    } else {
+      const savedId = localStorage.getItem('lastStudentId');
+      if (savedId) {
+        handleStudentLoginById(savedId, () => setView('login'));
+      } else {
+        setView('login');
+      }
+    }
   };
 
   useEffect(() => {
@@ -7243,13 +7375,26 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpen
       )}
 
       {isAuthReady && user && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40">
-          <button onClick={handleNavClick} className="px-6 py-3 rounded-full bg-indigo-600 text-white font-semibold shadow-lg hover:bg-indigo-700 transition-colors">
-            {navItems[navIndex].target === 'login'
-              ? (role === 'teacher' ? 'Teacher' : role === 'student' ? (studentProfile?.name || 'Student') : 'Login / Register')
-              : navItems[navIndex].label}
-          </button>
-        </div>
+        <>
+          {/* Small square, no taller than the 🔔 (StudentDashboard's bell
+              sits at top-4, so this is positioned just below it) -- cycles
+              Today/Week/Year/Trophies one at a time on tap, short labels so
+              it stays compact on phones. */}
+          <div className="fixed top-16 right-4 z-[9400]">
+            <button
+              onClick={handleNavClick}
+              title={navItems[navIndex].target === 'today' ? "Today's Schedule" : navItems[navIndex].target === 'weekly' ? 'Weekly Schedule' : navItems[navIndex].target === 'attendance' ? 'This Year Attended' : 'Trophies Awarded'}
+              className="bg-white hover:bg-gray-50 border border-gray-200 rounded-xl w-11 h-11 flex items-center justify-center shadow-lg text-[11px] font-bold text-indigo-700 leading-none"
+            >
+              {navItems[navIndex].label}
+            </button>
+          </div>
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40">
+            <button onClick={handleLoginButtonClick} className="px-6 py-3 rounded-full bg-indigo-600 text-white font-semibold shadow-lg hover:bg-indigo-700 transition-colors">
+              {role === 'teacher' ? 'Teacher' : role === 'student' ? (studentProfile?.name || 'Student') : 'Login / Register'}
+            </button>
+          </div>
+        </>
       )}
 
       <main>
