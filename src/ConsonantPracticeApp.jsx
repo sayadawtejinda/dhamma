@@ -24,7 +24,7 @@ import React, { useEffect, useRef } from 'react';
 
 const CONSONANT_APP_BODY_HTML = `
     
-    <div id="floating-controls" class="p-3 rounded-2xl shadow-lg flex items-center gap-3 transition-all duration-500 ease-in-out" style="position: fixed; top: 20px; left: 20px; z-index: 1000; cursor: move; background: rgba(255, 255, 255, 0.6); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.25);">
+    <div id="floating-controls" class="p-3 rounded-2xl shadow-lg flex items-center gap-3 transition-all duration-500 ease-in-out" style="position: fixed; bottom: 20px; left: 20px; z-index: 1000; cursor: move; background: rgba(255, 255, 255, 0.6); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.25);">
         <div id="pointing-hand" class="hidden">👆</div>
         
         <!-- 1. Settings -->
@@ -695,6 +695,39 @@ const CONSONANT_APP_CSS = `
             color: #ef4444;
             border-color: #fca5a5;
         }
+
+        /* New Roman Text Styles */
+        .consonant-item > span:first-child { 
+            transition: transform 0.3s ease;
+            transform: translateY(-8px);
+        }
+        .consonant-grid-container.hide-roman .consonant-item > span:first-child {
+            transform: none;
+        }
+        .roman-text {
+            font-size: 0.65rem;
+            font-weight: 700;
+            color: #4b5563; 
+            position: absolute;
+            bottom: 6px;
+            left: 0;
+            right: 0;
+            text-align: center;
+            opacity: 1;
+            visibility: visible;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            user-select: none;
+            z-index: 5;
+        }
+        .consonant-grid-container.hide-roman .roman-text {
+            opacity: 0 !important;
+            visibility: hidden !important;
+        }
+        .roman-text:hover {
+            color: #ef4444; 
+            text-decoration: line-through;
+        }
 `;
 
 export default function ConsonantPracticeApp({ entryRequest, onExit }) {
@@ -727,6 +760,17 @@ export default function ConsonantPracticeApp({ entryRequest, onExit }) {
         allConsonantsInOrder.forEach((char, index) => {
             consonantTimings[char] = { start: index * 2, duration: 2 };
         });
+
+        // Mapping Myanmar consonants to Romanized names
+        const romanizedNames = {
+            'က': 'Ka Gyi', 'ခ': 'Kha Kway', 'ဂ': 'Ga Nge', 'ဃ': 'Ga Gyi', 'င': 'Nga',
+            'စ': 'Sa Lone', 'ဆ': 'Sa Lein', 'ဇ': 'Za Kwe', 'ဈ': 'Za Myin Zwe', 'ည': 'Nya',
+            'ဋ': 'Ta Tha Lin Chate', 'ဌ': 'Hta Wun Be', 'ဍ': 'Da Yin Kauk', 'ဎ': 'Da Yin Hmout', 'ဏ': 'Na Gyi',
+            'တ': 'Ta Wun Pu', 'ထ': 'Hta Sin Htoo', 'ဒ': 'Da Dway', 'ဓ': 'Da Auk Chite', 'န': 'Na Nge',
+            'ပ': 'Pa Sauk', 'ဖ': 'Pha Oo Htoke', 'ဗ': 'Ba Htet Chite', 'ဘ': 'Ba Kone', 'မ': 'Ma',
+            'ယ': 'Ya Pet Let', 'ရ': 'Ya Kauk', 'လ': 'La', 'ဝ': 'Wa', 'သ': 'Tha',
+            'ဟ': 'Ha', 'ဠ': 'La Gyi', 'အ': 'A'
+        };
         
         const instructionTimings = {
             1: { start: 0, duration: 5.5 }, 2: { start: 6, duration: 4.5 },
@@ -963,7 +1007,7 @@ export default function ConsonantPracticeApp({ entryRequest, onExit }) {
         const tutorialAudioClips = [2, 14, 8, 5, 6, 3, 4];
 
         // --- Controls Repositioning Logic ---
-        let controlsPositionIndex = 0;
+        let controlsPositionIndex = 2;
         const controlPositions = [
             { top: '20px', left: '20px', right: 'auto', bottom: 'auto' }, // Top-left
             { top: '20px', right: '20px', left: 'auto', bottom: 'auto' }, // Top-right
@@ -1290,6 +1334,12 @@ export default function ConsonantPracticeApp({ entryRequest, onExit }) {
             toggleReadAloudBtn.classList.remove('bg-blue-500');
             toggleReadAloudBtn.classList.add('bg-red-500');
             readAloudIcon.innerHTML = `<path d="M18.36 5.64a9 9 0 0 1 0 12.72M15.54 8.46a5 5 0 0 1 0 7.07"/>`;
+
+            // Reset all dismissed Roman texts when Read Aloud starts again
+            document.querySelectorAll('.roman-text.dismissed').forEach(el => {
+                el.classList.remove('dismissed');
+                el.style.display = '';
+            });
 
             const consonantsToRead = allConsonantsInOrder.slice(0, consonantCountOptions[currentConsonantCountIndex]);
             const repeats = isAutoFlow ? READ_ALOUD_REPEATS : 1;
@@ -1727,6 +1777,9 @@ export default function ConsonantPracticeApp({ entryRequest, onExit }) {
             isAutoFlow = true; // Enable auto flow
             currentGameMode = 'matching';
             correctCount = 0;
+            
+            consonantGridContainer.classList.add('hide-roman'); // Hide roman text for extra challenge
+            
             toggleMatchingBtn.innerHTML = `<span class="text-lg">🛑</span>`;
             toggleMatchingBtn.classList.remove('bg-orange-500');
             toggleMatchingBtn.classList.add('bg-red-500');
@@ -2006,6 +2059,7 @@ export default function ConsonantPracticeApp({ entryRequest, onExit }) {
                 toggleMatchingBtn.classList.remove('bg-red-500');
                 toggleMatchingBtn.classList.add('bg-orange-500');
                 document.querySelectorAll('.consonant-item.choice').forEach(el => el.classList.remove('choice'));
+                consonantGridContainer.classList.remove('hide-roman');
             } else if (currentGameMode === 'puzzle') {
                 togglePuzzleBtn.innerHTML = `<span class="text-lg">⛓️</span>`;
                 togglePuzzleBtn.classList.remove('bg-red-500');
@@ -2019,8 +2073,8 @@ export default function ConsonantPracticeApp({ entryRequest, onExit }) {
                 document.querySelectorAll('.consonant-item.puzzle-hidden').forEach(el => {
                     el.classList.remove('puzzle-hidden');
                 });
-                // Reset controls position to default top-left
-                controlsPositionIndex = 0;
+                // Reset controls position to default bottom-left
+                controlsPositionIndex = 2;
                 applyControlsPosition(controlsPositionIndex);
             }
             currentGameMode = null; correctAnswer = null; userClickSequence = ''; matchingChoices = []; puzzleSequence = []; puzzleUserProgress = [];
@@ -2091,6 +2145,23 @@ export default function ConsonantPracticeApp({ entryRequest, onExit }) {
         }
 
         async function initializeApp() {
+            // Dynamically inject Romanized phonetic text
+            document.querySelectorAll('.consonant-item').forEach(item => {
+                const char = item.dataset.consonant;
+                if (char && romanizedNames[char]) {
+                    const romanEl = document.createElement('div');
+                    romanEl.className = 'roman-text';
+                    romanEl.innerText = romanizedNames[char];
+                    romanEl.title = "ပိတ်ရန်နှိပ်ပါ (Click to hide)";
+                    romanEl.onclick = (e) => {
+                        e.stopPropagation(); // Prevent grid item click
+                        romanEl.classList.add('dismissed');
+                        romanEl.style.display = 'none'; // Hide permanently for this session
+                    };
+                    item.appendChild(romanEl);
+                }
+            });
+
             updateGridVisibility();
             setTimeout(() => setHandPosition(0), 100);
         }
@@ -2139,6 +2210,18 @@ export default function ConsonantPracticeApp({ entryRequest, onExit }) {
         };
 
 
+  return () => {
+      delete window.changeConsonantCount;
+      delete window.toggleReadAloud;
+      delete window.cycleWaga;
+      delete window.toggleWagaGame;
+      delete window.toggleMatchingGame;
+      delete window.togglePuzzleGame;
+      delete window.toggleClickGame;
+      delete window.toggleTypingGame;
+      delete window.toggleInstructionAudio;
+      delete window.handleGridClick;
+    };
   }, []);
 
   return (
