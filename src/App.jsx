@@ -11,6 +11,8 @@ import MyanmarNumberLearningApp from './MyanmarNumberLearningApp';
 import MyanmarVowelsLearningApp from './MyanmarVowelsLearningApp';
 import AnimalSoundApp from './AnimalSoundApp';
 import BurmeseLearningGamesApp from './BurmeseLearningGamesApp';
+import InteractiveLearningQuizApp from './InteractiveLearningQuizApp';
+import MyanmarPoemsApp from './MyanmarPoemsApp';
 
 export default function App() {
   const [activeApp, setActiveApp] = useState('tutoring');
@@ -25,6 +27,26 @@ export default function App() {
   const [vowelsLearningRequest, setVowelsLearningRequest] = useState(null);
   const [animalSoundRequest, setAnimalSoundRequest] = useState(null);
   const [burmeseLearningGamesRequest, setBurmeseLearningGamesRequest] = useState(null);
+  const [interactiveQuizRequest, setInteractiveQuizRequest] = useState(null);
+  const [myanmarPoemsRequest, setMyanmarPoemsRequest] = useState(null);
+
+  const openInteractiveQuiz = (request) => {
+    setInteractiveQuizRequest(request || {});
+    setActiveApp('interactivequiz');
+  };
+  const closeInteractiveQuiz = () => {
+    setActiveApp('tutoring');
+    setInteractiveQuizRequest(null);
+  };
+
+  const openMyanmarPoems = (request) => {
+    setMyanmarPoemsRequest(request || {});
+    setActiveApp('myanmarpoems');
+  };
+  const closeMyanmarPoems = () => {
+    setActiveApp('tutoring');
+    setMyanmarPoemsRequest(null);
+  };
 
   const openAnimalSound = (request) => {
     setAnimalSoundRequest(request || {});
@@ -141,6 +163,8 @@ export default function App() {
           onOpenVowelsLearning={openVowelsLearning}
           onOpenAnimalSound={openAnimalSound}
           onOpenBurmeseLearningGames={openBurmeseLearningGames}
+          onOpenInteractiveQuiz={openInteractiveQuiz}
+          onOpenMyanmarPoems={openMyanmarPoems}
         />
       </div>
 
@@ -296,6 +320,34 @@ export default function App() {
           </div>
         )}
         <BurmeseLearningGamesApp entryRequest={burmeseLearningGamesRequest} onExit={closeBurmeseLearningGames} />
+      </div>
+
+      <div style={{ display: activeApp === 'interactivequiz' ? 'block' : 'none' }}>
+        {activeApp === 'interactivequiz' && (
+          <div className="fixed top-3 left-3 z-[9999]">
+            <button
+              onClick={closeInteractiveQuiz}
+              className="px-4 py-2 bg-gray-800 text-white rounded-full shadow-lg font-semibold text-sm hover:bg-gray-900"
+            >
+              ← Back to Tutoring Dashboard
+            </button>
+          </div>
+        )}
+        <InteractiveLearningQuizApp entryRequest={interactiveQuizRequest} onExit={closeInteractiveQuiz} />
+      </div>
+
+      <div style={{ display: activeApp === 'myanmarpoems' ? 'block' : 'none' }}>
+        {activeApp === 'myanmarpoems' && (
+          <div className="fixed top-3 left-3 z-[9999]">
+            <button
+              onClick={closeMyanmarPoems}
+              className="px-4 py-2 bg-gray-800 text-white rounded-full shadow-lg font-semibold text-sm hover:bg-gray-900"
+            >
+              ← Back to Tutoring Dashboard
+            </button>
+          </div>
+        )}
+        <MyanmarPoemsApp entryRequest={myanmarPoemsRequest} onExit={closeMyanmarPoems} />
       </div>
     </div>
   );
