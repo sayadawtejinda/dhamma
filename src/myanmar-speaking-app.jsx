@@ -4968,6 +4968,23 @@ export default function MyanmarSpeakingApp({ entryRequest, onExit }) {
     const minutesWrittenRef = useRef(0);
     const lastActivityRef = useRef(Date.now());
     const activeMsRef = useRef(0);
+    const appliedDeepLinkRef = useRef(null);
+
+    // This component mounts once when the whole SPA loads (hidden, per
+    // App.jsx's "keep everything mounted" design) — at that point
+    // entryRequest is still null, so the lazy useState initializers above
+    // never see a real studentName. This effect catches it once it actually
+    // arrives (when the student clicks Continue), so they land straight in
+    // the student view under their own name instead of the manual
+    // role-selection / name-entry screens.
+    useEffect(() => {
+        if (deepLinkStudentName && appliedDeepLinkRef.current !== deepLinkStudentName) {
+            appliedDeepLinkRef.current = deepLinkStudentName;
+            setStudentName(deepLinkStudentName);
+            setActiveRole('student');
+            setStudySessionStart(Date.now());
+        }
+    }, [deepLinkStudentName]);
 
     useEffect(() => {
         initializeAuth();

@@ -3592,6 +3592,18 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                   </div>
                 );
               })()}
+              {newBankLessonLink === 'consonantpractice://' && (
+                <div className="mt-2 flex items-center justify-between bg-cyan-50 border border-cyan-200 rounded-lg px-3 py-2">
+                  <span className="text-sm text-cyan-800 font-semibold">🔤 Myanmar Consonant Practice app</span>
+                  <button type="button" onClick={() => setNewBankLessonLink('')} className="text-xs text-red-600 hover:text-red-800 font-semibold">Clear</button>
+                </div>
+              )}
+              {newBankLessonLink === 'burmesegame://' && (
+                <div className="mt-2 flex items-center justify-between bg-fuchsia-50 border border-fuchsia-200 rounded-lg px-3 py-2">
+                  <span className="text-sm text-fuchsia-800 font-semibold">🕷️ Burmese Consonant Learning Game</span>
+                  <button type="button" onClick={() => setNewBankLessonLink('')} className="text-xs text-red-600 hover:text-red-800 font-semibold">Clear</button>
+                </div>
+              )}
 
               {showLinkPicker && (
                 <div className="absolute z-20 mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-xl p-3 max-h-96 overflow-y-auto">
@@ -3683,6 +3695,33 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                     className="w-full text-left p-2 rounded-lg hover:bg-teal-50 border border-transparent hover:border-teal-200 font-semibold text-gray-800 mt-1"
                   >
                     📗 Myanmar Reader app
+                  </button>
+                  {/* Consonant Practice and Burmese Consonant Game are mounted
+                      inline (like SmartStudy/Abhidhamma/Dhammaschool), not real
+                      hosted URLs — so they get their own custom link scheme,
+                      handled specially in handleStartLesson/Continue, same
+                      idea as smartstudy://, abhidhamma://, dhammaschool://. */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewBankLessonLink('consonantpractice://');
+                      if (!newBankLessonTitle.trim()) setNewBankLessonTitle('Myanmar Consonant Practice');
+                      setShowLinkPicker(false);
+                    }}
+                    className="w-full text-left p-2 rounded-lg hover:bg-cyan-50 border border-transparent hover:border-cyan-200 font-semibold text-gray-800 mt-1"
+                  >
+                    🔤 Myanmar Consonant Practice app
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewBankLessonLink('burmesegame://');
+                      if (!newBankLessonTitle.trim()) setNewBankLessonTitle('Burmese Consonant Learning Game');
+                      setShowLinkPicker(false);
+                    }}
+                    className="w-full text-left p-2 rounded-lg hover:bg-fuchsia-50 border border-transparent hover:border-fuchsia-200 font-semibold text-gray-800 mt-1"
+                  >
+                    🕷️ Burmese Consonant Learning Game
                   </button>
                 </div>
               )}
@@ -3921,7 +3960,7 @@ function SmartStudyProgressBadge({ classId, studentName, smartStudyNames, compac
   if (completedCount === null) return null;
 }
 
-function StudentDashboard({ user, studentProfile, studentUid, announcements, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenMyanmarSpeaking, onLogout }) {
+function StudentDashboard({ user, studentProfile, studentUid, announcements, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenMyanmarSpeaking, onOpenConsonantPractice, onOpenBurmeseGame, onLogout }) {
   const [myLessons, setMyLessons] = useState([]);
   const [ssCompletionCounts, setSsCompletionCounts] = useState({}); // classId → SmartStudy completedCount
   const [mySessions, setMySessions] = useState([]);
@@ -4451,6 +4490,30 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           });
         }
       } catch (e) { console.error("Error starting Dhammaschool session:", e); }
+      return;
+    }
+
+    if (lesson.link === 'consonantpractice://' || lesson.link === 'burmesegame://') {
+      const isConsonant = lesson.link === 'consonantpractice://';
+      const opener = isConsonant ? onOpenConsonantPractice : onOpenBurmeseGame;
+      if (opener) opener({ studentName: studentProfile?.name || '' });
+      if (lesson.status === 'pending') {
+        try { await updateDoc(doc(db, `${publicDataPath}/lessons`, lesson.id), { status: 'started' }); } catch (e) {}
+      }
+      // Session for time-tracking + Report button (same pattern as other apps)
+      try {
+        const activeCheckQuery = query(sessionsCollection, where("studentUid", "==", studentUid), where("endTime", "==", null));
+        const activeCheckSnap = await getDocs(activeCheckQuery);
+        if (activeCheckSnap.empty) {
+          await addDoc(sessionsCollection, {
+            studentUid: studentUid, lessonId: lesson.id, lessonTitle: lesson.title, lessonLink: lesson.link,
+            lessonTrophyLimit: lesson.trophyLimit || 0,
+            lessonUnitCount: lesson.unitCount || 0,
+            lessonUnitLabel: lesson.unitLabel || 'Game',
+            startTime: serverTimestamp(), endTime: null, feedbackNotes: null, score: null, awardedTrophies: 0
+          });
+        }
+      } catch (e) { console.error("Error starting game session:", e); }
       return;
     }
 
@@ -5346,6 +5409,14 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                       classId: extractDhammaschoolClassId(url) || '',
                     });
                   }
+                  return;
+                }
+                if (url && url.startsWith('consonantpractice://')) {
+                  if (onOpenConsonantPractice) onOpenConsonantPractice({ studentName: studentProfile?.name || '' });
+                  return;
+                }
+                if (url && url.startsWith('burmesegame://')) {
+                  if (onOpenBurmeseGame) onOpenBurmeseGame({ studentName: studentProfile?.name || '' });
                   return;
                 }
                 if (!url.startsWith('http://') && !url.startsWith('https://')) url = `https://${url}`;
@@ -6958,7 +7029,7 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpen
             </div>
           );
         }
-        return <StudentDashboard user={user} studentProfile={studentProfile} studentUid={targetStudentUid} announcements={announcements} onOpenSmartStudy={onOpenSmartStudy} onOpenAbhidhamma={onOpenAbhidhamma} onOpenMyanmarReader={onOpenMyanmarReader} onOpenDhammaschool={onOpenDhammaschool} onOpenMyanmarSpeaking={onOpenMyanmarSpeaking} onLogout={handleStudentLogout} />;
+        return <StudentDashboard user={user} studentProfile={studentProfile} studentUid={targetStudentUid} announcements={announcements} onOpenSmartStudy={onOpenSmartStudy} onOpenAbhidhamma={onOpenAbhidhamma} onOpenMyanmarReader={onOpenMyanmarReader} onOpenDhammaschool={onOpenDhammaschool} onOpenMyanmarSpeaking={onOpenMyanmarSpeaking} onOpenConsonantPractice={onOpenConsonantPractice} onOpenBurmeseGame={onOpenBurmeseGame} onLogout={handleStudentLogout} />;
       case 'weekly': 
         return <WeeklySchedule role={role} targetStudentUid={targetStudentUid} />;
       case 'attendance':
