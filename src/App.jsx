@@ -26,6 +26,13 @@ const MyanmarConsonantEndingsApp = lazy(() => import('./MyanmarConsonantEndingsA
 const TimeAndCalendarApp = lazy(() => import('./TimeAndCalendarApp'));
 const MyanmarSpellingApp = lazy(() => import('./MyanmarSpellingApp'));
 const MyanmarSoundPracticeApp = lazy(() => import('./MyanmarSoundPracticeApp'));
+// Combined "Reading Myanmar" group — bundles ConsonantPracticeApp,
+// BurmeseConsonantGameApp, MyanmarVowelsLearningApp, MyanmarSpellingApp,
+// MyanmarConsonantEndingsApp and MyanmarSoundPracticeApp behind one Lesson
+// Bank entry with a "Choose a Part" landing screen (see ReadingMyanmarApp.jsx).
+// The 6 apps above stay wired individually too for now, so nothing already
+// working changes — this is purely an additional entry point.
+const ReadingMyanmarApp = lazy(() => import('./ReadingMyanmarApp'));
 
 function LoadingFallback() {
   return (
@@ -64,6 +71,7 @@ export default function App() {
   const [timeAndCalendarRequest, setTimeAndCalendarRequest] = useState(null);
   const [myanmarSpellingRequest, setMyanmarSpellingRequest] = useState(null);
   const [myanmarSoundPracticeRequest, setMyanmarSoundPracticeRequest] = useState(null);
+  const [readingMyanmarRequest, setReadingMyanmarRequest] = useState(null);
 
   const openMyanmarSpelling = (request) => {
     setMyanmarSpellingRequest(request || {});
@@ -81,6 +89,15 @@ export default function App() {
   const closeMyanmarSoundPractice = () => {
     setActiveApp('tutoring');
     setMyanmarSoundPracticeRequest(null);
+  };
+
+  const openReadingMyanmar = (request) => {
+    setReadingMyanmarRequest(request || {});
+    setActiveApp('readingmyanmar');
+  };
+  const closeReadingMyanmar = () => {
+    setActiveApp('tutoring');
+    setReadingMyanmarRequest(null);
   };
 
   const openConsonantEndings = (request) => {
@@ -244,6 +261,7 @@ export default function App() {
           onOpenTimeAndCalendar={openTimeAndCalendar}
           onOpenMyanmarSpelling={openMyanmarSpelling}
           onOpenMyanmarSoundPractice={openMyanmarSoundPractice}
+          onOpenReadingMyanmar={openReadingMyanmar}
         />
       </div>
 
@@ -517,6 +535,12 @@ export default function App() {
               </div>
             )}
             <MyanmarSoundPracticeApp entryRequest={myanmarSoundPracticeRequest} onExit={closeMyanmarSoundPractice} />
+          </div>
+        )}
+
+        {openedApps.has('readingmyanmar') && (
+          <div style={{ display: activeApp === 'readingmyanmar' ? 'block' : 'none' }}>
+            <ReadingMyanmarApp entryRequest={readingMyanmarRequest} onExit={closeReadingMyanmar} />
           </div>
         )}
       </Suspense>
