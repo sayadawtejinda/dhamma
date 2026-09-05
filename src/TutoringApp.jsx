@@ -712,7 +712,7 @@ function AttendanceReports({ students, teacherSchedule, sessions }) {
   );
 }
 
-function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenConsonantPractice, onOpenBurmeseGame, onOpenMyanmarSpeaking, onOpenNumberLearning, onOpenVowelsLearning, onOpenAnimalSound, onOpenBurmeseLearningGames, onOpenInteractiveQuiz, onOpenMyanmarPoems, onOpenConsonantEndings, onOpenTimeAndCalendar }) {
+function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenConsonantPractice, onOpenBurmeseGame, onOpenMyanmarSpeaking, onOpenNumberLearning, onOpenVowelsLearning, onOpenAnimalSound, onOpenBurmeseLearningGames, onOpenInteractiveQuiz, onOpenMyanmarPoems, onOpenConsonantEndings, onOpenTimeAndCalendar, onOpenMyanmarSpelling, onOpenMyanmarSoundPractice }) {
   const [students, setStudents] = useState([]);
   const [lessonBank, setLessonBank] = useState([]); 
   const [sessions, setSessions] = useState([]); 
@@ -2795,6 +2795,20 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
             <span className="flex items-center text-lg font-bold text-cyan-800">🕐 Time and Calendar</span>
             <span className="text-cyan-500 text-xl">→</span>
           </button>
+          <button
+            onClick={() => onOpenMyanmarSpelling && onOpenMyanmarSpelling({})}
+            className="w-full flex items-center justify-between bg-white p-4 rounded-xl border-2 border-violet-200 hover:border-violet-400 hover:shadow-md transition-all mt-3"
+          >
+            <span className="flex items-center text-lg font-bold text-violet-800">✍️ Myanmar Spelling</span>
+            <span className="text-violet-500 text-xl">→</span>
+          </button>
+          <button
+            onClick={() => onOpenMyanmarSoundPractice && onOpenMyanmarSoundPractice({})}
+            className="w-full flex items-center justify-between bg-white p-4 rounded-xl border-2 border-rose-200 hover:border-rose-400 hover:shadow-md transition-all mt-3"
+          >
+            <span className="flex items-center text-lg font-bold text-rose-800">🔊 Myanmar Sound Practice</span>
+            <span className="text-rose-500 text-xl">→</span>
+          </button>
           {/* Myanmar Speaking app — now mounted inline in the same project as
               the other apps above, instead of opening the separately-hosted
               myanmar-wordcraft deployment in a new tab. */}
@@ -3808,6 +3822,18 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                   <button type="button" onClick={() => setNewBankLessonLink('')} className="text-xs text-red-600 hover:text-red-800 font-semibold">Clear</button>
                 </div>
               )}
+              {newBankLessonLink === 'myanmarspelling://' && (
+                <div className="mt-2 flex items-center justify-between bg-violet-50 border border-violet-200 rounded-lg px-3 py-2">
+                  <span className="text-sm text-violet-800 font-semibold">✍️ Myanmar Spelling app</span>
+                  <button type="button" onClick={() => setNewBankLessonLink('')} className="text-xs text-red-600 hover:text-red-800 font-semibold">Clear</button>
+                </div>
+              )}
+              {newBankLessonLink === 'myanmarsoundpractice://' && (
+                <div className="mt-2 flex items-center justify-between bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
+                  <span className="text-sm text-rose-800 font-semibold">🔊 Myanmar Sound Practice app</span>
+                  <button type="button" onClick={() => setNewBankLessonLink('')} className="text-xs text-red-600 hover:text-red-800 font-semibold">Clear</button>
+                </div>
+              )}
 
               {showLinkPicker && (
                 <div className="absolute z-20 mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-xl p-3 max-h-96 overflow-y-auto">
@@ -4014,6 +4040,28 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                     className="w-full text-left p-2 rounded-lg hover:bg-cyan-50 border border-transparent hover:border-cyan-200 font-semibold text-gray-800 mt-1"
                   >
                     🕐 Time and Calendar app
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewBankLessonLink('myanmarspelling://');
+                      if (!newBankLessonTitle.trim()) setNewBankLessonTitle('Myanmar Spelling');
+                      setShowLinkPicker(false);
+                    }}
+                    className="w-full text-left p-2 rounded-lg hover:bg-violet-50 border border-transparent hover:border-violet-200 font-semibold text-gray-800 mt-1"
+                  >
+                    ✍️ Myanmar Spelling app
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewBankLessonLink('myanmarsoundpractice://');
+                      if (!newBankLessonTitle.trim()) setNewBankLessonTitle('Myanmar Sound Practice');
+                      setShowLinkPicker(false);
+                    }}
+                    className="w-full text-left p-2 rounded-lg hover:bg-rose-50 border border-transparent hover:border-rose-200 font-semibold text-gray-800 mt-1"
+                  >
+                    🔊 Myanmar Sound Practice app
                   </button>
                 </div>
               )}
@@ -4252,7 +4300,7 @@ function SmartStudyProgressBadge({ classId, studentName, smartStudyNames, compac
   if (completedCount === null) return null;
 }
 
-function StudentDashboard({ user, studentProfile, studentUid, announcements, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenMyanmarSpeaking, onOpenConsonantPractice, onOpenBurmeseGame, onOpenNumberLearning, onOpenVowelsLearning, onOpenAnimalSound, onOpenBurmeseLearningGames, onOpenInteractiveQuiz, onOpenMyanmarPoems, onOpenConsonantEndings, onOpenTimeAndCalendar, onLogout }) {
+function StudentDashboard({ user, studentProfile, studentUid, announcements, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenMyanmarSpeaking, onOpenConsonantPractice, onOpenBurmeseGame, onOpenNumberLearning, onOpenVowelsLearning, onOpenAnimalSound, onOpenBurmeseLearningGames, onOpenInteractiveQuiz, onOpenMyanmarPoems, onOpenConsonantEndings, onOpenTimeAndCalendar, onOpenMyanmarSpelling, onOpenMyanmarSoundPractice, onLogout }) {
   const [myLessons, setMyLessons] = useState([]);
   const [ssCompletionCounts, setSsCompletionCounts] = useState({}); // classId → SmartStudy completedCount
   const [mySessions, setMySessions] = useState([]);
@@ -4803,7 +4851,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       return;
     }
 
-    if (['consonantpractice://', 'burmesegame://', 'numberlearning://', 'vowelslearning://', 'animalsound://', 'burmeselearninggames://', 'interactivequiz://', 'myanmarpoems://', 'consonantendings://', 'timeandcalendar://'].includes(lesson.link)) {
+    if (['consonantpractice://', 'burmesegame://', 'numberlearning://', 'vowelslearning://', 'animalsound://', 'burmeselearninggames://', 'interactivequiz://', 'myanmarpoems://', 'consonantendings://', 'timeandcalendar://', 'myanmarspelling://', 'myanmarsoundpractice://'].includes(lesson.link)) {
       const openerByLink = {
         'consonantpractice://': onOpenConsonantPractice,
         'burmesegame://': onOpenBurmeseGame,
@@ -4815,6 +4863,8 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         'myanmarpoems://': onOpenMyanmarPoems,
         'consonantendings://': onOpenConsonantEndings,
         'timeandcalendar://': onOpenTimeAndCalendar,
+        'myanmarspelling://': onOpenMyanmarSpelling,
+        'myanmarsoundpractice://': onOpenMyanmarSoundPractice,
       };
       const opener = openerByLink[lesson.link];
       if (opener) opener({ studentName: studentProfile?.name || '' });
@@ -5785,6 +5835,14 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                 }
                 if (url && url.startsWith('timeandcalendar://')) {
                   if (onOpenTimeAndCalendar) onOpenTimeAndCalendar({ studentName: studentProfile?.name || '' });
+                  return;
+                }
+                if (url && url.startsWith('myanmarspelling://')) {
+                  if (onOpenMyanmarSpelling) onOpenMyanmarSpelling({ studentName: studentProfile?.name || '' });
+                  return;
+                }
+                if (url && url.startsWith('myanmarsoundpractice://')) {
+                  if (onOpenMyanmarSoundPractice) onOpenMyanmarSoundPractice({ studentName: studentProfile?.name || '' });
                   return;
                 }
                 if (!url.startsWith('http://') && !url.startsWith('https://')) url = `https://${url}`;
@@ -6972,7 +7030,7 @@ function DeactivatedScreen() {
   );
 }
 
-export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenConsonantPractice, onOpenBurmeseGame, onOpenMyanmarSpeaking, onOpenNumberLearning, onOpenVowelsLearning, onOpenAnimalSound, onOpenBurmeseLearningGames, onOpenInteractiveQuiz, onOpenMyanmarPoems, onOpenConsonantEndings, onOpenTimeAndCalendar }) {
+export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenConsonantPractice, onOpenBurmeseGame, onOpenMyanmarSpeaking, onOpenNumberLearning, onOpenVowelsLearning, onOpenAnimalSound, onOpenBurmeseLearningGames, onOpenInteractiveQuiz, onOpenMyanmarPoems, onOpenConsonantEndings, onOpenTimeAndCalendar, onOpenMyanmarSpelling, onOpenMyanmarSoundPractice }) {
   const [user, setUser] = useState(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [role, setRole] = useState(null); 
@@ -7389,7 +7447,7 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpen
     switch (view) {
       case 'teacher':
         if (role !== 'teacher') return <TodaySchedule role={role} />; 
-        return <TeacherDashboard user={user} onOpenSmartStudy={onOpenSmartStudy} onOpenAbhidhamma={onOpenAbhidhamma} onOpenMyanmarReader={onOpenMyanmarReader} onOpenDhammaschool={onOpenDhammaschool} onOpenConsonantPractice={onOpenConsonantPractice} onOpenBurmeseGame={onOpenBurmeseGame} onOpenMyanmarSpeaking={onOpenMyanmarSpeaking} onOpenNumberLearning={onOpenNumberLearning} onOpenVowelsLearning={onOpenVowelsLearning} onOpenAnimalSound={onOpenAnimalSound} onOpenBurmeseLearningGames={onOpenBurmeseLearningGames} onOpenInteractiveQuiz={onOpenInteractiveQuiz} onOpenMyanmarPoems={onOpenMyanmarPoems} onOpenConsonantEndings={onOpenConsonantEndings} onOpenTimeAndCalendar={onOpenTimeAndCalendar} />;
+        return <TeacherDashboard user={user} onOpenSmartStudy={onOpenSmartStudy} onOpenAbhidhamma={onOpenAbhidhamma} onOpenMyanmarReader={onOpenMyanmarReader} onOpenDhammaschool={onOpenDhammaschool} onOpenConsonantPractice={onOpenConsonantPractice} onOpenBurmeseGame={onOpenBurmeseGame} onOpenMyanmarSpeaking={onOpenMyanmarSpeaking} onOpenNumberLearning={onOpenNumberLearning} onOpenVowelsLearning={onOpenVowelsLearning} onOpenAnimalSound={onOpenAnimalSound} onOpenBurmeseLearningGames={onOpenBurmeseLearningGames} onOpenInteractiveQuiz={onOpenInteractiveQuiz} onOpenMyanmarPoems={onOpenMyanmarPoems} onOpenConsonantEndings={onOpenConsonantEndings} onOpenTimeAndCalendar={onOpenTimeAndCalendar} onOpenMyanmarSpelling={onOpenMyanmarSpelling} onOpenMyanmarSoundPractice={onOpenMyanmarSoundPractice} />;
       case 'student':
         if (role !== 'student') return <TodaySchedule role={role} />; 
         if (!studentProfile) {
@@ -7399,7 +7457,7 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpen
             </div>
           );
         }
-        return <StudentDashboard user={user} studentProfile={studentProfile} studentUid={targetStudentUid} announcements={announcements} onOpenSmartStudy={onOpenSmartStudy} onOpenAbhidhamma={onOpenAbhidhamma} onOpenMyanmarReader={onOpenMyanmarReader} onOpenDhammaschool={onOpenDhammaschool} onOpenMyanmarSpeaking={onOpenMyanmarSpeaking} onOpenConsonantPractice={onOpenConsonantPractice} onOpenBurmeseGame={onOpenBurmeseGame} onOpenNumberLearning={onOpenNumberLearning} onOpenVowelsLearning={onOpenVowelsLearning} onOpenAnimalSound={onOpenAnimalSound} onOpenBurmeseLearningGames={onOpenBurmeseLearningGames} onOpenInteractiveQuiz={onOpenInteractiveQuiz} onOpenMyanmarPoems={onOpenMyanmarPoems} onOpenConsonantEndings={onOpenConsonantEndings} onOpenTimeAndCalendar={onOpenTimeAndCalendar} onLogout={handleStudentLogout} />;
+        return <StudentDashboard user={user} studentProfile={studentProfile} studentUid={targetStudentUid} announcements={announcements} onOpenSmartStudy={onOpenSmartStudy} onOpenAbhidhamma={onOpenAbhidhamma} onOpenMyanmarReader={onOpenMyanmarReader} onOpenDhammaschool={onOpenDhammaschool} onOpenMyanmarSpeaking={onOpenMyanmarSpeaking} onOpenConsonantPractice={onOpenConsonantPractice} onOpenBurmeseGame={onOpenBurmeseGame} onOpenNumberLearning={onOpenNumberLearning} onOpenVowelsLearning={onOpenVowelsLearning} onOpenAnimalSound={onOpenAnimalSound} onOpenBurmeseLearningGames={onOpenBurmeseLearningGames} onOpenInteractiveQuiz={onOpenInteractiveQuiz} onOpenMyanmarPoems={onOpenMyanmarPoems} onOpenConsonantEndings={onOpenConsonantEndings} onOpenTimeAndCalendar={onOpenTimeAndCalendar} onOpenMyanmarSpelling={onOpenMyanmarSpelling} onOpenMyanmarSoundPractice={onOpenMyanmarSoundPractice} onLogout={handleStudentLogout} />;
       case 'weekly': 
         return <WeeklySchedule role={role} targetStudentUid={targetStudentUid} />;
       case 'attendance':
