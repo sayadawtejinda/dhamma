@@ -13,6 +13,8 @@ import AnimalSoundApp from './AnimalSoundApp';
 import BurmeseLearningGamesApp from './BurmeseLearningGamesApp';
 import InteractiveLearningQuizApp from './InteractiveLearningQuizApp';
 import MyanmarPoemsApp from './MyanmarPoemsApp';
+import MyanmarConsonantEndingsApp from './MyanmarConsonantEndingsApp';
+import TimeAndCalendarApp from './TimeAndCalendarApp';
 
 export default function App() {
   const [activeApp, setActiveApp] = useState('tutoring');
@@ -29,6 +31,26 @@ export default function App() {
   const [burmeseLearningGamesRequest, setBurmeseLearningGamesRequest] = useState(null);
   const [interactiveQuizRequest, setInteractiveQuizRequest] = useState(null);
   const [myanmarPoemsRequest, setMyanmarPoemsRequest] = useState(null);
+  const [consonantEndingsRequest, setConsonantEndingsRequest] = useState(null);
+  const [timeAndCalendarRequest, setTimeAndCalendarRequest] = useState(null);
+
+  const openConsonantEndings = (request) => {
+    setConsonantEndingsRequest(request || {});
+    setActiveApp('consonantendings');
+  };
+  const closeConsonantEndings = () => {
+    setActiveApp('tutoring');
+    setConsonantEndingsRequest(null);
+  };
+
+  const openTimeAndCalendar = (request) => {
+    setTimeAndCalendarRequest(request || {});
+    setActiveApp('timeandcalendar');
+  };
+  const closeTimeAndCalendar = () => {
+    setActiveApp('tutoring');
+    setTimeAndCalendarRequest(null);
+  };
 
   const openInteractiveQuiz = (request) => {
     setInteractiveQuizRequest(request || {});
@@ -165,6 +187,8 @@ export default function App() {
           onOpenBurmeseLearningGames={openBurmeseLearningGames}
           onOpenInteractiveQuiz={openInteractiveQuiz}
           onOpenMyanmarPoems={openMyanmarPoems}
+          onOpenConsonantEndings={openConsonantEndings}
+          onOpenTimeAndCalendar={openTimeAndCalendar}
         />
       </div>
 
@@ -348,6 +372,34 @@ export default function App() {
           </div>
         )}
         <MyanmarPoemsApp entryRequest={myanmarPoemsRequest} onExit={closeMyanmarPoems} />
+      </div>
+
+      <div style={{ display: activeApp === 'consonantendings' ? 'block' : 'none' }}>
+        {activeApp === 'consonantendings' && (
+          <div className="fixed top-3 left-3 z-[9999]">
+            <button
+              onClick={closeConsonantEndings}
+              className="px-4 py-2 bg-gray-800 text-white rounded-full shadow-lg font-semibold text-sm hover:bg-gray-900"
+            >
+              ← Back to Tutoring Dashboard
+            </button>
+          </div>
+        )}
+        <MyanmarConsonantEndingsApp entryRequest={consonantEndingsRequest} onExit={closeConsonantEndings} />
+      </div>
+
+      <div style={{ display: activeApp === 'timeandcalendar' ? 'block' : 'none' }}>
+        {activeApp === 'timeandcalendar' && (
+          <div className="fixed top-3 left-3 z-[9999]">
+            <button
+              onClick={closeTimeAndCalendar}
+              className="px-4 py-2 bg-gray-800 text-white rounded-full shadow-lg font-semibold text-sm hover:bg-gray-900"
+            >
+              ← Back to Tutoring Dashboard
+            </button>
+          </div>
+        )}
+        <TimeAndCalendarApp entryRequest={timeAndCalendarRequest} onExit={closeTimeAndCalendar} />
       </div>
     </div>
   );
