@@ -143,6 +143,11 @@ const DHAMMASCHOOL_APP_URL = 'https://sayadawtejinda.github.io/dhamma/Dhammascho
 // ── Myanmar Speaking app (standalone HTML app — opened via window.open, NOT mounted as React component) ──
 // TODO: replace with the actual hosted URL once the Myanmar Speaking app is deployed (same pattern as Dhammaschool app).
 const MYANMAR_SPEAKING_APP_URL = 'https://sayadawtejinda.github.io/myanmar-wordcraft/';
+// Loose match instead of a strict startsWith(MYANMAR_SPEAKING_APP_URL) — an
+// older Lesson Bank entry may have been saved without the trailing slash, or
+// with http:// instead of https://, and would otherwise silently fall through
+// to the generic external-link opener (new tab, no auto-login, no minutes).
+const isMyanmarSpeakingUrl = (u) => typeof u === 'string' && u.includes('myanmar-wordcraft');
 
 // ── Myanmar Reader app (standalone HTML app — opened via window.open, NOT mounted as React component) ──
 // TODO: replace with the actual hosted URL once the Myanmar Reader app is deployed (same pattern as Myanmar Speaking app).
@@ -4690,7 +4695,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     // myanmar-speaking-app.jsx as the student uses it) and drop it straight
     // into "Today completed" — there's no chapter/unit structure here, so
     // minutes studied today is what the teacher reviews before awarding a trophy.
-    if (activeSession.lessonLink && MYANMAR_SPEAKING_APP_URL && activeSession.lessonLink.startsWith(MYANMAR_SPEAKING_APP_URL)) {
+    if (isMyanmarSpeakingUrl(activeSession.lessonLink)) {
       const stuName = studentProfile?.name;
       if (stuName) {
         try {
@@ -5342,7 +5347,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                   return;
                 }
                 if (!url.startsWith('http://') && !url.startsWith('https://')) url = `https://${url}`;
-                if (MYANMAR_SPEAKING_APP_URL && url.startsWith(MYANMAR_SPEAKING_APP_URL) && onOpenMyanmarSpeaking && studentProfile?.name) {
+                if (isMyanmarSpeakingUrl(url) && onOpenMyanmarSpeaking && studentProfile?.name) {
                   onOpenMyanmarSpeaking({ studentName: studentProfile.name });
                   setIsLessonOverlayOpen(true);
                   return;
