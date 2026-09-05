@@ -711,7 +711,7 @@ function AttendanceReports({ students, teacherSchedule, sessions }) {
   );
 }
 
-function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenConsonantPractice, onOpenBurmeseGame, onOpenMyanmarSpeaking }) {
+function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenConsonantPractice, onOpenBurmeseGame, onOpenMyanmarSpeaking, onOpenNumberLearning, onOpenVowelsLearning }) {
   const [students, setStudents] = useState([]);
   const [lessonBank, setLessonBank] = useState([]); 
   const [sessions, setSessions] = useState([]); 
@@ -2639,6 +2639,23 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
             <span className="flex items-center text-lg font-bold text-fuchsia-800">🕷️ Burmese Consonant Learning Game</span>
             <span className="text-fuchsia-500 text-xl">→</span>
           </button>
+          {/* Myanmar Number Learning / Vowels Learning — mounted inline like
+              the others above, same "no Firebase/trophy wiring yet" note as
+              Consonant Practice / Burmese Game. */}
+          <button
+            onClick={() => onOpenNumberLearning && onOpenNumberLearning({})}
+            className="w-full flex items-center justify-between bg-white p-4 rounded-xl border-2 border-rose-200 hover:border-rose-400 hover:shadow-md transition-all mt-3"
+          >
+            <span className="flex items-center text-lg font-bold text-rose-800">🔢 Myanmar Number Learning</span>
+            <span className="text-rose-500 text-xl">→</span>
+          </button>
+          <button
+            onClick={() => onOpenVowelsLearning && onOpenVowelsLearning({})}
+            className="w-full flex items-center justify-between bg-white p-4 rounded-xl border-2 border-violet-200 hover:border-violet-400 hover:shadow-md transition-all mt-3"
+          >
+            <span className="flex items-center text-lg font-bold text-violet-800">🔤 Myanmar Vowels Learning</span>
+            <span className="text-violet-500 text-xl">→</span>
+          </button>
           {/* Myanmar Speaking app — now mounted inline in the same project as
               the other apps above, instead of opening the separately-hosted
               myanmar-wordcraft deployment in a new tab. */}
@@ -3604,6 +3621,18 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                   <button type="button" onClick={() => setNewBankLessonLink('')} className="text-xs text-red-600 hover:text-red-800 font-semibold">Clear</button>
                 </div>
               )}
+              {newBankLessonLink === 'numberlearning://' && (
+                <div className="mt-2 flex items-center justify-between bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
+                  <span className="text-sm text-rose-800 font-semibold">🔢 Myanmar Number Learning app</span>
+                  <button type="button" onClick={() => setNewBankLessonLink('')} className="text-xs text-red-600 hover:text-red-800 font-semibold">Clear</button>
+                </div>
+              )}
+              {newBankLessonLink === 'vowelslearning://' && (
+                <div className="mt-2 flex items-center justify-between bg-violet-50 border border-violet-200 rounded-lg px-3 py-2">
+                  <span className="text-sm text-violet-800 font-semibold">🔤 Myanmar Vowels Learning app</span>
+                  <button type="button" onClick={() => setNewBankLessonLink('')} className="text-xs text-red-600 hover:text-red-800 font-semibold">Clear</button>
+                </div>
+              )}
 
               {showLinkPicker && (
                 <div className="absolute z-20 mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-xl p-3 max-h-96 overflow-y-auto">
@@ -3722,6 +3751,28 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                     className="w-full text-left p-2 rounded-lg hover:bg-fuchsia-50 border border-transparent hover:border-fuchsia-200 font-semibold text-gray-800 mt-1"
                   >
                     🕷️ Burmese Consonant Learning Game
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewBankLessonLink('numberlearning://');
+                      if (!newBankLessonTitle.trim()) setNewBankLessonTitle('Myanmar Number Learning');
+                      setShowLinkPicker(false);
+                    }}
+                    className="w-full text-left p-2 rounded-lg hover:bg-rose-50 border border-transparent hover:border-rose-200 font-semibold text-gray-800 mt-1"
+                  >
+                    🔢 Myanmar Number Learning app
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewBankLessonLink('vowelslearning://');
+                      if (!newBankLessonTitle.trim()) setNewBankLessonTitle('Myanmar Vowels Learning');
+                      setShowLinkPicker(false);
+                    }}
+                    className="w-full text-left p-2 rounded-lg hover:bg-violet-50 border border-transparent hover:border-violet-200 font-semibold text-gray-800 mt-1"
+                  >
+                    🔤 Myanmar Vowels Learning app
                   </button>
                 </div>
               )}
@@ -3960,7 +4011,7 @@ function SmartStudyProgressBadge({ classId, studentName, smartStudyNames, compac
   if (completedCount === null) return null;
 }
 
-function StudentDashboard({ user, studentProfile, studentUid, announcements, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenMyanmarSpeaking, onOpenConsonantPractice, onOpenBurmeseGame, onLogout }) {
+function StudentDashboard({ user, studentProfile, studentUid, announcements, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenMyanmarSpeaking, onOpenConsonantPractice, onOpenBurmeseGame, onOpenNumberLearning, onOpenVowelsLearning, onLogout }) {
   const [myLessons, setMyLessons] = useState([]);
   const [ssCompletionCounts, setSsCompletionCounts] = useState({}); // classId → SmartStudy completedCount
   const [mySessions, setMySessions] = useState([]);
@@ -4493,9 +4544,14 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       return;
     }
 
-    if (lesson.link === 'consonantpractice://' || lesson.link === 'burmesegame://') {
-      const isConsonant = lesson.link === 'consonantpractice://';
-      const opener = isConsonant ? onOpenConsonantPractice : onOpenBurmeseGame;
+    if (['consonantpractice://', 'burmesegame://', 'numberlearning://', 'vowelslearning://'].includes(lesson.link)) {
+      const openerByLink = {
+        'consonantpractice://': onOpenConsonantPractice,
+        'burmesegame://': onOpenBurmeseGame,
+        'numberlearning://': onOpenNumberLearning,
+        'vowelslearning://': onOpenVowelsLearning,
+      };
+      const opener = openerByLink[lesson.link];
       if (opener) opener({ studentName: studentProfile?.name || '' });
       if (lesson.status === 'pending') {
         try { await updateDoc(doc(db, `${publicDataPath}/lessons`, lesson.id), { status: 'started' }); } catch (e) {}
@@ -5417,6 +5473,14 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                 }
                 if (url && url.startsWith('burmesegame://')) {
                   if (onOpenBurmeseGame) onOpenBurmeseGame({ studentName: studentProfile?.name || '' });
+                  return;
+                }
+                if (url && url.startsWith('numberlearning://')) {
+                  if (onOpenNumberLearning) onOpenNumberLearning({ studentName: studentProfile?.name || '' });
+                  return;
+                }
+                if (url && url.startsWith('vowelslearning://')) {
+                  if (onOpenVowelsLearning) onOpenVowelsLearning({ studentName: studentProfile?.name || '' });
                   return;
                 }
                 if (!url.startsWith('http://') && !url.startsWith('https://')) url = `https://${url}`;
@@ -6604,7 +6668,7 @@ function DeactivatedScreen() {
   );
 }
 
-export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenConsonantPractice, onOpenBurmeseGame, onOpenMyanmarSpeaking }) {
+export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenConsonantPractice, onOpenBurmeseGame, onOpenMyanmarSpeaking, onOpenNumberLearning, onOpenVowelsLearning }) {
   const [user, setUser] = useState(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [role, setRole] = useState(null); 
@@ -7019,7 +7083,7 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpen
     switch (view) {
       case 'teacher':
         if (role !== 'teacher') return <TodaySchedule role={role} />; 
-        return <TeacherDashboard user={user} onOpenSmartStudy={onOpenSmartStudy} onOpenAbhidhamma={onOpenAbhidhamma} onOpenMyanmarReader={onOpenMyanmarReader} onOpenDhammaschool={onOpenDhammaschool} onOpenConsonantPractice={onOpenConsonantPractice} onOpenBurmeseGame={onOpenBurmeseGame} onOpenMyanmarSpeaking={onOpenMyanmarSpeaking} />;
+        return <TeacherDashboard user={user} onOpenSmartStudy={onOpenSmartStudy} onOpenAbhidhamma={onOpenAbhidhamma} onOpenMyanmarReader={onOpenMyanmarReader} onOpenDhammaschool={onOpenDhammaschool} onOpenConsonantPractice={onOpenConsonantPractice} onOpenBurmeseGame={onOpenBurmeseGame} onOpenMyanmarSpeaking={onOpenMyanmarSpeaking} onOpenNumberLearning={onOpenNumberLearning} onOpenVowelsLearning={onOpenVowelsLearning} />;
       case 'student':
         if (role !== 'student') return <TodaySchedule role={role} />; 
         if (!studentProfile) {
@@ -7029,7 +7093,7 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpen
             </div>
           );
         }
-        return <StudentDashboard user={user} studentProfile={studentProfile} studentUid={targetStudentUid} announcements={announcements} onOpenSmartStudy={onOpenSmartStudy} onOpenAbhidhamma={onOpenAbhidhamma} onOpenMyanmarReader={onOpenMyanmarReader} onOpenDhammaschool={onOpenDhammaschool} onOpenMyanmarSpeaking={onOpenMyanmarSpeaking} onOpenConsonantPractice={onOpenConsonantPractice} onOpenBurmeseGame={onOpenBurmeseGame} onLogout={handleStudentLogout} />;
+        return <StudentDashboard user={user} studentProfile={studentProfile} studentUid={targetStudentUid} announcements={announcements} onOpenSmartStudy={onOpenSmartStudy} onOpenAbhidhamma={onOpenAbhidhamma} onOpenMyanmarReader={onOpenMyanmarReader} onOpenDhammaschool={onOpenDhammaschool} onOpenMyanmarSpeaking={onOpenMyanmarSpeaking} onOpenConsonantPractice={onOpenConsonantPractice} onOpenBurmeseGame={onOpenBurmeseGame} onOpenNumberLearning={onOpenNumberLearning} onOpenVowelsLearning={onOpenVowelsLearning} onLogout={handleStudentLogout} />;
       case 'weekly': 
         return <WeeklySchedule role={role} targetStudentUid={targetStudentUid} />;
       case 'attendance':

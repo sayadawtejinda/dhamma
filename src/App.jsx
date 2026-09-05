@@ -7,6 +7,8 @@ import DhammaschoolApp from './DhammaschoolApp';
 import ConsonantPracticeApp from './ConsonantPracticeApp';
 import BurmeseConsonantGameApp from './BurmeseConsonantGameApp';
 import MyanmarSpeakingApp from './myanmar-speaking-app';
+import MyanmarNumberLearningApp from './MyanmarNumberLearningApp';
+import MyanmarVowelsLearningApp from './MyanmarVowelsLearningApp';
 
 export default function App() {
   const [activeApp, setActiveApp] = useState('tutoring');
@@ -17,6 +19,26 @@ export default function App() {
   const [consonantPracticeRequest, setConsonantPracticeRequest] = useState(null);
   const [burmeseGameRequest, setBurmeseGameRequest] = useState(null);
   const [myanmarSpeakingRequest, setMyanmarSpeakingRequest] = useState(null);
+  const [numberLearningRequest, setNumberLearningRequest] = useState(null);
+  const [vowelsLearningRequest, setVowelsLearningRequest] = useState(null);
+
+  const openNumberLearning = (request) => {
+    setNumberLearningRequest(request || {});
+    setActiveApp('numberlearning');
+  };
+  const closeNumberLearning = () => {
+    setActiveApp('tutoring');
+    setNumberLearningRequest(null);
+  };
+
+  const openVowelsLearning = (request) => {
+    setVowelsLearningRequest(request || {});
+    setActiveApp('vowelslearning');
+  };
+  const closeVowelsLearning = () => {
+    setActiveApp('tutoring');
+    setVowelsLearningRequest(null);
+  };
 
   const openMyanmarSpeaking = (request) => {
     setMyanmarSpeakingRequest(request || {});
@@ -93,6 +115,8 @@ export default function App() {
           onOpenConsonantPractice={openConsonantPractice}
           onOpenBurmeseGame={openBurmeseGame}
           onOpenMyanmarSpeaking={openMyanmarSpeaking}
+          onOpenNumberLearning={openNumberLearning}
+          onOpenVowelsLearning={openVowelsLearning}
         />
       </div>
 
@@ -192,6 +216,34 @@ export default function App() {
           </div>
         )}
         <MyanmarSpeakingApp entryRequest={myanmarSpeakingRequest} onExit={closeMyanmarSpeaking} />
+      </div>
+
+      <div style={{ display: activeApp === 'numberlearning' ? 'block' : 'none' }}>
+        {activeApp === 'numberlearning' && (
+          <div className="fixed top-3 left-3 z-[9999]">
+            <button
+              onClick={closeNumberLearning}
+              className="px-4 py-2 bg-gray-800 text-white rounded-full shadow-lg font-semibold text-sm hover:bg-gray-900"
+            >
+              ← Back to Tutoring Dashboard
+            </button>
+          </div>
+        )}
+        <MyanmarNumberLearningApp entryRequest={numberLearningRequest} onExit={closeNumberLearning} />
+      </div>
+
+      <div style={{ display: activeApp === 'vowelslearning' ? 'block' : 'none' }}>
+        {activeApp === 'vowelslearning' && (
+          <div className="fixed top-3 left-3 z-[9999]">
+            <button
+              onClick={closeVowelsLearning}
+              className="px-4 py-2 bg-gray-800 text-white rounded-full shadow-lg font-semibold text-sm hover:bg-gray-900"
+            >
+              ← Back to Tutoring Dashboard
+            </button>
+          </div>
+        )}
+        <MyanmarVowelsLearningApp entryRequest={vowelsLearningRequest} onExit={closeVowelsLearning} />
       </div>
     </div>
   );
