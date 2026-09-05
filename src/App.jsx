@@ -5,6 +5,7 @@ import AbhidhammaApp from './AbhidhammaApp';
 import MyanmarReaderApp from './MyanmarReaderApp';
 import DhammaschoolApp from './DhammaschoolApp';
 import ConsonantPracticeApp from './ConsonantPracticeApp';
+import BurmeseConsonantGameApp from './BurmeseConsonantGameApp';
 
 export default function App() {
   const [activeApp, setActiveApp] = useState('tutoring');
@@ -13,6 +14,16 @@ export default function App() {
   const [myanmarReaderRequest, setMyanmarReaderRequest] = useState(null);
   const [dhammaschoolRequest, setDhammaschoolRequest] = useState(null);
   const [consonantPracticeRequest, setConsonantPracticeRequest] = useState(null);
+  const [burmeseGameRequest, setBurmeseGameRequest] = useState(null);
+
+  const openBurmeseGame = (request) => {
+    setBurmeseGameRequest(request || {});
+    setActiveApp('burmesegame');
+  };
+  const closeBurmeseGame = () => {
+    setActiveApp('tutoring');
+    setBurmeseGameRequest(null);
+  };
 
   const openConsonantPractice = (request) => {
     setConsonantPracticeRequest(request || {});
@@ -69,6 +80,7 @@ export default function App() {
           onOpenMyanmarReader={openMyanmarReader}
           onOpenDhammaschool={openDhammaschool}
           onOpenConsonantPractice={openConsonantPractice}
+          onOpenBurmeseGame={openBurmeseGame}
         />
       </div>
 
@@ -140,6 +152,20 @@ export default function App() {
           </div>
         )}
         <ConsonantPracticeApp entryRequest={consonantPracticeRequest} onExit={closeConsonantPractice} />
+      </div>
+
+      <div style={{ display: activeApp === 'burmesegame' ? 'block' : 'none' }}>
+        {activeApp === 'burmesegame' && (
+          <div className="fixed top-3 left-3 z-[9999]">
+            <button
+              onClick={closeBurmeseGame}
+              className="px-4 py-2 bg-gray-800 text-white rounded-full shadow-lg font-semibold text-sm hover:bg-gray-900"
+            >
+              ← Back to Tutoring Dashboard
+            </button>
+          </div>
+        )}
+        <BurmeseConsonantGameApp entryRequest={burmeseGameRequest} onExit={closeBurmeseGame} />
       </div>
     </div>
   );

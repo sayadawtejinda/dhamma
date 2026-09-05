@@ -8,6 +8,16 @@ import React, { useEffect, useRef } from 'react';
 // querySelector/classList calls throughout, and re-authoring all of that
 // would be a large, risky rewrite for no functional benefit.
 //
+// IMPORTANT: every onclick="..." attribute in the static HTML resolves the
+// function it calls via the GLOBAL scope (that's just how inline HTML event
+// handlers work) — but the actual functions are declared inside this
+// component's useEffect closure, not as bare globals. window.__cpApp below
+// is what bridges that gap, and it's namespaced (not e.g. bare
+// window.toggleClickGame) specifically so a same-named function from a
+// different hybrid-wrapped app mounted alongside this one can't silently
+// overwrite it — see the note above window.__cpApp near the end of the
+// script for the full explanation.
+//
 // No Firebase/Firestore integration yet (per instructions — games + trophy
 // wiring come in a later pass); this is purely the "mount it inline instead
 // of a new tab" step for now.
@@ -18,10 +28,10 @@ const CONSONANT_APP_BODY_HTML = `
         <div id="pointing-hand" class="hidden">👆</div>
         
         <!-- 1. Settings -->
-        <div id="consonant-count-icon" class="number-icon-3d" onclick="changeConsonantCount()">3️⃣3️⃣</div>
+        <div id="consonant-count-icon" class="number-icon-3d" onclick="window.__cpApp.changeConsonantCount()">3️⃣3️⃣</div>
         
         <!-- 2. Step 1: Read Aloud -->
-        <div id="toggle-read-aloud-btn" onclick="toggleReadAloud()" class="play-button-icon bg-blue-500 hover:bg-blue-600 text-white">
+        <div id="toggle-read-aloud-btn" onclick="window.__cpApp.toggleReadAloud()" class="play-button-icon bg-blue-500 hover:bg-blue-600 text-white">
             <svg id="read-aloud-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
                 <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
@@ -29,39 +39,39 @@ const CONSONANT_APP_BODY_HTML = `
         </div>
 
         <!-- 3. Step 2: Waga (Bubble) Game -->
-        <div id="toggle-waga-btn" onclick="cycleWaga()" class="play-button-icon bg-purple-500 hover:bg-purple-600 text-white relative">
+        <div id="toggle-waga-btn" onclick="window.__cpApp.cycleWaga()" class="play-button-icon bg-purple-500 hover:bg-purple-600 text-white relative">
             <span id="waga-icon" class="text-xs font-bold text-center leading-tight">Ka<br>Group</span>
-            <div id="waga-play-btn" onclick="event.stopPropagation(); toggleWagaGame();" class="absolute -bottom-2 -right-2 w-7 h-7 bg-green-500 rounded-full flex items-center justify-center shadow-md">
+            <div id="waga-play-btn" onclick="event.stopPropagation(); window.__cpApp.toggleWagaGame();" class="absolute -bottom-2 -right-2 w-7 h-7 bg-green-500 rounded-full flex items-center justify-center shadow-md">
                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3L19 12 5 21z" fill="white"></path></svg>
             </div>
         </div>
         
         <!-- 4. Step 3: Matching Game -->
-        <div id="toggle-matching-btn" onclick="toggleMatchingGame()" class="play-button-icon bg-orange-500 hover:bg-orange-600 text-white">
+        <div id="toggle-matching-btn" onclick="window.__cpApp.toggleMatchingGame()" class="play-button-icon bg-orange-500 hover:bg-orange-600 text-white">
             <span class="text-lg">🧩</span>
         </div>
 
         <!-- 5. Step 4: Puzzle Game -->
-        <div id="toggle-puzzle-btn" onclick="togglePuzzleGame()" class="play-button-icon bg-pink-500 hover:bg-pink-600 text-white">
+        <div id="toggle-puzzle-btn" onclick="window.__cpApp.togglePuzzleGame()" class="play-button-icon bg-pink-500 hover:bg-pink-600 text-white">
             <span class="text-lg">⛓️</span>
         </div>
 
         <!-- 6. Manual: Click Game -->
-        <div id="toggle-click-btn" class="play-button-icon start" onclick="toggleClickGame()">
+        <div id="toggle-click-btn" class="play-button-icon start" onclick="window.__cpApp.toggleClickGame()">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-play">
                 <path d="M5 3L19 12 5 21z" fill="white"/>
             </svg>
         </div>
         
         <!-- 7. Manual: Typing Game -->
-        <div id="toggle-typing-btn" onclick="toggleTypingGame()" class="play-button-icon bg-green-500 hover:bg-green-600 text-white">
+        <div id="toggle-typing-btn" onclick="window.__cpApp.toggleTypingGame()" class="play-button-icon bg-green-500 hover:bg-green-600 text-white">
             <span class="text-lg">⌨️</span>
         </div>
         
     </div>
 
     <!-- Instruction Audio Toggle (Bottom Right) -->
-    <div id="audio-toggle-btn" onclick="toggleInstructionAudio()">
+    <div id="audio-toggle-btn" onclick="window.__cpApp.toggleInstructionAudio()">
         🔊
     </div>
 
@@ -79,142 +89,142 @@ const CONSONANT_APP_BODY_HTML = `
         <!-- Consonant Grid Section -->
         <div id="consonant-grid-container" class="consonant-grid-container mt-6 rounded-1g p-1">
             <div class="consonant-grid">
-                <div data-consonant="က" onclick="handleGridClick(this)" class="consonant-item bg-blue-100 hover:bg-blue-200">
+                <div data-consonant="က" onclick="window.__cpApp.handleGridClick(this)" class="consonant-item bg-blue-100 hover:bg-blue-200">
                     <span class="text-3xl font-semibold text-blue-900">က</span>
                     <span class="waga-counter" style="display: none;">0</span>
                 </div>
-                <div data-consonant="ခ" onclick="handleGridClick(this)" class="consonant-item bg-green-100 hover:bg-green-200">
+                <div data-consonant="ခ" onclick="window.__cpApp.handleGridClick(this)" class="consonant-item bg-green-100 hover:bg-green-200">
                     <span class="text-3xl font-semibold text-green-900">ခ</span>
                     <span class="waga-counter" style="display: none;">0</span>
                 </div>
-                <div data-consonant="ဂ" onclick="handleGridClick(this)" class="consonant-item bg-purple-100 hover:bg-purple-200">
+                <div data-consonant="ဂ" onclick="window.__cpApp.handleGridClick(this)" class="consonant-item bg-purple-100 hover:bg-purple-200">
                     <span class="text-3xl font-semibold text-purple-900">ဂ</span>
                     <span class="waga-counter" style="display: none;">0</span>
                 </div>
-                <div data-consonant="ဃ" onclick="handleGridClick(this)" class="consonant-item bg-yellow-100 hover:bg-yellow-200">
+                <div data-consonant="ဃ" onclick="window.__cpApp.handleGridClick(this)" class="consonant-item bg-yellow-100 hover:bg-yellow-200">
                     <span class="text-3xl font-semibold text-yellow-900">ဃ</span>
                     <span class="waga-counter" style="display: none;">0</span>
                 </div>
-                <div data-consonant="င" onclick="handleGridClick(this)" class="consonant-item bg-red-100 hover:bg-red-200">
+                <div data-consonant="င" onclick="window.__cpApp.handleGridClick(this)" class="consonant-item bg-red-100 hover:bg-red-200">
                     <span class="text-3xl font-semibold text-red-900">င</span>
                     <span class="waga-counter" style="display: none;">0</span>
                 </div>
-                <div data-consonant="စ" onclick="handleGridClick(this)" class="consonant-item bg-pink-100 hover:bg-pink-200">
+                <div data-consonant="စ" onclick="window.__cpApp.handleGridClick(this)" class="consonant-item bg-pink-100 hover:bg-pink-200">
                     <span class="text-3xl font-semibold text-pink-900">စ</span>
                     <span class="waga-counter" style="display: none;">0</span>
                 </div>
-                <div data-consonant="ဆ" onclick="handleGridClick(this)" class="consonant-item bg-indigo-100 hover:bg-indigo-200">
+                <div data-consonant="ဆ" onclick="window.__cpApp.handleGridClick(this)" class="consonant-item bg-indigo-100 hover:bg-indigo-200">
                     <span class="text-3xl font-semibold text-indigo-900">ဆ</span>
                     <span class="waga-counter" style="display: none;">0</span>
                 </div>
-                <div data-consonant="ဇ" onclick="handleGridClick(this)" class="consonant-item bg-teal-100 hover:bg-teal-200">
+                <div data-consonant="ဇ" onclick="window.__cpApp.handleGridClick(this)" class="consonant-item bg-teal-100 hover:bg-teal-200">
                     <span class="text-3xl font-semibold text-teal-900">ဇ</span>
                     <span class="waga-counter" style="display: none;">0</span>
                 </div>
-                <div data-consonant="ဈ" onclick="handleGridClick(this)" class="consonant-item bg-orange-100 hover:bg-orange-200">
+                <div data-consonant="ဈ" onclick="window.__cpApp.handleGridClick(this)" class="consonant-item bg-orange-100 hover:bg-orange-200">
                     <span class="text-3xl font-semibold text-orange-900">ဈ</span>
                     <span class="waga-counter" style="display: none;">0</span>
                 </div>
-                <div data-consonant="ည" onclick="handleGridClick(this)" class="consonant-item bg-gray-200 hover:bg-gray-300">
+                <div data-consonant="ည" onclick="window.__cpApp.handleGridClick(this)" class="consonant-item bg-gray-200 hover:bg-gray-300">
                     <span class="text-3xl font-semibold text-gray-900">ည</span>
                     <span class="waga-counter" style="display: none;">0</span>
                 </div>
-                <div data-consonant="ဋ" onclick="handleGridClick(this)" class="consonant-item bg-blue-100 hover:bg-blue-200">
+                <div data-consonant="ဋ" onclick="window.__cpApp.handleGridClick(this)" class="consonant-item bg-blue-100 hover:bg-blue-200">
                     <span class="text-3xl font-semibold text-blue-900">ဋ</span>
                     <span class="waga-counter" style="display: none;">0</span>
                 </div>
-                <div data-consonant="ဌ" onclick="handleGridClick(this)" class="consonant-item bg-green-100 hover:bg-green-200">
+                <div data-consonant="ဌ" onclick="window.__cpApp.handleGridClick(this)" class="consonant-item bg-green-100 hover:bg-green-200">
                     <span class="text-3xl font-semibold text-green-900">ဌ</span>
                     <span class="waga-counter" style="display: none;">0</span>
                 </div>
-                <div data-consonant="ဍ" onclick="handleGridClick(this)" class="consonant-item bg-purple-100 hover:bg-purple-200">
+                <div data-consonant="ဍ" onclick="window.__cpApp.handleGridClick(this)" class="consonant-item bg-purple-100 hover:bg-purple-200">
                     <span class="text-3xl font-semibold text-purple-900">ဍ</span>
                     <span class="waga-counter" style="display: none;">0</span>
                 </div>
-                <div data-consonant="ဎ" onclick="handleGridClick(this)" class="consonant-item bg-yellow-100 hover:bg-yellow-200">
+                <div data-consonant="ဎ" onclick="window.__cpApp.handleGridClick(this)" class="consonant-item bg-yellow-100 hover:bg-yellow-200">
                     <span class="text-3xl font-semibold text-yellow-900">ဎ</span>
                     <span class="waga-counter" style="display: none;">0</span>
                 </div>
-                <div data-consonant="ဏ" onclick="handleGridClick(this)" class="consonant-item bg-red-100 hover:bg-red-200">
+                <div data-consonant="ဏ" onclick="window.__cpApp.handleGridClick(this)" class="consonant-item bg-red-100 hover:bg-red-200">
                     <span class="text-3xl font-semibold text-red-900">ဏ</span>
                     <span class="waga-counter" style="display: none;">0</span>
                 </div>
-                <div data-consonant="တ" onclick="handleGridClick(this)" class="consonant-item bg-pink-100 hover:bg-pink-200">
+                <div data-consonant="တ" onclick="window.__cpApp.handleGridClick(this)" class="consonant-item bg-pink-100 hover:bg-pink-200">
                     <span class="text-3xl font-semibold text-pink-900">တ</span>
                     <span class="waga-counter" style="display: none;">0</span>
                 </div>
-                <div data-consonant="ထ" onclick="handleGridClick(this)" class="consonant-item bg-indigo-100 hover:bg-indigo-200">
+                <div data-consonant="ထ" onclick="window.__cpApp.handleGridClick(this)" class="consonant-item bg-indigo-100 hover:bg-indigo-200">
                     <span class="text-3xl font-semibold text-indigo-900">ထ</span>
                     <span class="waga-counter" style="display: none;">0</span>
                 </div>
-                <div data-consonant="ဒ" onclick="handleGridClick(this)" class="consonant-item bg-teal-100 hover:bg-teal-200">
+                <div data-consonant="ဒ" onclick="window.__cpApp.handleGridClick(this)" class="consonant-item bg-teal-100 hover:bg-teal-200">
                     <span class="text-3xl font-semibold text-teal-900">ဒ</span>
                     <span class="waga-counter" style="display: none;">0</span>
                 </div>
-                <div data-consonant="ဓ" onclick="handleGridClick(this)" class="consonant-item bg-orange-100 hover:bg-orange-200">
+                <div data-consonant="ဓ" onclick="window.__cpApp.handleGridClick(this)" class="consonant-item bg-orange-100 hover:bg-orange-200">
                     <span class="text-3xl font-semibold text-orange-900">ဓ</span>
                     <span class="waga-counter" style="display: none;">0</span>
                 </div>
-                <div data-consonant="န" onclick="handleGridClick(this)" class="consonant-item bg-gray-200 hover:bg-gray-300">
+                <div data-consonant="န" onclick="window.__cpApp.handleGridClick(this)" class="consonant-item bg-gray-200 hover:bg-gray-300">
                     <span class="text-3xl font-semibold text-gray-900">န</span>
                     <span class="waga-counter" style="display: none;">0</span>
                 </div>
-                <div data-consonant="ပ" onclick="handleGridClick(this)" class="consonant-item bg-blue-100 hover:bg-blue-200">
+                <div data-consonant="ပ" onclick="window.__cpApp.handleGridClick(this)" class="consonant-item bg-blue-100 hover:bg-blue-200">
                     <span class="text-3xl font-semibold text-blue-900">ပ</span>
                     <span class="waga-counter" style="display: none;">0</span>
                 </div>
-                <div data-consonant="ဖ" onclick="handleGridClick(this)" class="consonant-item bg-green-100 hover:bg-green-200">
+                <div data-consonant="ဖ" onclick="window.__cpApp.handleGridClick(this)" class="consonant-item bg-green-100 hover:bg-green-200">
                     <span class="text-3xl font-semibold text-green-900">ဖ</span>
                     <span class="waga-counter" style="display: none;">0</span>
                 </div>
-                <div data-consonant="ဗ" onclick="handleGridClick(this)" class="consonant-item bg-purple-100 hover:bg-purple-200">
+                <div data-consonant="ဗ" onclick="window.__cpApp.handleGridClick(this)" class="consonant-item bg-purple-100 hover:bg-purple-200">
                     <span class="text-3xl font-semibold text-purple-900">ဗ</span>
                     <span class="waga-counter" style="display: none;">0</span>
                 </div>
-                <div data-consonant="ဘ" onclick="handleGridClick(this)" class="consonant-item bg-yellow-100 hover:bg-yellow-200">
+                <div data-consonant="ဘ" onclick="window.__cpApp.handleGridClick(this)" class="consonant-item bg-yellow-100 hover:bg-yellow-200">
                     <span class="text-3xl font-semibold text-yellow-900">ဘ</span>
                     <span class="waga-counter" style="display: none;">0</span>
                 </div>
-                <div data-consonant="မ" onclick="handleGridClick(this)" class="consonant-item bg-red-100 hover:bg-red-200">
+                <div data-consonant="မ" onclick="window.__cpApp.handleGridClick(this)" class="consonant-item bg-red-100 hover:bg-red-200">
                     <span class="text-3xl font-semibold text-red-900">မ</span>
                     <span class="waga-counter" style="display: none;">0</span>
                 </div>
-                <div data-consonant="ယ" onclick="handleGridClick(this)" class="consonant-item bg-pink-100 hover:bg-pink-200">
+                <div data-consonant="ယ" onclick="window.__cpApp.handleGridClick(this)" class="consonant-item bg-pink-100 hover:bg-pink-200">
                     <span class="text-3xl font-semibold text-pink-900">ယ</span>
                     <span class="waga-counter" style="display: none;">0</span>
                 </div>
-                <div data-consonant="ရ" onclick="handleGridClick(this)" class="consonant-item bg-indigo-100 hover:bg-indigo-200">
+                <div data-consonant="ရ" onclick="window.__cpApp.handleGridClick(this)" class="consonant-item bg-indigo-100 hover:bg-indigo-200">
                     <span class="text-3xl font-semibold text-indigo-900">ရ</span>
                     <span class="waga-counter" style="display: none;">0</span>
                 </div>
-                <div data-consonant="လ" onclick="handleGridClick(this)" class="consonant-item bg-teal-100 hover:bg-teal-200">
+                <div data-consonant="လ" onclick="window.__cpApp.handleGridClick(this)" class="consonant-item bg-teal-100 hover:bg-teal-200">
                     <span class="text-3xl font-semibold text-teal-900">လ</span>
                     <span class="waga-counter" style="display: none;">0</span>
                 </div>
-                <div data-consonant="ဝ" onclick="handleGridClick(this)" class="consonant-item bg-orange-100 hover:bg-orange-200">
+                <div data-consonant="ဝ" onclick="window.__cpApp.handleGridClick(this)" class="consonant-item bg-orange-100 hover:bg-orange-200">
                     <span class="text-3xl font-semibold text-orange-900">ဝ</span>
                     <span class="waga-counter" style="display: none;">0</span>
                 </div>
-                <div data-consonant="သ" onclick="handleGridClick(this)" class="consonant-item bg-gray-200 hover:bg-gray-300">
+                <div data-consonant="သ" onclick="window.__cpApp.handleGridClick(this)" class="consonant-item bg-gray-200 hover:bg-gray-300">
                     <span class="text-3xl font-semibold text-gray-900">သ</span>
                     <span class="waga-counter" style="display: none;">0</span>
                 </div>
-                <div data-consonant="" onclick="handleGridClick(this)" class="consonant-item inactive">
+                <div data-consonant="" onclick="window.__cpApp.handleGridClick(this)" class="consonant-item inactive">
                     <span class="text-3xl font-semibold text-gray-100"></span>
                 </div>
-                <div data-consonant="ဟ" onclick="handleGridClick(this)" class="consonant-item bg-green-100 hover:bg-green-200">
+                <div data-consonant="ဟ" onclick="window.__cpApp.handleGridClick(this)" class="consonant-item bg-green-100 hover:bg-green-200">
                     <span class="text-3xl font-semibold text-green-900">ဟ</span>
                     <span class="waga-counter" style="display: none;">0</span>
                 </div>
-                <div data-consonant="ဠ" onclick="handleGridClick(this)" class="consonant-item bg-purple-100 hover:bg-purple-200">
+                <div data-consonant="ဠ" onclick="window.__cpApp.handleGridClick(this)" class="consonant-item bg-purple-100 hover:bg-purple-200">
                     <span class="text-3xl font-semibold text-purple-900">ဠ</span>
                     <span class="waga-counter" style="display: none;">0</span>
                 </div>
-                <div data-consonant="အ" onclick="handleGridClick(this)" class="consonant-item bg-yellow-100 hover:bg-yellow-200">
+                <div data-consonant="အ" onclick="window.__cpApp.handleGridClick(this)" class="consonant-item bg-yellow-100 hover:bg-yellow-200">
                     <span class="text-3xl font-semibold text-yellow-900">အ</span>
                     <span class="waga-counter" style="display: none;">0</span>
                 </div>
-                <div data-consonant="" onclick="handleGridClick(this)" class="consonant-item inactive">
+                <div data-consonant="" onclick="window.__cpApp.handleGridClick(this)" class="consonant-item inactive">
                     <span class="text-3xl font-semibold text-gray-100"></span>
                 </div>
             </div>
@@ -2084,17 +2094,6 @@ export default function ConsonantPracticeApp({ entryRequest, onExit }) {
             updateGridVisibility();
             setTimeout(() => setHandPosition(0), 100);
         }
-        // onclick="..." attribute တွေက window ပေါ်ကရှာလို့ function တွေကို window ပေါ်တင်ပေးရမယ်
-        window.changeConsonantCount = changeConsonantCount;
-        window.toggleReadAloud = toggleReadAloud;
-        window.cycleWaga = cycleWaga;
-        window.toggleWagaGame = toggleWagaGame;
-        window.toggleMatchingGame = toggleMatchingGame;
-        window.togglePuzzleGame = togglePuzzleGame;
-        window.toggleClickGame = toggleClickGame;
-        window.toggleTypingGame = toggleTypingGame;
-        window.toggleInstructionAudio = toggleInstructionAudio;
-        window.handleGridClick = handleGridClick;
 
         // --- Event Listeners ---
         // Scoped to this app's own container (rootEl), not document.body —
@@ -2121,19 +2120,25 @@ export default function ConsonantPracticeApp({ entryRequest, onExit }) {
         // call it directly instead.
         initializeApp();
 
+        // Every onclick="..." attribute in the static HTML above (the whole
+        // consonant grid, game buttons, etc.) resolves the function it calls
+        // via the GLOBAL scope — that's just how inline HTML event handler
+        // attributes work, regardless of where the actual function was
+        // declared. Since these functions are declared here inside this
+        // component's own useEffect closure (not as bare globals), they'd
+        // otherwise be unreachable from those onclick attributes. Exporting
+        // them under one object namespaced to THIS app (window.__cpApp)
+        // makes them reachable again without dumping generic names like
+        // "toggleClickGame" directly onto the shared window object, where a
+        // same-named function from a different app mounted alongside this
+        // one could silently overwrite it.
+        window.__cpApp = {
+          changeConsonantCount, cycleWaga, toggleWagaGame, handleGridClick,
+          toggleClickGame, toggleInstructionAudio, toggleMatchingGame,
+          togglePuzzleGame, toggleReadAloud, toggleTypingGame,
+        };
 
-      return () => {
-      delete window.changeConsonantCount;
-      delete window.toggleReadAloud;
-      delete window.cycleWaga;
-      delete window.toggleWagaGame;
-      delete window.toggleMatchingGame;
-      delete window.togglePuzzleGame;
-      delete window.toggleClickGame;
-      delete window.toggleTypingGame;
-      delete window.toggleInstructionAudio;
-      delete window.handleGridClick;
-    };
+
   }, []);
 
   return (
