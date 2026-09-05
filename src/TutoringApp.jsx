@@ -3798,7 +3798,7 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
 // renamed, so we also look up the Smart Study roster name (the name used in
 // quizCompletions) via the classRoster collection and query with whichever
 // name(s) appear there, falling back to the Tutoring name if nothing is found.
-function SmartStudyProgressBadge({ classId, studentName, smartStudyNames, compact, autoTrophy, onCountChange }) {
+function SmartStudyProgressBadge({ classId, studentName, smartStudyNames, compact, onCountChange }) {
   const [completedCount, setCompletedCount] = useState(null);
   const [totalCount, setTotalCount] = useState(null);
   const [badError, setBadError] = useState(false);
@@ -3902,39 +3902,17 @@ function SmartStudyProgressBadge({ classId, studentName, smartStudyNames, compac
     }
   }, [classId]);
 
-  // Auto-request trophies based on Smart Study completion count — no manual
-  // report needed. Only runs on the student side (autoTrophy prop supplied).
-  // Still goes through the teacher's normal Approve step, same as any other
-  // trophy request, for consistency and safety.
-  useEffect(() => {
-    if (!autoTrophy || completedCount === null) return;
-    const { studentUid, unitCount, trophyLimit, lessonKey, earnedSoFar, alreadyRequested, completedUnitsTracked } = autoTrophy;
-    if (!studentUid || !unitCount || !trophyLimit || alreadyRequested) return;
-    const effectiveUnit = Math.min(unitCount, completedCount);
-    if (effectiveUnit <= completedUnitsTracked && earnedSoFar >= trophyLimit) return;
-    const deservedSoFar = Math.min(trophyLimit, Math.floor((effectiveUnit * trophyLimit) / unitCount));
-    const newlyAvailable = Math.max(0, deservedSoFar - earnedSoFar);
-    if (newlyAvailable <= 0 && effectiveUnit <= completedUnitsTracked) return;
-    (async () => {
-      try {
-        const updateData = {};
-        if (effectiveUnit > completedUnitsTracked) updateData[`completedUnits.${lessonKey}`] = effectiveUnit;
-        if (newlyAvailable > 0) {
-          updateData.trophyRequested = true;
-          updateData.requestedTrophyAmount = newlyAvailable;
-          updateData.requestedTrophyLessonId = null;
-          updateData.requestedTrophyLessonTitle = `Smart Study: ${classId}`;
-          updateData.requestedTrophyLessonLink = `smartstudy://${classId}`;
-          updateData.requestedTrophySessionId = null;
-        }
-        if (Object.keys(updateData).length > 0) {
-          await updateDoc(doc(db, `${publicDataPath}/students`, studentUid), updateData);
-        }
-      } catch (err) {
-        console.error('Error auto-requesting Smart Study trophy:', err);
-      }
-    })();
-  }, [autoTrophy, completedCount, classId]);
+  // Trophies for Smart Study now only ever come through the same "Report" +
+  // Lesson-completed flow as every other linked app (Abhidhamma/
+  // Dhammaschool/Myanmar Reader) — this used to also auto-request trophies
+  // live, straight from this badge, the moment completedCount crossed a
+  // threshold, entirely separate from the Report button. That caused a
+  // request loop: rejecting a request only cleared trophyRequested, it never
+  // advanced completedUnits, so the very next re-render saw "not yet
+  // requested" again and immediately fired a fresh request — denying it did
+  // nothing but produce another identical request a moment later. Removed
+  // for good; see handleSubmitFeedback for the one real path a Smart Study
+  // trophy request can come from now.
 
   if (badError) return null;
   if (completedCount === null) return null;
@@ -5448,15 +5426,6 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                         studentName={studentProfile?.name}
                         smartStudyNames={studentProfile?.smartStudyNames || null}
                         onCountChange={(count) => setSsCompletionCounts(prev => ({ ...prev, [extractSmartStudyClassId(lesson.link)]: count }))}
-                        autoTrophy={{
-                          studentUid,
-                          unitCount: lesson.unitCount || 0,
-                          trophyLimit: lesson.trophyLimit || 0,
-                          lessonKey: lessonKeyList,
-                          earnedSoFar: previouslyEarnedList,
-                          completedUnitsTracked: trackedCompletedUnit,
-                          alreadyRequested: !!studentProfile?.trophyRequested
-                        }}
                       />
                     )}
                     {/* One unified message for every app (SmartStudy included) — same
