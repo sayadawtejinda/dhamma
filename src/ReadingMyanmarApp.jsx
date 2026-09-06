@@ -50,7 +50,7 @@ function ReadingMyanmarLoading() {
 }
 
 export default function ReadingMyanmarApp({ entryRequest, onExit }) {
-  const [activePart, setActivePart] = useState(null);
+  const [activePart, setActivePart] = useState(() => entryRequest?.initialPart || null);
   const studentName = entryRequest?.studentName || null;
   const [onlineStudents, setOnlineStudents] = useState([]);
   const [showOnlinePanel, setShowOnlinePanel] = useState(false);

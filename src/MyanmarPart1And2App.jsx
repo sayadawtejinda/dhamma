@@ -39,7 +39,7 @@ function P1And2Loading() {
 }
 
 export default function MyanmarPart1And2App({ entryRequest, onExit }) {
-  const [activePart, setActivePart] = useState(null);
+  const [activePart, setActivePart] = useState(() => entryRequest?.initialPart || null);
   const studentName = entryRequest?.studentName || null;
   const [onlineStudents, setOnlineStudents] = useState([]);
   const [showOnlinePanel, setShowOnlinePanel] = useState(false);

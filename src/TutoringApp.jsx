@@ -175,6 +175,63 @@ const extractClassIdFromLink = (link) => {
   if (link.startsWith('dhammaschool://')) return extractDhammaschoolClassId(link);
   return null;
 };
+
+// ── Grouped apps (Reading Myanmar / Speaking Myanmar / Myanmar Part 1 & 2) ──
+// Each bundles several games behind one "Choose a Part" screen (see
+// ReadingMyanmarApp.jsx etc). A Lesson Bank entry for one of these is
+// stored as the bare scheme (e.g. "readingmyanmar://"); the specific part
+// is chosen at Assign Lesson time (same "not baked into the bank entry"
+// idea as smartstudy://) and appended as "readingmyanmar://<partKey>" on
+// the assigned lesson, so the student's copy jumps straight into that part
+// instead of showing the chooser, and Available Lessons can show which
+// part it is. These lists must stay in sync with the PARTS arrays in the
+// three group files.
+const READING_MYANMAR_PARTS = [
+  { key: 'consonantpractice', label: 'Part 1: Consonant Practice' },
+  { key: 'burmesegame', label: 'Part 2: Burmese Consonant Game' },
+  { key: 'vowelslearning', label: 'Part 3: Myanmar Vowels' },
+  { key: 'myanmarspelling', label: 'Part 4: Myanmar Spelling' },
+  { key: 'consonantendings', label: 'Part 5: Consonant Endings' },
+  { key: 'soundpractice', label: 'Part 6: Sound Practice' },
+];
+const SPEAKING_MYANMAR_PARTS = [
+  { key: 'myanmarpoems', label: 'Part 1: Myanmar Poems' },
+  { key: 'numberlearning', label: 'Part 2: Number Learning' },
+  { key: 'animalsound', label: 'Part 3: Animal Sound Quiz' },
+  { key: 'burmeselearninggames', label: 'Part 4: Burmese Learning Games' },
+  { key: 'interactivequiz', label: 'Part 5: Interactive Learning Quiz' },
+  { key: 'timeandcalendar', label: 'Part 6: Time and Calendar' },
+];
+const MYANMAR_PART1AND2_PARTS = [
+  { key: 'part1a', label: 'Part 1A: Myanmar Learning & Game' },
+  { key: 'part1b', label: 'Part 1B: Kindergarten Classroom' },
+  { key: 'part2a', label: 'Part 2A: Chapters 15-28 Vocabulary' },
+  { key: 'part2b', label: 'Part 2B: Chapters 15-29 Reading' },
+];
+const GROUP_PARTS_BY_SCHEME = {
+  'readingmyanmar://': READING_MYANMAR_PARTS,
+  'speakingmyanmar://': SPEAKING_MYANMAR_PARTS,
+  'myanmarpart1and2://': MYANMAR_PART1AND2_PARTS,
+};
+const extractGroupPartKey = (link) => {
+  if (!link) return null;
+  for (const scheme of Object.keys(GROUP_PARTS_BY_SCHEME)) {
+    if (link.startsWith(scheme) && link !== scheme) return link.replace(scheme, '');
+  }
+  return null;
+};
+const groupPartLabel = (scheme, partKey) => {
+  const parts = GROUP_PARTS_BY_SCHEME[scheme];
+  const part = parts && parts.find(p => p.key === partKey);
+  return part ? part.label : null;
+};
+const groupSchemeOfLink = (link) => {
+  if (!link) return null;
+  for (const scheme of Object.keys(GROUP_PARTS_BY_SCHEME)) {
+    if (link === scheme || link.startsWith(scheme)) return scheme;
+  }
+  return null;
+};
 const computeLessonKey = (title, link) => {
   const classId = extractClassIdFromLink(link);
   return sanitizeKey(classId ? `${title}_${classId}` : title);
@@ -762,6 +819,7 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyan
   const [selectedStudentUid, setSelectedStudentUid] = useState('');
   const [selectedBankLessonId, setSelectedBankLessonId] = useState('');
   const [sendSmartStudyClassId, setSendSmartStudyClassId] = useState(''); // class chosen in Send Action for smartstudy:// lessons
+  const [sendGroupPartKey, setSendGroupPartKey] = useState(''); // part chosen in Send Action for readingmyanmar:// / speakingmyanmar:// / myanmarpart1and2:// lessons
   // SmartStudy completion counts for the selected student (loaded when student+lesson are selected)
   const [ssStudentClassCount, setSsStudentClassCount] = useState(null);   // per-class (e.g. BUDDHA)
   const [ssStudentTotalCount, setSsStudentTotalCount] = useState(null);   // all classes combined
@@ -1317,6 +1375,7 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyan
       if (lessonToSend.link === 'smartstudy://' && sendSmartStudyClassId) return `smartstudy://${sendSmartStudyClassId}`;
       if (lessonToSend.link === 'abhidhamma://' && sendAbhidhammaClassId) return `abhidhamma://${sendAbhidhammaClassId}`;
       if (lessonToSend.link === 'dhammaschool://' && sendDhammaschoolClassId) return `dhammaschool://${sendDhammaschoolClassId}`;
+      if (GROUP_PARTS_BY_SCHEME[lessonToSend.link] && sendGroupPartKey) return `${lessonToSend.link}${sendGroupPartKey}`;
       return lessonToSend.link;
     })();
 
@@ -1418,6 +1477,7 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyan
     if (lesson.link === 'smartstudy://' && sendSmartStudyClassId) return `smartstudy://${sendSmartStudyClassId}`;
     if (lesson.link === 'abhidhamma://' && sendAbhidhammaClassId) return `abhidhamma://${sendAbhidhammaClassId}`;
     if (lesson.link === 'dhammaschool://' && sendDhammaschoolClassId) return `dhammaschool://${sendDhammaschoolClassId}`;
+    if (GROUP_PARTS_BY_SCHEME[lesson.link] && sendGroupPartKey) return `${lesson.link}${sendGroupPartKey}`;
     return lesson.link;
   };
 
@@ -2726,96 +2786,12 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
               No teacher/student distinction yet (no Firebase wiring in this
               app currently — that, plus trophy/score integration, comes in a
               later pass), so this just switches straight to it. */}
-          <button
-            onClick={() => onOpenConsonantPractice && onOpenConsonantPractice({})}
-            className="w-full flex items-center justify-between bg-white p-4 rounded-xl border-2 border-cyan-200 hover:border-cyan-400 hover:shadow-md transition-all mt-3"
-          >
-            <span className="flex items-center text-lg font-bold text-cyan-800">🔤 Myanmar Consonant Practice</span>
-            <span className="text-cyan-500 text-xl">→</span>
-          </button>
           {/* Burmese Consonant Learning Game — mounted inline like the others.
               No Firebase/trophy wiring yet either, same as Consonant Practice
               above (comes in a later pass). */}
-          <button
-            onClick={() => onOpenBurmeseGame && onOpenBurmeseGame({})}
-            className="w-full flex items-center justify-between bg-white p-4 rounded-xl border-2 border-fuchsia-200 hover:border-fuchsia-400 hover:shadow-md transition-all mt-3"
-          >
-            <span className="flex items-center text-lg font-bold text-fuchsia-800">🕷️ Burmese Consonant Learning Game</span>
-            <span className="text-fuchsia-500 text-xl">→</span>
-          </button>
           {/* Myanmar Number Learning / Vowels Learning — mounted inline like
               the others above, same "no Firebase/trophy wiring yet" note as
               Consonant Practice / Burmese Game. */}
-          <button
-            onClick={() => onOpenNumberLearning && onOpenNumberLearning({})}
-            className="w-full flex items-center justify-between bg-white p-4 rounded-xl border-2 border-rose-200 hover:border-rose-400 hover:shadow-md transition-all mt-3"
-          >
-            <span className="flex items-center text-lg font-bold text-rose-800">🔢 Myanmar Number Learning</span>
-            <span className="text-rose-500 text-xl">→</span>
-          </button>
-          <button
-            onClick={() => onOpenVowelsLearning && onOpenVowelsLearning({})}
-            className="w-full flex items-center justify-between bg-white p-4 rounded-xl border-2 border-violet-200 hover:border-violet-400 hover:shadow-md transition-all mt-3"
-          >
-            <span className="flex items-center text-lg font-bold text-violet-800">🔤 Myanmar Vowels Learning</span>
-            <span className="text-violet-500 text-xl">→</span>
-          </button>
-          <button
-            onClick={() => onOpenAnimalSound && onOpenAnimalSound({})}
-            className="w-full flex items-center justify-between bg-white p-4 rounded-xl border-2 border-sky-200 hover:border-sky-400 hover:shadow-md transition-all mt-3"
-          >
-            <span className="flex items-center text-lg font-bold text-sky-800">🐾 Animal Sound Quiz</span>
-            <span className="text-sky-500 text-xl">→</span>
-          </button>
-          <button
-            onClick={() => onOpenBurmeseLearningGames && onOpenBurmeseLearningGames({})}
-            className="w-full flex items-center justify-between bg-white p-4 rounded-xl border-2 border-lime-200 hover:border-lime-400 hover:shadow-md transition-all mt-3"
-          >
-            <span className="flex items-center text-lg font-bold text-lime-800">🎮 Burmese Learning Games</span>
-            <span className="text-lime-500 text-xl">→</span>
-          </button>
-          <button
-            onClick={() => onOpenInteractiveQuiz && onOpenInteractiveQuiz({})}
-            className="w-full flex items-center justify-between bg-white p-4 rounded-xl border-2 border-rose-200 hover:border-rose-400 hover:shadow-md transition-all mt-3"
-          >
-            <span className="flex items-center text-lg font-bold text-rose-800">🧠 Interactive Learning Quiz</span>
-            <span className="text-rose-500 text-xl">→</span>
-          </button>
-          <button
-            onClick={() => onOpenMyanmarPoems && onOpenMyanmarPoems({})}
-            className="w-full flex items-center justify-between bg-white p-4 rounded-xl border-2 border-emerald-200 hover:border-emerald-400 hover:shadow-md transition-all mt-3"
-          >
-            <span className="flex items-center text-lg font-bold text-emerald-800">📖 Myanmar Poems</span>
-            <span className="text-emerald-500 text-xl">→</span>
-          </button>
-          <button
-            onClick={() => onOpenConsonantEndings && onOpenConsonantEndings({})}
-            className="w-full flex items-center justify-between bg-white p-4 rounded-xl border-2 border-fuchsia-200 hover:border-fuchsia-400 hover:shadow-md transition-all mt-3"
-          >
-            <span className="flex items-center text-lg font-bold text-fuchsia-800">🔤 Myanmar Consonant Endings</span>
-            <span className="text-fuchsia-500 text-xl">→</span>
-          </button>
-          <button
-            onClick={() => onOpenTimeAndCalendar && onOpenTimeAndCalendar({})}
-            className="w-full flex items-center justify-between bg-white p-4 rounded-xl border-2 border-cyan-200 hover:border-cyan-400 hover:shadow-md transition-all mt-3"
-          >
-            <span className="flex items-center text-lg font-bold text-cyan-800">🕐 Time and Calendar</span>
-            <span className="text-cyan-500 text-xl">→</span>
-          </button>
-          <button
-            onClick={() => onOpenMyanmarSpelling && onOpenMyanmarSpelling({})}
-            className="w-full flex items-center justify-between bg-white p-4 rounded-xl border-2 border-violet-200 hover:border-violet-400 hover:shadow-md transition-all mt-3"
-          >
-            <span className="flex items-center text-lg font-bold text-violet-800">✍️ Myanmar Spelling</span>
-            <span className="text-violet-500 text-xl">→</span>
-          </button>
-          <button
-            onClick={() => onOpenMyanmarSoundPractice && onOpenMyanmarSoundPractice({})}
-            className="w-full flex items-center justify-between bg-white p-4 rounded-xl border-2 border-rose-200 hover:border-rose-400 hover:shadow-md transition-all mt-3"
-          >
-            <span className="flex items-center text-lg font-bold text-rose-800">🔊 Myanmar Sound Practice</span>
-            <span className="text-rose-500 text-xl">→</span>
-          </button>
           {/* Combined group entry — bundles Consonant Practice, Burmese
               Consonant Game, Vowels, Spelling, Consonant Endings and Sound
               Practice behind one "Choose a Part" screen so a teacher can
@@ -3005,7 +2981,7 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
           
           <div className="mb-4">
             <label className="block text-gray-700 mb-2">Select Lesson from Bank</label>
-            <select value={selectedBankLessonId} onChange={(e) => { setSelectedBankLessonId(e.target.value); setSendSmartStudyClassId(''); setSendAbhidhammaClassId(''); }} className="w-full p-3 border rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <select value={selectedBankLessonId} onChange={(e) => { setSelectedBankLessonId(e.target.value); setSendSmartStudyClassId(''); setSendAbhidhammaClassId(''); setSendGroupPartKey(''); }} className="w-full p-3 border rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500">
               <option value="" disabled>-- Select a lesson --</option>
               {lessonBank.map(lesson => <option key={lesson.id} value={lesson.id}>{lesson.title} ({lesson.details})</option>)}
             </select>
@@ -3123,6 +3099,33 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                     ? <p className="text-sm text-orange-700">{student.name} completed <strong>{dhammaschoolStudentProgress.completedCount}</strong> / {dhammaschoolStudentProgress.totalLessons} lesson{dhammaschoolStudentProgress.totalLessons !== 1 ? 's' : ''} · Total score: <strong>{(dhammaschoolStudentProgress.score || 0).toLocaleString()} pts</strong></p>
                     : <p className="text-sm text-orange-600">No public lessons in this class yet.</p>
                 }
+              </div>
+            );
+          })()}
+
+          {/* Grouped apps (Reading Myanmar / Speaking Myanmar / Myanmar Part 1 & 2)
+              — choose which part to send, same "not baked into the bank
+              entry" idea as Smart Study's class picker, but the part list
+              is static (no Firestore fetch needed). */}
+          {(() => {
+            const selectedLesson = lessonBank.find(l => l.id === selectedBankLessonId);
+            const scheme = selectedLesson ? groupSchemeOfLink(selectedLesson.link) : null;
+            if (!selectedLesson || !scheme || selectedLesson.link !== scheme) return null;
+            const parts = GROUP_PARTS_BY_SCHEME[scheme];
+            const appLabel = selectedLesson.title || 'this app';
+            return (
+              <div className="mb-4">
+                <label className="block text-gray-700 mb-2 font-medium">{appLabel} — choose a Part</label>
+                <select
+                  value={sendGroupPartKey}
+                  onChange={(e) => setSendGroupPartKey(e.target.value)}
+                  className="w-full p-3 border rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="" disabled>-- Choose a part --</option>
+                  {parts.map(p => (
+                    <option key={p.key} value={p.key}>{p.label}</option>
+                  ))}
+                </select>
               </div>
             );
           })()}
@@ -3800,78 +3803,6 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                   </div>
                 );
               })()}
-              {newBankLessonLink === 'consonantpractice://' && (
-                <div className="mt-2 flex items-center justify-between bg-cyan-50 border border-cyan-200 rounded-lg px-3 py-2">
-                  <span className="text-sm text-cyan-800 font-semibold">🔤 Myanmar Consonant Practice app</span>
-                  <button type="button" onClick={() => setNewBankLessonLink('')} className="text-xs text-red-600 hover:text-red-800 font-semibold">Clear</button>
-                </div>
-              )}
-              {newBankLessonLink === 'burmesegame://' && (
-                <div className="mt-2 flex items-center justify-between bg-fuchsia-50 border border-fuchsia-200 rounded-lg px-3 py-2">
-                  <span className="text-sm text-fuchsia-800 font-semibold">🕷️ Burmese Consonant Learning Game</span>
-                  <button type="button" onClick={() => setNewBankLessonLink('')} className="text-xs text-red-600 hover:text-red-800 font-semibold">Clear</button>
-                </div>
-              )}
-              {newBankLessonLink === 'numberlearning://' && (
-                <div className="mt-2 flex items-center justify-between bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
-                  <span className="text-sm text-rose-800 font-semibold">🔢 Myanmar Number Learning app</span>
-                  <button type="button" onClick={() => setNewBankLessonLink('')} className="text-xs text-red-600 hover:text-red-800 font-semibold">Clear</button>
-                </div>
-              )}
-              {newBankLessonLink === 'vowelslearning://' && (
-                <div className="mt-2 flex items-center justify-between bg-violet-50 border border-violet-200 rounded-lg px-3 py-2">
-                  <span className="text-sm text-violet-800 font-semibold">🔤 Myanmar Vowels Learning app</span>
-                  <button type="button" onClick={() => setNewBankLessonLink('')} className="text-xs text-red-600 hover:text-red-800 font-semibold">Clear</button>
-                </div>
-              )}
-              {newBankLessonLink === 'animalsound://' && (
-                <div className="mt-2 flex items-center justify-between bg-sky-50 border border-sky-200 rounded-lg px-3 py-2">
-                  <span className="text-sm text-sky-800 font-semibold">🐾 Animal Sound Quiz app</span>
-                  <button type="button" onClick={() => setNewBankLessonLink('')} className="text-xs text-red-600 hover:text-red-800 font-semibold">Clear</button>
-                </div>
-              )}
-              {newBankLessonLink === 'burmeselearninggames://' && (
-                <div className="mt-2 flex items-center justify-between bg-lime-50 border border-lime-200 rounded-lg px-3 py-2">
-                  <span className="text-sm text-lime-800 font-semibold">🎮 Burmese Learning Games app</span>
-                  <button type="button" onClick={() => setNewBankLessonLink('')} className="text-xs text-red-600 hover:text-red-800 font-semibold">Clear</button>
-                </div>
-              )}
-              {newBankLessonLink === 'interactivequiz://' && (
-                <div className="mt-2 flex items-center justify-between bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
-                  <span className="text-sm text-rose-800 font-semibold">🧠 Interactive Learning Quiz app</span>
-                  <button type="button" onClick={() => setNewBankLessonLink('')} className="text-xs text-red-600 hover:text-red-800 font-semibold">Clear</button>
-                </div>
-              )}
-              {newBankLessonLink === 'myanmarpoems://' && (
-                <div className="mt-2 flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
-                  <span className="text-sm text-emerald-800 font-semibold">📖 Myanmar Poems app</span>
-                  <button type="button" onClick={() => setNewBankLessonLink('')} className="text-xs text-red-600 hover:text-red-800 font-semibold">Clear</button>
-                </div>
-              )}
-              {newBankLessonLink === 'consonantendings://' && (
-                <div className="mt-2 flex items-center justify-between bg-fuchsia-50 border border-fuchsia-200 rounded-lg px-3 py-2">
-                  <span className="text-sm text-fuchsia-800 font-semibold">🔤 Myanmar Consonant Endings app</span>
-                  <button type="button" onClick={() => setNewBankLessonLink('')} className="text-xs text-red-600 hover:text-red-800 font-semibold">Clear</button>
-                </div>
-              )}
-              {newBankLessonLink === 'timeandcalendar://' && (
-                <div className="mt-2 flex items-center justify-between bg-cyan-50 border border-cyan-200 rounded-lg px-3 py-2">
-                  <span className="text-sm text-cyan-800 font-semibold">🕐 Time and Calendar app</span>
-                  <button type="button" onClick={() => setNewBankLessonLink('')} className="text-xs text-red-600 hover:text-red-800 font-semibold">Clear</button>
-                </div>
-              )}
-              {newBankLessonLink === 'myanmarspelling://' && (
-                <div className="mt-2 flex items-center justify-between bg-violet-50 border border-violet-200 rounded-lg px-3 py-2">
-                  <span className="text-sm text-violet-800 font-semibold">✍️ Myanmar Spelling app</span>
-                  <button type="button" onClick={() => setNewBankLessonLink('')} className="text-xs text-red-600 hover:text-red-800 font-semibold">Clear</button>
-                </div>
-              )}
-              {newBankLessonLink === 'myanmarsoundpractice://' && (
-                <div className="mt-2 flex items-center justify-between bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
-                  <span className="text-sm text-rose-800 font-semibold">🔊 Myanmar Sound Practice app</span>
-                  <button type="button" onClick={() => setNewBankLessonLink('')} className="text-xs text-red-600 hover:text-red-800 font-semibold">Clear</button>
-                </div>
-              )}
               {newBankLessonLink === 'readingmyanmar://' && (
                 <div className="mt-2 flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
                   <span className="text-sm text-blue-800 font-semibold">📚 Reading Myanmar app</span>
@@ -3987,138 +3918,6 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                       hosted URLs — so they get their own custom link scheme,
                       handled specially in handleStartLesson/Continue, same
                       idea as smartstudy://, abhidhamma://, dhammaschool://. */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setNewBankLessonLink('consonantpractice://');
-                      if (!newBankLessonTitle.trim()) setNewBankLessonTitle('Myanmar Consonant Practice');
-                      setShowLinkPicker(false);
-                    }}
-                    className="w-full text-left p-2 rounded-lg hover:bg-cyan-50 border border-transparent hover:border-cyan-200 font-semibold text-gray-800 mt-1"
-                  >
-                    🔤 Myanmar Consonant Practice app
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setNewBankLessonLink('burmesegame://');
-                      if (!newBankLessonTitle.trim()) setNewBankLessonTitle('Burmese Consonant Learning Game');
-                      setShowLinkPicker(false);
-                    }}
-                    className="w-full text-left p-2 rounded-lg hover:bg-fuchsia-50 border border-transparent hover:border-fuchsia-200 font-semibold text-gray-800 mt-1"
-                  >
-                    🕷️ Burmese Consonant Learning Game
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setNewBankLessonLink('numberlearning://');
-                      if (!newBankLessonTitle.trim()) setNewBankLessonTitle('Myanmar Number Learning');
-                      setShowLinkPicker(false);
-                    }}
-                    className="w-full text-left p-2 rounded-lg hover:bg-rose-50 border border-transparent hover:border-rose-200 font-semibold text-gray-800 mt-1"
-                  >
-                    🔢 Myanmar Number Learning app
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setNewBankLessonLink('vowelslearning://');
-                      if (!newBankLessonTitle.trim()) setNewBankLessonTitle('Myanmar Vowels Learning');
-                      setShowLinkPicker(false);
-                    }}
-                    className="w-full text-left p-2 rounded-lg hover:bg-violet-50 border border-transparent hover:border-violet-200 font-semibold text-gray-800 mt-1"
-                  >
-                    🔤 Myanmar Vowels Learning app
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setNewBankLessonLink('animalsound://');
-                      if (!newBankLessonTitle.trim()) setNewBankLessonTitle('Animal Sound Quiz');
-                      setShowLinkPicker(false);
-                    }}
-                    className="w-full text-left p-2 rounded-lg hover:bg-sky-50 border border-transparent hover:border-sky-200 font-semibold text-gray-800 mt-1"
-                  >
-                    🐾 Animal Sound Quiz app
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setNewBankLessonLink('burmeselearninggames://');
-                      if (!newBankLessonTitle.trim()) setNewBankLessonTitle('Burmese Learning Games');
-                      setShowLinkPicker(false);
-                    }}
-                    className="w-full text-left p-2 rounded-lg hover:bg-lime-50 border border-transparent hover:border-lime-200 font-semibold text-gray-800 mt-1"
-                  >
-                    🎮 Burmese Learning Games app
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setNewBankLessonLink('interactivequiz://');
-                      if (!newBankLessonTitle.trim()) setNewBankLessonTitle('Interactive Learning Quiz');
-                      setShowLinkPicker(false);
-                    }}
-                    className="w-full text-left p-2 rounded-lg hover:bg-rose-50 border border-transparent hover:border-rose-200 font-semibold text-gray-800 mt-1"
-                  >
-                    🧠 Interactive Learning Quiz app
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setNewBankLessonLink('myanmarpoems://');
-                      if (!newBankLessonTitle.trim()) setNewBankLessonTitle('Myanmar Poems');
-                      setShowLinkPicker(false);
-                    }}
-                    className="w-full text-left p-2 rounded-lg hover:bg-emerald-50 border border-transparent hover:border-emerald-200 font-semibold text-gray-800 mt-1"
-                  >
-                    📖 Myanmar Poems app
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setNewBankLessonLink('consonantendings://');
-                      if (!newBankLessonTitle.trim()) setNewBankLessonTitle('Myanmar Consonant Endings');
-                      setShowLinkPicker(false);
-                    }}
-                    className="w-full text-left p-2 rounded-lg hover:bg-fuchsia-50 border border-transparent hover:border-fuchsia-200 font-semibold text-gray-800 mt-1"
-                  >
-                    🔤 Myanmar Consonant Endings app
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setNewBankLessonLink('timeandcalendar://');
-                      if (!newBankLessonTitle.trim()) setNewBankLessonTitle('Time and Calendar');
-                      setShowLinkPicker(false);
-                    }}
-                    className="w-full text-left p-2 rounded-lg hover:bg-cyan-50 border border-transparent hover:border-cyan-200 font-semibold text-gray-800 mt-1"
-                  >
-                    🕐 Time and Calendar app
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setNewBankLessonLink('myanmarspelling://');
-                      if (!newBankLessonTitle.trim()) setNewBankLessonTitle('Myanmar Spelling');
-                      setShowLinkPicker(false);
-                    }}
-                    className="w-full text-left p-2 rounded-lg hover:bg-violet-50 border border-transparent hover:border-violet-200 font-semibold text-gray-800 mt-1"
-                  >
-                    ✍️ Myanmar Spelling app
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setNewBankLessonLink('myanmarsoundpractice://');
-                      if (!newBankLessonTitle.trim()) setNewBankLessonTitle('Myanmar Sound Practice');
-                      setShowLinkPicker(false);
-                    }}
-                    className="w-full text-left p-2 rounded-lg hover:bg-rose-50 border border-transparent hover:border-rose-200 font-semibold text-gray-800 mt-1"
-                  >
-                    🔊 Myanmar Sound Practice app
-                  </button>
                   <button
                     type="button"
                     onClick={() => {
@@ -4940,7 +4739,8 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       return;
     }
 
-    if (['consonantpractice://', 'burmesegame://', 'numberlearning://', 'vowelslearning://', 'animalsound://', 'burmeselearninggames://', 'interactivequiz://', 'myanmarpoems://', 'consonantendings://', 'timeandcalendar://', 'myanmarspelling://', 'myanmarsoundpractice://', 'readingmyanmar://', 'speakingmyanmar://', 'myanmarpart1and2://'].includes(lesson.link)) {
+    const simpleAppSchemes = ['consonantpractice://', 'burmesegame://', 'numberlearning://', 'vowelslearning://', 'animalsound://', 'burmeselearninggames://', 'interactivequiz://', 'myanmarpoems://', 'consonantendings://', 'timeandcalendar://', 'myanmarspelling://', 'myanmarsoundpractice://', 'readingmyanmar://', 'speakingmyanmar://', 'myanmarpart1and2://'];
+    if (simpleAppSchemes.some(scheme => lesson.link === scheme || lesson.link.startsWith(scheme))) {
       const openerByLink = {
         'consonantpractice://': onOpenConsonantPractice,
         'burmesegame://': onOpenBurmeseGame,
@@ -4958,8 +4758,10 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         'speakingmyanmar://': onOpenSpeakingMyanmar,
         'myanmarpart1and2://': onOpenMyanmarPart1And2,
       };
-      const opener = openerByLink[lesson.link];
-      if (opener) opener({ studentName: studentProfile?.name || '' });
+      const matchedScheme = groupSchemeOfLink(lesson.link) || lesson.link;
+      const opener = openerByLink[matchedScheme];
+      const initialPart = extractGroupPartKey(lesson.link);
+      if (opener) opener({ studentName: studentProfile?.name || '', ...(initialPart ? { initialPart } : {}) });
       if (lesson.status === 'pending') {
         try { await updateDoc(doc(db, `${publicDataPath}/lessons`, lesson.id), { status: 'started' }); } catch (e) {}
       }
@@ -5938,15 +5740,18 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                   return;
                 }
                 if (url && url.startsWith('readingmyanmar://')) {
-                  if (onOpenReadingMyanmar) onOpenReadingMyanmar({ studentName: studentProfile?.name || '' });
+                  const initialPart = extractGroupPartKey(url);
+                  if (onOpenReadingMyanmar) onOpenReadingMyanmar({ studentName: studentProfile?.name || '', ...(initialPart ? { initialPart } : {}) });
                   return;
                 }
                 if (url && url.startsWith('speakingmyanmar://')) {
-                  if (onOpenSpeakingMyanmar) onOpenSpeakingMyanmar({ studentName: studentProfile?.name || '' });
+                  const initialPart = extractGroupPartKey(url);
+                  if (onOpenSpeakingMyanmar) onOpenSpeakingMyanmar({ studentName: studentProfile?.name || '', ...(initialPart ? { initialPart } : {}) });
                   return;
                 }
                 if (url && url.startsWith('myanmarpart1and2://')) {
-                  if (onOpenMyanmarPart1And2) onOpenMyanmarPart1And2({ studentName: studentProfile?.name || '' });
+                  const initialPart = extractGroupPartKey(url);
+                  if (onOpenMyanmarPart1And2) onOpenMyanmarPart1And2({ studentName: studentProfile?.name || '', ...(initialPart ? { initialPart } : {}) });
                   return;
                 }
                 if (!url.startsWith('http://') && !url.startsWith('https://')) url = `https://${url}`;
@@ -6047,6 +5852,9 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                       )}
                       {lesson.link && lesson.link.startsWith('dhammaschool://') && extractDhammaschoolClassId(lesson.link) && (
                         <span className="text-sm font-semibold text-blue-600 ml-1">— {extractDhammaschoolClassId(lesson.link)}</span>
+                      )}
+                      {lesson.link && groupSchemeOfLink(lesson.link) && extractGroupPartKey(lesson.link) && (
+                        <span className="text-sm font-semibold text-blue-600 ml-1">— {groupPartLabel(groupSchemeOfLink(lesson.link), extractGroupPartKey(lesson.link))}</span>
                       )}
                       {lesson.unitCount > 0 && completedUnitList >= lesson.unitCount && (
                         <span className="bg-emerald-500 text-white text-xs font-bold px-2 py-1 rounded-full">✅ Completed</span>

@@ -1,14 +1,22 @@
-import React, { useState, useEffect, Suspense, lazy } from 'react';
+import React, { useState, Suspense, lazy } from 'react';
 import TutoringApp from './TutoringApp';
 
 // Every sub-app below is lazy-loaded (its JS is only downloaded the first
-// time it's actually opened, not bundled into the initial page load) AND
-// only mounted into the tree once opened (see openedApps below) — mounting
-// eagerly meant every app's Firestore listeners (data + the online-roster
-// heartbeat) started firing the instant the page loaded, regardless of
-// whether the visitor ever touched that app. With this many apps, that was
-// dozens of simultaneous Firestore connections on every single page load,
-// which is what was causing the site to hang/spin.
+// time it's actually opened) AND only mounted while it's the active app —
+// switching to a different app unmounts the previous one, so its
+// Firestore listeners, roster heartbeat, and any audio/timers actually
+// stop instead of continuing to run in the background. Mounting everything
+// eagerly (the original design) meant every app's Firestore listeners
+// started firing the instant the page loaded regardless of whether the
+// visitor ever touched that app -- with this many apps, that was dozens of
+// simultaneous Firestore connections on every page load, which is what was
+// causing the site to hang/spin. Keeping every opened app mounted forever
+// (an intermediate design) traded that outage for the same problem at a
+// smaller scale -- background apps kept pinging their roster and playing
+// audio after the visitor navigated away. Unmounting on switch avoids
+// both; each app resets to its own starting screen when reopened, which
+// is an acceptable trade-off now that most of these are grouped behind a
+// "Choose a Part" screen anyway.
 const SmartStudyApp = lazy(() => import('./SmartStudy'));
 const AbhidhammaApp = lazy(() => import('./AbhidhammaApp'));
 const MyanmarReaderApp = lazy(() => import('./MyanmarReaderApp'));
@@ -52,15 +60,6 @@ function LoadingFallback() {
 
 export default function App() {
   const [activeApp, setActiveApp] = useState('tutoring');
-  // Once an app has been opened, it stays mounted for the rest of the
-  // session (so switching away and back never loses in-progress state) --
-  // but it isn't mounted, and its code isn't even downloaded, until that
-  // first open.
-  const [openedApps, setOpenedApps] = useState(() => new Set());
-  useEffect(() => {
-    if (activeApp === 'tutoring') return;
-    setOpenedApps(prev => (prev.has(activeApp) ? prev : new Set(prev).add(activeApp)));
-  }, [activeApp]);
 
   const [smartStudyRequest, setSmartStudyRequest] = useState(null);
   const [abhidhammaRequest, setAbhidhammaRequest] = useState(null);
@@ -267,9 +266,8 @@ export default function App() {
     <div className="min-h-screen">
       {/* The Tutoring Dashboard is the home screen, so it's the only app
           that's always mounted/eagerly loaded. Every other app below is
-          lazy-loaded and only mounted once opened (see openedApps above),
-          so it stays mounted afterward (switching away and back never loses
-          in-progress state) without ever having started up unasked. */}
+          lazy-loaded and only mounted while it's the active app, and
+          unmounted the moment the visitor switches away from it. */}
       <div style={{ display: activeApp === 'tutoring' ? 'block' : 'none' }}>
         <TutoringApp
           onOpenSmartStudy={openSmartStudy}
@@ -296,8 +294,8 @@ export default function App() {
       </div>
 
       <Suspense fallback={<LoadingFallback />}>
-        {openedApps.has('smartstudy') && (
-          <div style={{ display: activeApp === 'smartstudy' ? 'block' : 'none' }}>
+        {activeApp === 'smartstudy' && (
+          <div>
             {activeApp === 'smartstudy' && (
               <div className="fixed top-3 left-3 z-[9999]">
                 <button
@@ -312,8 +310,8 @@ export default function App() {
           </div>
         )}
 
-        {openedApps.has('abhidhamma') && (
-          <div style={{ display: activeApp === 'abhidhamma' ? 'block' : 'none' }}>
+        {activeApp === 'abhidhamma' && (
+          <div>
             {activeApp === 'abhidhamma' && (
               <div className="fixed top-3 left-3 z-[9999]">
                 <button
@@ -328,8 +326,8 @@ export default function App() {
           </div>
         )}
 
-        {openedApps.has('myanmarreader') && (
-          <div style={{ display: activeApp === 'myanmarreader' ? 'block' : 'none' }}>
+        {activeApp === 'myanmarreader' && (
+          <div>
             {activeApp === 'myanmarreader' && (
               <div className="fixed top-3 left-3 z-[9999]">
                 <button
@@ -344,8 +342,8 @@ export default function App() {
           </div>
         )}
 
-        {openedApps.has('dhammaschool') && (
-          <div style={{ display: activeApp === 'dhammaschool' ? 'block' : 'none' }}>
+        {activeApp === 'dhammaschool' && (
+          <div>
             {activeApp === 'dhammaschool' && (
               <div className="fixed top-3 left-3 z-[9999]">
                 <button
@@ -360,8 +358,8 @@ export default function App() {
           </div>
         )}
 
-        {openedApps.has('consonantpractice') && (
-          <div style={{ display: activeApp === 'consonantpractice' ? 'block' : 'none' }}>
+        {activeApp === 'consonantpractice' && (
+          <div>
             {activeApp === 'consonantpractice' && (
               <div className="fixed top-3 left-3 z-[9999]">
                 <button
@@ -376,8 +374,8 @@ export default function App() {
           </div>
         )}
 
-        {openedApps.has('burmesegame') && (
-          <div style={{ display: activeApp === 'burmesegame' ? 'block' : 'none' }}>
+        {activeApp === 'burmesegame' && (
+          <div>
             {activeApp === 'burmesegame' && (
               <div className="fixed top-3 left-3 z-[9999]">
                 <button
@@ -392,8 +390,8 @@ export default function App() {
           </div>
         )}
 
-        {openedApps.has('myanmarspeaking') && (
-          <div style={{ display: activeApp === 'myanmarspeaking' ? 'block' : 'none' }}>
+        {activeApp === 'myanmarspeaking' && (
+          <div>
             {activeApp === 'myanmarspeaking' && (
               <div className="fixed top-3 left-3 z-[9999]">
                 <button
@@ -408,8 +406,8 @@ export default function App() {
           </div>
         )}
 
-        {openedApps.has('numberlearning') && (
-          <div style={{ display: activeApp === 'numberlearning' ? 'block' : 'none' }}>
+        {activeApp === 'numberlearning' && (
+          <div>
             {activeApp === 'numberlearning' && (
               <div className="fixed top-3 left-3 z-[9999]">
                 <button
@@ -424,8 +422,8 @@ export default function App() {
           </div>
         )}
 
-        {openedApps.has('vowelslearning') && (
-          <div style={{ display: activeApp === 'vowelslearning' ? 'block' : 'none' }}>
+        {activeApp === 'vowelslearning' && (
+          <div>
             {activeApp === 'vowelslearning' && (
               <div className="fixed top-3 left-3 z-[9999]">
                 <button
@@ -440,8 +438,8 @@ export default function App() {
           </div>
         )}
 
-        {openedApps.has('animalsound') && (
-          <div style={{ display: activeApp === 'animalsound' ? 'block' : 'none' }}>
+        {activeApp === 'animalsound' && (
+          <div>
             {activeApp === 'animalsound' && (
               <div className="fixed top-3 left-3 z-[9999]">
                 <button
@@ -456,8 +454,8 @@ export default function App() {
           </div>
         )}
 
-        {openedApps.has('burmeselearninggames') && (
-          <div style={{ display: activeApp === 'burmeselearninggames' ? 'block' : 'none' }}>
+        {activeApp === 'burmeselearninggames' && (
+          <div>
             {activeApp === 'burmeselearninggames' && (
               <div className="fixed top-3 left-3 z-[9999]">
                 <button
@@ -472,8 +470,8 @@ export default function App() {
           </div>
         )}
 
-        {openedApps.has('interactivequiz') && (
-          <div style={{ display: activeApp === 'interactivequiz' ? 'block' : 'none' }}>
+        {activeApp === 'interactivequiz' && (
+          <div>
             {activeApp === 'interactivequiz' && (
               <div className="fixed top-3 left-3 z-[9999]">
                 <button
@@ -488,8 +486,8 @@ export default function App() {
           </div>
         )}
 
-        {openedApps.has('myanmarpoems') && (
-          <div style={{ display: activeApp === 'myanmarpoems' ? 'block' : 'none' }}>
+        {activeApp === 'myanmarpoems' && (
+          <div>
             {activeApp === 'myanmarpoems' && (
               <div className="fixed top-3 left-3 z-[9999]">
                 <button
@@ -504,8 +502,8 @@ export default function App() {
           </div>
         )}
 
-        {openedApps.has('consonantendings') && (
-          <div style={{ display: activeApp === 'consonantendings' ? 'block' : 'none' }}>
+        {activeApp === 'consonantendings' && (
+          <div>
             {activeApp === 'consonantendings' && (
               <div className="fixed top-3 left-3 z-[9999]">
                 <button
@@ -520,8 +518,8 @@ export default function App() {
           </div>
         )}
 
-        {openedApps.has('timeandcalendar') && (
-          <div style={{ display: activeApp === 'timeandcalendar' ? 'block' : 'none' }}>
+        {activeApp === 'timeandcalendar' && (
+          <div>
             {activeApp === 'timeandcalendar' && (
               <div className="fixed top-3 left-3 z-[9999]">
                 <button
@@ -536,8 +534,8 @@ export default function App() {
           </div>
         )}
 
-        {openedApps.has('myanmarspelling') && (
-          <div style={{ display: activeApp === 'myanmarspelling' ? 'block' : 'none' }}>
+        {activeApp === 'myanmarspelling' && (
+          <div>
             {activeApp === 'myanmarspelling' && (
               <div className="fixed top-3 left-3 z-[9999]">
                 <button
@@ -552,8 +550,8 @@ export default function App() {
           </div>
         )}
 
-        {openedApps.has('myanmarsoundpractice') && (
-          <div style={{ display: activeApp === 'myanmarsoundpractice' ? 'block' : 'none' }}>
+        {activeApp === 'myanmarsoundpractice' && (
+          <div>
             {activeApp === 'myanmarsoundpractice' && (
               <div className="fixed top-3 left-3 z-[9999]">
                 <button
@@ -568,20 +566,20 @@ export default function App() {
           </div>
         )}
 
-        {openedApps.has('readingmyanmar') && (
-          <div style={{ display: activeApp === 'readingmyanmar' ? 'block' : 'none' }}>
+        {activeApp === 'readingmyanmar' && (
+          <div>
             <ReadingMyanmarApp entryRequest={readingMyanmarRequest} onExit={closeReadingMyanmar} />
           </div>
         )}
 
-        {openedApps.has('speakingmyanmar') && (
-          <div style={{ display: activeApp === 'speakingmyanmar' ? 'block' : 'none' }}>
+        {activeApp === 'speakingmyanmar' && (
+          <div>
             <SpeakingMyanmarApp entryRequest={speakingMyanmarRequest} onExit={closeSpeakingMyanmar} />
           </div>
         )}
 
-        {openedApps.has('myanmarpart1and2') && (
-          <div style={{ display: activeApp === 'myanmarpart1and2' ? 'block' : 'none' }}>
+        {activeApp === 'myanmarpart1and2' && (
+          <div>
             <MyanmarPart1And2App entryRequest={myanmarPart1And2Request} onExit={closeMyanmarPart1And2} />
           </div>
         )}
