@@ -116,8 +116,22 @@ function LoadingFallback() {
   );
 }
 
+// These five are large, complex apps with substantial internal state and
+// initialization logic (role/login screens, class pickers, live listeners)
+// that's expensive -- and in Smart Study/Abhidhamma's case, apparently not
+// reliable -- to redo from scratch every time they're reopened. They're
+// kept mounted (hidden) once opened instead of being unmounted on switch,
+// same as before; every other app is simpler and unmounts on switch so
+// its resources (audio, roster heartbeat) actually stop.
+const KEEP_ALIVE_APPS = new Set(['smartstudy', 'abhidhamma', 'myanmarreader', 'dhammaschool', 'myanmarspeaking']);
+
 export default function App() {
   const [activeApp, setActiveApp] = useState('tutoring');
+  const [openedKeepAliveApps, setOpenedKeepAliveApps] = useState(() => new Set());
+  useEffect(() => {
+    if (!KEEP_ALIVE_APPS.has(activeApp) || openedKeepAliveApps.has(activeApp)) return;
+    setOpenedKeepAliveApps(prev => new Set(prev).add(activeApp));
+  }, [activeApp, openedKeepAliveApps]);
 
   const [smartStudyRequest, setSmartStudyRequest] = useState(null);
   const [abhidhammaRequest, setAbhidhammaRequest] = useState(null);
@@ -351,10 +365,10 @@ export default function App() {
         />
       </div>
 
-      <AppErrorBoundary key={activeApp}>
+      <AppErrorBoundary>
       <Suspense fallback={<LoadingFallback />}>
-        {activeApp === 'smartstudy' && (
-          <div>
+        {openedKeepAliveApps.has('smartstudy') && (
+          <div style={{ display: activeApp === 'smartstudy' ? 'block' : 'none' }}>
             {activeApp === 'smartstudy' && (
               <div className="fixed top-3 left-3 z-[9999]">
                 <button
@@ -369,8 +383,8 @@ export default function App() {
           </div>
         )}
 
-        {activeApp === 'abhidhamma' && (
-          <div>
+        {openedKeepAliveApps.has('abhidhamma') && (
+          <div style={{ display: activeApp === 'abhidhamma' ? 'block' : 'none' }}>
             {activeApp === 'abhidhamma' && (
               <div className="fixed top-3 left-3 z-[9999]">
                 <button
@@ -385,8 +399,8 @@ export default function App() {
           </div>
         )}
 
-        {activeApp === 'myanmarreader' && (
-          <div>
+        {openedKeepAliveApps.has('myanmarreader') && (
+          <div style={{ display: activeApp === 'myanmarreader' ? 'block' : 'none' }}>
             {activeApp === 'myanmarreader' && (
               <div className="fixed top-3 left-3 z-[9999]">
                 <button
@@ -401,8 +415,8 @@ export default function App() {
           </div>
         )}
 
-        {activeApp === 'dhammaschool' && (
-          <div>
+        {openedKeepAliveApps.has('dhammaschool') && (
+          <div style={{ display: activeApp === 'dhammaschool' ? 'block' : 'none' }}>
             {activeApp === 'dhammaschool' && (
               <div className="fixed top-3 left-3 z-[9999]">
                 <button
@@ -449,8 +463,8 @@ export default function App() {
           </div>
         )}
 
-        {activeApp === 'myanmarspeaking' && (
-          <div>
+        {openedKeepAliveApps.has('myanmarspeaking') && (
+          <div style={{ display: activeApp === 'myanmarspeaking' ? 'block' : 'none' }}>
             {activeApp === 'myanmarspeaking' && (
               <div className="fixed top-3 left-3 z-[9999]">
                 <button
