@@ -1735,7 +1735,16 @@ export default function MyanmarSpellingApp({ entryRequest, onExit }) {
             }
         });
 
-    return () => {};
+    return () => {
+      // Browsers cap how many AudioContexts a page may have open at once;
+      // this app can now be entered/exited repeatedly within a session
+      // (e.g. navigating parts inside the "Reading Myanmar" group), so an
+      // unclosed context left over from a previous visit could exhaust
+      // that limit and make a later visit fail to load audio at all.
+      if (audioContext && audioContext.state !== 'closed') {
+        audioContext.close().catch(() => {});
+      }
+    };
   }, []);
 
   return (
