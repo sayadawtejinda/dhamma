@@ -3593,7 +3593,18 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                       const student = students.find(s => s.id === session.studentUid);
                       return (
                         <div key={session.id} className="bg-white p-4 rounded-lg border border-gray-200">
-                          <p className="font-semibold text-gray-900">{session.lessonTitle}</p>
+                          <p className="font-semibold text-gray-900">
+                            {session.lessonTitle}
+                            {session.lessonLink && extractSmartStudyClassId(session.lessonLink) && (
+                              <span className="text-sm font-semibold text-blue-600 ml-1">— {extractSmartStudyClassId(session.lessonLink)}</span>
+                            )}
+                            {session.lessonLink && session.lessonLink.startsWith('abhidhamma://') && extractAbhidhammaLessonId(session.lessonLink) && (
+                              <span className="text-sm font-semibold text-blue-600 ml-1">— {extractAbhidhammaLessonId(session.lessonLink)}</span>
+                            )}
+                            {session.lessonLink && session.lessonLink.startsWith('dhammaschool://') && extractDhammaschoolClassId(session.lessonLink) && (
+                              <span className="text-sm font-semibold text-blue-600 ml-1">— {extractDhammaschoolClassId(session.lessonLink)}</span>
+                            )}
+                          </p>
                           <p className="text-sm font-medium text-indigo-700">Student: {student ? student.name : 'Unknown'}</p>
                           <p className="text-sm text-gray-600">Completed: {formatTimestamp(session.endTime)}</p>
                           <p className="text-sm text-gray-600">Duration: {getDuration(session.startTime, session.endTime)}</p>
@@ -5629,7 +5640,18 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       {activeSession && (
         <div ref={activeSessionRef} className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 p-6 rounded-xl shadow-lg mb-8">
           <h3 className="text-xl font-bold mb-3">Active Session</h3>
-          <p className="text-lg mb-4">{activeSession.lessonTitle}</p>
+          <p className="text-lg mb-4">
+            {activeSession.lessonTitle}
+            {activeSession.lessonLink && extractSmartStudyClassId(activeSession.lessonLink) && (
+              <span className="text-base font-semibold text-blue-700 ml-1">— {extractSmartStudyClassId(activeSession.lessonLink)}</span>
+            )}
+            {activeSession.lessonLink && activeSession.lessonLink.startsWith('abhidhamma://') && extractAbhidhammaLessonId(activeSession.lessonLink) && (
+              <span className="text-base font-semibold text-blue-700 ml-1">— {extractAbhidhammaLessonId(activeSession.lessonLink)}</span>
+            )}
+            {activeSession.lessonLink && activeSession.lessonLink.startsWith('dhammaschool://') && extractDhammaschoolClassId(activeSession.lessonLink) && (
+              <span className="text-base font-semibold text-blue-700 ml-1">— {extractDhammaschoolClassId(activeSession.lessonLink)}</span>
+            )}
+          </p>
           {activeSession.lessonUnitCount > 0 && (
             <p className="text-sm mb-4 font-semibold">
               Studying {activeSession.lessonUnitLabel || 'Chapter'} {(studentProfile?.completedUnits?.[computeLessonKey(activeSession.lessonTitle, activeSession.lessonLink)] || 0) + 1}
@@ -5881,7 +5903,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                       <p className="text-sm font-bold text-indigo-700 mt-1">
                         You completed up to {lesson.unitLabel || 'Chapter'} {
                           lesson.link?.startsWith('smartstudy://')
-                            ? ssCompletionCounts[extractSmartStudyClassId(lesson.link)]
+                            ? Math.max(ssCompletionCounts[extractSmartStudyClassId(lesson.link)] || 0, completedUnitList, latestSessionForLesson?.completedUnit || 0)
                             : Math.max(completedUnitList, latestSessionForLesson?.completedUnit || 0)
                         }{lesson.unitCount > 0 ? ` / ${lesson.unitCount}` : ''}.
                         {showNowFinished && ` Now you finished ${lesson.unitLabel || 'Chapter'} ${latestSessionForLesson.completedUnit}.`}
