@@ -444,7 +444,7 @@ const SP_APP_BODY_HTML = `
 
 `;
 
-export default function MyanmarSoundPracticeApp({ entryRequest, onExit }) {
+export default function MyanmarSoundPracticeApp({ entryRequest, onExit, hideOwnOnlineBadge }) {
   const containerRef = useRef(null);
   const initializedRef = useRef(false);
   const studentName = entryRequest?.studentName || null;
@@ -1845,6 +1845,7 @@ export default function MyanmarSoundPracticeApp({ entryRequest, onExit }) {
         className="sp-app-root"
         dangerouslySetInnerHTML={{ __html: SP_APP_BODY_HTML }}
       />
+      {!hideOwnOnlineBadge && (
       <button
         onClick={() => setShowOnlinePanel(true)}
         className="fixed top-16 right-4 z-[9990] flex items-center gap-1 text-sm font-bold bg-white/90 backdrop-blur-sm px-3 py-2 rounded-2xl shadow-lg border border-gray-200 text-emerald-600 hover:underline"
@@ -1873,6 +1874,7 @@ export default function MyanmarSoundPracticeApp({ entryRequest, onExit }) {
             </div>
           </div>
         </div>
+      )}
       )}
     </>
   );

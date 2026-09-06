@@ -127,12 +127,12 @@ const MPOEMS_APP_CSS = `
 
 const MPOEMS_APP_BODY_HTML = `
 
-    <div id="app" class="app-container lg:flex lg:flex-row p-4 sm:p-6 lg:p-8 space-y-6 lg:space-y-0 lg:space-x-8">
+    <div id="app" class="app-container md:flex md:flex-row p-4 sm:p-6 lg:p-8 space-y-6 md:space-y-0 md:space-x-8">
         
         <!-- ============================================= -->
         <!-- LEFT PANEL: POEM CONTENT & CONTROLS -->
         <!-- ============================================= -->
-        <div class="lg:w-1/2 flex flex-col bg-white p-6 rounded-3xl shadow-2xl transition-all duration-300 transform hover:shadow-3xl border-4 border-yellow-400">
+        <div class="md:w-1/2 flex flex-col bg-white p-6 rounded-3xl shadow-2xl transition-all duration-300 transform hover:shadow-3xl border-4 border-yellow-400">
             <h1 id="poem-title" class="text-3xl sm:text-4xl font-extrabold mb-4 text-center text-blue-800 tracking-tight"></h1>
             
             <!-- Controls Bar (Updated for navigation) -->
@@ -174,7 +174,7 @@ const MPOEMS_APP_BODY_HTML = `
         <!-- ============================================= -->
         <!-- RIGHT PANEL: IMAGE DISPLAY (3D-like container) -->
         <!-- ============================================= -->
-        <div class="lg:w-1/2 flex flex-col bg-white p-6 rounded-3xl shadow-2xl border-4 border-pink-400">
+        <div class="md:w-1/2 flex flex-col bg-white p-6 rounded-3xl shadow-2xl border-4 border-pink-400">
             <div id="media-display" class="image-container flex-grow items-center justify-center">
                 <!-- Image or Placeholder goes here -->
                 <div id="initial-placeholder" class="w-full h-full flex flex-col items-center justify-center text-gray-700 p-6">
@@ -197,7 +197,7 @@ const MPOEMS_APP_BODY_HTML = `
 
 `;
 
-export default function MyanmarPoemsApp({ entryRequest, onExit }) {
+export default function MyanmarPoemsApp({ entryRequest, onExit, hideOwnOnlineBadge }) {
   const containerRef = useRef(null);
   const initializedRef = useRef(false);
   const studentName = entryRequest?.studentName || null;
@@ -2306,6 +2306,7 @@ export default function MyanmarPoemsApp({ entryRequest, onExit }) {
         className="mpoems-app-root selection:bg-yellow-200"
         dangerouslySetInnerHTML={{ __html: MPOEMS_APP_BODY_HTML }}
       />
+      {!hideOwnOnlineBadge && (
       <button
         onClick={() => setShowOnlinePanel(true)}
         className="fixed top-16 left-3 z-[9990] flex items-center gap-1 text-sm font-bold bg-white/90 backdrop-blur-sm px-3 py-2 rounded-2xl shadow-lg border border-gray-200 text-emerald-600 hover:underline"
@@ -2334,6 +2335,7 @@ export default function MyanmarPoemsApp({ entryRequest, onExit }) {
             </div>
           </div>
         </div>
+      )}
       )}
     </>
   );

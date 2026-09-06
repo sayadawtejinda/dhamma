@@ -2818,7 +2818,7 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
             onClick={() => onOpenReadingMyanmar && onOpenReadingMyanmar({})}
             className="w-full flex items-center justify-between bg-white p-4 rounded-xl border-2 border-blue-200 hover:border-blue-400 hover:shadow-md transition-all mt-3"
           >
-            <span className="flex items-center text-lg font-bold text-blue-800">📚 Reading Myanmar (all-in-one)</span>
+            <span className="flex items-center text-lg font-bold text-blue-800">📚 Reading Myanmar app</span>
             <span className="text-blue-500 text-xl">→</span>
           </button>
           {/* Second combined group — bundles Myanmar Poems, Number Learning,
@@ -2828,7 +2828,7 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
             onClick={() => onOpenSpeakingMyanmar && onOpenSpeakingMyanmar({})}
             className="w-full flex items-center justify-between bg-white p-4 rounded-xl border-2 border-orange-200 hover:border-orange-400 hover:shadow-md transition-all mt-3"
           >
-            <span className="flex items-center text-lg font-bold text-orange-800">🗣️ Speaking Myanmar (all-in-one)</span>
+            <span className="flex items-center text-lg font-bold text-orange-800">🗣️ Speaking Myanmar app</span>
             <span className="text-orange-500 text-xl">→</span>
           </button>
           {/* Myanmar Speaking app — now mounted inline in the same project as
@@ -3858,13 +3858,13 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
               )}
               {newBankLessonLink === 'readingmyanmar://' && (
                 <div className="mt-2 flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
-                  <span className="text-sm text-blue-800 font-semibold">📚 Reading Myanmar (all-in-one) app</span>
+                  <span className="text-sm text-blue-800 font-semibold">📚 Reading Myanmar app</span>
                   <button type="button" onClick={() => setNewBankLessonLink('')} className="text-xs text-red-600 hover:text-red-800 font-semibold">Clear</button>
                 </div>
               )}
               {newBankLessonLink === 'speakingmyanmar://' && (
                 <div className="mt-2 flex items-center justify-between bg-orange-50 border border-orange-200 rounded-lg px-3 py-2">
-                  <span className="text-sm text-orange-800 font-semibold">🗣️ Speaking Myanmar (all-in-one) app</span>
+                  <span className="text-sm text-orange-800 font-semibold">🗣️ Speaking Myanmar app</span>
                   <button type="button" onClick={() => setNewBankLessonLink('')} className="text-xs text-red-600 hover:text-red-800 font-semibold">Clear</button>
                 </div>
               )}
@@ -4101,23 +4101,23 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                     type="button"
                     onClick={() => {
                       setNewBankLessonLink('readingmyanmar://');
-                      if (!newBankLessonTitle.trim()) setNewBankLessonTitle('Reading Myanmar (all-in-one)');
+                      if (!newBankLessonTitle.trim()) setNewBankLessonTitle('📚 Reading Myanmar app — Choose a Part');
                       setShowLinkPicker(false);
                     }}
                     className="w-full text-left p-2 rounded-lg hover:bg-blue-50 border border-transparent hover:border-blue-200 font-semibold text-gray-800 mt-1"
                   >
-                    📚 Reading Myanmar (all-in-one) app
+                    📚 Reading Myanmar app
                   </button>
                   <button
                     type="button"
                     onClick={() => {
                       setNewBankLessonLink('speakingmyanmar://');
-                      if (!newBankLessonTitle.trim()) setNewBankLessonTitle('Speaking Myanmar (all-in-one)');
+                      if (!newBankLessonTitle.trim()) setNewBankLessonTitle('🗣️ Speaking Myanmar app — Choose a Part');
                       setShowLinkPicker(false);
                     }}
                     className="w-full text-left p-2 rounded-lg hover:bg-orange-50 border border-transparent hover:border-orange-200 font-semibold text-gray-800 mt-1"
                   >
-                    🗣️ Speaking Myanmar (all-in-one) app
+                    🗣️ Speaking Myanmar app
                   </button>
                 </div>
               )}
