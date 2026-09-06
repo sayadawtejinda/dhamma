@@ -2565,6 +2565,19 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
     try {
       const backup = JSON.parse(auditBackupFileContent);
       const oldStudents = backup.students || [];
+      // The live `students` list comes from a Firestore listener that can
+      // still be mid-load (especially right after opening this tab) --
+      // comparing against it too early falsely reported every one of a
+      // student's trophies as "0, possible data loss" once, even though
+      // the data was actually all there once the listener caught up. If
+      // live has noticeably fewer students than the backup being compared
+      // against, that's a strong sign it hasn't finished loading yet, so
+      // refuse to run rather than produce a misleading report.
+      if (oldStudents.length > 0 && students.length < oldStudents.length * 0.9) {
+        alert(`Live student list looks incomplete (${students.length} loaded vs ${oldStudents.length} in the backup) -- it may still be loading. Wait a few seconds and try again.`);
+        setIsRunningTrophyAudit(false);
+        return;
+      }
       const findings = [];
       oldStudents.forEach(oldStudent => {
         const liveStudent = students.find(s => (s.name || '').trim().toLowerCase() === (oldStudent.name || '').trim().toLowerCase());
