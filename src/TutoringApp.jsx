@@ -243,17 +243,19 @@ const computeLessonKey = (title, link) => {
 // actually written to once a class is involved. So when no specific class
 // is selected (the "Trophy Status for this Lesson" whole-app view),
 // looking up that bare key alone always reads back 0/stale, even though
-// every individual class's own trophy count is correct. Summing every key
-// that belongs to this title (bare, for lessons with no class concept, or
-// "title_anyClassId") gives the real cross-class total.
-const sumEarnedTrophiesForTitle = (earnedTrophiesMap, title) => {
+// every individual class's own trophy count is correct. This sums the
+// bare legacy key plus every key for a class ID we KNOW actually belongs
+// to this app (from the already-fetched class list) -- a blind
+// "starts with this title" string scan was tried first and over-counted
+// for lessons whose title happens to prefix-match other unrelated keys.
+const sumEarnedTrophiesForTitle = (earnedTrophiesMap, title, scheme, knownClassIds) => {
   if (!earnedTrophiesMap) return 0;
-  const base = sanitizeKey(title);
-  const prefix = `${base}_`;
-  return Object.entries(earnedTrophiesMap).reduce((sum, [key, value]) => {
-    if (key === base || key.startsWith(prefix)) return sum + (value || 0);
-    return sum;
-  }, 0);
+  let sum = earnedTrophiesMap[sanitizeKey(title)] || 0;
+  (knownClassIds || []).forEach(classId => {
+    const key = computeLessonKey(title, `${scheme}${classId}`);
+    sum += earnedTrophiesMap[key] || 0;
+  });
+  return sum;
 };
 
 // Single source of truth for "how many lesson-units has this student
@@ -3218,9 +3220,14 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
               // "Previously Earned" number being a cross-class total instead of
               // this specific class's own trophies.
               const { maxAvailable, lessonKey, classId } = getClassSpecificTrophyInfo(lesson);
+              const aggregateScheme = lesson.link === 'smartstudy://' ? 'smartstudy://' : isAbhiForTrophy ? 'abhidhamma://' : isDhammaschoolForTrophy ? 'dhammaschool://' : null;
+              const aggregateKnownClassIds = aggregateScheme === 'smartstudy://' ? (smartStudyClasses || []).map(c => c.classId)
+                : aggregateScheme === 'abhidhamma://' ? (abhidhammaClasses || []).map(c => c.classId)
+                : aggregateScheme === 'dhammaschool://' ? (dhammaschoolClasses || []).map(c => c.classId)
+                : [];
               const previouslyEarned = classId
                 ? (student.earnedTrophies?.[lessonKey] || 0)
-                : sumEarnedTrophiesForTitle(student.earnedTrophies, lesson.title);
+                : sumEarnedTrophiesForTitle(student.earnedTrophies, lesson.title, aggregateScheme, aggregateKnownClassIds);
               const remaining = Math.max(0, maxAvailable - previouslyEarned);
 
               const trackedCompletedUnit = student.completedUnits?.[lessonKey] || 0;
