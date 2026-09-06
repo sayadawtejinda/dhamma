@@ -2683,6 +2683,30 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
         }
         return distinct.size;
       };
+      // Same name-resolution as SmartStudyProgressBadge: a student linked to a
+      // Smart Study class before `smartStudyNames` existed on their profile
+      // has their old Smart Study name recorded only in the classRoster doc,
+      // not on the profile -- missing this step is what made the first
+      // preview undercount everyone so badly.
+      const rosterNameCache = {};
+      const resolveNamesForClass = async (student, classId) => {
+        const profileSmartStudyName = student.smartStudyNames?.[classId] || null;
+        const names = new Set([student.name, profileSmartStudyName].filter(Boolean));
+        if (!profileSmartStudyName) {
+          const rosterCacheKey = `${classId}::${student.name}`;
+          if (!(rosterCacheKey in rosterNameCache)) {
+            try {
+              const rosterRef = doc(db, 'artifacts', appId, 'public', 'data', 'classRoster', `${classId}_${encodeURIComponent(student.name)}`);
+              const snap = await getDoc(rosterRef);
+              rosterNameCache[rosterCacheKey] = snap.exists() ? (snap.data().studentName || null) : null;
+            } catch (e) {
+              rosterNameCache[rosterCacheKey] = null;
+            }
+          }
+          if (rosterNameCache[rosterCacheKey]) names.add(rosterNameCache[rosterCacheKey]);
+        }
+        return [...names];
+      };
 
       const rows = [];
       for (const student of students) {
@@ -2697,7 +2721,7 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
             const lessonCount = liveClasses[classId];
             let deserved, basis, liveCompleted = null, liveTotal = null;
             if (lessonCount != null && lessonCount > 0) {
-              const names = [...new Set([student.name, student.smartStudyNames?.[classId]].filter(Boolean))];
+              const names = await resolveNamesForClass(student, classId);
               const completed = await getCompletedCount(classId, names);
               const maxAvailable = computeClassTrophyMax(lessonCount);
               deserved = Math.floor((completed * maxAvailable) / lessonCount);
