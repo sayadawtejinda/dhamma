@@ -1414,8 +1414,15 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyan
 
     if (!lessonToSend) return;
 
-    const deleteExistingLessons = async (sUid, title) => {
-      const q = query(lessonsCollection, where("studentUid", "==", sUid), where("title", "==", title));
+    // Only replaces a PREVIOUS assignment of the exact same class/link, not
+    // every past lesson with this title -- Smart Study/Abhidhamma/
+    // Dhammaschool assign one class at a time under the same bank title, so
+    // matching on title alone would delete (and hide from Available
+    // Lessons) a still-relevant earlier class the moment a different one is
+    // sent. The student's per-class trophy/completed progress lives on
+    // their own profile doc either way and was never affected by this.
+    const deleteExistingLessons = async (sUid, title, link) => {
+      const q = query(lessonsCollection, where("studentUid", "==", sUid), where("title", "==", title), where("link", "==", link));
       const snapshot = await getDocs(q);
       const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
       await Promise.all(deletePromises);
@@ -1431,7 +1438,7 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyan
       const executeSend = async () => {
         try {
           for (const studentUid of group.studentUids) {
-            await deleteExistingLessons(studentUid, lessonToSend.title);
+            await deleteExistingLessons(studentUid, lessonToSend.title, effectiveLessonLink);
             await addDoc(lessonsCollection, {
               studentUid: studentUid,
               teacherUid: user.uid,
@@ -1469,7 +1476,7 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyan
       
       const executeSend = async () => {
         try {
-          await deleteExistingLessons(selectedStudentUid, lessonToSend.title);
+          await deleteExistingLessons(selectedStudentUid, lessonToSend.title, effectiveLessonLink);
           await addDoc(lessonsCollection, {
             studentUid: selectedStudentUid,
             teacherUid: user.uid,
