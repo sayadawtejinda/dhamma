@@ -1266,8 +1266,15 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyan
     try {
       if (editingLessonId) {
         const lessonDoc = doc(db, `${publicDataPath}/lessonBank`, editingLessonId);
-        await updateDoc(lessonDoc, lessonData);
-        setEditingLessonId(null); 
+        try {
+          await updateDoc(lessonDoc, lessonData);
+        } catch (updateError) {
+          // The lesson being edited was deleted (by this teacher or another
+          // session) before the edit was saved -- re-create it instead of
+          // silently losing the edit.
+          await addDoc(lessonBankCollection, { ...lessonData, createdAt: serverTimestamp() });
+        }
+        setEditingLessonId(null);
       } else {
         await addDoc(lessonBankCollection, {
           ...lessonData,
@@ -1276,7 +1283,7 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyan
       }
       setNewBankLessonTitle('');
       setNewBankLessonLink('');
-      setNewBankLessonDetails(''); 
+      setNewBankLessonDetails('');
       setNewBankLessonTrophyLimit(0);
       setNewBankLessonUnitLabel('Chapter');
       setNewBankLessonUnitCount(0);

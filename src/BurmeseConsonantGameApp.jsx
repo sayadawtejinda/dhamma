@@ -574,6 +574,18 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
     initializedRef.current = true;
     const rootEl = containerRef.current;
 
+    // The original page loaded the canvas-confetti library via a <script>
+    // tag in <head>, which is not carried over by this hybrid port -- load
+    // it on demand instead so window.confetti exists by the time any of
+    // this app's confetti(...) calls run during gameplay.
+    (function ensureConfettiLoaded() {
+      if (window.confetti || document.querySelector("script[data-confetti-cdn]")) return;
+      const script = document.createElement("script");
+      script.src = "https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js";
+      script.dataset.confettiCdn = "true";
+      document.head.appendChild(script);
+    })();
+
         // Firebase Auth (kept for structure) — but this file has no real
         // shared Firebase instance to plug into yet (per instructions, that
         // comes with the trophy/link-to-tutoring pass later), so this whole
@@ -861,8 +873,8 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
         function triggerDiverseConfetti() {
             const config = rewardConfettiConfigs[rewardIndex % rewardConfettiConfigs.length];
             rewardIndex++;
-            confetti({ ...config, origin: { y: 0.7 }, spread: config.spread || 90, zIndex: 200 });
-            confetti({ particleCount: 50, spread: 70, origin: { y: 0.6 }, zIndex: 200, });
+            window.confetti && window.confetti({ ...config, origin: { y: 0.7 }, spread: config.spread || 90, zIndex: 200 });
+            window.confetti && window.confetti({ particleCount: 50, spread: 70, origin: { y: 0.6 }, zIndex: 200, });
         }
         function updateSpiderProgress() {
             if (netScore < 0) netScore = 0;
