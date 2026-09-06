@@ -237,6 +237,39 @@ const computeLessonKey = (title, link) => {
   return sanitizeKey(classId ? `${title}_${classId}` : title);
 };
 
+// Single source of truth for "how many lesson-units has this student
+// completed on this lesson" — Smart Study, Abhidhamma, and Dhammaschool all
+// share the same idea (a class = several lessons, trophies awarded roughly
+// every 5), and used to each compute this number slightly differently in
+// different places (tracked completedUnits, a trophy-derived estimate, real
+// recorded sessions, and — for Smart Study only — a live class-completion
+// count), which could disagree with each other: a teacher fixing the
+// trophy count wouldn't necessarily update every other display, so a
+// student could see "✅ Completed" in one place and "Continue Lesson 1" in
+// another for the exact same lesson. This takes the highest of every
+// signal available, so every display -- Available Lessons, Active
+// Session, the Completed badge, Continue/Start button text -- always
+// agrees, and "Fix Previously Earned" alone is enough to correct all of
+// them at once.
+const getEffectiveCompletedUnit = (lesson, studentProfile, sessionsForLesson, ssCompletionCounts) => {
+  if (!lesson) return 0;
+  const lessonKey = computeLessonKey(lesson.title, lesson.link);
+  const maxAvailable = lesson.trophyLimit || 0;
+  const unitCount = lesson.unitCount || 0;
+  const previouslyEarned = studentProfile?.earnedTrophies?.[lessonKey] || 0;
+  const trackedCompletedUnit = studentProfile?.completedUnits?.[lessonKey] || 0;
+  const derivedCompletedUnit = (unitCount > 0 && maxAvailable > 0)
+    ? Math.min(unitCount, Math.ceil((previouslyEarned * unitCount) / maxAvailable))
+    : 0;
+  const highestSessionCompletedUnit = (sessionsForLesson || []).reduce(
+    (max, s) => (typeof s.completedUnit === 'number' ? Math.max(max, s.completedUnit) : max), 0
+  );
+  const ssClassId = lesson.link?.startsWith('smartstudy://') ? extractSmartStudyClassId(lesson.link) : null;
+  const ssCount = ssClassId != null ? (ssCompletionCounts?.[ssClassId] || 0) : 0;
+  const effective = Math.max(trackedCompletedUnit, derivedCompletedUnit, highestSessionCompletedUnit, ssCount);
+  return unitCount > 0 ? Math.min(unitCount, effective) : effective;
+};
+
 // How many trophies a class with this many lessons is worth. Matches the
 // teacher's real awarding pattern (confirmed against actual examples):
 // 4 lessons -> 1 trophy, 10 -> 2, 11 -> 2, 29 -> 6 — i.e. round(lessons / 5),
@@ -5637,7 +5670,19 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         )}
       </div>
 
-      {activeSession && (
+      {activeSession && (() => {
+        // Same getEffectiveCompletedUnit() used by Available Lessons and the
+        // Completed badge there, so the Active Session box (the "Studying
+        // Lesson N" text and the Continue button below) never contradicts
+        // them -- e.g. showing "Studying Lesson 11" or a plain "Continue
+        // Lesson 1" for a 10-lesson class the teacher just marked fully
+        // complete via Fix Previously Earned.
+        const activeUnitCount = activeSession.lessonUnitCount || 0;
+        const pseudoLesson = { title: activeSession.lessonTitle, link: activeSession.lessonLink, unitCount: activeUnitCount, trophyLimit: activeSession.lessonTrophyLimit || 0 };
+        const sessionsForActive = completedSessions.filter(s => s.lessonTitle === activeSession.lessonTitle);
+        const activeEffectiveCompleted = getEffectiveCompletedUnit(pseudoLesson, studentProfile, sessionsForActive, ssCompletionCounts);
+        const isActiveFullyComplete = activeUnitCount > 0 && activeEffectiveCompleted >= activeUnitCount;
+        return (
         <div ref={activeSessionRef} className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 p-6 rounded-xl shadow-lg mb-8">
           <h3 className="text-xl font-bold mb-3">Active Session</h3>
           <p className="text-lg mb-4">
@@ -5652,12 +5697,15 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
               <span className="text-base font-semibold text-blue-700 ml-1">— {extractDhammaschoolClassId(activeSession.lessonLink)}</span>
             )}
           </p>
-          {activeSession.lessonUnitCount > 0 && (
+          {activeUnitCount > 0 && (
             <p className="text-sm mb-4 font-semibold">
-              Studying {activeSession.lessonUnitLabel || 'Chapter'} {(studentProfile?.completedUnits?.[computeLessonKey(activeSession.lessonTitle, activeSession.lessonLink)] || 0) + 1}
+              {isActiveFullyComplete
+                ? <>✅ Completed — all {activeUnitCount} {activeSession.lessonUnitLabel || 'Chapter'}{activeUnitCount === 1 ? '' : 's'}</>
+                : <>Studying {activeSession.lessonUnitLabel || 'Chapter'} {Math.min(activeUnitCount, activeEffectiveCompleted + 1)}</>
+              }
             </p>
           )}
-          
+
           <p className="text-sm mb-4">Started: {formatTimestamp(activeSession.startTime)}</p>
           {activeSession.startTime && typeof activeSession.startTime.toDate === 'function' && (
             <p className="text-sm mb-4 font-semibold">
@@ -5793,7 +5841,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
               disabled={!activeSession.lessonLink} 
               className="w-full sm:w-1/2 bg-blue-500 text-white p-4 rounded-lg font-bold hover:bg-blue-600 transition-transform transform hover:scale-105 shadow-md disabled:opacity-50"
             >
-              Continue
+              {isActiveFullyComplete ? '✅ Completed — Continue' : 'Continue'}
             </button>
             <div className="w-full sm:w-1/2">
                <button 
@@ -5805,7 +5853,8 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       <div ref={lessonsSectionRef} className="bg-white/90 backdrop-blur-sm p-6 rounded-xl shadow-lg mb-8 border border-gray-200 relative">
         <h3 className="text-xl font-semibold mb-4 text-gray-800">Available Lessons</h3>
@@ -5826,29 +5875,16 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
               const previouslyEarnedList = earnedTrophiesMapList[lessonKeyList] || 0;
               const maxAvailableList = lesson.trophyLimit || 0;
               const remainingList = Math.max(0, maxAvailableList - previouslyEarnedList);
-              const completedUnitsMapList = studentProfile?.completedUnits || {};
-              const trackedCompletedUnit = completedUnitsMapList[lessonKeyList] || 0;
-              const derivedCompletedUnit = (lesson.unitCount > 0 && maxAvailableList > 0)
-                ? Math.min(lesson.unitCount, Math.ceil((previouslyEarnedList * lesson.unitCount) / maxAvailableList))
-                : 0;
-              const completedUnitList = Math.max(trackedCompletedUnit, derivedCompletedUnit);
+              const sessionsForLessonList = completedSessions.filter(s => s.lessonTitle === lesson.title);
+              const completedUnitList = getEffectiveCompletedUnit(lesson, studentProfile, sessionsForLessonList, ssCompletionCounts);
               const nextUnitNumber = lesson.unitCount > 0 ? Math.min(lesson.unitCount, completedUnitList + 1) : completedUnitList + 1;
               const latestSessionForLesson = completedSessions.find(s => s.lessonTitle === lesson.title && typeof s.completedUnit === 'number' && s.completedUnit > 0);
               const showNowFinished = !!latestSessionForLesson;
               const isSmartStudyLesson = !!(lesson.link && lesson.link.startsWith('smartstudy://'));
               const ssClassIdForBtn = isSmartStudyLesson ? extractSmartStudyClassId(lesson.link) : null;
-              const ssCount = ssClassIdForBtn != null ? (ssCompletionCounts[ssClassIdForBtn] ?? null) : null;
-              // Next SmartStudy lesson number = completions done + 1 (capped at unitCount)
-              const ssNextNum = ssCount !== null
-                ? (lesson.unitCount > 0 ? Math.min(lesson.unitCount, ssCount + 1) : ssCount + 1)
-                : null;
-              const buttonText = isSmartStudyLesson
-                ? (ssNextNum !== null
-                  ? (isNew ? `Start ${lesson.unitLabel || 'Lesson'} ${ssNextNum}` : `Continue ${lesson.unitLabel || 'Lesson'} ${ssNextNum}`)
-                  : (isNew ? `Start ${lesson.unitLabel || 'Lesson'}` : `Continue ${lesson.unitLabel || 'Lesson'}`))
-                : (isNew
-                  ? (lesson.unitCount > 0 ? `Start ${lesson.unitLabel || 'Chapter'} ${nextUnitNumber}` : 'Start Lesson')
-                  : (lesson.unitCount > 0 ? `Continue ${lesson.unitLabel || 'Chapter'} ${nextUnitNumber}` : 'Continue Lesson'));
+              const buttonText = isNew
+                ? (lesson.unitCount > 0 ? `Start ${lesson.unitLabel || 'Chapter'} ${nextUnitNumber}` : 'Start Lesson')
+                : (lesson.unitCount > 0 ? `Continue ${lesson.unitLabel || 'Chapter'} ${nextUnitNumber}` : 'Continue Lesson');
 
               const recentCompletedSession = mySessions
                 .filter(s => s.lessonTitle === lesson.title && s.endTime && s.startTime)
@@ -5892,20 +5928,16 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                         onCountChange={(count) => setSsCompletionCounts(prev => ({ ...prev, [extractSmartStudyClassId(lesson.link)]: count }))}
                       />
                     )}
-                    {/* One unified message for every app (SmartStudy included) — same
-                        line, not split across a <br/>, so it always reads as a single
-                        clear sentence: "You completed up to X / Y. Now you finished X." */}
-                    {lesson.unitCount > 0 && (
-                      completedUnitList > 0 ||
-                      showNowFinished ||
-                      (lesson.link?.startsWith('smartstudy://') && ssCompletionCounts[extractSmartStudyClassId(lesson.link)] > 0)
-                    ) && (
+                    {/* One unified message for every app (Smart Study, Abhidhamma,
+                        Dhammaschool included) — same line, not split across a
+                        <br/>, so it always reads as a single clear sentence:
+                        "You completed up to X / Y. Now you finished X." Uses the
+                        same getEffectiveCompletedUnit() number as the Completed
+                        badge and the Continue button above, so they can never
+                        disagree with each other. */}
+                    {lesson.unitCount > 0 && (completedUnitList > 0 || showNowFinished) && (
                       <p className="text-sm font-bold text-indigo-700 mt-1">
-                        You completed up to {lesson.unitLabel || 'Chapter'} {
-                          lesson.link?.startsWith('smartstudy://')
-                            ? Math.max(ssCompletionCounts[extractSmartStudyClassId(lesson.link)] || 0, completedUnitList, latestSessionForLesson?.completedUnit || 0)
-                            : Math.max(completedUnitList, latestSessionForLesson?.completedUnit || 0)
-                        }{lesson.unitCount > 0 ? ` / ${lesson.unitCount}` : ''}.
+                        You completed up to {lesson.unitLabel || 'Chapter'} {completedUnitList}{lesson.unitCount > 0 ? ` / ${lesson.unitCount}` : ''}.
                         {showNowFinished && ` Now you finished ${lesson.unitLabel || 'Chapter'} ${latestSessionForLesson.completedUnit}.`}
                       </p>
                     )}
