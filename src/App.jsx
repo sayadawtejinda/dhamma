@@ -1,5 +1,6 @@
 import React, { useState, Suspense, lazy } from 'react';
 import TutoringApp from './TutoringApp';
+import InstallAppBanner from './InstallAppBanner';
 
 // Every sub-app below is lazy-loaded (its JS is only downloaded the first
 // time it's actually opened) AND only mounted while it's the active app —
@@ -584,6 +585,7 @@ export default function App() {
           </div>
         )}
       </Suspense>
+      <InstallAppBanner />
     </div>
   );
 }
