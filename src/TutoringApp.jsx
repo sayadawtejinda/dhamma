@@ -237,6 +237,25 @@ const computeLessonKey = (title, link) => {
   return sanitizeKey(classId ? `${title}_${classId}` : title);
 };
 
+// Smart Study/Abhidhamma/Dhammaschool trophies are always stored per class
+// (each class gets its own "title_classId" key on the student's
+// earnedTrophies map) -- a bare "title" key with no class suffix is never
+// actually written to once a class is involved. So when no specific class
+// is selected (the "Trophy Status for this Lesson" whole-app view),
+// looking up that bare key alone always reads back 0/stale, even though
+// every individual class's own trophy count is correct. Summing every key
+// that belongs to this title (bare, for lessons with no class concept, or
+// "title_anyClassId") gives the real cross-class total.
+const sumEarnedTrophiesForTitle = (earnedTrophiesMap, title) => {
+  if (!earnedTrophiesMap) return 0;
+  const base = sanitizeKey(title);
+  const prefix = `${base}_`;
+  return Object.entries(earnedTrophiesMap).reduce((sum, [key, value]) => {
+    if (key === base || key.startsWith(prefix)) return sum + (value || 0);
+    return sum;
+  }, 0);
+};
+
 // Single source of truth for "how many lesson-units has this student
 // completed on this lesson" — Smart Study, Abhidhamma, and Dhammaschool all
 // share the same idea (a class = several lessons, trophies awarded roughly
@@ -3198,8 +3217,10 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
               // function (getClassSpecificTrophyInfo) — this is what fixes the
               // "Previously Earned" number being a cross-class total instead of
               // this specific class's own trophies.
-              const { maxAvailable, lessonKey } = getClassSpecificTrophyInfo(lesson);
-              const previouslyEarned = student.earnedTrophies?.[lessonKey] || 0;
+              const { maxAvailable, lessonKey, classId } = getClassSpecificTrophyInfo(lesson);
+              const previouslyEarned = classId
+                ? (student.earnedTrophies?.[lessonKey] || 0)
+                : sumEarnedTrophiesForTitle(student.earnedTrophies, lesson.title);
               const remaining = Math.max(0, maxAvailable - previouslyEarned);
 
               const trackedCompletedUnit = student.completedUnits?.[lessonKey] || 0;
