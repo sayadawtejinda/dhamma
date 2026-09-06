@@ -2672,7 +2672,7 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
           const cacheKey = `${classId}::${name}`;
           if (!(cacheKey in completionCache)) {
             const q = query(
-              collection(db, 'artifacts', appId, 'public', 'data', 'quizCompletions'),
+              collection(db, 'artifacts', appId, 'public', 'data', 'scores'),
               where('classId', '==', classId),
               where('studentName', '==', name)
             );
