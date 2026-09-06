@@ -1088,6 +1088,7 @@ export default function AnimalSoundApp({ entryRequest, onExit, hideOwnOnlineBadg
         dangerouslySetInnerHTML={{ __html: AS_APP_BODY_HTML }}
       />
       {!hideOwnOnlineBadge && (
+      <>
       <button
         onClick={() => setShowOnlinePanel(true)}
         className="fixed top-16 left-3 z-[9990] flex items-center gap-1 text-sm font-bold bg-white/90 backdrop-blur-sm px-3 py-2 rounded-2xl shadow-lg border border-gray-200 text-emerald-600 hover:underline"
@@ -1117,6 +1118,7 @@ export default function AnimalSoundApp({ entryRequest, onExit, hideOwnOnlineBadg
           </div>
         </div>
       )}
+      </>
       )}
     </>
   );
