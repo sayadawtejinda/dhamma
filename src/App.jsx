@@ -33,6 +33,10 @@ const MyanmarSoundPracticeApp = lazy(() => import('./MyanmarSoundPracticeApp'));
 // The 6 apps above stay wired individually too for now, so nothing already
 // working changes — this is purely an additional entry point.
 const ReadingMyanmarApp = lazy(() => import('./ReadingMyanmarApp'));
+// Second combined group — bundles MyanmarPoemsApp, MyanmarNumberLearningApp,
+// AnimalSoundApp, BurmeseLearningGamesApp, InteractiveLearningQuizApp and
+// TimeAndCalendarApp the same way (see SpeakingMyanmarApp.jsx).
+const SpeakingMyanmarApp = lazy(() => import('./SpeakingMyanmarApp'));
 
 function LoadingFallback() {
   return (
@@ -72,6 +76,7 @@ export default function App() {
   const [myanmarSpellingRequest, setMyanmarSpellingRequest] = useState(null);
   const [myanmarSoundPracticeRequest, setMyanmarSoundPracticeRequest] = useState(null);
   const [readingMyanmarRequest, setReadingMyanmarRequest] = useState(null);
+  const [speakingMyanmarRequest, setSpeakingMyanmarRequest] = useState(null);
 
   const openMyanmarSpelling = (request) => {
     setMyanmarSpellingRequest(request || {});
@@ -98,6 +103,15 @@ export default function App() {
   const closeReadingMyanmar = () => {
     setActiveApp('tutoring');
     setReadingMyanmarRequest(null);
+  };
+
+  const openSpeakingMyanmar = (request) => {
+    setSpeakingMyanmarRequest(request || {});
+    setActiveApp('speakingmyanmar');
+  };
+  const closeSpeakingMyanmar = () => {
+    setActiveApp('tutoring');
+    setSpeakingMyanmarRequest(null);
   };
 
   const openConsonantEndings = (request) => {
@@ -262,6 +276,7 @@ export default function App() {
           onOpenMyanmarSpelling={openMyanmarSpelling}
           onOpenMyanmarSoundPractice={openMyanmarSoundPractice}
           onOpenReadingMyanmar={openReadingMyanmar}
+          onOpenSpeakingMyanmar={openSpeakingMyanmar}
         />
       </div>
 
@@ -541,6 +556,12 @@ export default function App() {
         {openedApps.has('readingmyanmar') && (
           <div style={{ display: activeApp === 'readingmyanmar' ? 'block' : 'none' }}>
             <ReadingMyanmarApp entryRequest={readingMyanmarRequest} onExit={closeReadingMyanmar} />
+          </div>
+        )}
+
+        {openedApps.has('speakingmyanmar') && (
+          <div style={{ display: activeApp === 'speakingmyanmar' ? 'block' : 'none' }}>
+            <SpeakingMyanmarApp entryRequest={speakingMyanmarRequest} onExit={closeSpeakingMyanmar} />
           </div>
         )}
       </Suspense>
