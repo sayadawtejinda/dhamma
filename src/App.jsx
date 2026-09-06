@@ -1,4 +1,4 @@
-import React, { useState, Suspense, lazy } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import TutoringApp from './TutoringApp';
 import InstallAppBanner from './InstallAppBanner';
 
@@ -51,10 +51,67 @@ const SpeakingMyanmarApp = lazy(() => import('./SpeakingMyanmarApp'));
 // MyanmarPart1And2App.jsx).
 const MyanmarPart1And2App = lazy(() => import('./MyanmarPart1And2App'));
 
+// Catches a failed lazy-chunk load (e.g. the browser has an old page open
+// from before a new deploy replaced that chunk's file) so it shows a
+// recoverable message instead of a blank crashed screen.
+class AppErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error) {
+    console.error('App crashed:', error);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="fixed inset-0 flex flex-col items-center justify-center gap-4 bg-indigo-50 p-4 text-center">
+          <div className="text-xl font-semibold text-indigo-600">Something went wrong loading this page.</div>
+          <p className="text-sm text-indigo-500">This can happen right after an update. Reloading usually fixes it.</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-indigo-600 text-white rounded-full font-semibold text-sm hover:bg-indigo-700"
+          >
+            Reload page
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function LoadingFallback() {
+  // Some of these apps (Smart Study especially) are large, so the first
+  // download after a fresh deploy or on a slow connection can take a
+  // moment. If it's still loading after a while, offer a reload instead
+  // of leaving the visitor staring at a spinner with no way out -- a
+  // reload re-fetches the current chunk list fresh, which also recovers
+  // from the one real failure mode here: the browser holding an old,
+  // now-superseded build that references chunk files a newer deploy
+  // already replaced.
+  const [showReload, setShowReload] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setShowReload(true), 8000);
+    return () => clearTimeout(timer);
+  }, []);
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-indigo-50">
+    <div className="fixed inset-0 flex flex-col items-center justify-center gap-4 bg-indigo-50">
       <div className="text-xl font-semibold text-indigo-600">Loading...</div>
+      {showReload && (
+        <div className="text-center">
+          <p className="text-sm text-indigo-500 mb-2">Taking longer than usual.</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-indigo-600 text-white rounded-full font-semibold text-sm hover:bg-indigo-700"
+          >
+            Reload page
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -294,6 +351,7 @@ export default function App() {
         />
       </div>
 
+      <AppErrorBoundary key={activeApp}>
       <Suspense fallback={<LoadingFallback />}>
         {activeApp === 'smartstudy' && (
           <div>
@@ -585,6 +643,7 @@ export default function App() {
           </div>
         )}
       </Suspense>
+      </AppErrorBoundary>
       <InstallAppBanner />
     </div>
   );
