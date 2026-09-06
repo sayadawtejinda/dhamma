@@ -2488,7 +2488,122 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
     setImportFileContent(null);
     setIsImporting(false);
   };
-  
+
+  // ── Trophy Data Audit ──
+  // Two checks, neither of which writes anything -- purely diagnostic, so
+  // it's always safe to run.
+  //
+  // 1) Live scan: flags any earnedTrophies value that exceeds its lesson's
+  //    own trophyLimit -- a state that should be logically impossible, so
+  //    seeing it at all means something (a bad manual edit, a bug like the
+  //    per-class-summing one this was built in response to) let a number
+  //    go higher than it should. Only checks bare-title keys (lessons
+  //    without a Smart Study/Abhidhamma/Dhammaschool class concept),
+  //    since a per-class key's real max requires knowing that specific
+  //    class's live lesson count, which wasn't worth the extra fetches for
+  //    a first pass.
+  //
+  // 2) Backup comparison: upload an older exported backup and compare each
+  //    student's earnedTrophies/completedUnits key-by-key against the
+  //    current live data (matched by student NAME, not ID, since an old
+  //    backup can come from a different Firebase project with different
+  //    IDs -- see confirmImportData's teacherUid rewrite for the same
+  //    reason). Surfaces every case where the old backup shows MORE than
+  //    what's live now -- exactly the shape of bug that lost Long Phan's
+  //    6 Abhidhamma trophies during whatever long-ago migration never
+  //    finished carrying them over.
+  const [trophyAuditResults, setTrophyAuditResults] = useState(null);
+  const [isRunningTrophyAudit, setIsRunningTrophyAudit] = useState(false);
+  const [auditBackupFileContent, setAuditBackupFileContent] = useState(null);
+  const [auditBackupFileName, setAuditBackupFileName] = useState('');
+  const auditBackupFileRef = useRef(null);
+
+  const runLiveTrophyAudit = () => {
+    setIsRunningTrophyAudit(true);
+    const findings = [];
+    students.forEach(student => {
+      const earned = student.earnedTrophies || {};
+      Object.entries(earned).forEach(([key, value]) => {
+        if (!value || value <= 0) return;
+        // Only bare-title keys (no class suffix): find a lessonBank entry
+        // whose own sanitized title matches this key exactly.
+        const matchingLesson = lessonBank.find(l => sanitizeKey(l.title) === key);
+        if (!matchingLesson) return;
+        const max = matchingLesson.trophyLimit || 0;
+        if (max > 0 && value > max) {
+          findings.push({
+            type: 'impossible',
+            studentName: student.name,
+            lessonTitle: matchingLesson.title,
+            key,
+            liveValue: value,
+            max
+          });
+        }
+      });
+    });
+    setTrophyAuditResults(prev => ({ ...(prev || {}), impossibleStates: findings, liveScanDone: true }));
+    setIsRunningTrophyAudit(false);
+  };
+
+  const handleAuditBackupFileSelect = (event) => {
+    const file = event.target.files[0];
+    if (file && file.type === "application/json") {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setAuditBackupFileContent(e.target.result);
+        setAuditBackupFileName(file.name);
+      };
+      reader.readAsText(file);
+    }
+    if (auditBackupFileRef.current) auditBackupFileRef.current.value = null;
+  };
+
+  const runBackupComparisonAudit = () => {
+    if (!auditBackupFileContent) return;
+    setIsRunningTrophyAudit(true);
+    try {
+      const backup = JSON.parse(auditBackupFileContent);
+      const oldStudents = backup.students || [];
+      const findings = [];
+      oldStudents.forEach(oldStudent => {
+        const liveStudent = students.find(s => (s.name || '').trim().toLowerCase() === (oldStudent.name || '').trim().toLowerCase());
+        if (!liveStudent) {
+          findings.push({ type: 'missing_student', studentName: oldStudent.name });
+          return;
+        }
+        ['earnedTrophies', 'completedUnits'].forEach(field => {
+          const oldMap = oldStudent[field] || {};
+          const liveMap = liveStudent[field] || {};
+          Object.entries(oldMap).forEach(([key, oldValue]) => {
+            const liveValue = liveMap[key] || 0;
+            if ((oldValue || 0) !== liveValue) {
+              findings.push({
+                type: 'mismatch',
+                field,
+                studentName: liveStudent.name,
+                key,
+                oldValue: oldValue || 0,
+                liveValue,
+                lostData: (oldValue || 0) > liveValue
+              });
+            }
+          });
+        });
+      });
+      // Worst (data possibly lost) first, then by student name.
+      findings.sort((a, b) => {
+        if (a.type === 'missing_student' || b.type === 'missing_student') return a.type === 'missing_student' ? -1 : 1;
+        if (a.lostData !== b.lostData) return a.lostData ? -1 : 1;
+        return (a.studentName || '').localeCompare(b.studentName || '');
+      });
+      setTrophyAuditResults(prev => ({ ...(prev || {}), backupComparison: findings, backupFileName: auditBackupFileName }));
+    } catch (err) {
+      alert(`Could not read that backup file: ${err.message || err}`);
+    }
+    setIsRunningTrophyAudit(false);
+  };
+
   const completedSessions = sessions
     .filter(s => s.endTime)
     .sort((a, b) => b.startTime.toDate() - a.startTime.toDate());
@@ -3575,6 +3690,77 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
               className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 disabled:opacity-50"
             />
             {isImporting && <p className="text-indigo-600 mt-4">Importing data, please wait...</p>}
+          </div>
+
+          <div className="mt-8 pt-6 border-t border-violet-200">
+            <h4 className="text-lg font-semibold mb-3 text-gray-700">🔍 Trophy Data Audit</h4>
+            <p className="text-sm text-gray-600 mb-4">
+              Read-only checks — nothing here writes any data. Use this to find other trophy mix-ups without checking every student one by one.
+            </p>
+
+            <div className="mb-5 p-4 bg-white rounded-lg border border-violet-200">
+              <p className="font-semibold text-gray-800 mb-1">1. Scan for impossible trophy counts</p>
+              <p className="text-sm text-gray-500 mb-3">Flags any student whose earned trophies for a lesson exceed that lesson's own Max Available — a state that should never happen.</p>
+              <button
+                onClick={runLiveTrophyAudit}
+                disabled={isRunningTrophyAudit}
+                className="bg-violet-500 text-white px-4 py-2 rounded-lg font-semibold hover:bg-violet-600 disabled:opacity-50"
+              >
+                {isRunningTrophyAudit ? 'Scanning...' : 'Scan Live Data'}
+              </button>
+              {trophyAuditResults?.liveScanDone && (
+                trophyAuditResults.impossibleStates.length === 0 ? (
+                  <p className="text-sm text-emerald-600 font-semibold mt-3">✅ No impossible trophy counts found.</p>
+                ) : (
+                  <div className="mt-3 space-y-2">
+                    {trophyAuditResults.impossibleStates.map((f, i) => (
+                      <div key={i} className="text-sm bg-red-50 border border-red-200 rounded-lg p-2">
+                        <strong>{f.studentName}</strong> — {f.lessonTitle}: has <strong className="text-red-700">{f.liveValue}</strong> trophies, but Max Available is only <strong>{f.max}</strong>
+                      </div>
+                    ))}
+                  </div>
+                )
+              )}
+            </div>
+
+            <div className="p-4 bg-white rounded-lg border border-violet-200">
+              <p className="font-semibold text-gray-800 mb-1">2. Compare against an old backup</p>
+              <p className="text-sm text-gray-500 mb-3">Upload a previous "Download Data Backup" file (matched by student name) to see exactly which trophy/lesson numbers differ from right now — this doesn't touch live data at all, it just shows the differences.</p>
+              <input
+                type="file" accept=".json" ref={auditBackupFileRef} onChange={handleAuditBackupFileSelect}
+                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100 mb-3"
+              />
+              {auditBackupFileName && (
+                <p className="text-xs text-gray-500 mb-3">Selected: {auditBackupFileName}</p>
+              )}
+              <button
+                onClick={runBackupComparisonAudit}
+                disabled={isRunningTrophyAudit || !auditBackupFileContent}
+                className="bg-violet-500 text-white px-4 py-2 rounded-lg font-semibold hover:bg-violet-600 disabled:opacity-50"
+              >
+                {isRunningTrophyAudit ? 'Comparing...' : 'Compare to Old Backup'}
+              </button>
+              {trophyAuditResults?.backupComparison && (
+                trophyAuditResults.backupComparison.length === 0 ? (
+                  <p className="text-sm text-emerald-600 font-semibold mt-3">✅ No differences found — everything matches the old backup.</p>
+                ) : (
+                  <div className="mt-3 space-y-2 max-h-96 overflow-y-auto">
+                    {trophyAuditResults.backupComparison.map((f, i) => (
+                      <div key={i} className={`text-sm rounded-lg p-2 border ${f.type === 'missing_student' ? 'bg-gray-50 border-gray-200' : f.lostData ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'}`}>
+                        {f.type === 'missing_student' ? (
+                          <><strong>{f.studentName}</strong> — in the old backup, but no matching student found live (name may have changed).</>
+                        ) : (
+                          <>
+                            <strong>{f.studentName}</strong> — {f.field === 'earnedTrophies' ? 'trophies' : 'completed'} for "{f.key}": old backup had <strong className={f.lostData ? 'text-red-700' : ''}>{f.oldValue}</strong>, live now has <strong>{f.liveValue}</strong>
+                            {f.lostData && <span className="ml-1 text-red-700 font-semibold">— possible data loss</span>}
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )
+              )}
+            </div>
           </div>
 
           <div className="mt-8 pt-6 border-t border-violet-200">
