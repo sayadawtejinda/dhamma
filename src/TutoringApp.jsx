@@ -280,6 +280,33 @@ const computeClassTrophyMax = (lessonCount) => {
   return Math.max(1, Math.round(n / 5));
 };
 
+// One-time migration map for the 4 old Gemini-link Lesson Bank entries being
+// retired in favor of the real per-class Smart Study tracking. `fallback` is
+// only ever used for a target class that has NO live Smart Study tracking at
+// all (e.g. Mingala) -- every class that does exist live gets its trophies
+// computed from real quizCompletions data instead, exactly like a normal
+// Smart Study class, so a student's true progress decides the number, not
+// this old fixed value.
+const SMARTSTUDY_MIGRATION_MAP = {
+  "10 Parami": [
+    { classId: 'BUDDHA', fallback: 2 },
+    { classId: 'DHAMMA', fallback: 2 },
+    { classId: 'NEW', fallback: 1 },
+  ],
+  " Heavenly World or Golden cage": [
+    { classId: 'DEVA', fallback: 2 },
+    { classId: 'KAMMA', fallback: 3 },
+  ],
+  "38 Blessings ": [
+    { classId: 'MINGALA', fallback: 2 },
+  ],
+  "The Buddha's Eight Outer Victories": [
+    { classId: 'OUTER VICTORIES', fallback: 2 },
+    { classId: 'WASO', fallback: 2 },
+  ],
+};
+const SMARTSTUDY_MIGRATION_NEW_TITLE = 'Smart Study';
+
 const toLocalDateString = (date) => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -2617,6 +2644,154 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
     setIsRunningTrophyAudit(false);
   };
 
+  // ── Smart Study migration (retiring 4 old Gemini-link lessons) ──
+  // Preview-first, exactly like the audit above: computes what WOULD change
+  // and shows it, writes nothing until the teacher explicitly applies it.
+  // Only ever raises a per-class earnedTrophies value up to what a student
+  // has actually earned live in Smart Study (or the fallback, for a class
+  // with no live tracking) -- it never lowers anything, and it never touches
+  // the old bare-title keys, so trophyCount and everything already awarded
+  // stays exactly as-is.
+  const [ssMigrationPreview, setSsMigrationPreview] = useState(null);
+  const [isRunningSsMigration, setIsRunningSsMigration] = useState(false);
+  const [isApplyingSsMigration, setIsApplyingSsMigration] = useState(false);
+
+  const runSmartStudyMigrationPreview = async () => {
+    setIsRunningSsMigration(true);
+    setSsMigrationPreview(null);
+    try {
+      const classesSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'classes'));
+      const liveClasses = {};
+      classesSnap.docs.forEach(d => { liveClasses[d.id] = (d.data().lessons || []).length; });
+
+      const completionCache = {};
+      const getCompletedCount = async (classId, names) => {
+        const distinct = new Set();
+        for (const name of names) {
+          if (!name) continue;
+          const cacheKey = `${classId}::${name}`;
+          if (!(cacheKey in completionCache)) {
+            const q = query(
+              collection(db, 'artifacts', appId, 'public', 'data', 'quizCompletions'),
+              where('classId', '==', classId),
+              where('studentName', '==', name)
+            );
+            const snap = await getDocs(q);
+            completionCache[cacheKey] = snap.docs.map(d => d.data().lessonId);
+          }
+          completionCache[cacheKey].forEach(id => distinct.add(id));
+        }
+        return distinct.size;
+      };
+
+      const rows = [];
+      for (const student of students) {
+        const earned = student.earnedTrophies || {};
+        for (const oldTitle of Object.keys(SMARTSTUDY_MIGRATION_MAP)) {
+          const oldValue = earned[oldTitle] || 0;
+          if (oldValue <= 0) continue;
+          for (const target of SMARTSTUDY_MIGRATION_MAP[oldTitle]) {
+            const { classId, fallback } = target;
+            const newKey = sanitizeKey(`${SMARTSTUDY_MIGRATION_NEW_TITLE}_${classId}`);
+            const currentNew = earned[newKey] || 0;
+            const lessonCount = liveClasses[classId];
+            let deserved, basis, liveCompleted = null, liveTotal = null;
+            if (lessonCount != null && lessonCount > 0) {
+              const names = [...new Set([student.name, student.smartStudyNames?.[classId]].filter(Boolean))];
+              const completed = await getCompletedCount(classId, names);
+              const maxAvailable = computeClassTrophyMax(lessonCount);
+              deserved = Math.floor((completed * maxAvailable) / lessonCount);
+              basis = 'live';
+              liveCompleted = completed;
+              liveTotal = lessonCount;
+            } else {
+              deserved = fallback;
+              basis = 'fallback';
+            }
+            const proposedNew = Math.max(currentNew, deserved);
+            rows.push({
+              studentId: student.id,
+              studentName: student.name,
+              oldTitle,
+              oldValue,
+              classId,
+              newKey,
+              basis,
+              liveCompleted,
+              liveTotal,
+              deserved,
+              currentNew,
+              proposedNew,
+              willChange: proposedNew > currentNew,
+            });
+          }
+        }
+      }
+      rows.sort((a, b) => a.studentName.localeCompare(b.studentName) || a.oldTitle.localeCompare(b.oldTitle) || a.classId.localeCompare(b.classId));
+      setSsMigrationPreview({ rows, liveClasses });
+    } catch (err) {
+      console.error('Error running Smart Study migration preview:', err);
+      alert(`Could not run the migration preview: ${err.message || err}`);
+    }
+    setIsRunningSsMigration(false);
+  };
+
+  const applySmartStudyMigration = async () => {
+    if (!ssMigrationPreview) return;
+    const changingRows = ssMigrationPreview.rows.filter(r => r.willChange);
+    if (changingRows.length === 0) {
+      alert('Nothing to apply -- no student needs a higher trophy count than they already have.');
+      return;
+    }
+    if (!window.confirm(`This will set new "Smart Study" per-class trophy values for ${changingRows.length} student/class combination(s), only where that raises the number. It will NOT change any existing trophy already given. Continue?`)) return;
+    setIsApplyingSsMigration(true);
+    try {
+      let ssEntry = lessonBank.find(l => l.link === 'smartstudy://');
+      if (!ssEntry) {
+        await addDoc(lessonBankCollection, {
+          teacherUid: user.uid,
+          title: SMARTSTUDY_MIGRATION_NEW_TITLE,
+          link: 'smartstudy://',
+          details: '',
+          trophyLimit: 0,
+          unitLabel: 'Lesson',
+          unitCount: 0,
+          createdAt: serverTimestamp(),
+        });
+      }
+      const batch = writeBatch(db);
+      changingRows.forEach(row => {
+        const studentRef = doc(db, `${publicDataPath}/students`, row.studentId);
+        batch.update(studentRef, { [`earnedTrophies.${row.newKey}`]: row.proposedNew });
+      });
+      await batch.commit();
+      alert(`Done. Updated ${changingRows.length} trophy value(s) under the new "Smart Study" entry. The old lesson trophies were left untouched.`);
+      setSsMigrationPreview(null);
+    } catch (err) {
+      console.error('Error applying Smart Study migration:', err);
+      alert(`Migration failed: ${err.message || err}`);
+    }
+    setIsApplyingSsMigration(false);
+  };
+
+  const handleDeleteOldSmartStudyLessons = async () => {
+    const targets = lessonBank.filter(l => Object.keys(SMARTSTUDY_MIGRATION_MAP).includes(l.title));
+    if (targets.length === 0) {
+      alert('None of the 4 old lessons were found in the Lesson Bank (maybe already deleted).');
+      return;
+    }
+    if (!window.confirm(`Delete these ${targets.length} old Lesson Bank entries?\n\n${targets.map(t => `- ${t.title}`).join('\n')}\n\nStudents' already-earned trophies for them are NOT touched -- this only removes them from the Lesson Bank / Assign Lesson list.`)) {
+      return;
+    }
+    try {
+      await Promise.all(targets.map(t => deleteDoc(doc(db, `${publicDataPath}/lessonBank`, t.id))));
+      alert(`Deleted ${targets.length} old lesson(s).`);
+    } catch (err) {
+      console.error('Error deleting old Smart Study lessons:', err);
+      alert(`Delete failed: ${err.message || err}`);
+    }
+  };
+
   const completedSessions = sessions
     .filter(s => s.endTime)
     .sort((a, b) => b.startTime.toDate() - a.startTime.toDate());
@@ -3773,6 +3948,86 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                   </div>
                 )
               )}
+            </div>
+          </div>
+
+          <div className="mt-8 pt-6 border-t border-violet-200">
+            <h4 className="text-lg font-semibold mb-3 text-gray-700">🔄 Migrate Old Lessons into Smart Study</h4>
+            <p className="text-sm text-gray-600 mb-4">
+              One-time move for 4 old Gemini-link lessons ("10 Parami", "Heavenly World or Golden cage", "38 Blessings", "The Buddha's Eight Outer Victories") into the real per-class Smart Study tracking. Step 1 only calculates and shows a preview — nothing is written until you press Apply. Step 2 (deleting the old lessons) is separate and only removes them from the Lesson Bank; it never touches any student's already-earned trophies.
+            </p>
+
+            <div className="mb-5 p-4 bg-white rounded-lg border border-violet-200">
+              <p className="font-semibold text-gray-800 mb-1">1. Preview the Smart Study trophy migration</p>
+              <p className="text-sm text-gray-500 mb-3">For every affected student, checks their real live progress in each mapped Smart Study class (or uses the old fixed number only if that class has no Smart Study tracking at all), and shows what would change.</p>
+              <button
+                onClick={runSmartStudyMigrationPreview}
+                disabled={isRunningSsMigration}
+                className="bg-violet-500 text-white px-4 py-2 rounded-lg font-semibold hover:bg-violet-600 disabled:opacity-50"
+              >
+                {isRunningSsMigration ? 'Calculating...' : 'Run Migration Preview'}
+              </button>
+
+              {ssMigrationPreview && (
+                <div className="mt-4">
+                  {ssMigrationPreview.rows.length === 0 ? (
+                    <p className="text-sm text-gray-500">No students currently have trophies under these 4 old lessons.</p>
+                  ) : (
+                    <>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full text-sm border">
+                          <thead className="bg-gray-100">
+                            <tr>
+                              <th className="p-2 text-left border">Student</th>
+                              <th className="p-2 text-left border">Old Lesson</th>
+                              <th className="p-2 text-left border">→ Class</th>
+                              <th className="p-2 text-left border">Basis</th>
+                              <th className="p-2 text-left border">Current New</th>
+                              <th className="p-2 text-left border">Proposed New</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {ssMigrationPreview.rows.map((r, i) => (
+                              <tr key={i} className={r.willChange ? 'bg-emerald-50' : ''}>
+                                <td className="p-2 border">{r.studentName}</td>
+                                <td className="p-2 border">{r.oldTitle.trim()}</td>
+                                <td className="p-2 border">{r.classId}</td>
+                                <td className="p-2 border">
+                                  {r.basis === 'live'
+                                    ? `live (${r.liveCompleted}/${r.liveTotal} lessons)`
+                                    : <span className="text-amber-700">fallback (no live class found)</span>}
+                                </td>
+                                <td className="p-2 border">{r.currentNew}</td>
+                                <td className="p-2 border font-semibold">
+                                  {r.proposedNew}{r.willChange && <span className="text-emerald-700 ml-1">(+{r.proposedNew - r.currentNew})</span>}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <button
+                        onClick={applySmartStudyMigration}
+                        disabled={isApplyingSsMigration || ssMigrationPreview.rows.every(r => !r.willChange)}
+                        className="mt-4 bg-emerald-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50"
+                      >
+                        {isApplyingSsMigration ? 'Applying...' : `Apply — set ${ssMigrationPreview.rows.filter(r => r.willChange).length} value(s)`}
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 bg-white rounded-lg border border-violet-200">
+              <p className="font-semibold text-gray-800 mb-1">2. Delete the 4 old lessons from the Lesson Bank</p>
+              <p className="text-sm text-gray-500 mb-3">Only do this after Step 1's Apply has been run. Removes them from the Lesson Bank / Assign Lesson list only — does not touch any student's data.</p>
+              <button
+                onClick={handleDeleteOldSmartStudyLessons}
+                className="bg-red-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-700"
+              >
+                Delete Old Lessons
+              </button>
             </div>
           </div>
 
