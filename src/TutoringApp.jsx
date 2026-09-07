@@ -358,6 +358,23 @@ const ABHIDHAMMA_MIGRATION_MAP = {
 // to worry about here.
 const CANONICAL_ABHIDHAMMA_TITLE = 'Abhidhamma Lesson';
 const ABHIDHAMMA_MIGRATION_CLASS_IDS = [...new Set(Object.values(ABHIDHAMMA_MIGRATION_MAP).flat().map(t => t.classId))];
+
+// One-time migration map for old Gemini-link Dhammaschool grade lessons
+// (Myanmar-titled) into the real per-class Dhammaschool tracking. classId
+// values (GRADE-1 .. GRADE-5) were given directly by the teacher as the
+// real live class IDs -- Dhammaschool classes are a plain string field on
+// each lesson doc, not a separate document id vs. display name like
+// Abhidhamma, so no name-resolution ambiguity here.
+const DHAMMASCHOOL_MIGRATION_MAP = {
+  'ဓမ္မစကူးလ်-ပထမတန်း': [{ classId: 'GRADE-1' }],
+  'ဓမ္မစကူးလ်(ဒုတိယတန်း)': [{ classId: 'GRADE-2' }],
+  'ဓမ္မစကူးလ် (တတိယတန်း)': [{ classId: 'GRADE-3' }],
+  'ဓမ္မစကူးလ်(စတုတ္ထတန်း)': [{ classId: 'GRADE-4' }],
+  'ဓမ္မစကူးလ်-ပဉ္စမတန်း': [{ classId: 'GRADE-5' }],
+};
+// Confirmed directly by the teacher as the entry actually used to send
+// Dhammaschool lessons.
+const CANONICAL_DHAMMASCHOOL_TITLE = 'Dhammaschool Lesson';
 const SMARTSTUDY_MIGRATION_CLASS_IDS = [...new Set(Object.values(SMARTSTUDY_MIGRATION_MAP).flat().map(t => t.classId))];
 
 const toLocalDateString = (date) => {
@@ -3219,6 +3236,150 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
     setIsRunningAbhiCleanup(false);
   };
 
+  // ── Dhammaschool migration (same preview-first pattern as the other two) ──
+  const [dsMigrationPreview, setDsMigrationPreview] = useState(null);
+  const [isRunningDsMigration, setIsRunningDsMigration] = useState(false);
+  const [isApplyingDsMigration, setIsApplyingDsMigration] = useState(false);
+
+  const runDhammaschoolMigrationPreview = async () => {
+    setIsRunningDsMigration(true);
+    setDsMigrationPreview(null);
+    try {
+      const classIds = [...new Set(Object.values(DHAMMASCHOOL_MIGRATION_MAP).flat().map(t => t.classId))];
+      const classLessonIdsByClass = {};
+      for (const classId of classIds) {
+        const lessonsSnap = await getDocs(query(
+          collection(db, 'artifacts', DHAMMASCHOOL_APP_ID, 'public', 'data', 'lessons'),
+          where('classId', '==', classId)
+        ));
+        classLessonIdsByClass[classId] = lessonsSnap.docs.map(d => d.id);
+      }
+
+      const completionsCache = {};
+      const getCompletedCount = async (classId, name) => {
+        if (!(name in completionsCache)) {
+          const snap = await getDocs(query(
+            collection(db, 'artifacts', DHAMMASCHOOL_APP_ID, 'public', 'data', 'lesson_completions'),
+            where('studentName', '==', name)
+          ));
+          completionsCache[name] = snap.docs.map(d => d.data().lessonId);
+        }
+        const classLessonIds = classLessonIdsByClass[classId] || [];
+        return completionsCache[name].filter(lid => classLessonIds.includes(lid)).length;
+      };
+
+      const rows = [];
+      for (const student of students) {
+        const earned = student.earnedTrophies || {};
+        for (const oldTitle of Object.keys(DHAMMASCHOOL_MIGRATION_MAP)) {
+          const oldValue = earned[oldTitle] || 0;
+          if (oldValue <= 0) continue;
+          for (const target of DHAMMASCHOOL_MIGRATION_MAP[oldTitle]) {
+            const { classId } = target;
+            const newKey = sanitizeKey(`${CANONICAL_DHAMMASCHOOL_TITLE}_${classId}`);
+            const currentNew = earned[newKey] || 0;
+            const lessonCount = (classLessonIdsByClass[classId] || []).length;
+            let deserved, basis, liveCompleted = null, liveTotal = null;
+            if (lessonCount > 0) {
+              const completed = await getCompletedCount(classId, student.name);
+              const maxAvailable = computeClassTrophyMax(lessonCount);
+              deserved = Math.floor((completed * maxAvailable) / lessonCount);
+              basis = 'live';
+              liveCompleted = completed;
+              liveTotal = lessonCount;
+            } else {
+              deserved = oldValue;
+              basis = 'not-found';
+            }
+            const proposedNew = Math.max(currentNew, deserved);
+            rows.push({
+              studentId: student.id,
+              studentName: student.name,
+              oldTitle,
+              oldValue,
+              classId,
+              newKey,
+              basis,
+              liveCompleted,
+              liveTotal,
+              deserved,
+              currentNew,
+              proposedNew,
+              willChange: proposedNew > currentNew,
+            });
+          }
+        }
+      }
+      rows.sort((a, b) => a.studentName.localeCompare(b.studentName) || a.oldTitle.localeCompare(b.oldTitle) || a.classId.localeCompare(b.classId));
+      setDsMigrationPreview({ rows });
+    } catch (err) {
+      console.error('Error running Dhammaschool migration preview:', err);
+      alert(`Could not run the migration preview: ${err.message || err}`);
+    }
+    setIsRunningDsMigration(false);
+  };
+
+  const applyDhammaschoolMigration = async () => {
+    if (!dsMigrationPreview) return;
+    const byKey = {};
+    dsMigrationPreview.rows.filter(r => r.willChange).forEach(r => {
+      const k = `${r.studentId}::${r.newKey}`;
+      if (!byKey[k] || r.proposedNew > byKey[k].proposedNew) byKey[k] = r;
+    });
+    const changingRows = Object.values(byKey);
+    if (changingRows.length === 0) {
+      alert('Nothing to apply -- no student needs a higher trophy count than they already have.');
+      return;
+    }
+    if (!window.confirm(`This will set new "Dhammaschool Lesson" per-class trophy values for ${changingRows.length} student/class combination(s), only where that raises the number. It will NOT change any existing trophy already given. Continue?`)) return;
+    setIsApplyingDsMigration(true);
+    try {
+      const dsEntrySnap = await getDocs(query(lessonBankCollection, where('link', '==', 'dhammaschool://')));
+      if (dsEntrySnap.empty) {
+        await addDoc(lessonBankCollection, {
+          teacherUid: user.uid,
+          title: CANONICAL_DHAMMASCHOOL_TITLE,
+          link: 'dhammaschool://',
+          details: '',
+          trophyLimit: 0,
+          unitLabel: 'Lesson',
+          unitCount: 0,
+          createdAt: serverTimestamp(),
+        });
+      }
+      const batch = writeBatch(db);
+      changingRows.forEach(row => {
+        const studentRef = doc(db, `${publicDataPath}/students`, row.studentId);
+        batch.update(studentRef, { [`earnedTrophies.${row.newKey}`]: row.proposedNew });
+      });
+      await batch.commit();
+      alert(`Done. Updated ${changingRows.length} trophy value(s) under "${CANONICAL_DHAMMASCHOOL_TITLE}". The old lesson trophies were left untouched.`);
+      setDsMigrationPreview(null);
+    } catch (err) {
+      console.error('Error applying Dhammaschool migration:', err);
+      alert(`Migration failed: ${err.message || err}`);
+    }
+    setIsApplyingDsMigration(false);
+  };
+
+  const handleDeleteOldDhammaschoolLessons = async () => {
+    const targets = lessonBank.filter(l => Object.keys(DHAMMASCHOOL_MIGRATION_MAP).includes(l.title));
+    if (targets.length === 0) {
+      alert('None of the old Dhammaschool lessons were found in the Lesson Bank (maybe already deleted).');
+      return;
+    }
+    if (!window.confirm(`Delete these ${targets.length} old Lesson Bank entries?\n\n${targets.map(t => `- ${t.title}`).join('\n')}\n\nStudents' already-earned trophies for them are NOT touched -- this only removes them from the Lesson Bank / Assign Lesson list.`)) {
+      return;
+    }
+    try {
+      await Promise.all(targets.map(t => deleteDoc(doc(db, `${publicDataPath}/lessonBank`, t.id))));
+      alert(`Deleted ${targets.length} old lesson(s).`);
+    } catch (err) {
+      console.error('Error deleting old Dhammaschool lessons:', err);
+      alert(`Delete failed: ${err.message || err}`);
+    }
+  };
+
   const completedSessions = sessions
     .filter(s => s.endTime)
     .sort((a, b) => b.startTime.toDate() - a.startTime.toDate());
@@ -4597,6 +4758,91 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
               <p className="text-sm text-gray-500 mb-3">Only do this after Step 1's Apply has been run. Removes them from the Lesson Bank / Assign Lesson list only — does not touch any student's data. "Basic Abhiddhamma" is not included (not migrated yet).</p>
               <button
                 onClick={handleDeleteOldAbhidhammaLessons}
+                className="bg-red-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-700"
+              >
+                Delete Old Lessons
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-8 pt-6 border-t border-violet-200">
+            <h4 className="text-lg font-semibold mb-3 text-gray-700">🔄 Migrate Old Lessons into Dhammaschool</h4>
+            <p className="text-sm text-gray-600 mb-4">
+              Same one-time move as above, for the 5 old Myanmar-titled Dhammaschool grade lessons into the real per-class Dhammaschool tracking under the "Dhammaschool Lesson" entry (GRADE-1 through GRADE-5).
+            </p>
+
+            <div className="mb-5 p-4 bg-white rounded-lg border border-violet-200">
+              <p className="font-semibold text-gray-800 mb-1">1. Preview the Dhammaschool trophy migration</p>
+              <p className="text-sm text-gray-500 mb-3">Checks real live progress in each mapped grade class.</p>
+              <button
+                onClick={runDhammaschoolMigrationPreview}
+                disabled={isRunningDsMigration}
+                className="bg-violet-500 text-white px-4 py-2 rounded-lg font-semibold hover:bg-violet-600 disabled:opacity-50"
+              >
+                {isRunningDsMigration ? 'Calculating...' : 'Run Migration Preview'}
+              </button>
+
+              {dsMigrationPreview && (
+                <div className="mt-4">
+                  {dsMigrationPreview.rows.length === 0 ? (
+                    <p className="text-sm text-gray-500">No students currently have trophies under these old lessons.</p>
+                  ) : (
+                    <>
+                      {dsMigrationPreview.rows.some(r => r.basis === 'not-found') && (
+                        <p className="text-sm bg-red-50 border border-red-200 text-red-700 rounded-lg p-2 mb-3">
+                          ⚠️ Some target classes weren't found live (shown as "not found" below) — double-check those class IDs before applying.
+                        </p>
+                      )}
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full text-sm border">
+                          <thead className="bg-gray-100">
+                            <tr>
+                              <th className="p-2 text-left border">Student</th>
+                              <th className="p-2 text-left border">Old Lesson</th>
+                              <th className="p-2 text-left border">→ Class</th>
+                              <th className="p-2 text-left border">Basis</th>
+                              <th className="p-2 text-left border">Current New</th>
+                              <th className="p-2 text-left border">Proposed New</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {dsMigrationPreview.rows.map((r, i) => (
+                              <tr key={i} className={r.willChange ? 'bg-emerald-50' : ''}>
+                                <td className="p-2 border">{r.studentName}</td>
+                                <td className="p-2 border">{r.oldTitle.trim()}</td>
+                                <td className="p-2 border">{r.classId}</td>
+                                <td className="p-2 border">
+                                  {r.basis === 'live'
+                                    ? `live (${r.liveCompleted}/${r.liveTotal} lessons)`
+                                    : <span className="text-red-700 font-semibold">not found — check class ID</span>}
+                                </td>
+                                <td className="p-2 border">{r.currentNew}</td>
+                                <td className="p-2 border font-semibold">
+                                  {r.proposedNew}{r.willChange && <span className="text-emerald-700 ml-1">(+{r.proposedNew - r.currentNew})</span>}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <button
+                        onClick={applyDhammaschoolMigration}
+                        disabled={isApplyingDsMigration || dsMigrationPreview.rows.every(r => !r.willChange)}
+                        className="mt-4 bg-emerald-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50"
+                      >
+                        {isApplyingDsMigration ? 'Applying...' : `Apply — set ${new Set(dsMigrationPreview.rows.filter(r => r.willChange).map(r => `${r.studentId}::${r.newKey}`)).size} value(s)`}
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 bg-white rounded-lg border border-violet-200">
+              <p className="font-semibold text-gray-800 mb-1">2. Delete the old lessons from the Lesson Bank</p>
+              <p className="text-sm text-gray-500 mb-3">Only do this after Step 1's Apply has been run. Removes them from the Lesson Bank / Assign Lesson list only — does not touch any student's data.</p>
+              <button
+                onClick={handleDeleteOldDhammaschoolLessons}
                 className="bg-red-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-700"
               >
                 Delete Old Lessons
