@@ -2716,8 +2716,17 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
       // which is filtered to `teacherUid == user.uid` and can silently miss
       // an entry created under a different teacherUid (exactly what made
       // the first two Apply attempts write to the wrong key).
+      // The very first Apply attempt likely ran before `lessonBank` had
+      // finished loading, so its "create one if none exists" fallback found
+      // none and created a SECOND entry titled "Smart Study" alongside the
+      // real, already-in-use "Smart Study Lesson" entry. With two matching
+      // docs, picking docs[0] is unordered and can land on the placeholder
+      // every time -- explicitly skip anything titled exactly the
+      // placeholder so the real entry's title always wins.
       const ssEntrySnap = await getDocs(query(lessonBankCollection, where('link', '==', 'smartstudy://')));
-      const ssTitleForKeys = ssEntrySnap.docs[0]?.data()?.title || SMARTSTUDY_MIGRATION_NEW_TITLE;
+      const ssDocs = ssEntrySnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const realSsEntry = ssDocs.find(d => d.title && d.title !== SMARTSTUDY_MIGRATION_NEW_TITLE) || ssDocs[0];
+      const ssTitleForKeys = realSsEntry?.title || SMARTSTUDY_MIGRATION_NEW_TITLE;
 
       const rows = [];
       for (const student of students) {
@@ -2818,34 +2827,52 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
   const [ssCleanupPreview, setSsCleanupPreview] = useState(null);
   const [isRunningSsCleanup, setIsRunningSsCleanup] = useState(false);
   const STRAY_SMARTSTUDY_TITLE = 'Smart Study';
-  const runSsCleanupScan = () => {
+  const runSsCleanupScan = async () => {
     setIsRunningSsCleanup(true);
-    const allClassIds = [...new Set(Object.values(SMARTSTUDY_MIGRATION_MAP).flat().map(t => t.classId))];
-    const strayKeys = allClassIds.map(classId => sanitizeKey(`${STRAY_SMARTSTUDY_TITLE}_${classId}`));
-    const rows = [];
-    students.forEach(student => {
-      const earned = student.earnedTrophies || {};
-      strayKeys.forEach(key => {
-        if (earned[key] != null) {
-          rows.push({ studentId: student.id, studentName: student.name, key, value: earned[key] });
-        }
+    try {
+      const allClassIds = [...new Set(Object.values(SMARTSTUDY_MIGRATION_MAP).flat().map(t => t.classId))];
+      const strayKeys = allClassIds.map(classId => sanitizeKey(`${STRAY_SMARTSTUDY_TITLE}_${classId}`));
+      const rows = [];
+      students.forEach(student => {
+        const earned = student.earnedTrophies || {};
+        strayKeys.forEach(key => {
+          if (earned[key] != null) {
+            rows.push({ studentId: student.id, studentName: student.name, key, value: earned[key] });
+          }
+        });
       });
-    });
-    setSsCleanupPreview(rows);
+      // Also check for a duplicate placeholder Lesson Bank entry -- the very
+      // first Apply likely ran before `lessonBank` had loaded, so its
+      // "create one if none exists" check found nothing and created a
+      // second smartstudy:// entry titled exactly "Smart Study" alongside
+      // the real "Smart Study Lesson" entry already in use.
+      const ssEntrySnap = await getDocs(query(lessonBankCollection, where('link', '==', 'smartstudy://')));
+      const ssDocs = ssEntrySnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const duplicateEntry = ssDocs.length > 1 ? ssDocs.find(d => d.title === STRAY_SMARTSTUDY_TITLE) : null;
+      setSsCleanupPreview({ rows, duplicateEntry: duplicateEntry || null });
+    } catch (err) {
+      console.error('Error scanning for stray Smart Study data:', err);
+      alert(`Scan failed: ${err.message || err}`);
+    }
     setIsRunningSsCleanup(false);
   };
   const applySsCleanup = async () => {
-    if (!ssCleanupPreview || ssCleanupPreview.length === 0) return;
-    if (!window.confirm(`Remove ${ssCleanupPreview.length} incorrectly-keyed trophy field(s) written by the first Apply? This only deletes the stray "${STRAY_SMARTSTUDY_TITLE}_<class>" keys -- it does not touch any real trophy value.`)) return;
+    if (!ssCleanupPreview) return;
+    const { rows, duplicateEntry } = ssCleanupPreview;
+    if (rows.length === 0 && !duplicateEntry) return;
+    if (!window.confirm(`Remove ${rows.length} incorrectly-keyed trophy field(s)${duplicateEntry ? ' and 1 duplicate placeholder Lesson Bank entry' : ''} left by the first Apply? This does not touch any real trophy value or the real "Smart Study Lesson" entry.`)) return;
     setIsRunningSsCleanup(true);
     try {
       const batch = writeBatch(db);
-      ssCleanupPreview.forEach(row => {
+      rows.forEach(row => {
         const studentRef = doc(db, `${publicDataPath}/students`, row.studentId);
         batch.update(studentRef, { [`earnedTrophies.${row.key}`]: deleteField() });
       });
       await batch.commit();
-      alert(`Removed ${ssCleanupPreview.length} stray field(s).`);
+      if (duplicateEntry) {
+        await deleteDoc(doc(db, `${publicDataPath}/lessonBank`, duplicateEntry.id));
+      }
+      alert(`Removed ${rows.length} stray field(s)${duplicateEntry ? ' and the duplicate Lesson Bank entry' : ''}.`);
       setSsCleanupPreview(null);
     } catch (err) {
       console.error('Error cleaning up stray Smart Study keys:', err);
@@ -4048,17 +4075,20 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                 {isRunningSsCleanup ? 'Scanning...' : 'Scan for Stray Keys'}
               </button>
               {ssCleanupPreview && (
-                ssCleanupPreview.length === 0 ? (
+                ssCleanupPreview.rows.length === 0 && !ssCleanupPreview.duplicateEntry ? (
                   <p className="text-sm text-emerald-600 font-semibold mt-3">✅ Nothing to clean up.</p>
                 ) : (
                   <>
-                    <p className="text-sm text-gray-600 mt-3 mb-2">{ssCleanupPreview.length} stray field(s) found across {new Set(ssCleanupPreview.map(r => r.studentId)).size} student(s).</p>
+                    <p className="text-sm text-gray-600 mt-3 mb-2">
+                      {ssCleanupPreview.rows.length} stray field(s) found across {new Set(ssCleanupPreview.rows.map(r => r.studentId)).size} student(s).
+                      {ssCleanupPreview.duplicateEntry && <> Also found a duplicate Lesson Bank entry titled "{ssCleanupPreview.duplicateEntry.title}" (unused placeholder).</>}
+                    </p>
                     <button
                       onClick={applySsCleanup}
                       disabled={isRunningSsCleanup}
                       className="bg-red-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-700 disabled:opacity-50"
                     >
-                      Remove {ssCleanupPreview.length} Stray Field(s)
+                      Remove {ssCleanupPreview.rows.length} Stray Field(s){ssCleanupPreview.duplicateEntry ? ' + Duplicate Entry' : ''}
                     </button>
                   </>
                 )
