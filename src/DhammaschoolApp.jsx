@@ -3927,6 +3927,7 @@ function renderClickableWords(text) {
             if (loadError) {
                 const resultsEl = document.getElementById(`link-picker-results-${cssEscape(studentName)}`);
                 if (resultsEl) {
+                    resultsEl.style.display = 'block';
                     resultsEl.innerHTML = `<p class="text-sm text-red-600 p-2 font-bold">Could not load Tutoring students: ${loadError.message || loadError.code || 'unknown error'}.<br><span class="font-normal">This is usually a Firestore security-rules issue — the "${TUTORING_STUDENTS_PATH}" collection needs to allow reads from this app.</span></p>`;
                 }
                 return;
@@ -3937,6 +3938,13 @@ function renderClickableWords(text) {
         window.filterTutoringStudents = (studentName, filterText) => {
             const resultsEl = document.getElementById(`link-picker-results-${cssEscape(studentName)}`);
             if (!resultsEl || cachedTutoringStudents === null) return;
+            // This div was computing display:none from somewhere (Tailwind's
+            // CDN runtime doesn't reliably generate CSS for classes that only
+            // ever arrive via a raw innerHTML replacement of ~100+ elements at
+            // once, rather than one at a time) even though its content was
+            // always populated correctly -- forcing this inline always wins
+            // regardless of the cause.
+            resultsEl.style.display = 'block';
             const filtered = cachedTutoringStudents.filter(s => s.name.toLowerCase().includes(filterText.toLowerCase()));
             if (filtered.length === 0) {
                 resultsEl.innerHTML = '<p class="text-sm text-slate-500 p-2">No matching students found.</p>';
