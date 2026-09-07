@@ -290,7 +290,7 @@ const computeClassTrophyMax = (lessonCount) => {
 const SMARTSTUDY_MIGRATION_MAP = {
   "10 Parami": [
     { classId: 'BUDDHA', fallback: 2 },
-    { classId: 'DHAMMA', fallback: 2 },
+    { classId: 'PARAMI', fallback: 2 },
     { classId: 'NEW', fallback: 1 },
   ],
   " Heavenly World or Golden cage": [
