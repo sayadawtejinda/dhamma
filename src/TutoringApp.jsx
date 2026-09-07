@@ -306,19 +306,20 @@ const SMARTSTUDY_MIGRATION_MAP = {
   ],
 };
 const SMARTSTUDY_MIGRATION_NEW_TITLE = 'Smart Study';
-// The real Lesson Bank entry actually used to send Smart Study lessons to
-// students right now -- confirmed directly by the teacher. Every per-class
-// trophy key this migration writes MUST be computed from this exact title,
-// or Assign Lesson will never see the value. "Smart Study Lesson" is the
-// entry that's SUPPOSED to serve this role, but it can't currently be
-// opened at all (separate bug, not yet diagnosed) -- as a working
-// alternative, the teacher repurposed the old " Heavenly World or Golden
-// cage" lesson's link to smartstudy://, and that's what's actually usable
-// today. NOTE: this is the exact same title used as `oldTitle` for that
-// lesson's own flat legacy trophy count elsewhere in this migration -- that
-// stays safe because the two are different final keys (bare title vs.
-// title+classId), never the same field.
-const CANONICAL_SMARTSTUDY_TITLE = ' Heavenly World or Golden cage';
+// The Lesson Bank entry actually used to send Smart Study lessons to
+// students -- confirmed directly by the teacher. Every per-class trophy key
+// this migration writes MUST be computed from this exact title, or Assign
+// Lesson will never see the value. This briefly had to point at a
+// repurposed old lesson (" Heavenly World or Golden cage") while "Smart
+// Study Lesson" couldn't be opened at all -- that turned out to be a
+// separate, now-fixed bug (a stale-closure effect kept resetting the
+// teacher's Lesson Bank selection back to whichever title sorts first
+// alphabetically), so this now points back at the real entry.
+const CANONICAL_SMARTSTUDY_TITLE = 'Smart Study Lesson';
+// The other title this migration has, at various points, mistakenly keyed
+// trophies under while chasing the entry-selection bugs above -- used only
+// by the cleanup scan to find and remove those specific stray writes.
+const PRIOR_WRONG_SMARTSTUDY_TITLE = ' Heavenly World or Golden cage';
 const SMARTSTUDY_MIGRATION_CLASS_IDS = [...new Set(Object.values(SMARTSTUDY_MIGRATION_MAP).flat().map(t => t.classId))];
 
 const toLocalDateString = (date) => {
@@ -2868,12 +2869,14 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
     setIsApplyingSsMigration(false);
   };
 
-  // One-off cleanup for the earlier Apply attempts, which wrote trophies
-  // under a placeholder "Smart Study" Lesson Bank entry the code created
-  // itself (before it knew a real smartstudy:// entry already existed).
-  // IMPORTANT: this must stay narrowly scoped to that ONE specific known-bad
-  // title -- a broader "any non-canonical title" sweep would also catch
-  // real, already-earned trophies recorded under "Smart Study Lesson" from
+  // One-off cleanup for earlier Apply attempts, which wrote trophies under
+  // two different wrong titles while chasing entry-selection bugs: a
+  // placeholder "Smart Study" entry the code created itself, and later the
+  // repurposed " Heavenly World or Golden cage" entry used as a stand-in
+  // while "Smart Study Lesson" couldn't be opened at all. IMPORTANT: this
+  // must stay narrowly scoped to these SPECIFIC known-bad titles -- a
+  // broader "any non-canonical title" sweep would also catch real,
+  // already-earned trophies recorded under "Smart Study Lesson" from
   // ordinary day-to-day use (e.g. a student's real NEW/WASO trophies),
   // which must never be touched. Safe to run more than once: once the
   // specific stray keys are gone, it just reports nothing left.
@@ -2882,7 +2885,10 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
   const runSsCleanupScan = async () => {
     setIsRunningSsCleanup(true);
     try {
-      const strayKeys = new Set(SMARTSTUDY_MIGRATION_CLASS_IDS.map(classId => sanitizeKey(`${SMARTSTUDY_MIGRATION_NEW_TITLE}_${classId}`)));
+      const strayKeys = new Set(SMARTSTUDY_MIGRATION_CLASS_IDS.flatMap(classId => [
+        sanitizeKey(`${SMARTSTUDY_MIGRATION_NEW_TITLE}_${classId}`),
+        sanitizeKey(`${PRIOR_WRONG_SMARTSTUDY_TITLE}_${classId}`),
+      ]));
       const rows = [];
       students.forEach(student => {
         const earned = student.earnedTrophies || {};
