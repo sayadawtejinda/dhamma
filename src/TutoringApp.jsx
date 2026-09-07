@@ -1004,7 +1004,8 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyan
     } else if (lesson.link === 'dhammaschool://' && !sendDhammaschoolClassId) {
       (async () => {
         const classes = await loadDhammaschoolClasses();
-        setWholeAppMaxAvailable((classes || []).reduce((total, c) => total + computeClassTrophyMax(c.lessonCount), 0));
+        // Dhammaschool's rate is 2 trophies per lesson, not round(lessons/5).
+        setWholeAppMaxAvailable((classes || []).reduce((total, c) => total + c.lessonCount * 2, 0));
       })();
     } else {
       setWholeAppMaxAvailable(null);
@@ -1543,7 +1544,11 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyan
       return null;
     })();
     const effectiveLessonUnitCount = classLessonCountForSend != null ? classLessonCountForSend : (lessonToSend?.unitCount || 0);
-    const effectiveLessonTrophyLimit = classLessonCountForSend != null ? computeClassTrophyMax(classLessonCountForSend) : (lessonToSend?.trophyLimit || 0);
+    // Dhammaschool's real trophy rate is 2 per lesson (confirmed by the
+    // teacher), not the round(lessons/5) formula Smart Study/Abhidhamma use.
+    const effectiveLessonTrophyLimit = classLessonCountForSend != null
+      ? (lessonToSend?.link === 'dhammaschool://' ? classLessonCountForSend * 2 : computeClassTrophyMax(classLessonCountForSend))
+      : (lessonToSend?.trophyLimit || 0);
     // For lessons stored without a classId, substitute the one chosen here in
     // the Send Action class picker.
     const effectiveLessonLink = (() => {
@@ -1683,8 +1688,11 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyan
     }
 
     const isLinkedApp = lesson.link === 'smartstudy://' || lesson.link?.startsWith('abhidhamma://') || lesson.link?.startsWith('dhammaschool://');
+    // Dhammaschool's real trophy rate is 2 per lesson (confirmed by the
+    // teacher -- a 40-lesson grade is worth 80), not the round(lessons/5)
+    // formula Smart Study/Abhidhamma use.
     const maxAvailable = lessonCount != null
-      ? computeClassTrophyMax(lessonCount)
+      ? (lesson.link?.startsWith('dhammaschool://') ? lessonCount * 2 : computeClassTrophyMax(lessonCount))
       : (isLinkedApp && wholeAppMaxAvailable != null ? wholeAppMaxAvailable : (lesson.trophyLimit || 0));
     const unitCount = lessonCount != null ? lessonCount : (lesson.unitCount || 0);
     const lessonKey = computeLessonKey(lesson.title, effectiveLink);
