@@ -4037,35 +4037,6 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
             );
           })()}
 
-          {/* Dhammaschool app — student progress across the whole class */}
-          {(() => {
-            const selectedLesson = lessonBank.find(l => l.id === selectedBankLessonId);
-            if (!selectedStudentUid || !selectedLesson || selectedLesson.link !== 'dhammaschool://' || !sendDhammaschoolClassId) return null;
-            const student = students.find(s => s.id === selectedStudentUid);
-            if (!student) return null;
-            // Many Dhammaschool students studied via Google Slides outside
-            // the live app, so live completedCount is often stuck at 0 even
-            // for a student who's fully done and already has the trophies
-            // to prove it -- take whichever of live vs. trophy-derived is
-            // higher, same as the "Student Progress on this Lesson" box
-            // below, so the two never contradict each other.
-            const { maxAvailable, lessonKey } = getClassSpecificTrophyInfo(selectedLesson);
-            const previouslyEarned = student.earnedTrophies?.[lessonKey] || 0;
-            const derivedCompleted = (dhammaschoolStudentProgress?.totalLessons > 0 && maxAvailable > 0)
-              ? Math.min(dhammaschoolStudentProgress.totalLessons, Math.ceil((previouslyEarned * dhammaschoolStudentProgress.totalLessons) / maxAvailable))
-              : 0;
-            return (
-              <div className="mb-4 p-4 bg-orange-50 rounded-lg border border-orange-200">
-                <p className="text-orange-800 font-bold mb-1">Student Progress on "{sendDhammaschoolClassId}" Dhammaschool Class:</p>
-                {dhammaschoolStudentProgress === null
-                  ? <p className="text-sm text-orange-600">Loading…</p>
-                  : dhammaschoolStudentProgress.totalLessons > 0
-                    ? <p className="text-sm text-orange-700">{student.name} completed <strong>{Math.max(dhammaschoolStudentProgress.completedCount, derivedCompleted)}</strong> / {dhammaschoolStudentProgress.totalLessons} lesson{dhammaschoolStudentProgress.totalLessons !== 1 ? 's' : ''} · Total score: <strong>{(dhammaschoolStudentProgress.score || 0).toLocaleString()} pts</strong></p>
-                    : <p className="text-sm text-orange-600">No public lessons in this class yet.</p>
-                }
-              </div>
-            );
-          })()}
 
           {/* Grouped apps (Reading Myanmar / Speaking Myanmar / Myanmar Part 1 & 2)
               — choose which part to send, same "not baked into the bank
