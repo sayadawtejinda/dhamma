@@ -3283,8 +3283,17 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
             if (lessonCount > 0) {
               const completed = await getCompletedCount(classId, student.name);
               const maxAvailable = computeClassTrophyMax(lessonCount);
-              deserved = Math.floor((completed * maxAvailable) / lessonCount);
-              basis = 'live';
+              const liveDeserved = Math.floor((completed * maxAvailable) / lessonCount);
+              // Many of these students actually studied via Google Slides
+              // outside the live app, so real completion data is missing or
+              // very incomplete for most of them even though they were
+              // legitimately awarded trophies at the time -- never let a low
+              // live number erase what they already earned; fall back to
+              // their old trophy count (capped to the new class's own max)
+              // whenever it's higher than what live data alone would give.
+              const oldValueCapped = Math.min(oldValue, maxAvailable);
+              deserved = Math.max(liveDeserved, oldValueCapped);
+              basis = liveDeserved >= oldValueCapped ? 'live' : 'fallback';
               liveCompleted = completed;
               liveTotal = lessonCount;
             } else {
@@ -4814,7 +4823,9 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                                 <td className="p-2 border">
                                   {r.basis === 'live'
                                     ? `live (${r.liveCompleted}/${r.liveTotal} lessons)`
-                                    : <span className="text-red-700 font-semibold">not found — check class ID</span>}
+                                    : r.basis === 'fallback'
+                                      ? <span className="text-amber-700">fallback (old trophy, live: {r.liveCompleted}/{r.liveTotal})</span>
+                                      : <span className="text-red-700 font-semibold">not found — check class ID</span>}
                                 </td>
                                 <td className="p-2 border">{r.currentNew}</td>
                                 <td className="p-2 border font-semibold">
