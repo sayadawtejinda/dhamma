@@ -997,6 +997,7 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyan
   const prevSessionsRef = useRef([]); 
   const hasAutoSelectedSendStudentRef = useRef(false);
   const hasAutoSelectedScheduleStudentRef = useRef(false);
+  const hasAutoSelectedBankLessonRef = useRef(false);
 
   useEffect(() => {
     const unsubscribe = onSnapshot(teacherConfigDoc, (docSnap) => {
@@ -1037,9 +1038,24 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyan
         .map(doc => ({ id: doc.id, ...doc.data() }))
         .sort((a, b) => a.title.localeCompare(b.title)); 
       setLessonBank(bankList);
-      
-      if (!selectedBankLessonId && bankList.length > 0) {
+
+      // BUG (found while chasing why "Smart Study Lesson" kept snapping back
+      // to a different lesson the instant it was picked): this effect's
+      // dependency array is only [user.uid], so this onSnapshot callback is
+      // never recreated -- it permanently closes over `selectedBankLessonId`
+      // as it was at mount time (''). The old `if (!selectedBankLessonId...)`
+      // check therefore evaluated true on EVERY single snapshot forever, not
+      // just the first one, so any time the lesson bank changed for any
+      // reason (including the weekly auto-refresh effect right below) this
+      // silently reset the teacher's actual selection back to bankList[0]
+      // (alphabetically first -- which a title with a leading space, like
+      // " Heavenly World or Golden cage", reliably wins). A ref survives
+      // across renders without needing to be a dependency, so it actually
+      // only fires once, matching the same working pattern already used for
+      // hasAutoSelectedSendStudentRef above.
+      if (!hasAutoSelectedBankLessonRef.current && bankList.length > 0) {
         setSelectedBankLessonId(bankList[0].id);
+        hasAutoSelectedBankLessonRef.current = true;
       }
     }, (error) => {
       console.error("Error fetching lesson bank: ", error);
@@ -3464,7 +3480,7 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
           
           <div className="mb-4">
             <label className="block text-gray-700 mb-2">Select Lesson from Bank</label>
-            <select value={selectedBankLessonId} onChange={(e) => { setSelectedBankLessonId(e.target.value); setSendSmartStudyClassId(''); setSendAbhidhammaClassId(''); setSendGroupPartKey(''); }} className="w-full p-3 border rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <select value={selectedBankLessonId} onChange={(e) => { setSelectedBankLessonId(e.target.value); hasAutoSelectedBankLessonRef.current = true; setSendSmartStudyClassId(''); setSendAbhidhammaClassId(''); setSendGroupPartKey(''); }} className="w-full p-3 border rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500">
               <option value="" disabled>-- Select a lesson --</option>
               {lessonBank.map(lesson => <option key={lesson.id} value={lesson.id}>{lesson.title} ({lesson.details})</option>)}
             </select>
