@@ -767,6 +767,7 @@ const syncRunning = useRef(false);
               <button onClick={()=>{setPickerFor(null);setSearch('');setAltNames('');}} className="text-gray-400 hover:text-white"><X className="w-5 h-5"/></button>
             </div>
             <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search TutoringApp student name…"
+              autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck="false"
               className="w-full p-2 mb-3 bg-gray-900 border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-indigo-400" autoFocus/>
             <input value={altNames} onChange={e=>setAltNames(e.target.value)}
               placeholder="Also merge these old name(s), comma-separated — e.g. from an old import"

@@ -860,6 +860,7 @@ const TeacherDashboard = React.memo(({
                           <input
                             type="text" value={linkSearch} onChange={(e) => setLinkSearch(e.target.value)}
                             placeholder="Search Tutoring students..."
+                            autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck="false"
                             className="w-full p-2 mb-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
                           />
                           {tutoringStudents === null ? (

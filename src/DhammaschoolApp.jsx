@@ -3891,7 +3891,7 @@ function renderClickableWords(text) {
                             }
                         </div>
                         <div id="link-picker-${cssEscape(name)}" class="hidden mt-3 p-3 bg-white rounded-lg border border-indigo-200">
-                            <input type="text" oninput="window.filterTutoringStudents('${safeName}', this.value)" placeholder="Search Tutoring students..." class="w-full p-2 mb-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                            <input type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" oninput="window.filterTutoringStudents('${safeName}', this.value)" placeholder="Search Tutoring students..." class="w-full p-2 mb-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
                             <div id="link-picker-results-${cssEscape(name)}" class="max-h-48 overflow-y-auto space-y-1">
                                 <p class="text-sm text-slate-500 p-2">Loading students...</p>
                             </div>
