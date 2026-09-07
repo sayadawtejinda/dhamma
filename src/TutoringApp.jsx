@@ -2710,12 +2710,14 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
 
       // Use whatever title the real smartstudy:// Lesson Bank entry already
       // has -- Assign Lesson computes each student's trophy key from that
-      // entry's actual title, so if one already exists (as it does: "Smart
-      // Study Lesson", already sending real classes to real students) we
-      // MUST match it, or every value here gets written under a key nothing
-      // ever reads.
-      const existingSsEntry = lessonBank.find(l => l.link === 'smartstudy://');
-      const ssTitleForKeys = existingSsEntry?.title || SMARTSTUDY_MIGRATION_NEW_TITLE;
+      // entry's actual title, so if one already exists we MUST match it, or
+      // every value here gets written under a key nothing ever reads. Query
+      // Firestore directly rather than trusting the `lessonBank` state,
+      // which is filtered to `teacherUid == user.uid` and can silently miss
+      // an entry created under a different teacherUid (exactly what made
+      // the first two Apply attempts write to the wrong key).
+      const ssEntrySnap = await getDocs(query(lessonBankCollection, where('link', '==', 'smartstudy://')));
+      const ssTitleForKeys = ssEntrySnap.docs[0]?.data()?.title || SMARTSTUDY_MIGRATION_NEW_TITLE;
 
       const rows = [];
       for (const student of students) {
@@ -2779,8 +2781,8 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
     if (!window.confirm(`This will set new "Smart Study" per-class trophy values for ${changingRows.length} student/class combination(s), only where that raises the number. It will NOT change any existing trophy already given. Continue?`)) return;
     setIsApplyingSsMigration(true);
     try {
-      let ssEntry = lessonBank.find(l => l.link === 'smartstudy://');
-      if (!ssEntry) {
+      const ssEntrySnap = await getDocs(query(lessonBankCollection, where('link', '==', 'smartstudy://')));
+      if (ssEntrySnap.empty) {
         await addDoc(lessonBankCollection, {
           teacherUid: user.uid,
           title: SMARTSTUDY_MIGRATION_NEW_TITLE,
