@@ -320,6 +320,36 @@ const CANONICAL_SMARTSTUDY_TITLE = 'Smart Study Lesson';
 // trophies under while chasing the entry-selection bugs above -- used only
 // by the cleanup scan to find and remove those specific stray writes.
 const PRIOR_WRONG_SMARTSTUDY_TITLE = ' Heavenly World or Golden cage';
+
+// One-time migration map for old Gemini-link Abhidhamma lessons being
+// retired in favor of the real per-class Abhidhamma tracking (same shape
+// and reasoning as SMARTSTUDY_MIGRATION_MAP above). `forceFallback: true`
+// means always use the student's own already-earned trophy count for that
+// OLD lesson directly (never look up live progress) -- confirmed by the
+// teacher for "THE GREAT BUDDHISTS" and "DHAMMAPADA-1" specifically: those
+// classes exist and have lesson content, but have no real per-student
+// completion data recorded yet, so a live lookup would wrongly compute 0
+// and erase the trophies these students already earned. Every other target
+// class here does have live tracking, so those get computed from real
+// progress like normal. "Basic Abhiddhamma" (the original bare lesson) is
+// deliberately NOT included -- not yet assigned to any class, to be
+// migrated separately later.
+const ABHIDHAMMA_MIGRATION_MAP = {
+  'Basic Abhiddhamma-2': [{ classId: 'Basic Abhiddhamma-2' }],
+  'Basic Abhiddhamma-3': [{ classId: 'Basic Abhiddhamma-2' }],
+  'Basic Abhiddhamma-4': [{ classId: 'Basic Abhiddhamma-3' }],
+  'Basic Abhiddhamma-5': [{ classId: 'Basic Abhiddhamma-4' }],
+  'Being Good and Being Kind': [{ classId: 'Being Good and Being Kind' }],
+  'The Great Buddhist Lady': [{ classId: 'THE GREAT BUDDHISTS', forceFallback: true }],
+  'The Great Buddhist Layman': [{ classId: 'THE GREAT BUDDHISTS', forceFallback: true }],
+  'Dhammapada Chapter-1': [{ classId: 'DHAMMAPADA-1', forceFallback: true }],
+};
+// The Lesson Bank entry actually used to send Abhidhamma lessons -- the
+// teacher just rebuilt this from scratch (the old one was lost to a data
+// import overwrite), so unlike Smart Study there's no ambiguity/duplicate
+// to worry about here.
+const CANONICAL_ABHIDHAMMA_TITLE = 'Abhidhamma Lesson';
+const ABHIDHAMMA_MIGRATION_CLASS_IDS = [...new Set(Object.values(ABHIDHAMMA_MIGRATION_MAP).flat().map(t => t.classId))];
 const SMARTSTUDY_MIGRATION_CLASS_IDS = [...new Set(Object.values(SMARTSTUDY_MIGRATION_MAP).flat().map(t => t.classId))];
 
 const toLocalDateString = (date) => {
@@ -2961,6 +2991,182 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
     }
   };
 
+  // ── Abhidhamma migration (same preview-first pattern as Smart Study) ──
+  const [abhiMigrationPreview, setAbhiMigrationPreview] = useState(null);
+  const [isRunningAbhiMigration, setIsRunningAbhiMigration] = useState(false);
+  const [isApplyingAbhiMigration, setIsApplyingAbhiMigration] = useState(false);
+
+  const runAbhidhammaMigrationPreview = async () => {
+    setIsRunningAbhiMigration(true);
+    setAbhiMigrationPreview(null);
+    try {
+      // Live classes are keyed by an internal document id, not necessarily
+      // the human-readable name the teacher gave each class -- resolve by
+      // matching displayName (falling back to the doc id itself) so a
+      // typo'd or unresolved target is obvious in the preview rather than
+      // silently computing against the wrong (or a nonexistent) class.
+      const classesSnap = await getDocs(collection(db, 'artifacts', ABHIDHAMMA_APP_ID, 'public', 'data', 'classes'));
+      const liveClasses = await Promise.all(classesSnap.docs.map(async d => {
+        let lessonCount = 0;
+        try {
+          const lessonsSnap = await getDocs(collection(db, 'artifacts', ABHIDHAMMA_APP_ID, 'public', 'data', 'classes', d.id, 'lessons'));
+          lessonCount = lessonsSnap.size;
+        } catch (e) {}
+        return { classId: d.id, displayName: (d.data().displayName || d.id).trim(), lessonCount };
+      }));
+      const resolveClass = (givenName) => {
+        const norm = givenName.trim().toLowerCase();
+        return liveClasses.find(c => c.displayName.toLowerCase() === norm || c.classId.toLowerCase() === norm) || null;
+      };
+
+      const scoresCache = {};
+      const getCompletedCount = async (resolvedClassId, names) => {
+        const distinct = new Set();
+        for (const name of names) {
+          if (!name) continue;
+          const cacheKey = `${resolvedClassId}::${name}`;
+          if (!(cacheKey in scoresCache)) {
+            const ABHI_COL = collection(db, 'artifacts', ABHIDHAMMA_APP_ID, 'public', 'data', 'global_scores');
+            const [s1, s2] = await Promise.all([
+              getDocs(query(ABHI_COL, where('name', '==', name))),
+              getDocs(query(ABHI_COL, where('studentName', '==', name))),
+            ]);
+            scoresCache[cacheKey] = [...s1.docs, ...s2.docs]
+              .filter(d => !d.data().classId || d.data().classId === resolvedClassId)
+              .map(d => d.data().lessonId)
+              .filter(Boolean);
+          }
+          scoresCache[cacheKey].forEach(id => distinct.add(id));
+        }
+        return distinct.size;
+      };
+
+      const rows = [];
+      for (const student of students) {
+        const earned = student.earnedTrophies || {};
+        for (const oldTitle of Object.keys(ABHIDHAMMA_MIGRATION_MAP)) {
+          const oldValue = earned[oldTitle] || 0;
+          if (oldValue <= 0) continue;
+          for (const target of ABHIDHAMMA_MIGRATION_MAP[oldTitle]) {
+            const { classId: givenClassName, forceFallback } = target;
+            const resolved = resolveClass(givenClassName);
+            const newKey = sanitizeKey(`${CANONICAL_ABHIDHAMMA_TITLE}_${resolved ? resolved.classId : givenClassName}`);
+            const currentNew = earned[newKey] || 0;
+            let deserved, basis, liveCompleted = null, liveTotal = null;
+            if (!resolved) {
+              deserved = oldValue;
+              basis = 'not-found';
+            } else if (forceFallback) {
+              deserved = oldValue;
+              basis = 'fallback';
+              liveTotal = resolved.lessonCount;
+            } else if (resolved.lessonCount > 0) {
+              const names = [...new Set([student.name, student.abhidhammaNames?.[resolved.classId]].filter(Boolean))];
+              const completed = await getCompletedCount(resolved.classId, names);
+              const maxAvailable = computeClassTrophyMax(resolved.lessonCount);
+              deserved = Math.floor((completed * maxAvailable) / resolved.lessonCount);
+              basis = 'live';
+              liveCompleted = completed;
+              liveTotal = resolved.lessonCount;
+            } else {
+              deserved = oldValue;
+              basis = 'fallback';
+            }
+            const proposedNew = Math.max(currentNew, deserved);
+            rows.push({
+              studentId: student.id,
+              studentName: student.name,
+              oldTitle,
+              oldValue,
+              classId: resolved ? resolved.displayName : givenClassName,
+              newKey,
+              basis,
+              liveCompleted,
+              liveTotal,
+              deserved,
+              currentNew,
+              proposedNew,
+              willChange: proposedNew > currentNew,
+            });
+          }
+        }
+      }
+      rows.sort((a, b) => a.studentName.localeCompare(b.studentName) || a.oldTitle.localeCompare(b.oldTitle) || a.classId.localeCompare(b.classId));
+      setAbhiMigrationPreview({ rows });
+    } catch (err) {
+      console.error('Error running Abhidhamma migration preview:', err);
+      alert(`Could not run the migration preview: ${err.message || err}`);
+    }
+    setIsRunningAbhiMigration(false);
+  };
+
+  const applyAbhidhammaMigration = async () => {
+    if (!abhiMigrationPreview) return;
+    // A class fed by more than one old lesson (e.g. "The Great Buddhist
+    // Lady" and "...Layman" both feeding "THE GREAT BUDDHISTS") can produce
+    // two rows targeting the exact same newKey with different proposed
+    // values -- writing both in one batch would let whichever happens to
+    // apply last silently win instead of the correct (higher) one, so
+    // collapse to the single highest proposedNew per (student, key) first.
+    const byKey = {};
+    abhiMigrationPreview.rows.filter(r => r.willChange).forEach(r => {
+      const k = `${r.studentId}::${r.newKey}`;
+      if (!byKey[k] || r.proposedNew > byKey[k].proposedNew) byKey[k] = r;
+    });
+    const changingRows = Object.values(byKey);
+    if (changingRows.length === 0) {
+      alert('Nothing to apply -- no student needs a higher trophy count than they already have.');
+      return;
+    }
+    if (!window.confirm(`This will set new "Abhidhamma Lesson" per-class trophy values for ${changingRows.length} student/class combination(s), only where that raises the number. It will NOT change any existing trophy already given. Continue?`)) return;
+    setIsApplyingAbhiMigration(true);
+    try {
+      const abhiEntrySnap = await getDocs(query(lessonBankCollection, where('link', '==', 'abhidhamma://')));
+      if (abhiEntrySnap.empty) {
+        await addDoc(lessonBankCollection, {
+          teacherUid: user.uid,
+          title: CANONICAL_ABHIDHAMMA_TITLE,
+          link: 'abhidhamma://',
+          details: '',
+          trophyLimit: 0,
+          unitLabel: 'Lesson',
+          unitCount: 0,
+          createdAt: serverTimestamp(),
+        });
+      }
+      const batch = writeBatch(db);
+      changingRows.forEach(row => {
+        const studentRef = doc(db, `${publicDataPath}/students`, row.studentId);
+        batch.update(studentRef, { [`earnedTrophies.${row.newKey}`]: row.proposedNew });
+      });
+      await batch.commit();
+      alert(`Done. Updated ${changingRows.length} trophy value(s) under "${CANONICAL_ABHIDHAMMA_TITLE}". The old lesson trophies were left untouched.`);
+      setAbhiMigrationPreview(null);
+    } catch (err) {
+      console.error('Error applying Abhidhamma migration:', err);
+      alert(`Migration failed: ${err.message || err}`);
+    }
+    setIsApplyingAbhiMigration(false);
+  };
+
+  const handleDeleteOldAbhidhammaLessons = async () => {
+    const targets = lessonBank.filter(l => Object.keys(ABHIDHAMMA_MIGRATION_MAP).includes(l.title));
+    if (targets.length === 0) {
+      alert('None of the old Abhidhamma lessons were found in the Lesson Bank (maybe already deleted).');
+      return;
+    }
+    if (!window.confirm(`Delete these ${targets.length} old Lesson Bank entries?\n\n${targets.map(t => `- ${t.title}`).join('\n')}\n\nStudents' already-earned trophies for them are NOT touched -- this only removes them from the Lesson Bank / Assign Lesson list.`)) {
+      return;
+    }
+    try {
+      await Promise.all(targets.map(t => deleteDoc(doc(db, `${publicDataPath}/lessonBank`, t.id))));
+      alert(`Deleted ${targets.length} old lesson(s).`);
+    } catch (err) {
+      console.error('Error deleting old Abhidhamma lessons:', err);
+      alert(`Delete failed: ${err.message || err}`);
+    }
+  };
+
   const completedSessions = sessions
     .filter(s => s.endTime)
     .sort((a, b) => b.startTime.toDate() - a.startTime.toDate());
@@ -4224,6 +4430,93 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
               <p className="text-sm text-gray-500 mb-3">"10 Parami", "Heavenly World or Golden cage", "38 Blessings", "The Buddha's Eight Outer Victories", and "Kind and Respectful" (no migration mapping — deleted anyway per teacher request). Only do this after Step 1's Apply has been run. Removes them from the Lesson Bank / Assign Lesson list only — does not touch any student's data.</p>
               <button
                 onClick={handleDeleteOldSmartStudyLessons}
+                className="bg-red-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-700"
+              >
+                Delete Old Lessons
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-8 pt-6 border-t border-violet-200">
+            <h4 className="text-lg font-semibold mb-3 text-gray-700">🔄 Migrate Old Lessons into Abhidhamma</h4>
+            <p className="text-sm text-gray-600 mb-4">
+              Same one-time move as Smart Study above, for the old Gemini-link Abhidhamma lessons ("Basic Abhiddhamma-2" through "-5", "Being Good and Being Kind", "The Great Buddhist Lady"/"Layman", "Dhammapada Chapter-1") into the real per-class Abhidhamma tracking under the "Abhidhamma Lesson" entry. "Basic Abhiddhamma" (the original bare lesson) isn't included yet — not assigned to a class.
+            </p>
+
+            <div className="mb-5 p-4 bg-white rounded-lg border border-violet-200">
+              <p className="font-semibold text-gray-800 mb-1">1. Preview the Abhidhamma trophy migration</p>
+              <p className="text-sm text-gray-500 mb-3">Checks real live progress in each mapped Abhidhamma class where available; "THE GREAT BUDDHISTS" and "DHAMMAPADA-1" have no completion data recorded yet, so those always carry over the student's existing trophy count directly instead.</p>
+              <button
+                onClick={runAbhidhammaMigrationPreview}
+                disabled={isRunningAbhiMigration}
+                className="bg-violet-500 text-white px-4 py-2 rounded-lg font-semibold hover:bg-violet-600 disabled:opacity-50"
+              >
+                {isRunningAbhiMigration ? 'Calculating...' : 'Run Migration Preview'}
+              </button>
+
+              {abhiMigrationPreview && (
+                <div className="mt-4">
+                  {abhiMigrationPreview.rows.length === 0 ? (
+                    <p className="text-sm text-gray-500">No students currently have trophies under these old lessons.</p>
+                  ) : (
+                    <>
+                      {abhiMigrationPreview.rows.some(r => r.basis === 'not-found') && (
+                        <p className="text-sm bg-red-50 border border-red-200 text-red-700 rounded-lg p-2 mb-3">
+                          ⚠️ Some target classes weren't found live (shown as "not found" below) — double-check those class names before applying.
+                        </p>
+                      )}
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full text-sm border">
+                          <thead className="bg-gray-100">
+                            <tr>
+                              <th className="p-2 text-left border">Student</th>
+                              <th className="p-2 text-left border">Old Lesson</th>
+                              <th className="p-2 text-left border">→ Class</th>
+                              <th className="p-2 text-left border">Basis</th>
+                              <th className="p-2 text-left border">Current New</th>
+                              <th className="p-2 text-left border">Proposed New</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {abhiMigrationPreview.rows.map((r, i) => (
+                              <tr key={i} className={r.willChange ? 'bg-emerald-50' : ''}>
+                                <td className="p-2 border">{r.studentName}</td>
+                                <td className="p-2 border">{r.oldTitle.trim()}</td>
+                                <td className="p-2 border">{r.classId}</td>
+                                <td className="p-2 border">
+                                  {r.basis === 'live'
+                                    ? `live (${r.liveCompleted}/${r.liveTotal} lessons)`
+                                    : r.basis === 'not-found'
+                                      ? <span className="text-red-700 font-semibold">not found — check class name</span>
+                                      : <span className="text-amber-700">fallback (carried over from old trophy)</span>}
+                                </td>
+                                <td className="p-2 border">{r.currentNew}</td>
+                                <td className="p-2 border font-semibold">
+                                  {r.proposedNew}{r.willChange && <span className="text-emerald-700 ml-1">(+{r.proposedNew - r.currentNew})</span>}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <button
+                        onClick={applyAbhidhammaMigration}
+                        disabled={isApplyingAbhiMigration || abhiMigrationPreview.rows.every(r => !r.willChange)}
+                        className="mt-4 bg-emerald-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50"
+                      >
+                        {isApplyingAbhiMigration ? 'Applying...' : `Apply — set ${new Set(abhiMigrationPreview.rows.filter(r => r.willChange).map(r => `${r.studentId}::${r.newKey}`)).size} value(s)`}
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 bg-white rounded-lg border border-violet-200">
+              <p className="font-semibold text-gray-800 mb-1">2. Delete the old lessons from the Lesson Bank</p>
+              <p className="text-sm text-gray-500 mb-3">Only do this after Step 1's Apply has been run. Removes them from the Lesson Bank / Assign Lesson list only — does not touch any student's data. "Basic Abhiddhamma" is not included (not migrated yet).</p>
+              <button
+                onClick={handleDeleteOldAbhidhammaLessons}
                 className="bg-red-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-700"
               >
                 Delete Old Lessons
