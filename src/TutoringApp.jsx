@@ -307,11 +307,18 @@ const SMARTSTUDY_MIGRATION_MAP = {
 };
 const SMARTSTUDY_MIGRATION_NEW_TITLE = 'Smart Study';
 // The real Lesson Bank entry actually used to send Smart Study lessons to
-// students -- confirmed directly by the teacher. Every per-class trophy key
-// this migration writes MUST be computed from this exact title, or Assign
-// Lesson will never see the value (this is the title Assign Lesson resolves
-// to for every real "Smart Study Lesson" card students already see).
-const CANONICAL_SMARTSTUDY_TITLE = 'Smart Study Lesson';
+// students right now -- confirmed directly by the teacher. Every per-class
+// trophy key this migration writes MUST be computed from this exact title,
+// or Assign Lesson will never see the value. "Smart Study Lesson" is the
+// entry that's SUPPOSED to serve this role, but it can't currently be
+// opened at all (separate bug, not yet diagnosed) -- as a working
+// alternative, the teacher repurposed the old " Heavenly World or Golden
+// cage" lesson's link to smartstudy://, and that's what's actually usable
+// today. NOTE: this is the exact same title used as `oldTitle` for that
+// lesson's own flat legacy trophy count elsewhere in this migration -- that
+// stays safe because the two are different final keys (bare title vs.
+// title+classId), never the same field.
+const CANONICAL_SMARTSTUDY_TITLE = ' Heavenly World or Golden cage';
 const SMARTSTUDY_MIGRATION_CLASS_IDS = [...new Set(Object.values(SMARTSTUDY_MIGRATION_MAP).flat().map(t => t.classId))];
 
 const toLocalDateString = (date) => {
@@ -2816,27 +2823,25 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
   };
 
   // One-off cleanup for the earlier Apply attempts, which wrote trophies
-  // under whichever smartstudy:// Lesson Bank entry the code found first --
-  // a placeholder "Smart Study" entry it created itself, and separately an
-  // old lesson temporarily repurposed with a smartstudy:// link -- neither
-  // of which is the real "Smart Study Lesson" entry Assign Lesson actually
-  // uses. This scans generically for ANY "<title>_<classId>" trophy key
-  // (for the classIds this migration touches) whose title isn't the
-  // canonical one, so it catches every wrong title already hit and any
-  // future one, not just the ones already diagnosed by name. Safe to run
-  // more than once: once stray keys are gone, it just reports nothing left.
+  // under a placeholder "Smart Study" Lesson Bank entry the code created
+  // itself (before it knew a real smartstudy:// entry already existed).
+  // IMPORTANT: this must stay narrowly scoped to that ONE specific known-bad
+  // title -- a broader "any non-canonical title" sweep would also catch
+  // real, already-earned trophies recorded under "Smart Study Lesson" from
+  // ordinary day-to-day use (e.g. a student's real NEW/WASO trophies),
+  // which must never be touched. Safe to run more than once: once the
+  // specific stray keys are gone, it just reports nothing left.
   const [ssCleanupPreview, setSsCleanupPreview] = useState(null);
   const [isRunningSsCleanup, setIsRunningSsCleanup] = useState(false);
   const runSsCleanupScan = async () => {
     setIsRunningSsCleanup(true);
     try {
-      const canonicalKeys = new Set(SMARTSTUDY_MIGRATION_CLASS_IDS.map(classId => sanitizeKey(`${CANONICAL_SMARTSTUDY_TITLE}_${classId}`)));
+      const strayKeys = new Set(SMARTSTUDY_MIGRATION_CLASS_IDS.map(classId => sanitizeKey(`${SMARTSTUDY_MIGRATION_NEW_TITLE}_${classId}`)));
       const rows = [];
       students.forEach(student => {
         const earned = student.earnedTrophies || {};
         Object.keys(earned).forEach(key => {
-          const matchedClassId = SMARTSTUDY_MIGRATION_CLASS_IDS.find(classId => key.endsWith(`_${classId}`));
-          if (matchedClassId && !canonicalKeys.has(key)) {
+          if (strayKeys.has(key)) {
             rows.push({ studentId: student.id, studentName: student.name, key, value: earned[key] });
           }
         });
