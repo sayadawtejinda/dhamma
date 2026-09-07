@@ -3282,7 +3282,12 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
             let deserved, basis, liveCompleted = null, liveTotal = null;
             if (lessonCount > 0) {
               const completed = await getCompletedCount(classId, student.name);
-              const maxAvailable = computeClassTrophyMax(lessonCount);
+              // Dhammaschool's own trophy rate is NOT the round(lessons/5)
+              // formula the other apps use -- confirmed directly by the
+              // teacher: a fully-completed 40-lesson grade is worth 80
+              // trophies (2 per lesson), matching every old grade lesson's
+              // own trophyLimit (all 80, for 40-chapter content).
+              const maxAvailable = lessonCount * 2;
               const liveDeserved = Math.floor((completed * maxAvailable) / lessonCount);
               // Many of these students actually studied via Google Slides
               // outside the live app, so real completion data is missing or
