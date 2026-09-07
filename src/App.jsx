@@ -64,6 +64,23 @@ class AppErrorBoundary extends React.Component {
   }
   componentDidCatch(error) {
     console.error('App crashed:', error);
+    // The one real failure mode here: the browser holding an old, now-
+    // superseded build whose chunk files a newer deploy already replaced,
+    // so a lazy import 404s. Rather than making every visitor notice the
+    // error screen and click Reload themselves, auto-reload once -- a
+    // sessionStorage guard stops it from looping if the crash turns out to
+    // be something else that a reload won't fix.
+    const msg = String(error?.message || '');
+    const looksLikeStaleChunk = error?.name === 'ChunkLoadError'
+      || /dynamically imported module|failed to fetch|loading chunk|importing a module script failed/i.test(msg);
+    if (looksLikeStaleChunk) {
+      try {
+        if (!sessionStorage.getItem('dhamma_auto_reload_attempted')) {
+          sessionStorage.setItem('dhamma_auto_reload_attempted', '1');
+          window.location.reload();
+        }
+      } catch (e) {}
+    }
   }
   render() {
     if (this.state.hasError) {
@@ -128,6 +145,14 @@ const KEEP_ALIVE_APPS = new Set(['smartstudy', 'abhidhamma', 'myanmarreader', 'd
 export default function App() {
   const [activeApp, setActiveApp] = useState('tutoring');
   const [openedKeepAliveApps, setOpenedKeepAliveApps] = useState(() => new Set());
+  // A fresh mount only happens via an actual page load, so getting here at
+  // all means this page's own chunk loaded fine -- clear the auto-reload
+  // guard so a stale-chunk crash on a DIFFERENT lazy-loaded app later in
+  // this same visit (e.g. opening Smart Study after Tutoring loaded fine)
+  // is still allowed one automatic reload of its own.
+  useEffect(() => {
+    try { sessionStorage.removeItem('dhamma_auto_reload_attempted'); } catch (e) {}
+  }, []);
   useEffect(() => {
     if (!KEEP_ALIVE_APPS.has(activeApp) || openedKeepAliveApps.has(activeApp)) return;
     setOpenedKeepAliveApps(prev => new Set(prev).add(activeApp));
