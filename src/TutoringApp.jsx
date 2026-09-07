@@ -2708,6 +2708,15 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
         return [...names];
       };
 
+      // Use whatever title the real smartstudy:// Lesson Bank entry already
+      // has -- Assign Lesson computes each student's trophy key from that
+      // entry's actual title, so if one already exists (as it does: "Smart
+      // Study Lesson", already sending real classes to real students) we
+      // MUST match it, or every value here gets written under a key nothing
+      // ever reads.
+      const existingSsEntry = lessonBank.find(l => l.link === 'smartstudy://');
+      const ssTitleForKeys = existingSsEntry?.title || SMARTSTUDY_MIGRATION_NEW_TITLE;
+
       const rows = [];
       for (const student of students) {
         const earned = student.earnedTrophies || {};
@@ -2716,7 +2725,7 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
           if (oldValue <= 0) continue;
           for (const target of SMARTSTUDY_MIGRATION_MAP[oldTitle]) {
             const { classId, fallback } = target;
-            const newKey = sanitizeKey(`${SMARTSTUDY_MIGRATION_NEW_TITLE}_${classId}`);
+            const newKey = sanitizeKey(`${ssTitleForKeys}_${classId}`);
             const currentNew = earned[newKey] || 0;
             const lessonCount = liveClasses[classId];
             let deserved, basis, liveCompleted = null, liveTotal = null;
@@ -2796,6 +2805,51 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
       alert(`Migration failed: ${err.message || err}`);
     }
     setIsApplyingSsMigration(false);
+  };
+
+  // One-off cleanup for the very first Apply run, which wrote trophies under
+  // a hardcoded "Smart Study" title before we knew the real Lesson Bank
+  // entry was already titled "Smart Study Lesson" -- those keys don't match
+  // anything Assign Lesson ever reads, so they're inert, but they should be
+  // removed rather than left as silent clutter. Safe to run more than once:
+  // once the stray keys are gone, it just reports nothing left to clean.
+  const [ssCleanupPreview, setSsCleanupPreview] = useState(null);
+  const [isRunningSsCleanup, setIsRunningSsCleanup] = useState(false);
+  const STRAY_SMARTSTUDY_TITLE = 'Smart Study';
+  const runSsCleanupScan = () => {
+    setIsRunningSsCleanup(true);
+    const allClassIds = [...new Set(Object.values(SMARTSTUDY_MIGRATION_MAP).flat().map(t => t.classId))];
+    const strayKeys = allClassIds.map(classId => sanitizeKey(`${STRAY_SMARTSTUDY_TITLE}_${classId}`));
+    const rows = [];
+    students.forEach(student => {
+      const earned = student.earnedTrophies || {};
+      strayKeys.forEach(key => {
+        if (earned[key] != null) {
+          rows.push({ studentId: student.id, studentName: student.name, key, value: earned[key] });
+        }
+      });
+    });
+    setSsCleanupPreview(rows);
+    setIsRunningSsCleanup(false);
+  };
+  const applySsCleanup = async () => {
+    if (!ssCleanupPreview || ssCleanupPreview.length === 0) return;
+    if (!window.confirm(`Remove ${ssCleanupPreview.length} incorrectly-keyed trophy field(s) written by the first Apply? This only deletes the stray "${STRAY_SMARTSTUDY_TITLE}_<class>" keys -- it does not touch any real trophy value.`)) return;
+    setIsRunningSsCleanup(true);
+    try {
+      const batch = writeBatch(db);
+      ssCleanupPreview.forEach(row => {
+        const studentRef = doc(db, `${publicDataPath}/students`, row.studentId);
+        batch.update(studentRef, { [`earnedTrophies.${row.key}`]: deleteField() });
+      });
+      await batch.commit();
+      alert(`Removed ${ssCleanupPreview.length} stray field(s).`);
+      setSsCleanupPreview(null);
+    } catch (err) {
+      console.error('Error cleaning up stray Smart Study keys:', err);
+      alert(`Cleanup failed: ${err.message || err}`);
+    }
+    setIsRunningSsCleanup(false);
   };
 
   const handleDeleteOldSmartStudyLessons = async () => {
@@ -3980,6 +4034,34 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
             <p className="text-sm text-gray-600 mb-4">
               One-time move for 4 old Gemini-link lessons ("10 Parami", "Heavenly World or Golden cage", "38 Blessings", "The Buddha's Eight Outer Victories") into the real per-class Smart Study tracking. Step 1 only calculates and shows a preview — nothing is written until you press Apply. Step 2 (deleting the old lessons) is separate and only removes them from the Lesson Bank; it never touches any student's already-earned trophies.
             </p>
+
+            <div className="mb-5 p-4 bg-amber-50 rounded-lg border border-amber-300">
+              <p className="font-semibold text-gray-800 mb-1">⚠️ 0. Clean up the first Apply (wrong title was used)</p>
+              <p className="text-sm text-gray-600 mb-3">The very first Apply wrote trophies under a placeholder "Smart Study" title before we knew the real Lesson Bank entry is titled "Smart Study Lesson" — those values are stranded under a key nothing reads (which is why nothing changed on Aaron's page). Run this once to remove them, then redo Preview → Apply below so they get written under the correct key.</p>
+              <button
+                onClick={runSsCleanupScan}
+                disabled={isRunningSsCleanup}
+                className="bg-amber-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-amber-700 disabled:opacity-50"
+              >
+                {isRunningSsCleanup ? 'Scanning...' : 'Scan for Stray Keys'}
+              </button>
+              {ssCleanupPreview && (
+                ssCleanupPreview.length === 0 ? (
+                  <p className="text-sm text-emerald-600 font-semibold mt-3">✅ Nothing to clean up.</p>
+                ) : (
+                  <>
+                    <p className="text-sm text-gray-600 mt-3 mb-2">{ssCleanupPreview.length} stray field(s) found across {new Set(ssCleanupPreview.map(r => r.studentId)).size} student(s).</p>
+                    <button
+                      onClick={applySsCleanup}
+                      disabled={isRunningSsCleanup}
+                      className="bg-red-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-700 disabled:opacity-50"
+                    >
+                      Remove {ssCleanupPreview.length} Stray Field(s)
+                    </button>
+                  </>
+                )
+              )}
+            </div>
 
             <div className="mb-5 p-4 bg-white rounded-lg border border-violet-200">
               <p className="font-semibold text-gray-800 mb-1">1. Preview the Smart Study trophy migration</p>
