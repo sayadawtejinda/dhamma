@@ -2936,10 +2936,17 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
     setIsRunningSsCleanup(false);
   };
 
+  // "Kind and Respectful" is also an old Gemini-link Smart Study lesson, but
+  // it was never given a migration mapping above (no per-class equivalent
+  // was worked out for it) -- the teacher confirmed it should be deleted
+  // anyway. Its students' existing bare-key trophies are untouched by
+  // deletion either way (deleting a Lesson Bank entry never touches student
+  // data), they just won't have a live per-class Smart Study equivalent.
+  const OLD_SMARTSTUDY_TITLES_TO_DELETE = [...Object.keys(SMARTSTUDY_MIGRATION_MAP), 'Kind and Respectful'];
   const handleDeleteOldSmartStudyLessons = async () => {
-    const targets = lessonBank.filter(l => Object.keys(SMARTSTUDY_MIGRATION_MAP).includes(l.title));
+    const targets = lessonBank.filter(l => OLD_SMARTSTUDY_TITLES_TO_DELETE.includes(l.title));
     if (targets.length === 0) {
-      alert('None of the 4 old lessons were found in the Lesson Bank (maybe already deleted).');
+      alert('None of the old lessons were found in the Lesson Bank (maybe already deleted).');
       return;
     }
     if (!window.confirm(`Delete these ${targets.length} old Lesson Bank entries?\n\n${targets.map(t => `- ${t.title}`).join('\n')}\n\nStudents' already-earned trophies for them are NOT touched -- this only removes them from the Lesson Bank / Assign Lesson list.`)) {
@@ -4213,8 +4220,8 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
             </div>
 
             <div className="p-4 bg-white rounded-lg border border-violet-200">
-              <p className="font-semibold text-gray-800 mb-1">2. Delete the 4 old lessons from the Lesson Bank</p>
-              <p className="text-sm text-gray-500 mb-3">Only do this after Step 1's Apply has been run. Removes them from the Lesson Bank / Assign Lesson list only — does not touch any student's data.</p>
+              <p className="font-semibold text-gray-800 mb-1">2. Delete the 5 old lessons from the Lesson Bank</p>
+              <p className="text-sm text-gray-500 mb-3">"10 Parami", "Heavenly World or Golden cage", "38 Blessings", "The Buddha's Eight Outer Victories", and "Kind and Respectful" (no migration mapping — deleted anyway per teacher request). Only do this after Step 1's Apply has been run. Removes them from the Lesson Bank / Assign Lesson list only — does not touch any student's data.</p>
               <button
                 onClick={handleDeleteOldSmartStudyLessons}
                 className="bg-red-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-700"
