@@ -1193,26 +1193,56 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyan
     if (!lesson?.link?.startsWith('smartstudy://')) return;
     const student = students.find(s => s.id === selectedStudentUid);
     if (!student) return;
-    const sName = student.name;
-    const namesToTry = [...new Set([sName, ...Object.values(student.smartStudyNames || {})].filter(Boolean))];
     let isMounted = true;
     (async () => {
       try {
+        // Enumerate every class this student is actually linked to, and the
+        // exact alias name used in each, straight from classRoster's
+        // `tutoringStudentUid` link -- this is the definitive source (every
+        // roster doc records which tutoring student it belongs to and what
+        // name they registered under in Smart Study for that class), rather
+        // than guessing from `smartStudyNames`, which can be missing an old
+        // alias entirely. Guessing from a possibly-incomplete name list is
+        // exactly what made this total visibly jump (e.g. 21 then 61) as
+        // more names got discovered across re-renders.
+        const rosterSnap = await getDocs(query(
+          collection(db, 'artifacts', appId, 'public', 'data', 'classRoster'),
+          where('tutoringStudentUid', '==', student.id)
+        ));
+        const classAliasPairs = rosterSnap.docs
+          .map(d => ({ classId: d.data().classId, name: d.data().studentName }))
+          .filter(p => p.classId && p.name);
+        // Belt-and-suspenders: also always check the student's current name
+        // directly (no classId restriction) in case a class was never
+        // linked via roster at all.
+        const namesToTryDirectly = [...new Set([student.name, ...Object.values(student.smartStudyNames || {})].filter(Boolean))];
+
         const distinctClassLesson = new Set(); // all-class total
         const distinctForClass = new Set();    // per-class (selected class)
-        for (const name of namesToTry) {
-          const q = query(
-            collection(db, 'artifacts', appId, 'public', 'data', 'scores'),
-            where('studentName', '==', name)
-          );
-          const snap = await getDocs(q);
+        const addResults = (snap, classIdHint) => {
           snap.docs.forEach(d => {
-            const cId = d.data().classId; const lId = d.data().lessonId;
+            const cId = classIdHint || d.data().classId;
+            const lId = d.data().lessonId;
             if (cId && lId) {
               distinctClassLesson.add(`${cId}-${lId}`);
               if (sendSmartStudyClassId && cId === sendSmartStudyClassId) distinctForClass.add(lId);
             }
           });
+        };
+        for (const { classId, name } of classAliasPairs) {
+          const snap = await getDocs(query(
+            collection(db, 'artifacts', appId, 'public', 'data', 'scores'),
+            where('classId', '==', classId),
+            where('studentName', '==', name)
+          ));
+          addResults(snap, classId);
+        }
+        for (const name of namesToTryDirectly) {
+          const snap = await getDocs(query(
+            collection(db, 'artifacts', appId, 'public', 'data', 'scores'),
+            where('studentName', '==', name)
+          ));
+          addResults(snap, null);
         }
         if (isMounted) {
           setSsStudentTotalCount(distinctClassLesson.size);
