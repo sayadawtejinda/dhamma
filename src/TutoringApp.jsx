@@ -323,23 +323,31 @@ const PRIOR_WRONG_SMARTSTUDY_TITLE = ' Heavenly World or Golden cage';
 
 // One-time migration map for old Gemini-link Abhidhamma lessons being
 // retired in favor of the real per-class Abhidhamma tracking (same shape
-// and reasoning as SMARTSTUDY_MIGRATION_MAP above). `forceFallback: true`
-// means always use the student's own already-earned trophy count for that
-// OLD lesson directly (never look up live progress) -- confirmed by the
+// and reasoning as SMARTSTUDY_MIGRATION_MAP above). classId values are the
+// REAL live document IDs (confirmed directly from the teacher's "Existing
+// Classes" list -- these use ALL-CAPS-WITH-HYPHENS and single "dh", e.g.
+// "BASIC-ABHIDHAMMA-3", NOT the old lesson's own Title Case / double-d
+// spelling like "Basic Abhiddhamma-4"). The first version of this map used
+// the human-readable old-lesson-style spelling as a guessed classId, which
+// silently failed to match the real class and is exactly why Kevin's
+// Previously Earned stayed at 0 after Apply. `forceFallback: true` means
+// always use the student's own already-earned trophy count for that OLD
+// lesson directly (never look up live progress) -- confirmed by the
 // teacher for "THE GREAT BUDDHISTS" and "DHAMMAPADA-1" specifically: those
 // classes exist and have lesson content, but have no real per-student
 // completion data recorded yet, so a live lookup would wrongly compute 0
-// and erase the trophies these students already earned. Every other target
-// class here does have live tracking, so those get computed from real
-// progress like normal. "Basic Abhiddhamma" (the original bare lesson) is
-// deliberately NOT included -- not yet assigned to any class, to be
-// migrated separately later.
+// and erase the trophies these students already earned. "Basic Abhiddhamma"
+// (the original bare lesson) is deliberately NOT included -- not yet
+// assigned to any class, to be migrated separately later.
 const ABHIDHAMMA_MIGRATION_MAP = {
-  'Basic Abhiddhamma-2': [{ classId: 'Basic Abhiddhamma-2' }],
-  'Basic Abhiddhamma-3': [{ classId: 'Basic Abhiddhamma-2' }],
-  'Basic Abhiddhamma-4': [{ classId: 'Basic Abhiddhamma-3' }],
-  'Basic Abhiddhamma-5': [{ classId: 'Basic Abhiddhamma-4' }],
-  'Being Good and Being Kind': [{ classId: 'Being Good and Being Kind' }],
+  'Basic Abhiddhamma-2': [{ classId: 'BASIC-ABHIDHAMMA-2' }],
+  'Basic Abhiddhamma-3': [{ classId: 'BASIC-ABHIDHAMMA-2' }],
+  'Basic Abhiddhamma-4': [{ classId: 'BASIC-ABHIDHAMMA-3' }],
+  'Basic Abhiddhamma-5': [{ classId: 'BASIC-ABHIDHAMMA-4' }],
+  // Note the single "d" in "Abhidhamma" here -- this old lesson's title is
+  // spelled differently from the others (double "d") in the Lesson Bank.
+  'Basic Abhidhamma-6': [{ classId: 'BASIC-ABHIDHAMMA-5' }],
+  'Being Good and Being Kind': [{ classId: 'BEING GOOD AND BEING KIND' }],
   'The Great Buddhist Lady': [{ classId: 'THE GREAT BUDDHISTS', forceFallback: true }],
   'The Great Buddhist Layman': [{ classId: 'THE GREAT BUDDHISTS', forceFallback: true }],
   'Dhammapada Chapter-1': [{ classId: 'DHAMMAPADA-1', forceFallback: true }],
@@ -3167,6 +3175,50 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
     }
   };
 
+  // Cleanup for the first Abhidhamma Apply, which used the old lessons'
+  // own Title-Case/double-d spelling as a guessed classId (e.g. "Basic
+  // Abhiddhamma-3") instead of the real live document ID ("BASIC-
+  // ABHIDHAMMA-3") -- that guess never matched a real class, so those
+  // writes landed under a key nothing reads. Narrowly scoped to these
+  // specific wrong guesses only.
+  const PRIOR_WRONG_ABHIDHAMMA_CLASSIDS = ['Basic Abhiddhamma-2', 'Basic Abhiddhamma-3', 'Basic Abhiddhamma-4'];
+  const [abhiCleanupPreview, setAbhiCleanupPreview] = useState(null);
+  const [isRunningAbhiCleanup, setIsRunningAbhiCleanup] = useState(false);
+  const runAbhiCleanupScan = () => {
+    setIsRunningAbhiCleanup(true);
+    const strayKeys = new Set(PRIOR_WRONG_ABHIDHAMMA_CLASSIDS.map(classId => sanitizeKey(`${CANONICAL_ABHIDHAMMA_TITLE}_${classId}`)));
+    const rows = [];
+    students.forEach(student => {
+      const earned = student.earnedTrophies || {};
+      Object.keys(earned).forEach(key => {
+        if (strayKeys.has(key)) {
+          rows.push({ studentId: student.id, studentName: student.name, key, value: earned[key] });
+        }
+      });
+    });
+    setAbhiCleanupPreview(rows);
+    setIsRunningAbhiCleanup(false);
+  };
+  const applyAbhiCleanup = async () => {
+    if (!abhiCleanupPreview || abhiCleanupPreview.length === 0) return;
+    if (!window.confirm(`Remove ${abhiCleanupPreview.length} incorrectly-keyed trophy field(s) left by the first Abhidhamma Apply? This does not touch any real trophy value.`)) return;
+    setIsRunningAbhiCleanup(true);
+    try {
+      const batch = writeBatch(db);
+      abhiCleanupPreview.forEach(row => {
+        const studentRef = doc(db, `${publicDataPath}/students`, row.studentId);
+        batch.update(studentRef, { [`earnedTrophies.${row.key}`]: deleteField() });
+      });
+      await batch.commit();
+      alert(`Removed ${abhiCleanupPreview.length} stray field(s).`);
+      setAbhiCleanupPreview(null);
+    } catch (err) {
+      console.error('Error cleaning up stray Abhidhamma keys:', err);
+      alert(`Cleanup failed: ${err.message || err}`);
+    }
+    setIsRunningAbhiCleanup(false);
+  };
+
   const completedSessions = sessions
     .filter(s => s.endTime)
     .sort((a, b) => b.startTime.toDate() - a.startTime.toDate());
@@ -4442,6 +4494,34 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
             <p className="text-sm text-gray-600 mb-4">
               Same one-time move as Smart Study above, for the old Gemini-link Abhidhamma lessons ("Basic Abhiddhamma-2" through "-5", "Being Good and Being Kind", "The Great Buddhist Lady"/"Layman", "Dhammapada Chapter-1") into the real per-class Abhidhamma tracking under the "Abhidhamma Lesson" entry. "Basic Abhiddhamma" (the original bare lesson) isn't included yet — not assigned to a class.
             </p>
+
+            <div className="mb-5 p-4 bg-amber-50 rounded-lg border border-amber-300">
+              <p className="font-semibold text-gray-800 mb-1">⚠️ 0. Clean up the first Apply (wrong class ID guessed)</p>
+              <p className="text-sm text-gray-600 mb-3">The first Apply guessed the old lessons' own spelling ("Basic Abhiddhamma-3") as the class ID instead of the real one ("BASIC-ABHIDHAMMA-3"), so those values are stranded under a key nothing reads. Run this once to remove them, then redo Preview → Apply below.</p>
+              <button
+                onClick={runAbhiCleanupScan}
+                disabled={isRunningAbhiCleanup}
+                className="bg-amber-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-amber-700 disabled:opacity-50"
+              >
+                {isRunningAbhiCleanup ? 'Scanning...' : 'Scan for Stray Keys'}
+              </button>
+              {abhiCleanupPreview && (
+                abhiCleanupPreview.length === 0 ? (
+                  <p className="text-sm text-emerald-600 font-semibold mt-3">✅ Nothing to clean up.</p>
+                ) : (
+                  <>
+                    <p className="text-sm text-gray-600 mt-3 mb-2">{abhiCleanupPreview.length} stray field(s) found across {new Set(abhiCleanupPreview.map(r => r.studentId)).size} student(s).</p>
+                    <button
+                      onClick={applyAbhiCleanup}
+                      disabled={isRunningAbhiCleanup}
+                      className="bg-red-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-700 disabled:opacity-50"
+                    >
+                      Remove {abhiCleanupPreview.length} Stray Field(s)
+                    </button>
+                  </>
+                )
+              )}
+            </div>
 
             <div className="mb-5 p-4 bg-white rounded-lg border border-violet-200">
               <p className="font-semibold text-gray-800 mb-1">1. Preview the Abhidhamma trophy migration</p>
