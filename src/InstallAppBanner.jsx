@@ -12,7 +12,17 @@ import React, { useEffect, useState } from 'react';
 // menu, and no web page can trigger that automatically. This banner just
 // shows clear step-by-step instructions instead.
 // Already-installed / desktop: nothing renders.
-const DISMISS_KEY = 'dhamma_install_banner_dismissed_v1';
+//
+// Dismissing (the X, or cancelling Android's native prompt) only snoozes
+// the banner for a day rather than hiding it forever -- a student can tap
+// the wrong thing or dismiss by accident without ever actually completing
+// "Add to Home Screen", and there's no reliable way to detect that failure
+// directly (iOS gives no signal at all). Re-showing periodically until
+// `isStandalone()` genuinely becomes true (only possible by opening the
+// installed icon) means a student who never finished installing keeps
+// getting reminded, while one who's actually installed never sees it again.
+const DISMISS_KEY = 'dhamma_install_banner_dismissed_at_v2';
+const SNOOZE_MS = 24 * 60 * 60 * 1000;
 
 function isStandalone() {
   return window.matchMedia?.('(display-mode: standalone)')?.matches || window.navigator.standalone === true;
@@ -27,7 +37,10 @@ export default function InstallAppBanner() {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [showIosInstructions, setShowIosInstructions] = useState(false);
   const [dismissed, setDismissed] = useState(() => {
-    try { return localStorage.getItem(DISMISS_KEY) === 'true'; } catch { return false; }
+    try {
+      const ts = parseInt(localStorage.getItem(DISMISS_KEY), 10);
+      return !!ts && (Date.now() - ts < SNOOZE_MS);
+    } catch { return false; }
   });
 
   useEffect(() => {
@@ -43,7 +56,7 @@ export default function InstallAppBanner() {
 
   const dismiss = () => {
     setDismissed(true);
-    try { localStorage.setItem(DISMISS_KEY, 'true'); } catch {}
+    try { localStorage.setItem(DISMISS_KEY, String(Date.now())); } catch {}
   };
 
   if (dismissed || isStandalone()) return null;
