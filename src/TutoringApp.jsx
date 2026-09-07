@@ -306,6 +306,13 @@ const SMARTSTUDY_MIGRATION_MAP = {
   ],
 };
 const SMARTSTUDY_MIGRATION_NEW_TITLE = 'Smart Study';
+// The real Lesson Bank entry actually used to send Smart Study lessons to
+// students -- confirmed directly by the teacher. Every per-class trophy key
+// this migration writes MUST be computed from this exact title, or Assign
+// Lesson will never see the value (this is the title Assign Lesson resolves
+// to for every real "Smart Study Lesson" card students already see).
+const CANONICAL_SMARTSTUDY_TITLE = 'Smart Study Lesson';
+const SMARTSTUDY_MIGRATION_CLASS_IDS = [...new Set(Object.values(SMARTSTUDY_MIGRATION_MAP).flat().map(t => t.classId))];
 
 const toLocalDateString = (date) => {
   const year = date.getFullYear();
@@ -2708,25 +2715,15 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
         return [...names];
       };
 
-      // Use whatever title the real smartstudy:// Lesson Bank entry already
-      // has -- Assign Lesson computes each student's trophy key from that
-      // entry's actual title, so if one already exists we MUST match it, or
-      // every value here gets written under a key nothing ever reads. Query
-      // Firestore directly rather than trusting the `lessonBank` state,
-      // which is filtered to `teacherUid == user.uid` and can silently miss
-      // an entry created under a different teacherUid (exactly what made
-      // the first two Apply attempts write to the wrong key).
-      // The very first Apply attempt likely ran before `lessonBank` had
-      // finished loading, so its "create one if none exists" fallback found
-      // none and created a SECOND entry titled "Smart Study" alongside the
-      // real, already-in-use "Smart Study Lesson" entry. With two matching
-      // docs, picking docs[0] is unordered and can land on the placeholder
-      // every time -- explicitly skip anything titled exactly the
-      // placeholder so the real entry's title always wins.
-      const ssEntrySnap = await getDocs(query(lessonBankCollection, where('link', '==', 'smartstudy://')));
-      const ssDocs = ssEntrySnap.docs.map(d => ({ id: d.id, ...d.data() }));
-      const realSsEntry = ssDocs.find(d => d.title && d.title !== SMARTSTUDY_MIGRATION_NEW_TITLE) || ssDocs[0];
-      const ssTitleForKeys = realSsEntry?.title || SMARTSTUDY_MIGRATION_NEW_TITLE;
+      // Assign Lesson computes each student's trophy key from the Lesson
+      // Bank entry's own title, so this MUST match whichever entry is
+      // actually used to send Smart Study lessons to students. The teacher
+      // confirmed "Smart Study Lesson" is that entry going forward (an old
+      // lesson had briefly been repurposed with a smartstudy:// link as a
+      // workaround while that entry was unusable, which is what made two
+      // earlier Apply attempts write under the wrong title) -- so the title
+      // is now fixed rather than auto-detected.
+      const ssTitleForKeys = CANONICAL_SMARTSTUDY_TITLE;
 
       const rows = [];
       for (const student of students) {
@@ -2818,37 +2815,38 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
     setIsApplyingSsMigration(false);
   };
 
-  // One-off cleanup for the very first Apply run, which wrote trophies under
-  // a hardcoded "Smart Study" title before we knew the real Lesson Bank
-  // entry was already titled "Smart Study Lesson" -- those keys don't match
-  // anything Assign Lesson ever reads, so they're inert, but they should be
-  // removed rather than left as silent clutter. Safe to run more than once:
-  // once the stray keys are gone, it just reports nothing left to clean.
+  // One-off cleanup for the earlier Apply attempts, which wrote trophies
+  // under whichever smartstudy:// Lesson Bank entry the code found first --
+  // a placeholder "Smart Study" entry it created itself, and separately an
+  // old lesson temporarily repurposed with a smartstudy:// link -- neither
+  // of which is the real "Smart Study Lesson" entry Assign Lesson actually
+  // uses. This scans generically for ANY "<title>_<classId>" trophy key
+  // (for the classIds this migration touches) whose title isn't the
+  // canonical one, so it catches every wrong title already hit and any
+  // future one, not just the ones already diagnosed by name. Safe to run
+  // more than once: once stray keys are gone, it just reports nothing left.
   const [ssCleanupPreview, setSsCleanupPreview] = useState(null);
   const [isRunningSsCleanup, setIsRunningSsCleanup] = useState(false);
-  const STRAY_SMARTSTUDY_TITLE = 'Smart Study';
   const runSsCleanupScan = async () => {
     setIsRunningSsCleanup(true);
     try {
-      const allClassIds = [...new Set(Object.values(SMARTSTUDY_MIGRATION_MAP).flat().map(t => t.classId))];
-      const strayKeys = allClassIds.map(classId => sanitizeKey(`${STRAY_SMARTSTUDY_TITLE}_${classId}`));
+      const canonicalKeys = new Set(SMARTSTUDY_MIGRATION_CLASS_IDS.map(classId => sanitizeKey(`${CANONICAL_SMARTSTUDY_TITLE}_${classId}`)));
       const rows = [];
       students.forEach(student => {
         const earned = student.earnedTrophies || {};
-        strayKeys.forEach(key => {
-          if (earned[key] != null) {
+        Object.keys(earned).forEach(key => {
+          const matchedClassId = SMARTSTUDY_MIGRATION_CLASS_IDS.find(classId => key.endsWith(`_${classId}`));
+          if (matchedClassId && !canonicalKeys.has(key)) {
             rows.push({ studentId: student.id, studentName: student.name, key, value: earned[key] });
           }
         });
       });
-      // Also check for a duplicate placeholder Lesson Bank entry -- the very
-      // first Apply likely ran before `lessonBank` had loaded, so its
-      // "create one if none exists" check found nothing and created a
-      // second smartstudy:// entry titled exactly "Smart Study" alongside
-      // the real "Smart Study Lesson" entry already in use.
+      // Also check for a duplicate placeholder Lesson Bank entry created by
+      // an Apply that ran before `lessonBank` had loaded and so found no
+      // existing smartstudy:// entry.
       const ssEntrySnap = await getDocs(query(lessonBankCollection, where('link', '==', 'smartstudy://')));
       const ssDocs = ssEntrySnap.docs.map(d => ({ id: d.id, ...d.data() }));
-      const duplicateEntry = ssDocs.length > 1 ? ssDocs.find(d => d.title === STRAY_SMARTSTUDY_TITLE) : null;
+      const duplicateEntry = ssDocs.length > 1 ? ssDocs.find(d => d.title === SMARTSTUDY_MIGRATION_NEW_TITLE) : null;
       setSsCleanupPreview({ rows, duplicateEntry: duplicateEntry || null });
     } catch (err) {
       console.error('Error scanning for stray Smart Study data:', err);
@@ -2860,7 +2858,7 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
     if (!ssCleanupPreview) return;
     const { rows, duplicateEntry } = ssCleanupPreview;
     if (rows.length === 0 && !duplicateEntry) return;
-    if (!window.confirm(`Remove ${rows.length} incorrectly-keyed trophy field(s)${duplicateEntry ? ' and 1 duplicate placeholder Lesson Bank entry' : ''} left by the first Apply? This does not touch any real trophy value or the real "Smart Study Lesson" entry.`)) return;
+    if (!window.confirm(`Remove ${rows.length} incorrectly-keyed trophy field(s)${duplicateEntry ? ' and 1 duplicate placeholder Lesson Bank entry' : ''} left by earlier Apply attempts? This does not touch any real trophy value or the real "Smart Study Lesson" entry.`)) return;
     setIsRunningSsCleanup(true);
     try {
       const batch = writeBatch(db);
