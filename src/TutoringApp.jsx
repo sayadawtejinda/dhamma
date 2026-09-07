@@ -964,7 +964,8 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyan
   const [abhidhammaClasses, setAbhidhammaClasses] = useState(null);   // null = not yet loaded
   const [abhidhammaLoading, setAbhidhammaLoading] = useState(false);
   const [sendTargetType, setSendTargetType] = useState('student'); 
-  const [selectedGroupId, setSelectedGroupId] = useState(''); 
+  const [selectedGroupId, setSelectedGroupId] = useState('');
+  const [fullScreenRosterGroup, setFullScreenRosterGroup] = useState(null);
   const [sendStudentSearch, setSendStudentSearch] = useState(''); 
   const [isSendDropdownOpen, setIsSendDropdownOpen] = useState(false); 
   const [directTrophyAmount, setDirectTrophyAmount] = useState(1);
@@ -1055,6 +1056,7 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyan
   const hasAutoSelectedSendStudentRef = useRef(false);
   const hasAutoSelectedScheduleStudentRef = useRef(false);
   const hasAutoSelectedBankLessonRef = useRef(false);
+  const hasAutoSelectedGroupRef = useRef(false);
 
   useEffect(() => {
     const unsubscribe = onSnapshot(teacherConfigDoc, (docSnap) => {
@@ -1165,11 +1167,28 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyan
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const groupList = snapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
-        .sort((a, b) => a.groupName.localeCompare(b.groupName));
+        .sort((a, b) => {
+          // Parami runs large enough (shared/rented devices, students who
+          // need to find their own ID quickly during class) that it needs
+          // to be the first thing the teacher sees, not buried alphabetically.
+          const aIsParami = (a.groupName || '').trim().toLowerCase() === 'parami';
+          const bIsParami = (b.groupName || '').trim().toLowerCase() === 'parami';
+          if (aIsParami !== bIsParami) return aIsParami ? -1 : 1;
+          return a.groupName.localeCompare(b.groupName);
+        });
       setGroups(groupList);
-      
-      if (!selectedGroupId && groupList.length > 0) {
+
+      // Bug fix (same class of bug as the Lesson Bank one): this effect
+      // only depends on [user.uid], so this callback permanently closes
+      // over `selectedGroupId` as it was at mount time -- the old
+      // `if (!selectedGroupId...)` check evaluated true on every snapshot
+      // forever, not just the first, silently resetting the teacher's
+      // actual group selection back to groupList[0] any time the groups
+      // list changed for any reason. A ref survives across renders without
+      // needing to be a dependency, so it actually only fires once.
+      if (!hasAutoSelectedGroupRef.current && groupList.length > 0) {
         setSelectedGroupId(groupList[0].id);
+        hasAutoSelectedGroupRef.current = true;
       }
     }, (error) => {
       console.error("Error fetching groups: ", error);
@@ -3598,6 +3617,40 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
 
   return (
     <div className="p-6">
+      {fullScreenRosterGroup && (() => {
+        // Some Parami students share a rented/borrowed device and need to
+        // find their own ID quickly during class -- a big, projector-
+        // friendly list of just this group's names + IDs, nothing else on
+        // screen to distract from that.
+        const rosterStudents = students
+          .filter(s => (fullScreenRosterGroup.studentUids || []).includes(s.id))
+          .sort((a, b) => a.name.localeCompare(b.name));
+        return (
+          <div className="fixed inset-0 z-[9999] bg-white overflow-y-auto p-8">
+            <div className="flex justify-between items-center mb-8">
+              <h2 className="text-3xl font-bold text-cyan-800">{fullScreenRosterGroup.groupName}</h2>
+              <button
+                onClick={() => setFullScreenRosterGroup(null)}
+                className="bg-gray-800 text-white px-6 py-3 rounded-full font-semibold hover:bg-gray-900"
+              >
+                ✕ Close
+              </button>
+            </div>
+            {rosterStudents.length === 0 ? (
+              <p className="text-xl text-gray-500">No students in this group yet.</p>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                {rosterStudents.map(student => (
+                  <div key={student.id} className="bg-cyan-50 border-2 border-cyan-200 rounded-2xl p-5 text-center">
+                    <p className="text-xl font-bold text-gray-800 break-words">{student.name}</p>
+                    <p className="text-2xl font-mono font-extrabold text-cyan-700 mt-2 tracking-wider">{student.displayId}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })()}
       <ConfirmationModal
         isOpen={showConfirmModal.isOpen} onClose={() => setShowConfirmModal({ isOpen: false })}
         onConfirm={showConfirmModal.onConfirm} title={showConfirmModal.title}
@@ -3925,7 +3978,7 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
           ) : (
             <div className="mb-4">
               <label className="block text-gray-700 mb-2">Select Group</label>
-              <select value={selectedGroupId} onChange={(e) => setSelectedGroupId(e.target.value)} className="w-full p-3 border rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <select value={selectedGroupId} onChange={(e) => { setSelectedGroupId(e.target.value); hasAutoSelectedGroupRef.current = true; }} className="w-full p-3 border rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500">
                 <option value="" disabled>-- Select a group --</option>
                 {groups.map(group => <option key={group.id} value={group.id}>{group.groupName} ({group.studentUids.length} students)</option>)}
               </select>
@@ -4419,11 +4472,16 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                    <div key={group.id} className="bg-white p-4 rounded-lg border border-gray-200">
                      <div className="flex justify-between items-center mb-3">
                        <h4 className="text-lg font-semibold text-cyan-800">{group.groupName}</h4>
-                       <button onClick={() => openDeleteModal(group.id, group.groupName, 'group')} className="text-red-500 hover:text-red-700" title="Delete Group">
+                       <div className="flex items-center gap-3">
+                         <button onClick={() => setFullScreenRosterGroup(group)} className="text-cyan-700 hover:text-cyan-900 text-sm font-semibold whitespace-nowrap" title="Show this group's IDs full-screen">
+                           🖥️ Show IDs
+                         </button>
+                         <button onClick={() => openDeleteModal(group.id, group.groupName, 'group')} className="text-red-500 hover:text-red-700" title="Delete Group">
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                             <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clipRule="evenodd" />
                           </svg>
                         </button>
+                       </div>
                      </div>
                      <p className="text-sm text-gray-600 mb-3">Add or remove students from this group:</p>
                      <div className="space-y-2 max-h-48 overflow-y-auto">
