@@ -50,6 +50,11 @@ const SpeakingMyanmarApp = lazy(() => import('./SpeakingMyanmarApp'));
 // MyanmarPart2AApp and MyanmarPart2BApp the same way (see
 // MyanmarPart1And2App.jsx).
 const MyanmarPart1And2App = lazy(() => import('./MyanmarPart1And2App'));
+// Bodhi Tree — first piece of the planned gamified student "Home": a tree
+// that grows from a student's real attendance history. Deliberately its
+// own standalone app (not part of TutoringApp.jsx) per the teacher's
+// request, so the gamification layer can grow independently later.
+const BodhiTreeApp = lazy(() => import('./BodhiTreeApp'));
 
 // Catches a failed lazy-chunk load (e.g. the browser has an old page open
 // from before a new deploy replaced that chunk's file) so it shows a
@@ -178,6 +183,7 @@ export default function App() {
   const [readingMyanmarRequest, setReadingMyanmarRequest] = useState(null);
   const [speakingMyanmarRequest, setSpeakingMyanmarRequest] = useState(null);
   const [myanmarPart1And2Request, setMyanmarPart1And2Request] = useState(null);
+  const [bodhiTreeRequest, setBodhiTreeRequest] = useState(null);
 
   const openMyanmarSpelling = (request) => {
     setMyanmarSpellingRequest(request || {});
@@ -195,6 +201,15 @@ export default function App() {
   const closeMyanmarSoundPractice = () => {
     setActiveApp('tutoring');
     setMyanmarSoundPracticeRequest(null);
+  };
+
+  const openBodhiTree = (request) => {
+    setBodhiTreeRequest(request || {});
+    setActiveApp('bodhitree');
+  };
+  const closeBodhiTree = () => {
+    setActiveApp('tutoring');
+    setBodhiTreeRequest(null);
   };
 
   const openReadingMyanmar = (request) => {
@@ -387,6 +402,7 @@ export default function App() {
           onOpenReadingMyanmar={openReadingMyanmar}
           onOpenSpeakingMyanmar={openSpeakingMyanmar}
           onOpenMyanmarPart1And2={openMyanmarPart1And2}
+          onOpenBodhiTree={openBodhiTree}
         />
       </div>
 
@@ -696,6 +712,12 @@ export default function App() {
         {activeApp === 'myanmarpart1and2' && (
           <div>
             <MyanmarPart1And2App entryRequest={myanmarPart1And2Request} onExit={closeMyanmarPart1And2} />
+          </div>
+        )}
+
+        {activeApp === 'bodhitree' && (
+          <div>
+            <BodhiTreeApp entryRequest={bodhiTreeRequest} onExit={closeBodhiTree} />
           </div>
         )}
       </Suspense>
