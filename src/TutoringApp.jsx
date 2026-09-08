@@ -1028,7 +1028,7 @@ function AttendanceReports({ students, teacherSchedule, sessions }) {
   );
 }
 
-function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenConsonantPractice, onOpenBurmeseGame, onOpenMyanmarSpeaking, onOpenNumberLearning, onOpenVowelsLearning, onOpenAnimalSound, onOpenBurmeseLearningGames, onOpenInteractiveQuiz, onOpenMyanmarPoems, onOpenConsonantEndings, onOpenTimeAndCalendar, onOpenMyanmarSpelling, onOpenMyanmarSoundPractice, onOpenReadingMyanmar, onOpenSpeakingMyanmar, onOpenMyanmarPart1And2 }) {
+function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenConsonantPractice, onOpenBurmeseGame, onOpenMyanmarSpeaking, onOpenNumberLearning, onOpenVowelsLearning, onOpenAnimalSound, onOpenBurmeseLearningGames, onOpenInteractiveQuiz, onOpenMyanmarPoems, onOpenConsonantEndings, onOpenTimeAndCalendar, onOpenMyanmarSpelling, onOpenMyanmarSoundPractice, onOpenReadingMyanmar, onOpenSpeakingMyanmar, onOpenMyanmarPart1And2, onOpenWatchAndLearn }) {
   const [students, setStudents] = useState([]);
   const [lessonBank, setLessonBank] = useState([]); 
   const [sessions, setSessions] = useState([]); 
@@ -3220,6 +3220,90 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
     setIsFixingMyanmarReaderScale(false);
   };
 
+  // One-time migration: 5 separate bare-link Lesson Bank entries (each just
+  // a YouTube link with no content of its own -- "watch this and report how
+  // much you watched") consolidated into one "🎥 Watch & Learn" entry with
+  // a real list screen (WatchAndLearnApp.jsx). Each student's trophies
+  // earned across all 5 old titles are summed into the one new title, never
+  // decreasing anything already there. New unitCount/trophyLimit are a
+  // reasonable combination of the 5 old ones' own scales (they used
+  // Minutes/Movies at very different scales -- see the note in the preview
+  // UI) rather than an exact conversion; the teacher can adjust "Total
+  // Number"/"Max Trophies" afterward via Edit Lesson if a different rate is
+  // wanted.
+  const WATCH_LEARN_OLD_TITLES = ['Animated Buddhist Stories', 'Kyaw Hein 🎦 ', 'Story', 'Watch 🎥 ', 'Combine Link'];
+  const WATCH_LEARN_NEW_TITLE = '🎥 Watch & Learn';
+  const WATCH_LEARN_LINK = 'watchandlearn://';
+  const WATCH_LEARN_UNIT_COUNT = 3000;
+  const WATCH_LEARN_TROPHY_LIMIT = 350;
+  const [watchLearnMigrationPreview, setWatchLearnMigrationPreview] = useState(null);
+  const [isApplyingWatchLearnMigration, setIsApplyingWatchLearnMigration] = useState(false);
+  const runWatchLearnMigrationPreview = () => {
+    const newKey = sanitizeKey(WATCH_LEARN_NEW_TITLE);
+    const rows = students
+      .map(student => {
+        const earned = student.earnedTrophies || {};
+        const sumOld = WATCH_LEARN_OLD_TITLES.reduce((sum, t) => sum + (earned[sanitizeKey(t)] || 0), 0);
+        const currentNew = earned[newKey] || 0;
+        return { studentId: student.id, studentName: student.name, sumOld, currentNew, proposedNew: Math.max(currentNew, sumOld) };
+      })
+      .filter(r => r.sumOld > 0 || r.currentNew > 0);
+    const bankEntry = lessonBank.find(l => l.title === WATCH_LEARN_NEW_TITLE && l.link === WATCH_LEARN_LINK) || null;
+    setWatchLearnMigrationPreview({ rows, bankEntryExists: !!bankEntry });
+  };
+  const applyWatchLearnMigration = async () => {
+    if (!watchLearnMigrationPreview) return;
+    const { rows, bankEntryExists } = watchLearnMigrationPreview;
+    const changedRows = rows.filter(r => r.proposedNew > r.currentNew);
+    if (changedRows.length === 0 && bankEntryExists) return;
+    setIsApplyingWatchLearnMigration(true);
+    try {
+      const newKey = sanitizeKey(WATCH_LEARN_NEW_TITLE);
+      const batch = writeBatch(db);
+      changedRows.forEach(row => {
+        batch.update(doc(db, `${publicDataPath}/students`, row.studentId), { [`earnedTrophies.${newKey}`]: row.proposedNew });
+      });
+      await batch.commit();
+      if (!bankEntryExists) {
+        await addDoc(lessonBankCollection, {
+          title: WATCH_LEARN_NEW_TITLE,
+          link: WATCH_LEARN_LINK,
+          unitLabel: 'Minute',
+          unitCount: WATCH_LEARN_UNIT_COUNT,
+          trophyLimit: WATCH_LEARN_TROPHY_LIMIT,
+          details: '',
+          teacherUid: user.uid,
+          createdAt: serverTimestamp(),
+        });
+      }
+      alert(`Applied — set ${changedRows.length} student trophy total(s)${!bankEntryExists ? ' and created the "🎥 Watch & Learn" Lesson Bank entry' : ''}.`);
+      setWatchLearnMigrationPreview(null);
+    } catch (err) {
+      console.error('Error applying Watch & Learn migration:', err);
+      alert(`Apply failed: ${err.message || err}`);
+    }
+    setIsApplyingWatchLearnMigration(false);
+  };
+  const handleDeleteOldWatchLearnLessons = async () => {
+    const targets = lessonBank.filter(l => WATCH_LEARN_OLD_TITLES.includes(l.title));
+    if (targets.length === 0) {
+      alert('None of the old video-link lessons were found in the Lesson Bank (maybe already deleted).');
+      return;
+    }
+    if (!window.confirm(`Delete these ${targets.length} old Lesson Bank entries?\n\n${targets.map(t => `- ${t.title}`).join('\n')}\n\nStudents' already-earned trophies for them are NOT touched -- this only removes them from the Lesson Bank / Assign Lesson list.`)) {
+      return;
+    }
+    try {
+      const batch = writeBatch(db);
+      targets.forEach(t => batch.delete(doc(db, `${publicDataPath}/lessonBank`, t.id)));
+      await batch.commit();
+      alert(`Deleted ${targets.length} old Lesson Bank entries.`);
+    } catch (err) {
+      console.error('Error deleting old Watch & Learn lessons:', err);
+      alert(`Delete failed: ${err.message || err}`);
+    }
+  };
+
   // "Kind and Respectful" is also an old Gemini-link Smart Study lesson, but
   // it was never given a migration mapping above (no per-class equivalent
   // was worked out for it) -- the teacher confirmed it should be deleted
@@ -4098,6 +4182,17 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
           >
             <span className="flex items-center text-lg font-bold text-indigo-800">📘 Myanmar Part 1 & 2 app</span>
             <span className="text-indigo-500 text-xl">→</span>
+          </button>
+          {/* Watch & Learn — a plain list of external video links (no
+              content of its own). Opening it here in teacher mode also
+              shows the "Add a video" form, so new videos can be added
+              without a code change. */}
+          <button
+            onClick={() => onOpenWatchAndLearn && onOpenWatchAndLearn({ mode: 'teacher' })}
+            className="w-full flex items-center justify-between bg-white p-4 rounded-xl border-2 border-orange-200 hover:border-orange-400 hover:shadow-md transition-all mt-3"
+          >
+            <span className="flex items-center text-lg font-bold text-orange-800">🎥 Watch & Learn app</span>
+            <span className="text-orange-500 text-xl">→</span>
           </button>
           {/* Myanmar Speaking app — now mounted inline in the same project as
               the other apps above, instead of opening the separately-hosted
@@ -5331,6 +5426,76 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
           </div>
 
           <div className="mt-8 pt-6 border-t border-violet-200">
+            <h4 className="text-lg font-semibold mb-3 text-gray-700">🔄 Migrate Old Lessons into 🎥 Watch & Learn</h4>
+            <p className="text-sm text-gray-600 mb-4">
+              "Animated Buddhist Stories", "Kyaw Hein 🎦", "Story", "Watch 🎥", and "Combine Link" were 5 separate bare-link Lesson Bank entries — no content of their own, just a YouTube link a student watches and reports back on. This combines them into one "🎥 Watch & Learn" entry with a real list screen (more videos can be added there later, right from the app, without needing a new Lesson Bank entry each time). Each student's trophies already earned across all 5 old titles are summed into the new one — never lowered, and nothing is deleted from the old titles unless you use Step 2 below.
+            </p>
+            <div className="mb-5 p-4 bg-white rounded-lg border border-violet-200">
+              <p className="font-semibold text-gray-800 mb-1">1. Preview and apply the trophy migration</p>
+              <button
+                onClick={runWatchLearnMigrationPreview}
+                className="bg-violet-500 text-white px-4 py-2 rounded-lg font-semibold hover:bg-violet-600"
+              >
+                Run Migration Preview
+              </button>
+
+              {watchLearnMigrationPreview && (
+                <div className="mt-4">
+                  {!watchLearnMigrationPreview.bankEntryExists && (
+                    <p className="text-sm text-indigo-700 mb-2">The "🎥 Watch & Learn" Lesson Bank entry doesn't exist yet — Apply will create it (Total Number: {WATCH_LEARN_UNIT_COUNT} Minutes, Max Trophies: {WATCH_LEARN_TROPHY_LIMIT}).</p>
+                  )}
+                  {watchLearnMigrationPreview.rows.length === 0 ? (
+                    <p className="text-sm text-gray-500">No students currently have trophies under these old titles.</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full text-sm border">
+                        <thead className="bg-gray-100">
+                          <tr>
+                            <th className="p-2 text-left border">Student</th>
+                            <th className="p-2 text-left border">Sum of Old Titles</th>
+                            <th className="p-2 text-left border">Current New</th>
+                            <th className="p-2 text-left border">Proposed New</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {watchLearnMigrationPreview.rows.map((r) => (
+                            <tr key={r.studentId} className={r.proposedNew > r.currentNew ? 'bg-emerald-50' : ''}>
+                              <td className="p-2 border">{r.studentName}</td>
+                              <td className="p-2 border">{r.sumOld}</td>
+                              <td className="p-2 border">{r.currentNew}</td>
+                              <td className="p-2 border font-semibold">
+                                {r.proposedNew}{r.proposedNew > r.currentNew && <span className="text-emerald-700 ml-1">(+{r.proposedNew - r.currentNew})</span>}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  <button
+                    onClick={applyWatchLearnMigration}
+                    disabled={isApplyingWatchLearnMigration}
+                    className="mt-4 bg-emerald-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50"
+                  >
+                    {isApplyingWatchLearnMigration ? 'Applying...' : 'Apply'}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 bg-white rounded-lg border border-violet-200">
+              <p className="font-semibold text-gray-800 mb-1">2. Delete the old lessons from the Lesson Bank</p>
+              <p className="text-sm text-gray-500 mb-3">Only do this after Step 1's Apply has been run. Removes them from the Lesson Bank / Assign Lesson list only — does not touch any student's data.</p>
+              <button
+                onClick={handleDeleteOldWatchLearnLessons}
+                className="bg-red-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-700"
+              >
+                Delete Old Lessons
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-8 pt-6 border-t border-violet-200">
             <h4 className="text-lg font-semibold mb-3 text-gray-700">🔑 Teacher Account Recovery Passcode</h4>
             <p className="text-sm text-gray-600 mb-2">
               Teacher access is normally tied to this browser/device. If you ever get logged out (cleared browser data, new device, etc.), this passcode lets you reclaim teacher access instead of needing a database edit.
@@ -6007,7 +6172,7 @@ function SmartStudyProgressBadge({ classId, studentName, smartStudyNames, compac
   return null;
 }
 
-function StudentDashboard({ user, studentProfile, studentUid, announcements, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenMyanmarSpeaking, onOpenConsonantPractice, onOpenBurmeseGame, onOpenNumberLearning, onOpenVowelsLearning, onOpenAnimalSound, onOpenBurmeseLearningGames, onOpenInteractiveQuiz, onOpenMyanmarPoems, onOpenConsonantEndings, onOpenTimeAndCalendar, onOpenMyanmarSpelling, onOpenMyanmarSoundPractice, onOpenReadingMyanmar, onOpenSpeakingMyanmar, onOpenMyanmarPart1And2, onOpenBodhiTree, onLogout }) {
+function StudentDashboard({ user, studentProfile, studentUid, announcements, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenMyanmarSpeaking, onOpenConsonantPractice, onOpenBurmeseGame, onOpenNumberLearning, onOpenVowelsLearning, onOpenAnimalSound, onOpenBurmeseLearningGames, onOpenInteractiveQuiz, onOpenMyanmarPoems, onOpenConsonantEndings, onOpenTimeAndCalendar, onOpenMyanmarSpelling, onOpenMyanmarSoundPractice, onOpenReadingMyanmar, onOpenSpeakingMyanmar, onOpenMyanmarPart1And2, onOpenBodhiTree, onOpenWatchAndLearn, onLogout }) {
   const [myLessons, setMyLessons] = useState([]);
   const [ssCompletionCounts, setSsCompletionCounts] = useState({}); // classId → SmartStudy completedCount
   const [mySessions, setMySessions] = useState([]);
@@ -6608,7 +6773,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       return;
     }
 
-    const simpleAppSchemes = ['consonantpractice://', 'burmesegame://', 'numberlearning://', 'vowelslearning://', 'animalsound://', 'burmeselearninggames://', 'interactivequiz://', 'myanmarpoems://', 'consonantendings://', 'timeandcalendar://', 'myanmarspelling://', 'myanmarsoundpractice://', 'readingmyanmar://', 'speakingmyanmar://', 'myanmarpart1and2://'];
+    const simpleAppSchemes = ['consonantpractice://', 'burmesegame://', 'numberlearning://', 'vowelslearning://', 'animalsound://', 'burmeselearninggames://', 'interactivequiz://', 'myanmarpoems://', 'consonantendings://', 'timeandcalendar://', 'myanmarspelling://', 'myanmarsoundpractice://', 'readingmyanmar://', 'speakingmyanmar://', 'myanmarpart1and2://', 'watchandlearn://'];
     if (simpleAppSchemes.some(scheme => lesson.link === scheme || lesson.link.startsWith(scheme))) {
       const openerByLink = {
         'consonantpractice://': onOpenConsonantPractice,
@@ -6626,6 +6791,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         'readingmyanmar://': onOpenReadingMyanmar,
         'speakingmyanmar://': onOpenSpeakingMyanmar,
         'myanmarpart1and2://': onOpenMyanmarPart1And2,
+        'watchandlearn://': onOpenWatchAndLearn,
       };
       const matchedScheme = groupSchemeOfLink(lesson.link) || lesson.link;
       const opener = openerByLink[matchedScheme];
@@ -7716,6 +7882,10 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                 if (url && url.startsWith('myanmarpart1and2://')) {
                   const initialPart = extractGroupPartKey(url);
                   if (onOpenMyanmarPart1And2) onOpenMyanmarPart1And2({ studentName: studentProfile?.name || '', ...(initialPart ? { initialPart } : {}) });
+                  return;
+                }
+                if (url && url.startsWith('watchandlearn://')) {
+                  if (onOpenWatchAndLearn) onOpenWatchAndLearn({ studentName: studentProfile?.name || '' });
                   return;
                 }
                 if (!url.startsWith('http://') && !url.startsWith('https://')) url = `https://${url}`;
@@ -9014,7 +9184,7 @@ function DeactivatedScreen() {
   );
 }
 
-export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenConsonantPractice, onOpenBurmeseGame, onOpenMyanmarSpeaking, onOpenNumberLearning, onOpenVowelsLearning, onOpenAnimalSound, onOpenBurmeseLearningGames, onOpenInteractiveQuiz, onOpenMyanmarPoems, onOpenConsonantEndings, onOpenTimeAndCalendar, onOpenMyanmarSpelling, onOpenMyanmarSoundPractice, onOpenReadingMyanmar, onOpenSpeakingMyanmar, onOpenMyanmarPart1And2, onOpenBodhiTree }) {
+export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenConsonantPractice, onOpenBurmeseGame, onOpenMyanmarSpeaking, onOpenNumberLearning, onOpenVowelsLearning, onOpenAnimalSound, onOpenBurmeseLearningGames, onOpenInteractiveQuiz, onOpenMyanmarPoems, onOpenConsonantEndings, onOpenTimeAndCalendar, onOpenMyanmarSpelling, onOpenMyanmarSoundPractice, onOpenReadingMyanmar, onOpenSpeakingMyanmar, onOpenMyanmarPart1And2, onOpenBodhiTree, onOpenWatchAndLearn }) {
   const [user, setUser] = useState(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [role, setRole] = useState(null); 
@@ -9431,7 +9601,7 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpen
     switch (view) {
       case 'teacher':
         if (role !== 'teacher') return <TodaySchedule role={role} />; 
-        return <TeacherDashboard user={user} onOpenSmartStudy={onOpenSmartStudy} onOpenAbhidhamma={onOpenAbhidhamma} onOpenMyanmarReader={onOpenMyanmarReader} onOpenDhammaschool={onOpenDhammaschool} onOpenConsonantPractice={onOpenConsonantPractice} onOpenBurmeseGame={onOpenBurmeseGame} onOpenMyanmarSpeaking={onOpenMyanmarSpeaking} onOpenNumberLearning={onOpenNumberLearning} onOpenVowelsLearning={onOpenVowelsLearning} onOpenAnimalSound={onOpenAnimalSound} onOpenBurmeseLearningGames={onOpenBurmeseLearningGames} onOpenInteractiveQuiz={onOpenInteractiveQuiz} onOpenMyanmarPoems={onOpenMyanmarPoems} onOpenConsonantEndings={onOpenConsonantEndings} onOpenTimeAndCalendar={onOpenTimeAndCalendar} onOpenMyanmarSpelling={onOpenMyanmarSpelling} onOpenMyanmarSoundPractice={onOpenMyanmarSoundPractice} onOpenReadingMyanmar={onOpenReadingMyanmar} onOpenSpeakingMyanmar={onOpenSpeakingMyanmar} onOpenMyanmarPart1And2={onOpenMyanmarPart1And2} />;
+        return <TeacherDashboard user={user} onOpenSmartStudy={onOpenSmartStudy} onOpenAbhidhamma={onOpenAbhidhamma} onOpenMyanmarReader={onOpenMyanmarReader} onOpenDhammaschool={onOpenDhammaschool} onOpenConsonantPractice={onOpenConsonantPractice} onOpenBurmeseGame={onOpenBurmeseGame} onOpenMyanmarSpeaking={onOpenMyanmarSpeaking} onOpenNumberLearning={onOpenNumberLearning} onOpenVowelsLearning={onOpenVowelsLearning} onOpenAnimalSound={onOpenAnimalSound} onOpenBurmeseLearningGames={onOpenBurmeseLearningGames} onOpenInteractiveQuiz={onOpenInteractiveQuiz} onOpenMyanmarPoems={onOpenMyanmarPoems} onOpenConsonantEndings={onOpenConsonantEndings} onOpenTimeAndCalendar={onOpenTimeAndCalendar} onOpenMyanmarSpelling={onOpenMyanmarSpelling} onOpenMyanmarSoundPractice={onOpenMyanmarSoundPractice} onOpenReadingMyanmar={onOpenReadingMyanmar} onOpenSpeakingMyanmar={onOpenSpeakingMyanmar} onOpenMyanmarPart1And2={onOpenMyanmarPart1And2} onOpenWatchAndLearn={onOpenWatchAndLearn} />;
       case 'student':
         if (role !== 'student') return <TodaySchedule role={role} />; 
         if (!studentProfile) {
@@ -9441,7 +9611,7 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpen
             </div>
           );
         }
-        return <StudentDashboard user={user} studentProfile={studentProfile} studentUid={targetStudentUid} announcements={announcements} onOpenSmartStudy={onOpenSmartStudy} onOpenAbhidhamma={onOpenAbhidhamma} onOpenMyanmarReader={onOpenMyanmarReader} onOpenDhammaschool={onOpenDhammaschool} onOpenMyanmarSpeaking={onOpenMyanmarSpeaking} onOpenConsonantPractice={onOpenConsonantPractice} onOpenBurmeseGame={onOpenBurmeseGame} onOpenNumberLearning={onOpenNumberLearning} onOpenVowelsLearning={onOpenVowelsLearning} onOpenAnimalSound={onOpenAnimalSound} onOpenBurmeseLearningGames={onOpenBurmeseLearningGames} onOpenInteractiveQuiz={onOpenInteractiveQuiz} onOpenMyanmarPoems={onOpenMyanmarPoems} onOpenConsonantEndings={onOpenConsonantEndings} onOpenTimeAndCalendar={onOpenTimeAndCalendar} onOpenMyanmarSpelling={onOpenMyanmarSpelling} onOpenMyanmarSoundPractice={onOpenMyanmarSoundPractice} onOpenReadingMyanmar={onOpenReadingMyanmar} onOpenSpeakingMyanmar={onOpenSpeakingMyanmar} onOpenMyanmarPart1And2={onOpenMyanmarPart1And2} onOpenBodhiTree={onOpenBodhiTree} onLogout={handleStudentLogout} />;
+        return <StudentDashboard user={user} studentProfile={studentProfile} studentUid={targetStudentUid} announcements={announcements} onOpenSmartStudy={onOpenSmartStudy} onOpenAbhidhamma={onOpenAbhidhamma} onOpenMyanmarReader={onOpenMyanmarReader} onOpenDhammaschool={onOpenDhammaschool} onOpenMyanmarSpeaking={onOpenMyanmarSpeaking} onOpenConsonantPractice={onOpenConsonantPractice} onOpenBurmeseGame={onOpenBurmeseGame} onOpenNumberLearning={onOpenNumberLearning} onOpenVowelsLearning={onOpenVowelsLearning} onOpenAnimalSound={onOpenAnimalSound} onOpenBurmeseLearningGames={onOpenBurmeseLearningGames} onOpenInteractiveQuiz={onOpenInteractiveQuiz} onOpenMyanmarPoems={onOpenMyanmarPoems} onOpenConsonantEndings={onOpenConsonantEndings} onOpenTimeAndCalendar={onOpenTimeAndCalendar} onOpenMyanmarSpelling={onOpenMyanmarSpelling} onOpenMyanmarSoundPractice={onOpenMyanmarSoundPractice} onOpenReadingMyanmar={onOpenReadingMyanmar} onOpenSpeakingMyanmar={onOpenSpeakingMyanmar} onOpenMyanmarPart1And2={onOpenMyanmarPart1And2} onOpenBodhiTree={onOpenBodhiTree} onOpenWatchAndLearn={onOpenWatchAndLearn} onLogout={handleStudentLogout} />;
       case 'weekly': 
         return <WeeklySchedule role={role} targetStudentUid={targetStudentUid} />;
       case 'attendance':

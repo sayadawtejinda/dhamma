@@ -82,6 +82,11 @@ const MyanmarPart1And2App = lazyLoad(() => import('./MyanmarPart1And2App'));
 // own standalone app (not part of TutoringApp.jsx) per the teacher's
 // request, so the gamification layer can grow independently later.
 const BodhiTreeApp = lazyLoad(() => import('./BodhiTreeApp'));
+// Watch & Learn — consolidates 5 previously-separate bare-link Lesson Bank
+// entries (each just a YouTube link, no content of its own) into one
+// assignable lesson with a list screen, extensible via its own "Add a
+// video" form instead of needing new Lesson Bank entries for each one.
+const WatchAndLearnApp = lazyLoad(() => import('./WatchAndLearnApp'));
 
 // Catches a failed lazy-chunk load (e.g. the browser has an old page open
 // from before a new deploy replaced that chunk's file) so it shows a
@@ -229,6 +234,7 @@ export default function App() {
   const [speakingMyanmarRequest, setSpeakingMyanmarRequest] = useState(null);
   const [myanmarPart1And2Request, setMyanmarPart1And2Request] = useState(null);
   const [bodhiTreeRequest, setBodhiTreeRequest] = useState(null);
+  const [watchAndLearnRequest, setWatchAndLearnRequest] = useState(null);
 
   const openMyanmarSpelling = (request) => {
     setMyanmarSpellingRequest(request || {});
@@ -255,6 +261,15 @@ export default function App() {
   const closeBodhiTree = () => {
     setActiveApp('tutoring');
     setBodhiTreeRequest(null);
+  };
+
+  const openWatchAndLearn = (request) => {
+    setWatchAndLearnRequest(request || {});
+    setActiveApp('watchandlearn');
+  };
+  const closeWatchAndLearn = () => {
+    setActiveApp('tutoring');
+    setWatchAndLearnRequest(null);
   };
 
   const openReadingMyanmar = (request) => {
@@ -448,6 +463,7 @@ export default function App() {
           onOpenSpeakingMyanmar={openSpeakingMyanmar}
           onOpenMyanmarPart1And2={openMyanmarPart1And2}
           onOpenBodhiTree={openBodhiTree}
+          onOpenWatchAndLearn={openWatchAndLearn}
         />
       </div>
 
@@ -763,6 +779,12 @@ export default function App() {
         {activeApp === 'bodhitree' && (
           <div>
             <BodhiTreeApp entryRequest={bodhiTreeRequest} onExit={closeBodhiTree} />
+          </div>
+        )}
+
+        {activeApp === 'watchandlearn' && (
+          <div>
+            <WatchAndLearnApp entryRequest={watchAndLearnRequest} onExit={closeWatchAndLearn} />
           </div>
         )}
       </Suspense>
