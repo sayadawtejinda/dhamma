@@ -398,9 +398,10 @@ export default function App() {
               <div className="fixed top-3 left-3 z-[9999]">
                 <button
                   onClick={closeSmartStudy}
-                  className="px-4 py-2 bg-gray-800 text-white rounded-full shadow-lg font-semibold text-sm hover:bg-gray-900"
+                  className="w-12 h-12 flex items-center justify-center bg-gray-800 text-white rounded-full shadow-lg text-2xl hover:bg-gray-900"
+                  aria-label="Back to Tutoring Dashboard"
                 >
-                  ← Back to Tutoring Dashboard
+                  🏡
                 </button>
               </div>
             )}
@@ -414,9 +415,10 @@ export default function App() {
               <div className="fixed top-3 left-3 z-[9999]">
                 <button
                   onClick={closeAbhidhamma}
-                  className="px-4 py-2 bg-gray-800 text-white rounded-full shadow-lg font-semibold text-sm hover:bg-gray-900"
+                  className="w-12 h-12 flex items-center justify-center bg-gray-800 text-white rounded-full shadow-lg text-2xl hover:bg-gray-900"
+                  aria-label="Back to Tutoring Dashboard"
                 >
-                  ← Back to Tutoring Dashboard
+                  🏡
                 </button>
               </div>
             )}
@@ -430,9 +432,10 @@ export default function App() {
               <div className="fixed top-3 left-3 z-[9999]">
                 <button
                   onClick={closeMyanmarReader}
-                  className="px-4 py-2 bg-gray-800 text-white rounded-full shadow-lg font-semibold text-sm hover:bg-gray-900"
+                  className="w-12 h-12 flex items-center justify-center bg-gray-800 text-white rounded-full shadow-lg text-2xl hover:bg-gray-900"
+                  aria-label="Back to Tutoring Dashboard"
                 >
-                  ← Back to Tutoring Dashboard
+                  🏡
                 </button>
               </div>
             )}
@@ -446,9 +449,10 @@ export default function App() {
               <div className="fixed top-3 left-3 z-[9999]">
                 <button
                   onClick={closeDhammaschool}
-                  className="px-4 py-2 bg-gray-800 text-white rounded-full shadow-lg font-semibold text-sm hover:bg-gray-900"
+                  className="w-12 h-12 flex items-center justify-center bg-gray-800 text-white rounded-full shadow-lg text-2xl hover:bg-gray-900"
+                  aria-label="Back to Tutoring Dashboard"
                 >
-                  ← Back to Tutoring Dashboard
+                  🏡
                 </button>
               </div>
             )}
@@ -462,9 +466,10 @@ export default function App() {
               <div className="fixed top-3 left-3 z-[9999]">
                 <button
                   onClick={closeConsonantPractice}
-                  className="px-4 py-2 bg-gray-800 text-white rounded-full shadow-lg font-semibold text-sm hover:bg-gray-900"
+                  className="w-12 h-12 flex items-center justify-center bg-gray-800 text-white rounded-full shadow-lg text-2xl hover:bg-gray-900"
+                  aria-label="Back to Tutoring Dashboard"
                 >
-                  ← Back to Tutoring Dashboard
+                  🏡
                 </button>
               </div>
             )}
@@ -478,9 +483,10 @@ export default function App() {
               <div className="fixed top-3 left-3 z-[9999]">
                 <button
                   onClick={closeBurmeseGame}
-                  className="px-4 py-2 bg-gray-800 text-white rounded-full shadow-lg font-semibold text-sm hover:bg-gray-900"
+                  className="w-12 h-12 flex items-center justify-center bg-gray-800 text-white rounded-full shadow-lg text-2xl hover:bg-gray-900"
+                  aria-label="Back to Tutoring Dashboard"
                 >
-                  ← Back to Tutoring Dashboard
+                  🏡
                 </button>
               </div>
             )}
@@ -494,9 +500,10 @@ export default function App() {
               <div className="fixed top-3 left-3 z-[9999]">
                 <button
                   onClick={closeMyanmarSpeaking}
-                  className="px-4 py-2 bg-gray-800 text-white rounded-full shadow-lg font-semibold text-sm hover:bg-gray-900"
+                  className="w-12 h-12 flex items-center justify-center bg-gray-800 text-white rounded-full shadow-lg text-2xl hover:bg-gray-900"
+                  aria-label="Back to Tutoring Dashboard"
                 >
-                  ← Back to Tutoring Dashboard
+                  🏡
                 </button>
               </div>
             )}
@@ -510,9 +517,10 @@ export default function App() {
               <div className="fixed top-3 left-3 z-[9999]">
                 <button
                   onClick={closeNumberLearning}
-                  className="px-4 py-2 bg-gray-800 text-white rounded-full shadow-lg font-semibold text-sm hover:bg-gray-900"
+                  className="w-12 h-12 flex items-center justify-center bg-gray-800 text-white rounded-full shadow-lg text-2xl hover:bg-gray-900"
+                  aria-label="Back to Tutoring Dashboard"
                 >
-                  ← Back to Tutoring Dashboard
+                  🏡
                 </button>
               </div>
             )}
@@ -526,9 +534,10 @@ export default function App() {
               <div className="fixed top-3 left-3 z-[9999]">
                 <button
                   onClick={closeVowelsLearning}
-                  className="px-4 py-2 bg-gray-800 text-white rounded-full shadow-lg font-semibold text-sm hover:bg-gray-900"
+                  className="w-12 h-12 flex items-center justify-center bg-gray-800 text-white rounded-full shadow-lg text-2xl hover:bg-gray-900"
+                  aria-label="Back to Tutoring Dashboard"
                 >
-                  ← Back to Tutoring Dashboard
+                  🏡
                 </button>
               </div>
             )}
@@ -542,9 +551,10 @@ export default function App() {
               <div className="fixed top-3 left-3 z-[9999]">
                 <button
                   onClick={closeAnimalSound}
-                  className="px-4 py-2 bg-gray-800 text-white rounded-full shadow-lg font-semibold text-sm hover:bg-gray-900"
+                  className="w-12 h-12 flex items-center justify-center bg-gray-800 text-white rounded-full shadow-lg text-2xl hover:bg-gray-900"
+                  aria-label="Back to Tutoring Dashboard"
                 >
-                  ← Back to Tutoring Dashboard
+                  🏡
                 </button>
               </div>
             )}
@@ -558,9 +568,10 @@ export default function App() {
               <div className="fixed top-3 left-3 z-[9999]">
                 <button
                   onClick={closeBurmeseLearningGames}
-                  className="px-4 py-2 bg-gray-800 text-white rounded-full shadow-lg font-semibold text-sm hover:bg-gray-900"
+                  className="w-12 h-12 flex items-center justify-center bg-gray-800 text-white rounded-full shadow-lg text-2xl hover:bg-gray-900"
+                  aria-label="Back to Tutoring Dashboard"
                 >
-                  ← Back to Tutoring Dashboard
+                  🏡
                 </button>
               </div>
             )}
@@ -574,9 +585,10 @@ export default function App() {
               <div className="fixed top-3 left-3 z-[9999]">
                 <button
                   onClick={closeInteractiveQuiz}
-                  className="px-4 py-2 bg-gray-800 text-white rounded-full shadow-lg font-semibold text-sm hover:bg-gray-900"
+                  className="w-12 h-12 flex items-center justify-center bg-gray-800 text-white rounded-full shadow-lg text-2xl hover:bg-gray-900"
+                  aria-label="Back to Tutoring Dashboard"
                 >
-                  ← Back to Tutoring Dashboard
+                  🏡
                 </button>
               </div>
             )}
@@ -590,9 +602,10 @@ export default function App() {
               <div className="fixed top-3 left-3 z-[9999]">
                 <button
                   onClick={closeMyanmarPoems}
-                  className="px-4 py-2 bg-gray-800 text-white rounded-full shadow-lg font-semibold text-sm hover:bg-gray-900"
+                  className="w-12 h-12 flex items-center justify-center bg-gray-800 text-white rounded-full shadow-lg text-2xl hover:bg-gray-900"
+                  aria-label="Back to Tutoring Dashboard"
                 >
-                  ← Back to Tutoring Dashboard
+                  🏡
                 </button>
               </div>
             )}
@@ -606,9 +619,10 @@ export default function App() {
               <div className="fixed top-3 left-3 z-[9999]">
                 <button
                   onClick={closeConsonantEndings}
-                  className="px-4 py-2 bg-gray-800 text-white rounded-full shadow-lg font-semibold text-sm hover:bg-gray-900"
+                  className="w-12 h-12 flex items-center justify-center bg-gray-800 text-white rounded-full shadow-lg text-2xl hover:bg-gray-900"
+                  aria-label="Back to Tutoring Dashboard"
                 >
-                  ← Back to Tutoring Dashboard
+                  🏡
                 </button>
               </div>
             )}
@@ -622,9 +636,10 @@ export default function App() {
               <div className="fixed top-3 left-3 z-[9999]">
                 <button
                   onClick={closeTimeAndCalendar}
-                  className="px-4 py-2 bg-gray-800 text-white rounded-full shadow-lg font-semibold text-sm hover:bg-gray-900"
+                  className="w-12 h-12 flex items-center justify-center bg-gray-800 text-white rounded-full shadow-lg text-2xl hover:bg-gray-900"
+                  aria-label="Back to Tutoring Dashboard"
                 >
-                  ← Back to Tutoring Dashboard
+                  🏡
                 </button>
               </div>
             )}
@@ -638,9 +653,10 @@ export default function App() {
               <div className="fixed top-3 left-3 z-[9999]">
                 <button
                   onClick={closeMyanmarSpelling}
-                  className="px-4 py-2 bg-gray-800 text-white rounded-full shadow-lg font-semibold text-sm hover:bg-gray-900"
+                  className="w-12 h-12 flex items-center justify-center bg-gray-800 text-white rounded-full shadow-lg text-2xl hover:bg-gray-900"
+                  aria-label="Back to Tutoring Dashboard"
                 >
-                  ← Back to Tutoring Dashboard
+                  🏡
                 </button>
               </div>
             )}
@@ -654,9 +670,10 @@ export default function App() {
               <div className="fixed top-3 left-3 z-[9999]">
                 <button
                   onClick={closeMyanmarSoundPractice}
-                  className="px-4 py-2 bg-gray-800 text-white rounded-full shadow-lg font-semibold text-sm hover:bg-gray-900"
+                  className="w-12 h-12 flex items-center justify-center bg-gray-800 text-white rounded-full shadow-lg text-2xl hover:bg-gray-900"
+                  aria-label="Back to Tutoring Dashboard"
                 >
-                  ← Back to Tutoring Dashboard
+                  🏡
                 </button>
               </div>
             )}

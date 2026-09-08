@@ -3623,7 +3623,7 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
         // friendly list of just this group's names + IDs, nothing else on
         // screen to distract from that.
         const rosterStudents = students
-          .filter(s => (fullScreenRosterGroup.studentUids || []).includes(s.id))
+          .filter(s => (fullScreenRosterGroup.studentUids || []).includes(s.id) && !s.hideFromGroupRoster)
           .sort((a, b) => a.name.localeCompare(b.name));
         return (
           <div className="fixed inset-0 z-[9999] bg-white overflow-y-auto p-8">
@@ -5616,6 +5616,41 @@ function StudentDashboard({ user, studentProfile, studentUid, announcements, onO
   // component so it reappears next time too, matching a fresh greeting.
   const [showGreetingPrompt, setShowGreetingPrompt] = useState(true);
 
+  // Parami runs large enough that some students share a rented/borrowed
+  // device -- ask (once) whether this is their own device or not, so a
+  // rented one can be auto-logged-out after inactivity below. Scoped to
+  // Parami specifically via a direct membership query (not the `groups`
+  // state, which is teacher-owned and empty for a student's own session).
+  const [isInParamiGroup, setIsInParamiGroup] = useState(false);
+  useEffect(() => {
+    if (!studentUid) return;
+    let isMounted = true;
+    (async () => {
+      try {
+        const snap = await getDocs(query(groupsCollection, where('studentUids', 'array-contains', studentUid)));
+        const inParami = snap.docs.some(d => (d.data().groupName || '').trim().toLowerCase() === 'parami');
+        if (isMounted) setIsInParamiGroup(inParami);
+      } catch (e) {}
+    })();
+    return () => { isMounted = false; };
+  }, [studentUid]);
+
+  const RENTAL_DEVICE_LOGOUT_MS = 60 * 60 * 1000; // 1 hour
+  useEffect(() => {
+    if (studentProfile?.isRentalDevice !== true) return;
+    let timer = setTimeout(() => onLogout && onLogout(), RENTAL_DEVICE_LOGOUT_MS);
+    const resetTimer = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => onLogout && onLogout(), RENTAL_DEVICE_LOGOUT_MS);
+    };
+    const events = ['mousedown', 'touchstart', 'keydown', 'scroll'];
+    events.forEach(ev => window.addEventListener(ev, resetTimer, { passive: true }));
+    return () => {
+      clearTimeout(timer);
+      events.forEach(ev => window.removeEventListener(ev, resetTimer));
+    };
+  }, [studentProfile?.isRentalDevice, onLogout]);
+
   const handleGreetTeacher = async () => {
     setShowGreetingPrompt(false);
     try {
@@ -6904,6 +6939,31 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         </div>
       )}
 
+      {/* One-time device-type question for Parami group members only --
+          answer decides whether the inactivity auto-logout above applies. */}
+      {isInParamiGroup && studentProfile?.isRentalDevice === undefined && (
+        <div className="fixed inset-0 bg-black/40 z-[9700] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full text-center">
+            <p className="text-4xl mb-3">📱</p>
+            <p className="text-lg font-bold text-gray-800 mb-5">This device is:</p>
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={() => updateDoc(doc(db, `${publicDataPath}/students`, studentUid), { isRentalDevice: false }).catch(() => {})}
+                className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl shadow-md text-lg"
+              >
+                🙋 Mine
+              </button>
+              <button
+                onClick={() => updateDoc(doc(db, `${publicDataPath}/students`, studentUid), { isRentalDevice: true }).catch(() => {})}
+                className="w-full py-3 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl shadow-md text-lg"
+              >
+                🤝 Shared / Borrowed
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 🔔 Notifications — fixed top-right, above where the Log Out button
           sits further down the page. Replaces the old always-visible
           "Awesome News Update" cards with a compact bell + unread dot, so
@@ -7026,6 +7086,20 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                   </svg>
                   <span>Log Out</span>
                 </button>
+                {!studentProfile?.hideFromGroupRoster && (
+                  <button
+                    onClick={() => {
+                      if (window.confirm("🙈 Stop showing your name/ID on the teacher's group screen? Make sure you remember your own Student ID first — you won't see it listed there anymore.")) {
+                        updateDoc(doc(db, `${publicDataPath}/students`, studentUid), { hideFromGroupRoster: true }).catch(() => {});
+                      }
+                    }}
+                    className="flex items-center justify-center space-x-1 text-gray-600 hover:text-amber-700 bg-gray-100 hover:bg-amber-50 px-4 py-2.5 rounded-lg font-semibold transition-colors border border-gray-200"
+                    title="Stop showing my ID on the teacher's group screen"
+                  >
+                    <span className="text-lg">🙈</span>
+                    <span>Hide My ID</span>
+                  </button>
+                )}
               </div>
           </div>
         )}
