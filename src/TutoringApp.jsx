@@ -3029,6 +3029,8 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
   // specific stray keys are gone, it just reports nothing left.
   const [ssCleanupPreview, setSsCleanupPreview] = useState(null);
   const [isRunningSsCleanup, setIsRunningSsCleanup] = useState(false);
+  const [myanmarReaderScaleFixPreview, setMyanmarReaderScaleFixPreview] = useState(null);
+  const [isFixingMyanmarReaderScale, setIsFixingMyanmarReaderScale] = useState(false);
   const runSsCleanupScan = async () => {
     setIsRunningSsCleanup(true);
     try {
@@ -3081,6 +3083,48 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
       alert(`Cleanup failed: ${err.message || err}`);
     }
     setIsRunningSsCleanup(false);
+  };
+
+  // One-time fix: Myanmar Reader used to be sent as two separate Lesson Bank
+  // entries ("Sheet A" and "Sheet B", 29 chapters each, trophies tracked
+  // separately) that got merged into one real Myanmar Reader Lesson entry.
+  // The merge summed each student's two old completedUnits values together
+  // (e.g. 19 + 19 = 38), but the merged lesson's own unitCount is the real
+  // 29-chapter total, not 58 — so "completed up to Chapter 38 / 29" is off by
+  // exactly double for anyone carrying that old summed value. Halving it
+  // brings it back in line with the real 29-chapter scale (and lines up with
+  // the half-chapter-per-sheet granularity the live auto-fill now uses).
+  const runMyanmarReaderScaleFixPreview = () => {
+    const lessonKey = computeLessonKey('Myanmar Reader Lesson', MYANMAR_READER_APP_URL);
+    const rows = students
+      .map(student => ({
+        studentId: student.id,
+        studentName: student.name,
+        oldValue: student.completedUnits?.[lessonKey] || 0,
+      }))
+      .filter(r => r.oldValue > 0)
+      .map(r => ({ ...r, newValue: r.oldValue / 2 }));
+    setMyanmarReaderScaleFixPreview(rows);
+  };
+  const applyMyanmarReaderScaleFix = async () => {
+    if (!myanmarReaderScaleFixPreview || myanmarReaderScaleFixPreview.length === 0) return;
+    if (!window.confirm(`Halve the stored Myanmar Reader progress number for ${myanmarReaderScaleFixPreview.length} student(s)? This only fixes the "completed up to Chapter X / 29" display — it does not touch any trophy already earned.`)) return;
+    setIsFixingMyanmarReaderScale(true);
+    try {
+      const lessonKey = computeLessonKey('Myanmar Reader Lesson', MYANMAR_READER_APP_URL);
+      const batch = writeBatch(db);
+      myanmarReaderScaleFixPreview.forEach(row => {
+        const studentRef = doc(db, `${publicDataPath}/students`, row.studentId);
+        batch.update(studentRef, { [`completedUnits.${lessonKey}`]: row.newValue });
+      });
+      await batch.commit();
+      alert(`Fixed the progress number for ${myanmarReaderScaleFixPreview.length} student(s).`);
+      setMyanmarReaderScaleFixPreview(null);
+    } catch (err) {
+      console.error('Error fixing Myanmar Reader progress scale:', err);
+      alert(`Fix failed: ${err.message || err}`);
+    }
+    setIsFixingMyanmarReaderScale(false);
   };
 
   // "Kind and Respectful" is also an old Gemini-link Smart Study lesson, but
@@ -5104,6 +5148,60 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
           </div>
 
           <div className="mt-8 pt-6 border-t border-violet-200">
+            <h4 className="text-lg font-semibold mb-3 text-gray-700">🔧 Fix Myanmar Reader Progress Scale</h4>
+            <p className="text-sm text-gray-600 mb-4">
+              Myanmar Reader used to be two separate Lesson Bank entries (Sheet A + Sheet B, 29 chapters each). Merging them into one summed each student's old progress together (e.g. 19 + 19 = 38), which now shows as "completed up to Chapter 38 / 29" against the real 29-chapter total. This halves that stored number back to the real scale — it doesn't touch any trophy already earned.
+            </p>
+            <div className="p-4 bg-white rounded-lg border border-violet-200">
+              <p className="font-semibold text-gray-800 mb-1">Preview the fix</p>
+              <button
+                onClick={runMyanmarReaderScaleFixPreview}
+                className="bg-violet-500 text-white px-4 py-2 rounded-lg font-semibold hover:bg-violet-600"
+              >
+                Run Preview
+              </button>
+
+              {myanmarReaderScaleFixPreview && (
+                <div className="mt-4">
+                  {myanmarReaderScaleFixPreview.length === 0 ? (
+                    <p className="text-sm text-gray-500">No students currently have a Myanmar Reader progress number to fix.</p>
+                  ) : (
+                    <>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full text-sm border">
+                          <thead className="bg-gray-100">
+                            <tr>
+                              <th className="p-2 text-left border">Student</th>
+                              <th className="p-2 text-left border">Current (stored)</th>
+                              <th className="p-2 text-left border">Fixed</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {myanmarReaderScaleFixPreview.map((r) => (
+                              <tr key={r.studentId} className="bg-emerald-50">
+                                <td className="p-2 border">{r.studentName}</td>
+                                <td className="p-2 border">{r.oldValue}</td>
+                                <td className="p-2 border font-semibold">{r.newValue}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <button
+                        onClick={applyMyanmarReaderScaleFix}
+                        disabled={isFixingMyanmarReaderScale}
+                        className="mt-4 bg-emerald-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50"
+                      >
+                        {isFixingMyanmarReaderScale ? 'Fixing...' : `Apply — fix ${myanmarReaderScaleFixPreview.length} student(s)`}
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-8 pt-6 border-t border-violet-200">
             <h4 className="text-lg font-semibold mb-3 text-gray-700">🔑 Teacher Account Recovery Passcode</h4>
             <p className="text-sm text-gray-600 mb-2">
               Teacher access is normally tied to this browser/device. If you ever get logged out (cleared browser data, new device, etc.), this passcode lets you reclaim teacher access instead of needing a database edit.
@@ -5871,7 +5969,9 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
 
     const lessonKey = computeLessonKey(targetSession.lessonTitle, targetSession.lessonLink);
     const previousHighestUnit = getEffectivePreviousUnit(lessonKey, targetSession);
-    const enteredUnit = parseInt(value) || 0;
+    // parseFloat (not parseInt) -- Myanmar Reader reports half-chapter (.5)
+    // progress when only one of a chapter's two sheets is done.
+    const enteredUnit = parseFloat(value) || 0;
 
     if (!skipTodaySync) {
       setTodayCompletedInput(String(Math.max(0, enteredUnit - previousHighestUnit)));
@@ -5897,7 +5997,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     const lessonKey = computeLessonKey(targetSession.lessonTitle, targetSession.lessonLink);
     const previousHighestUnit = getEffectivePreviousUnit(lessonKey, targetSession);
     const unitCount = targetSession.lessonUnitCount || 0;
-    const todayCount = parseInt(value) || 0;
+    const todayCount = parseFloat(value) || 0;
     let newUnit = previousHighestUnit + todayCount;
     if (unitCount > 0) newUnit = Math.min(unitCount, newUnit);
     handleCompletedUnitChange(String(newUnit), true);
@@ -6227,14 +6327,18 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
   // isComplete once it crosses 700) — and fills in whichever chapter+sheet
   // they most recently studied (by timestamp), whether or not it's finished.
   //
-  // A chapter has two sheets (A and B) that must both be finished before it
-  // "counts" — Sheet A alone isn't the chapter being done, so Lesson
-  // completed only fills in once a chapter's pair is both done (using
-  // chapterComplete, stamped by the reader app itself once it detects both
-  // sheets crossed 700), and only a chapter reaching that state is worth a
-  // trophy — 2 at once (one per sheet), not 1 at a time as each sheet
-  // finishes. requestTrophyChecked/requestTrophyAmount are the same state
-  // the other apps' "🏆 +N Trophy!" badge already reads from.
+  // Score holds only the raw score ("0/1000") -- which chapter/sheet it was
+  // goes in "What did you study?" instead, so the two fields each hold one
+  // clear thing rather than Score carrying both.
+  //
+  // A chapter has two sheets (A and B). Lesson completed is tracked in
+  // half-chapter steps: finishing one sheet of a not-yet-fully-done chapter
+  // is worth .5 (one sheet = half the chapter), finishing both is worth 1
+  // (e.g. chapter 29 with only Sheet A done -> 28.5; both done -> 29).
+  // Trophies themselves are NOT derived from this number for Myanmar Reader
+  // -- see the separate "pending" sheet-completion count below -- Lesson
+  // completed here only drives the "completed up to Chapter X / 29" progress
+  // display.
   const [myanmarReaderPendingScoreDocs, setMyanmarReaderPendingScoreDocs] = useState([]);
   useEffect(() => {
     const session = redoSession || activeSession;
@@ -6252,28 +6356,35 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         // Most recently studied chapter+sheet, complete or not — this is what
         // gets reported. Re-studying an OLD chapter still updates this (its
         // timestamp becomes the newest), so Score always reflects whatever
-        // was just done, even if "Lesson completed" (below) stays pointed at
-        // a higher chapter finished earlier.
+        // was just done.
         let latest = null;
         allDocs.forEach(dt => {
           const ts = dt.timestamp?.toMillis ? dt.timestamp.toMillis() : 0;
           if (!latest || ts > latest._ts) latest = { ...dt, _ts: ts };
         });
-        if (latest) setScore(`${latest.score ?? 0}/1000 — Chapter ${latest.chapterNum} (Sheet ${latest.sheetName})`);
 
-        // Highest chapter where BOTH sheets are done — recomputed directly
-        // from each sheet's own isComplete flag (not the chapterComplete
-        // stamp alone), since older completions from before that stamp
-        // existed wouldn't have it set and would otherwise never show up
-        // here — this is what was silently breaking Lesson completed.
+        // Which sheets are done for every chapter, recomputed directly from
+        // each sheet's own isComplete flag (not the chapterComplete stamp
+        // alone), since older completions from before that stamp existed
+        // wouldn't have it set and would otherwise never show up here.
         const sheetStatus = {}; // chapterNum -> { A: bool, B: bool }
         allDocs.forEach(dt => {
           if (dt.chapterNum == null || !dt.sheetName) return;
           sheetStatus[dt.chapterNum] = sheetStatus[dt.chapterNum] || {};
           if (dt.isComplete) sheetStatus[dt.chapterNum][dt.sheetName] = true;
         });
+
+        if (latest) {
+          setScore(`${latest.score ?? 0}/1000`);
+          setFeedbackNotes(`Chapter ${latest.chapterNum} (Sheet ${latest.sheetName})`);
+          const latestStatus = sheetStatus[latest.chapterNum] || {};
+          const bothSheetsDone = !!(latestStatus.A && latestStatus.B);
+          const lessonCompletedValue = (latest.chapterNum - 1) + (bothSheetsDone ? 1 : 0.5);
+          handleCompletedUnitChange(String(lessonCompletedValue), true);
+          setTodayCompletedInput(bothSheetsDone ? '1' : '0.5');
+        }
+
         const fullChapters = Object.entries(sheetStatus).filter(([, s]) => s.A && s.B).map(([ch]) => parseInt(ch));
-        if (fullChapters.length > 0) handleCompletedUnitChange(String(Math.max(...fullChapters)));
 
         // Completed sheets that are part of a fully-done chapter and haven't
         // been turned into a trophy request yet — both sheets of a chapter
@@ -6770,7 +6881,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     const remainingTrophies = Math.max(0, maxAvailable - previouslyEarned);
 
     const previousHighestUnit = getEffectivePreviousUnit(lessonKey, targetSession);
-    const enteredUnit = parseInt(completedUnitInput) || 0;
+    const enteredUnit = parseFloat(completedUnitInput) || 0;
     const newHighestUnit = Math.max(previousHighestUnit, enteredUnit);
     
     try {
@@ -7015,7 +7126,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
               <div>
                 <label className="block text-gray-700 mb-2 text-sm">Today, completed</label>
                 <input
-                  type="number" min="0"
+                  type="number" min="0" step="0.5"
                   value={todayCompletedInput}
                   onChange={(e) => handleTodayCountChange(e.target.value)}
                   placeholder="e.g., 3"
@@ -7037,9 +7148,10 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                     onChange={(e) => {
                       const cap = feedbackSession?.lessonUnitCount || 0;
                       let v = e.target.value;
-                      if (cap > 0 && parseInt(v) > cap) v = String(cap);
+                      if (cap > 0 && parseFloat(v) > cap) v = String(cap);
                       handleCompletedUnitChange(v);
                     }}
+                    step="0.5"
                     placeholder="e.g., 5"
                     className="flex-1 p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   />
@@ -7064,9 +7176,9 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                 </div>
               </div>
 
-              {parseInt(completedUnitInput) > 0 && (
+              {parseFloat(completedUnitInput) > 0 && (
                 <p className="col-span-3 text-sm font-semibold text-emerald-700 mt-1">
-                  {parseInt(completedUnitInput) < previousHighestUnitForModal ? (
+                  {parseFloat(completedUnitInput) < previousHighestUnitForModal ? (
                     <>
                       You completed up to {feedbackSession?.lessonUnitLabel || 'Chapter'} {previousHighestUnitForModal}. Now you finished {feedbackSession?.lessonUnitLabel || 'Chapter'} {completedUnitInput}.
                     </>
