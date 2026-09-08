@@ -302,6 +302,30 @@ const getEffectiveCompletedUnit = (lesson, studentProfile, sessionsForLesson, ss
   return unitCount > 0 ? Math.min(unitCount, effective) : effective;
 };
 
+// A chip strip for the attendance boxes: one small numbered chip per
+// scheduled class, in date order -- green (attended), red (absent), or
+// blank/outlined (hasn't happened yet). Pictures instead of just two plain
+// numbers, per the teacher's "kids don't read text" direction.
+function AttendanceBar({ statuses }) {
+  if (!statuses || statuses.length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-1 mt-2">
+      {statuses.map((status, i) => (
+        <span
+          key={i}
+          className={`w-6 h-6 flex items-center justify-center rounded text-[10px] font-bold ${
+            status === 'attended' ? 'bg-emerald-500 text-white'
+            : status === 'absent' ? 'bg-red-500 text-white'
+            : 'bg-white border border-gray-300 text-gray-300'
+          }`}
+        >
+          {i + 1}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 // Every other linked app counts in whole units, so "next" is always
 // completed + 1. Myanmar Reader is the one exception: its completed number
 // carries a chapter's two sheets as X (Sheet A of chapter X done) then X.5
@@ -6119,6 +6143,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
   };
   
   const [isEditingName, setIsEditingName] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [editingNameText, setEditingNameText] = useState('');
 
   const [praiseModalInfo, setPraiseModalInfo] = useState({ isOpen: false, newTrophy: false, totalTrophies: 0, message: '', emoji: '' });
@@ -6525,32 +6550,36 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59);
     const startOfYear = new Date(today.getFullYear(), 0, 1);
+    const endOfYear = new Date(today.getFullYear(), 11, 31, 23, 59, 59);
 
-    let monthAttended = 0, monthAbsent = 0;
-    let yearAttended = 0, yearAbsent = 0;
+    const monthEntries = [];
+    const yearEntries = [];
 
     mySchedule.forEach(entry => {
        const entryDate = entry.startTime.toDate();
-       if (entryDate > now) return;
+       // Not reached yet, or (for a group entry) nobody's toggled this
+       // student either way -- shown blank, not counted as attended/absent.
+       const rawStatus = entryDate > now ? null : getStudentAttendanceForEntry(entry, studentUid, mySessions);
+       const status = rawStatus === 'attended' ? 'attended' : rawStatus === 'absent' ? 'absent' : 'upcoming';
 
-       const status = getStudentAttendanceForEntry(entry, studentUid, mySessions);
-       const isAttended = status === 'attended';
-       const isAbsent = status === 'absent';
-       // A group entry's 'unmarked' status (nobody's toggled this student
-       // yet) doesn't count as attended or absent either way.
-
-       if (entryDate >= startOfMonth) {
-           if (isAttended) monthAttended++;
-           if (isAbsent) monthAbsent++;
-       }
-       if (entryDate >= startOfYear) {
-           if (isAttended) yearAttended++;
-           if (isAbsent) yearAbsent++;
-       }
+       if (entryDate >= startOfMonth && entryDate <= endOfMonth) monthEntries.push({ date: entryDate, status });
+       if (entryDate >= startOfYear && entryDate <= endOfYear) yearEntries.push({ date: entryDate, status });
     });
 
-    return { monthAttended, monthAbsent, yearAttended, yearAbsent };
+    monthEntries.sort((a, b) => a.date - b.date);
+    yearEntries.sort((a, b) => a.date - b.date);
+    const countOf = (list, key) => list.filter(e => e.status === key).length;
+
+    return {
+      monthAttended: countOf(monthEntries, 'attended'),
+      monthAbsent: countOf(monthEntries, 'absent'),
+      monthStatuses: monthEntries.map(e => e.status),
+      yearAttended: countOf(yearEntries, 'attended'),
+      yearAbsent: countOf(yearEntries, 'absent'),
+      yearStatuses: yearEntries.map(e => e.status),
+    };
   }, [mySchedule, mySessions, studentUid]);
 
   const handleStartLesson = async (lesson) => {
@@ -7330,17 +7359,38 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         </div>
       )}
 
-      {/* One-time "greet your teacher" prompt, shown each time a student
-          lands on their dashboard. Sends a greeting doc the teacher's
-          dashboard shows as a live toast (see greetingToast in TeacherDashboard). */}
+      {/* Once-per-day "greet your teacher" prompt. Sends a greeting doc the
+          teacher's dashboard shows as a live toast (see greetingToast in
+          TeacherDashboard). Image-only, no text -- young children don't
+          read the text, so tapping the "Mangalabar" button under the
+          picture of greeting a teacher is the whole interaction. */}
       {showGreetingPrompt && (
         <div className="fixed inset-0 bg-black/40 z-[9700] flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full text-center">
-            <p className="text-4xl mb-3">🙏</p>
-            <p className="text-lg font-bold text-gray-800 mb-4">Say hello to your teacher! Tap OK to greet: "Mangalabar"</p>
-            <button onClick={handleGreetTeacher} className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl shadow-md">
-              OK
+          <div className="bg-white rounded-2xl shadow-2xl p-3 max-w-sm w-full text-center overflow-hidden">
+            <img src="images/0001.jpg" alt="" className="w-full rounded-xl mb-3" />
+            <button onClick={handleGreetTeacher} className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-lg rounded-xl shadow-md">
+              Mangalabar 🙏
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Log Out confirmation -- for a borrowed/shared device. A picture
+          instead of a plain confirm() dialog, same reasoning as the
+          greeting prompt: icons/pictures over text for young readers. */}
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 bg-black/40 z-[9700] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-3 max-w-sm w-full text-center overflow-hidden">
+            <img src="images/0002.png" alt="" className="w-full rounded-xl mb-3" />
+            <p className="text-sm text-gray-500 mb-3">Use this if you're on a borrowed or shared device. You can log back in anytime with your Student ID.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setShowLogoutConfirm(false)} className="flex-1 py-3 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold rounded-xl shadow-md">
+                Cancel
+              </button>
+              <button onClick={() => { setShowLogoutConfirm(false); onLogout && onLogout(); }} className="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white font-bold rounded-xl shadow-md">
+                Log Out
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -7440,6 +7490,16 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
               <div>
                   <div className="flex items-center flex-wrap gap-3 mb-2">
                     <h3 className="text-2xl font-semibold text-emerald-800">Welcome, {studentProfile?.name}</h3>
+                    <button
+                      onClick={() => { setEditingNameText(studentProfile?.pendingName || studentProfile?.name || ''); setIsEditingName(true); }}
+                      className="w-8 h-8 flex items-center justify-center text-emerald-600 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 rounded-full transition-colors border border-emerald-200 flex-shrink-0"
+                      title="Edit Profile"
+                      aria-label="Edit Profile"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                      </svg>
+                    </button>
                     {studentProfile?.trophyCount > 0 && (
                         <span className="text-4xl font-bold text-yellow-600 px-2 py-1 drop-shadow-sm" title={`${studentProfile.trophyCount} Trophies`}>🏆 {studentProfile.trophyCount}</span>
                     )}
@@ -7461,6 +7521,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                           <span className="text-gray-600 text-sm">Attended:</span> <span className="font-bold text-lg text-emerald-600 mr-4">{attendanceSummary.monthAttended}</span>
                           <span className="text-gray-600 text-sm">Absent:</span> <span className="font-bold text-lg text-red-600">{attendanceSummary.monthAbsent}</span>
                         </div>
+                        <AttendanceBar statuses={attendanceSummary.monthStatuses} />
                     </div>
                     <div className="bg-indigo-50 p-3 rounded-xl shadow-sm border border-indigo-100 flex-1">
                         <p className="text-sm font-bold text-indigo-800 uppercase tracking-wide">This Year's Attendance</p>
@@ -7468,6 +7529,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                           <span className="text-gray-600 text-sm">Attended:</span> <span className="font-bold text-lg text-emerald-600 mr-4">{attendanceSummary.yearAttended}</span>
                           <span className="text-gray-600 text-sm">Absent:</span> <span className="font-bold text-lg text-red-600">{attendanceSummary.yearAbsent}</span>
                         </div>
+                        <AttendanceBar statuses={attendanceSummary.yearStatuses} />
                     </div>
                   </div>
               </div>
@@ -7481,18 +7543,8 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                     🌳
                   </button>
                 )}
-                <button onClick={() => { setEditingNameText(studentProfile?.pendingName || studentProfile?.name || ''); setIsEditingName(true); }} className="flex items-center justify-center space-x-1 text-emerald-600 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-4 py-2.5 rounded-lg font-semibold transition-colors border border-emerald-200">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-                    </svg>
-                    <span>Edit Profile</span>
-                </button>
                 <button
-                  onClick={() => {
-                    if (window.confirm('Log out? Use this if you are on a borrowed or shared device. You can log back in anytime with your Student ID.')) {
-                      onLogout && onLogout();
-                    }
-                  }}
+                  onClick={() => setShowLogoutConfirm(true)}
                   className="flex items-center justify-center space-x-1 text-gray-600 hover:text-red-700 bg-gray-100 hover:bg-red-50 px-4 py-2.5 rounded-lg font-semibold transition-colors border border-gray-200"
                   title="Log out of this device (e.g. borrowed/shared device)"
                 >
