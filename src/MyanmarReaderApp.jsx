@@ -2424,10 +2424,14 @@ const closeQAPanel = () => {
     setCurrentKeys([]);
     setAppMode('free');
     setShowTranslation(false);
-    // Also jump the chapter picker straight back to Chapter 1 Sheet A -- the
-    // reset a student reaches for once they're lost navigating ahead and
-    // can't find their way back to the start on their own.
-    fetchSheetData('A', getColumnName(0));
+    // Also reset the spelling-practice lesson cycler (handleBookClick) back
+    // to Lesson 1 -- that cycler only ever steps forward one at a time with
+    // no way back to the start otherwise. This must NOT touch the actual
+    // chapter/sheet a student is reading (selectedColumn/currentSheetIndex/
+    // currentSheetName) -- that position is tracked from real reading
+    // progress and should only ever move when the student themselves reads
+    // somewhere new, never reset by this button.
+    setCurrentLessonIndex(0);
   };
 
   const playSequence = async () => {
@@ -3618,7 +3622,7 @@ useEffect(() => {
             <button
               onClick={handleBookClick}
               disabled={isLocked}
-              title="Change Lesson (20 lines)"
+              title={`Change Lesson (${LESSONS.length} lines)`}
               className="flex items-center justify-center gap-2 bg-indigo-500 hover:bg-indigo-600 disabled:bg-indigo-300 disabled:cursor-not-allowed text-white px-5 py-4 rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transition-all active:scale-95 border-b-4 border-indigo-700 h-[60px]"
             >
               <Library size={24} />

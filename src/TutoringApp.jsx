@@ -302,24 +302,27 @@ const getEffectiveCompletedUnit = (lesson, studentProfile, sessionsForLesson, ss
   return unitCount > 0 ? Math.min(unitCount, effective) : effective;
 };
 
-// A chip strip for the attendance boxes: one small numbered chip per
-// scheduled class, in date order -- green (attended), red (absent), or
-// blank/outlined (hasn't happened yet). Pictures instead of just two plain
-// numbers, per the teacher's "kids don't read text" direction.
-function AttendanceBar({ statuses }) {
-  if (!statuses || statuses.length === 0) return null;
+// One small chip per scheduled class for the whole year, in date order --
+// green with the day-of-month number (attended), red with the day-of-month
+// number (absent), or a small blank/outlined dot (hasn't happened yet).
+// Replaces separate Month/Year boxes and "Attended:"/"Absent:" word labels
+// entirely -- kept small enough that a full year of chips still fits, per
+// the teacher's "pictures/colors over text for young readers" direction.
+function AttendanceBar({ entries }) {
+  if (!entries || entries.length === 0) return null;
   return (
-    <div className="flex flex-wrap gap-1 mt-2">
-      {statuses.map((status, i) => (
+    <div className="flex flex-wrap gap-0.5">
+      {entries.map((e, i) => (
         <span
           key={i}
-          className={`w-6 h-6 flex items-center justify-center rounded text-[10px] font-bold ${
-            status === 'attended' ? 'bg-emerald-500 text-white'
-            : status === 'absent' ? 'bg-red-500 text-white'
-            : 'bg-white border border-gray-300 text-gray-300'
+          className={`w-4 h-4 flex items-center justify-center rounded-sm text-[8px] leading-none font-bold ${
+            e.status === 'attended' ? 'bg-emerald-500 text-white'
+            : e.status === 'absent' ? 'bg-red-500 text-white'
+            : 'w-1.5 h-1.5 self-center border border-gray-300'
           }`}
+          title={e.date.toLocaleDateString()}
         >
-          {i + 1}
+          {e.status === 'upcoming' ? '' : e.day}
         </span>
       ))}
     </div>
@@ -6549,12 +6552,9 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
   const attendanceSummary = useMemo(() => {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-    const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59);
     const startOfYear = new Date(today.getFullYear(), 0, 1);
     const endOfYear = new Date(today.getFullYear(), 11, 31, 23, 59, 59);
 
-    const monthEntries = [];
     const yearEntries = [];
 
     mySchedule.forEach(entry => {
@@ -6564,21 +6564,16 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
        const rawStatus = entryDate > now ? null : getStudentAttendanceForEntry(entry, studentUid, mySessions);
        const status = rawStatus === 'attended' ? 'attended' : rawStatus === 'absent' ? 'absent' : 'upcoming';
 
-       if (entryDate >= startOfMonth && entryDate <= endOfMonth) monthEntries.push({ date: entryDate, status });
-       if (entryDate >= startOfYear && entryDate <= endOfYear) yearEntries.push({ date: entryDate, status });
+       if (entryDate >= startOfYear && entryDate <= endOfYear) yearEntries.push({ date: entryDate, status, day: entryDate.getDate() });
     });
 
-    monthEntries.sort((a, b) => a.date - b.date);
     yearEntries.sort((a, b) => a.date - b.date);
     const countOf = (list, key) => list.filter(e => e.status === key).length;
 
     return {
-      monthAttended: countOf(monthEntries, 'attended'),
-      monthAbsent: countOf(monthEntries, 'absent'),
-      monthStatuses: monthEntries.map(e => e.status),
       yearAttended: countOf(yearEntries, 'attended'),
       yearAbsent: countOf(yearEntries, 'absent'),
-      yearStatuses: yearEntries.map(e => e.status),
+      yearEntries,
     };
   }, [mySchedule, mySessions, studentUid]);
 
@@ -6761,9 +6756,13 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     } else if (isMyanmarReaderLesson && onOpenMyanmarReader && studentProfile?.name) {
       onOpenMyanmarReader({ studentName: studentProfile.name });
     } else {
+      // Only this genuine window.open fallback actually opens another tab --
+      // both branches above mount their app inline in this same page, so
+      // only this one needs the "opened in another tab, come back here when
+      // done" overlay.
       openLink(formattedUrl);
+      setIsLessonOverlayOpen(true);
     }
-    setIsLessonOverlayOpen(true);
     
     try {
       await addDoc(sessionsCollection, {
@@ -7465,7 +7464,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       </div>
 
       <h2 className="text-3xl font-bold mb-6 text-emerald-700">
-        {studentProfile?.name}'s Dashboard
+        {studentProfile?.name}'s Home
       </h2>
       
       <div className="bg-white/90 backdrop-blur-sm p-6 rounded-xl shadow-lg mb-8 border border-emerald-100 flex flex-col md:flex-row justify-between items-start md:items-center">
@@ -7489,7 +7488,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           <div className="w-full flex justify-between items-center flex-wrap gap-4">
               <div>
                   <div className="flex items-center flex-wrap gap-3 mb-2">
-                    <h3 className="text-2xl font-semibold text-emerald-800">Welcome, {studentProfile?.name}</h3>
+                    <h3 className="text-2xl font-semibold text-emerald-800">{studentProfile?.name}</h3>
                     <button
                       onClick={() => { setEditingNameText(studentProfile?.pendingName || studentProfile?.name || ''); setIsEditingName(true); }}
                       className="w-8 h-8 flex items-center justify-center text-emerald-600 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 rounded-full transition-colors border border-emerald-200 flex-shrink-0"
@@ -7514,22 +7513,13 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                   )}
                   <p className="text-gray-600 text-lg mt-2">Your ID: <span className="font-mono bg-gray-100 px-2 py-0.5 rounded-md font-bold text-gray-800">{studentProfile?.displayId}</span></p>
 
-                  <div className="flex flex-col sm:flex-row gap-4 mt-4">
-                    <div className="bg-emerald-50 p-3 rounded-xl shadow-sm border border-emerald-100 flex-1">
-                        <p className="text-sm font-bold text-emerald-800 uppercase tracking-wide">This Month's Attendance</p>
-                        <div className="mt-1">
-                          <span className="text-gray-600 text-sm">Attended:</span> <span className="font-bold text-lg text-emerald-600 mr-4">{attendanceSummary.monthAttended}</span>
-                          <span className="text-gray-600 text-sm">Absent:</span> <span className="font-bold text-lg text-red-600">{attendanceSummary.monthAbsent}</span>
+                  <div className="mt-4">
+                    <div className="bg-indigo-50 p-3 rounded-xl shadow-sm border border-indigo-100">
+                        <div className="flex items-center gap-3 mb-1.5">
+                          <span className="font-bold text-lg text-emerald-600">{attendanceSummary.yearAttended}</span>
+                          <span className="font-bold text-lg text-red-600">{attendanceSummary.yearAbsent}</span>
                         </div>
-                        <AttendanceBar statuses={attendanceSummary.monthStatuses} />
-                    </div>
-                    <div className="bg-indigo-50 p-3 rounded-xl shadow-sm border border-indigo-100 flex-1">
-                        <p className="text-sm font-bold text-indigo-800 uppercase tracking-wide">This Year's Attendance</p>
-                        <div className="mt-1">
-                          <span className="text-gray-600 text-sm">Attended:</span> <span className="font-bold text-lg text-emerald-600 mr-4">{attendanceSummary.yearAttended}</span>
-                          <span className="text-gray-600 text-sm">Absent:</span> <span className="font-bold text-lg text-red-600">{attendanceSummary.yearAbsent}</span>
-                        </div>
-                        <AttendanceBar statuses={attendanceSummary.yearStatuses} />
+                        <AttendanceBar entries={attendanceSummary.yearEntries} />
                     </div>
                   </div>
               </div>
@@ -7731,14 +7721,16 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                 if (!url.startsWith('http://') && !url.startsWith('https://')) url = `https://${url}`;
                 if (isMyanmarSpeakingUrl(url) && onOpenMyanmarSpeaking && studentProfile?.name) {
                   onOpenMyanmarSpeaking({ studentName: studentProfile.name });
-                  setIsLessonOverlayOpen(true);
                   return;
                 }
                 if (MYANMAR_READER_APP_URL && url.startsWith(MYANMAR_READER_APP_URL) && onOpenMyanmarReader && studentProfile?.name) {
                   onOpenMyanmarReader({ studentName: studentProfile.name });
-                  setIsLessonOverlayOpen(true);
                   return;
                 }
+                // Only the genuine window.open fallback below actually opens
+                // another tab -- every branch above mounts its app inline in
+                // this same page, so only this one needs the "opened in
+                // another tab, come back here when done" overlay.
                 openLink(url);
                 setIsLessonOverlayOpen(true);
               }} 
