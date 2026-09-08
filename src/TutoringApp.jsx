@@ -5997,11 +5997,19 @@ function StudentDashboard({ user, studentProfile, studentUid, announcements, onO
   const [redoSession, setRedoSession] = useState(null);
   const [nowTick, setNowTick] = useState(Date.now());
   const [elapsedTick, setElapsedTick] = useState(Date.now());
-  // Shown once each time a student lands on their dashboard ("enters the
-  // classroom"); initial value true (not a useEffect) is exactly "show on
-  // this mount only" -- switching away and back to 'student' remounts this
-  // component so it reappears next time too, matching a fresh greeting.
-  const [showGreetingPrompt, setShowGreetingPrompt] = useState(true);
+  // Shown once per calendar day, the first time a student lands on their
+  // dashboard that day -- not on every refresh/remount, which used to show
+  // it again and again all day. Tracked in localStorage per student (this
+  // device), so a different student logging in on the same device still
+  // gets their own greeting.
+  const GREETING_PROMPT_KEY = `dhamma_greeted_teacher_on_${studentUid}`;
+  const [showGreetingPrompt, setShowGreetingPrompt] = useState(() => {
+    try {
+      return localStorage.getItem(GREETING_PROMPT_KEY) !== new Date().toDateString();
+    } catch (e) {
+      return true;
+    }
+  });
 
   // Parami runs large enough that some students share a rented/borrowed
   // device -- ask (once) whether this is their own device or not, so a
@@ -6040,6 +6048,7 @@ function StudentDashboard({ user, studentProfile, studentUid, announcements, onO
 
   const handleGreetTeacher = async () => {
     setShowGreetingPrompt(false);
+    try { localStorage.setItem(GREETING_PROMPT_KEY, new Date().toDateString()); } catch (e) {}
     try {
       await addDoc(greetingsCollection, {
         studentUid,

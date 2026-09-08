@@ -2424,6 +2424,10 @@ const closeQAPanel = () => {
     setCurrentKeys([]);
     setAppMode('free');
     setShowTranslation(false);
+    // Also jump the chapter picker straight back to Chapter 1 Sheet A -- the
+    // reset a student reaches for once they're lost navigating ahead and
+    // can't find their way back to the start on their own.
+    fetchSheetData('A', getColumnName(0));
   };
 
   const playSequence = async () => {
