@@ -173,6 +173,12 @@ const extractClassIdFromLink = (link) => {
   if (link.startsWith('smartstudy://')) return extractSmartStudyClassId(link);
   if (link.startsWith('abhidhamma://')) return extractAbhidhammaLessonId(link);
   if (link.startsWith('dhammaschool://')) return extractDhammaschoolClassId(link);
+  // Reading Myanmar / Speaking Myanmar / Myanmar Part 1 & 2 append a part
+  // key the same way (e.g. "readingmyanmar://consonantpractice") -- this
+  // was missing entirely, so every part's trophy silently collapsed onto
+  // one shared bare-title key instead of six separate ones.
+  const groupPartKey = extractGroupPartKey(link);
+  if (groupPartKey) return groupPartKey;
   return null;
 };
 
@@ -376,6 +382,42 @@ const DHAMMASCHOOL_MIGRATION_MAP = {
 // Dhammaschool lessons.
 const CANONICAL_DHAMMASCHOOL_TITLE = 'Dhammaschool Lesson';
 const SMARTSTUDY_MIGRATION_CLASS_IDS = [...new Set(Object.values(SMARTSTUDY_MIGRATION_MAP).flat().map(t => t.classId))];
+
+// One-time migration for the old individual sub-apps merged into Reading
+// Myanmar / Speaking Myanmar (see GROUP_PARTS_BY_SCHEME above). Unlike every
+// other migration here, these apps track no student name, score, or class
+// id at all -- there is no live progress signal to compute from, so every
+// value is a pure carry-over of the old trophy count (confirmed directly by
+// the teacher). Both share the same shape, so one generic preview/apply
+// pair (below) handles them rather than duplicating the logic twice.
+const GROUP_APP_MIGRATIONS = [
+  {
+    id: 'readingMyanmar',
+    label: 'Reading Myanmar',
+    canonicalTitle: '📚 Reading Myanmar',
+    map: {
+      'Myanmar Consonant': 'consonantpractice',
+      'ALL Consonants ': 'burmesegame',
+      'Vowel Practice ': 'vowelslearning',
+      'Reading machine for Myanmar Letter': 'myanmarspelling',
+      'အသတ်သင်ခန်းစာ': 'consonantendings',
+      'ကကာကိကီ': 'soundpractice',
+    },
+  },
+  {
+    id: 'speakingMyanmar',
+    label: 'Speaking Myanmar',
+    canonicalTitle: '🗣️ Speaking Myanmar',
+    map: {
+      'Poem': 'myanmarpoems',
+      'All Number': 'numberlearning',
+      'Animal sound': 'animalsound',
+      'emoji Myanmar Language ': 'burmeselearninggames',
+      'Human Anatomy': 'interactivequiz',
+      'Time ': 'timeandcalendar',
+    },
+  },
+];
 
 // A "Group" schedule entry creates one normal individual entry per member
 // (same shape as a regular Online Student entry) tagged with a shared
@@ -3486,6 +3528,84 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
     }
   };
 
+  // ── Reading Myanmar / Speaking Myanmar migration (shared, no live data) ──
+  const [selectedGroupAppMigrationId, setSelectedGroupAppMigrationId] = useState(GROUP_APP_MIGRATIONS[0].id);
+  const [groupAppMigrationPreview, setGroupAppMigrationPreview] = useState(null);
+  const [isApplyingGroupAppMigration, setIsApplyingGroupAppMigration] = useState(false);
+  const selectedGroupAppMigration = GROUP_APP_MIGRATIONS.find(m => m.id === selectedGroupAppMigrationId);
+
+  const runGroupAppMigrationPreview = () => {
+    const config = selectedGroupAppMigration;
+    const rows = [];
+    students.forEach(student => {
+      const earned = student.earnedTrophies || {};
+      Object.entries(config.map).forEach(([oldTitle, partKey]) => {
+        const oldValue = earned[oldTitle] || 0;
+        if (oldValue <= 0) return;
+        const newKey = sanitizeKey(`${config.canonicalTitle}_${partKey}`);
+        const currentNew = earned[newKey] || 0;
+        const proposedNew = Math.max(currentNew, oldValue);
+        rows.push({
+          studentId: student.id,
+          studentName: student.name,
+          oldTitle,
+          oldValue,
+          partKey,
+          newKey,
+          currentNew,
+          proposedNew,
+          willChange: proposedNew > currentNew,
+        });
+      });
+    });
+    rows.sort((a, b) => a.studentName.localeCompare(b.studentName) || a.oldTitle.localeCompare(b.oldTitle));
+    setGroupAppMigrationPreview({ appId: config.id, rows });
+  };
+
+  const applyGroupAppMigration = async () => {
+    if (!groupAppMigrationPreview || groupAppMigrationPreview.appId !== selectedGroupAppMigrationId) return;
+    const changingRows = groupAppMigrationPreview.rows.filter(r => r.willChange);
+    if (changingRows.length === 0) {
+      alert('Nothing to apply -- no student needs a higher trophy count than they already have.');
+      return;
+    }
+    const config = selectedGroupAppMigration;
+    if (!window.confirm(`This will set new "${config.canonicalTitle}" per-part trophy values for ${changingRows.length} student/part combination(s), only where that raises the number. It will NOT change any existing trophy already given. Continue?`)) return;
+    setIsApplyingGroupAppMigration(true);
+    try {
+      const batch = writeBatch(db);
+      changingRows.forEach(row => {
+        const studentRef = doc(db, `${publicDataPath}/students`, row.studentId);
+        batch.update(studentRef, { [`earnedTrophies.${row.newKey}`]: row.proposedNew });
+      });
+      await batch.commit();
+      alert(`Done. Updated ${changingRows.length} trophy value(s) under "${config.canonicalTitle}". The old lesson trophies were left untouched.`);
+      setGroupAppMigrationPreview(null);
+    } catch (err) {
+      console.error('Error applying group app migration:', err);
+      alert(`Migration failed: ${err.message || err}`);
+    }
+    setIsApplyingGroupAppMigration(false);
+  };
+
+  const handleDeleteOldGroupAppLessons = async (config) => {
+    const targets = lessonBank.filter(l => Object.keys(config.map).includes(l.title));
+    if (targets.length === 0) {
+      alert('None of the old lessons were found in the Lesson Bank (maybe already deleted).');
+      return;
+    }
+    if (!window.confirm(`Delete these ${targets.length} old Lesson Bank entries?\n\n${targets.map(t => `- ${t.title}`).join('\n')}\n\nStudents' already-earned trophies for them are NOT touched -- this only removes them from the Lesson Bank / Assign Lesson list.`)) {
+      return;
+    }
+    try {
+      await Promise.all(targets.map(t => deleteDoc(doc(db, `${publicDataPath}/lessonBank`, t.id))));
+      alert(`Deleted ${targets.length} old lesson(s).`);
+    } catch (err) {
+      console.error('Error deleting old lessons:', err);
+      alert(`Delete failed: ${err.message || err}`);
+    }
+  };
+
   const completedSessions = sessions
     .filter(s => s.endTime)
     .sort((a, b) => b.startTime.toDate() - a.startTime.toDate());
@@ -4979,6 +5099,89 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
               <p className="text-sm text-gray-500 mb-3">Only do this after Step 1's Apply has been run. Removes them from the Lesson Bank / Assign Lesson list only — does not touch any student's data.</p>
               <button
                 onClick={handleDeleteOldDhammaschoolLessons}
+                className="bg-red-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-700"
+              >
+                Delete Old Lessons
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-8 pt-6 border-t border-violet-200">
+            <h4 className="text-lg font-semibold mb-3 text-gray-700">🔄 Migrate Old Lessons into Reading/Speaking Myanmar</h4>
+            <p className="text-sm text-gray-600 mb-4">
+              These apps track no student name, score, or class id at all, so there's no live progress to check — every value here is a direct carry-over of the old trophy count.
+            </p>
+
+            <div className="mb-4">
+              <label className="block text-gray-700 mb-2">Which app</label>
+              <select
+                value={selectedGroupAppMigrationId}
+                onChange={(e) => { setSelectedGroupAppMigrationId(e.target.value); setGroupAppMigrationPreview(null); }}
+                className="w-full p-3 border rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                {GROUP_APP_MIGRATIONS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+              </select>
+            </div>
+
+            <div className="mb-5 p-4 bg-white rounded-lg border border-violet-200">
+              <p className="font-semibold text-gray-800 mb-1">1. Preview the {selectedGroupAppMigration.label} trophy migration</p>
+              <button
+                onClick={runGroupAppMigrationPreview}
+                className="bg-violet-500 text-white px-4 py-2 rounded-lg font-semibold hover:bg-violet-600"
+              >
+                Run Migration Preview
+              </button>
+
+              {groupAppMigrationPreview && groupAppMigrationPreview.appId === selectedGroupAppMigrationId && (
+                <div className="mt-4">
+                  {groupAppMigrationPreview.rows.length === 0 ? (
+                    <p className="text-sm text-gray-500">No students currently have trophies under these old lessons.</p>
+                  ) : (
+                    <>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full text-sm border">
+                          <thead className="bg-gray-100">
+                            <tr>
+                              <th className="p-2 text-left border">Student</th>
+                              <th className="p-2 text-left border">Old Lesson</th>
+                              <th className="p-2 text-left border">→ Part</th>
+                              <th className="p-2 text-left border">Current New</th>
+                              <th className="p-2 text-left border">Proposed New</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {groupAppMigrationPreview.rows.map((r, i) => (
+                              <tr key={i} className={r.willChange ? 'bg-emerald-50' : ''}>
+                                <td className="p-2 border">{r.studentName}</td>
+                                <td className="p-2 border">{r.oldTitle.trim()}</td>
+                                <td className="p-2 border">{r.partKey}</td>
+                                <td className="p-2 border">{r.currentNew}</td>
+                                <td className="p-2 border font-semibold">
+                                  {r.proposedNew}{r.willChange && <span className="text-emerald-700 ml-1">(+{r.proposedNew - r.currentNew})</span>}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <button
+                        onClick={applyGroupAppMigration}
+                        disabled={isApplyingGroupAppMigration || groupAppMigrationPreview.rows.every(r => !r.willChange)}
+                        className="mt-4 bg-emerald-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50"
+                      >
+                        {isApplyingGroupAppMigration ? 'Applying...' : `Apply — set ${groupAppMigrationPreview.rows.filter(r => r.willChange).length} value(s)`}
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 bg-white rounded-lg border border-violet-200">
+              <p className="font-semibold text-gray-800 mb-1">2. Delete the old {selectedGroupAppMigration.label} lessons from the Lesson Bank</p>
+              <p className="text-sm text-gray-500 mb-3">Only do this after Step 1's Apply has been run. Removes them from the Lesson Bank / Assign Lesson list only — does not touch any student's data.</p>
+              <button
+                onClick={() => handleDeleteOldGroupAppLessons(selectedGroupAppMigration)}
                 className="bg-red-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-700"
               >
                 Delete Old Lessons
