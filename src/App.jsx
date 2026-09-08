@@ -1,6 +1,33 @@
-import React, { useState, useEffect, Suspense, lazy } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import TutoringApp from './TutoringApp';
 import InstallAppBanner from './InstallAppBanner';
+
+// A React.lazy()+Suspense replacement. React.lazy's own resolution somehow
+// gets permanently stuck on this site -- the dynamic import() itself
+// resolves fine (confirmed via manual testing: the chunk fetches, links,
+// and its default export is a real function within milliseconds) but the
+// Suspense boundary never swaps the fallback for the real content, forever,
+// with no console error of any kind. A plain useState-driven re-render
+// (confirmed working reliably even in the exact same stuck scenario, e.g.
+// the notifications-bell dropdown) doesn't depend on whatever internal
+// mechanism React.lazy/Suspense uses to schedule that swap, so doing the
+// import manually and setting state ourselves sidesteps the hang entirely.
+function lazyLoad(importer) {
+  return function LazyMount(props) {
+    const [Comp, setComp] = useState(null);
+    const [error, setError] = useState(null);
+    useEffect(() => {
+      let cancelled = false;
+      importer()
+        .then((mod) => { if (!cancelled) setComp(() => mod.default); })
+        .catch((err) => { if (!cancelled) setError(err); });
+      return () => { cancelled = true; };
+    }, []);
+    if (error) throw error;
+    if (!Comp) return <LoadingFallback />;
+    return <Comp {...props} />;
+  };
+}
 
 // Every sub-app below is lazy-loaded (its JS is only downloaded the first
 // time it's actually opened) AND only mounted while it's the active app —
@@ -18,43 +45,43 @@ import InstallAppBanner from './InstallAppBanner';
 // both; each app resets to its own starting screen when reopened, which
 // is an acceptable trade-off now that most of these are grouped behind a
 // "Choose a Part" screen anyway.
-const SmartStudyApp = lazy(() => import('./SmartStudy'));
-const AbhidhammaApp = lazy(() => import('./AbhidhammaApp'));
-const MyanmarReaderApp = lazy(() => import('./MyanmarReaderApp'));
-const DhammaschoolApp = lazy(() => import('./DhammaschoolApp'));
-const ConsonantPracticeApp = lazy(() => import('./ConsonantPracticeApp'));
-const BurmeseConsonantGameApp = lazy(() => import('./BurmeseConsonantGameApp'));
-const MyanmarSpeakingApp = lazy(() => import('./myanmar-speaking-app'));
-const MyanmarNumberLearningApp = lazy(() => import('./MyanmarNumberLearningApp'));
-const MyanmarVowelsLearningApp = lazy(() => import('./MyanmarVowelsLearningApp'));
-const AnimalSoundApp = lazy(() => import('./AnimalSoundApp'));
-const BurmeseLearningGamesApp = lazy(() => import('./BurmeseLearningGamesApp'));
-const InteractiveLearningQuizApp = lazy(() => import('./InteractiveLearningQuizApp'));
-const MyanmarPoemsApp = lazy(() => import('./MyanmarPoemsApp'));
-const MyanmarConsonantEndingsApp = lazy(() => import('./MyanmarConsonantEndingsApp'));
-const TimeAndCalendarApp = lazy(() => import('./TimeAndCalendarApp'));
-const MyanmarSpellingApp = lazy(() => import('./MyanmarSpellingApp'));
-const MyanmarSoundPracticeApp = lazy(() => import('./MyanmarSoundPracticeApp'));
+const SmartStudyApp = lazyLoad(() => import('./SmartStudy'));
+const AbhidhammaApp = lazyLoad(() => import('./AbhidhammaApp'));
+const MyanmarReaderApp = lazyLoad(() => import('./MyanmarReaderApp'));
+const DhammaschoolApp = lazyLoad(() => import('./DhammaschoolApp'));
+const ConsonantPracticeApp = lazyLoad(() => import('./ConsonantPracticeApp'));
+const BurmeseConsonantGameApp = lazyLoad(() => import('./BurmeseConsonantGameApp'));
+const MyanmarSpeakingApp = lazyLoad(() => import('./myanmar-speaking-app'));
+const MyanmarNumberLearningApp = lazyLoad(() => import('./MyanmarNumberLearningApp'));
+const MyanmarVowelsLearningApp = lazyLoad(() => import('./MyanmarVowelsLearningApp'));
+const AnimalSoundApp = lazyLoad(() => import('./AnimalSoundApp'));
+const BurmeseLearningGamesApp = lazyLoad(() => import('./BurmeseLearningGamesApp'));
+const InteractiveLearningQuizApp = lazyLoad(() => import('./InteractiveLearningQuizApp'));
+const MyanmarPoemsApp = lazyLoad(() => import('./MyanmarPoemsApp'));
+const MyanmarConsonantEndingsApp = lazyLoad(() => import('./MyanmarConsonantEndingsApp'));
+const TimeAndCalendarApp = lazyLoad(() => import('./TimeAndCalendarApp'));
+const MyanmarSpellingApp = lazyLoad(() => import('./MyanmarSpellingApp'));
+const MyanmarSoundPracticeApp = lazyLoad(() => import('./MyanmarSoundPracticeApp'));
 // Combined "Reading Myanmar" group — bundles ConsonantPracticeApp,
 // BurmeseConsonantGameApp, MyanmarVowelsLearningApp, MyanmarSpellingApp,
 // MyanmarConsonantEndingsApp and MyanmarSoundPracticeApp behind one Lesson
 // Bank entry with a "Choose a Part" landing screen (see ReadingMyanmarApp.jsx).
 // The 6 apps above stay wired individually too for now, so nothing already
 // working changes — this is purely an additional entry point.
-const ReadingMyanmarApp = lazy(() => import('./ReadingMyanmarApp'));
+const ReadingMyanmarApp = lazyLoad(() => import('./ReadingMyanmarApp'));
 // Second combined group — bundles MyanmarPoemsApp, MyanmarNumberLearningApp,
 // AnimalSoundApp, BurmeseLearningGamesApp, InteractiveLearningQuizApp and
 // TimeAndCalendarApp the same way (see SpeakingMyanmarApp.jsx).
-const SpeakingMyanmarApp = lazy(() => import('./SpeakingMyanmarApp'));
+const SpeakingMyanmarApp = lazyLoad(() => import('./SpeakingMyanmarApp'));
 // Third combined group — bundles MyanmarPart1AApp, MyanmarPart1BApp,
 // MyanmarPart2AApp and MyanmarPart2BApp the same way (see
 // MyanmarPart1And2App.jsx).
-const MyanmarPart1And2App = lazy(() => import('./MyanmarPart1And2App'));
+const MyanmarPart1And2App = lazyLoad(() => import('./MyanmarPart1And2App'));
 // Bodhi Tree — first piece of the planned gamified student "Home": a tree
 // that grows from a student's real attendance history. Deliberately its
 // own standalone app (not part of TutoringApp.jsx) per the teacher's
 // request, so the gamification layer can grow independently later.
-const BodhiTreeApp = lazy(() => import('./BodhiTreeApp'));
+const BodhiTreeApp = lazyLoad(() => import('./BodhiTreeApp'));
 
 // Catches a failed lazy-chunk load (e.g. the browser has an old page open
 // from before a new deploy replaced that chunk's file) so it shows a
