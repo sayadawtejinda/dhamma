@@ -3089,36 +3089,88 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
   // entries ("Sheet A" and "Sheet B", 29 chapters each, trophies tracked
   // separately) that got merged into one real Myanmar Reader Lesson entry.
   // The merge summed each student's two old completedUnits values together
-  // (e.g. 19 + 19 = 38), but the merged lesson's own unitCount is the real
-  // 29-chapter total, not 58 — so "completed up to Chapter 38 / 29" is off by
-  // exactly double for anyone carrying that old summed value. Halving it
-  // brings it back in line with the real 29-chapter scale (and lines up with
-  // the half-chapter-per-sheet granularity the live auto-fill now uses).
-  const runMyanmarReaderScaleFixPreview = () => {
-    const lessonKey = computeLessonKey('Myanmar Reader Lesson', MYANMAR_READER_APP_URL);
-    const rows = students
-      .map(student => ({
-        studentId: student.id,
-        studentName: student.name,
-        oldValue: student.completedUnits?.[lessonKey] || 0,
-      }))
-      .filter(r => r.oldValue > 0)
-      .map(r => ({ ...r, newValue: r.oldValue / 2 }));
-    setMyanmarReaderScaleFixPreview(rows);
+  // (e.g. 19 + 19 = 38) and the merged Lesson Bank entry's "Total Number"
+  // (unitCount) was left at the summed 58 instead of the real 29-chapter
+  // total.
+  //
+  // Editing "Total Number" by hand in Edit Lesson only changes the Lesson
+  // Bank's own master entry -- it does NOT reach any student who was already
+  // sent this lesson, because each assignment stores its OWN snapshot of
+  // unitCount/trophyLimit at send time (see handleSendLesson's addDoc) that
+  // never re-reads the Lesson Bank afterwards. That split is exactly what
+  // made a hand edit "get confusing": the teacher's Assign-Lesson preview
+  // (which reads the live Lesson Bank entry) and a student's own Available
+  // Lessons card (which reads their already-sent snapshot) could show two
+  // different totals. This preview covers all three places that need to
+  // agree: the Lesson Bank entry itself, every student's already-sent
+  // assignment doc, and each student's summed completedUnits number (halved
+  // back to the real 29-chapter scale). None of this touches any trophy
+  // already earned.
+  const runMyanmarReaderScaleFixPreview = async () => {
+    setIsFixingMyanmarReaderScale(true);
+    try {
+      const lessonKey = computeLessonKey('Myanmar Reader Lesson', MYANMAR_READER_APP_URL);
+      const REAL_CHAPTER_COUNT = 29;
+
+      const bankEntry = lessonBank.find(l => l.title === 'Myanmar Reader Lesson' && l.link === MYANMAR_READER_APP_URL) || null;
+
+      const assignedSnap = await getDocs(query(
+        lessonsCollection,
+        where('title', '==', 'Myanmar Reader Lesson'),
+        where('link', '==', MYANMAR_READER_APP_URL)
+      ));
+      const assignedDocs = assignedSnap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter(d => (d.unitCount || 0) !== REAL_CHAPTER_COUNT)
+        .map(d => ({
+          docId: d.id,
+          studentName: students.find(s => s.id === d.studentUid)?.name || d.studentUid,
+          oldUnitCount: d.unitCount || 0,
+        }));
+
+      const completedUnitRows = students
+        .map(student => ({
+          studentId: student.id,
+          studentName: student.name,
+          oldValue: student.completedUnits?.[lessonKey] || 0,
+        }))
+        .filter(r => r.oldValue > 0)
+        .map(r => ({ ...r, newValue: r.oldValue / 2 }));
+
+      setMyanmarReaderScaleFixPreview({
+        bankEntry: bankEntry ? { id: bankEntry.id, oldUnitCount: bankEntry.unitCount || 0 } : null,
+        assignedDocs,
+        completedUnitRows,
+        realChapterCount: REAL_CHAPTER_COUNT,
+      });
+    } catch (err) {
+      console.error('Error previewing Myanmar Reader scale fix:', err);
+      alert(`Preview failed: ${err.message || err}`);
+    }
+    setIsFixingMyanmarReaderScale(false);
   };
   const applyMyanmarReaderScaleFix = async () => {
-    if (!myanmarReaderScaleFixPreview || myanmarReaderScaleFixPreview.length === 0) return;
-    if (!window.confirm(`Halve the stored Myanmar Reader progress number for ${myanmarReaderScaleFixPreview.length} student(s)? This only fixes the "completed up to Chapter X / 29" display — it does not touch any trophy already earned.`)) return;
+    const preview = myanmarReaderScaleFixPreview;
+    if (!preview) return;
+    const totalChanges = (preview.bankEntry ? 1 : 0) + preview.assignedDocs.length + preview.completedUnitRows.length;
+    if (totalChanges === 0) return;
+    if (!window.confirm(`Fix Myanmar Reader's Total Number to ${preview.realChapterCount} everywhere (Lesson Bank entry, ${preview.assignedDocs.length} already-sent assignment(s)) and halve the stored progress number for ${preview.completedUnitRows.length} student(s)? This does not touch any trophy already earned.`)) return;
     setIsFixingMyanmarReaderScale(true);
     try {
       const lessonKey = computeLessonKey('Myanmar Reader Lesson', MYANMAR_READER_APP_URL);
       const batch = writeBatch(db);
-      myanmarReaderScaleFixPreview.forEach(row => {
+      if (preview.bankEntry) {
+        batch.update(doc(db, `${publicDataPath}/lessonBank`, preview.bankEntry.id), { unitCount: preview.realChapterCount });
+      }
+      preview.assignedDocs.forEach(row => {
+        batch.update(doc(db, `${publicDataPath}/lessons`, row.docId), { unitCount: preview.realChapterCount });
+      });
+      preview.completedUnitRows.forEach(row => {
         const studentRef = doc(db, `${publicDataPath}/students`, row.studentId);
         batch.update(studentRef, { [`completedUnits.${lessonKey}`]: row.newValue });
       });
       await batch.commit();
-      alert(`Fixed the progress number for ${myanmarReaderScaleFixPreview.length} student(s).`);
+      alert(`Fixed Myanmar Reader's Total Number and progress numbers.`);
       setMyanmarReaderScaleFixPreview(null);
     } catch (err) {
       console.error('Error fixing Myanmar Reader progress scale:', err);
@@ -5150,54 +5202,90 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
           <div className="mt-8 pt-6 border-t border-violet-200">
             <h4 className="text-lg font-semibold mb-3 text-gray-700">🔧 Fix Myanmar Reader Progress Scale</h4>
             <p className="text-sm text-gray-600 mb-4">
-              Myanmar Reader used to be two separate Lesson Bank entries (Sheet A + Sheet B, 29 chapters each). Merging them into one summed each student's old progress together (e.g. 19 + 19 = 38), which now shows as "completed up to Chapter 38 / 29" against the real 29-chapter total. This halves that stored number back to the real scale — it doesn't touch any trophy already earned.
+              Myanmar Reader used to be two separate Lesson Bank entries (Sheet A + Sheet B, 29 chapters each). Merging them into one summed each student's old progress together (e.g. 19 + 19 = 38), and left "Total Number" at the summed 58 instead of the real 29 chapters. Editing "Total Number" by hand in Edit Lesson only changes this Lesson Bank entry — it does not reach any student already sent this lesson (each keeps its own snapshot from when it was sent), which is what made a hand edit confusing. This one preview covers everywhere that number lives: the Lesson Bank entry, every already-sent assignment, and each student's summed progress number. It does not touch any trophy already earned.
             </p>
             <div className="p-4 bg-white rounded-lg border border-violet-200">
               <p className="font-semibold text-gray-800 mb-1">Preview the fix</p>
               <button
                 onClick={runMyanmarReaderScaleFixPreview}
-                className="bg-violet-500 text-white px-4 py-2 rounded-lg font-semibold hover:bg-violet-600"
+                disabled={isFixingMyanmarReaderScale}
+                className="bg-violet-500 text-white px-4 py-2 rounded-lg font-semibold hover:bg-violet-600 disabled:opacity-50"
               >
-                Run Preview
+                {isFixingMyanmarReaderScale ? 'Working...' : 'Run Preview'}
               </button>
 
-              {myanmarReaderScaleFixPreview && (
+              {myanmarReaderScaleFixPreview && (() => {
+                const preview = myanmarReaderScaleFixPreview;
+                const totalChanges = (preview.bankEntry ? 1 : 0) + preview.assignedDocs.length + preview.completedUnitRows.length;
+                return (
                 <div className="mt-4">
-                  {myanmarReaderScaleFixPreview.length === 0 ? (
-                    <p className="text-sm text-gray-500">No students currently have a Myanmar Reader progress number to fix.</p>
+                  {totalChanges === 0 ? (
+                    <p className="text-sm text-gray-500">Nothing to fix — Myanmar Reader's Total Number already reads {preview.realChapterCount} everywhere.</p>
                   ) : (
                     <>
-                      <div className="overflow-x-auto">
-                        <table className="min-w-full text-sm border">
-                          <thead className="bg-gray-100">
-                            <tr>
-                              <th className="p-2 text-left border">Student</th>
-                              <th className="p-2 text-left border">Current (stored)</th>
-                              <th className="p-2 text-left border">Fixed</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {myanmarReaderScaleFixPreview.map((r) => (
-                              <tr key={r.studentId} className="bg-emerald-50">
-                                <td className="p-2 border">{r.studentName}</td>
-                                <td className="p-2 border">{r.oldValue}</td>
-                                <td className="p-2 border font-semibold">{r.newValue}</td>
+                      {preview.bankEntry && (
+                        <p className="text-sm text-gray-700 mb-2">
+                          Lesson Bank "Total Number": <strong>{preview.bankEntry.oldUnitCount}</strong> → <strong>{preview.realChapterCount}</strong>
+                        </p>
+                      )}
+                      {preview.assignedDocs.length > 0 && (
+                        <div className="overflow-x-auto mb-3">
+                          <p className="text-sm font-semibold text-gray-700 mb-1">Already-sent assignments to fix ({preview.assignedDocs.length}):</p>
+                          <table className="min-w-full text-sm border">
+                            <thead className="bg-gray-100">
+                              <tr>
+                                <th className="p-2 text-left border">Student</th>
+                                <th className="p-2 text-left border">Current Total Number</th>
+                                <th className="p-2 text-left border">Fixed</th>
                               </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
+                            </thead>
+                            <tbody>
+                              {preview.assignedDocs.map((r) => (
+                                <tr key={r.docId} className="bg-emerald-50">
+                                  <td className="p-2 border">{r.studentName}</td>
+                                  <td className="p-2 border">{r.oldUnitCount}</td>
+                                  <td className="p-2 border font-semibold">{preview.realChapterCount}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                      {preview.completedUnitRows.length > 0 && (
+                        <div className="overflow-x-auto mb-3">
+                          <p className="text-sm font-semibold text-gray-700 mb-1">Progress numbers to halve ({preview.completedUnitRows.length}):</p>
+                          <table className="min-w-full text-sm border">
+                            <thead className="bg-gray-100">
+                              <tr>
+                                <th className="p-2 text-left border">Student</th>
+                                <th className="p-2 text-left border">Current (stored)</th>
+                                <th className="p-2 text-left border">Fixed</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {preview.completedUnitRows.map((r) => (
+                                <tr key={r.studentId} className="bg-emerald-50">
+                                  <td className="p-2 border">{r.studentName}</td>
+                                  <td className="p-2 border">{r.oldValue}</td>
+                                  <td className="p-2 border font-semibold">{r.newValue}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
                       <button
                         onClick={applyMyanmarReaderScaleFix}
                         disabled={isFixingMyanmarReaderScale}
-                        className="mt-4 bg-emerald-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50"
+                        className="mt-2 bg-emerald-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50"
                       >
-                        {isFixingMyanmarReaderScale ? 'Fixing...' : `Apply — fix ${myanmarReaderScaleFixPreview.length} student(s)`}
+                        {isFixingMyanmarReaderScale ? 'Fixing...' : `Apply — fix ${totalChanges} thing(s)`}
                       </button>
                     </>
                   )}
                 </div>
-              )}
+                );
+              })()}
             </div>
           </div>
 
