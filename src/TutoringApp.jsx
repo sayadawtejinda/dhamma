@@ -7697,7 +7697,11 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
               const remainingList = Math.max(0, maxAvailableList - previouslyEarnedList);
               const sessionsForLessonList = completedSessions.filter(s => s.lessonTitle === lesson.title);
               const completedUnitList = getEffectiveCompletedUnit(lesson, studentProfile, sessionsForLessonList, ssCompletionCounts);
-              const nextUnitNumber = lesson.unitCount > 0 ? Math.min(lesson.unitCount, completedUnitList + 1) : completedUnitList + 1;
+              // Math.floor, not the raw number -- Myanmar Reader's half-chapter
+              // progress (e.g. 19.5 = chapter 20's Sheet A done, Sheet B not)
+              // should still point at "Chapter 20" as the one to continue, not
+              // 20.5 or 21.
+              const nextUnitNumber = lesson.unitCount > 0 ? Math.min(lesson.unitCount, Math.floor(completedUnitList) + 1) : Math.floor(completedUnitList) + 1;
               const latestSessionForLesson = completedSessions.find(s => s.lessonTitle === lesson.title && typeof s.completedUnit === 'number' && s.completedUnit > 0);
               const showNowFinished = !!latestSessionForLesson;
               const isSmartStudyLesson = !!(lesson.link && lesson.link.startsWith('smartstudy://'));

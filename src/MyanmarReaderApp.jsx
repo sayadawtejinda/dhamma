@@ -830,7 +830,13 @@ export default function MyanmarReaderApp({ entryRequest, onExit }) {
   // hasn't read anything yet doesn't get a premature "continue" banner.
   useEffect(() => {
     if (!tutoringStudentUid || teacherCompletedChapters <= 0) return;
-    const teacherPosition = { chapterNum: Math.min(TOTAL_CHAPTERS, teacherCompletedChapters + 1), sheetName: 'A' };
+    // teacherCompletedChapters can be a half-integer (e.g. 19.5 = chapter 20's
+    // Sheet A done, Sheet B not) -- that points at Sheet B of THAT chapter,
+    // not Sheet A of the next one.
+    const isHalfDone = teacherCompletedChapters % 1 !== 0;
+    const teacherPosition = isHalfDone
+      ? { chapterNum: Math.min(TOTAL_CHAPTERS, Math.ceil(teacherCompletedChapters)), sheetName: 'B' }
+      : { chapterNum: Math.min(TOTAL_CHAPTERS, teacherCompletedChapters + 1), sheetName: 'A' };
     setResumePosition(prev => {
       const isFurther = !prev
         || teacherPosition.chapterNum > prev.chapterNum
@@ -854,6 +860,20 @@ export default function MyanmarReaderApp({ entryRequest, onExit }) {
         ...Array.from({ length: effectiveCompletedThrough }, (_, i) => i + 1).flatMap(c => [chapterSheetKey(c, 'A'), chapterSheetKey(c, 'B')])
       ])
     : completedChapterSheets;
+
+  // Chapters are meant to be studied in order -- Sheet A then Sheet B, then
+  // the next chapter -- so the chapter picker only unlocks up through
+  // whichever chapter resumePosition currently points at (its Sheet A is
+  // reachable even before it's done, since that's the chapter actually being
+  // worked on). resumePosition starts out null (brand new student, nothing
+  // read yet, no teacher-confirmed progress) -- default that to chapter 1
+  // only, not "everything," so a fresh student starts at the beginning
+  // instead of seeing the whole book unlocked before ever finishing anything.
+  // A student who's actually well ahead isn't blocked forever by this either
+  // -- once the teacher confirms/awards the skipped-ahead chapters (Assign
+  // Lesson's "Lesson completed"), that raises teacherCompletedChapters, which
+  // raises resumePosition/maxUnlockedChapter here too.
+  const maxUnlockedChapter = resumePosition ? resumePosition.chapterNum : 1;
 
   // Keeps this student's live score for the CURRENT chapter+sheet written to
   // Firestore as they read, so the online panel can show "reading Chapter 3
@@ -3368,7 +3388,7 @@ useEffect(() => {
                 <option value="" disabled hidden>Sheet</option>
                 {Array.from({length: TOTAL_CHAPTERS}, (_, i) => {
                     const col = getColumnName(i);
-                    return <option key={col} value={col}>{SHEET_CHAPTER_PREFIX} {i + 1}{effectiveCompletedFullChapters.has(i + 1) ? ' ✓' : ''}</option>
+                    return <option key={col} value={col} disabled={i + 1 > maxUnlockedChapter}>{SHEET_CHAPTER_PREFIX} {i + 1}{effectiveCompletedFullChapters.has(i + 1) ? ' ✓' : (i + 1 > maxUnlockedChapter ? ' 🔒' : '')}</option>
                 })}
             </select>
         </div>
@@ -3408,7 +3428,7 @@ useEffect(() => {
                                 <option value="" disabled hidden>Sheet</option>
                                 {Array.from({length: TOTAL_CHAPTERS}, (_, i) => {
                                     const col = getColumnName(i);
-                                    return <option key={col} value={col}>{SHEET_CHAPTER_PREFIX} {i + 1}{effectiveCompletedFullChapters.has(i + 1) ? ' ✓' : ''}</option>
+                                    return <option key={col} value={col} disabled={i + 1 > maxUnlockedChapter}>{SHEET_CHAPTER_PREFIX} {i + 1}{effectiveCompletedFullChapters.has(i + 1) ? ' ✓' : (i + 1 > maxUnlockedChapter ? ' 🔒' : '')}</option>
                                 })}
                             </select>
                         </div>
@@ -3449,7 +3469,7 @@ useEffect(() => {
                       <option value="" disabled hidden>Sheet</option>
                       {Array.from({length: TOTAL_CHAPTERS}, (_, i) => {
                           const col = getColumnName(i);
-                          return <option key={col} value={col}>{SHEET_CHAPTER_PREFIX} {i + 1}{effectiveCompletedFullChapters.has(i + 1) ? ' ✓' : ''}</option>
+                          return <option key={col} value={col} disabled={i + 1 > maxUnlockedChapter}>{SHEET_CHAPTER_PREFIX} {i + 1}{effectiveCompletedFullChapters.has(i + 1) ? ' ✓' : (i + 1 > maxUnlockedChapter ? ' 🔒' : '')}</option>
                       })}
                     </select>
                 </div>
