@@ -869,18 +869,13 @@ export default function MyanmarReaderApp({ entryRequest, onExit }) {
       ])
     : completedChapterSheets;
 
-  // Chapters are meant to be studied in order -- Sheet A then Sheet B, then
-  // the next chapter -- so the chapter picker only unlocks up through
-  // whichever chapter resumePosition currently points at (its Sheet A is
-  // reachable even before it's done, since that's the chapter actually being
-  // worked on). resumePosition starts out null (brand new student, nothing
-  // read yet, no teacher-confirmed progress) -- default that to chapter 1
-  // only, not "everything," so a fresh student starts at the beginning
-  // instead of seeing the whole book unlocked before ever finishing anything.
-  // A student who's actually well ahead isn't blocked forever by this either
-  // -- once the teacher confirms/awards the skipped-ahead chapters (Assign
-  // Lesson's "Lesson completed"), that raises teacherCompletedChapters, which
-  // raises resumePosition/maxUnlockedChapter here too.
+  // Chapters are meant to be studied in order, but a capable student is
+  // allowed to read ahead of that -- this isn't a hard lock, just a label
+  // in the picker ("(ahead)") marking chapters beyond wherever
+  // resumePosition currently points. Whether reading ahead actually earns a
+  // trophy is a separate, teacher-approved decision (see the trophy-request
+  // flow in TutoringApp) -- reading ahead is always allowed, it just isn't
+  // credited until the teacher reviews and approves it.
   const maxUnlockedChapter = resumePosition ? resumePosition.chapterNum : 1;
 
   // Keeps this student's live score for the CURRENT chapter+sheet written to
@@ -3396,7 +3391,7 @@ useEffect(() => {
                 <option value="" disabled hidden>Sheet</option>
                 {Array.from({length: TOTAL_CHAPTERS}, (_, i) => {
                     const col = getColumnName(i);
-                    return <option key={col} value={col} disabled={i + 1 > maxUnlockedChapter}>{SHEET_CHAPTER_PREFIX} {i + 1}{effectiveCompletedFullChapters.has(i + 1) ? ' ✓' : (i + 1 > maxUnlockedChapter ? ' 🔒' : '')}</option>
+                    return <option key={col} value={col}>{SHEET_CHAPTER_PREFIX} {i + 1}{effectiveCompletedFullChapters.has(i + 1) ? ' ✓' : (i + 1 > maxUnlockedChapter ? ' (ahead)' : '')}</option>
                 })}
             </select>
         </div>
@@ -3436,7 +3431,7 @@ useEffect(() => {
                                 <option value="" disabled hidden>Sheet</option>
                                 {Array.from({length: TOTAL_CHAPTERS}, (_, i) => {
                                     const col = getColumnName(i);
-                                    return <option key={col} value={col} disabled={i + 1 > maxUnlockedChapter}>{SHEET_CHAPTER_PREFIX} {i + 1}{effectiveCompletedFullChapters.has(i + 1) ? ' ✓' : (i + 1 > maxUnlockedChapter ? ' 🔒' : '')}</option>
+                                    return <option key={col} value={col}>{SHEET_CHAPTER_PREFIX} {i + 1}{effectiveCompletedFullChapters.has(i + 1) ? ' ✓' : (i + 1 > maxUnlockedChapter ? ' (ahead)' : '')}</option>
                                 })}
                             </select>
                         </div>
@@ -3477,7 +3472,7 @@ useEffect(() => {
                       <option value="" disabled hidden>Sheet</option>
                       {Array.from({length: TOTAL_CHAPTERS}, (_, i) => {
                           const col = getColumnName(i);
-                          return <option key={col} value={col} disabled={i + 1 > maxUnlockedChapter}>{SHEET_CHAPTER_PREFIX} {i + 1}{effectiveCompletedFullChapters.has(i + 1) ? ' ✓' : (i + 1 > maxUnlockedChapter ? ' 🔒' : '')}</option>
+                          return <option key={col} value={col}>{SHEET_CHAPTER_PREFIX} {i + 1}{effectiveCompletedFullChapters.has(i + 1) ? ' ✓' : (i + 1 > maxUnlockedChapter ? ' (ahead)' : '')}</option>
                       })}
                     </select>
                 </div>

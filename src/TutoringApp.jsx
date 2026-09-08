@@ -5972,8 +5972,12 @@ function SmartStudyProgressBadge({ classId, studentName, smartStudyNames, compac
   // for good; see handleSubmitFeedback for the one real path a Smart Study
   // trophy request can come from now.
 
-  if (badError) return null;
-  if (completedCount === null) return null;
+  // Headless tracker only -- it used to render a visible badge, stripped
+  // down to just reporting completedCount up to the parent (see comment
+  // above) but left without a return for the non-null case, so React threw
+  // "nothing was returned from render" once completedCount actually
+  // resolved.
+  return null;
 }
 
 function StudentDashboard({ user, studentProfile, studentUid, announcements, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenMyanmarSpeaking, onOpenConsonantPractice, onOpenBurmeseGame, onOpenNumberLearning, onOpenVowelsLearning, onOpenAnimalSound, onOpenBurmeseLearningGames, onOpenInteractiveQuiz, onOpenMyanmarPoems, onOpenConsonantEndings, onOpenTimeAndCalendar, onOpenMyanmarSpelling, onOpenMyanmarSoundPractice, onOpenReadingMyanmar, onOpenSpeakingMyanmar, onOpenMyanmarPart1And2, onOpenBodhiTree, onLogout }) {
@@ -6493,16 +6497,12 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           setTodayCompletedInput(bothSheetsDone ? '1' : '0.5');
         }
 
-        const fullChapters = Object.entries(sheetStatus).filter(([, s]) => s.A && s.B).map(([ch]) => parseInt(ch));
-
-        // Completed sheets that are part of a fully-done chapter and haven't
-        // been turned into a trophy request yet — both sheets of a chapter
-        // become pending together, so finishing a chapter always requests
-        // exactly 2 trophies at once. Uses the same robust "both sheets
-        // complete" check as above, not just the chapterComplete stamp.
-        const pending = allDocs.filter(d =>
-          d.isComplete && !d.trophyRequested && d.chapterNum != null && fullChapters.includes(d.chapterNum)
-        );
+        // Every completed (score 700+) sheet not yet turned into a trophy
+        // request is its own pending trophy -- 1 for Sheet A, 1 more for
+        // Sheet B, so a full chapter is worth 2 total, same as before, but
+        // each sheet is requested as soon as it's done rather than waiting
+        // for its sibling sheet to also finish.
+        const pending = allDocs.filter(d => d.isComplete && !d.trophyRequested);
         setMyanmarReaderPendingScoreDocs(pending);
         setRequestTrophyAmount(pending.length > 0 ? pending.length : 1);
         setRequestTrophyChecked(pending.length > 0);
@@ -7770,7 +7770,19 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                         classId={extractSmartStudyClassId(lesson.link)}
                         studentName={studentProfile?.name}
                         smartStudyNames={studentProfile?.smartStudyNames || null}
-                        onCountChange={(count) => setSsCompletionCounts(prev => ({ ...prev, [extractSmartStudyClassId(lesson.link)]: count }))}
+                        onCountChange={(count) => setSsCompletionCounts(prev => {
+                          // Bail out (return the SAME object reference) once the
+                          // count stops changing -- this callback is a fresh
+                          // function identity every render, so SmartStudyProgressBadge's
+                          // effect (which depends on it) re-fires every render;
+                          // without this guard, spreading into a new object every
+                          // time re-renders the parent, recreating the callback,
+                          // re-firing the effect -- an infinite loop ("Maximum
+                          // update depth exceeded").
+                          const key = extractSmartStudyClassId(lesson.link);
+                          if (prev[key] === count) return prev;
+                          return { ...prev, [key]: count };
+                        })}
                       />
                     )}
                     {/* One unified message for every app (Smart Study, Abhidhamma,
