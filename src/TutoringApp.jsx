@@ -377,22 +377,14 @@ const DHAMMASCHOOL_MIGRATION_MAP = {
 const CANONICAL_DHAMMASCHOOL_TITLE = 'Dhammaschool Lesson';
 const SMARTSTUDY_MIGRATION_CLASS_IDS = [...new Set(Object.values(SMARTSTUDY_MIGRATION_MAP).flat().map(t => t.classId))];
 
-// A "group" schedule entry represents a whole group's class occurrence in
-// ONE doc (studentUid: 'group', groupId, groupMemberUids: a snapshot of who
-// was in the group when the entry was created, groupAttendance: a map of
-// studentUid -> 'attended'|'absent' filled in per-member instead of the
-// single `overrideStatus` a normal entry uses) so the teacher doesn't have
-// to create one schedule entry per student for a group that's really one
-// class session. This gives a uniform "did THIS student attend THIS entry"
-// answer regardless of entry type, so per-student attendance counts don't
-// need separate logic for group vs. online vs. offline entries.
+// A "Group" schedule entry creates one normal individual entry per member
+// (same shape as a regular Online Student entry) tagged with a shared
+// `groupId` + `groupBatchKey`, rather than one special shared doc -- every
+// existing per-student attendance/session/dashboard query already works on
+// a real studentUid, so this needs no special-casing anywhere else. The
+// groupId is only ever read by the schedule views that cluster same-
+// occurrence entries back together for a collapsed group display.
 const getStudentAttendanceForEntry = (entry, studentUid, sessions) => {
-  if (entry.studentUid === 'group') {
-    const status = entry.groupAttendance?.[studentUid];
-    if (status === 'attended') return 'attended';
-    if (status === 'absent') return 'absent';
-    return 'unmarked';
-  }
   if (entry.overrideStatus === 'attended') return 'attended';
   if (entry.overrideStatus === 'absent') return 'absent';
   if (entry.studentUid !== 'offline') {
@@ -2002,7 +1994,7 @@ const handleUndoTrophyAward = async () => {
     
     let studentUid = null;
     let studentName = '';
-    let groupExtraFields = {};
+    let groupMembers = null; // [{id, name}], only set for scheduleStudentType === 'group'
 
     if (scheduleStudentType === 'online') {
       if (!scheduleSelectedStudentUid) return;
@@ -2012,12 +2004,19 @@ const handleUndoTrophyAward = async () => {
       if (!scheduleSelectedGroupId) return;
       const group = groups.find(g => g.id === scheduleSelectedGroupId);
       if (!group) return;
-      studentUid = 'group';
-      studentName = group.groupName;
-      // Snapshot who's in the group right now -- membership can change later,
-      // and this entry should keep showing whoever was actually in class for
-      // it, not whoever happens to be in the group when someone looks back.
-      groupExtraFields = { groupId: group.id, groupMemberUids: group.studentUids, groupAttendance: {} };
+      // Create ONE normal individual entry per member (same shape as a
+      // regular Online Student entry, tagged with a shared groupId) rather
+      // than a special shared doc -- every existing per-student attendance/
+      // session/dashboard query already works on a real studentUid, so
+      // nothing else needs to know groups exist at all. Snapshot membership
+      // now; it changing later shouldn't retroactively change who this
+      // occurrence's entries belong to.
+      groupMembers = group.studentUids
+        .map(uid => students.find(s => s.id === uid))
+        .filter(Boolean)
+        .map(s => ({ id: s.id, name: s.name }));
+      if (groupMembers.length === 0) return;
+      studentName = group.groupName; // only used for the confirm dialog text below
     } else {
       if (!manualStudentName) return;
       studentUid = 'offline';
@@ -2025,7 +2024,7 @@ const handleUndoTrophyAward = async () => {
     }
 
     if (!manualDate || !manualStartTime || !manualEndTime) return;
-    
+
     const executeAdd = async () => {
       const [startHour, startMinute] = manualStartTime.split(':').map(Number);
       const [endHour, endMinute] = manualEndTime.split(':').map(Number);
@@ -2033,49 +2032,70 @@ const handleUndoTrophyAward = async () => {
       try {
         const [year, month, day] = manualDate.split('-').map(Number);
         const baseStartDate = new Date(year, month - 1, day, startHour, startMinute);
-        const baseEndDate = new Date(year, month - 1, day, endHour, endMinute);
-      
+
+        const occurrenceDates = [];
         if (isRecurring) {
           if (!recurEndDate) return;
           const [endYear, endMonth, endDay] = recurEndDate.split('-').map(Number);
           const finalEntryDate = new Date(endYear, endMonth - 1, endDay, 23, 59, 59);
-          
-          const recurrenceId = getUUID(); 
           let currentLoopDate = new Date(baseStartDate.getTime());
-          
           while (currentLoopDate <= finalEntryDate) {
-            const currentStartTime = new Date(currentLoopDate.getTime());
-            currentStartTime.setHours(startHour, startMinute);
-            
-            const currentEndTime = new Date(currentLoopDate.getTime());
-            currentEndTime.setHours(endHour, endMinute);
-            
-            await addDoc(teacherScheduleCollection, {
-              teacherUid: user.uid,
-              studentUid: studentUid,
-              studentName: studentName,
-              startTime: Timestamp.fromDate(currentStartTime),
-              endTime: Timestamp.fromDate(currentEndTime),
-              isRecurring: true,
-              recurrenceId: recurrenceId,
-              overrideStatus: null,
-              ...groupExtraFields
-            });
+            occurrenceDates.push(new Date(currentLoopDate.getTime()));
             currentLoopDate.setDate(currentLoopDate.getDate() + 7);
           }
         } else {
-          await addDoc(teacherScheduleCollection, {
-            teacherUid: user.uid,
-            studentUid: studentUid,
-            studentName: studentName,
-            startTime: Timestamp.fromDate(baseStartDate),
-            endTime: Timestamp.fromDate(baseEndDate),
-            isRecurring: false,
-            recurrenceId: null,
-            overrideStatus: null,
-            ...groupExtraFields
-          });
+          occurrenceDates.push(baseStartDate);
         }
+        const recurrenceId = isRecurring ? getUUID() : null;
+
+        let batch = writeBatch(db);
+        let opCount = 0;
+        const addToBatch = async (data) => {
+          batch.set(doc(teacherScheduleCollection), data);
+          opCount++;
+          if (opCount >= 400) { await batch.commit(); batch = writeBatch(db); opCount = 0; }
+        };
+
+        for (const occDate of occurrenceDates) {
+          const currentStartTime = new Date(occDate.getTime());
+          currentStartTime.setHours(startHour, startMinute);
+          const currentEndTime = new Date(occDate.getTime());
+          currentEndTime.setHours(endHour, endMinute);
+
+          if (groupMembers) {
+            // Distinguishes this specific occurrence's entries from any
+            // other occurrence of the same group (e.g. next week's class),
+            // so schedule views can cluster "the same class session"
+            // without accidentally merging different days together.
+            const groupBatchKey = `${scheduleSelectedGroupId}_${currentStartTime.getTime()}`;
+            for (const member of groupMembers) {
+              await addToBatch({
+                teacherUid: user.uid,
+                studentUid: member.id,
+                studentName: member.name,
+                startTime: Timestamp.fromDate(currentStartTime),
+                endTime: Timestamp.fromDate(currentEndTime),
+                isRecurring: !!isRecurring,
+                recurrenceId,
+                overrideStatus: null,
+                groupId: scheduleSelectedGroupId,
+                groupBatchKey,
+              });
+            }
+          } else {
+            await addToBatch({
+              teacherUid: user.uid,
+              studentUid,
+              studentName,
+              startTime: Timestamp.fromDate(currentStartTime),
+              endTime: Timestamp.fromDate(currentEndTime),
+              isRecurring: !!isRecurring,
+              recurrenceId,
+              overrideStatus: null,
+            });
+          }
+        }
+        await batch.commit();
         setManualStudentName('');
         setScheduleSelectedGroupId('');
       } catch (error) {
@@ -2086,10 +2106,12 @@ const handleUndoTrophyAward = async () => {
     setShowConfirmModal({
       isOpen: true,
       title: 'Add Schedule Entry',
-      message: `Are you sure you want to add this schedule entry for ${studentName}?`,
+      message: groupMembers
+        ? `Are you sure you want to add this schedule entry for the "${studentName}" group (${groupMembers.length} students)?`
+        : `Are you sure you want to add this schedule entry for ${studentName}?`,
       onConfirm: () => {
         executeAdd();
-        setShowConfirmModal({ isOpen: false }); 
+        setShowConfirmModal({ isOpen: false });
       },
       confirmText: 'Add',
       confirmColor: 'bg-emerald-500 hover:bg-emerald-600'
@@ -3586,17 +3608,6 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
     teacherSchedule.forEach(entry => {
        const entryDate = entry.startTime.toDate();
        if (entryDate > now) return;
-
-       if (entry.studentUid === 'group') {
-         // One group entry represents several students -- tally each
-         // member's own attendance separately instead of counting the
-         // whole entry once (which would wildly understate a group class).
-         (entry.groupMemberUids || []).forEach(uid => {
-           const status = getStudentAttendanceForEntry(entry, uid, sessions);
-           tally(status === 'attended', status === 'absent', entryDate);
-         });
-         return;
-       }
 
        const status = getStudentAttendanceForEntry(entry, entry.studentUid, sessions);
        tally(status === 'attended', status === 'absent', entryDate);
@@ -6029,22 +6040,6 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     return () => unsubscribe();
   }, [studentUid]);
 
-  // Group schedule entries (see getStudentAttendanceForEntry) never have
-  // studentUid === this student, so the query above never sees them -- a
-  // Parami student's own attendance count would otherwise silently miss
-  // every group class they were actually part of.
-  const [myGroupSchedule, setMyGroupSchedule] = useState([]);
-  useEffect(() => {
-    if (!studentUid) return;
-    const q = query(teacherScheduleCollection, where("groupMemberUids", "array-contains", studentUid));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      setMyGroupSchedule(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => {
-      console.error("Error fetching student group schedule:", error);
-    });
-    return () => unsubscribe();
-  }, [studentUid]);
-
   useEffect(() => {
     const checkSchedule = () => {
       const now = new Date();
@@ -6189,7 +6184,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     let monthAttended = 0, monthAbsent = 0;
     let yearAttended = 0, yearAbsent = 0;
 
-    [...mySchedule, ...myGroupSchedule].forEach(entry => {
+    mySchedule.forEach(entry => {
        const entryDate = entry.startTime.toDate();
        if (entryDate > now) return;
 
@@ -6210,7 +6205,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     });
 
     return { monthAttended, monthAbsent, yearAttended, yearAbsent };
-  }, [mySchedule, myGroupSchedule, mySessions, studentUid]);
+  }, [mySchedule, mySessions, studentUid]);
 
   const handleStartLesson = async (lesson) => {
     if (lesson.link && lesson.link.startsWith('dhammaschool://')) {
@@ -7736,17 +7731,23 @@ function WeeklySchedule({ role, targetStudentUid }) {
   const [schedule, setSchedule] = useState([]);
   const [sessions, setSessions] = useState([]);
   const [students, setStudents] = useState([]);
+  const [groups, setGroups] = useState([]);
   const [weekOffset, setWeekOffset] = useState(0);
 
   const [showCountModal, setShowCountModal] = useState(false);
   const [modalData, setModalData] = useState({ name: '', attended: 0, total: 0, loading: false });
   const [showOverrideModal, setShowOverrideModal] = useState({ isOpen: false, entry: null, newStatus: null });
-  const [expandedGroupEntryId, setExpandedGroupEntryId] = useState(null);
+  const [expandedGroupBatchKey, setExpandedGroupBatchKey] = useState(null);
   const myEntryRef = useRef(null);
   const hasScrolledToMineRef = useRef(false);
 
   useEffect(() => {
     const unsub = onSnapshot(studentsCollection, (snap) => setStudents(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    const unsub = onSnapshot(groupsCollection, (snap) => setGroups(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
     return () => unsub();
   }, []);
   
@@ -7910,16 +7911,16 @@ function WeeklySchedule({ role, targetStudentUid }) {
     setShowOverrideModal({ isOpen: false, entry: null, newStatus: null });
   };
 
-  // Group entries store attendance per-member instead of a single
-  // overrideStatus (see getStudentAttendanceForEntry) -- no confirmation
-  // dialog here since marking one of several members is low-stakes and
-  // easily correctable, unlike overriding a whole entry.
-  const setGroupMemberAttendance = async (entry, memberUid, status) => {
+  // Used for marking one member within an expanded group cluster -- no
+  // confirmation dialog, unlike openOverrideModal/confirmOverride above,
+  // since correcting one of several members is low-stakes and should be a
+  // single tap, not a popup each time.
+  const quickSetAttendance = async (entry, status) => {
     try {
       const docRef = doc(db, `${publicDataPath}/teacherSchedule`, entry.id);
-      await updateDoc(docRef, { [`groupAttendance.${memberUid}`]: status });
+      await updateDoc(docRef, { overrideStatus: status });
     } catch (error) {
-      console.error("Error setting group member attendance:", error);
+      console.error("Error setting attendance:", error);
     }
   };
 
@@ -7949,42 +7950,115 @@ function WeeklySchedule({ role, targetStudentUid }) {
             return entryDate.getDate() === day.getDate() && entryDate.getMonth() === day.getMonth() && entryDate.getFullYear() === day.getFullYear();
           });
 
+          // Cluster same-occurrence Group entries into one display item for
+          // the teacher's view (the teacher picked "Group" once, so it
+          // should look like one class session, not N separate rows) -- a
+          // student's own schedule never clusters, every entry there is
+          // simply theirs like any other online entry.
+          const displayItems = targetStudentUid
+            ? dayEntries.map(entry => ({ isCluster: false, entry, sortTime: entry.startTime.toDate() }))
+            : (() => {
+                const clusters = {};
+                const items = [];
+                dayEntries.forEach(entry => {
+                  if (entry.groupBatchKey) {
+                    if (!clusters[entry.groupBatchKey]) {
+                      const cluster = { isCluster: true, groupBatchKey: entry.groupBatchKey, entries: [], sortTime: entry.startTime.toDate() };
+                      clusters[entry.groupBatchKey] = cluster;
+                      items.push(cluster);
+                    }
+                    clusters[entry.groupBatchKey].entries.push(entry);
+                  } else {
+                    items.push({ isCluster: false, entry, sortTime: entry.startTime.toDate() });
+                  }
+                });
+                items.forEach(item => { if (item.isCluster) item.entries.sort((a, b) => a.studentName.localeCompare(b.studentName)); });
+                return items.sort((a, b) => a.sortTime - b.sortTime);
+              })();
+
           return (
             <div key={day.toISOString()} className="bg-white/90 backdrop-blur-sm p-4 rounded-xl shadow-lg border border-gray-200">
               <h4 className="font-bold text-lg text-gray-800 border-b pb-2 mb-3">
                 {day.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
               </h4>
               <div className="space-y-2">
-                {dayEntries.length === 0 ? (
+                {displayItems.length === 0 ? (
                   <p className="text-gray-500">No sessions scheduled.</p>
                 ) : (
-                  dayEntries.map(entry => {
+                  displayItems.map(item => {
+                    if (item.isCluster) {
+                      const first = item.entries[0];
+                      const groupName = groups.find(g => g.id === first.groupId)?.groupName || 'Group';
+                      const isPast = first.endTime.toDate() < new Date();
+                      const statuses = item.entries.map(e => getStudentAttendanceForEntry(e, e.studentUid, sessions));
+                      const attendedCount = statuses.filter(s => s === 'attended').length;
+                      const absentCount = statuses.filter(s => s === 'absent').length;
+                      const isExpanded = expandedGroupBatchKey === item.groupBatchKey;
+
+                      return (
+                        <div key={item.groupBatchKey} className={`rounded-lg ${absentCount > 0 ? 'bg-orange-50' : 'bg-violet-50'}`}>
+                          <button
+                            onClick={() => setExpandedGroupBatchKey(isExpanded ? null : item.groupBatchKey)}
+                            className="w-full text-left p-3"
+                          >
+                            <p className="font-semibold text-violet-900">
+                              <span className="mr-1">{isExpanded ? '▾' : '▸'}</span>
+                              {groupName}
+                            </p>
+                            <p className="text-sm text-gray-700">
+                              {formatTime(first.startTime)} - {formatTime(first.endTime)}
+                              {first.isRecurring && <span className="ml-2 text-xs font-medium bg-violet-200 text-violet-800 px-2 py-0.5 rounded-full">Recurring</span>}
+                              <span className="ml-2 text-xs font-bold text-emerald-700">{attendedCount} attended</span>
+                              <span className="ml-2 text-xs font-bold text-red-700">{absentCount} absent</span>
+                              <span className="ml-2 text-xs text-gray-500">/ {item.entries.length} total</span>
+                            </p>
+                          </button>
+
+                          {isExpanded && (
+                            <div className="px-3 pb-3 space-y-1">
+                              {item.entries.map((entry, i) => {
+                                const status = statuses[i];
+                                return (
+                                  <div key={entry.id} className="flex items-center justify-between bg-white/70 rounded-lg px-3 py-2">
+                                    <span className="text-sm font-medium text-gray-800">{entry.studentName}</span>
+                                    <div className="flex items-center gap-1">
+                                      {role === 'teacher' && isPast && (
+                                        <>
+                                          <button
+                                            onClick={() => quickSetAttendance(entry, 'attended')}
+                                            className={`text-xs font-semibold px-2 py-1 rounded-full ${status === 'attended' ? 'bg-emerald-500 text-white' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}`}
+                                          >
+                                            ✓ Attended
+                                          </button>
+                                          <button
+                                            onClick={() => quickSetAttendance(entry, 'absent')}
+                                            className={`text-xs font-semibold px-2 py-1 rounded-full ${status === 'absent' ? 'bg-red-500 text-white' : 'bg-red-50 text-red-700 hover:bg-red-100'}`}
+                                          >
+                                            ✕ Absent
+                                          </button>
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    }
+
+                    const entry = item.entry;
                     const startOfDay = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, 0, 0);
                     const endOfDay = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 23, 59, 59);
 
-                    const isGroup = entry.studentUid === 'group';
-                    const isOnline = entry.studentUid !== 'offline' && !isGroup;
+                    const isOnline = entry.studentUid !== 'offline';
                     const isPast = entry.endTime.toDate() < new Date();
                     let attendanceStatus = 'upcoming';
                     let bgColor = 'bg-violet-50';
                     let attendanceTime = null;
-                    let groupSummary = null; // {markedCount, totalCount} for the teacher's collapsed row
 
-                    if (isGroup) {
-                      const memberUids = entry.groupMemberUids || [];
-                      if (targetStudentUid) {
-                        // A specific student's own schedule view -- show
-                        // just their own status within the group entry.
-                        const myStatus = getStudentAttendanceForEntry(entry, targetStudentUid, sessions);
-                        if (myStatus === 'attended') { attendanceStatus = 'attended'; bgColor = 'bg-emerald-100'; }
-                        else if (myStatus === 'absent') { attendanceStatus = 'absent'; bgColor = 'bg-red-100'; }
-                        else if (isPast) { attendanceStatus = 'unmarked'; bgColor = 'bg-orange-50'; }
-                      } else {
-                        const markedCount = memberUids.filter(uid => entry.groupAttendance?.[uid]).length;
-                        groupSummary = { markedCount, totalCount: memberUids.length };
-                        bgColor = isPast && markedCount < memberUids.length ? 'bg-orange-50' : 'bg-violet-50';
-                      }
-                    } else if (entry.overrideStatus === 'attended') {
+                    if (entry.overrideStatus === 'attended') {
                         attendanceStatus = 'attended'; bgColor = 'bg-emerald-100';
                     } else if (entry.overrideStatus === 'absent') {
                         attendanceStatus = 'absent'; bgColor = 'bg-red-100';
@@ -8004,86 +8078,41 @@ function WeeklySchedule({ role, targetStudentUid }) {
                       }
                     }
 
-                    const isMine = targetStudentUid && (entry.studentUid === targetStudentUid || (isGroup && (entry.groupMemberUids || []).includes(targetStudentUid)));
-
-                    const isGroupTeacherRow = isGroup && !targetStudentUid;
-                    const isExpanded = expandedGroupEntryId === entry.id;
+                    const isMine = targetStudentUid && entry.studentUid === targetStudentUid;
 
                     return (
-                      <div key={entry.id} ref={isMine ? myEntryRef : null} className={`rounded-lg ${bgColor} ${isMine ? 'ring-2 ring-indigo-500' : ''}`}>
-                        <div className="p-3 flex items-center justify-between">
-                          <div className="flex items-center">
-                            <div className="w-3 h-3 rounded-full mr-3 flex-shrink-0" style={{ backgroundColor: stringToColor(entry.studentName) }}></div>
-                            <button
-                              onClick={() => isGroupTeacherRow ? setExpandedGroupEntryId(isExpanded ? null : entry.id) : openCountModal(entry.studentUid, entry.studentName)}
-                              className="text-left disabled:cursor-not-allowed"
-                            >
-                              <p className={`font-semibold ${attendanceStatus === 'absent' ? 'text-red-900' : (attendanceStatus === 'attended' ? 'text-emerald-900' : 'text-violet-900')}`}>
-                                {isGroupTeacherRow && <span className="mr-1">{isExpanded ? '▾' : '▸'}</span>}
-                                {entry.studentName}{isMine && <span className="ml-2 text-xs font-bold text-indigo-600">(You)</span>}
-                              </p>
-                              <p className="text-sm text-gray-700">
-                                {formatTime(entry.startTime)} - {formatTime(entry.endTime)}
-                                 {entry.isRecurring && <span className="ml-2 text-xs font-medium bg-violet-200 text-violet-800 px-2 py-0.5 rounded-full">Recurring</span>}
-                                {groupSummary && <span className="ml-2 text-xs font-bold text-violet-700">({groupSummary.markedCount}/{groupSummary.totalCount} marked)</span>}
-                                {attendanceStatus === 'attended' && <span className="ml-2 text-xs font-bold text-emerald-700">(Attended{attendanceTime ? ` at ${formatTime(attendanceTime)}` : ''})</span>}
-                                {attendanceStatus === 'absent' && <span className="ml-2 text-xs font-bold text-red-700">(Absent)</span>}
-                              </p>
-                            </button>
-                          </div>
-
-                          {role === 'teacher' && isPast && !isGroup && (
-                            <div className="flex space-x-1 flex-shrink-0">
-                              {attendanceStatus !== 'attended' && (
-                                <button onClick={() => openOverrideModal(entry, 'attended')} title="Mark Attended" className="p-1 rounded-full text-emerald-600 hover:bg-emerald-200">
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
-                                </button>
-                              )}
-                              {attendanceStatus !== 'absent' && (
-                                <button onClick={() => openOverrideModal(entry, 'absent')} title="Mark Absent" className="p-1 rounded-full text-red-600 hover:bg-red-200">
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" /></svg>
-                                </button>
-                              )}
-                              {entry.overrideStatus && (
-                                <button onClick={() => openOverrideModal(entry, null)} title="Reset to Automatic" className="p-1 rounded-full text-indigo-600 hover:bg-indigo-200">
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M8 3a1 1 0 011 1v2.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 111.414-1.414L8 6.586V4a1 1 0 011-1zM12 10a1 1 0 01-1 1H8a1 1 0 010-2h3a1 1 0 011 1zM11.414 13.293a1 1 0 01-1.414 0l-3-3a1 1 0 011.414-1.414L10 13.586l1.293-1.293a1 1 0 011.414 1.414l-3 3z" clipRule="evenodd" /><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm0-2a6 6 0 100-12 6 6 0 000 12z" clipRule="evenodd" /></svg>
-                                </button>
-                              )}
-                            </div>
-                          )}
+                      <div key={entry.id} ref={isMine ? myEntryRef : null} className={`p-3 rounded-lg flex items-center justify-between ${bgColor} ${isMine ? 'ring-2 ring-indigo-500' : ''}`}>
+                        <div className="flex items-center">
+                          <div className="w-3 h-3 rounded-full mr-3 flex-shrink-0" style={{ backgroundColor: stringToColor(entry.studentName) }}></div>
+                          <button onClick={() => openCountModal(entry.studentUid, entry.studentName)} className="text-left disabled:cursor-not-allowed">
+                            <p className={`font-semibold ${attendanceStatus === 'absent' ? 'text-red-900' : (attendanceStatus === 'attended' ? 'text-emerald-900' : 'text-violet-900')}`}>
+                              {entry.studentName}{isMine && <span className="ml-2 text-xs font-bold text-indigo-600">(You)</span>}
+                            </p>
+                            <p className="text-sm text-gray-700">
+                              {formatTime(entry.startTime)} - {formatTime(entry.endTime)}
+                               {entry.isRecurring && <span className="ml-2 text-xs font-medium bg-violet-200 text-violet-800 px-2 py-0.5 rounded-full">Recurring</span>}
+                              {attendanceStatus === 'attended' && <span className="ml-2 text-xs font-bold text-emerald-700">(Attended{attendanceTime ? ` at ${formatTime(attendanceTime)}` : ''})</span>}
+                              {attendanceStatus === 'absent' && <span className="ml-2 text-xs font-bold text-red-700">(Absent)</span>}
+                            </p>
+                          </button>
                         </div>
 
-                        {isGroupTeacherRow && isExpanded && (
-                          <div className="px-3 pb-3 space-y-1">
-                            {(entry.groupMemberUids || []).length === 0 ? (
-                              <p className="text-sm text-gray-500">This group had no members when the entry was created.</p>
-                            ) : (
-                              (entry.groupMemberUids || [])
-                                .map(uid => students.find(s => s.id === uid))
-                                .filter(Boolean)
-                                .sort((a, b) => a.name.localeCompare(b.name))
-                                .map(member => {
-                                  const memberStatus = entry.groupAttendance?.[member.id] || null;
-                                  return (
-                                    <div key={member.id} className="flex items-center justify-between bg-white/70 rounded-lg px-3 py-2">
-                                      <span className="text-sm font-medium text-gray-800">{member.name}</span>
-                                      <div className="flex gap-1">
-                                        <button
-                                          onClick={() => setGroupMemberAttendance(entry, member.id, 'attended')}
-                                          className={`text-xs font-semibold px-2 py-1 rounded-full ${memberStatus === 'attended' ? 'bg-emerald-500 text-white' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}`}
-                                        >
-                                          ✓ Attended
-                                        </button>
-                                        <button
-                                          onClick={() => setGroupMemberAttendance(entry, member.id, 'absent')}
-                                          className={`text-xs font-semibold px-2 py-1 rounded-full ${memberStatus === 'absent' ? 'bg-red-500 text-white' : 'bg-red-50 text-red-700 hover:bg-red-100'}`}
-                                        >
-                                          ✕ Absent
-                                        </button>
-                                      </div>
-                                    </div>
-                                  );
-                                })
+                        {role === 'teacher' && isPast && (
+                          <div className="flex space-x-1 flex-shrink-0">
+                            {attendanceStatus !== 'attended' && (
+                              <button onClick={() => openOverrideModal(entry, 'attended')} title="Mark Attended" className="p-1 rounded-full text-emerald-600 hover:bg-emerald-200">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
+                              </button>
+                            )}
+                            {attendanceStatus !== 'absent' && (
+                              <button onClick={() => openOverrideModal(entry, 'absent')} title="Mark Absent" className="p-1 rounded-full text-red-600 hover:bg-red-200">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" /></svg>
+                              </button>
+                            )}
+                            {entry.overrideStatus && (
+                              <button onClick={() => openOverrideModal(entry, null)} title="Reset to Automatic" className="p-1 rounded-full text-indigo-600 hover:bg-indigo-200">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M8 3a1 1 0 011 1v2.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 111.414-1.414L8 6.586V4a1 1 0 011-1zM12 10a1 1 0 01-1 1H8a1 1 0 010-2h3a1 1 0 011 1zM11.414 13.293a1 1 0 01-1.414 0l-3-3a1 1 0 011.414-1.414L10 13.586l1.293-1.293a1 1 0 011.414 1.414l-3 3z" clipRule="evenodd" /><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm0-2a6 6 0 100-12 6 6 0 000 12z" clipRule="evenodd" /></svg>
+                              </button>
                             )}
                           </div>
                         )}
@@ -8161,19 +8190,6 @@ function YearAttendanceBoard({ role, targetStudentUid }) {
       teacherSchedule.forEach(sched => {
         const entryDate = sched.startTime.toDate();
         if (entryDate > now || entryDate < startOfYear) return;
-
-        if (sched.studentUid === 'group') {
-          // A group entry is one doc shared by several real students -- only
-          // ever relevant to online entries (a group is made of real
-          // students), and only counts for the specific members who were
-          // actually in it, via the entry's own per-member attendance map.
-          if (entry.isOffline || !(sched.groupMemberUids || []).includes(entry.id)) return;
-          const status = getStudentAttendanceForEntry(sched, entry.id, sessions);
-          if (status === 'attended') attended++;
-          else if (status === 'absent') absent++;
-          // 'unmarked' group occurrences don't count either way yet.
-          return;
-        }
 
         const isMatch = entry.isOffline
           ? (sched.studentUid === 'offline' && sched.studentName === entry.name)
