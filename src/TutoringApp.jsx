@@ -219,6 +219,32 @@ const GROUP_PARTS_BY_SCHEME = {
   'speakingmyanmar://': SPEAKING_MYANMAR_PARTS,
   'myanmarpart1and2://': MYANMAR_PART1AND2_PARTS,
 };
+// Reading Myanmar / Speaking Myanmar track no student name, score, or class
+// id at all, so there's no live lesson count to derive a trophy max from
+// the way Smart Study/Abhidhamma/Dhammaschool do. Each part's max is simply
+// carried over from the old individual lesson it replaced (see
+// GROUP_APP_MIGRATIONS) so "Trophy Status" has a real number to show
+// instead of silently not rendering at all (which is what happened before
+// this existed, since maxAvailable fell back to the bare Lesson Bank
+// entry's own trophyLimit -- 0, since it was never individually set).
+const GROUP_APP_PART_MAX = {
+  'readingmyanmar://': {
+    consonantpractice: 7,
+    burmesegame: 19,
+    vowelslearning: 11,
+    myanmarspelling: 20,
+    consonantendings: 7,
+    soundpractice: 14,
+  },
+  'speakingmyanmar://': {
+    myanmarpoems: 25,
+    numberlearning: 16,
+    animalsound: 5,
+    burmeselearninggames: 20,
+    interactivequiz: 5,
+    timeandcalendar: 3,
+  },
+};
 const extractGroupPartKey = (link) => {
   if (!link) return null;
   for (const scheme of Object.keys(GROUP_PARTS_BY_SCHEME)) {
@@ -1031,16 +1057,8 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyan
   const [sendStudentSearch, setSendStudentSearch] = useState(''); 
   const [isSendDropdownOpen, setIsSendDropdownOpen] = useState(false); 
   const [directTrophyAmount, setDirectTrophyAmount] = useState(1);
-  const [previouslyEarnedOverride, setPreviouslyEarnedOverride] = useState('');
-  const [completedUnitOverride, setCompletedUnitOverride] = useState('');
-  const [isSavingCompletedUnit, setIsSavingCompletedUnit] = useState(false);
-  const [isSavingPreviouslyEarned, setIsSavingPreviouslyEarned] = useState(false);
   const [isReconcilingAllClasses, setIsReconcilingAllClasses] = useState(false);
   const [wholeAppMaxAvailable, setWholeAppMaxAvailable] = useState(null); // sum of each class's own max-available
-  useEffect(() => {
-    setPreviouslyEarnedOverride('');
-    setCompletedUnitOverride('');
-  }, [selectedStudentUid, selectedBankLessonId, sendSmartStudyClassId, sendAbhidhammaClassId, sendDhammaschoolClassId]);
 
   // When no specific class is chosen, "Max Available" for the whole app must be
   // the SUM of each class's own max-available (floor(classLessons/5) per class)
@@ -1770,78 +1788,18 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyan
     }
 
     const isLinkedApp = lesson.link === 'smartstudy://' || lesson.link?.startsWith('abhidhamma://') || lesson.link?.startsWith('dhammaschool://');
+    const groupPartMax = GROUP_APP_PART_MAX[lesson.link]?.[classId];
     // Dhammaschool's real trophy rate is 2 per lesson (confirmed by the
     // teacher -- a 40-lesson grade is worth 80), not the round(lessons/5)
     // formula Smart Study/Abhidhamma use.
     const maxAvailable = lessonCount != null
       ? (lesson.link?.startsWith('dhammaschool://') ? lessonCount * 2 : computeClassTrophyMax(lessonCount))
-      : (isLinkedApp && wholeAppMaxAvailable != null ? wholeAppMaxAvailable : (lesson.trophyLimit || 0));
+      : groupPartMax != null
+        ? groupPartMax
+        : (isLinkedApp && wholeAppMaxAvailable != null ? wholeAppMaxAvailable : (lesson.trophyLimit || 0));
     const unitCount = lessonCount != null ? lessonCount : (lesson.unitCount || 0);
     const lessonKey = computeLessonKey(lesson.title, effectiveLink);
     return { maxAvailable, unitCount, lessonKey, classId };
-  };
-
-  // Lets the teacher directly SET the correct "Previously Earned" baseline for
-  // a specific class — a one-time reconciliation tool. Old trophy totals were
-  // accumulated under a shared title-only key across every class ever sent
-  // under that Lesson Bank entry, so they can't be automatically split back
-  // out per class (trophies were awarded in manual batches, not 1-per-lesson,
-  // so completed-lesson count alone can't reverse-engineer the true number).
-  // The teacher can see "Student Progress" (real completed-lesson count) right
-  // above this to help them judge the right number from memory/records, enter
-  // it once here, and going forward the app tracks that class correctly on
-  // its own — this does NOT add new trophies, it only corrects the stored
-  // starting point so "Remaining to Award" is accurate and nothing gets
-  // double-awarded.
-  const handleSetPreviouslyEarned = async (lessonKey, maxAvailable) => {
-    const student = students.find(s => s.id === selectedStudentUid);
-    if (!student) return;
-    const newValue = parseInt(previouslyEarnedOverride);
-    if (isNaN(newValue) || newValue < 0) {
-      alert('Please enter a valid number (0 or more).');
-      return;
-    }
-    if (newValue > maxAvailable) {
-      alert(`Can't be more than Max Available (${maxAvailable}).`);
-      return;
-    }
-    setIsSavingPreviouslyEarned(true);
-    try {
-      await updateDoc(doc(db, `${publicDataPath}/students`, student.id), {
-        [`earnedTrophies.${lessonKey}`]: newValue
-      });
-      setPreviouslyEarnedOverride('');
-    } catch (err) {
-      console.error('Error setting Previously Earned:', err);
-      alert('Error saving. Please try again.');
-    }
-    setIsSavingPreviouslyEarned(false);
-  };
-
-  // Same idea as handleSetPreviouslyEarned, but for completedUnits — some
-  // lessons (Myanmar Reader in particular) have no live class API to pull
-  // the real progress number from, so completedUnits[lessonKey] is just
-  // whatever was last stored, and can go stale (e.g. Sheet A/Sheet B used to
-  // get double-counted as separate chapters before that was fixed).
-  const handleSetCompletedUnit = async (lessonKey) => {
-    const student = students.find(s => s.id === selectedStudentUid);
-    if (!student) return;
-    const newValue = parseInt(completedUnitOverride);
-    if (isNaN(newValue) || newValue < 0) {
-      alert('Please enter a valid number (0 or more).');
-      return;
-    }
-    setIsSavingCompletedUnit(true);
-    try {
-      await updateDoc(doc(db, `${publicDataPath}/students`, student.id), {
-        [`completedUnits.${lessonKey}`]: newValue
-      });
-      setCompletedUnitOverride('');
-    } catch (err) {
-      console.error('Error setting Completed Unit:', err);
-      alert('Error saving. Please try again.');
-    }
-    setIsSavingCompletedUnit(false);
   };
 
   // One-click bulk reconciliation: for a student who has fully finished a
@@ -1850,7 +1808,7 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyan
   // sets Previously Earned = Max Available for every FULLY-completed class in
   // one pass, without touching classes that are only partially done (those
   // still need a manual look, since partial trophy history can't be
-  // reconstructed automatically — see handleSetPreviouslyEarned).
+  // reconstructed automatically).
   const handleReconcileAllAbhidhammaClasses = async () => {
     const student = students.find(s => s.id === selectedStudentUid);
     const lesson = lessonBank.find(l => l.id === selectedBankLessonId);
@@ -4312,7 +4270,10 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
               const dhammaschoolClassForTrophy = (isDhammaschoolForTrophy && sendDhammaschoolClassId && dhammaschoolStudentProgress?.totalLessons != null)
                 ? { classId: sendDhammaschoolClassId, lessonCount: dhammaschoolStudentProgress.totalLessons }
                 : null;
-              const anyClassForTrophy = ssClassForTrophy || abhiClassForTrophy || dhammaschoolClassForTrophy;
+              const groupPartForTrophy = (GROUP_PARTS_BY_SCHEME[lesson.link] && sendGroupPartKey)
+                ? { classId: groupPartLabel(lesson.link, sendGroupPartKey) || sendGroupPartKey }
+                : null;
+              const anyClassForTrophy = ssClassForTrophy || abhiClassForTrophy || dhammaschoolClassForTrophy || groupPartForTrophy;
               const effectiveUnitCountForDisplay = anyClassForTrophy
                 ? (anyClassForTrophy.lessonCount || 0)
                 : (lesson.unitCount || 0);
@@ -4381,32 +4342,6 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                             <p className="text-sm text-indigo-700">No progress reported yet for this lesson.</p>
                           );
                         })()}
-                        {/* One-time correction tool — for lessons like Myanmar Reader that
-                            don't have a live class API to pull the real number from, this
-                            value is just whatever was last stored in completedUnits, which
-                            can go stale (e.g. it briefly counted Sheet A and Sheet B as
-                            separate chapters, doubling the number). Only shown when there's
-                            no live-fetched count overriding it. */}
-                        {!isAbhiForTrophy && !isDhammaschoolForTrophy && !ssClassForTrophy && ssStudentTotalCount == null && (
-                          <div className="flex items-center gap-2 mt-2 pt-2 border-t border-indigo-200">
-                            <label className="text-xs text-indigo-700 font-semibold whitespace-nowrap">Fix Completed Chapter:</label>
-                            <input
-                              type="number" min="0"
-                              value={completedUnitOverride}
-                              onChange={(e) => setCompletedUnitOverride(e.target.value)}
-                              placeholder={String(completedUnit)}
-                              className="w-20 p-1.5 border-2 border-indigo-300 rounded-lg text-center font-bold text-indigo-900 text-sm"
-                            />
-                            <button
-                              type="button"
-                              disabled={isSavingCompletedUnit || completedUnitOverride === ''}
-                              onClick={() => handleSetCompletedUnit(lessonKey)}
-                              className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700 disabled:opacity-50"
-                            >
-                              {isSavingCompletedUnit ? 'Saving...' : 'Save'}
-                            </button>
-                          </div>
-                        )}
                       </div>
                     )}
 
@@ -4420,27 +4355,6 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                           <li>Previously Earned: <strong>{previouslyEarned}</strong></li>
                           <li>Remaining to Award: <strong>{remaining}</strong></li>
                         </ul>
-
-                        {/* One-time correction tool — see handleSetPreviouslyEarned for why
-                            this can't just be auto-recalculated from completed lessons. */}
-                        <div className="flex items-center gap-2 mb-3 pb-3 border-b border-yellow-200">
-                          <label className="text-xs text-yellow-700 font-semibold whitespace-nowrap">Fix Previously Earned:</label>
-                          <input
-                            type="number" min="0" max={maxAvailable}
-                            value={previouslyEarnedOverride}
-                            onChange={(e) => setPreviouslyEarnedOverride(e.target.value)}
-                            placeholder={String(previouslyEarned)}
-                            className="w-20 p-1.5 border-2 border-yellow-300 rounded-lg text-center font-bold text-yellow-900 text-sm"
-                          />
-                          <button
-                            type="button"
-                            disabled={isSavingPreviouslyEarned || previouslyEarnedOverride === ''}
-                            onClick={() => handleSetPreviouslyEarned(lessonKey, maxAvailable)}
-                            className="px-3 py-1.5 bg-yellow-600 text-white rounded-lg text-xs font-bold hover:bg-yellow-700 disabled:opacity-50"
-                          >
-                            {isSavingPreviouslyEarned ? 'Saving...' : 'Save'}
-                          </button>
-                        </div>
 
                         {/* Bulk one-click action: only shows in the "whole app" view (no
                             specific class chosen) — auto-confirms trophies for every class
