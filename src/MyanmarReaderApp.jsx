@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Play, Volume2, Delete, RotateCcw, BookOpen, DownloadCloud, FileText, Library, Settings, X, Plus, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { collection, doc, getDoc, getDocs, setDoc, updateDoc, onSnapshot, query, where, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, setDoc, updateDoc, onSnapshot, query, where, serverTimestamp, increment } from 'firebase/firestore';
 import { auth, db } from './firebase';
 
 const MYANMAR_READER_APP_ID = 'myanmar-reader-app';
@@ -643,10 +643,19 @@ export default function MyanmarReaderApp({ entryRequest, onExit }) {
   const [linkIdError, setLinkIdError] = useState('');
   const [nameInput, setNameInput] = useState('');
   const [trophyCount, setTrophyCount] = useState(0);
+  // Gold coins are a separate, always-on reward from trophies -- every point
+  // of reading score earns 1 coin, whether or not that reading ever turns
+  // into a teacher-approved trophy, so a student always gets something for
+  // showing up and reading. Persisted lifetime total on this student's own
+  // roster doc (not the per-chapter/sheet "SCORE" box, which resets on every
+  // new chapter). Meant to be spent in a Shop later.
+  const [coinBalance, setCoinBalance] = useState(0);
   // Set of "chapterNum_sheetName" keys already completed (score reached 700+)
   const [completedChapterSheets, setCompletedChapterSheets] = useState(new Set());
   const [completedFullChapters, setCompletedFullChapters] = useState(new Set()); // chapter numbers where BOTH sheets are done
   const [resumePosition, setResumePosition] = useState(null); // {chapterNum, sheetName} — furthest point reached
+  const [lastActivePosition, setLastActivePosition] = useState(null); // {chapterNum, sheetName, index} — exact spot last reading, for auto-resume on reopen
+  const [hasAutoResumedOnce, setHasAutoResumedOnce] = useState(false);
   const [showGoToSheetBPrompt, setShowGoToSheetBPrompt] = useState(null); // chapterNum, or null
   const [onlineStudents, setOnlineStudents] = useState([]); // full roster docs, for the shared panel below
   const [showOnlinePanel, setShowOnlinePanel] = useState(false);
@@ -680,6 +689,19 @@ export default function MyanmarReaderApp({ entryRequest, onExit }) {
 
   const readerRosterDocRef = (name) => doc(db, READER_ROSTER_PATH, sanitizeReaderKey(name));
   const chapterSheetKey = (chapterNum, sheetName) => `${chapterNum}_${sheetName}`;
+
+  // Every point of score earned bumps both the current chapter/sheet's
+  // "SCORE" box (resets on the next chapter) AND this student's lifetime
+  // coin total (never resets, persisted on their roster doc) -- 1 score
+  // point = 1 coin, whether or not this reading ever earns an official
+  // trophy.
+  const awardScore = (amount) => {
+    if (!amount) return;
+    setScore(prev => prev + amount);
+    if (studentName) {
+      setDoc(readerRosterDocRef(studentName), { coinBalance: increment(Math.round(amount)) }, { merge: true }).catch(() => {});
+    }
+  };
 
   const finishNameSetup = (name, extra = {}) => {
     const trimmed = name.trim();
@@ -805,6 +827,15 @@ export default function MyanmarReaderApp({ entryRequest, onExit }) {
         const dt = snap.data();
         if (dt.furthestChapter != null) setResumePosition({ chapterNum: dt.furthestChapter, sheetName: dt.furthestSheet || 'A' });
         setTutoringStudentUid(dt.tutoringStudentUid || null);
+        // Exact spot they were last reading (not just the furthest reached --
+        // they might have gone back to re-read an earlier sentence), so a
+        // student who exits (Home icon, an accidental close, a dropped
+        // connection) and comes back lands on the same sentence instead of
+        // the start of the chapter.
+        if (dt.lastChapterNum != null && dt.lastSheetName && dt.lastIndex != null) {
+          setLastActivePosition({ chapterNum: dt.lastChapterNum, sheetName: dt.lastSheetName, index: dt.lastIndex });
+        }
+        setCoinBalance(dt.coinBalance || 0);
       }
     }, e => console.error('Resume position listen error:', e));
     return () => unsub();
@@ -1605,7 +1636,7 @@ if (appMode === 'sheet' && sheetData.length > 0) {
       }
   };
 
-  const fetchSheetData = async (sheetNameParam, column) => {
+  const fetchSheetData = async (sheetNameParam, column, resumeIndex = 0) => {
       setIsFetchingSheet(true);
       interruptPlayback();
       setShowQAPanel(false);      // ← Chapter ပြောင်းရင် Q&A panel ကို ပိတ်
@@ -1655,17 +1686,20 @@ for (let i = 1; i < namesArray.length; i++) {
                   });
               }
 
+              // Clamp in case the sheet has gotten shorter since a resume
+              // position was saved.
+              const startIndex = Math.min(Math.max(0, resumeIndex), formattedData.length - 1);
               setSheetData(formattedData);
               if (sheetNameParam !== 'B') {
     const wordList = formattedData.slice(1).map(d => d.mm);
     setSheetAWordList(wordList);
-    setSheetACurrentIndex(0);
+    setSheetACurrentIndex(startIndex > 0 ? startIndex - 1 : 0);
 } else {
     setSheetAWordList([]);
     setSheetACurrentIndex(-1);
 }
-              setCurrentSheetIndex(0);
-              const newSyllables = loadStringToSyllables(formattedData[0].mm);
+              setCurrentSheetIndex(startIndex);
+              const newSyllables = loadStringToSyllables(formattedData[startIndex].mm);
               setSyllables(newSyllables);
               setCurrentKeys([]);
               setShowTranslation(true); 
@@ -1715,8 +1749,22 @@ const paras = paraGroups.map((idxArr, pi) => ({
         ),
     }));
     setSheetBParagraph(paras);
-    setSheetBParaIndex(0);
-    setSheetBLineIndex(0);   // ← ပထမ paragraph ရဲ့ ပထမဆုံးစာကြောင်းကို highlight
+    if (startIndex > 0) {
+        // Same reverse-mapping handleNextSheetRow/handlePrevSheetRow use to
+        // find which paragraph/line a flat sentence index falls in.
+        let lineIdx = -1, paraIdx = 0, count = 0;
+        for (let p = 0; p < paras.length; p++) {
+            for (let l = 0; l < paras[p].lines.length; l++) {
+                if (count + 1 === startIndex) { paraIdx = p; lineIdx = l; }
+                count++;
+            }
+        }
+        setSheetBParaIndex(paraIdx);
+        setSheetBLineIndex(lineIdx);
+    } else {
+        setSheetBParaIndex(0);
+        setSheetBLineIndex(0);   // ← ပထမ paragraph ရဲ့ ပထမဆုံးစာကြောင်းကို highlight
+    }
 } else {
     setSheetBParagraph(null);
     setSheetBLineIndex(-1);
@@ -1727,9 +1775,9 @@ const paras = paraGroups.map((idxArr, pi) => ({
               setNumSentencesInChapter(numSentences > 0 ? numSentences : 1);
               setScore(0);
               setCompletedSentences(new Set());
-              setCurrentSentenceScore(0); // Index 0 is Title
+              setCurrentSentenceScore(startIndex > 0 ? 1000 / (numSentences > 0 ? numSentences : 1) : 0);
               setHasReadAloudCurrent(false);
-              
+
               if (onboardingStep === 'choose_chapter') setOnboardingStep(null);
 
 window.scrollTo({ top: 0, behavior: 'auto' });
@@ -1804,7 +1852,7 @@ setTimeout(() => {
       // Submit Score for current
       if (appMode === 'sheet' && currentSheetIndex > 0) {
           if ((hasReadAloudCurrent || justRead) && !completedSentences.has(currentSheetIndex)) {
-              setScore(prev => prev + currentSentenceScore);
+              awardScore(currentSentenceScore);
               setCompletedSentences(prev => {
                   const newSet = new Set(prev);
                   newSet.add(currentSheetIndex);
@@ -1857,7 +1905,7 @@ setShowTranslation(true);
       // Submit Score if read
       if (appMode === 'sheet' && currentSheetIndex > 0) {
           if (hasReadAloudCurrent && !completedSentences.has(currentSheetIndex)) {
-              setScore(prev => prev + currentSentenceScore);
+              awardScore(currentSentenceScore);
               setCompletedSentences(prev => {
                   const newSet = new Set(prev);
                   newSet.add(currentSheetIndex);
@@ -1894,6 +1942,42 @@ setShowTranslation(true);
     setSheetBLineIndex(lineIdx);
 }
   };
+
+  // Save the exact sentence being read (not just the furthest reached) so a
+  // student who exits and comes back -- Home icon, an accidental close, a
+  // dropped connection -- lands back on the same sentence, not chapter 1.
+  useEffect(() => {
+    if (!studentName || appMode !== 'sheet' || !selectedColumn || currentSheetIndex < 0) return;
+    const chapterNum = getColumnIndex(selectedColumn);
+    setDoc(readerRosterDocRef(studentName), {
+      lastChapterNum: chapterNum, lastSheetName: currentSheetName, lastIndex: currentSheetIndex
+    }, { merge: true }).catch(() => {});
+  }, [studentName, appMode, selectedColumn, currentSheetName, currentSheetIndex]);
+
+  // Auto-resume once, the first time this student's saved position arrives
+  // and nothing is loaded yet -- re-opens the same chapter+sheet straight at
+  // the saved sentence (fetchSheetData's own resumeIndex param, not a replay
+  // of "next sentence" clicks -- those close over whatever sheetData/index
+  // was current when THIS effect was defined, which is stale by the time
+  // fetchSheetData's state updates land, so a manual loop would silently
+  // fast-forward against the wrong data), then restores their live score.
+  useEffect(() => {
+    if (!studentName || !lastActivePosition || hasAutoResumedOnce || sheetData.length > 0) return;
+    setHasAutoResumedOnce(true);
+    if (lastActivePosition.chapterNum == null || !lastActivePosition.sheetName) return;
+    (async () => {
+      try {
+        const column = getColumnName(lastActivePosition.chapterNum - 1);
+        await fetchSheetData(lastActivePosition.sheetName, column, lastActivePosition.index || 0);
+        const scoreId = `${sanitizeReaderKey(studentName)}_ch${lastActivePosition.chapterNum}_${lastActivePosition.sheetName}`;
+        const scoreSnap = await getDoc(doc(db, READER_SCORES_PATH, scoreId));
+        if (scoreSnap.exists() && typeof scoreSnap.data().score === 'number') {
+          setScore(scoreSnap.data().score);
+        }
+      } catch (e) { console.error('Auto-resume error:', e); }
+    })();
+  }, [studentName, lastActivePosition, hasAutoResumedOnce, sheetData.length]);
+
   const [showQAPanel, setShowQAPanel] = useState(false);
 const [qaPairsForParagraph, setQaPairsForParagraph] = useState([]);
 const [qaIndex, setQaIndex] = useState(0);
@@ -2852,7 +2936,7 @@ useEffect(() => {
       ) : studentName && (
         <div className="fixed top-2 right-2 z-[9800] flex items-center gap-2 bg-white/90 backdrop-blur-sm px-3 py-2 rounded-2xl shadow-lg border border-gray-200 text-sm">
           <span className="font-bold text-gray-700">{studentName}</span>
-          <span className="flex items-center gap-1 text-amber-600 font-bold"><span>🏆</span>{trophyCount}</span>
+          <span className="flex items-center gap-1 text-amber-600 font-bold" title="Gold coins earned from reading"><span>🪙</span>{coinBalance}</span>
           <button onClick={() => setShowOnlinePanel(true)} className="flex items-center gap-1 text-emerald-600 font-bold hover:underline">
             <span className="w-2 h-2 bg-emerald-500 rounded-full inline-block"></span>{onlineCount} online
           </button>
@@ -2879,7 +2963,7 @@ useEffect(() => {
               onPointerUp={(e) => { setIsScoreDragging(false); e.target.releasePointerCapture(e.pointerId); }}
               onPointerCancel={(e) => { setIsScoreDragging(false); e.target.releasePointerCapture(e.pointerId); }}
           >
-              <span className="text-xs font-bold text-amber-900 bg-white/60 px-3 py-0.5 rounded-full mb-1 shadow-sm uppercase tracking-wider">Score</span>
+              <span className="text-lg bg-white/60 px-3 py-0.5 rounded-full mb-1 shadow-sm" title="Gold coins from this sentence">🪙</span>
               <span className="text-3xl font-extrabold text-amber-950 drop-shadow-sm">{Math.round(score)}</span>
           </div>
       )}
@@ -3368,16 +3452,6 @@ useEffect(() => {
         className="p-3 bg-teal-400 hover:bg-teal-500 text-white border-b-4 border-teal-600 rounded-l-xl disabled:opacity-40 transition-all active:scale-95 h-full"
     ><ChevronLeft size={20} /></button>
     <div className="flex items-center gap-1 bg-teal-500 border-b-4 border-teal-700 h-full hover:shadow-xl transition-all">
-        <button
-            onClick={handleNextSheetRow}
-            disabled={isLocked}
-            className="flex items-center justify-center gap-2 px-4 text-white hover:bg-teal-600 active:bg-teal-700 h-full transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Next Sentence"
-        >
-            
-            <span className="font-bold whitespace-nowrap text-sm sm:text-base"> {currentSheetIndex + 1}/{sheetData.length}</span>
-        </button>
-        <div className="w-[1px] h-[60%] bg-teal-700 opacity-50"></div>
         <div className="relative inline-block h-full w-[50px]" onClick={() => { if(onboardingStep === 'sheet_icon') setOnboardingStep('choose_chapter'); }}>
             <button className="flex items-center justify-center px-2 h-full w-full text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 transition-all text-sm">
   <BookOpen size={24} />
@@ -3391,10 +3465,20 @@ useEffect(() => {
                 <option value="" disabled hidden>Sheet</option>
                 {Array.from({length: TOTAL_CHAPTERS}, (_, i) => {
                     const col = getColumnName(i);
-                    return <option key={col} value={col}>{SHEET_CHAPTER_PREFIX} {i + 1}{effectiveCompletedFullChapters.has(i + 1) ? ' ✓' : (i + 1 > maxUnlockedChapter ? ' (ahead)' : '')}</option>
+                    return <option key={col} value={col}>{SHEET_CHAPTER_PREFIX} {i + 1}{effectiveCompletedFullChapters.has(i + 1) ? ' 🔵' : (i + 1 > maxUnlockedChapter ? ' 🟢' : '')}</option>
                 })}
             </select>
         </div>
+        <div className="w-[1px] h-[60%] bg-teal-700 opacity-50"></div>
+        <button
+            onClick={handleNextSheetRow}
+            disabled={isLocked}
+            className="flex items-center justify-center gap-2 px-4 text-white hover:bg-teal-600 active:bg-teal-700 h-full transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Next Sentence"
+        >
+
+            <span className="font-bold whitespace-nowrap text-sm sm:text-base"> {currentSheetIndex + 1}/{sheetData.length}</span>
+        </button>
     </div>
     <button
         onClick={handleNextSheetRow}
@@ -3410,16 +3494,6 @@ useEffect(() => {
                         className="p-3 bg-teal-400 hover:bg-teal-500 text-white border-b-4 border-teal-600 rounded-l-xl disabled:opacity-40 transition-all active:scale-95 h-full"
                     ><ChevronLeft size={20} /></button>
                     <div className="flex items-center gap-1 bg-teal-500 border-b-4 border-teal-700 h-full hover:shadow-xl transition-all">
-                        <button
-                            onClick={handleResumeSheet}
-                            disabled={isLocked}
-                            className="flex items-center justify-center gap-2 px-4 text-white hover:bg-teal-600 active:bg-teal-700 h-full transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="Resume Sheet"
-                        >
-                            
-                            <span className="font-bold whitespace-nowrap text-sm sm:text-base">Resume</span>
-                        </button>
-                        <div className="w-[1px] h-[60%] bg-teal-700 opacity-50"></div>
                         <div className="relative inline-block h-full w-[50px]">
                             <button className="flex items-center justify-center px-2 h-full w-full text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 transition-all text-sm"><BookOpen size={24} /></button>
                             <select
@@ -3431,10 +3505,20 @@ useEffect(() => {
                                 <option value="" disabled hidden>Sheet</option>
                                 {Array.from({length: TOTAL_CHAPTERS}, (_, i) => {
                                     const col = getColumnName(i);
-                                    return <option key={col} value={col}>{SHEET_CHAPTER_PREFIX} {i + 1}{effectiveCompletedFullChapters.has(i + 1) ? ' ✓' : (i + 1 > maxUnlockedChapter ? ' (ahead)' : '')}</option>
+                                    return <option key={col} value={col}>{SHEET_CHAPTER_PREFIX} {i + 1}{effectiveCompletedFullChapters.has(i + 1) ? ' 🔵' : (i + 1 > maxUnlockedChapter ? ' 🟢' : '')}</option>
                                 })}
                             </select>
                         </div>
+                        <div className="w-[1px] h-[60%] bg-teal-700 opacity-50"></div>
+                        <button
+                            onClick={handleResumeSheet}
+                            disabled={isLocked}
+                            className="flex items-center justify-center gap-2 px-4 text-white hover:bg-teal-600 active:bg-teal-700 h-full transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Resume Sheet"
+                        >
+
+                            <span className="font-bold whitespace-nowrap text-sm sm:text-base">Resume</span>
+                        </button>
                     </div>
                     <button
                         onClick={handleNextSheetRow}
@@ -3472,7 +3556,7 @@ useEffect(() => {
                       <option value="" disabled hidden>Sheet</option>
                       {Array.from({length: TOTAL_CHAPTERS}, (_, i) => {
                           const col = getColumnName(i);
-                          return <option key={col} value={col}>{SHEET_CHAPTER_PREFIX} {i + 1}{effectiveCompletedFullChapters.has(i + 1) ? ' ✓' : (i + 1 > maxUnlockedChapter ? ' (ahead)' : '')}</option>
+                          return <option key={col} value={col}>{SHEET_CHAPTER_PREFIX} {i + 1}{effectiveCompletedFullChapters.has(i + 1) ? ' 🔵' : (i + 1 > maxUnlockedChapter ? ' 🟢' : '')}</option>
                       })}
                     </select>
                 </div>
