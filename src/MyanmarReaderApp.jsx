@@ -830,13 +830,14 @@ export default function MyanmarReaderApp({ entryRequest, onExit }) {
   // hasn't read anything yet doesn't get a premature "continue" banner.
   useEffect(() => {
     if (!tutoringStudentUid || teacherCompletedChapters <= 0) return;
-    // teacherCompletedChapters can be a half-integer (e.g. 19.5 = chapter 20's
-    // Sheet A done, Sheet B not) -- that points at Sheet B of THAT chapter,
-    // not Sheet A of the next one.
-    const isHalfDone = teacherCompletedChapters % 1 !== 0;
-    const teacherPosition = isHalfDone
-      ? { chapterNum: Math.min(TOTAL_CHAPTERS, Math.ceil(teacherCompletedChapters)), sheetName: 'B' }
-      : { chapterNum: Math.min(TOTAL_CHAPTERS, teacherCompletedChapters + 1), sheetName: 'A' };
+    // teacherCompletedChapters reports as the chapter number itself once its
+    // Sheet A is done (e.g. 20 = chapter 20's Sheet A done, Sheet B not --
+    // resume at that chapter's Sheet B), then N.5 once Sheet B is also done
+    // (chapter N fully finished -- resume at chapter N+1's Sheet A).
+    const isFullChapterDone = teacherCompletedChapters % 1 !== 0;
+    const teacherPosition = isFullChapterDone
+      ? { chapterNum: Math.min(TOTAL_CHAPTERS, Math.floor(teacherCompletedChapters) + 1), sheetName: 'A' }
+      : { chapterNum: Math.min(TOTAL_CHAPTERS, teacherCompletedChapters), sheetName: 'B' };
     setResumePosition(prev => {
       const isFurther = !prev
         || teacherPosition.chapterNum > prev.chapterNum
@@ -848,9 +849,16 @@ export default function MyanmarReaderApp({ entryRequest, onExit }) {
   // Merge the teacher's confirmed count with this app's own record of fully
   // finished chapters (both sheets, via READER_SCORES_PATH) so "already
   // completed" checks and the chapter picker reflect whichever is further.
+  // teacherCompletedChapters itself isn't a full-chapters count -- a whole
+  // number means that chapter's Sheet A is done but Sheet B isn't (so the
+  // chapter itself isn't finished yet), only the .5 form means the chapter
+  // is fully done.
   let ownCompletedThrough = 0;
   while (completedFullChapters.has(ownCompletedThrough + 1)) ownCompletedThrough++;
-  const effectiveCompletedThrough = Math.max(ownCompletedThrough, teacherCompletedChapters);
+  const teacherFullChaptersDone = Number.isInteger(teacherCompletedChapters)
+    ? Math.max(0, teacherCompletedChapters - 1)
+    : Math.floor(teacherCompletedChapters);
+  const effectiveCompletedThrough = Math.max(ownCompletedThrough, teacherFullChaptersDone);
   const effectiveCompletedFullChapters = effectiveCompletedThrough > ownCompletedThrough
     ? new Set([...completedFullChapters, ...Array.from({ length: effectiveCompletedThrough }, (_, i) => i + 1)])
     : completedFullChapters;

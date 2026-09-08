@@ -302,6 +302,20 @@ const getEffectiveCompletedUnit = (lesson, studentProfile, sessionsForLesson, ss
   return unitCount > 0 ? Math.min(unitCount, effective) : effective;
 };
 
+// Every other linked app counts in whole units, so "next" is always
+// completed + 1. Myanmar Reader is the one exception: its completed number
+// carries a chapter's two sheets as X (Sheet A of chapter X done) then X.5
+// (Sheet B done too, chapter X fully finished) -- see the Myanmar Reader
+// auto-fill effect below for where that value gets written. So the "next"
+// chapter to show/study is the SAME chapter (continue with Sheet B) when the
+// number is a whole one, and the FOLLOWING chapter (start Sheet A) once it
+// has picked up the .5.
+const getNextChapterNumber = (completedValue, isMyanmarReaderLesson) => {
+  if (!isMyanmarReaderLesson) return completedValue + 1;
+  if (completedValue <= 0) return 1;
+  return Number.isInteger(completedValue) ? completedValue : Math.floor(completedValue) + 1;
+};
+
 // How many trophies a class with this many lessons is worth. Matches the
 // teacher's real awarding pattern (confirmed against actual examples):
 // 4 lessons -> 1 trophy, 10 -> 2, 11 -> 2, 29 -> 6 — i.e. round(lessons / 5),
@@ -6419,14 +6433,16 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
   // goes in "What did you study?" instead, so the two fields each hold one
   // clear thing rather than Score carrying both.
   //
-  // A chapter has two sheets (A and B). Lesson completed is tracked in
-  // half-chapter steps: finishing one sheet of a not-yet-fully-done chapter
-  // is worth .5 (one sheet = half the chapter), finishing both is worth 1
-  // (e.g. chapter 29 with only Sheet A done -> 28.5; both done -> 29).
-  // Trophies themselves are NOT derived from this number for Myanmar Reader
-  // -- see the separate "pending" sheet-completion count below -- Lesson
-  // completed here only drives the "completed up to Chapter X / 29" progress
-  // display.
+  // A chapter has two sheets (A and B). Lesson completed reports as the
+  // chapter number itself once Sheet A is done (e.g. 20 = chapter 20's
+  // Sheet A done, continue with its Sheet B), then N.5 once Sheet B is also
+  // done (20.5 = chapter 20 fully finished, continue with chapter 21's
+  // Sheet A) -- see getNextChapterNumber, which reads this same value
+  // everywhere it's shown. Trophies themselves are NOT derived from this
+  // number for Myanmar Reader -- see the separate "pending" sheet-completion
+  // count below -- Lesson completed here only drives the "completed up to
+  // Chapter X / 29" progress display and which chapter is shown/unlocked
+  // next.
   const [myanmarReaderPendingScoreDocs, setMyanmarReaderPendingScoreDocs] = useState([]);
   useEffect(() => {
     const session = redoSession || activeSession;
@@ -6467,7 +6483,12 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           setFeedbackNotes(`Chapter ${latest.chapterNum} (Sheet ${latest.sheetName})`);
           const latestStatus = sheetStatus[latest.chapterNum] || {};
           const bothSheetsDone = !!(latestStatus.A && latestStatus.B);
-          const lessonCompletedValue = (latest.chapterNum - 1) + (bothSheetsDone ? 1 : 0.5);
+          // Chapter N with only Sheet A done reports as N itself; once Sheet B
+          // is also done it becomes N.5 (chapter N fully finished) -- matches
+          // getNextChapterNumber's reading of this same value everywhere else
+          // (a whole number means "continue this chapter's Sheet B", a .5
+          // means "start the next chapter's Sheet A").
+          const lessonCompletedValue = latest.chapterNum + (bothSheetsDone ? 0.5 : 0);
           handleCompletedUnitChange(String(lessonCompletedValue), true);
           setTodayCompletedInput(bothSheetsDone ? '1' : '0.5');
         }
@@ -7502,6 +7523,8 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         const sessionsForActive = completedSessions.filter(s => s.lessonTitle === activeSession.lessonTitle);
         const activeEffectiveCompleted = getEffectiveCompletedUnit(pseudoLesson, studentProfile, sessionsForActive, ssCompletionCounts);
         const isActiveFullyComplete = activeUnitCount > 0 && activeEffectiveCompleted >= activeUnitCount;
+        const isMyanmarReaderActive = !!(MYANMAR_READER_APP_URL && activeSession.lessonLink === MYANMAR_READER_APP_URL);
+        const activeNextChapter = Math.min(activeUnitCount, getNextChapterNumber(activeEffectiveCompleted, isMyanmarReaderActive));
         return (
         <div ref={activeSessionRef} className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 p-6 rounded-xl shadow-lg mb-8">
           <h3 className="text-xl font-bold mb-3">Active Session</h3>
@@ -7521,7 +7544,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
             <p className="text-sm mb-4 font-semibold">
               {isActiveFullyComplete
                 ? <>✅ Completed — all {activeUnitCount} {activeSession.lessonUnitLabel || 'Chapter'}{activeUnitCount === 1 ? '' : 's'}</>
-                : <>Studying {activeSession.lessonUnitLabel || 'Chapter'} {Math.min(activeUnitCount, activeEffectiveCompleted + 1)}</>
+                : <>Studying {activeSession.lessonUnitLabel || 'Chapter'} {activeNextChapter}</>
               }
             </p>
           )}
@@ -7697,11 +7720,9 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
               const remainingList = Math.max(0, maxAvailableList - previouslyEarnedList);
               const sessionsForLessonList = completedSessions.filter(s => s.lessonTitle === lesson.title);
               const completedUnitList = getEffectiveCompletedUnit(lesson, studentProfile, sessionsForLessonList, ssCompletionCounts);
-              // Math.floor, not the raw number -- Myanmar Reader's half-chapter
-              // progress (e.g. 19.5 = chapter 20's Sheet A done, Sheet B not)
-              // should still point at "Chapter 20" as the one to continue, not
-              // 20.5 or 21.
-              const nextUnitNumber = lesson.unitCount > 0 ? Math.min(lesson.unitCount, Math.floor(completedUnitList) + 1) : Math.floor(completedUnitList) + 1;
+              const isMyanmarReaderLessonList = !!(MYANMAR_READER_APP_URL && lesson.link === MYANMAR_READER_APP_URL);
+              const nextUnitNumberRaw = getNextChapterNumber(completedUnitList, isMyanmarReaderLessonList);
+              const nextUnitNumber = lesson.unitCount > 0 ? Math.min(lesson.unitCount, nextUnitNumberRaw) : nextUnitNumberRaw;
               const latestSessionForLesson = completedSessions.find(s => s.lessonTitle === lesson.title && typeof s.completedUnit === 'number' && s.completedUnit > 0);
               const showNowFinished = !!latestSessionForLesson;
               const isSmartStudyLesson = !!(lesson.link && lesson.link.startsWith('smartstudy://'));
