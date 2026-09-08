@@ -59,6 +59,24 @@ const BodhiTreeApp = lazy(() => import('./BodhiTreeApp'));
 // Catches a failed lazy-chunk load (e.g. the browser has an old page open
 // from before a new deploy replaced that chunk's file) so it shows a
 // recoverable message instead of a blank crashed screen.
+//
+// A plain window.location.reload() isn't enough to actually recover: it can
+// re-fetch the exact same stale, cached index.html (from the browser's disk
+// cache or GitHub Pages' CDN) that references the old, now-deleted chunk
+// file, so the same failure just repeats forever until the visitor does a
+// manual hard-refresh themselves. Reloading via a cache-busted URL instead
+// forces a real network fetch of the current index.html, which references
+// the current build's chunk hashes.
+function hardReload() {
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.set('_r', Date.now().toString());
+    window.location.replace(url.toString());
+  } catch (e) {
+    window.location.reload();
+  }
+}
+
 class AppErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -82,7 +100,7 @@ class AppErrorBoundary extends React.Component {
       try {
         if (!sessionStorage.getItem('dhamma_auto_reload_attempted')) {
           sessionStorage.setItem('dhamma_auto_reload_attempted', '1');
-          window.location.reload();
+          hardReload();
         }
       } catch (e) {}
     }
@@ -94,7 +112,7 @@ class AppErrorBoundary extends React.Component {
           <div className="text-xl font-semibold text-indigo-600">Something went wrong loading this page.</div>
           <p className="text-sm text-indigo-500">This can happen right after an update. Reloading usually fixes it.</p>
           <button
-            onClick={() => window.location.reload()}
+            onClick={hardReload}
             className="px-4 py-2 bg-indigo-600 text-white rounded-full font-semibold text-sm hover:bg-indigo-700"
           >
             Reload page
@@ -127,7 +145,7 @@ function LoadingFallback() {
         <div className="text-center">
           <p className="text-sm text-indigo-500 mb-2">Taking longer than usual.</p>
           <button
-            onClick={() => window.location.reload()}
+            onClick={hardReload}
             className="px-4 py-2 bg-indigo-600 text-white rounded-full font-semibold text-sm hover:bg-indigo-700"
           >
             Reload page
