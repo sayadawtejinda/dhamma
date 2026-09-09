@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { appId } from './firebaseConfig';
 
@@ -299,15 +299,48 @@ function TreeCanvas({ days }) {
   return <canvas ref={canvasRef} className="w-full rounded-2xl shadow-inner" />;
 }
 
+// The teacher's own tree isn't tied to any student's attendance -- it just
+// grows one day at a time, every calendar day, so it's something to check
+// in on regardless of who attended what. `baselineDays` is a manually-set
+// anchor (0 until the teacher edits it) and `baselineSetAt` is when that
+// anchor was set; the displayed age is always baselineDays plus however
+// many calendar days have passed since, so editing the count just moves
+// the anchor forward (or back) without losing the "grows every day" feel.
+const teacherTreeDocRef = () => doc(db, `${publicDataPath}/teacherBodhiTree`, 'main');
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
 export default function BodhiTreeApp({ entryRequest, onExit }) {
+  const isTeacherMode = entryRequest?.mode === 'teacher';
   const studentUid = entryRequest?.studentUid;
   const studentName = entryRequest?.studentName || 'Friend';
   const [loading, setLoading] = useState(true);
   const [treeAgeDays, setTreeAgeDays] = useState(0);
   const [showWater, setShowWater] = useState(false);
   const [watered, setWatered] = useState(false);
+  const [teacherBaseline, setTeacherBaseline] = useState({ baselineDays: 0, baselineSetAt: Date.now() });
+  const [isEditingDays, setIsEditingDays] = useState(false);
+  const [editDaysInput, setEditDaysInput] = useState('');
+  const [isSavingDays, setIsSavingDays] = useState(false);
 
   useEffect(() => {
+    if (isTeacherMode) {
+      let isMounted = true;
+      (async () => {
+        try {
+          const snap = await getDoc(teacherTreeDocRef());
+          const data = snap.exists() ? snap.data() : { baselineDays: 0, baselineSetAt: Date.now() };
+          if (isMounted) {
+            setTeacherBaseline(data);
+            const elapsedDays = Math.floor((Date.now() - (data.baselineSetAt || Date.now())) / MS_PER_DAY);
+            setTreeAgeDays(Math.max(0, (data.baselineDays || 0) + elapsedDays));
+          }
+        } catch (e) {
+          console.error('Error loading teacher Bodhi tree data:', e);
+        }
+        if (isMounted) setLoading(false);
+      })();
+      return () => { isMounted = false; };
+    }
     if (!studentUid) { setLoading(false); return; }
     let isMounted = true;
     (async () => {
@@ -329,7 +362,26 @@ export default function BodhiTreeApp({ entryRequest, onExit }) {
       if (isMounted) setLoading(false);
     })();
     return () => { isMounted = false; };
-  }, [studentUid]);
+  }, [studentUid, isTeacherMode]);
+
+  const handleStartEditDays = () => {
+    setEditDaysInput(String(treeAgeDays));
+    setIsEditingDays(true);
+  };
+  const handleSaveEditDays = async () => {
+    const newDays = Math.max(0, parseInt(editDaysInput, 10) || 0);
+    setIsSavingDays(true);
+    try {
+      const newBaseline = { baselineDays: newDays, baselineSetAt: Date.now() };
+      await setDoc(teacherTreeDocRef(), newBaseline, { merge: true });
+      setTeacherBaseline(newBaseline);
+      setTreeAgeDays(newDays);
+      setIsEditingDays(false);
+    } catch (e) {
+      console.error('Error saving teacher Bodhi tree days:', e);
+    }
+    setIsSavingDays(false);
+  };
 
   useEffect(() => {
     // Purely a delightful ritual moment on entering -- the tree's real age
@@ -353,8 +405,12 @@ export default function BodhiTreeApp({ entryRequest, onExit }) {
         🏡
       </button>
 
-      <h1 className="text-2xl font-bold text-emerald-800 mt-16 mb-1 text-center">{studentName}'s Bodhi Tree</h1>
-      <p className="text-emerald-600 text-sm mb-6">🙏 Grows a little every time you come to class</p>
+      <h1 className="text-2xl font-bold text-emerald-800 mt-16 mb-1 text-center">
+        {isTeacherMode ? "Teacher's Bodhi Tree" : `${studentName}'s Bodhi Tree`}
+      </h1>
+      <p className="text-emerald-600 text-sm mb-6">
+        {isTeacherMode ? '🙏 Grows a little every day' : '🙏 Grows a little every time you come to class'}
+      </p>
 
       {loading ? (
         <p className="text-emerald-700">Loading your tree...</p>
@@ -364,10 +420,44 @@ export default function BodhiTreeApp({ entryRequest, onExit }) {
             <TreeCanvas days={treeAgeDays} />
           </div>
           <p className="text-xl font-bold text-emerald-800 mt-4">{stageName}</p>
-          <p className="text-emerald-600 mb-1">{treeAgeDays} day{treeAgeDays === 1 ? '' : 's'} old</p>
-          {nextMilestone != null && (
+
+          {isEditingDays ? (
+            <div className="flex items-center gap-2 mb-1">
+              <input
+                type="number"
+                min="0"
+                value={editDaysInput}
+                onChange={(e) => setEditDaysInput(e.target.value)}
+                className="w-24 text-center border border-emerald-300 rounded-lg p-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                autoFocus
+              />
+              <span className="text-emerald-600">days old</span>
+              <button onClick={handleSaveEditDays} disabled={isSavingDays} className="bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold px-3 py-1.5 rounded-lg disabled:opacity-50">
+                {isSavingDays ? 'Saving...' : 'Save'}
+              </button>
+              <button onClick={() => setIsEditingDays(false)} className="bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm font-bold px-3 py-1.5 rounded-lg">
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <p className="text-emerald-600 mb-1 flex items-center gap-2">
+              {treeAgeDays} day{treeAgeDays === 1 ? '' : 's'} old
+              {isTeacherMode && (
+                <button onClick={handleStartEditDays} className="text-emerald-500 hover:text-emerald-700" title="Edit day count">
+                  ✏️
+                </button>
+              )}
+            </p>
+          )}
+
+          {!isTeacherMode && nextMilestone != null && (
             <p className="text-sm text-emerald-500 mb-6">
               {Math.ceil(daysToNext / 7)} more class{Math.ceil(daysToNext / 7) === 1 ? '' : 'es'} until it grows again!
+            </p>
+          )}
+          {isTeacherMode && nextMilestone != null && (
+            <p className="text-sm text-emerald-500 mb-6">
+              {daysToNext} more day{daysToNext === 1 ? '' : 's'} until it grows again!
             </p>
           )}
 
@@ -382,7 +472,7 @@ export default function BodhiTreeApp({ entryRequest, onExit }) {
             )}
             {watered && (
               <p className="text-sky-700 font-semibold text-lg text-center">
-                💦 Thank you for watering!<br />See you next class 🙏
+                💦 Thank you for watering!<br />{isTeacherMode ? 'See you tomorrow 🙏' : 'See you next class 🙏'}
               </p>
             )}
           </div>

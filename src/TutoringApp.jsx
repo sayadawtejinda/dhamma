@@ -1034,7 +1034,7 @@ function AttendanceReports({ students, teacherSchedule, sessions }) {
   );
 }
 
-function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenConsonantPractice, onOpenBurmeseGame, onOpenMyanmarSpeaking, onOpenNumberLearning, onOpenVowelsLearning, onOpenAnimalSound, onOpenBurmeseLearningGames, onOpenInteractiveQuiz, onOpenMyanmarPoems, onOpenConsonantEndings, onOpenTimeAndCalendar, onOpenMyanmarSpelling, onOpenMyanmarSoundPractice, onOpenReadingMyanmar, onOpenSpeakingMyanmar, onOpenMyanmarPart1And2, onOpenWatchAndLearn }) {
+function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenConsonantPractice, onOpenBurmeseGame, onOpenMyanmarSpeaking, onOpenNumberLearning, onOpenVowelsLearning, onOpenAnimalSound, onOpenBurmeseLearningGames, onOpenInteractiveQuiz, onOpenMyanmarPoems, onOpenConsonantEndings, onOpenTimeAndCalendar, onOpenMyanmarSpelling, onOpenMyanmarSoundPractice, onOpenReadingMyanmar, onOpenSpeakingMyanmar, onOpenMyanmarPart1And2, onOpenWatchAndLearn, onOpenBodhiTree }) {
   const [students, setStudents] = useState([]);
   const [lessonBank, setLessonBank] = useState([]); 
   const [sessions, setSessions] = useState([]); 
@@ -4194,8 +4194,19 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
       <StudentAttendanceModal isOpen={showAttendanceModal} onClose={closeAttendanceModal} student={selectedStudentForHistory} />
       <EditScheduleModal isOpen={showEditModal} onClose={closeEditModal} onSave={handleUpdateSchedule} entry={editingEntry} students={students.filter(s => s.isActive)} />
       
-      <h2 className="text-3xl font-bold mb-6 text-indigo-700">Teacher Dashboard</h2>
-      
+      <div className="flex items-center gap-3 mb-6">
+        <h2 className="text-3xl font-bold text-indigo-700">Teacher Dashboard</h2>
+        {onOpenBodhiTree && (
+          <button
+            onClick={() => onOpenBodhiTree({ mode: 'teacher' })}
+            className="flex items-center justify-center text-2xl bg-emerald-50 hover:bg-emerald-100 px-4 py-2 rounded-lg transition-colors border border-emerald-200"
+            title="My Bodhi Tree"
+          >
+            🌳
+          </button>
+        )}
+      </div>
+
       <div className="mb-6 border-b border-gray-300">
         <nav className="flex flex-wrap space-x-4">
           <button onClick={() => setViewMode('send')} className={`py-2 px-4 font-medium ${viewMode === 'send' ? 'border-b-2 border-indigo-500 text-indigo-600' : 'text-gray-600 hover:text-indigo-600'}`}>Send Action</button>
@@ -9770,7 +9781,7 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpen
     switch (view) {
       case 'teacher':
         if (role !== 'teacher') return <TodaySchedule role={role} />; 
-        return <TeacherDashboard user={user} announcements={announcements} onOpenSmartStudy={onOpenSmartStudy} onOpenAbhidhamma={onOpenAbhidhamma} onOpenMyanmarReader={onOpenMyanmarReader} onOpenDhammaschool={onOpenDhammaschool} onOpenConsonantPractice={onOpenConsonantPractice} onOpenBurmeseGame={onOpenBurmeseGame} onOpenMyanmarSpeaking={onOpenMyanmarSpeaking} onOpenNumberLearning={onOpenNumberLearning} onOpenVowelsLearning={onOpenVowelsLearning} onOpenAnimalSound={onOpenAnimalSound} onOpenBurmeseLearningGames={onOpenBurmeseLearningGames} onOpenInteractiveQuiz={onOpenInteractiveQuiz} onOpenMyanmarPoems={onOpenMyanmarPoems} onOpenConsonantEndings={onOpenConsonantEndings} onOpenTimeAndCalendar={onOpenTimeAndCalendar} onOpenMyanmarSpelling={onOpenMyanmarSpelling} onOpenMyanmarSoundPractice={onOpenMyanmarSoundPractice} onOpenReadingMyanmar={onOpenReadingMyanmar} onOpenSpeakingMyanmar={onOpenSpeakingMyanmar} onOpenMyanmarPart1And2={onOpenMyanmarPart1And2} onOpenWatchAndLearn={onOpenWatchAndLearn} />;
+        return <TeacherDashboard user={user} announcements={announcements} onOpenSmartStudy={onOpenSmartStudy} onOpenAbhidhamma={onOpenAbhidhamma} onOpenMyanmarReader={onOpenMyanmarReader} onOpenDhammaschool={onOpenDhammaschool} onOpenConsonantPractice={onOpenConsonantPractice} onOpenBurmeseGame={onOpenBurmeseGame} onOpenMyanmarSpeaking={onOpenMyanmarSpeaking} onOpenNumberLearning={onOpenNumberLearning} onOpenVowelsLearning={onOpenVowelsLearning} onOpenAnimalSound={onOpenAnimalSound} onOpenBurmeseLearningGames={onOpenBurmeseLearningGames} onOpenInteractiveQuiz={onOpenInteractiveQuiz} onOpenMyanmarPoems={onOpenMyanmarPoems} onOpenConsonantEndings={onOpenConsonantEndings} onOpenTimeAndCalendar={onOpenTimeAndCalendar} onOpenMyanmarSpelling={onOpenMyanmarSpelling} onOpenMyanmarSoundPractice={onOpenMyanmarSoundPractice} onOpenReadingMyanmar={onOpenReadingMyanmar} onOpenSpeakingMyanmar={onOpenSpeakingMyanmar} onOpenMyanmarPart1And2={onOpenMyanmarPart1And2} onOpenWatchAndLearn={onOpenWatchAndLearn} onOpenBodhiTree={onOpenBodhiTree} />;
       case 'student':
         if (role !== 'student') return <TodaySchedule role={role} />; 
         if (!studentProfile) {
