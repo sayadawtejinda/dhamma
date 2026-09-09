@@ -4935,7 +4935,7 @@ const TeacherAuthScreen = ({ dbPasscode, onAuthenticated, onCancel }) => {
     );
 };
 
-export default function MyanmarSpeakingApp({ entryRequest, onExit }) {
+export default function MyanmarSpeakingApp({ entryRequest, onExit, isActive }) {
     // Arrives as entryRequest={ studentName } when opened via TutoringApp's
     // Assign Lesson / Continue flow — in that case we skip straight to the
     // student view under their real name instead of asking again, and start
@@ -5054,9 +5054,20 @@ export default function MyanmarSpeakingApp({ entryRequest, onExit }) {
     // marked offline and minutes stop accumulating (being "in" the app with
     // an untouched screen shouldn't count as studying or being online).
     // Activity resumes both the instant they interact again.
+    //
+    // This app is one of App.jsx's KEEP_ALIVE_APPS -- it never unmounts once
+    // opened, tapping 🏡 just hides it, so without `isActive` this effect's
+    // interval would keep running (and keep counting minutes) in the
+    // background all day. `isActive` (App.jsx passes `activeApp ===
+    // 'myanmarspeaking'`) is now a dependency specifically so leaving the
+    // app tears this effect down immediately, same as going idle or closing
+    // the tab already did. SESSION_CAP_MS separately stops a single
+    // continuous open (no idle, never left) from silently racking up hours
+    // of "minutes studied" that would otherwise all land in one Report.
     useEffect(() => {
-        if (activeRole !== 'student' || !studentName) return;
-        const IDLE_MS = 2 * 60 * 1000; // 2 minutes with no touch/click/key
+        if (activeRole !== 'student' || !studentName || !isActive) return;
+        const IDLE_MS = 3 * 60 * 1000; // 3 minutes with no touch/click/key
+        const SESSION_CAP_MS = 30 * 60 * 1000; // max minutes counted per continuous visit
         const TICK_MS = 15000;
         const rosterRef = doc(db, ROSTER_PATH, sanitizeSpeakingKey(studentName));
         let isIdle = false;
@@ -5085,6 +5096,7 @@ export default function MyanmarSpeakingApp({ entryRequest, onExit }) {
             }
             isIdle = false;
             setDoc(rosterRef, { studentName, isOnline: true, lastSeen: serverTimestamp() }, { merge: true }).catch(() => {});
+            if (activeMsRef.current >= SESSION_CAP_MS) return; // this visit already hit the cap
             activeMsRef.current += TICK_MS;
             flushMinutes();
         };
@@ -5097,8 +5109,13 @@ export default function MyanmarSpeakingApp({ entryRequest, onExit }) {
             window.removeEventListener('beforeunload', goOffline);
             flushMinutes();
             goOffline();
+            // Leaving (🏡, idle already handled above, or closing the tab)
+            // ends this visit -- the next one starts its own fresh 30-minute
+            // allowance instead of picking up wherever this one left off.
+            activeMsRef.current = 0;
+            minutesWrittenRef.current = 0;
         };
-    }, [studentName, activeRole]);
+    }, [studentName, activeRole, isActive]);
 
     // Full live roster — same list feeds both the teacher's panel and every
     // student's own "who else is online" panel.

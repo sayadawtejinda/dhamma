@@ -584,7 +584,7 @@ export default function App() {
                 </button>
               </div>
             )}
-            <MyanmarSpeakingApp entryRequest={myanmarSpeakingRequest} onExit={closeMyanmarSpeaking} />
+            <MyanmarSpeakingApp entryRequest={myanmarSpeakingRequest} onExit={closeMyanmarSpeaking} isActive={activeApp === 'myanmarspeaking'} />
           </div>
         )}
 
