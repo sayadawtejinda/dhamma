@@ -3276,7 +3276,26 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
           createdAt: serverTimestamp(),
         });
       }
-      alert(`Applied — set ${changedRows.length} student trophy total(s)${!bankEntryExists ? ' and created the "🎥 Watch & Learn" Lesson Bank entry' : ''}.`);
+      // Seed the new app's own video list from the real links on the old
+      // bare-link Lesson Bank entries -- Apply only migrated trophy totals
+      // above, it never copied the actual watchable URLs anywhere, so
+      // without this the new app opens empty even after migrating.
+      const videosCollection = collection(db, `${publicDataPath}/watchAndLearnVideos`);
+      const existingVideosSnap = await getDocs(videosCollection);
+      const existingTitles = new Set(existingVideosSnap.docs.map(d => (d.data().title || '').trim()));
+      const oldEntries = lessonBank.filter(l => WATCH_LEARN_OLD_TITLES.includes(l.title) && l.link);
+      let nextOrder = existingVideosSnap.docs.length > 0
+        ? Math.max(...existingVideosSnap.docs.map(d => d.data().order || 0)) + 1
+        : 0;
+      let addedVideoCount = 0;
+      for (const entry of oldEntries) {
+        const title = entry.title.trim();
+        if (existingTitles.has(title)) continue;
+        await addDoc(videosCollection, { title, link: entry.link, order: nextOrder, createdAt: serverTimestamp() });
+        nextOrder += 1;
+        addedVideoCount += 1;
+      }
+      alert(`Applied — set ${changedRows.length} student trophy total(s)${!bankEntryExists ? ', created the "🎥 Watch & Learn" Lesson Bank entry,' : ''} and added ${addedVideoCount} video(s) to the Watch & Learn list.`);
       setWatchLearnMigrationPreview(null);
     } catch (err) {
       console.error('Error applying Watch & Learn migration:', err);
@@ -7630,7 +7649,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       </div>
 
       <h2 className="text-3xl font-bold mb-6 text-emerald-700">
-        {studentProfile?.name}'s Home
+        {studentProfile?.name}'s 🏡
       </h2>
       
       <div className="bg-white/90 backdrop-blur-sm p-6 rounded-xl shadow-lg mb-8 border border-emerald-100 flex flex-col md:flex-row justify-between items-start md:items-center">
@@ -9660,9 +9679,20 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpen
             </button>
           </div>
           <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40">
-            <button onClick={handleLoginButtonClick} className="px-6 py-3 rounded-full bg-indigo-600 text-white font-semibold shadow-lg hover:bg-indigo-700 transition-colors">
-              {role === 'teacher' ? 'Teacher' : role === 'student' ? (studentProfile?.name || 'Student') : 'Login / Register'}
-            </button>
+            {role === 'teacher' || role === 'student' ? (
+              <button
+                onClick={handleLoginButtonClick}
+                title="Home"
+                aria-label="Home"
+                className="w-14 h-14 flex items-center justify-center bg-gray-800 text-white rounded-full shadow-lg text-2xl hover:bg-gray-900"
+              >
+                🏡
+              </button>
+            ) : (
+              <button onClick={handleLoginButtonClick} className="px-6 py-3 rounded-full bg-indigo-600 text-white font-semibold shadow-lg hover:bg-indigo-700 transition-colors">
+                Login / Register
+              </button>
+            )}
           </div>
         </>
       )}
