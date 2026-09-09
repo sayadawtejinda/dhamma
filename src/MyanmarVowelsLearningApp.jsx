@@ -1577,7 +1577,11 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
 
         runMasterInit();
 
+    // Stop any running game/audio -- otherwise it keeps playing after this
+    // component unmounts, since it's plain JS state with no React lifecycle
+    // of its own.
     return () => {
+      stopGame();
       delete window.__mvlApp;
     };
   }, []);

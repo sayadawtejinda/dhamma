@@ -1563,6 +1563,15 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
           toggleSoundSet, togglePickGame, toggleClickGame, toggleImageGame, toggleTypingGame,
         };
 
+    // Stop any repeating audio (audioTimer replays a question's sound every
+    // few seconds) and delete the window bridge when the student leaves via
+    // 🏡 -- otherwise the interval keeps firing after this component
+    // unmounts, since it's a plain JS timer with no React lifecycle of
+    // its own.
+    return () => {
+      stopGame();
+      delete window.__bcgApp;
+    };
   }, []);
 
   return (

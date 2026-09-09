@@ -1845,7 +1845,15 @@ export default function MyanmarSoundPracticeApp({ entryRequest, onExit, hideOwnO
             if (!animationFrameId) { animateFireworks(); }
         }
 
-    return () => {};
+    // Stop any playing/queued audio -- otherwise a clip (or the read-aloud
+    // series) can keep going after this component unmounts, since Audio
+    // objects and setTimeout aren't tied to React's lifecycle.
+    return () => {
+      isPlayingSeries = false;
+      if (soundTimeout) clearTimeout(soundTimeout);
+      if (!audioPlayer.paused) audioPlayer.pause();
+      if (!audioPlayerLevel5.paused) audioPlayerLevel5.pause();
+    };
   }, []);
 
   return (

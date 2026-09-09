@@ -1380,7 +1380,7 @@ export default function ConsonantPracticeApp({ entryRequest, onExit, hideOwnOnli
             // Gold coins only for Waga (Bubble), Matching, and Puzzle -- not
             // the Click/Typing games, which also call handleCorrectAnswer().
             if (currentGameMode === 'waga' || currentGameMode === 'matching' || currentGameMode === 'puzzle') {
-                awardCoins(5);
+                awardCoins(10);
             }
 
             // Modified Scoring Logic for Auto Flow
@@ -2331,6 +2331,11 @@ export default function ConsonantPracticeApp({ entryRequest, onExit, hideOwnOnli
 
 
   return () => {
+      // Stop any repeating audio/game state -- otherwise audioTimer (which
+      // replays a question's sound every few seconds) keeps firing after
+      // this component unmounts, since it's a plain JS timer with no React
+      // lifecycle of its own.
+      stopAllGames();
       delete window.changeConsonantCount;
       delete window.toggleReadAloud;
       delete window.cycleWaga;

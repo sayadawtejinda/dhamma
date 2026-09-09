@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { doc, setDoc, updateDoc, onSnapshot, collection, serverTimestamp } from 'firebase/firestore';
-import { X } from 'lucide-react';
+import { doc, setDoc, updateDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { db } from './firebase';
+import OnlineStatusWidget from './OnlineStatusWidget';
 
 // ── Ported from the standalone "Myanmar Consonant Endings" HTML app ──
 // Same hybrid approach as the other ported apps in this project: the
@@ -258,9 +258,11 @@ export default function MyanmarConsonantEndingsApp({ entryRequest, onExit, hideO
   const containerRef = useRef(null);
   const initializedRef = useRef(false);
   const studentName = entryRequest?.studentName || null;
-  const [onlineStudents, setOnlineStudents] = useState([]);
-  const [showOnlinePanel, setShowOnlinePanel] = useState(false);
-  const [nowForOnlineCheck, setNowForOnlineCheck] = useState(Date.now());
+  // coinBalanceRef is the source of truth the vanilla-JS game code reads and
+  // writes synchronously on every answer; myCoinBalance is just its React
+  // mirror for the online-status pill (same split as ConsonantPracticeApp).
+  const coinBalanceRef = useRef(0);
+  const [myCoinBalance, setMyCoinBalance] = useState(0);
 
   // Roster heartbeat — only pings when opened for a student (entryRequest
   // carries their name); a teacher just observes.
@@ -278,36 +280,6 @@ export default function MyanmarConsonantEndingsApp({ entryRequest, onExit, hideO
       goOffline();
     };
   }, [studentName]);
-
-  useEffect(() => {
-    const unsub = onSnapshot(collection(db, MCE_ROSTER_PATH), (snap) => {
-      setOnlineStudents(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, e => console.error('Myanmar Consonant Endings roster listen error:', e));
-    return () => unsub();
-  }, []);
-
-  useEffect(() => {
-    const interval = setInterval(() => setNowForOnlineCheck(Date.now()), 30000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const isRosterEntryOnline = (s) => {
-    const lastSeenMs = s.lastSeen?.toMillis ? s.lastSeen.toMillis() : (s.lastSeen?.seconds ? s.lastSeen.seconds * 1000 : 0);
-    return lastSeenMs > 0 && (nowForOnlineCheck - lastSeenMs) < 5 * 60 * 1000;
-  };
-  const weeklyRosterList = onlineStudents
-    .filter(s => {
-      const lastSeenMs = s.lastSeen?.toMillis ? s.lastSeen.toMillis() : (s.lastSeen?.seconds ? s.lastSeen.seconds * 1000 : 0);
-      return lastSeenMs > 0 && (nowForOnlineCheck - lastSeenMs) < 7 * 24 * 60 * 60 * 1000;
-    })
-    .map(s => ({ ...s, _isOnlineNow: isRosterEntryOnline(s) }))
-    .sort((a, b) => {
-      if (a._isOnlineNow !== b._isOnlineNow) return b._isOnlineNow ? 1 : -1;
-      const aMs = a.lastSeen?.toMillis ? a.lastSeen.toMillis() : 0;
-      const bMs = b.lastSeen?.toMillis ? b.lastSeen.toMillis() : 0;
-      return bMs - aMs;
-    });
-  const onlineCount = onlineStudents.filter(isRosterEntryOnline).length;
 
   useEffect(() => {
     // Dev-mode double-invoke / re-mount guard — this whole script wires up
@@ -455,6 +427,24 @@ export default function MyanmarConsonantEndingsApp({ entryRequest, onExit, hideO
         let audioTimer = null;
         let soundTimeout = null;
         let currentFeedbackAudio = null;
+
+        // --- Gold coins (roster doc, keyed by studentName): +10 per
+        // consonant picked, +10 per correct Play Game answer, -1 per wrong
+        // -- clamped at 0, same convention as ConsonantPracticeApp. ---
+        const progressRosterRef = studentName ? doc(db, MCE_ROSTER_PATH, sanitizeMceKey(studentName)) : null;
+        function awardCoins(delta) {
+            if (!progressRosterRef) return;
+            const newBalance = Math.max(0, coinBalanceRef.current + delta);
+            coinBalanceRef.current = newBalance;
+            setMyCoinBalance(newBalance);
+            setDoc(progressRosterRef, { coinBalance: newBalance }, { merge: true }).catch(() => {});
+        }
+        if (progressRosterRef) {
+            getDoc(progressRosterRef).then(snap => {
+                coinBalanceRef.current = snap.exists() ? (snap.data().coinBalance || 0) : 0;
+                setMyCoinBalance(coinBalanceRef.current);
+            }).catch(e => console.error('Error loading Myanmar Consonant Endings coin balance:', e));
+        }
 
         // UI Elements
         const gridElement = byId('main-grid');
@@ -618,8 +608,9 @@ export default function MyanmarConsonantEndingsApp({ entryRequest, onExit, hideO
         }
 
         function selectBaseConsonant(c) {
+            awardCoins(10);
             currentBaseConsonant = c;
-            activeGroupIndex = -1; 
+            activeGroupIndex = -1;
             baseSelectorBtn.innerText = c;
             
             dropdownMenu.classList.add('hidden');
@@ -879,11 +870,13 @@ export default function MyanmarConsonantEndingsApp({ entryRequest, onExit, hideO
                 const audio = new Audio(feedbackAudio.correct);
                 audio.play();
                 correctCount++;
+                awardCoins(10);
             } else {
                 btn.style.backgroundColor = '#f87171'; // Red
                 const audio = new Audio(feedbackAudio.wrong);
                 audio.play();
                 incorrectCount++;
+                awardCoins(-1);
             }
             
             updateScoreDisplay();
@@ -938,7 +931,12 @@ export default function MyanmarConsonantEndingsApp({ entryRequest, onExit, hideO
 
         runMasterInit();
 
+    // Stop any repeating audio/game state -- otherwise audioTimer (which
+    // replays a question's sound every few seconds) keeps firing after
+    // this component unmounts, since it's a plain JS timer with no React
+    // lifecycle of its own.
     return () => {
+      stopAllModes();
       delete window.__mceApp;
     };
   }, []);
@@ -952,37 +950,13 @@ export default function MyanmarConsonantEndingsApp({ entryRequest, onExit, hideO
         dangerouslySetInnerHTML={{ __html: MCE_APP_BODY_HTML }}
       />
       {!hideOwnOnlineBadge && (
-      <>
-      <button
-        onClick={() => setShowOnlinePanel(true)}
-        className="fixed top-3 right-3 z-[9990] flex items-center gap-1 text-sm font-bold bg-white/90 backdrop-blur-sm px-3 py-2 rounded-2xl shadow-lg border border-gray-200 text-emerald-600 hover:underline"
-      >
-        <span className="w-2 h-2 bg-emerald-500 rounded-full inline-block"></span>{onlineCount} online
-      </button>
-      {showOnlinePanel && (
-        <div className="fixed inset-0 z-[9995] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowOnlinePanel(false)}>
-          <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full max-h-[80vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-gray-800">🔤 Students {onlineCount > 0 && <span className="text-emerald-600">({onlineCount} online)</span>}</h2>
-              <button onClick={() => setShowOnlinePanel(false)} className="text-gray-400 hover:text-gray-700"><X size={22}/></button>
-            </div>
-            <p className="text-xs text-gray-400 mb-3">Showing everyone active in the last 7 days.</p>
-            <div className="space-y-2">
-              {weeklyRosterList.map(s => (
-                <div key={s.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
-                  <div className="flex items-center gap-2">
-                    <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${s._isOnlineNow ? 'bg-emerald-500' : 'bg-gray-300'}`}></span>
-                    <span className="font-bold text-gray-800">{s.studentName}</span>
-                  </div>
-                  <span className="text-xs text-gray-400">{s._isOnlineNow ? 'Online now' : 'Active this week'}</span>
-                </div>
-              ))}
-              {weeklyRosterList.length === 0 && <p className="text-center text-gray-400 py-6">No students active this week yet.</p>}
-            </div>
-          </div>
-        </div>
-      )}
-      </>
+        <OnlineStatusWidget
+          rosterPath={MCE_ROSTER_PATH}
+          studentName={studentName}
+          isTeacherMode={!studentName}
+          coinBalance={studentName ? myCoinBalance : null}
+          panelTitle="🔤 Students"
+        />
       )}
     </>
   );

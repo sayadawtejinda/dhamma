@@ -86,14 +86,14 @@ export default function ReadingMyanmarApp({ entryRequest, onExit }) {
   const activePartData = READING_PARTS.find(p => p.key === activePart);
 
   // Consonant Practice (Part 1), Burmese Consonant Game (Part 2), Myanmar
-  // Vowels (Part 3), and Sound Practice (Part 6) already show the shared
-  // OnlineStatusWidget themselves -- with their own coin balance/group/level
-  // activity, richer than this generic group-wide one -- so each takes over
-  // instead of stacking two pills. The other parts aren't migrated to their
-  // own widget yet, so this group-wide one (same shared component, just
-  // less detail) still covers them, and the "Choose a Part" landing screen
-  // where no part is active yet.
-  const OWN_WIDGET_PARTS = ['consonantpractice', 'burmesegame', 'vowelslearning', 'soundpractice'];
+  // Vowels (Part 3), Consonant Endings (Part 5), and Sound Practice (Part 6)
+  // already show the shared OnlineStatusWidget themselves -- with their own
+  // coin balance/group/level activity, richer than this generic group-wide
+  // one -- so each takes over instead of stacking two pills. The other
+  // parts aren't migrated to their own widget yet, so this group-wide one
+  // (same shared component, just less detail) still covers them, and the
+  // "Choose a Part" landing screen where no part is active yet.
+  const OWN_WIDGET_PARTS = ['consonantpractice', 'burmesegame', 'vowelslearning', 'consonantendings', 'soundpractice'];
   const showGroupBadge = !OWN_WIDGET_PARTS.includes(activePart);
   const OnlineBadge = (
     <OnlineStatusWidget

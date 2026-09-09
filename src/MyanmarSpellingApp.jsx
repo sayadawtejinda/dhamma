@@ -71,7 +71,18 @@ const MS_APP_CSS = `
             z-index: 100;
         }
         .consonant-group-btn {
-            @apply p-2 rounded-lg text-white font-bold text-lg text-center cursor-pointer shadow-md transition-all duration-200 hover:scale-105;
+            padding: 0.5rem;
+            border-radius: 0.5rem;
+            color: white;
+            font-weight: 700;
+            font-size: 1.125rem;
+            text-align: center;
+            cursor: pointer;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1);
+            transition: all 0.2s;
+        }
+        .consonant-group-btn:hover {
+            transform: scale(1.05);
         }
         .consonant-group-btn.active, .onset-btn.active {
             background-color: var(--highlight-color) !important;
