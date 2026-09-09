@@ -29,11 +29,23 @@ const getAttendanceStatus = (entry, sessions) => {
   return 'absent';
 };
 
-// 1 attended class = 7 "tree-age days" -- confirmed by the teacher. The
-// canvas animation's own growth curve maxes out at 120 days (full maturity,
-// birds/butterflies), matching the reference widget -- a student well past
-// that still sees the true day count in text, just the same fully-grown
-// visual as anyone else at 120+.
+// +7 "tree-age days" per CALENDAR WEEK the student attended at least one
+// scheduled class -- not per attended class. A student scheduled twice a
+// week who attends both still only grows 7 days that week (attending
+// every scheduled class in a week is what "counts" as that week's growth,
+// not a multiplier); a week with zero attendance grows nothing. Confirmed
+// by the teacher. The canvas animation's own growth curve maxes out at 120
+// days (full maturity, birds/butterflies), matching the reference widget --
+// a student well past that still sees the true day count in text, just the
+// same fully-grown visual as anyone else at 120+.
+// Monday-start week key so every schedule entry in the same calendar week
+// (regardless of which day it falls on) maps to the same bucket.
+function getWeekKey(date) {
+  const day = date.getDay(); // 0=Sun..6=Sat
+  const diffToMonday = (day === 0 ? -6 : 1) - day;
+  const monday = new Date(date.getFullYear(), date.getMonth(), date.getDate() + diffToMonday);
+  return monday.toISOString().slice(0, 10);
+}
 const MILESTONES = [0, 1, 5, 10, 20, 30, 40, 80, 120];
 const STAGE_NAMES = [
   'Dormant Seed',
@@ -352,10 +364,12 @@ export default function BodhiTreeApp({ entryRequest, onExit }) {
         const schedule = scheduleSnap.docs.map(d => d.data());
         const sessions = sessionsSnap.docs.map(d => d.data());
         const now = new Date();
-        const attendedCount = schedule.filter(e =>
-          e.endTime?.toDate?.() < now && getAttendanceStatus(e, sessions) === 'attended'
-        ).length;
-        if (isMounted) setTreeAgeDays(attendedCount * 7);
+        const attendedWeeks = new Set(
+          schedule
+            .filter(e => e.endTime?.toDate?.() < now && getAttendanceStatus(e, sessions) === 'attended')
+            .map(e => getWeekKey(e.startTime.toDate()))
+        );
+        if (isMounted) setTreeAgeDays(attendedWeeks.size * 7);
       } catch (e) {
         console.error('Error loading Bodhi tree data:', e);
       }
@@ -455,7 +469,7 @@ export default function BodhiTreeApp({ entryRequest, onExit }) {
 
           {!isTeacherMode && nextMilestone != null && (
             <p className="text-sm text-emerald-500 mb-6">
-              {Math.ceil(daysToNext / 7)} more class{Math.ceil(daysToNext / 7) === 1 ? '' : 'es'} until it grows again!
+              {Math.ceil(daysToNext / 7)} more week{Math.ceil(daysToNext / 7) === 1 ? '' : 's'} of attendance until it grows again!
             </p>
           )}
           {isTeacherMode && nextMilestone != null && (

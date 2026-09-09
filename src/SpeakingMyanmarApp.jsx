@@ -72,13 +72,14 @@ export default function SpeakingMyanmarApp({ entryRequest, onExit }) {
 
   const activePartData = SPEAKING_PARTS.find(p => p.key === activePart);
 
-  // Myanmar Poems (Part 1) already shows the shared OnlineStatusWidget
-  // itself, with its own coin balance/poems-done activity, richer than this
-  // generic group-wide one, so it takes over instead of stacking two pills.
-  // The other parts aren't migrated to their own widget yet, so this
-  // group-wide one (same shared component, just less detail) still covers
-  // them, and the "Choose a Part" landing screen where no part is active yet.
-  const OWN_WIDGET_PARTS = ['myanmarpoems'];
+  // Myanmar Poems (Part 1) and Number Learning (Part 2) already show the
+  // shared OnlineStatusWidget themselves -- with their own coin balance/
+  // levels-done activity, richer than this generic group-wide one -- so
+  // each takes over instead of stacking two pills. The other parts aren't
+  // migrated to their own widget yet, so this group-wide one (same shared
+  // component, just less detail) still covers them, and the "Choose a
+  // Part" landing screen where no part is active yet.
+  const OWN_WIDGET_PARTS = ['myanmarpoems', 'numberlearning'];
   const showGroupBadge = !OWN_WIDGET_PARTS.includes(activePart);
   const OnlineBadge = (
     <OnlineStatusWidget
