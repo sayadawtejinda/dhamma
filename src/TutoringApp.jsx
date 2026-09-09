@@ -7996,7 +7996,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         )}
       </h2>
 
-      <div className="p-6 mb-8 relative flex flex-col md:flex-row justify-between items-start md:items-center">
+      <div className="py-6 mb-8 relative flex flex-col md:flex-row justify-between items-start md:items-center">
         {isEditingName ? (
           <div className="space-y-3 w-full md:w-auto flex-1">
             <h3 className="text-lg font-semibold text-emerald-800 mb-4">Edit Profile</h3>
@@ -8019,7 +8019,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
             <div className="w-full">
                 <div className="flex items-center flex-wrap gap-3 mb-2">
                   {studentProfile?.trophyCount > 0 && (
-                      <span className="text-4xl font-bold text-yellow-600 py-1 drop-shadow-sm" title={`${studentProfile.trophyCount} Trophies`}>🏆 {studentProfile.trophyCount}</span>
+                      <span className="text-2xl font-bold text-yellow-600 drop-shadow-sm whitespace-nowrap" title={`${studentProfile.trophyCount} Trophies`}>🏆{studentProfile.trophyCount}</span>
                   )}
                   {onOpenBodhiTree && (
                     <button
@@ -8054,26 +8054,28 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                   </button>
                 )}
             </div>
-            <button
-              onClick={() => setShowLogoutConfirm(true)}
-              className="absolute top-0 right-0 w-9 h-9 flex items-center justify-center text-gray-500 hover:text-red-700 bg-gray-100 hover:bg-red-50 rounded-full transition-colors border border-gray-200"
-              title="Log out of this device (e.g. borrowed/shared device)"
-              aria-label="Log Out"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 001 1h6a1 1 0 100-2H4V5h5a1 1 0 000-2H3zm10.293 4.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L14.586 11H7a1 1 0 110-2h7.586l-1.293-1.293a1 1 0 010-1.414z" clipRule="evenodd" />
-              </svg>
-            </button>
-            <button
-              onClick={() => { setEditingNameText(studentProfile?.pendingName || studentProfile?.name || ''); setIsEditingName(true); }}
-              className="absolute bottom-2 right-2 w-8 h-8 flex items-center justify-center text-emerald-600 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 rounded-full transition-colors border border-emerald-200"
-              title="Edit Profile"
-              aria-label="Edit Profile"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-              </svg>
-            </button>
+            <div className="absolute bottom-2 right-2 flex items-center gap-2">
+              <button
+                onClick={() => setShowLogoutConfirm(true)}
+                className="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-red-700 bg-gray-100 hover:bg-red-50 rounded-full transition-colors border border-gray-200"
+                title="Log out of this device (e.g. borrowed/shared device)"
+                aria-label="Log Out"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 001 1h6a1 1 0 100-2H4V5h5a1 1 0 000-2H3zm10.293 4.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L14.586 11H7a1 1 0 110-2h7.586l-1.293-1.293a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </button>
+              <button
+                onClick={() => { setEditingNameText(studentProfile?.pendingName || studentProfile?.name || ''); setIsEditingName(true); }}
+                className="w-8 h-8 flex items-center justify-center text-emerald-600 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 rounded-full transition-colors border border-emerald-200"
+                title="Edit Profile"
+                aria-label="Edit Profile"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                </svg>
+              </button>
+            </div>
           </>
         )}
       </div>
