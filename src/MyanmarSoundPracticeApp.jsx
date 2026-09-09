@@ -1,7 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { doc, setDoc, updateDoc, onSnapshot, collection, serverTimestamp } from 'firebase/firestore';
-import { X } from 'lucide-react';
+import React, { useEffect, useRef } from 'react';
+import { doc, setDoc, updateDoc, serverTimestamp, getDoc, arrayUnion } from 'firebase/firestore';
 import { db } from './firebase';
+import OnlineStatusWidget from './OnlineStatusWidget';
 
 // ── Ported from the standalone "Myanmar Sound Practice" HTML app ──
 // Same hybrid approach as the other ported apps in this project: the
@@ -448,9 +448,6 @@ export default function MyanmarSoundPracticeApp({ entryRequest, onExit, hideOwnO
   const containerRef = useRef(null);
   const initializedRef = useRef(false);
   const studentName = entryRequest?.studentName || null;
-  const [onlineStudents, setOnlineStudents] = useState([]);
-  const [showOnlinePanel, setShowOnlinePanel] = useState(false);
-  const [nowForOnlineCheck, setNowForOnlineCheck] = useState(Date.now());
 
   useEffect(() => {
     if (!studentName) return;
@@ -466,36 +463,6 @@ export default function MyanmarSoundPracticeApp({ entryRequest, onExit, hideOwnO
       goOffline();
     };
   }, [studentName]);
-
-  useEffect(() => {
-    const unsub = onSnapshot(collection(db, SP_ROSTER_PATH), (snap) => {
-      setOnlineStudents(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, e => console.error('Myanmar Sound Practice roster listen error:', e));
-    return () => unsub();
-  }, []);
-
-  useEffect(() => {
-    const interval = setInterval(() => setNowForOnlineCheck(Date.now()), 30000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const isRosterEntryOnline = (s) => {
-    const lastSeenMs = s.lastSeen?.toMillis ? s.lastSeen.toMillis() : (s.lastSeen?.seconds ? s.lastSeen.seconds * 1000 : 0);
-    return lastSeenMs > 0 && (nowForOnlineCheck - lastSeenMs) < 5 * 60 * 1000;
-  };
-  const weeklyRosterList = onlineStudents
-    .filter(s => {
-      const lastSeenMs = s.lastSeen?.toMillis ? s.lastSeen.toMillis() : (s.lastSeen?.seconds ? s.lastSeen.seconds * 1000 : 0);
-      return lastSeenMs > 0 && (nowForOnlineCheck - lastSeenMs) < 7 * 24 * 60 * 60 * 1000;
-    })
-    .map(s => ({ ...s, _isOnlineNow: isRosterEntryOnline(s) }))
-    .sort((a, b) => {
-      if (a._isOnlineNow !== b._isOnlineNow) return b._isOnlineNow ? 1 : -1;
-      const aMs = a.lastSeen?.toMillis ? a.lastSeen.toMillis() : 0;
-      const bMs = b.lastSeen?.toMillis ? b.lastSeen.toMillis() : 0;
-      return bMs - aMs;
-    });
-  const onlineCount = onlineStudents.filter(isRosterEntryOnline).length;
 
   useEffect(() => {
     if (initializedRef.current) return;
@@ -587,7 +554,48 @@ export default function MyanmarSoundPracticeApp({ entryRequest, onExit, hideOwnO
         let choices = [];
         let correctItem = null;
         let soundTimeout = null;
-        
+
+        // --- Quiz Mode progress (roster doc, keyed by studentName) ---
+        // Persists which Levels have been won (score hits WIN_SCORE) so:
+        // (1) the level buttons show a ✅ for ones already passed, (2) the
+        // shared online-status panel can show "Level N" for whoever's
+        // online, and (3) TutoringApp's session Report can auto-fill the
+        // "completed" count from passedLevels.length (2 trophies/level is
+        // then just the Lesson Bank's normal unitCount/trophyLimit ratio,
+        // same as every other app).
+        const progressRosterRef = studentName ? doc(db, SP_ROSTER_PATH, sanitizeSpKey(studentName)) : null;
+        let passedLevels = [];
+        function markLevelButtonPassed(level) {
+            const btn = byId(`level-${level}-btn`);
+            if (!btn || btn.querySelector('.level-passed-badge')) return;
+            const badge = document.createElement('span');
+            badge.className = 'level-passed-badge';
+            badge.textContent = '✅';
+            badge.style.cssText = 'position:absolute;top:-8px;right:-8px;font-size:14px;line-height:1;';
+            btn.appendChild(badge);
+        }
+        function recordLevelPassed(level) {
+            if (passedLevels.includes(level)) return;
+            passedLevels.push(level);
+            markLevelButtonPassed(level);
+            if (progressRosterRef) {
+                setDoc(progressRosterRef, { passedLevels: arrayUnion(level) }, { merge: true }).catch(() => {});
+            }
+        }
+        function persistCurrentLevel(level) {
+            if (progressRosterRef) {
+                setDoc(progressRosterRef, { currentLevel: level }, { merge: true }).catch(() => {});
+            }
+        }
+        if (progressRosterRef) {
+            getDoc(progressRosterRef).then(snap => {
+                const data = snap.exists() ? snap.data() : {};
+                passedLevels = Array.isArray(data.passedLevels) ? data.passedLevels : [];
+                passedLevels.forEach(markLevelButtonPassed);
+            }).catch(e => console.error('Error loading Sound Practice progress:', e));
+            persistCurrentLevel(currentLevel);
+        }
+
         // Learning Mode State
         let currentLearningLevel = 1;
         let isPlayingSeries = false;
@@ -1375,7 +1383,8 @@ export default function MyanmarSoundPracticeApp({ entryRequest, onExit, hideOwnO
                 shootEnergy(button, () => {
                     updateProgressAvatars();
                     
-                    if (score === WIN_SCORE && wrongScore < 10) { 
+                    if (score === WIN_SCORE && wrongScore < 10) {
+                        recordLevelPassed(currentLevel);
                         // Celebrate only exactly at max score to prevent repeating loop on "Stay"
                         const blackout = byId('blackout-overlay');
                         blackout.classList.remove('hidden');
@@ -1707,9 +1716,10 @@ export default function MyanmarSoundPracticeApp({ entryRequest, onExit, hideOwnO
             levelButtons.forEach(button => { button.addEventListener('click', () => { 
                 if (remediationState.active && remediationState.phase !== 'completed') return;
 
-                levelButtons.forEach(btn => btn.classList.remove('active')); button.classList.add('active'); 
-                currentLevel = parseInt(button.id.match(/\d+/)[0]); 
-                if (isGameRunning) { 
+                levelButtons.forEach(btn => btn.classList.remove('active')); button.classList.add('active');
+                currentLevel = parseInt(button.id.match(/\d+/)[0]);
+                persistCurrentLevel(currentLevel);
+                if (isGameRunning) {
                     if (score >= WIN_SCORE) leaveSatelliteInOrbit();
                     score = 0; wrongScore = 0; scoreElement.textContent = 0; wrongScoreElement.textContent = 0; newGame(); 
                 } 
@@ -1772,6 +1782,7 @@ export default function MyanmarSoundPracticeApp({ entryRequest, onExit, hideOwnO
                         if (nextBtn) nextBtn.classList.add('active');
                         
                         currentLevel++;
+                        persistCurrentLevel(currentLevel);
                         score = 0;
                         wrongScore = 0;
                         scoreElement.textContent = 0;
@@ -1846,37 +1857,15 @@ export default function MyanmarSoundPracticeApp({ entryRequest, onExit, hideOwnO
         dangerouslySetInnerHTML={{ __html: SP_APP_BODY_HTML }}
       />
       {!hideOwnOnlineBadge && (
-      <>
-      <button
-        onClick={() => setShowOnlinePanel(true)}
-        className="fixed top-16 right-4 z-[9990] flex items-center gap-1 text-sm font-bold bg-white/90 backdrop-blur-sm px-3 py-2 rounded-2xl shadow-lg border border-gray-200 text-emerald-600 hover:underline"
-      >
-        <span className="w-2 h-2 bg-emerald-500 rounded-full inline-block"></span>{onlineCount} online
-      </button>
-      {showOnlinePanel && (
-        <div className="fixed inset-0 z-[9995] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowOnlinePanel(false)}>
-          <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full max-h-[80vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-gray-800">🔊 Students {onlineCount > 0 && <span className="text-emerald-600">({onlineCount} online)</span>}</h2>
-              <button onClick={() => setShowOnlinePanel(false)} className="text-gray-400 hover:text-gray-700"><X size={22}/></button>
-            </div>
-            <p className="text-xs text-gray-400 mb-3">Showing everyone active in the last 7 days.</p>
-            <div className="space-y-2">
-              {weeklyRosterList.map(s => (
-                <div key={s.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
-                  <div className="flex items-center gap-2">
-                    <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${s._isOnlineNow ? 'bg-emerald-500' : 'bg-gray-300'}`}></span>
-                    <span className="font-bold text-gray-800">{s.studentName}</span>
-                  </div>
-                  <span className="text-xs text-gray-400">{s._isOnlineNow ? 'Online now' : 'Active this week'}</span>
-                </div>
-              ))}
-              {weeklyRosterList.length === 0 && <p className="text-center text-gray-400 py-6">No students active this week yet.</p>}
-            </div>
-          </div>
-        </div>
-      )}
-      </>
+        <OnlineStatusWidget
+          rosterPath={SP_ROSTER_PATH}
+          studentName={studentName}
+          isTeacherMode={!studentName}
+          panelTitle="🔊 Students"
+          renderActivity={s => (
+            <span className="text-gray-600">{s.currentLevel ? `Level ${s.currentLevel}` : 'Not practicing'}</span>
+          )}
+        />
       )}
     </>
   );

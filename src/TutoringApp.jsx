@@ -240,7 +240,7 @@ const GROUP_APP_PART_MAX = {
     vowelslearning: 11,
     myanmarspelling: 20,
     consonantendings: 7,
-    soundpractice: 14,
+    soundpractice: 16, // Quiz Mode Levels 1-8, 2 trophies per level passed
   },
   'speakingmyanmar://': {
     myanmarpoems: 25,
@@ -270,6 +270,14 @@ const groupSchemeOfLink = (link) => {
   }
   return null;
 };
+// Myanmar Sound Practice can be assigned standalone (myanmarsoundpractice://)
+// or as Reading Myanmar's Part 6 -- either way its own Quiz Mode progress
+// (see MYANMAR_SOUND_PRACTICE_APP_ID below) is what the Report auto-fill reads.
+const MYANMAR_SOUND_PRACTICE_APP_ID = 'myanmar-sound-practice-app'; // Firestore appId used inside MyanmarSoundPracticeApp.jsx
+const sanitizeSoundPracticeKey = (key) => (key || 'unknown').replace(/[.$#/\[\]]/g, '_');
+const isSoundPracticeUrl = (link) =>
+  link === 'myanmarsoundpractice://' ||
+  (groupSchemeOfLink(link) === 'readingmyanmar://' && extractGroupPartKey(link) === 'soundpractice');
 const computeLessonKey = (title, link) => {
   const classId = extractClassIdFromLink(link);
   return sanitizeKey(classId ? `${title}_${classId}` : title);
@@ -7240,6 +7248,22 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         } catch (e) { console.error('Myanmar Speaking minutes fetch:', e); }
       }
     }
+
+    // Myanmar Sound Practice: fetch which Quiz Mode Levels (1-8) this
+    // student has already passed, and drop the count straight into
+    // "completed" -- same "2 trophies per unit" ratio as everywhere else,
+    // just driven by the Lesson Bank's Total Number/Unit Name for this
+    // lesson (16 / "Level") instead of a live class lesson count.
+    if (isSoundPracticeUrl(activeSession.lessonLink)) {
+      const stuName = studentProfile?.name;
+      if (stuName) {
+        try {
+          const rosterSnap = await getDoc(doc(db, 'artifacts', MYANMAR_SOUND_PRACTICE_APP_ID, 'public', 'data', 'roster', sanitizeSoundPracticeKey(stuName)));
+          const passedLevels = rosterSnap.exists() && Array.isArray(rosterSnap.data().passedLevels) ? rosterSnap.data().passedLevels : [];
+          if (passedLevels.length > 0) setCompletedUnitInput(String(passedLevels.length));
+        } catch (e) { console.error('Myanmar Sound Practice progress fetch:', e); }
+      }
+    }
   };
 
   const handleOpenRedoReport = async (session) => {
@@ -7303,9 +7327,20 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         }catch(e){console.error('Abhi redo:',e);}
       }
     }
+    // Myanmar Sound Practice redo fetch — same passedLevels-count logic as handleEndSession
+    if (isSoundPracticeUrl(session.lessonLink)) {
+      const stuName = studentProfile?.name;
+      if (stuName) {
+        try {
+          const rosterSnap = await getDoc(doc(db, 'artifacts', MYANMAR_SOUND_PRACTICE_APP_ID, 'public', 'data', 'roster', sanitizeSoundPracticeKey(stuName)));
+          const passedLevels = rosterSnap.exists() && Array.isArray(rosterSnap.data().passedLevels) ? rosterSnap.data().passedLevels : [];
+          if (passedLevels.length > 0) setCompletedUnitInput(String(passedLevels.length));
+        } catch (e) { console.error('Myanmar Sound Practice redo fetch:', e); }
+      }
+    }
   };
-  
-  const handleAutoSubmitSession = async (sessionToSubmit, calculatedEndTime) => { 
+
+  const handleAutoSubmitSession = async (sessionToSubmit, calculatedEndTime) => {
     if (!sessionToSubmit || !sessionToSubmit.id) return; 
     
     let finalEndTime;
