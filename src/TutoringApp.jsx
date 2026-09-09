@@ -339,20 +339,21 @@ const getEffectiveCompletedUnit = (lesson, studentProfile, sessionsForLesson, ss
 // entirely -- kept small enough that a full year of chips still fits, per
 // the teacher's "pictures/colors over text for young readers" direction.
 function AttendanceBar({ entries }) {
-  if (!entries || entries.length === 0) return null;
+  // "upcoming" (not-yet-happened) days render as blank placeholder boxes --
+  // skipped entirely so the bar only shows real attended/absent history.
+  const shownEntries = (entries || []).filter(e => e.status !== 'upcoming');
+  if (shownEntries.length === 0) return null;
   return (
     <div className="flex flex-wrap gap-px">
-      {entries.map((e, i) => (
+      {shownEntries.map((e, i) => (
         <span
           key={i}
           className={`w-3 h-3 flex items-center justify-center rounded-sm text-[6px] leading-none font-bold ${
-            e.status === 'attended' ? 'bg-emerald-500 text-white'
-            : e.status === 'absent' ? 'bg-red-500 text-white'
-            : 'w-1 h-1 self-center border border-gray-300'
+            e.status === 'attended' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
           }`}
           title={e.date.toLocaleDateString()}
         >
-          {e.status === 'upcoming' ? '' : e.day}
+          {e.day}
         </span>
       ))}
     </div>
@@ -7886,14 +7887,21 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         )}
       </div>
 
-      <h2 className="text-3xl font-bold mb-6 text-emerald-700">
-        {studentProfile?.name}'s 🏡
+      <h2 className="text-3xl font-bold mb-6 text-emerald-700 flex items-center flex-wrap gap-3">
+        <span>{studentProfile?.name}'s 🏡</span>
+        {(attendanceSummary.yearAttended > 0 || attendanceSummary.yearAbsent > 0) && (
+          <span className="flex items-center gap-2 text-lg" title="Days attended / absent this year">
+            <span className="font-bold text-emerald-600">{attendanceSummary.yearAttended}</span>
+            <span className="font-bold text-red-600">{attendanceSummary.yearAbsent}</span>
+          </span>
+        )}
       </h2>
-      
-      <div className="bg-white/90 backdrop-blur-sm p-6 rounded-xl shadow-lg mb-8 border border-emerald-100 flex flex-col md:flex-row justify-between items-start md:items-center">
+
+      <div className="p-6 mb-8 relative flex flex-col md:flex-row justify-between items-start md:items-center">
         {isEditingName ? (
           <div className="space-y-3 w-full md:w-auto flex-1">
             <h3 className="text-lg font-semibold text-emerald-800 mb-4">Edit Profile</h3>
+            <p className="text-gray-600">Your ID: <span className="font-mono bg-gray-100 px-2 py-0.5 rounded-md font-bold text-gray-800">{studentProfile?.displayId}</span></p>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
               <input type="text" value={editingNameText} onChange={(e) => setEditingNameText(e.target.value)} className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500" />
@@ -7908,64 +7916,33 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
             </div>
           </div>
         ) : (
-          <div className="w-full flex justify-between items-center flex-wrap gap-4">
-              <div>
-                  <div className="flex items-center flex-wrap gap-3 mb-2">
-                    <h3 className="text-2xl font-semibold text-emerald-800">{studentProfile?.name}</h3>
-                    <button
-                      onClick={() => { setEditingNameText(studentProfile?.pendingName || studentProfile?.name || ''); setIsEditingName(true); }}
-                      className="w-8 h-8 flex items-center justify-center text-emerald-600 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 rounded-full transition-colors border border-emerald-200 flex-shrink-0"
-                      title="Edit Profile"
-                      aria-label="Edit Profile"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                        <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-                      </svg>
-                    </button>
-                    {studentProfile?.trophyCount > 0 && (
-                        <span className="text-4xl font-bold text-yellow-600 px-2 py-1 drop-shadow-sm" title={`${studentProfile.trophyCount} Trophies`}>🏆 {studentProfile.trophyCount}</span>
-                    )}
-                  </div>
-                  {studentProfile?.pendingName && (
-                    <div className="mb-2 inline-flex items-center gap-2 bg-yellow-50 border border-yellow-300 rounded-lg px-3 py-1.5">
-                      <span className="text-yellow-800 text-sm font-semibold">
-                        ⏳ Name change to "<strong>{studentProfile.pendingName}</strong>" is pending teacher approval.
-                      </span>
-                      <button onClick={handleCancelPendingNameRequest} className="text-xs text-red-600 hover:text-red-800 font-semibold underline">Cancel</button>
-                    </div>
+          <>
+            <div className="w-full">
+                <div className="flex items-center flex-wrap gap-3 mb-2">
+                  {studentProfile?.trophyCount > 0 && (
+                      <span className="text-4xl font-bold text-yellow-600 py-1 drop-shadow-sm" title={`${studentProfile.trophyCount} Trophies`}>🏆 {studentProfile.trophyCount}</span>
                   )}
-                  <p className="text-gray-600 text-lg mt-2">Your ID: <span className="font-mono bg-gray-100 px-2 py-0.5 rounded-md font-bold text-gray-800">{studentProfile?.displayId}</span></p>
-
-                  <div className="mt-4">
-                    <div className="bg-indigo-50 p-3 rounded-xl shadow-sm border border-indigo-100">
-                        <div className="flex items-center gap-3 mb-1.5">
-                          <span className="font-bold text-lg text-emerald-600">{attendanceSummary.yearAttended}</span>
-                          <span className="font-bold text-lg text-red-600">{attendanceSummary.yearAbsent}</span>
-                        </div>
-                        <AttendanceBar entries={attendanceSummary.yearEntries} />
-                    </div>
+                  {onOpenBodhiTree && (
+                    <button
+                      onClick={() => onOpenBodhiTree({ studentUid, studentName: studentProfile?.name || '' })}
+                      className="flex items-center justify-center text-2xl bg-emerald-50 hover:bg-emerald-100 w-11 h-11 rounded-lg transition-colors border border-emerald-200 flex-shrink-0"
+                      title="My Bodhi Tree"
+                    >
+                      🌳
+                    </button>
+                  )}
+                </div>
+                {studentProfile?.pendingName && (
+                  <div className="mb-2 inline-flex items-center gap-2 bg-yellow-50 border border-yellow-300 rounded-lg px-3 py-1.5">
+                    <span className="text-yellow-800 text-sm font-semibold">
+                      ⏳ Name change to "<strong>{studentProfile.pendingName}</strong>" is pending teacher approval.
+                    </span>
+                    <button onClick={handleCancelPendingNameRequest} className="text-xs text-red-600 hover:text-red-800 font-semibold underline">Cancel</button>
                   </div>
-              </div>
-              <div className="flex flex-col sm:flex-row gap-3">
-                {onOpenBodhiTree && (
-                  <button
-                    onClick={() => onOpenBodhiTree({ studentUid, studentName: studentProfile?.name || '' })}
-                    className="flex items-center justify-center space-x-1 text-2xl bg-emerald-50 hover:bg-emerald-100 px-4 py-2.5 rounded-lg transition-colors border border-emerald-200"
-                    title="My Bodhi Tree"
-                  >
-                    🌳
-                  </button>
                 )}
-                <button
-                  onClick={() => setShowLogoutConfirm(true)}
-                  className="flex items-center justify-center space-x-1 text-gray-600 hover:text-red-700 bg-gray-100 hover:bg-red-50 px-4 py-2.5 rounded-lg font-semibold transition-colors border border-gray-200"
-                  title="Log out of this device (e.g. borrowed/shared device)"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 001 1h6a1 1 0 100-2H4V5h5a1 1 0 000-2H3zm10.293 4.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L14.586 11H7a1 1 0 110-2h7.586l-1.293-1.293a1 1 0 010-1.414z" clipRule="evenodd" />
-                  </svg>
-                  <span>Log Out</span>
-                </button>
+                <div className="mt-2">
+                  <AttendanceBar entries={attendanceSummary.yearEntries} />
+                </div>
                 {!studentProfile?.hideFromGroupRoster && (
                   <button
                     onClick={() => {
@@ -7973,15 +7950,35 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                         updateDoc(doc(db, `${publicDataPath}/students`, studentUid), { hideFromGroupRoster: true }).catch(() => {});
                       }
                     }}
-                    className="flex items-center justify-center space-x-1 text-gray-600 hover:text-amber-700 bg-gray-100 hover:bg-amber-50 px-4 py-2.5 rounded-lg font-semibold transition-colors border border-gray-200"
+                    className="mt-3 flex items-center gap-1 text-sm text-gray-500 hover:text-amber-700 font-semibold"
                     title="Stop showing my ID on the teacher's group screen"
                   >
-                    <span className="text-lg">🙈</span>
+                    <span>🙈</span>
                     <span>Hide My ID</span>
                   </button>
                 )}
-              </div>
-          </div>
+            </div>
+            <button
+              onClick={() => setShowLogoutConfirm(true)}
+              className="absolute top-0 right-0 w-9 h-9 flex items-center justify-center text-gray-500 hover:text-red-700 bg-gray-100 hover:bg-red-50 rounded-full transition-colors border border-gray-200"
+              title="Log out of this device (e.g. borrowed/shared device)"
+              aria-label="Log Out"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 001 1h6a1 1 0 100-2H4V5h5a1 1 0 000-2H3zm10.293 4.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L14.586 11H7a1 1 0 110-2h7.586l-1.293-1.293a1 1 0 010-1.414z" clipRule="evenodd" />
+              </svg>
+            </button>
+            <button
+              onClick={() => { setEditingNameText(studentProfile?.pendingName || studentProfile?.name || ''); setIsEditingName(true); }}
+              className="absolute bottom-2 right-2 w-8 h-8 flex items-center justify-center text-emerald-600 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 rounded-full transition-colors border border-emerald-200"
+              title="Edit Profile"
+              aria-label="Edit Profile"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+              </svg>
+            </button>
+          </>
         )}
       </div>
 
