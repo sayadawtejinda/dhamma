@@ -302,6 +302,14 @@ const sanitizePoemsKey = (key) => (key || 'unknown').replace(/[.$#/\[\]]/g, '_')
 const isMyanmarPoemsUrl = (link) =>
   link === 'myanmarpoems://' ||
   (groupSchemeOfLink(link) === 'speakingmyanmar://' && extractGroupPartKey(link) === 'myanmarpoems');
+// Same idea for Myanmar Number Learning -- standalone (numberlearning://) or
+// as Speaking Myanmar's Part 2. Its own roster doc's completedLevels is what
+// the Report auto-fill reads.
+const MYANMAR_NUMBER_LEARNING_APP_ID = 'myanmar-number-learning-app'; // Firestore appId used inside MyanmarNumberLearningApp.jsx
+const sanitizeNumberLearningKey = (key) => (key || 'unknown').replace(/[.$#/\[\]]/g, '_');
+const isNumberLearningUrl = (link) =>
+  link === 'numberlearning://' ||
+  (groupSchemeOfLink(link) === 'speakingmyanmar://' && extractGroupPartKey(link) === 'numberlearning');
 const computeLessonKey = (title, link) => {
   const classId = extractClassIdFromLink(link);
   return sanitizeKey(classId ? `${title}_${classId}` : title);
@@ -7328,6 +7336,19 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         } catch (e) { console.error('Myanmar Poems progress fetch:', e); }
       }
     }
+
+    // Myanmar Number Learning: fetch total place-value levels completed
+    // (units/tens/hundreds/thousands) and drop the count into "completed".
+    if (isNumberLearningUrl(activeSession.lessonLink)) {
+      const stuName = studentProfile?.name;
+      if (stuName) {
+        try {
+          const rosterSnap = await getDoc(doc(db, 'artifacts', MYANMAR_NUMBER_LEARNING_APP_ID, 'public', 'data', 'roster', sanitizeNumberLearningKey(stuName)));
+          const completedLevels = rosterSnap.exists() && Array.isArray(rosterSnap.data().completedLevels) ? rosterSnap.data().completedLevels : [];
+          if (completedLevels.length > 0) setCompletedUnitInput(String(completedLevels.length));
+        } catch (e) { console.error('Myanmar Number Learning progress fetch:', e); }
+      }
+    }
   };
 
   const handleOpenRedoReport = async (session) => {
@@ -7433,6 +7454,17 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           const completedPoemIds = rosterSnap.exists() && Array.isArray(rosterSnap.data().completedPoemIds) ? rosterSnap.data().completedPoemIds : [];
           if (completedPoemIds.length > 0) setCompletedUnitInput(String(completedPoemIds.length));
         } catch (e) { console.error('Myanmar Poems redo fetch:', e); }
+      }
+    }
+    // Myanmar Number Learning redo fetch — same completedLevels-count logic as handleEndSession
+    if (isNumberLearningUrl(session.lessonLink)) {
+      const stuName = studentProfile?.name;
+      if (stuName) {
+        try {
+          const rosterSnap = await getDoc(doc(db, 'artifacts', MYANMAR_NUMBER_LEARNING_APP_ID, 'public', 'data', 'roster', sanitizeNumberLearningKey(stuName)));
+          const completedLevels = rosterSnap.exists() && Array.isArray(rosterSnap.data().completedLevels) ? rosterSnap.data().completedLevels : [];
+          if (completedLevels.length > 0) setCompletedUnitInput(String(completedLevels.length));
+        } catch (e) { console.error('Myanmar Number Learning redo fetch:', e); }
       }
     }
   };

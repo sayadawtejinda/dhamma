@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { doc, setDoc, updateDoc, onSnapshot, collection, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, updateDoc, onSnapshot, collection, serverTimestamp, getDoc, arrayUnion } from 'firebase/firestore';
 import { X } from 'lucide-react';
 import { db } from './firebase';
 
@@ -433,6 +433,50 @@ export default function MyanmarNumberLearningApp({ entryRequest, onExit, hideOwn
         const gameLevels = ['units', 'tens', 'hundreds', 'thousands'];
         const finalLevels = ['tenThousands', 'hundredThousands', 'millions', 'crore'];
         let finalSequenceIndex = 0;
+
+        // --- Progress persistence (roster doc, keyed by studentName) ---
+        // completedLevels holds which of gameLevels this student has already
+        // won (20 correct) -- there's no game for finalLevels, so those
+        // never get added here except via the one-off backfill for students
+        // who were already given trophies for them before this tracking
+        // existed (see the standalone backfill script, not part of this app).
+        const progressRosterRef = studentName ? doc(db, MNL_ROSTER_PATH, sanitizeMnlKey(studentName)) : null;
+        let completedLevels = [];
+        let coinBalance = 0;
+
+        // Gold coins: +20 per correct quiz answer, -1 per wrong, clamped at
+        // 0 (same convention as ConsonantPracticeApp).
+        function awardCoins(delta) {
+            if (!progressRosterRef) return;
+            coinBalance = Math.max(0, coinBalance + delta);
+            setDoc(progressRosterRef, { coinBalance }, { merge: true }).catch(() => {});
+        }
+
+        function recordLevelCompleted(level) {
+            if (completedLevels.includes(level)) return;
+            completedLevels.push(level);
+            if (progressRosterRef) {
+                setDoc(progressRosterRef, { completedLevels: arrayUnion(level) }, { merge: true }).catch(() => {});
+            }
+            refreshLevelButtonLabels();
+        }
+
+        // Adds/removes the ✅ suffix on the units/tens/hundreds/thousands
+        // nav buttons to reflect completedLevels, without touching their
+        // onclick wiring (they're generated once as an HTML string).
+        function refreshLevelButtonLabels() {
+            gameLevels.forEach(key => {
+                const btn = rootEl.querySelector(`.place-value-button[data-section="${key}"]`);
+                if (btn) btn.textContent = countingData[key].label + (completedLevels.includes(key) ? ' ✅' : '');
+            });
+        }
+
+        // The first game level (in gameLevels order) not yet completed --
+        // Quiz Mode is only playable for this one (or an already-completed
+        // one, to let a student replay); finalLevels are never gated.
+        function firstUnlockedLevel() {
+            return gameLevels.find(l => !completedLevels.includes(l)) || gameLevels[gameLevels.length - 1];
+        }
         let isFinalSequencePlaying = false;
         // ------------------------------------------
 
@@ -800,7 +844,7 @@ export default function MyanmarNumberLearningApp({ entryRequest, onExit, hideOwn
                      <p class="text-lg font-bold text-gray-800"><span class="text-rose-600">${label}</span> Quiz</p>
                 </div>
                 <div class="turtle-track-container w-full max-w-[500px] mx-auto">
-                    <div class="turtle" id="app1-turtle" style="left: calc(${(app1Stats.correct / 25) * 100}% - ${(app1Stats.correct / 20) * 40}px);">🐢</div>
+                    <div class="turtle" id="app1-turtle" style="left: calc(${(app1Stats.correct / 20) * 100}% - ${(app1Stats.correct / 20) * 40}px);">🐢</div>
                     <div class="finish-line">🏁</div>
                 </div>
                 <div class="flex flex-col items-center justify-center mt-2">
@@ -873,6 +917,7 @@ export default function MyanmarNumberLearningApp({ entryRequest, onExit, hideOwn
                 }
             }
             if (selectedDigit === correctNumber) {
+                awardCoins(20);
                 // --- UPDATED LOGIC: Turtle Move Forward ---
                 app1Stats.correct++;
                 const turtle = byId('app1-turtle');
@@ -891,8 +936,9 @@ export default function MyanmarNumberLearningApp({ entryRequest, onExit, hideOwn
                     // --- Win Condition: 20 Correct ---
                     if (app1Stats.correct >= 20) {
                         // Level Complete
+                        recordLevelCompleted(currentSection);
                         alert(`Level ${countingData[currentSection].label} Complete!`);
-                        
+
                         // Move to next level logic
                         const currentIndex = gameLevels.indexOf(currentSection);
                         if (currentIndex < gameLevels.length - 1) {
@@ -921,6 +967,7 @@ export default function MyanmarNumberLearningApp({ entryRequest, onExit, hideOwn
                     }
                 }, 1500);
             } else {
+                awardCoins(-1);
                 // --- UPDATED LOGIC: Turtle Move Backward ---
                 app1Stats.correct = Math.max(0, app1Stats.correct - 1);
                 const turtle = byId('app1-turtle');
@@ -953,13 +1000,26 @@ export default function MyanmarNumberLearningApp({ entryRequest, onExit, hideOwn
             }
         }
         const toggleGameMode = function () {
+            // Quiz Mode only exists for units/tens/hundreds/thousands --
+            // there's no game for the higher place values, so this no
+            // longer silently redirects to 'units' when browsing one of
+            // those; it just refuses.
+            if (!gameLevels.includes(currentSection)) {
+                alert('Quiz Mode ဟာ ခု/ဆယ်/ရာ/ထောင် လေးမျိုးအတွက်သာ ရနိုင်ပါသည်။');
+                return;
+            }
+            // Sequential unlock: can't start a later level's quiz before
+            // finishing the earlier ones.
+            if (!isGameMode && currentSection !== firstUnlockedLevel() && !completedLevels.includes(currentSection)) {
+                alert(`${countingData[firstUnlockedLevel()].label} ကို အရင်ပြီးအောင် ကစားပါ။`);
+                return;
+            }
             isGameMode = !isGameMode;
             const toggleBtn = byId('gameToggle');
-            if (!['units', 'tens', 'hundreds', 'thousands'].includes(currentSection)) { currentSection = 'units'; }
-            
+
             // Reset Stats on toggle
             app1Stats = { correct: 0, wrong: 0 };
-            
+
             if (isGameMode) {
                 toggleBtn.textContent = 'Quiz Mode (ON)';
                 toggleBtn.classList.remove('bg-teal-500', 'hover:bg-teal-600');
@@ -1250,8 +1310,22 @@ export default function MyanmarNumberLearningApp({ entryRequest, onExit, hideOwn
 
         runMasterInit();
 
+        if (progressRosterRef) {
+            getDoc(progressRosterRef).then(snap => {
+                const data = snap.exists() ? snap.data() : {};
+                completedLevels = Array.isArray(data.completedLevels) ? data.completedLevels : [];
+                coinBalance = data.coinBalance || 0;
+                refreshLevelButtonLabels();
+            }).catch(e => console.error('Error loading Myanmar Number Learning progress:', e));
+        }
+
     return () => {
       delete window.__mnlApp;
+      // Stop any playing audio -- otherwise it keeps going after this
+      // component unmounts, since Audio objects aren't tied to React's
+      // lifecycle.
+      if (audioPlayer) audioPlayer.pause();
+      if (app2AudioPlayer) app2AudioPlayer.pause();
     };
   }, []);
 
