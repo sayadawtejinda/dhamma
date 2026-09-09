@@ -821,6 +821,7 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
                 if (resumeGroupNumber > 1 && resumeGroupNumber <= allSoundGroupsForReading.length) {
                     currentSelectedGroupIndex = resumeGroupNumber - 1;
                     if (elements.groupSelectorDisplay) elements.groupSelectorDisplay.innerText = resumeGroupNumber;
+                    persistCurrentGroup(currentSelectedGroupIndex);
                 }
             }).catch(e => console.error('Error loading Burmese Consonant Game progress:', e));
         }
@@ -1220,12 +1221,14 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
                 if (audioTimer) clearInterval(audioTimer); audioTimer = null;
                 playAudio('correct', true); correctCount++; updateScoreDisplay(); showGameStatus('Correct!', 'correct');
                 triggerDiverseConfetti();
+                awardCoins(10);
                 netScore++; updateSpiderProgress();
                 if (netScore >= TARGET_SCORE) triggerVictory('typing');
                 else setTimeout(askTypingQuestion, 2000);
             } else {
                 playAudio('wrong', true); incorrectCount++; updateScoreDisplay();
                 showGameStatus(`Wrong. The answer was "${correctAnswer}".`, 'incorrect');
+                awardCoins(-1);
                 netScore--; updateSpiderProgress();
                 setTimeout(askTypingQuestion, 3000);
             }
@@ -1464,6 +1467,7 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
                 playAudio('correct', true);
                 correctCount++; updateScoreDisplay(); showGameStatus('Correct!', 'correct');
                 triggerDiverseConfetti();
+                awardCoins(10);
                 netScore++; updateSpiderProgress();
                 if (netScore >= TARGET_SCORE) { triggerVictory('image'); } else { setTimeout(askImageQuestion, 2000); }
             } else {
@@ -1473,6 +1477,7 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
                 incorrectCount++; updateScoreDisplay(); showGameStatus('Wrong!', 'incorrect');
                 const correctEl = Array.from(elements.imageOptionsGrid.children).find(el => el.innerText === correctAnswer);
                 if (correctEl) { correctEl.style.borderColor = '#22c55e'; correctEl.style.backgroundColor = '#dcfce7'; }
+                awardCoins(-1);
                 netScore--; updateSpiderProgress();
                 setTimeout(askImageQuestion, 3000);
             }

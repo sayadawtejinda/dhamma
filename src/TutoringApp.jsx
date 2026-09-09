@@ -286,6 +286,14 @@ const sanitizeBurmeseGameKey = (key) => (key || 'unknown').replace(/[.$#/\[\]]/g
 const isBurmeseGameUrl = (link) =>
   link === 'burmesegame://' ||
   (groupSchemeOfLink(link) === 'readingmyanmar://' && extractGroupPartKey(link) === 'burmesegame');
+// Same idea for Myanmar Vowels Learning -- standalone (vowelslearning://) or
+// as Reading Myanmar's Part 3. Its own roster doc's completedGames (Basic/Pro
+// Listen & Match and Click Sequence levels) is what the Report auto-fill reads.
+const MYANMAR_VOWELS_APP_ID = 'myanmar-vowels-learning-app'; // Firestore appId used inside MyanmarVowelsLearningApp.jsx
+const sanitizeVowelsKey = (key) => (key || 'unknown').replace(/[.$#/\[\]]/g, '_');
+const isVowelsLearningUrl = (link) =>
+  link === 'vowelslearning://' ||
+  (groupSchemeOfLink(link) === 'readingmyanmar://' && extractGroupPartKey(link) === 'vowelslearning');
 const computeLessonKey = (title, link) => {
   const classId = extractClassIdFromLink(link);
   return sanitizeKey(classId ? `${title}_${classId}` : title);
@@ -7285,6 +7293,19 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         } catch (e) { console.error('Burmese Consonant Game progress fetch:', e); }
       }
     }
+
+    // Myanmar Vowels Learning: fetch total completed Listen & Match / Click
+    // Sequence levels (Basic + Pro) and drop the count into "completed".
+    if (isVowelsLearningUrl(activeSession.lessonLink)) {
+      const stuName = studentProfile?.name;
+      if (stuName) {
+        try {
+          const rosterSnap = await getDoc(doc(db, 'artifacts', MYANMAR_VOWELS_APP_ID, 'public', 'data', 'roster', sanitizeVowelsKey(stuName)));
+          const completedGames = rosterSnap.exists() && Array.isArray(rosterSnap.data().completedGames) ? rosterSnap.data().completedGames : [];
+          if (completedGames.length > 0) setCompletedUnitInput(String(completedGames.length));
+        } catch (e) { console.error('Myanmar Vowels Learning progress fetch:', e); }
+      }
+    }
   };
 
   const handleOpenRedoReport = async (session) => {
@@ -7368,6 +7389,17 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           const completedGames = rosterSnap.exists() && Array.isArray(rosterSnap.data().completedGames) ? rosterSnap.data().completedGames : [];
           if (completedGames.length > 0) setCompletedUnitInput(String(completedGames.length));
         } catch (e) { console.error('Burmese Consonant Game redo fetch:', e); }
+      }
+    }
+    // Myanmar Vowels Learning redo fetch — same completedGames-count logic as handleEndSession
+    if (isVowelsLearningUrl(session.lessonLink)) {
+      const stuName = studentProfile?.name;
+      if (stuName) {
+        try {
+          const rosterSnap = await getDoc(doc(db, 'artifacts', MYANMAR_VOWELS_APP_ID, 'public', 'data', 'roster', sanitizeVowelsKey(stuName)));
+          const completedGames = rosterSnap.exists() && Array.isArray(rosterSnap.data().completedGames) ? rosterSnap.data().completedGames : [];
+          if (completedGames.length > 0) setCompletedUnitInput(String(completedGames.length));
+        } catch (e) { console.error('Myanmar Vowels Learning redo fetch:', e); }
       }
     }
   };
