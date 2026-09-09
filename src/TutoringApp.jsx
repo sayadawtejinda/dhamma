@@ -7887,12 +7887,15 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         )}
       </div>
 
-      <h2 className="text-3xl font-bold mb-6 text-emerald-700 flex items-center flex-wrap gap-3">
+      <h2 className="text-3xl font-bold mb-6 text-emerald-700 flex items-end flex-wrap gap-3">
         <span>{studentProfile?.name}'s 🏡</span>
         {(attendanceSummary.yearAttended > 0 || attendanceSummary.yearAbsent > 0) && (
-          <span className="flex items-center gap-2 text-lg" title="Days attended / absent this year">
-            <span className="font-bold text-emerald-600">{attendanceSummary.yearAttended}</span>
-            <span className="font-bold text-red-600">{attendanceSummary.yearAbsent}</span>
+          <span className="flex flex-col items-start gap-1">
+            <span className="flex items-center gap-2 text-lg" title="Days attended / absent this year">
+              <span className="font-bold text-emerald-600">{attendanceSummary.yearAttended}</span>
+              <span className="font-bold text-red-600">{attendanceSummary.yearAbsent}</span>
+            </span>
+            <AttendanceBar entries={attendanceSummary.yearEntries} />
           </span>
         )}
       </h2>
@@ -7940,9 +7943,6 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                     <button onClick={handleCancelPendingNameRequest} className="text-xs text-red-600 hover:text-red-800 font-semibold underline">Cancel</button>
                   </div>
                 )}
-                <div className="mt-2">
-                  <AttendanceBar entries={attendanceSummary.yearEntries} />
-                </div>
                 {!studentProfile?.hideFromGroupRoster && (
                   <button
                     onClick={() => {
