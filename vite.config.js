@@ -9,13 +9,13 @@ export default defineConfig({
   base: '/dhamma/',
   build: {
     rollupOptions: {
-      // paramattha1.html is a second, independent page (not part of the
+      // paramattha.html is a second, independent page (not part of the
       // Tutoring single-page app / Firebase) -- listing it here makes Vite
       // build it as its own bundle, deployed alongside index.html by the
-      // same GitHub Actions workflow, reachable at /dhamma/paramattha1.html.
+      // same GitHub Actions workflow, reachable at /dhamma/paramattha.html.
       input: {
         main: resolve(__dirname, 'index.html'),
-        paramattha1: resolve(__dirname, 'paramattha1.html'),
+        paramattha: resolve(__dirname, 'paramattha.html'),
       },
     },
   },

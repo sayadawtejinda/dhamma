@@ -1734,9 +1734,12 @@ const QuizView = React.memo(({ quiz, questionNumber, totalQuestions, timerValue,
 // (not in the list -- other students' coin balances don't belong in a list
 // like this). `allOnlineRoster` already covers every class's approved
 // students (roster doc id is `${classId}_${studentName}`, so one student in
-// several classes shows up as several rows here) and `allScoresEverywhere`
-// is every score doc, unfiltered, used only for the coin conversion.
-const SmartStudyStatusBar = React.memo(({ mode, userName, allOnlineRoster, allScoresEverywhere }) => {
+// several classes shows up as several rows here). `myScoresGlobal` is just
+// the viewing student's own scores across every class (already fetched
+// elsewhere in SmartStudyApp for their own completion counts) -- reused
+// here only for their own 🪙 conversion, so this bar never needs to fetch
+// every score in the database just to show one student's own coin count.
+const SmartStudyStatusBar = React.memo(({ mode, userName, allOnlineRoster, myScoresGlobal }) => {
   const [showModal, setShowModal] = React.useState(false);
   const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -1824,7 +1827,7 @@ const SmartStudyStatusBar = React.memo(({ mode, userName, allOnlineRoster, allSc
   // Student mode -- name + own coin count on the pill, my own line (if any)
   // in the modal, same shape as the teacher's list.
   if (!userName) return null;
-  const myCoins = goldCoinsForScore(computeStudentTotalScore(allScoresEverywhere, userName));
+  const myCoins = goldCoinsForScore(computeStudentTotalScore(myScoresGlobal, userName));
   return (
     <div className="fixed top-3 right-3 z-[9999]">
       <button
@@ -2175,18 +2178,6 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
     const unsub = onSnapshot(query(getRosterCollectionRef(), where('status', '==', 'approved')), (snap) => {
       setAllOnlineRoster(snap.docs.map(d => d.data()));
     }, (error) => console.error('Error fetching all-class roster:', error));
-    return () => unsub();
-  }, [isAuthReady]);
-
-  // Every score, across every class, for every student -- used only to
-  // convert each student's lifetime points into 🪙 gold coins (see
-  // computeStudentTotalScore below) for the same persistent status bar.
-  const [allScoresEverywhere, setAllScoresEverywhere] = useState([]);
-  useEffect(() => {
-    if (!isAuthReady) return;
-    const unsub = onSnapshot(getScoresCollectionRef(), (snap) => {
-      setAllScoresEverywhere(snap.docs.map(d => d.data()));
-    }, (error) => console.error('Error fetching all scores:', error));
     return () => unsub();
   }, [isAuthReady]);
 
@@ -2649,6 +2640,42 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
     const lessonData = { title: finalTitle, content: content || { storyteller: '', explorer: '', adventurer: '', voyager: '' }, imageUrl: '', formattedContent: formattedContent || { storyteller: '', explorer: '', adventurer: '', voyager: '' }, headerImageUrl: headerImageUrl || '', image1Url: image1Url || '', image2Url: image2Url || '', image3Url: image3Url || '', image4Url: image4Url || '', };
     if (editingId) updatedLessons = lessons.map(l => l.lessonId === editingId ? { ...l, ...lessonData } : l);
     else updatedLessons = [...lessons, { lessonId: generateNewLessonId(), ...lessonData, questions: [] }];
+
+    // Saving L1's Header Image URL with the same "…00101.png"-style numbered
+    // pattern the field above already uses to fill its own image1-4 also
+    // fills every OTHER lesson's 5 images the same way, continuing the same
+    // count (L2 picks up right where L1 left off, L3 after that, and so
+    // on) -- so uploading one numbered batch of images and typing only L1's
+    // header URL is enough to seed the whole class, instead of pasting 5
+    // URLs into every single lesson by hand. Only touches lessons that
+    // don't already have a header image, so it never clobbers ones a
+    // teacher already set individually.
+    const savedLessonId = editingId || updatedLessons[updatedLessons.length - 1].lessonId;
+    if (savedLessonId === 'L1' && headerImageUrl) {
+      const match = headerImageUrl.match(/^(.*)(\d{2,})(\.(?:png|jpg|jpeg|webp))$/i);
+      if (match) {
+        const baseUrl = match[1]; const numberStr = match[2]; const extension = match[3];
+        const baseNumber = parseInt(numberStr, 10); const numDigits = numberStr.length;
+        if (!isNaN(baseNumber)) {
+          updatedLessons = updatedLessons.map(l => {
+            if (l.lessonId === 'L1' || l.headerImageUrl) return l;
+            const n = parseInt((l.lessonId || '').replace(/^L/i, ''), 10);
+            if (isNaN(n)) return l;
+            const offset = (n - 1) * 5;
+            const num = (delta) => String(baseNumber + offset + delta).padStart(numDigits, '0');
+            return {
+              ...l,
+              headerImageUrl: `${baseUrl}${num(0)}${extension}`,
+              image1Url: `${baseUrl}${num(1)}${extension}`,
+              image2Url: `${baseUrl}${num(2)}${extension}`,
+              image3Url: `${baseUrl}${num(3)}${extension}`,
+              image4Url: `${baseUrl}${num(4)}${extension}`,
+            };
+          });
+        }
+      }
+    }
+
     updateLessonsInFirestore(updatedLessons);
     setNewLesson({ title: '', masterContent: '', content: { storyteller: '', explorer: '', adventurer: '', voyager: '' }, formattedContent: { storyteller: '', explorer: '', adventurer: '', voyager: '' }, editingId: null, headerImageUrl: '', image1Url: '', image2Url: '', image3Url: '', image4Url: '', });
   }, [newLesson, lessons, generateNewLessonId, updateLessonsInFirestore, generateLessonTitle]);
@@ -3065,9 +3092,9 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
           since there's no session/identity yet at that point. */}
       {!['home', 'teacherPasscode'].includes(view) && (
         ['teacherLogin', 'teacherDashboard'].includes(view) ? (
-          <SmartStudyStatusBar mode="teacher" allOnlineRoster={allOnlineRoster} allScoresEverywhere={allScoresEverywhere} />
+          <SmartStudyStatusBar mode="teacher" allOnlineRoster={allOnlineRoster} />
         ) : userName ? (
-          <SmartStudyStatusBar mode="student" userName={userName} allOnlineRoster={allOnlineRoster} allScoresEverywhere={allScoresEverywhere} />
+          <SmartStudyStatusBar mode="student" userName={userName} allOnlineRoster={allOnlineRoster} myScoresGlobal={allMyScoresGlobal} />
         ) : null
       )}
       <div className="min-h-screen">{renderView()}</div>
