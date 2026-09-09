@@ -310,6 +310,14 @@ const sanitizeNumberLearningKey = (key) => (key || 'unknown').replace(/[.$#/\[\]
 const isNumberLearningUrl = (link) =>
   link === 'numberlearning://' ||
   (groupSchemeOfLink(link) === 'speakingmyanmar://' && extractGroupPartKey(link) === 'numberlearning');
+// Same idea for Animal Sound Quiz -- standalone (animalsound://) or as
+// Speaking Myanmar's Part 3. Its own roster doc's trophyWins (capped at 5)
+// is what the Report auto-fill reads.
+const ANIMAL_SOUND_APP_ID = 'animal-sound-app'; // Firestore appId used inside AnimalSoundApp.jsx
+const sanitizeAnimalSoundKey = (key) => (key || 'unknown').replace(/[.$#/\[\]]/g, '_');
+const isAnimalSoundUrl = (link) =>
+  link === 'animalsound://' ||
+  (groupSchemeOfLink(link) === 'speakingmyanmar://' && extractGroupPartKey(link) === 'animalsound');
 const computeLessonKey = (title, link) => {
   const classId = extractClassIdFromLink(link);
   return sanitizeKey(classId ? `${title}_${classId}` : title);
@@ -7349,6 +7357,19 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         } catch (e) { console.error('Myanmar Number Learning progress fetch:', e); }
       }
     }
+
+    // Animal Sound Quiz: fetch trophy-worthy wins (capped at 5) and drop
+    // the count into "completed".
+    if (isAnimalSoundUrl(activeSession.lessonLink)) {
+      const stuName = studentProfile?.name;
+      if (stuName) {
+        try {
+          const rosterSnap = await getDoc(doc(db, 'artifacts', ANIMAL_SOUND_APP_ID, 'public', 'data', 'roster', sanitizeAnimalSoundKey(stuName)));
+          const trophyWins = rosterSnap.exists() ? (rosterSnap.data().trophyWins || 0) : 0;
+          if (trophyWins > 0) setCompletedUnitInput(String(trophyWins));
+        } catch (e) { console.error('Animal Sound Quiz progress fetch:', e); }
+      }
+    }
   };
 
   const handleOpenRedoReport = async (session) => {
@@ -7465,6 +7486,17 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           const completedLevels = rosterSnap.exists() && Array.isArray(rosterSnap.data().completedLevels) ? rosterSnap.data().completedLevels : [];
           if (completedLevels.length > 0) setCompletedUnitInput(String(completedLevels.length));
         } catch (e) { console.error('Myanmar Number Learning redo fetch:', e); }
+      }
+    }
+    // Animal Sound Quiz redo fetch — same trophyWins logic as handleEndSession
+    if (isAnimalSoundUrl(session.lessonLink)) {
+      const stuName = studentProfile?.name;
+      if (stuName) {
+        try {
+          const rosterSnap = await getDoc(doc(db, 'artifacts', ANIMAL_SOUND_APP_ID, 'public', 'data', 'roster', sanitizeAnimalSoundKey(stuName)));
+          const trophyWins = rosterSnap.exists() ? (rosterSnap.data().trophyWins || 0) : 0;
+          if (trophyWins > 0) setCompletedUnitInput(String(trophyWins));
+        } catch (e) { console.error('Animal Sound Quiz redo fetch:', e); }
       }
     }
   };
