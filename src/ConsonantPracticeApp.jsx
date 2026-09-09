@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { doc, setDoc, updateDoc, onSnapshot, collection, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, onSnapshot, collection, serverTimestamp, arrayUnion } from 'firebase/firestore';
 import { X } from 'lucide-react';
 import { db } from './firebase';
 
@@ -749,6 +749,14 @@ export default function ConsonantPracticeApp({ entryRequest, onExit, hideOwnOnli
   const [onlineStudents, setOnlineStudents] = useState([]);
   const [showOnlinePanel, setShowOnlinePanel] = useState(false);
   const [nowForOnlineCheck, setNowForOnlineCheck] = useState(Date.now());
+  // Gold coins: +5 per correct answer, -1 per wrong, in the Bubble/Matching/
+  // Puzzle games (see awardCoins() inside the game-engine effect below).
+  // coinBalanceRef is the source of truth the vanilla-JS game code reads and
+  // writes synchronously on every answer; myCoinBalance is just its React
+  // state mirror so the online-status panel can render it like everything
+  // else here.
+  const coinBalanceRef = useRef(0);
+  const [myCoinBalance, setMyCoinBalance] = useState(0);
 
   // Roster heartbeat — only pings when opened for a student (entryRequest
   // carries their name); a teacher just observes.
@@ -1060,6 +1068,70 @@ export default function ConsonantPracticeApp({ entryRequest, onExit, hideOwnOnli
         const consonantCountOptions = [5, 10, 15, 20, 25, 30, 33];
         const consonantCountEmojis = ['5️⃣', '🔟', '1️⃣5️⃣', '2️⃣0️⃣', '2️⃣5️⃣', '3️⃣0️⃣', '3️⃣3️⃣'];
         let currentConsonantCountIndex = 6;
+        let completedGroupSizes = []; // consonantCountOptions values this student has already finished
+
+        // --- Gold coins + group progression (persisted to the roster doc
+        // this student already pings every 30s for the online panel) ---
+        const consonantRosterRef = studentName ? doc(db, CONSONANT_ROSTER_PATH, sanitizeConsonantKey(studentName)) : null;
+
+        // +5 per correct answer, -1 per wrong, in Waga (Bubble), Matching,
+        // and Puzzle only -- called from handleCorrectAnswer() and each of
+        // those three games' own wrong-answer branches below. Clamped at 0
+        // rather than using a raw increment(), so a losing streak can't
+        // leave a negative balance.
+        function awardCoins(delta) {
+            if (!consonantRosterRef) return;
+            const newBalance = Math.max(0, coinBalanceRef.current + delta);
+            coinBalanceRef.current = newBalance;
+            setMyCoinBalance(newBalance);
+            setDoc(consonantRosterRef, { coinBalance: newBalance }, { merge: true }).catch(() => {});
+        }
+
+        // So the online-status panel can show "practicing 10 consonants"
+        // for whoever's online, the same way other apps show a current
+        // chapter/lesson.
+        function persistCurrentGroupSize() {
+            if (!consonantRosterRef) return;
+            setDoc(consonantRosterRef, { currentGroupSize: consonantCountOptions[currentConsonantCountIndex] }, { merge: true }).catch(() => {});
+        }
+
+        // Called once a Puzzle Game round pushes puzzleRoundsWon to
+        // TARGET_PUZZLE_ROUNDS (see handlePuzzleChoiceClick below) --
+        // permanently marks the CURRENT group done. The "you can now study
+        // the next group" announcement happens on the student's next visit
+        // (see the load below), not mid-session, since they're already
+        // mid-flow on this group right now.
+        function markCurrentGroupCompleted() {
+            if (!consonantRosterRef) return;
+            const size = consonantCountOptions[currentConsonantCountIndex];
+            if (completedGroupSizes.includes(size)) return;
+            completedGroupSizes.push(size);
+            setDoc(consonantRosterRef, { completedGroups: arrayUnion(size) }, { merge: true }).catch(() => {});
+        }
+
+        // Loads this student's saved progress once at startup -- coin
+        // balance for display, and completed groups to pick up right after
+        // whichever one they last finished (a brand-new student starts at
+        // index 0 / 5 consonants, not the old default of "all 33").
+        if (consonantRosterRef) {
+            getDoc(consonantRosterRef).then((snap) => {
+                const data = snap.exists() ? snap.data() : {};
+                coinBalanceRef.current = data.coinBalance || 0;
+                setMyCoinBalance(coinBalanceRef.current);
+                completedGroupSizes = Array.isArray(data.completedGroups) ? data.completedGroups : [];
+                if (completedGroupSizes.length > 0) {
+                    const highestDoneIndex = Math.max(...completedGroupSizes.map(s => consonantCountOptions.indexOf(s)).filter(i => i >= 0));
+                    const unlockedIndex = Math.min(consonantCountOptions.length - 1, highestDoneIndex + 1);
+                    currentConsonantCountIndex = unlockedIndex;
+                    if (consonantCountIcon) consonantCountIcon.innerText = consonantCountEmojis[unlockedIndex];
+                    createMessage(`Welcome back! You can now study ${consonantCountOptions[unlockedIndex]} consonants. 🎉`, false);
+                } else {
+                    currentConsonantCountIndex = 0;
+                    if (consonantCountIcon) consonantCountIcon.innerText = consonantCountEmojis[0];
+                }
+                persistCurrentGroupSize();
+            }).catch((e) => console.error('Error loading consonant practice progress:', e));
+        }
 
         // --- Tutorial State ---
         let tutorialStep = 0;
@@ -1337,6 +1409,11 @@ export default function ConsonantPracticeApp({ entryRequest, onExit, hideOwnOnli
             correctCount++;
             consecutiveWrongAnswers = 0;
             showDogAnimation();
+            // Gold coins only for Waga (Bubble), Matching, and Puzzle -- not
+            // the Click/Typing games, which also call handleCorrectAnswer().
+            if (currentGameMode === 'waga' || currentGameMode === 'matching' || currentGameMode === 'puzzle') {
+                awardCoins(5);
+            }
 
             // Modified Scoring Logic for Auto Flow
             if (currentGameMode === 'matching') {
@@ -1628,7 +1705,8 @@ export default function ConsonantPracticeApp({ entryRequest, onExit, hideOwnOnli
                 // AUDIO & LOGIC LATER
                 await playAudio('wrong', true, null, feedbackAudioWaga);
                 await playRandomWrongFeedback();
-                
+                awardCoins(-1);
+
                 consecutiveWrongAnswers++;
                 if (consecutiveWrongAnswers >= 3) {
                     showCorrectAnswerHint();
@@ -1701,7 +1779,8 @@ export default function ConsonantPracticeApp({ entryRequest, onExit, hideOwnOnli
             stopAllGames(); // Reset everything including AutoFlow
             currentConsonantCountIndex = (currentConsonantCountIndex + 1) % consonantCountOptions.length;
             consonantCountIcon.innerText = consonantCountEmojis[currentConsonantCountIndex];
-            
+            persistCurrentGroupSize();
+
             const currentCount = consonantCountOptions[currentConsonantCountIndex];
             createMessage(`Selected ${currentCount} consonants.`, false);
             updateGridVisibility();
@@ -1993,7 +2072,15 @@ export default function ConsonantPracticeApp({ entryRequest, onExit, hideOwnOnli
                 if (puzzleUserProgress.length === puzzleSequence.length) {
                     puzzleRoundsWon++;
                     showGiftBoxReward();
-                    
+                    // 3 full Puzzle rounds won on the CURRENT group marks it
+                    // done for good (independent of isAutoFlow below, which
+                    // only controls what happens to the on-screen flow right
+                    // now) -- the next group unlocks on this student's next
+                    // visit, see the progress load near the top of this effect.
+                    if (puzzleRoundsWon >= TARGET_PUZZLE_ROUNDS) {
+                        markCurrentGroupCompleted();
+                    }
+
                     if (isAutoFlow && puzzleRoundsWon >= TARGET_PUZZLE_ROUNDS) {
                          setTimeout(() => {
                              showScore("Lesson Completed! 🎉");
@@ -2018,6 +2105,7 @@ export default function ConsonantPracticeApp({ entryRequest, onExit, hideOwnOnli
             } else {
                 await playAudio('wrong', true);
                 await playRandomWrongFeedback();
+                awardCoins(-1);
                 consecutiveWrongAnswers++;
                 if (consecutiveWrongAnswers >= 3) {
                     showCorrectAnswerHint();
@@ -2079,6 +2167,7 @@ export default function ConsonantPracticeApp({ entryRequest, onExit, hideOwnOnli
                 } else {
                     await playAudio('wrong', true);
                     await playRandomWrongFeedback();
+                    awardCoins(-1);
                     const correctEl = document.querySelector(`.consonant-item[data-consonant='${correctAnswer}']`);
                     if(correctEl) {
                         correctEl.classList.add('highlight');
@@ -2299,9 +2388,11 @@ export default function ConsonantPracticeApp({ entryRequest, onExit, hideOwnOnli
       <>
       <button
         onClick={() => setShowOnlinePanel(true)}
-        className="fixed top-3 right-3 z-[9990] flex items-center gap-1 text-sm font-bold bg-white/90 backdrop-blur-sm px-3 py-2 rounded-2xl shadow-lg border border-gray-200 text-emerald-600 hover:underline"
+        className="fixed top-3 right-3 z-[9990] flex items-center gap-1.5 text-sm font-bold bg-white/90 backdrop-blur-sm px-3 py-2 rounded-2xl shadow-lg border border-gray-200 text-emerald-600 hover:underline"
       >
         <span className="w-2 h-2 bg-emerald-500 rounded-full inline-block"></span>{onlineCount} online
+        {studentName && <span className="text-gray-700">· {studentName}</span>}
+        {studentName && <span className="text-amber-600">🪙 {myCoinBalance}</span>}
       </button>
       {showOnlinePanel && (
         <div className="fixed inset-0 z-[9995] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowOnlinePanel(false)}>
@@ -2317,6 +2408,8 @@ export default function ConsonantPracticeApp({ entryRequest, onExit, hideOwnOnli
                   <div className="flex items-center gap-2">
                     <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${s._isOnlineNow ? 'bg-emerald-500' : 'bg-gray-300'}`}></span>
                     <span className="font-bold text-gray-800">{s.studentName}</span>
+                    <span className="text-xs font-bold text-amber-600">🪙 {s.coinBalance || 0}</span>
+                    {s.currentGroupSize && <span className="text-xs text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">{s.currentGroupSize} consonants</span>}
                   </div>
                   <span className="text-xs text-gray-400">{s._isOnlineNow ? 'Online now' : 'Active this week'}</span>
                 </div>
