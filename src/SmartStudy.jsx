@@ -36,6 +36,7 @@ import {
     Lock
 } from 'lucide-react';
 import { appId } from './firebaseConfig';
+import OnlineStatusWidget from './OnlineStatusWidget';
 import { auth, db } from './firebase';
 
 const API_KEY = ""; // AI features (Generate/Format/Quiz) need a real Gemini API key to work.
@@ -590,14 +591,10 @@ const TeacherDashboard = React.memo(({
     .filter(s => s.status === 'approved')
     .sort((a, b) => a.joinedAt - b.joinedAt)
     .map((student, index) => ({ ...student, displayIndex: index + 1 }));
-  const sortedApprovedStudents = [...approvedStudentsWithIndex].sort((a, b) => {
-    const aTime = Date.now() - a.lastSeen; const bTime = Date.now() - b.lastSeen;
-    const aIsOnline = aTime < 180000; const bIsOnline = bTime < 180000;
-    const aIsWarning = aTime >= 180000 && aTime < 480000; const bIsWarning = bTime >= 180000 && bTime < 480000;
-    if (aIsOnline && !bIsOnline) return -1; if (!aIsOnline && bIsOnline) return 1;
-    if (aIsWarning && !bIsWarning) return -1; if (!aIsWarning && bIsWarning) return 1;
-    return a.joinedAt - b.joinedAt; 
-  });
+  // Online/inactive is no longer shown in this list (see the shared
+  // OnlineStatusWidget, which now owns that everywhere) -- just joinedAt
+  // order, same as approvedStudentsWithIndex already used for numbering.
+  const sortedApprovedStudents = approvedStudentsWithIndex;
 
   // Students from scores/completions who are NOT yet in the approved roster
   const bulkNameMatches = (tutoringStudents || [])
@@ -822,18 +819,15 @@ const TeacherDashboard = React.memo(({
             {sortedApprovedStudents.length === 0 ? (<p className="text-gray-500 italic">No approved students yet. Click above to approve students with completions.</p>) : (
               <div className="space-y-3">
                 {sortedApprovedStudents.map((student) => {
-                  const timeSinceLastSeen = Date.now() - student.lastSeen;
-                  const isOnline = timeSinceLastSeen < 180000;
-                  const isWarning = timeSinceLastSeen >= 180000 && timeSinceLastSeen < 480000;
                   const isPickerOpen = linkPickerFor === student.studentName;
                   const filteredTutoringStudents = (tutoringStudents || []).filter(s => s.name.toLowerCase().includes(linkSearch.toLowerCase()));
                   return (
-                    <div key={student.studentName} className={`p-3 rounded-xl border transition-colors ${isOnline ? 'bg-green-50 border-green-300' : isWarning ? 'bg-red-50 border-red-300' : 'bg-gray-50 border-gray-200 opacity-80'}`}>
+                    <div key={student.studentName} className="p-3 rounded-xl border transition-colors bg-gray-50 border-gray-200">
                       <div className="flex justify-between items-center">
                         <div className="flex items-center space-x-4">
-                          <span className={`font-black text-2xl w-8 ${isOnline ? 'text-green-700' : isWarning ? 'text-red-700' : 'text-gray-500'}`}>{student.displayIndex}.</span>
+                          <span className="font-black text-2xl w-8 text-gray-500">{student.displayIndex}.</span>
                           <div>
-                            <p className={`font-bold text-lg ${isOnline ? 'text-gray-800' : isWarning ? 'text-red-800' : 'text-gray-600'}`}>
+                            <p className="font-bold text-lg text-gray-800">
                               {student.studentName} {student.linkedToTutoring && (
   <button
     onClick={() => onUnlinkStudent && onUnlinkStudent(student.studentName)}
@@ -844,24 +838,6 @@ const TeacherDashboard = React.memo(({
   </button>
 )}
                             </p>
-                            <div className="flex items-center mt-1">
-                              {isOnline ? (
-                                <>
-                                  <span className="w-2.5 h-2.5 bg-green-500 rounded-full mr-2 animate-pulse"></span> 
-                                  <span className="text-xs text-green-600 font-bold">Online</span>
-                                  {student.currentLessonId && (<span className="ml-2 text-xs text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full border border-blue-200">Viewing: {student.currentLessonId}</span>)}
-                                </>
-                              ) : isWarning ? (
-                                <>
-                                  <span className="w-2.5 h-2.5 bg-red-500 rounded-full mr-2 animate-pulse"></span> 
-                                  <span className="text-xs text-red-600 font-bold">Inactive (Please warn student)</span>
-                                </>
-                              ) : (
-                                <>
-                                  <span className="w-2.5 h-2.5 bg-gray-400 rounded-full mr-2"></span> <span className="text-xs text-gray-500">Offline</span>
-                                </>
-                              )}
-                            </div>
                           </div>
                         </div>
                         <div className="flex flex-col items-end gap-1">
@@ -1724,142 +1700,6 @@ const QuizView = React.memo(({ quiz, questionNumber, totalQuestions, timerValue,
   );
 });
 
-// Persistent online-status bar, shown on every screen (see its render spot
-// inside SmartStudyApp, outside the view switch) instead of living inside
-// just one screen like the old "Active Students — All Classes" section did.
-// Same shape for teacher and student -- one line per student: a color dot
-// for online/inactive/idle, their name, then which classes (+ last lesson
-// in each) they were in this week. Teacher sees every student; a student
-// sees just their own line, plus their own 🪙 coin count on the pill itself
-// (not in the list -- other students' coin balances don't belong in a list
-// like this). `allOnlineRoster` already covers every class's approved
-// students (roster doc id is `${classId}_${studentName}`, so one student in
-// several classes shows up as several rows here). `myScoresGlobal` is just
-// the viewing student's own scores across every class (already fetched
-// elsewhere in SmartStudyApp for their own completion counts) -- reused
-// here only for their own 🪙 conversion, so this bar never needs to fetch
-// every score in the database just to show one student's own coin count.
-const SmartStudyStatusBar = React.memo(({ mode, userName, allOnlineRoster, myScoresGlobal }) => {
-  const [showModal, setShowModal] = React.useState(false);
-  const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
-
-  const roster = React.useMemo(() => {
-    const now = Date.now();
-    return (allOnlineRoster || []).map(s => {
-      const sinceSeen = now - (s.lastSeen || 0);
-      return {
-        ...s,
-        isOnline: sinceSeen < 180000,
-        isWarning: sinceSeen >= 180000 && sinceSeen < 480000,
-        isRecent: sinceSeen < ONE_WEEK_MS,
-      };
-    });
-  }, [allOnlineRoster]);
-
-  // One row per student (not per class) -- a student active in Class A but
-  // idle in Class B shows once, as active, with both classes listed.
-  const byStudent = {};
-  roster.filter(s => s.isRecent).forEach(s => {
-    if (!byStudent[s.studentName]) byStudent[s.studentName] = { studentName: s.studentName, isOnline: false, isWarning: false, weekly: [] };
-    const entry = byStudent[s.studentName];
-    if (s.isOnline) entry.isOnline = true;
-    if (s.isWarning) entry.isWarning = true;
-    entry.weekly.push({ classId: s.classId, currentLessonId: s.currentLessonId });
-  });
-  let rows = Object.values(byStudent);
-  if (mode === 'student') rows = rows.filter(r => r.studentName === userName);
-  rows = rows.sort((a, b) => {
-    if (a.isWarning !== b.isWarning) return a.isWarning ? -1 : 1;
-    if (a.isOnline !== b.isOnline) return a.isOnline ? -1 : 1;
-    return a.studentName.localeCompare(b.studentName);
-  });
-  const activeCount = rows.filter(r => r.isOnline).length;
-  const warningCount = rows.filter(r => r.isWarning).length;
-
-  const rowLine = (r) => (
-    <span>
-      <span className="font-bold">{r.studentName}</span>
-      {r.weekly.length > 0 && (
-        <span className="text-gray-500"> — {r.weekly.map((w, i) => (
-          <span key={i}>{i > 0 ? ', ' : ''}{w.classId}{w.currentLessonId ? ` (${w.currentLessonId})` : ''}</span>
-        ))}</span>
-      )}
-    </span>
-  );
-
-  if (mode === 'teacher') {
-    return (
-      <div className="fixed top-3 right-3 z-[9999]">
-        <button
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-1.5 bg-white hover:bg-gray-50 border border-gray-200 rounded-full pl-2 pr-3 py-1.5 shadow-lg text-sm font-bold text-gray-700"
-        >
-          <span className={`w-2.5 h-2.5 rounded-full ${activeCount > 0 ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`}></span>
-          {activeCount} online
-          {warningCount > 0 && <span className="text-xs font-bold text-red-600 bg-red-100 border border-red-300 px-1.5 py-0.5 rounded-full">{warningCount} inactive</span>}
-        </button>
-        {showModal && (
-          <div className="fixed inset-0 bg-black/40 z-[9999] flex items-start justify-end p-3" onClick={() => setShowModal(false)}>
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm max-h-[80vh] overflow-y-auto p-4 mt-14" onClick={e => e.stopPropagation()}>
-              <div className="flex justify-between items-center mb-3">
-                <p className="font-bold text-gray-800">Students — every class</p>
-                <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-700 text-xl leading-none">✕</button>
-              </div>
-              {rows.length === 0 ? (
-                <p className="text-sm text-gray-400 italic text-center py-6">No student activity this week.</p>
-              ) : (
-                <div className="space-y-1.5">
-                  {rows.map(r => (
-                    <div key={r.studentName} className="flex items-center text-sm">
-                      <span className={`w-2 h-2 rounded-full mr-2 flex-shrink-0 ${r.isWarning ? 'bg-red-500' : r.isOnline ? 'bg-green-500' : 'bg-gray-300'}`}></span>
-                      {rowLine(r)}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // Student mode -- name + own coin count on the pill, my own line (if any)
-  // in the modal, same shape as the teacher's list.
-  if (!userName) return null;
-  const myCoins = goldCoinsForScore(computeStudentTotalScore(myScoresGlobal, userName));
-  return (
-    <div className="fixed top-3 right-3 z-[9999]">
-      <button
-        onClick={() => setShowModal(true)}
-        className="flex items-center gap-1.5 bg-white hover:bg-gray-50 border border-gray-200 rounded-full pl-2 pr-3 py-1.5 shadow-lg text-sm font-bold text-gray-700"
-      >
-        <span className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse"></span>
-        {userName}
-        <span className="text-amber-700">🪙 {myCoins}</span>
-      </button>
-      {showModal && (
-        <div className="fixed inset-0 bg-black/40 z-[9999] flex items-start justify-end p-3" onClick={() => setShowModal(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm max-h-[80vh] overflow-y-auto p-4 mt-14" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-3">
-              <p className="font-bold text-gray-800">My week</p>
-              <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-700 text-xl leading-none">✕</button>
-            </div>
-            {rows.length === 0 ? (
-              <p className="text-sm text-gray-400 italic text-center py-6">No classes visited this week yet.</p>
-            ) : (
-              <div className="flex items-center text-sm">
-                <span className="w-2 h-2 rounded-full mr-2 flex-shrink-0 bg-green-500"></span>
-                {rowLine(rows[0])}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-});
-
 // --- Core App Component ---
 
 const SmartStudyApp = ({ entryRequest, onExit }) => {
@@ -2156,7 +1996,6 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
   }, [lessons]);
 
   const [allTeacherClasses, setAllTeacherClasses] = useState([]);
-  const [allOnlineRoster, setAllOnlineRoster] = useState([]);
 
   // Load all classes when teacher opens the class picker
   useEffect(() => {
@@ -2165,21 +2004,6 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
       .then(snap => setAllTeacherClasses(snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>a.id.localeCompare(b.id))))
       .catch(() => {});
   }, [view]);
-
-  // Live roster across every class (not just one), so the "Teacher — Choose
-  // Class" screen can show, in one place, every approved student and which
-  // class/lesson they're currently in — same online/inactive/offline pattern
-  // used inside a single class's dashboard.
-  // Was only fetched on the "Teacher — Choose Class" screen; now also backs
-  // the persistent online-status bar (see SmartStudyStatusBar below), which
-  // needs to work from every screen in the app, teacher or student.
-  useEffect(() => {
-    if (!isAuthReady) return;
-    const unsub = onSnapshot(query(getRosterCollectionRef(), where('status', '==', 'approved')), (snap) => {
-      setAllOnlineRoster(snap.docs.map(d => d.data()));
-    }, (error) => console.error('Error fetching all-class roster:', error));
-    return () => unsub();
-  }, [isAuthReady]);
 
   const handleRenameClass = useCallback(async (classId, displayName) => {
     if (!classId || !displayName.trim()) return;
@@ -3084,17 +2908,28 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
         .animate-bounce-slight { animation: bounceSlight 2s infinite; }
         @keyframes slideInRight { from { transform: translateX(110%); } to { transform: translateX(0); } }
       `}</style>
-      {/* Persistent online-status + 🪙 -- visible on every screen inside
-          Smart Study, not just one view, per the "wherever they open the
-          app" requirement. Teacher mode replaces the old "Active Students —
-          All Classes" section; student mode is their own coin count. Hidden
-          on the very first Teacher/Student choice screen and while loading,
-          since there's no session/identity yet at that point. */}
+      {/* Same OnlineStatusWidget used by every app in this project now --
+          visible on every screen inside Smart Study, not just one view.
+          Replaces both the old "Active Students — All Classes" section and
+          the per-class Approved Students list's own online/inactive dots.
+          Hidden on the very first Teacher/Student choice screen and while
+          loading, since there's no session/identity yet at that point. */}
       {!['home', 'teacherPasscode'].includes(view) && (
         ['teacherLogin', 'teacherDashboard'].includes(view) ? (
-          <SmartStudyStatusBar mode="teacher" allOnlineRoster={allOnlineRoster} />
+          <OnlineStatusWidget
+            rosterPath={getRosterCollectionRef().path}
+            isTeacherMode={true}
+            filterDocs={(d) => d.status === 'approved'}
+            renderActivity={(s) => <span className="text-gray-600">{s.classId}{s.currentLessonId ? ` · ${s.currentLessonId}` : ''}</span>}
+          />
         ) : userName ? (
-          <SmartStudyStatusBar mode="student" userName={userName} allOnlineRoster={allOnlineRoster} myScoresGlobal={allMyScoresGlobal} />
+          <OnlineStatusWidget
+            rosterPath={getRosterCollectionRef().path}
+            studentName={userName}
+            coinBalance={goldCoinsForScore(computeStudentTotalScore(allMyScoresGlobal, userName))}
+            filterDocs={(d) => d.status === 'approved'}
+            renderActivity={(s) => <span className="text-gray-600">{s.classId}{s.currentLessonId ? ` · ${s.currentLessonId}` : ''}</span>}
+          />
         ) : null
       )}
       <div className="min-h-screen">{renderView()}</div>

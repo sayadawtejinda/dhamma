@@ -14,6 +14,7 @@ import {
     ArrowBigRight, Square, Lock, KeyRound, UserCircle, Book, Heart
 } from 'lucide-react';
 import { app } from './firebase';
+import OnlineStatusWidget from './OnlineStatusWidget';
 
 // --- Firebase Auth/DB Setup ---
 // Reuses the shared Firebase app instance from ./firebase.js instead of
@@ -4960,11 +4961,6 @@ export default function MyanmarSpeakingApp({ entryRequest, onExit, isActive }) {
     const [showRomanization, setShowRomanization] = useState(false);
     const [studySessionStart, setStudySessionStart] = useState(() => deepLinkStudentName ? Date.now() : null);
 
-    // Live "who's online" roster, shown to both teacher and student — same
-    // pattern as MyanmarReaderApp.jsx's READER_ROSTER_PATH.
-    const [onlineStudents, setOnlineStudents] = useState([]);
-    const [showOnlinePanel, setShowOnlinePanel] = useState(false);
-    const [nowForOnlineCheck, setNowForOnlineCheck] = useState(Date.now());
     const minutesWrittenRef = useRef(0);
     const lastActivityRef = useRef(Date.now());
     const activeMsRef = useRef(0);
@@ -5117,42 +5113,6 @@ export default function MyanmarSpeakingApp({ entryRequest, onExit, isActive }) {
         };
     }, [studentName, activeRole, isActive]);
 
-    // Full live roster — same list feeds both the teacher's panel and every
-    // student's own "who else is online" panel.
-    useEffect(() => {
-        const unsub = onSnapshot(collection(db, ROSTER_PATH), (snap) => {
-            setOnlineStudents(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-        }, e => console.error('Myanmar Speaking roster listen error:', e));
-        return () => unsub();
-    }, []);
-
-    // Ticks every 30s so "online" (last seen within 5 min) stays current
-    // without a page reload.
-    useEffect(() => {
-        const interval = setInterval(() => setNowForOnlineCheck(Date.now()), 30000);
-        return () => clearInterval(interval);
-    }, []);
-
-    const FIVE_MIN_MS = 5 * 60 * 1000;
-    const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
-    const isRosterEntryOnline = (s) => {
-        const lastSeenMs = s.lastSeen?.toMillis ? s.lastSeen.toMillis() : (s.lastSeen?.seconds ? s.lastSeen.seconds * 1000 : 0);
-        return lastSeenMs > 0 && (nowForOnlineCheck - lastSeenMs) < FIVE_MIN_MS;
-    };
-    const weeklyRosterList = onlineStudents
-        .filter(s => {
-            const lastSeenMs = s.lastSeen?.toMillis ? s.lastSeen.toMillis() : (s.lastSeen?.seconds ? s.lastSeen.seconds * 1000 : 0);
-            return lastSeenMs > 0 && (nowForOnlineCheck - lastSeenMs) < ONE_WEEK_MS;
-        })
-        .map(s => ({ ...s, _isOnlineNow: isRosterEntryOnline(s) }))
-        .sort((a, b) => {
-            if (a._isOnlineNow !== b._isOnlineNow) return b._isOnlineNow ? 1 : -1;
-            const aMs = a.lastSeen?.toMillis ? a.lastSeen.toMillis() : 0;
-            const bMs = b.lastSeen?.toMillis ? b.lastSeen.toMillis() : 0;
-            return bMs - aMs;
-        });
-    const onlineCount = onlineStudents.filter(isRosterEntryOnline).length;
-
     const handleSelectTeacher = async () => {
         setIsAuthReady(false);
         try {
@@ -5202,42 +5162,18 @@ export default function MyanmarSpeakingApp({ entryRequest, onExit, isActive }) {
                     Myanmar <span className="text-yellow-400 ml-1">WordCraft</span>
                 </div>
                 <div className="flex items-center gap-2">
-                    <button
-                        onClick={() => setShowOnlinePanel(true)}
-                        className="flex items-center gap-1 text-sm font-bold bg-indigo-800 px-3 py-1 rounded-full border border-indigo-500 hover:bg-indigo-900"
-                    >
-                        <span className="w-2 h-2 bg-emerald-400 rounded-full inline-block"></span>{onlineCount} online
-                    </button>
                     <div className="text-sm font-bold bg-indigo-800 px-3 py-1 rounded-full border border-indigo-500">
                     {activeRole === 'teacher' ? '👩‍🏫 Teacher Mode' : '👩‍🎓 Student Mode'}
                     </div>
                 </div>
             </header>
 
-            {/* Online Students panel — same view for teacher and every student */}
-            {showOnlinePanel && (
-                <div className="fixed inset-0 z-[9950] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowOnlinePanel(false)}>
-                    <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full max-h-[80vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
-                        <div className="flex justify-between items-center mb-4">
-                            <h2 className="text-xl font-bold text-gray-800">🗣️ Students {onlineCount > 0 && <span className="text-emerald-600">({onlineCount} online)</span>}</h2>
-                            <button onClick={() => setShowOnlinePanel(false)} className="text-gray-400 hover:text-gray-700"><X size={22}/></button>
-                        </div>
-                        <p className="text-xs text-gray-400 mb-3">Showing everyone active in the last 7 days.</p>
-                        <div className="space-y-2">
-                            {weeklyRosterList.map(s => (
-                                <div key={s.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
-                                    <div className="flex items-center gap-2">
-                                        <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${s._isOnlineNow ? 'bg-emerald-500' : 'bg-gray-300'}`}></span>
-                                        <span className="font-bold text-gray-800">{s.studentName}</span>
-                                    </div>
-                                    <span className="text-xs text-gray-400">{s._isOnlineNow ? 'Online now' : 'Active this week'}</span>
-                                </div>
-                            ))}
-                            {weeklyRosterList.length === 0 && <p className="text-center text-gray-400 py-6">No students active this week yet.</p>}
-                        </div>
-                    </div>
-                </div>
-            )}
+            <OnlineStatusWidget
+                rosterPath={ROSTER_PATH}
+                studentName={activeRole === 'teacher' ? null : studentName}
+                isTeacherMode={activeRole === 'teacher'}
+                panelTitle="🗣️ Students"
+            />
 
             {(activeRole === 'teacher' || activeRole === 'student_preview') && (
                 <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50">

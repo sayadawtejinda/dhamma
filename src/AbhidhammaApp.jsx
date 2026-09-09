@@ -9,6 +9,7 @@ import {
   ToggleLeft, ToggleRight, Plus, FolderOpen, ImageIcon, FileText, RefreshCw
 } from 'lucide-react';
 import { auth, db } from './firebase';
+import OnlineStatusWidget from './OnlineStatusWidget';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const ABHIDHAMMA_APP_ID = 'lesson-translator-app-v6';
@@ -340,7 +341,6 @@ const NotificationBell = ({ userId, classId }) => {
 const AbhiClassRoster = ({ userId, classId, onLink }) => {
   const [students,setStudents]=useState([]);
   const [aa,setAa]=useState(false);
-  const [now,setNow]=useState(Date.now());
   const [open,setOpen]=useState(true);
   const [studentStats,setStudentStats]=useState({}); // studentName → {rank, completed}
   // ── Link-to-Tutoring state (merged in from the old separate section) ──
@@ -355,8 +355,6 @@ const AbhiClassRoster = ({ userId, classId, onLink }) => {
   const [matchPreview,setMatchPreview]=useState(null); // null=not previewed yet; [] or [...] once "Find" has run
   const [unlinking,setUnlinking]=useState(null); // studentName currently being unlinked
   const [repairingMissedScores,setRepairingMissedScores]=useState(false);
-
-  useEffect(()=>{ const i=setInterval(()=>setNow(Date.now()),10000); return()=>clearInterval(i); },[]);
 
   // Per-student rank + completed-lesson count for this class, shown as a floating badge on each row
   useEffect(()=>{
@@ -697,7 +695,6 @@ const syncRunning = useRef(false);
         <div className="flex items-center gap-3 text-sm font-semibold">
           {pending.length>0&&<span className="text-yellow-400 animate-pulse">{pending.length} Pending</span>}
           {onLink&&unlinked.length>0&&<span className="text-orange-300 text-xs bg-orange-500/20 px-2 py-0.5 rounded-full border border-orange-500/30">{unlinked.length} unlinked</span>}
-          <span className="text-green-400">{approved.filter(s=>s.isOnline).length} Online</span>
           <span className="text-gray-400">{approved.length} Total</span>
           {open?<ChevronDown className="w-5 h-5 text-gray-400"/>:<ChevronRight className="w-5 h-5 text-gray-400"/>}
         </div>
@@ -725,24 +722,21 @@ const syncRunning = useRef(false);
             <button onClick={e=>removeStu(e,s.id)} className="p-1 bg-red-900/50 rounded text-red-400 hover:bg-red-700 hover:text-white" title="Remove"><Trash2 className="w-3.5 h-3.5"/></button>
           </div>
         ))}
-        {/* Approved students — online/offline + rank + Link-to-Tutoring, all in one row */}
+        {/* Approved students — rank + Link-to-Tutoring, all in one row.
+            Online/inactive status now lives only in the shared
+            OnlineStatusWidget (see AbhiTeacherClassPicker/roster header),
+            not duplicated here. */}
         {approved.map(s=>{
-          const lp=s.lastPing;
-          const pmins=lp?Math.floor((now-(lp.toMillis?lp.toMillis():(lp.seconds*1000)))/60000):null;
-          const isWarn=pmins!==null&&pmins>=3&&pmins<=8;
-          const onlineDot=s.isOnline?'fill-green-500 text-green-500':isWarn?'fill-orange-500 text-orange-500':'fill-gray-500 text-gray-500';
           const stat=studentStats[s.studentName];
           return(
-            <div key={s.id} className={`relative mt-3 first:mt-0 flex items-center gap-2 p-2.5 rounded-lg border ${s.isOnline?'bg-indigo-900/20 border-indigo-700/30':isWarn?'bg-orange-900/20 border-orange-700/30':'bg-gray-700/30 border-gray-600/30'}`}>
+            <div key={s.id} className="relative mt-3 first:mt-0 flex items-center gap-2 p-2.5 rounded-lg border bg-gray-700/30 border-gray-600/30">
               {stat&&(
                 <span className="absolute -top-2.5 right-2 flex items-center gap-1 text-[10px] font-black text-gray-900 bg-gradient-to-r from-amber-400 to-yellow-400 px-2 py-0.5 rounded-full shadow border border-amber-300 whitespace-nowrap">
                   🏆#{stat.rank} · {stat.completed} done
                 </span>
               )}
-              <Circle className={`w-2.5 h-2.5 shrink-0 ${onlineDot}`}/>
               <span className="font-bold text-gray-300 text-xs w-5 shrink-0">#{s.studentNumber||'?'}</span>
               <span className="flex-1 text-white text-sm font-semibold min-w-0 truncate">{s.studentName}</span>
-              {isWarn&&<span className="text-xs text-orange-400 font-bold whitespace-nowrap">Inactive {pmins}m</span>}
               {/* Link to Tutoring — merged in here instead of a separate list below */}
               {onLink&&(s.linkedToTutoring
                 ? <button onClick={()=>handleUnlink(s.studentName)} disabled={unlinking===s.studentName}
@@ -1681,6 +1675,18 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
             {classId&&<NotificationBell userId={userId} classId={classId}/>}
           </div>
         </header>
+
+        <OnlineStatusWidget
+          rosterPath={P('classRoster')}
+          isTeacherMode={role==='Teacher'}
+          studentName={role==='Student'?studentProfile?.name:null}
+          filterDocs={d=>d.status==='approved'&&(!classId||d.classId===classId)}
+          panelTitle="📚 Students"
+          teacherLabel="👩‍🏫 Teacher"
+          renderActivity={s=>(
+            <span className="text-gray-600">{s.classId}{s.group?` · ${AGE_GROUPS[s.group]?.label?.split(' ')[0]||s.group}`:''}</span>
+          )}
+        />
 
         {/* ── TEACHER VIEW ── */}
         {role==='Teacher'&&(

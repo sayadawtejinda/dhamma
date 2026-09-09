@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   signInAnonymously, signInWithCustomToken, onAuthStateChanged
 } from 'firebase/auth';
@@ -7,6 +7,13 @@ import {
   addDoc, where, getDocs, deleteDoc, arrayUnion, arrayRemove, writeBatch
 } from 'firebase/firestore';
 import { auth as sharedAuth, db as sharedDb } from './firebase';
+import OnlineStatusWidget from './OnlineStatusWidget';
+
+// The vanilla script below tracks role/name/class as plain closure `let`s,
+// not React state, so this collection path is the only piece the shared
+// OnlineStatusWidget (a real React component, rendered as a sibling of the
+// dangerouslySetInnerHTML markup) needs from outside that closure.
+const DHAMMASCHOOL_PRESENCE_PATH = 'artifacts/dhammaschool-app/public/data/presence';
 
 // ── Ported from the standalone Dhammaschool.html (vanilla JS + DOM) ──
 // This wraps that exact, working script almost unchanged inside a React
@@ -56,11 +63,13 @@ const DHAMMASCHOOL_BODY_HTML = `
             </div>
         </header>
 
-        <!-- Floating Online-Students Widget — fixed so it stays visible on any
-             screen (library, lesson, teacher dashboard) for both roles. Badge
-             count is currently-online students; click opens the full list,
-             which also includes students seen within the past week. -->
-        <div id="online-widget-btn" class="fixed top-24 right-3 md:right-6 z-[70] bg-white shadow-lg rounded-full pl-3 pr-4 py-2 flex items-center gap-2 cursor-pointer border-2 border-green-200 hover:border-green-400 transition">
+        <!-- Old vanilla Online-Students widget — superseded by the shared
+             React OnlineStatusWidget (rendered outside this markup, see
+             DhammaschoolApp's return()). Left in the DOM (display:none, not
+             removed) so the unchanged JS below that still writes to/reads
+             from it (#online-count-badge, #online-list, the click handler)
+             has no null-element to crash on. -->
+        <div id="online-widget-btn" style="display:none" class="fixed top-24 right-3 md:right-6 z-[70] bg-white shadow-lg rounded-full pl-3 pr-4 py-2 flex items-center gap-2 cursor-pointer border-2 border-green-200 hover:border-green-400 transition">
             <span class="relative flex h-3 w-3">
                 <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                 <span class="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
@@ -777,6 +786,10 @@ const DHAMMASCHOOL_CSS = `
 export default function DhammaschoolApp({ entryRequest, onExit }) {
   const containerRef = useRef(null);
   const initializedRef = useRef(false);
+  // Mirrors the closure's isTeacher/studentName (plain `let`s, not React
+  // state -- see DHAMMASCHOOL_PRESENCE_PATH above) so the shared
+  // OnlineStatusWidget can render outside that closure.
+  const [rosterCtx, setRosterCtx] = useState({ isTeacherMode: false, studentName: null });
 
   // FontAwesome is used throughout Dhammaschool's markup (fa-* icon classes)
   // — load it once if it isn't already on the page (harmless / idempotent if
@@ -1317,6 +1330,17 @@ let bilingualMode = false;
             updatePresence();
             setInterval(updatePresence, 20000);
             setInterval(renderOnlineWidget, 20000);
+
+            // Mirror role/name into React state for the shared OnlineStatusWidget
+            // (see DHAMMASCHOOL_PRESENCE_PATH) -- isTeacher/studentName here are
+            // plain closure variables, not React state, so this is a poll rather
+            // than a set-on-every-assignment sync.
+            const syncRosterCtx = () => setRosterCtx(prev => {
+                const next = { isTeacherMode: isTeacher, studentName: !isTeacher ? (studentName || null) : null };
+                return (prev.isTeacherMode === next.isTeacherMode && prev.studentName === next.studentName) ? prev : next;
+            });
+            syncRosterCtx();
+            setInterval(syncRosterCtx, 2000);
         }
 
         function setupPresenceListener() {
@@ -4371,6 +4395,18 @@ function renderClickableWords(text) {
         ref={containerRef}
         className="dhammaschool-root p-4 md:p-6 min-h-screen text-slate-800"
         dangerouslySetInnerHTML={{ __html: DHAMMASCHOOL_BODY_HTML }}
+      />
+      <OnlineStatusWidget
+        rosterPath={DHAMMASCHOOL_PRESENCE_PATH}
+        isTeacherMode={rosterCtx.isTeacherMode}
+        studentName={rosterCtx.studentName}
+        filterDocs={d => d.role === 'student'}
+        lastSeenField="lastActive"
+        panelTitle="📖 Students"
+        teacherLabel="👩‍🏫 Teacher"
+        renderActivity={s => (
+          <span className="text-gray-600">{s.classId || 'GENERAL'}{s.lessonName ? ` · ${s.lessonName}` : ''}</span>
+        )}
       />
     </>
   );
