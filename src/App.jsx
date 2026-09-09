@@ -516,7 +516,7 @@ export default function App() {
                 </button>
               </div>
             )}
-            <MyanmarReaderApp entryRequest={myanmarReaderRequest} onExit={closeMyanmarReader} />
+            <MyanmarReaderApp entryRequest={myanmarReaderRequest} onExit={closeMyanmarReader} isActive={activeApp === 'myanmarreader'} />
           </div>
         )}
 

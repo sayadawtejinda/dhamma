@@ -611,7 +611,7 @@ const TITLE_TO_GROUP_INDEX = {
 };
 const VOWEL_COLOR = 'bg-orange-100 hover:bg-orange-200 text-orange-900 border-orange-300';
 
-export default function MyanmarReaderApp({ entryRequest, onExit }) {
+export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
   // ── Teacher mode — opened via TutoringApp's "Other Apps" panel. When
   // mounted inline (this component, inside TutoringApp's own project), that
   // arrives as entryRequest={mode:'teacher'}; the standalone deployment
@@ -736,6 +736,19 @@ export default function MyanmarReaderApp({ entryRequest, onExit }) {
   // Teacher sessions never write a roster doc (nothing to track for them).
   useEffect(() => {
     if (isTeacherMode || !studentName || !userId) return;
+    // This app is one of App.jsx's KEEP_ALIVE_APPS -- it never unmounts once
+    // opened, it just gets hidden behind the dashboard when the student taps
+    // 🏡. Without checking `isActive`, this ping interval would keep marking
+    // the student "online" forever (until the browser tab itself closes),
+    // even while they're back on the dashboard or in a completely different
+    // app. `isActive` (passed down from App.jsx as `activeApp ===
+    // 'myanmarreader'`) tracks whether THIS app is the one currently on
+    // screen, so leaving it goes offline immediately, same as closing the
+    // tab would.
+    if (!isActive) {
+      updateDoc(readerRosterDocRef(studentName), { isOnline: false, lastSeen: serverTimestamp() }).catch(() => {});
+      return;
+    }
     const ping = () => updateDoc(readerRosterDocRef(studentName), {
       isOnline: true, lastPing: serverTimestamp(), lastSeen: serverTimestamp(), userId
     }).catch(() => setDoc(readerRosterDocRef(studentName), {
@@ -747,7 +760,7 @@ export default function MyanmarReaderApp({ entryRequest, onExit }) {
     const goOffline = () => { updateDoc(readerRosterDocRef(studentName), { isOnline: false, lastSeen: serverTimestamp() }).catch(() => {}); };
     window.addEventListener('beforeunload', goOffline);
     return () => { clearInterval(interval); goOffline(); window.removeEventListener('beforeunload', goOffline); };
-  }, [studentName, userId, isTeacherMode]);
+  }, [studentName, userId, isTeacherMode, isActive]);
 
   // Full live roster — same data feeds both the teacher's view and every
   // student's own "who else is online" panel, so they see identical info.
