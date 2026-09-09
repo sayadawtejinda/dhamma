@@ -317,14 +317,14 @@ const getEffectiveCompletedUnit = (lesson, studentProfile, sessionsForLesson, ss
 function AttendanceBar({ entries }) {
   if (!entries || entries.length === 0) return null;
   return (
-    <div className="flex flex-wrap gap-0.5">
+    <div className="flex flex-wrap gap-px">
       {entries.map((e, i) => (
         <span
           key={i}
-          className={`w-4 h-4 flex items-center justify-center rounded-sm text-[8px] leading-none font-bold ${
+          className={`w-3 h-3 flex items-center justify-center rounded-sm text-[6px] leading-none font-bold ${
             e.status === 'attended' ? 'bg-emerald-500 text-white'
             : e.status === 'absent' ? 'bg-red-500 text-white'
-            : 'w-1.5 h-1.5 self-center border border-gray-300'
+            : 'w-1 h-1 self-center border border-gray-300'
           }`}
           title={e.date.toLocaleDateString()}
         >
