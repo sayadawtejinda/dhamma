@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { doc, setDoc, updateDoc, onSnapshot, collection, serverTimestamp } from 'firebase/firestore';
-import { X } from 'lucide-react';
+import { doc, setDoc, updateDoc, serverTimestamp, getDoc, arrayUnion } from 'firebase/firestore';
 import { db } from './firebase';
+import OnlineStatusWidget from './OnlineStatusWidget';
 
 // Live "who's online" roster — same simple heartbeat pattern as
 // MyanmarReaderApp.jsx's READER_ROSTER_PATH (30s ping, 5-minute online
@@ -518,9 +518,11 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
   const containerRef = useRef(null);
   const initializedRef = useRef(false);
   const studentName = entryRequest?.studentName || null;
-  const [onlineStudents, setOnlineStudents] = useState([]);
-  const [showOnlinePanel, setShowOnlinePanel] = useState(false);
-  const [nowForOnlineCheck, setNowForOnlineCheck] = useState(Date.now());
+  // coinBalanceRef is the source of truth the vanilla-JS game code reads and
+  // writes synchronously on every answer; myCoinBalance is just its React
+  // mirror for the online-status pill (same split as ConsonantPracticeApp).
+  const coinBalanceRef = useRef(0);
+  const [myCoinBalance, setMyCoinBalance] = useState(0);
 
   // The original standalone page's <head> linked Font Awesome for its many
   // <i class="fa-solid ..."> icons (spider, flag, sound toggle, checklist,
@@ -555,36 +557,6 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
       goOffline();
     };
   }, [studentName]);
-
-  useEffect(() => {
-    const unsub = onSnapshot(collection(db, BCG_ROSTER_PATH), (snap) => {
-      setOnlineStudents(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, e => console.error('Burmese Consonant Game roster listen error:', e));
-    return () => unsub();
-  }, []);
-
-  useEffect(() => {
-    const interval = setInterval(() => setNowForOnlineCheck(Date.now()), 30000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const isRosterEntryOnline = (s) => {
-    const lastSeenMs = s.lastSeen?.toMillis ? s.lastSeen.toMillis() : (s.lastSeen?.seconds ? s.lastSeen.seconds * 1000 : 0);
-    return lastSeenMs > 0 && (nowForOnlineCheck - lastSeenMs) < 5 * 60 * 1000;
-  };
-  const weeklyRosterList = onlineStudents
-    .filter(s => {
-      const lastSeenMs = s.lastSeen?.toMillis ? s.lastSeen.toMillis() : (s.lastSeen?.seconds ? s.lastSeen.seconds * 1000 : 0);
-      return lastSeenMs > 0 && (nowForOnlineCheck - lastSeenMs) < 7 * 24 * 60 * 60 * 1000;
-    })
-    .map(s => ({ ...s, _isOnlineNow: isRosterEntryOnline(s) }))
-    .sort((a, b) => {
-      if (a._isOnlineNow !== b._isOnlineNow) return b._isOnlineNow ? 1 : -1;
-      const aMs = a.lastSeen?.toMillis ? a.lastSeen.toMillis() : 0;
-      const bMs = b.lastSeen?.toMillis ? b.lastSeen.toMillis() : 0;
-      return bMs - aMs;
-    });
-  const onlineCount = onlineStudents.filter(isRosterEntryOnline).length;
 
   useEffect(() => {
     if (initializedRef.current) return;
@@ -797,6 +769,62 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
         let isReadingAloud = false;
         let currentSelectedGroupIndex = 0;
 
+        // --- Progress persistence (roster doc, keyed by studentName) ---
+        // completedGames holds ids like "picture-1", "pick-g3", "click-g5" --
+        // winning Picture Game Level N, or a group's Pick/Click game. Lets:
+        // (1) a returning student resume Picture Game at the right level
+        // instead of restarting at Level 1, (2) group N+1 stay locked until
+        // group N's BOTH games (Pick + Click) are done, (3) TutoringApp's
+        // Report auto-fill "completed" from completedGameIds.size.
+        const progressRosterRef = studentName ? doc(db, BCG_ROSTER_PATH, sanitizeBcgKey(studentName)) : null;
+        let completedGameIds = new Set();
+        function recordGameCompleted(gameId) {
+            if (completedGameIds.has(gameId)) return;
+            completedGameIds.add(gameId);
+            if (progressRosterRef) setDoc(progressRosterRef, { completedGames: arrayUnion(gameId) }, { merge: true }).catch(() => {});
+        }
+        function persistCurrentGroup(groupIndex) {
+            if (progressRosterRef) setDoc(progressRosterRef, { currentGroupNumber: groupIndex + 1 }, { merge: true }).catch(() => {});
+        }
+        function isGroupFullyDone(groupNumber) {
+            return completedGameIds.has(`pick-g${groupNumber}`) && completedGameIds.has(`click-g${groupNumber}`);
+        }
+        // The highest group number reachable right now -- Group 1 is always
+        // open; group N+1 opens only once group N's Pick AND Click games are
+        // both done, so students can't skip ahead.
+        function maxUnlockedGroupNumber() {
+            let n = 1;
+            while (isGroupFullyDone(n)) n++;
+            return n;
+        }
+        // Gold coins: +10 per correct Pick/Click answer, -1 per wrong,
+        // clamped at 0 (same convention as ConsonantPracticeApp).
+        function awardCoins(delta) {
+            if (!progressRosterRef) return;
+            const newBalance = Math.max(0, coinBalanceRef.current + delta);
+            coinBalanceRef.current = newBalance;
+            setMyCoinBalance(newBalance);
+            setDoc(progressRosterRef, { coinBalance: newBalance }, { merge: true }).catch(() => {});
+        }
+        if (progressRosterRef) {
+            getDoc(progressRosterRef).then(snap => {
+                const data = snap.exists() ? snap.data() : {};
+                completedGameIds = new Set(Array.isArray(data.completedGames) ? data.completedGames : []);
+                coinBalanceRef.current = data.coinBalance || 0;
+                setMyCoinBalance(coinBalanceRef.current);
+                // Resume Picture Game at the right stage instead of restarting at Level 1.
+                if (completedGameIds.has('picture-2')) imageGameStage = 'middle';
+                else if (completedGameIds.has('picture-1')) imageGameStage = 'last';
+                // Same idea for the consonant group -- jump straight to the
+                // next unlocked group instead of always reopening at Group 1.
+                const resumeGroupNumber = maxUnlockedGroupNumber();
+                if (resumeGroupNumber > 1 && resumeGroupNumber <= allSoundGroupsForReading.length) {
+                    currentSelectedGroupIndex = resumeGroupNumber - 1;
+                    if (elements.groupSelectorDisplay) elements.groupSelectorDisplay.innerText = resumeGroupNumber;
+                }
+            }).catch(e => console.error('Error loading Burmese Consonant Game progress:', e));
+        }
+
         const scoreWidget = rootEl.querySelector('#floating-score-widget');
         const scoreHeader = rootEl.querySelector('#score-container');
         let isDragging = false;
@@ -907,6 +935,7 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
         }
         function triggerImageLevelUp() {
             isVictorySequence = true;
+            recordGameCompleted('picture-' + ({ first: 1, last: 2, middle: 3 }[imageGameStage] || 1));
             let nextStage = 'first';
             let levelName = 'Level 1';
             if (imageGameStage === 'first') { nextStage = 'last'; levelName = 'Level 2'; }
@@ -935,6 +964,9 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
         }
         function triggerVictory(completedMode) {
             if (completedMode === 'image') { triggerImageLevelUp(); return; }
+            if (completedMode === 'pick' || completedMode === 'click') {
+                recordGameCompleted(`${completedMode}-g${currentSelectedGroupIndex + 1}`);
+            }
             isVictorySequence = true;
             stopGame(); 
             const overlay = rootEl.querySelector('#victory-overlay');
@@ -1089,8 +1121,17 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
         elements.groupSelectorBtn.addEventListener('click', () => {
             stopGame();
             if (allSoundGroupsForReading.length === 0) return;
-            currentSelectedGroupIndex = (currentSelectedGroupIndex + 1) % allSoundGroupsForReading.length;
+            const candidateIndex = (currentSelectedGroupIndex + 1) % allSoundGroupsForReading.length;
+            // Group N+1 stays locked until group N's Pick AND Click games are
+            // both won -- Group 1 (index 0) is always reachable, and wrapping
+            // back to it from the end is never blocked.
+            if (candidateIndex !== 0 && (candidateIndex + 1) > maxUnlockedGroupNumber()) {
+                showGameStatus(`Finish Group ${currentSelectedGroupIndex + 1}'s Pick and Click games first!`, 'incorrect');
+                return;
+            }
+            currentSelectedGroupIndex = candidateIndex;
             const newIndex = currentSelectedGroupIndex;
+            persistCurrentGroup(newIndex);
             elements.groupSelectorDisplay.innerText = newIndex + 1;
             showGameStatus(`Group ${newIndex + 1} Selected.`, 'info');
             let targetElement;
@@ -1228,12 +1269,14 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
                     if (audioTimer) clearInterval(audioTimer); audioTimer = null;
                     playAudio('correct', true); correctCount++; updateScoreDisplay(); showGameStatus('Correct!', 'correct');
                     triggerDiverseConfetti();
+                    awardCoins(10);
                     netScore++; updateSpiderProgress();
                     if (netScore >= TARGET_SCORE) triggerVictory('click');
                     else setTimeout(askClickQuestion, 2000);
                 } else {
                     if (audioTimer) clearInterval(audioTimer); audioTimer = null;
                     playAudio('wrong', true); incorrectCount++; updateScoreDisplay(); showGameStatus('Wrong! Try again.', 'incorrect');
+                    awardCoins(-1);
                     netScore--; updateSpiderProgress();
                     setTimeout(askClickQuestion, 2000);
                 }
@@ -1312,6 +1355,7 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
                 element.classList.add('highlight');
                 playAudio('correct', true); correctCount++; updateScoreDisplay(); showGameStatus('Correct!', 'correct');
                 triggerDiverseConfetti();
+                awardCoins(10);
                 netScore++; updateSpiderProgress();
                 if (netScore >= TARGET_SCORE) triggerVictory('pick');
                 else setTimeout(askPickQuestion, 2000);
@@ -1321,6 +1365,7 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
                 playAudio('wrong', true); incorrectCount++; updateScoreDisplay(); showGameStatus('Wrong!', 'incorrect');
                 const correctEl = elements.pickOneOfThreeContainer.querySelector(`[data-consonant="${correctAnswer}"]`);
                 if(correctEl) { correctEl.style.setProperty('--highlight-color', '#10b981'); correctEl.classList.add('highlight'); }
+                awardCoins(-1);
                 netScore--; updateSpiderProgress();
                 setTimeout(askPickQuestion, 3000); 
             }
@@ -1329,13 +1374,17 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
         function startImageGame() {
             stopGame();
             currentGameMode = 'image';
-            imageGameStage = 'first';
+            // imageGameStage is NOT reset here -- a returning student who
+            // already passed Level 1 (and/or 2) resumes where they left off
+            // instead of restarting at Level 1 every time (see the
+            // progressRosterRef load above).
             netScore = 0; updateSpiderProgress();
             rootEl.classList.add('game-active');
             elements.imageGameToggleBtn.classList.add('active');
             elements.imageGameContainer.classList.add('active');
             elements.imageGameContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            showGameStatus(`Picture Game Started! Level 1: First Letter`, 'info');
+            const startLevelName = imageGameStage === 'middle' ? 'Level 3' : imageGameStage === 'last' ? 'Level 2' : 'Level 1';
+            showGameStatus(`Picture Game Started! ${startLevelName}`, 'info');
             askImageQuestion();
         }
         // The source images live in a separate third-party GitHub repo
@@ -1520,37 +1569,19 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
         dangerouslySetInnerHTML={{ __html: BCG_APP_BODY_HTML }}
       />
       {!hideOwnOnlineBadge && (
-      <>
-      <button
-        onClick={() => setShowOnlinePanel(true)}
-        className="fixed top-3 right-3 z-[9990] flex items-center gap-1 text-sm font-bold bg-white/90 backdrop-blur-sm px-3 py-2 rounded-2xl shadow-lg border border-gray-200 text-emerald-600 hover:underline"
-      >
-        <span className="w-2 h-2 bg-emerald-500 rounded-full inline-block"></span>{onlineCount} online
-      </button>
-      {showOnlinePanel && (
-        <div className="fixed inset-0 z-[9995] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowOnlinePanel(false)}>
-          <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full max-h-[80vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-gray-800">🕷️ Students {onlineCount > 0 && <span className="text-emerald-600">({onlineCount} online)</span>}</h2>
-              <button onClick={() => setShowOnlinePanel(false)} className="text-gray-400 hover:text-gray-700"><X size={22}/></button>
-            </div>
-            <p className="text-xs text-gray-400 mb-3">Showing everyone active in the last 7 days.</p>
-            <div className="space-y-2">
-              {weeklyRosterList.map(s => (
-                <div key={s.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
-                  <div className="flex items-center gap-2">
-                    <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${s._isOnlineNow ? 'bg-emerald-500' : 'bg-gray-300'}`}></span>
-                    <span className="font-bold text-gray-800">{s.studentName}</span>
-                  </div>
-                  <span className="text-xs text-gray-400">{s._isOnlineNow ? 'Online now' : 'Active this week'}</span>
-                </div>
-              ))}
-              {weeklyRosterList.length === 0 && <p className="text-center text-gray-400 py-6">No students active this week yet.</p>}
-            </div>
-          </div>
-        </div>
-      )}
-      </>
+        <OnlineStatusWidget
+          rosterPath={BCG_ROSTER_PATH}
+          studentName={studentName}
+          isTeacherMode={!studentName}
+          coinBalance={studentName ? myCoinBalance : null}
+          panelTitle="🕷️ Students"
+          renderActivity={s => (
+            <span className="text-gray-600">
+              {s.currentGroupNumber ? `Group ${s.currentGroupNumber}` : 'Not practicing'}
+              {s.coinBalance != null && <> · <span className="font-bold text-amber-600">🪙{s.coinBalance}</span></>}
+            </span>
+          )}
+        />
       )}
     </>
   );

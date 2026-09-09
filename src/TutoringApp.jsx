@@ -278,6 +278,14 @@ const sanitizeSoundPracticeKey = (key) => (key || 'unknown').replace(/[.$#/\[\]]
 const isSoundPracticeUrl = (link) =>
   link === 'myanmarsoundpractice://' ||
   (groupSchemeOfLink(link) === 'readingmyanmar://' && extractGroupPartKey(link) === 'soundpractice');
+// Same idea for Burmese Consonant Game -- standalone (burmesegame://) or as
+// Reading Myanmar's Part 2. Its own roster doc's completedGames (Picture
+// Game levels + per-group Pick/Click games) is what the Report auto-fill reads.
+const BURMESE_GAME_APP_ID = 'burmese-consonant-game-app'; // Firestore appId used inside BurmeseConsonantGameApp.jsx
+const sanitizeBurmeseGameKey = (key) => (key || 'unknown').replace(/[.$#/\[\]]/g, '_');
+const isBurmeseGameUrl = (link) =>
+  link === 'burmesegame://' ||
+  (groupSchemeOfLink(link) === 'readingmyanmar://' && extractGroupPartKey(link) === 'burmesegame');
 const computeLessonKey = (title, link) => {
   const classId = extractClassIdFromLink(link);
   return sanitizeKey(classId ? `${title}_${classId}` : title);
@@ -7264,6 +7272,19 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         } catch (e) { console.error('Myanmar Sound Practice progress fetch:', e); }
       }
     }
+
+    // Burmese Consonant Game: fetch total completed games (Picture Game
+    // levels + per-group Pick/Click games) and drop the count into "completed".
+    if (isBurmeseGameUrl(activeSession.lessonLink)) {
+      const stuName = studentProfile?.name;
+      if (stuName) {
+        try {
+          const rosterSnap = await getDoc(doc(db, 'artifacts', BURMESE_GAME_APP_ID, 'public', 'data', 'roster', sanitizeBurmeseGameKey(stuName)));
+          const completedGames = rosterSnap.exists() && Array.isArray(rosterSnap.data().completedGames) ? rosterSnap.data().completedGames : [];
+          if (completedGames.length > 0) setCompletedUnitInput(String(completedGames.length));
+        } catch (e) { console.error('Burmese Consonant Game progress fetch:', e); }
+      }
+    }
   };
 
   const handleOpenRedoReport = async (session) => {
@@ -7336,6 +7357,17 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           const passedLevels = rosterSnap.exists() && Array.isArray(rosterSnap.data().passedLevels) ? rosterSnap.data().passedLevels : [];
           if (passedLevels.length > 0) setCompletedUnitInput(String(passedLevels.length));
         } catch (e) { console.error('Myanmar Sound Practice redo fetch:', e); }
+      }
+    }
+    // Burmese Consonant Game redo fetch — same completedGames-count logic as handleEndSession
+    if (isBurmeseGameUrl(session.lessonLink)) {
+      const stuName = studentProfile?.name;
+      if (stuName) {
+        try {
+          const rosterSnap = await getDoc(doc(db, 'artifacts', BURMESE_GAME_APP_ID, 'public', 'data', 'roster', sanitizeBurmeseGameKey(stuName)));
+          const completedGames = rosterSnap.exists() && Array.isArray(rosterSnap.data().completedGames) ? rosterSnap.data().completedGames : [];
+          if (completedGames.length > 0) setCompletedUnitInput(String(completedGames.length));
+        } catch (e) { console.error('Burmese Consonant Game redo fetch:', e); }
       }
     }
   };
