@@ -1028,6 +1028,53 @@ const [sheetBAudio] = useState(new Audio());
   const [sheetBQAPairs, setSheetBQAPairs] = useState([]);
   const [selectedColumn, setSelectedColumn] = useState('');
 
+  // This app is in App.jsx's KEEP_ALIVE_APPS list -- it never unmounts, so
+  // logging out of one student and into another on the SAME device/browser
+  // just changes the studentName state on this same running instance. Every
+  // other piece of reading-position state (appMode, selectedColumn,
+  // currentSheetName/Index, score, etc.) is left over from whoever was
+  // reading before. Without this reset, the very next tick the effects below
+  // fire with the NEW studentName but the OLD chapter/score still in state,
+  // writing the previous student's chapter/score into the new student's own
+  // Firestore docs (reported: switching from one student to Aaron on the
+  // same device made Aaron show up as having reached the previous student's
+  // chapter). Resetting here -- during render, on studentName change -- runs
+  // before the commit's effects see this render's state, so their
+  // `appMode !== 'sheet'` guards correctly block the stale writes.
+  const [prevStudentNameForReset, setPrevStudentNameForReset] = useState(studentName);
+  if (studentName !== prevStudentNameForReset) {
+    setPrevStudentNameForReset(studentName);
+    setAppMode('free');
+    setSelectedColumn('');
+    setCurrentSheetName(AVAILABLE_SHEETS[0]);
+    setSheetData([]);
+    setCurrentSheetIndex(-1);
+    setSyllables([]);
+    setCurrentKeys([]);
+    setScore(0);
+    setCurrentSentenceScore(0);
+    setNumSentencesInChapter(1);
+    setHasReadAloudCurrent(false);
+    setCompletedSentences(new Set());
+    setShowTranslation(false);
+    setSheetBParagraph(null);
+    setSheetBParaIndex(0);
+    setSheetBLineIndex(-1);
+    setSheetAWordList([]);
+    setSheetACurrentIndex(-1);
+    setResumePosition(null);
+    setLastActivePosition(null);
+    setHasAutoResumedOnce(false);
+    setCompletedChapterSheets(new Set());
+    setCompletedFullChapters(new Set());
+    setTutoringStudentUid(null);
+    setTeacherCompletedChapters(0);
+    setCoinBalance(0);
+    setTrophyCount(0);
+    setAlreadyCompletedInfo(null);
+    setShowGoToSheetBPrompt(null);
+  }
+
   // Keep this student's current chapter+sheet+score written to Firestore as
   // they read, live — not just at the end. Debounced by 1.5s so a burst of
   // per-sentence score updates while reading doesn't spam Firestore writes;
