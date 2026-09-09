@@ -294,6 +294,14 @@ const sanitizeVowelsKey = (key) => (key || 'unknown').replace(/[.$#/\[\]]/g, '_'
 const isVowelsLearningUrl = (link) =>
   link === 'vowelslearning://' ||
   (groupSchemeOfLink(link) === 'readingmyanmar://' && extractGroupPartKey(link) === 'vowelslearning');
+// Same idea for Myanmar Poems -- standalone (myanmarpoems://) or as Speaking
+// Myanmar's Part 1. Its own roster doc's completedPoemIds is what the
+// Report auto-fill reads.
+const MYANMAR_POEMS_APP_ID = 'myanmar-poems-app'; // Firestore appId used inside MyanmarPoemsApp.jsx
+const sanitizePoemsKey = (key) => (key || 'unknown').replace(/[.$#/\[\]]/g, '_');
+const isMyanmarPoemsUrl = (link) =>
+  link === 'myanmarpoems://' ||
+  (groupSchemeOfLink(link) === 'speakingmyanmar://' && extractGroupPartKey(link) === 'myanmarpoems');
 const computeLessonKey = (title, link) => {
   const classId = extractClassIdFromLink(link);
   return sanitizeKey(classId ? `${title}_${classId}` : title);
@@ -7307,6 +7315,19 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         } catch (e) { console.error('Myanmar Vowels Learning progress fetch:', e); }
       }
     }
+
+    // Myanmar Poems: fetch total poems the student has confirmed reciting
+    // themselves and drop the count into "completed".
+    if (isMyanmarPoemsUrl(activeSession.lessonLink)) {
+      const stuName = studentProfile?.name;
+      if (stuName) {
+        try {
+          const rosterSnap = await getDoc(doc(db, 'artifacts', MYANMAR_POEMS_APP_ID, 'public', 'data', 'roster', sanitizePoemsKey(stuName)));
+          const completedPoemIds = rosterSnap.exists() && Array.isArray(rosterSnap.data().completedPoemIds) ? rosterSnap.data().completedPoemIds : [];
+          if (completedPoemIds.length > 0) setCompletedUnitInput(String(completedPoemIds.length));
+        } catch (e) { console.error('Myanmar Poems progress fetch:', e); }
+      }
+    }
   };
 
   const handleOpenRedoReport = async (session) => {
@@ -7401,6 +7422,17 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           const completedGames = rosterSnap.exists() && Array.isArray(rosterSnap.data().completedGames) ? rosterSnap.data().completedGames : [];
           if (completedGames.length > 0) setCompletedUnitInput(String(completedGames.length));
         } catch (e) { console.error('Myanmar Vowels Learning redo fetch:', e); }
+      }
+    }
+    // Myanmar Poems redo fetch — same completedPoemIds-count logic as handleEndSession
+    if (isMyanmarPoemsUrl(session.lessonLink)) {
+      const stuName = studentProfile?.name;
+      if (stuName) {
+        try {
+          const rosterSnap = await getDoc(doc(db, 'artifacts', MYANMAR_POEMS_APP_ID, 'public', 'data', 'roster', sanitizePoemsKey(stuName)));
+          const completedPoemIds = rosterSnap.exists() && Array.isArray(rosterSnap.data().completedPoemIds) ? rosterSnap.data().completedPoemIds : [];
+          if (completedPoemIds.length > 0) setCompletedUnitInput(String(completedPoemIds.length));
+        } catch (e) { console.error('Myanmar Poems redo fetch:', e); }
       }
     }
   };

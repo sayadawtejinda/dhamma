@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { doc, setDoc, updateDoc, onSnapshot, collection, serverTimestamp } from 'firebase/firestore';
-import { X } from 'lucide-react';
+import { doc, setDoc, updateDoc, serverTimestamp, getDoc, arrayUnion } from 'firebase/firestore';
 import { db } from './firebase';
+import OnlineStatusWidget from './OnlineStatusWidget';
 
 // ── Ported from the standalone "မြန်မာကဗျာ သင်ကြားရေး" (Myanmar Poems) HTML app ──
 // Same hybrid approach as the other ported apps in this project: the
@@ -213,9 +213,11 @@ export default function MyanmarPoemsApp({ entryRequest, onExit, hideOwnOnlineBad
   const containerRef = useRef(null);
   const initializedRef = useRef(false);
   const studentName = entryRequest?.studentName || null;
-  const [onlineStudents, setOnlineStudents] = useState([]);
-  const [showOnlinePanel, setShowOnlinePanel] = useState(false);
-  const [nowForOnlineCheck, setNowForOnlineCheck] = useState(Date.now());
+  // coinBalanceRef is the source of truth the vanilla-JS game code reads and
+  // writes synchronously on every answer; myCoinBalance is just its React
+  // mirror for the online-status pill (same split as ConsonantPracticeApp).
+  const coinBalanceRef = useRef(0);
+  const [myCoinBalance, setMyCoinBalance] = useState(0);
 
   // Roster heartbeat — only pings when opened for a student (entryRequest
   // carries their name); a teacher just observes.
@@ -233,36 +235,6 @@ export default function MyanmarPoemsApp({ entryRequest, onExit, hideOwnOnlineBad
       goOffline();
     };
   }, [studentName]);
-
-  useEffect(() => {
-    const unsub = onSnapshot(collection(db, MPOEMS_ROSTER_PATH), (snap) => {
-      setOnlineStudents(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, e => console.error('Myanmar Poems roster listen error:', e));
-    return () => unsub();
-  }, []);
-
-  useEffect(() => {
-    const interval = setInterval(() => setNowForOnlineCheck(Date.now()), 30000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const isRosterEntryOnline = (s) => {
-    const lastSeenMs = s.lastSeen?.toMillis ? s.lastSeen.toMillis() : (s.lastSeen?.seconds ? s.lastSeen.seconds * 1000 : 0);
-    return lastSeenMs > 0 && (nowForOnlineCheck - lastSeenMs) < 5 * 60 * 1000;
-  };
-  const weeklyRosterList = onlineStudents
-    .filter(s => {
-      const lastSeenMs = s.lastSeen?.toMillis ? s.lastSeen.toMillis() : (s.lastSeen?.seconds ? s.lastSeen.seconds * 1000 : 0);
-      return lastSeenMs > 0 && (nowForOnlineCheck - lastSeenMs) < 7 * 24 * 60 * 60 * 1000;
-    })
-    .map(s => ({ ...s, _isOnlineNow: isRosterEntryOnline(s) }))
-    .sort((a, b) => {
-      if (a._isOnlineNow !== b._isOnlineNow) return b._isOnlineNow ? 1 : -1;
-      const aMs = a.lastSeen?.toMillis ? a.lastSeen.toMillis() : 0;
-      const bMs = b.lastSeen?.toMillis ? b.lastSeen.toMillis() : 0;
-      return bMs - aMs;
-    });
-  const onlineCount = onlineStudents.filter(isRosterEntryOnline).length;
 
   useEffect(() => {
     // Dev-mode double-invoke / re-mount guard — this whole script wires up
@@ -1944,6 +1916,47 @@ export default function MyanmarPoemsApp({ entryRequest, onExit, hideOwnOnlineBad
         const COLOR_CLASSES = ['color-0', 'color-1', 'color-2', 'color-3', 'color-4'];
         const TRANSLATION_TIMEOUT_MS = 3000; // 3 seconds to hide the translation
 
+        // --- Progress persistence (roster doc, keyed by studentName) ---
+        // completedPoemIds are poems this student has confirmed reciting
+        // themselves (see navigatePoem below), capped at
+        // MAX_NEW_POEMS_PER_SESSION new ones per visit -- so "every 2 new
+        // poems = 1 trophy" can never bank more than one trophy's worth in
+        // a single sitting, no matter how many poems get recited today.
+        const progressRosterRef = studentName ? doc(db, MPOEMS_ROSTER_PATH, sanitizeMpoemsKey(studentName)) : null;
+        let completedPoemIds = [];
+        let newPoemsCountedThisSession = 0;
+        let poemStartTime = Date.now();
+        let audioCoinAwardedForThisPoem = false;
+        const MIN_RECITE_SECONDS = 15;
+        const MAX_NEW_POEMS_PER_SESSION = 2;
+
+        // Gold coins: +20 for listening along via Play Audio (once per poem
+        // visit), +50 for confirming self-recitation -- clamped at 0, same
+        // convention as ConsonantPracticeApp.
+        function awardCoins(delta) {
+            if (!progressRosterRef) return;
+            const newBalance = Math.max(0, coinBalanceRef.current + delta);
+            coinBalanceRef.current = newBalance;
+            setMyCoinBalance(newBalance);
+            setDoc(progressRosterRef, { coinBalance: newBalance }, { merge: true }).catch(() => {});
+        }
+
+        // Resolves once completedPoemIds/coinBalance are loaded and
+        // currentPoemIndex has been moved to the first not-yet-done poem --
+        // runMasterInit (which calls renderPoem for the first time) waits
+        // on this so the student lands on the right poem from the start.
+        function loadPoemProgress() {
+            if (!progressRosterRef) return Promise.resolve();
+            return getDoc(progressRosterRef).then(snap => {
+                const data = snap.exists() ? snap.data() : {};
+                completedPoemIds = Array.isArray(data.completedPoemIds) ? data.completedPoemIds : [];
+                coinBalanceRef.current = data.coinBalance || 0;
+                setMyCoinBalance(coinBalanceRef.current);
+                const nextNewIndex = poemsData.findIndex((_, i) => !completedPoemIds.includes(i));
+                if (nextNewIndex >= 0) currentPoemIndex = nextNewIndex;
+            }).catch(e => console.error('Error loading Myanmar Poems progress:', e));
+        }
+
         // ----------------------------------------------------
         // III. CORE FUNCTIONS
         // ----------------------------------------------------
@@ -1954,8 +1967,11 @@ export default function MyanmarPoemsApp({ entryRequest, onExit, hideOwnOnlineBad
         function renderPoem() {
             const poem = poemsData[currentPoemIndex];
             const lines = isRomanizationMode ? poem.romanization : poem.burmese;
-            
-            poemTitle.textContent = `${currentPoemIndex + 1}. ${poem.title}`;
+
+            poemStartTime = Date.now();
+            audioCoinAwardedForThisPoem = false;
+            const doneTag = completedPoemIds.includes(currentPoemIndex) ? ' ✅ Completed' : '';
+            poemTitle.textContent = `${currentPoemIndex + 1}. ${poem.title}${doneTag}`;
             poemContainer.innerHTML = '';
             
             lines.forEach((line, index) => {
@@ -2020,12 +2036,33 @@ export default function MyanmarPoemsApp({ entryRequest, onExit, hideOwnOnlineBad
          * @param {number} direction - 1 for next, -1 for previous.
          */
         function navigatePoem(direction) {
+            // Moving to the Next poem after reciting for at least
+            // MIN_RECITE_SECONDS asks whether the student actually recited
+            // it themselves -- confirming awards coins, and (capped at
+            // MAX_NEW_POEMS_PER_SESSION new poems per visit) marks it done.
+            if (direction === 1) {
+                const recitedSeconds = (Date.now() - poemStartTime) / 1000;
+                if (recitedSeconds >= MIN_RECITE_SECONDS) {
+                    const recitedThemselves = window.confirm('ဒီကဗျာကို မင်းကိုယ်တိုင် ရွတ်ဆိုခဲ့တာလား? (Did you recite this poem yourself?)');
+                    if (recitedThemselves) {
+                        awardCoins(50);
+                        if (!completedPoemIds.includes(currentPoemIndex) && newPoemsCountedThisSession < MAX_NEW_POEMS_PER_SESSION) {
+                            completedPoemIds.push(currentPoemIndex);
+                            newPoemsCountedThisSession++;
+                            if (progressRosterRef) {
+                                setDoc(progressRosterRef, { completedPoemIds: arrayUnion(currentPoemIndex) }, { merge: true }).catch(() => {});
+                            }
+                        }
+                    }
+                }
+            }
+
             // Stop any currently playing audio when changing poems
             if (currentAudio) {
                 currentAudio.pause();
                 currentAudio.currentTime = 0;
             }
-            
+
             const newIndex = currentPoemIndex + direction;
             if (newIndex >= 0 && newIndex < poemsData.length) {
                 currentPoemIndex = newIndex;
@@ -2181,6 +2218,10 @@ export default function MyanmarPoemsApp({ entryRequest, onExit, hideOwnOnlineBad
 
             currentAudio.onplaying = () => {
                 alertUser(`"${poem.title}" ကို ဖွင့်နေပါသည်...`);
+                if (!audioCoinAwardedForThisPoem) {
+                    audioCoinAwardedForThisPoem = true;
+                    awardCoins(20);
+                }
             }
             
             currentAudio.onended = () => {
@@ -2305,9 +2346,17 @@ export default function MyanmarPoemsApp({ entryRequest, onExit, hideOwnOnlineBad
                 document.head.appendChild(script);
             });
         }
-        ensureLucideLoaded().then(runMasterInit);
+        Promise.all([ensureLucideLoaded(), loadPoemProgress()]).then(runMasterInit);
 
-    return () => {};
+    // Stop any playing poem audio -- otherwise it keeps going after this
+    // component unmounts, since the Audio object isn't tied to React's
+    // lifecycle.
+    return () => {
+      if (currentAudio) {
+        currentAudio.pause();
+        currentAudio.currentTime = 0;
+      }
+    };
   }, []);
 
   return (
@@ -2319,37 +2368,19 @@ export default function MyanmarPoemsApp({ entryRequest, onExit, hideOwnOnlineBad
         dangerouslySetInnerHTML={{ __html: MPOEMS_APP_BODY_HTML }}
       />
       {!hideOwnOnlineBadge && (
-      <>
-      <button
-        onClick={() => setShowOnlinePanel(true)}
-        className="fixed top-16 left-3 z-[9990] flex items-center gap-1 text-sm font-bold bg-white/90 backdrop-blur-sm px-3 py-2 rounded-2xl shadow-lg border border-gray-200 text-emerald-600 hover:underline"
-      >
-        <span className="w-2 h-2 bg-emerald-500 rounded-full inline-block"></span>{onlineCount} online
-      </button>
-      {showOnlinePanel && (
-        <div className="fixed inset-0 z-[9995] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowOnlinePanel(false)}>
-          <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full max-h-[80vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-gray-800">📖 Students {onlineCount > 0 && <span className="text-emerald-600">({onlineCount} online)</span>}</h2>
-              <button onClick={() => setShowOnlinePanel(false)} className="text-gray-400 hover:text-gray-700"><X size={22}/></button>
-            </div>
-            <p className="text-xs text-gray-400 mb-3">Showing everyone active in the last 7 days.</p>
-            <div className="space-y-2">
-              {weeklyRosterList.map(s => (
-                <div key={s.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
-                  <div className="flex items-center gap-2">
-                    <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${s._isOnlineNow ? 'bg-emerald-500' : 'bg-gray-300'}`}></span>
-                    <span className="font-bold text-gray-800">{s.studentName}</span>
-                  </div>
-                  <span className="text-xs text-gray-400">{s._isOnlineNow ? 'Online now' : 'Active this week'}</span>
-                </div>
-              ))}
-              {weeklyRosterList.length === 0 && <p className="text-center text-gray-400 py-6">No students active this week yet.</p>}
-            </div>
-          </div>
-        </div>
-      )}
-      </>
+        <OnlineStatusWidget
+          rosterPath={MPOEMS_ROSTER_PATH}
+          studentName={studentName}
+          isTeacherMode={!studentName}
+          coinBalance={studentName ? myCoinBalance : null}
+          panelTitle="📖 Students"
+          renderActivity={s => (
+            <span className="text-gray-600">
+              {s.completedPoemIds?.length ? `${s.completedPoemIds.length} poems done` : 'Not practicing'}
+              {s.coinBalance != null && <> · <span className="font-bold text-amber-600">🪙{s.coinBalance}</span></>}
+            </span>
+          )}
+        />
       )}
     </>
   );
