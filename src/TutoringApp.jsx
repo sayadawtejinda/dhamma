@@ -4329,7 +4329,7 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
             onClick={() => onOpenMyanmarSpeaking && onOpenMyanmarSpeaking({})}
             className="w-full flex items-center justify-between bg-white p-4 rounded-xl border-2 border-purple-200 hover:border-purple-400 hover:shadow-md transition-all mt-3"
           >
-            <span className="flex items-center text-lg font-bold text-purple-800">🗣️ Myanmar Speaking app</span>
+            <span className="flex items-center text-lg font-bold text-purple-800">🗣️ Myanmar Speaker app</span>
             <span className="text-purple-500 text-xl">→</span>
           </button>
           {/* Myanmar Reader app — now mounted inline in the same project as
@@ -6034,7 +6034,7 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                     }}
                     className="w-full text-left p-2 rounded-lg hover:bg-purple-50 border border-transparent hover:border-purple-200 font-semibold text-gray-800 mt-1"
                   >
-                    🗣️ Myanmar Speaking app
+                    🗣️ Myanmar Speaker app
                   </button>
                   <button
                     type="button"

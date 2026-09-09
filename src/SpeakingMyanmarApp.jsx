@@ -146,9 +146,10 @@ export default function SpeakingMyanmarApp({ entryRequest, onExit }) {
         <div className="fixed top-3 left-3 z-[9999]">
           <button
             onClick={onExit}
-            className="px-4 py-2 bg-gray-800 text-white rounded-full shadow-lg font-semibold text-sm hover:bg-gray-900"
+            className="w-12 h-12 flex items-center justify-center bg-gray-800 text-white rounded-full shadow-lg text-2xl hover:bg-gray-900"
+            aria-label="Back to Tutoring Dashboard"
           >
-            ← Back to Tutoring Dashboard
+            🏡
           </button>
         </div>
         <div className="max-w-2xl mx-auto p-4 md:p-8 pt-16">
