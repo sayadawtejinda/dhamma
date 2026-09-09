@@ -158,6 +158,11 @@ const extractDhammaschoolClassId = (link) => {
   return link.replace('dhammaschool://', '') || null;
 };
 
+const extractWatchLearnVideoKey = (link) => {
+  if (!link || !link.startsWith('watchandlearn://')) return null;
+  return link.replace('watchandlearn://', '') || null;
+};
+
 const sanitizeKey = (key) => {
   if (!key || typeof key !== 'string') return 'unknown_lesson';
   return key.replace(/[\.\#\$\/\[\]]/g, '_');
@@ -173,6 +178,7 @@ const extractClassIdFromLink = (link) => {
   if (link.startsWith('smartstudy://')) return extractSmartStudyClassId(link);
   if (link.startsWith('abhidhamma://')) return extractAbhidhammaLessonId(link);
   if (link.startsWith('dhammaschool://')) return extractDhammaschoolClassId(link);
+  if (link.startsWith('watchandlearn://')) return extractWatchLearnVideoKey(link);
   // Reading Myanmar / Speaking Myanmar / Myanmar Part 1 & 2 append a part
   // key the same way (e.g. "readingmyanmar://consonantpractice") -- this
   // was missing entirely, so every part's trophy silently collapsed onto
@@ -1079,6 +1085,8 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
   const [selectedBankLessonId, setSelectedBankLessonId] = useState('');
   const [sendSmartStudyClassId, setSendSmartStudyClassId] = useState(''); // class chosen in Send Action for smartstudy:// lessons
   const [sendGroupPartKey, setSendGroupPartKey] = useState(''); // part chosen in Send Action for readingmyanmar:// / speakingmyanmar:// / myanmarpart1and2:// lessons
+  const [sendWatchLearnVideoKey, setSendWatchLearnVideoKey] = useState(''); // video chosen in Send Action for watchandlearn:// lessons
+  const [watchLearnVideos, setWatchLearnVideos] = useState([]);
   // SmartStudy completion counts for the selected student (loaded when student+lesson are selected)
   const [ssStudentClassCount, setSsStudentClassCount] = useState(null);   // per-class (e.g. BUDDHA)
   const [ssStudentTotalCount, setSsStudentTotalCount] = useState(null);   // all classes combined
@@ -1280,6 +1288,18 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
     });
     return () => unsubscribe();
   }, [user.uid]);
+
+  // The videos inside 🎥 Watch & Learn (see WatchAndLearnApp.jsx) live in
+  // Firestore, not a static list like Reading Myanmar/Speaking Myanmar's
+  // parts -- fetched here so Send Action can offer a "choose a Video"
+  // picker for the one Lesson Bank entry that now covers all of them.
+  useEffect(() => {
+    const q = query(collection(db, `${publicDataPath}/watchAndLearnVideos`), orderBy('order', 'asc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setWatchLearnVideos(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+    return () => unsubscribe();
+  }, []);
 
   // Lessons keep getting added to SmartStudy/Abhidhamma, so a whole-app
   // Lesson Bank entry's "Total Number" and "Max Trophies Available" go stale
@@ -1735,6 +1755,7 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
       if (lessonToSend.link === 'abhidhamma://' && sendAbhidhammaClassId) return `abhidhamma://${sendAbhidhammaClassId}`;
       if (lessonToSend.link === 'dhammaschool://' && sendDhammaschoolClassId) return `dhammaschool://${sendDhammaschoolClassId}`;
       if (GROUP_PARTS_BY_SCHEME[lessonToSend.link] && sendGroupPartKey) return `${lessonToSend.link}${sendGroupPartKey}`;
+      if (lessonToSend.link === 'watchandlearn://' && sendWatchLearnVideoKey) return `watchandlearn://${sendWatchLearnVideoKey}`;
       return lessonToSend.link;
     })();
 
@@ -1844,6 +1865,7 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
     if (lesson.link === 'abhidhamma://' && sendAbhidhammaClassId) return `abhidhamma://${sendAbhidhammaClassId}`;
     if (lesson.link === 'dhammaschool://' && sendDhammaschoolClassId) return `dhammaschool://${sendDhammaschoolClassId}`;
     if (GROUP_PARTS_BY_SCHEME[lesson.link] && sendGroupPartKey) return `${lesson.link}${sendGroupPartKey}`;
+    if (lesson.link === 'watchandlearn://' && sendWatchLearnVideoKey) return `watchandlearn://${sendWatchLearnVideoKey}`;
     return lesson.link;
   };
 
@@ -4447,7 +4469,7 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
           
           <div className="mb-4">
             <label className="block text-gray-700 mb-2">Select Lesson from Bank</label>
-            <select value={selectedBankLessonId} onChange={(e) => { setSelectedBankLessonId(e.target.value); hasAutoSelectedBankLessonRef.current = true; setSendSmartStudyClassId(''); setSendAbhidhammaClassId(''); setSendGroupPartKey(''); }} className="w-full p-3 border rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <select value={selectedBankLessonId} onChange={(e) => { setSelectedBankLessonId(e.target.value); hasAutoSelectedBankLessonRef.current = true; setSendSmartStudyClassId(''); setSendAbhidhammaClassId(''); setSendGroupPartKey(''); setSendWatchLearnVideoKey(''); }} className="w-full p-3 border rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500">
               <option value="" disabled>-- Select a lesson --</option>
               {lessonBank.map(lesson => <option key={lesson.id} value={lesson.id}>{lesson.title} ({lesson.details})</option>)}
             </select>
@@ -4574,6 +4596,36 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                     <option key={p.key} value={p.key}>{p.label}</option>
                   ))}
                 </select>
+              </div>
+            );
+          })()}
+
+          {/* 🎥 Watch & Learn -- consolidates 5 old bare-link lessons (see the
+              migration in Data Management) that each used to have their own
+              trophy limit; picking a specific video here (not baked into the
+              one shared Lesson Bank entry, same idea as the pickers above)
+              keeps each video's trophies tracked separately again, same as
+              before the merge. */}
+          {(() => {
+            const selectedLesson = lessonBank.find(l => l.id === selectedBankLessonId);
+            if (!selectedLesson || selectedLesson.link !== 'watchandlearn://') return null;
+            return (
+              <div className="mb-4">
+                <label className="block text-gray-700 mb-2 font-medium">🎥 Watch & Learn — choose a Video</label>
+                {watchLearnVideos.length === 0 ? (
+                  <p className="text-gray-500 text-sm p-2">No videos added yet -- add one from the 🎥 Watch & Learn app (teacher mode) first.</p>
+                ) : (
+                  <select
+                    value={sendWatchLearnVideoKey}
+                    onChange={(e) => setSendWatchLearnVideoKey(e.target.value)}
+                    className="w-full p-3 border rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  >
+                    <option value="" disabled>-- Choose a video --</option>
+                    {watchLearnVideos.map(v => (
+                      <option key={v.id} value={sanitizeKey(v.title)}>{v.title}</option>
+                    ))}
+                  </select>
+                )}
               </div>
             );
           })()}
@@ -6888,7 +6940,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         'myanmarpart1and2://': onOpenMyanmarPart1And2,
         'watchandlearn://': onOpenWatchAndLearn,
       };
-      const matchedScheme = groupSchemeOfLink(lesson.link) || lesson.link;
+      const matchedScheme = groupSchemeOfLink(lesson.link) || (lesson.link.startsWith('watchandlearn://') ? 'watchandlearn://' : lesson.link);
       const opener = openerByLink[matchedScheme];
       const initialPart = extractGroupPartKey(lesson.link);
       if (opener) opener({ studentName: studentProfile?.name || '', ...(initialPart ? { initialPart } : {}) });
@@ -8076,6 +8128,9 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                       )}
                       {lesson.link && groupSchemeOfLink(lesson.link) && extractGroupPartKey(lesson.link) && (
                         <span className="text-sm font-semibold text-blue-600 ml-1">— {groupPartLabel(groupSchemeOfLink(lesson.link), extractGroupPartKey(lesson.link))}</span>
+                      )}
+                      {lesson.link && lesson.link.startsWith('watchandlearn://') && extractWatchLearnVideoKey(lesson.link) && (
+                        <span className="text-sm font-semibold text-blue-600 ml-1">— {extractWatchLearnVideoKey(lesson.link)}</span>
                       )}
                       {lesson.unitCount > 0 && completedUnitList >= lesson.unitCount && (
                         <span className="bg-emerald-500 text-white text-xs font-bold px-2 py-1 rounded-full">✅ Completed</span>
