@@ -1048,6 +1048,10 @@ let bilingualMode = false;
                                 if (paramStudent) {
                                     studentName = paramStudent;
                                     localStorage.setItem('studentName', paramStudent);
+                                    // setupListeners() (called just above) already built the
+                                    // completions query before studentName was known -- rebuild
+                                    // it now that it is.
+                                    setupCompletionsListener();
                                 }
                                 if (paramClassId) {
                                     selectedClassId = paramClassId;
@@ -1112,6 +1116,7 @@ let bilingualMode = false;
                                         els.nameModal.classList.add('hidden');
                                         nameError.classList.add('hidden');
                                         // The student library is already being rendered by setupListeners
+                                        setupCompletionsListener();
                                         updatePresence();
                                     } else {
                                         nameError.classList.remove('hidden');
@@ -1145,6 +1150,7 @@ let bilingualMode = false;
                                         localStorage.setItem('dhammaschool_linked_tutoring_id', enteredId);
                                         safeSetText('current-student-name', studentName);
                                         els.nameModal.classList.add('hidden');
+                                        setupCompletionsListener();
                                     } catch (e) {
                                         console.error('Error looking up Tutoring student:', e);
                                         idError.textContent = 'Could not check that ID right now. Please try again.';
@@ -1396,7 +1402,16 @@ let bilingualMode = false;
 
         function setupCompletionsListener() {
             if (completionsUnsub) completionsUnsub();
-            const q = query(collection(db, PATHS.completions), where("userId", "==", userId));
+            if (!studentName || isTeacher) return;
+            // Matched by studentName, not userId (this anonymous session's
+            // Firebase auth uid) -- the same student on a different device,
+            // or after a cleared-storage/new-anonymous-session reset, kept a
+            // real completion history that a userId match would silently
+            // lose, showing already-earned-trophy lessons as not completed.
+            // TutoringApp.jsx's own trophy calculation already matches
+            // completions the same way (by studentName), so this makes the
+            // two agree.
+            const q = query(collection(db, PATHS.completions), where("studentName", "==", studentName));
             completionsUnsub = onSnapshot(q, (snap) => {
                 myCompletedLessonIds = new Set();
                 snap.forEach(d => myCompletedLessonIds.add(d.data().lessonId));
@@ -2000,11 +2015,31 @@ document.getElementById('toggle-audio-btn').onclick = async () => {
             updatePresence();
         };
 
+        // Lessons in a class have to be studied in order (creation order --
+        // there's no separate chapter-number field to sort by). Recomputed
+        // here rather than trusted from the rendered card, so a stale/cached
+        // click can't skip the check.
+        function isLessonLockedForStudent(lid) {
+            if (isTeacher || isPreviewMode) return false;
+            const lesson = allLessons[lid];
+            if (!lesson) return false;
+            const classId = (lesson.classId && lesson.classId.trim()) ? lesson.classId.trim() : 'GENERAL';
+            const classLessons = studentLibraryLessons
+                .filter(l => (l.classId && l.classId.trim() ? l.classId.trim() : 'GENERAL') === classId)
+                .sort((a, b) => (a.createdAt || "9999").localeCompare(b.createdAt || "9999"));
+            const idx = classLessons.findIndex(l => l.id === lid);
+            return idx > 0 && !myCompletedLessonIds.has(classLessons[idx - 1].id);
+        }
+        window.lockedLessonClick = () => {
+            alertMessage('Finish the previous lesson first!', 'error');
+        };
+
         window.enterLesson = (lid) => {
-            studentCurrentLessonId = lid; 
+            if (isLessonLockedForStudent(lid)) { window.lockedLessonClick(); return; }
+            studentCurrentLessonId = lid;
             // --- FIX: Persist ID so it survives refresh ---
             localStorage.setItem('studentCurrentLessonId', lid);
-            currentStepIndex = 0; 
+            currentStepIndex = 0;
             answersMap = {};
             els.studentLibrary.classList.add('hidden'); els.studentActiveLesson.classList.remove('hidden');
             setupLessonListener(lid); setupMyAnswersListener();
@@ -2128,20 +2163,29 @@ document.getElementById('toggle-audio-btn').onclick = async () => {
             if(filtered.length === 0) { container.innerHTML = '<div class="text-center col-span-full py-10 text-slate-400 font-bold">No lessons in this class yet.</div>'; return; }
             filtered.sort((a, b) => (a.createdAt || "9999").localeCompare(b.createdAt || "9999"));
             container.innerHTML = '';
-            filtered.forEach(lesson => {
+            filtered.forEach((lesson, index) => {
                 const count = lesson.steps ? lesson.steps.length : 0;
                 // Use English Title if mode is English
                 const title = (lesson.languageMode === 'en' && lesson.name_en) ? lesson.name_en : lesson.name;
-                
+
                 const isDone = myCompletedLessonIds.has(lesson.id);
+                // Lessons within a class have to be studied in order: locked
+                // until the previous one (by creation order -- there's no
+                // separate chapter-number field) is completed. `filtered` is
+                // already this class's own list, so index 0 is always open.
+                const isLocked = index > 0 && !myCompletedLessonIds.has(filtered[index - 1].id);
+                const clickHandler = isLocked ? `lockedLessonClick()` : `enterLesson('${lesson.id}')`;
                 container.innerHTML += `
-                    <div onclick="enterLesson('${lesson.id}')" class="lesson-card bg-white p-6 rounded-3xl shadow-md border-2 ${isDone ? 'border-green-200' : 'border-white'} cursor-pointer relative overflow-hidden group">
-                        <div class="absolute top-0 left-0 w-2 h-full bg-gradient-to-b ${isDone ? 'from-green-300 to-green-500' : 'from-orange-300 to-orange-500'}"></div>
-                        ${isDone ? `<div class="absolute top-3 right-3 bg-green-100 text-green-700 text-xs font-black px-3 py-1 rounded-full border border-green-300"><i class="fas fa-check-circle"></i> Completed</div>` : ''}
+                    <div onclick="${clickHandler}" class="lesson-card bg-white p-6 rounded-3xl shadow-md border-2 ${isDone ? 'border-green-200' : isLocked ? 'border-slate-200' : 'border-white'} ${isLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'} relative overflow-hidden group">
+                        <div class="absolute top-0 left-0 w-2 h-full bg-gradient-to-b ${isDone ? 'from-green-300 to-green-500' : isLocked ? 'from-slate-300 to-slate-400' : 'from-orange-300 to-orange-500'}"></div>
+                        ${isDone ? `<div class="absolute top-3 right-3 bg-green-100 text-green-700 text-xs font-black px-3 py-1 rounded-full border border-green-300"><i class="fas fa-check-circle"></i> Completed</div>` : isLocked ? `<div class="absolute top-3 right-3 bg-slate-100 text-slate-500 text-xs font-black px-3 py-1 rounded-full border border-slate-300"><i class="fas fa-lock"></i> Locked</div>` : ''}
                         <div class="ml-4">
-                            <h3 class="text-xl font-black text-slate-800 mb-2 group-hover:text-orange-600 transition">${title}</h3>
+                            <h3 class="text-xl font-black text-slate-800 mb-2 ${isLocked ? '' : 'group-hover:text-orange-600'} transition">${title}</h3>
                             <div class="flex items-center gap-2 text-sm text-slate-500 font-bold"><span class="bg-orange-50 text-orange-600 px-2 py-1 rounded-lg"><i class="fas fa-layer-group"></i> ${count} Steps</span></div>
-                            <div class="mt-4 flex justify-end"><span class="text-blue-500 font-bold group-hover:translate-x-1 transition-transform">${isDone ? 'Review Again' : 'Start Learning'} <i class="fas fa-arrow-right ml-1"></i></span></div>
+                            <div class="mt-4 flex justify-end">${isLocked
+                                ? `<span class="text-slate-400 font-bold"><i class="fas fa-lock mr-1"></i> Finish the previous lesson first</span>`
+                                : `<span class="text-blue-500 font-bold group-hover:translate-x-1 transition-transform">${isDone ? 'Review Again' : 'Start Learning'} <i class="fas fa-arrow-right ml-1"></i></span>`
+                            }</div>
                         </div>
                     </div>`;
             });
@@ -4287,6 +4331,7 @@ function renderClickableWords(text) {
       delete window.translateCurrentLesson;
       delete window.goToLibrary;
       delete window.enterLesson;
+      delete window.lockedLessonClick;
       delete window.previewAsStudent;
       delete window.exitPreview;
       delete window.selectClass;
