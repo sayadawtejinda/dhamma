@@ -1028,7 +1028,7 @@ function AttendanceReports({ students, teacherSchedule, sessions }) {
   );
 }
 
-function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenConsonantPractice, onOpenBurmeseGame, onOpenMyanmarSpeaking, onOpenNumberLearning, onOpenVowelsLearning, onOpenAnimalSound, onOpenBurmeseLearningGames, onOpenInteractiveQuiz, onOpenMyanmarPoems, onOpenConsonantEndings, onOpenTimeAndCalendar, onOpenMyanmarSpelling, onOpenMyanmarSoundPractice, onOpenReadingMyanmar, onOpenSpeakingMyanmar, onOpenMyanmarPart1And2, onOpenWatchAndLearn }) {
+function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenConsonantPractice, onOpenBurmeseGame, onOpenMyanmarSpeaking, onOpenNumberLearning, onOpenVowelsLearning, onOpenAnimalSound, onOpenBurmeseLearningGames, onOpenInteractiveQuiz, onOpenMyanmarPoems, onOpenConsonantEndings, onOpenTimeAndCalendar, onOpenMyanmarSpelling, onOpenMyanmarSoundPractice, onOpenReadingMyanmar, onOpenSpeakingMyanmar, onOpenMyanmarPart1And2, onOpenWatchAndLearn }) {
   const [students, setStudents] = useState([]);
   const [lessonBank, setLessonBank] = useState([]); 
   const [sessions, setSessions] = useState([]); 
@@ -1186,6 +1186,43 @@ function TeacherDashboard({ user, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyan
     });
     return () => unsubscribe();
   }, []);
+
+  // Same 🔔 the student side has, showing everyone's trophy announcements
+  // from the past week -- lets the teacher glance back at what was awarded
+  // without digging through each student's page. "Seen" state lives on the
+  // teacher's own config doc (there's no per-student profile to hang it on
+  // here), same arrayUnion pattern as the student side.
+  const [showNotifDropdown, setShowNotifDropdown] = useState(false);
+  const [visibleAnnouncements, setVisibleAnnouncements] = useState([]);
+  useEffect(() => {
+    if (!announcements) return;
+    const seenIds = teacherConfigData?.seenAnnouncements || [];
+    const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+    const nowMs = Date.now();
+    const recent = announcements
+      .filter(a => {
+        const ms = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : (a.createdAt?.seconds ? a.createdAt.seconds * 1000 : nowMs);
+        return (nowMs - ms) < ONE_WEEK_MS;
+      })
+      .sort((a, b) => {
+        const aMs = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : (a.createdAt?.seconds ? a.createdAt.seconds * 1000 : 0);
+        const bMs = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : (b.createdAt?.seconds ? b.createdAt.seconds * 1000 : 0);
+        return bMs - aMs;
+      })
+      .map(a => ({ ...a, _unseen: !seenIds.includes(a.id) }));
+    setVisibleAnnouncements(recent);
+  }, [announcements, teacherConfigData]);
+  const unreadAnnouncementCount = visibleAnnouncements.filter(a => a._unseen).length;
+  const dismissAnnouncement = async (id) => {
+    try { await setDoc(teacherConfigDoc, { seenAnnouncements: arrayUnion(id) }, { merge: true }); }
+    catch (error) { console.error("Error dismissing announcement:", error); }
+  };
+  const dismissAllAnnouncements = async () => {
+    const newIds = visibleAnnouncements.map(a => a.id);
+    if (newIds.length === 0) return;
+    try { await setDoc(teacherConfigDoc, { seenAnnouncements: arrayUnion(...newIds) }, { merge: true }); }
+    catch (error) { console.error("Error dismissing all announcements:", error); }
+  };
 
   useEffect(() => {
     const q = query(studentsCollection);
@@ -3990,6 +4027,45 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
 
   return (
     <div className="p-6">
+      <div className="fixed top-4 right-4 z-[9500]">
+        <button
+          onClick={() => setShowNotifDropdown(v => !v)}
+          className="relative bg-white hover:bg-gray-50 border border-gray-200 rounded-full w-11 h-11 flex items-center justify-center shadow-lg text-xl"
+          title="Notifications"
+        >
+          🔔
+          {unreadAnnouncementCount > 0 && (
+            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center border-2 border-white">
+              {unreadAnnouncementCount > 9 ? '9+' : unreadAnnouncementCount}
+            </span>
+          )}
+        </button>
+        {showNotifDropdown && (
+          <div className="absolute right-0 mt-2 w-80 max-h-96 overflow-y-auto bg-white rounded-xl shadow-2xl border border-gray-200 p-3">
+            <div className="flex justify-between items-center mb-2 px-1">
+              <p className="font-bold text-gray-700 text-sm">Notifications (past week)</p>
+              {visibleAnnouncements.length > 0 && (
+                <button onClick={dismissAllAnnouncements} className="text-xs text-gray-400 hover:text-gray-700 font-semibold">
+                  Dismiss All
+                </button>
+              )}
+            </div>
+            {visibleAnnouncements.length === 0 && (
+              <p className="text-sm text-gray-400 text-center py-6">No notifications this week.</p>
+            )}
+            <div className="space-y-2">
+              {visibleAnnouncements.map(ann => (
+                <div key={ann.id} className={`p-3 rounded-lg border text-sm relative ${ann._unseen ? 'bg-yellow-50 border-yellow-200' : 'bg-gray-50 border-gray-100'}`}>
+                  <button onClick={() => dismissAnnouncement(ann.id)} className="absolute top-1.5 right-1.5 text-gray-300 hover:text-gray-600 text-xs">✕</button>
+                  <p className="font-bold text-yellow-900 pr-4">🎉 {ann.studentName}</p>
+                  <p className="text-yellow-800">earned their <span className="font-black text-yellow-600">{ann.trophyCount}</span>th trophy! 🏆</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
       {fullScreenRosterGroup && (() => {
         // Some Parami students share a rented/borrowed device and need to
         // find their own ID quickly during class -- a big, projector-
@@ -8529,6 +8605,18 @@ function WeeklySchedule({ role, targetStudentUid }) {
     }
   };
 
+  // For a mistakenly-created entry itself (wrong student, wrong time) --
+  // separate from the Attended/Absent/Reset buttons above, which only
+  // change the attendance mark on an entry that's otherwise correct.
+  const handleDeleteScheduleEntry = async (entry) => {
+    if (!window.confirm(`Delete this schedule entry for ${entry.studentName} (${formatTime(entry.startTime)} - ${formatTime(entry.endTime)})? This cannot be undone.`)) return;
+    try {
+      await deleteDoc(doc(db, `${publicDataPath}/teacherSchedule`, entry.id));
+    } catch (error) {
+      console.error("Error deleting schedule entry:", error);
+    }
+  };
+
   return (
     <div className="p-6">
       <AttendanceCountModal isOpen={showCountModal} onClose={() => setShowCountModal(false)} data={modalData} />
@@ -8702,23 +8790,30 @@ function WeeklySchedule({ role, targetStudentUid }) {
                           </button>
                         </div>
 
-                        {role === 'teacher' && isPast && (
+                        {role === 'teacher' && (
                           <div className="flex space-x-1 flex-shrink-0">
-                            {attendanceStatus !== 'attended' && (
+                            {isPast && attendanceStatus !== 'attended' && (
                               <button onClick={() => openOverrideModal(entry, 'attended')} title="Mark Attended" className="p-1 rounded-full text-emerald-600 hover:bg-emerald-200">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
                               </button>
                             )}
-                            {attendanceStatus !== 'absent' && (
+                            {isPast && attendanceStatus !== 'absent' && (
                               <button onClick={() => openOverrideModal(entry, 'absent')} title="Mark Absent" className="p-1 rounded-full text-red-600 hover:bg-red-200">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" /></svg>
                               </button>
                             )}
-                            {entry.overrideStatus && (
+                            {isPast && entry.overrideStatus && (
                               <button onClick={() => openOverrideModal(entry, null)} title="Reset to Automatic" className="p-1 rounded-full text-indigo-600 hover:bg-indigo-200">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M8 3a1 1 0 011 1v2.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 111.414-1.414L8 6.586V4a1 1 0 011-1zM12 10a1 1 0 01-1 1H8a1 1 0 010-2h3a1 1 0 011 1zM11.414 13.293a1 1 0 01-1.414 0l-3-3a1 1 0 011.414-1.414L10 13.586l1.293-1.293a1 1 0 011.414 1.414l-3 3z" clipRule="evenodd" /><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm0-2a6 6 0 100-12 6 6 0 000 12z" clipRule="evenodd" /></svg>
                               </button>
                             )}
+                            {/* Delete the entry itself -- for when it was created wrong
+                                (wrong student / wrong time), not just marked wrong.
+                                Always available, not gated on isPast, since a mistaken
+                                entry is usually noticed before its time arrives. */}
+                            <button onClick={() => handleDeleteScheduleEntry(entry)} title="Delete this entry" className="p-1 rounded-full text-gray-500 hover:bg-gray-200 hover:text-red-700">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
+                            </button>
                           </div>
                         )}
                       </div>
@@ -9620,7 +9715,7 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpen
     switch (view) {
       case 'teacher':
         if (role !== 'teacher') return <TodaySchedule role={role} />; 
-        return <TeacherDashboard user={user} onOpenSmartStudy={onOpenSmartStudy} onOpenAbhidhamma={onOpenAbhidhamma} onOpenMyanmarReader={onOpenMyanmarReader} onOpenDhammaschool={onOpenDhammaschool} onOpenConsonantPractice={onOpenConsonantPractice} onOpenBurmeseGame={onOpenBurmeseGame} onOpenMyanmarSpeaking={onOpenMyanmarSpeaking} onOpenNumberLearning={onOpenNumberLearning} onOpenVowelsLearning={onOpenVowelsLearning} onOpenAnimalSound={onOpenAnimalSound} onOpenBurmeseLearningGames={onOpenBurmeseLearningGames} onOpenInteractiveQuiz={onOpenInteractiveQuiz} onOpenMyanmarPoems={onOpenMyanmarPoems} onOpenConsonantEndings={onOpenConsonantEndings} onOpenTimeAndCalendar={onOpenTimeAndCalendar} onOpenMyanmarSpelling={onOpenMyanmarSpelling} onOpenMyanmarSoundPractice={onOpenMyanmarSoundPractice} onOpenReadingMyanmar={onOpenReadingMyanmar} onOpenSpeakingMyanmar={onOpenSpeakingMyanmar} onOpenMyanmarPart1And2={onOpenMyanmarPart1And2} onOpenWatchAndLearn={onOpenWatchAndLearn} />;
+        return <TeacherDashboard user={user} announcements={announcements} onOpenSmartStudy={onOpenSmartStudy} onOpenAbhidhamma={onOpenAbhidhamma} onOpenMyanmarReader={onOpenMyanmarReader} onOpenDhammaschool={onOpenDhammaschool} onOpenConsonantPractice={onOpenConsonantPractice} onOpenBurmeseGame={onOpenBurmeseGame} onOpenMyanmarSpeaking={onOpenMyanmarSpeaking} onOpenNumberLearning={onOpenNumberLearning} onOpenVowelsLearning={onOpenVowelsLearning} onOpenAnimalSound={onOpenAnimalSound} onOpenBurmeseLearningGames={onOpenBurmeseLearningGames} onOpenInteractiveQuiz={onOpenInteractiveQuiz} onOpenMyanmarPoems={onOpenMyanmarPoems} onOpenConsonantEndings={onOpenConsonantEndings} onOpenTimeAndCalendar={onOpenTimeAndCalendar} onOpenMyanmarSpelling={onOpenMyanmarSpelling} onOpenMyanmarSoundPractice={onOpenMyanmarSoundPractice} onOpenReadingMyanmar={onOpenReadingMyanmar} onOpenSpeakingMyanmar={onOpenSpeakingMyanmar} onOpenMyanmarPart1And2={onOpenMyanmarPart1And2} onOpenWatchAndLearn={onOpenWatchAndLearn} />;
       case 'student':
         if (role !== 'student') return <TodaySchedule role={role} />; 
         if (!studentProfile) {
@@ -9678,12 +9773,14 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpen
               {navItems[navIndex].label}
             </button>
           </div>
-          {(role === 'teacher' || role === 'student') && (
+          {(role === 'teacher' || role === 'student') && view !== role && (
             // Same top-left circular 🏡 spot every other sub-app uses to exit
             // back to this dashboard -- moved here from a separate
             // bottom-center button so there's only ever one 🏡 convention,
             // and it stays reachable from Weekly/Year/Trophies too (those
-            // views have no home button of their own otherwise).
+            // views have no home button of their own otherwise). Hidden while
+            // already on the dashboard itself (view === role) -- no point
+            // showing a way "home" when already there.
             <button
               onClick={handleLoginButtonClick}
               title="Home"
