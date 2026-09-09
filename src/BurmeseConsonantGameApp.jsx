@@ -74,7 +74,15 @@ const BCG_APP_BODY_HTML = `
             <button id="click-game-toggle-btn" class="game-toggle-btn" onclick="window.__bcgApp.toggleClickGame()" title="Click the letter">
                 <svg class="game-icon-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.686 2 6 4.686 6 8v8h12V8c0-3.314-2.686-6-6-6zM18 10h-2v2h2v-2zm-2 2h-2v2h2v-2zm-4 0H8v2h2v-2zm-2-2h2v2H8v-2zm4-6c-3.314 0-6 2.686-6 6v8h12V8c0-3.314-2.686-6-6-6zm0 16a2 2 0 100 4 2 2 0 000-4z"/><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 18a8 8 0 110-16 8 8 0 010 16z"/><path d="M12 12a2 2 0 100 4 2 2 0 000-4z"/></svg>
             </button>
-            <button id="image-game-toggle-btn" class="game-toggle-btn" onclick="window.__bcgApp.toggleImageGame()" title="Play Picture Game">
+            <!-- Picture Game hidden -- its images were never real: the code
+                 looked up each word's picture by filename on a third-party
+                 GitHub repo (nathantun93/Pic), but that repo's files are
+                 named with plain sequential numbers (001.png, 00101.png...),
+                 not the Burmese words used here, so it always fell back to
+                 showing the word as plain text instead of a picture. Needs
+                 real word-matched images (or a real word->filename map)
+                 before this can come back. -->
+            <button id="image-game-toggle-btn" class="game-toggle-btn" onclick="window.__bcgApp.toggleImageGame()" title="Play Picture Game" style="display:none">
                 <i class="fa-solid fa-images text-xl"></i>
             </button>
             <div id="group-selector-btn" class="group-selector-btn" title="Select Consonant Group">
@@ -941,7 +949,8 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
             let nextBtnId = null;
             let promptText = "";
             if (completedMode === 'pick') { nextBtnId = 'click-game-toggle-btn'; promptText = "Play Click Game next?"; }
-            else if (completedMode === 'click') { nextBtnId = 'image-game-toggle-btn'; promptText = "Play Picture Game next?"; }
+            // Picture Game's toggle button is hidden (see its definition
+            // above) -- no longer suggested as "what's next".
             if (nextBtnId) {
                 const btn = rootEl.querySelector('#' + nextBtnId);
                 if (btn) btn.classList.add('next-game-highlight');
