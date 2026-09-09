@@ -44,11 +44,23 @@ const MPOEMS_APP_CSS = `
             background-color: #f0fdf4; /* Light Mint Background */
         }
 
-        /* Full-screen container */
+        /* Full-screen container -- side-by-side (poem | picture) on a full
+           computer screen, stacked on narrow/mobile. This plain CSS rule and
+           the element's own "md:flex md:flex-row" Tailwind classes have the
+           same specificity, so whichever one's stylesheet happens to load
+           later was silently winning -- often this one, leaving the layout
+           stacked (text on top, picture pushed below) even on a wide
+           screen. Matching Tailwind's own md breakpoint here explicitly
+           removes that coin-flip instead of relying on load order. */
         .app-container {
             min-height: 100vh;
             display: flex;
             flex-direction: column;
+        }
+        @media (min-width: 768px) {
+            .app-container {
+                flex-direction: row;
+            }
         }
 
         /* Line-by-line hover effect for poem lines (Adjusted spacing) */

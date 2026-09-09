@@ -422,22 +422,25 @@ export default function BodhiTreeApp({ entryRequest, onExit }) {
           <p className="text-xl font-bold text-emerald-800 mt-4">{stageName}</p>
 
           {isEditingDays ? (
-            <div className="flex items-center gap-2 mb-1">
+            <div className="w-full max-w-sm flex flex-col items-center gap-2 mb-1">
+              <span className="text-emerald-700 font-bold text-lg">{editDaysInput} day{Number(editDaysInput) === 1 ? '' : 's'} old</span>
               <input
-                type="number"
+                type="range"
                 min="0"
+                max="500"
                 value={editDaysInput}
                 onChange={(e) => setEditDaysInput(e.target.value)}
-                className="w-24 text-center border border-emerald-300 rounded-lg p-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                className="w-full accent-emerald-500"
                 autoFocus
               />
-              <span className="text-emerald-600">days old</span>
-              <button onClick={handleSaveEditDays} disabled={isSavingDays} className="bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold px-3 py-1.5 rounded-lg disabled:opacity-50">
-                {isSavingDays ? 'Saving...' : 'Save'}
-              </button>
-              <button onClick={() => setIsEditingDays(false)} className="bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm font-bold px-3 py-1.5 rounded-lg">
-                Cancel
-              </button>
+              <div className="flex items-center gap-2">
+                <button onClick={handleSaveEditDays} disabled={isSavingDays} className="bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold px-4 py-1.5 rounded-lg disabled:opacity-50">
+                  {isSavingDays ? 'Saving...' : 'Save'}
+                </button>
+                <button onClick={() => setIsEditingDays(false)} className="bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm font-bold px-4 py-1.5 rounded-lg">
+                  Cancel
+                </button>
+              </div>
             </div>
           ) : (
             <p className="text-emerald-600 mb-1 flex items-center gap-2">
