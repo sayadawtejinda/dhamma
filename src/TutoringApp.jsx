@@ -9678,22 +9678,28 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpen
               {navItems[navIndex].label}
             </button>
           </div>
-          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40">
-            {role === 'teacher' || role === 'student' ? (
-              <button
-                onClick={handleLoginButtonClick}
-                title="Home"
-                aria-label="Home"
-                className="w-14 h-14 flex items-center justify-center bg-gray-800 text-white rounded-full shadow-lg text-2xl hover:bg-gray-900"
-              >
-                🏡
-              </button>
-            ) : (
+          {(role === 'teacher' || role === 'student') && (
+            // Same top-left circular 🏡 spot every other sub-app uses to exit
+            // back to this dashboard -- moved here from a separate
+            // bottom-center button so there's only ever one 🏡 convention,
+            // and it stays reachable from Weekly/Year/Trophies too (those
+            // views have no home button of their own otherwise).
+            <button
+              onClick={handleLoginButtonClick}
+              title="Home"
+              aria-label="Home"
+              className="fixed top-3 left-3 z-50 w-12 h-12 flex items-center justify-center bg-gray-800 text-white rounded-full shadow-lg text-2xl hover:bg-gray-900"
+            >
+              🏡
+            </button>
+          )}
+          {role !== 'teacher' && role !== 'student' && (
+            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40">
               <button onClick={handleLoginButtonClick} className="px-6 py-3 rounded-full bg-indigo-600 text-white font-semibold shadow-lg hover:bg-indigo-700 transition-colors">
                 Login / Register
               </button>
-            )}
-          </div>
+            </div>
+          )}
         </>
       )}
 
