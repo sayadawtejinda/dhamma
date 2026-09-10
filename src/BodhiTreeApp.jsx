@@ -46,20 +46,25 @@ function getWeekKey(date) {
   const monday = new Date(date.getFullYear(), date.getMonth(), date.getDate() + diffToMonday);
   return monday.toISOString().slice(0, 10);
 }
-const MILESTONES = [0, 1, 5, 10, 20, 30, 40, 80, 120];
+// Student rank/title (not a description of the tree itself) -- per the
+// teacher's request, 10 tiers keyed to the same day thresholds the app
+// already used for its early growth stages, extended with one more (160)
+// to fit the 4 titles from their first message into a full 10-tier scale.
+const MILESTONES = [0, 1, 5, 10, 20, 30, 40, 80, 120, 160];
 const STAGE_NAMES = [
-  'Dormant Seed',
-  'Seed Sprouting',
-  'Sprout',
-  'Small Sapling',
-  'Bushy Plant',
-  'Young Bodhi Tree',
-  'Mature Bodhi Tree',
-  'Radiant Bodhi Tree',
-  'Sacred Canopy',
+  'Little Planter',
+  'Sprout Caretaker',
+  'Budding Gardener',
+  'Plant Lover',
+  'Green Custodian',
+  'Nature Guardian',
+  'Bodhi Protector',
+  'Tree Mentor',
+  'Wisdom Cultivator',
+  'Bodhi Master',
 ];
 const getStageName = (days) => {
-  const clamped = Math.max(0, Math.min(120, days));
+  const clamped = Math.max(0, Math.min(160, days));
   let idx = 0;
   for (let i = 0; i < MILESTONES.length; i++) if (clamped >= MILESTONES[i]) idx = i;
   return STAGE_NAMES[idx];
