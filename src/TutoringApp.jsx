@@ -8084,7 +8084,10 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
             <div className="w-full">
                 <div className="flex items-center flex-wrap gap-3 mb-2">
                   {studentProfile?.trophyCount > 0 && (
-                      <span className="text-2xl font-bold text-yellow-600 drop-shadow-sm whitespace-nowrap" title={`${studentProfile.trophyCount} Trophies`}>🏆{studentProfile.trophyCount}</span>
+                      <span className="flex items-end gap-0.5 whitespace-nowrap" title={`${studentProfile.trophyCount} Trophies`}>
+                        <span className="text-4xl drop-shadow-sm">🏆</span>
+                        <span className="text-sm font-bold text-yellow-600 mb-1">{studentProfile.trophyCount}</span>
+                      </span>
                   )}
                   {onOpenBodhiTree && (
                     <button
