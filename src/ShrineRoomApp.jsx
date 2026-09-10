@@ -811,6 +811,12 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
 
   return (
     <div className={`min-h-screen flex flex-col items-center px-4 pt-6 pb-16 transition-colors duration-1000 ${dimmed ? 'bg-gradient-to-b from-indigo-200 via-amber-100 to-amber-200' : 'bg-gradient-to-b from-sky-100 via-emerald-50 to-emerald-100'}`}>
+      {meditatingMinutes != null && (
+        <style>{`
+          @keyframes shrineAuraPulse { 0%, 100% { opacity: 0.35; transform: translateX(-50%) scale(1); } 50% { opacity: 0.65; transform: translateX(-50%) scale(1.18); } }
+          @keyframes shrineSparkleRise { 0% { opacity: 0; transform: translateY(0) scale(0.4); } 20% { opacity: 1; } 100% { opacity: 0; transform: translateY(-150px) scale(1); } }
+        `}</style>
+      )}
       <button
         onClick={onExit}
         className="fixed top-3 left-3 z-50 w-12 h-12 flex items-center justify-center bg-gray-800 text-white rounded-full shadow-lg text-2xl hover:bg-gray-900"
@@ -849,18 +855,6 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
         </button>
       </div>
 
-      {/* Radiating color glow while meditating, per the teacher's request
-          ("colors coming out from the shrine room") -- an animated
-          background layer, not a takeover, so the altar/Buddha stay
-          exactly where they are on top of it. */}
-      {meditatingMinutes != null && (
-        <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
-          <div className="absolute inset-0 animate-[spin_12s_linear_infinite] opacity-60"
-            style={{ background: 'conic-gradient(from 0deg, #f9a8d4, #fde68a, #a7f3d0, #93c5fd, #c4b5fd, #f9a8d4)' }}
-          />
-          <div className="absolute inset-0 bg-white/50" />
-        </div>
-      )}
 
       {/* Meditation duration picker -- a typed number (1-60), not presets. */}
       {meditationPickerOpen && (
@@ -978,6 +972,32 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
                 canvas backdrop tree drew at the wrong scale as a result). */}
             <div className="relative w-[360px] max-w-full h-96">
               <BodhiBackdropCanvas />
+
+              {meditatingMinutes != null && buddha && (
+                <div className="absolute left-1/2 bottom-24 pointer-events-none" style={{ width: 0, height: 0 }}>
+                  <div
+                    className="absolute rounded-full"
+                    style={{
+                      left: '50%', bottom: 0, transform: 'translateX(-50%)',
+                      width: 220, height: 220,
+                      background: 'radial-gradient(circle, rgba(251,191,36,0.55) 0%, rgba(251,191,36,0.25) 40%, rgba(251,191,36,0) 70%)',
+                      animation: 'shrineAuraPulse 3.2s ease-in-out infinite',
+                    }}
+                  />
+                  {[0, 1, 2, 3, 4, 5].map((i) => (
+                    <div
+                      key={i}
+                      className="absolute rounded-full bg-amber-200"
+                      style={{
+                        left: `${-40 + i * 16}px`, bottom: '10px',
+                        width: 5, height: 5,
+                        boxShadow: '0 0 6px 2px rgba(253,230,138,0.9)',
+                        animation: `shrineSparkleRise ${2.4 + (i % 3) * 0.5}s ease-in ${i * 0.4}s infinite`,
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
 
               <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[340px] h-32 rounded-t-2xl border-4 border-amber-700 shadow-xl flex items-end justify-center pb-3"
                 style={{ background: 'linear-gradient(to bottom, #fde68a, #d4af37)' }}
