@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { doc, setDoc, updateDoc, onSnapshot, collection, serverTimestamp } from 'firebase/firestore';
-import { X } from 'lucide-react';
+import { doc, setDoc, updateDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { db } from './firebase';
+import OnlineStatusWidget from './OnlineStatusWidget';
 
 // ── Ported from the standalone "Burmese Learning Games Collection" HTML app ──
 // Same hybrid approach as the other ported apps in this project: the
@@ -272,9 +272,9 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
   const containerRef = useRef(null);
   const initializedRef = useRef(false);
   const studentName = entryRequest?.studentName || null;
-  const [onlineStudents, setOnlineStudents] = useState([]);
-  const [showOnlinePanel, setShowOnlinePanel] = useState(false);
-  const [nowForOnlineCheck, setNowForOnlineCheck] = useState(Date.now());
+  // Mirrors the vanilla-JS coinBalance variable into React state for the
+  // online-status pill (same split as ConsonantPracticeApp).
+  const [myCoinBalance, setMyCoinBalance] = useState(0);
 
   // Roster heartbeat — only pings when opened for a student (entryRequest
   // carries their name); a teacher just observes.
@@ -292,36 +292,6 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
       goOffline();
     };
   }, [studentName]);
-
-  useEffect(() => {
-    const unsub = onSnapshot(collection(db, BLG_ROSTER_PATH), (snap) => {
-      setOnlineStudents(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, e => console.error('Burmese Learning Games roster listen error:', e));
-    return () => unsub();
-  }, []);
-
-  useEffect(() => {
-    const interval = setInterval(() => setNowForOnlineCheck(Date.now()), 30000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const isRosterEntryOnline = (s) => {
-    const lastSeenMs = s.lastSeen?.toMillis ? s.lastSeen.toMillis() : (s.lastSeen?.seconds ? s.lastSeen.seconds * 1000 : 0);
-    return lastSeenMs > 0 && (nowForOnlineCheck - lastSeenMs) < 5 * 60 * 1000;
-  };
-  const weeklyRosterList = onlineStudents
-    .filter(s => {
-      const lastSeenMs = s.lastSeen?.toMillis ? s.lastSeen.toMillis() : (s.lastSeen?.seconds ? s.lastSeen.seconds * 1000 : 0);
-      return lastSeenMs > 0 && (nowForOnlineCheck - lastSeenMs) < 7 * 24 * 60 * 60 * 1000;
-    })
-    .map(s => ({ ...s, _isOnlineNow: isRosterEntryOnline(s) }))
-    .sort((a, b) => {
-      if (a._isOnlineNow !== b._isOnlineNow) return b._isOnlineNow ? 1 : -1;
-      const aMs = a.lastSeen?.toMillis ? a.lastSeen.toMillis() : 0;
-      const bMs = b.lastSeen?.toMillis ? b.lastSeen.toMillis() : 0;
-      return bMs - aMs;
-    });
-  const onlineCount = onlineStudents.filter(isRosterEntryOnline).length;
 
   useEffect(() => {
     // Dev-mode double-invoke / re-mount guard — this whole script wires up
@@ -700,7 +670,8 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
 
         function handleWin(gameType, targetTrophyId, setupNextRoundFn) {
             currentGameWins++;
-            stopHintTimer(); 
+            recordRoundWin();
+            stopHintTimer();
             
             showHelicopterReward('floating-trophy', () => {
                 quizState.trophies++;
@@ -900,6 +871,40 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
         let ALL_HABITAT_KEYS = []; 
         let quizState = { currentQuizType: null, currentCorrectItem: null, currentCorrectAnswerKey: null, score: 0, trophies: 0, isAnswering: true };
 
+        // --- Progress persistence (roster doc, keyed by studentName) ---
+        // Every handleWin() below (across all 4 mini-games) is a "round
+        // win" -- 30 of those = 1 real Tutoring trophy, capped at 20 total
+        // (so 600 wins is the max this ever credits); coins are separate
+        // and keep coming after the cap. Both persist across visits.
+        const progressRosterRef = studentName ? doc(db, BLG_ROSTER_PATH, sanitizeBlgKey(studentName)) : null;
+        const WINS_PER_TROPHY = 30;
+        const MAX_TROPHIES = 20;
+        let totalWins = 0;
+        let coinBalance = 0;
+
+        function awardCoins(delta) {
+            if (!progressRosterRef) return;
+            coinBalance = Math.max(0, coinBalance + delta);
+            setMyCoinBalance(coinBalance);
+            setDoc(progressRosterRef, { coinBalance }, { merge: true }).catch(() => {});
+        }
+
+        function recordRoundWin() {
+            totalWins++;
+            if (!progressRosterRef) return;
+            const trophyUnits = Math.min(MAX_TROPHIES, Math.floor(totalWins / WINS_PER_TROPHY));
+            setDoc(progressRosterRef, { totalWins, trophyUnits }, { merge: true }).catch(() => {});
+        }
+
+        if (progressRosterRef) {
+            getDoc(progressRosterRef).then(snap => {
+                const data = snap.exists() ? snap.data() : {};
+                totalWins = data.totalWins || 0;
+                coinBalance = data.coinBalance || 0;
+                setMyCoinBalance(coinBalance);
+            }).catch(e => console.error('Error loading Burmese Learning Games progress:', e));
+        }
+
         const habitatQuestionTextEl = byId('habitat-question-text');
         const questionTargetDisplayEl = byId('question-target-display');
         const answerOptionsEl = byId('answer-options');
@@ -1093,11 +1098,13 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
             let correctDisplay = quizState.currentQuizType === 'B' ? `${quizState.currentCorrectItem.emoji} ${t(quizState.currentCorrectItem.burmese)}` : `'${t(quizState.currentCorrectItem.habitatKey)}'`;
 
             if (isCorrect) {
+                awardCoins(20);
                 gameFeedbackEl.textContent = `✅ Correct!`;
                 playAudio(quizState.currentQuizType === 'A' ? quizState.currentCorrectItem.habitatKey : quizState.currentCorrectItem.burmese);
                 if (correctButton) correctButton.classList.replace('default-answer', 'correct-answer');
                 handleWin('habitat', 'floating-trophy', setupQuestion);
             } else {
+                awardCoins(-1);
                 gameFeedbackEl.textContent = `❌ Wrong! The answer is ${correctDisplay}.`;
                 if (selectedButton) selectedButton.classList.replace('default-answer', 'incorrect-answer');
                 if (correctButton) correctButton.classList.replace('default-answer', 'correct-answer');
@@ -1187,6 +1194,7 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
                 movesDisplay.textContent = `Moves: ${memMoves}`;
 
                 if (memFlippedCards[0].dataset.name === memFlippedCards[1].dataset.name) {
+                    awardCoins(20);
                     memFlippedCards.forEach(c => c.classList.add('matched'));
                     memMatchedPairs++;
                     memFlippedCards = [];
@@ -1200,6 +1208,7 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
                         resetHintTimer();
                     }
                 } else {
+                    awardCoins(-1);
                     setTimeout(() => {
                         memFlippedCards.forEach(c => c.classList.remove('flipped'));
                         memFlippedCards = [];
@@ -1309,12 +1318,14 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
             stopHintTimer();
             
             if (clickedItem.name !== countingGameState.correctItem.name) {
+                awardCoins(-1);
                 countingFeedbackEl.innerHTML = `<div class="text-lg font-semibold text-red-600">❌ Wrong! Try again.</div>`;
                 resetHintTimer();
                 return;
             }
-            
-            quizState.isAnswering = false; 
+
+            awardCoins(20);
+            quizState.isAnswering = false;
             countingGameState.currentCount++;
             
             if (countingGameState.currentCount > countingGameState.targetCount) {
@@ -1429,11 +1440,13 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
             const correctBurmeseName = nameGameState.correctItem.name.split(' (')[0];
 
             if (clickedOption.isCorrect) {
+                awardCoins(20);
                 nameGameFeedbackEl.textContent = `✅ Correct!`;
-                playAudio(correctBurmeseName); 
+                playAudio(correctBurmeseName);
                 buttonEl.classList.replace('default-answer', 'correct-answer');
-                handleWin('name', 'floating-trophy', setupNameGame); 
+                handleWin('name', 'floating-trophy', setupNameGame);
             } else {
+                awardCoins(-1);
                 nameGameFeedbackEl.textContent = `❌ Wrong! The answer is '${t(correctBurmeseName)}'.`;
                 buttonEl.classList.replace('default-answer', 'incorrect-answer');
                 allButtons.forEach(btn => {
@@ -1599,6 +1612,12 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
 
     return () => {
       delete window.__blgApp;
+      // Stop any playing sound and free the AudioContext -- otherwise
+      // audio can keep going after this component unmounts, and browsers
+      // cap how many AudioContexts a page may have open at once.
+      if (audioCtx && audioCtx.state !== 'closed') {
+        audioCtx.close().catch(() => {});
+      }
     };
   }, []);
 
@@ -1611,37 +1630,19 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
         dangerouslySetInnerHTML={{ __html: BLG_APP_BODY_HTML }}
       />
       {!hideOwnOnlineBadge && (
-      <>
-      <button
-        onClick={() => setShowOnlinePanel(true)}
-        className="fixed top-16 left-3 z-[9990] flex items-center gap-1 text-sm font-bold bg-white/90 backdrop-blur-sm px-3 py-2 rounded-2xl shadow-lg border border-gray-200 text-emerald-600 hover:underline"
-      >
-        <span className="w-2 h-2 bg-emerald-500 rounded-full inline-block"></span>{onlineCount} online
-      </button>
-      {showOnlinePanel && (
-        <div className="fixed inset-0 z-[9995] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowOnlinePanel(false)}>
-          <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full max-h-[80vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-gray-800">🎮 Students {onlineCount > 0 && <span className="text-emerald-600">({onlineCount} online)</span>}</h2>
-              <button onClick={() => setShowOnlinePanel(false)} className="text-gray-400 hover:text-gray-700"><X size={22}/></button>
-            </div>
-            <p className="text-xs text-gray-400 mb-3">Showing everyone active in the last 7 days.</p>
-            <div className="space-y-2">
-              {weeklyRosterList.map(s => (
-                <div key={s.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
-                  <div className="flex items-center gap-2">
-                    <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${s._isOnlineNow ? 'bg-emerald-500' : 'bg-gray-300'}`}></span>
-                    <span className="font-bold text-gray-800">{s.studentName}</span>
-                  </div>
-                  <span className="text-xs text-gray-400">{s._isOnlineNow ? 'Online now' : 'Active this week'}</span>
-                </div>
-              ))}
-              {weeklyRosterList.length === 0 && <p className="text-center text-gray-400 py-6">No students active this week yet.</p>}
-            </div>
-          </div>
-        </div>
-      )}
-      </>
+        <OnlineStatusWidget
+          rosterPath={BLG_ROSTER_PATH}
+          studentName={studentName}
+          isTeacherMode={!studentName}
+          coinBalance={studentName ? myCoinBalance : null}
+          panelTitle="🎮 Students"
+          renderActivity={s => (
+            <span className="text-gray-600">
+              {s.trophyUnits != null ? `${s.trophyUnits}/20 trophies` : 'Not practicing'}
+              {s.coinBalance != null && <> · <span className="font-bold text-amber-600">🪙{s.coinBalance}</span></>}
+            </span>
+          )}
+        />
       )}
     </>
   );

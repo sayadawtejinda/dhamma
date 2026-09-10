@@ -318,6 +318,15 @@ const sanitizeAnimalSoundKey = (key) => (key || 'unknown').replace(/[.$#/\[\]]/g
 const isAnimalSoundUrl = (link) =>
   link === 'animalsound://' ||
   (groupSchemeOfLink(link) === 'speakingmyanmar://' && extractGroupPartKey(link) === 'animalsound');
+// Same idea for Burmese Learning Games -- standalone (burmeselearninggames://)
+// or as Speaking Myanmar's Part 4. Its own roster doc's trophyUnits (capped
+// at 20, 1 per 30 round-wins across its 4 mini-games) is what the Report
+// auto-fill reads.
+const BURMESE_LEARNING_GAMES_APP_ID = 'burmese-learning-games-app'; // Firestore appId used inside BurmeseLearningGamesApp.jsx
+const sanitizeBurmeseLearningGamesKey = (key) => (key || 'unknown').replace(/[.$#/\[\]]/g, '_');
+const isBurmeseLearningGamesUrl = (link) =>
+  link === 'burmeselearninggames://' ||
+  (groupSchemeOfLink(link) === 'speakingmyanmar://' && extractGroupPartKey(link) === 'burmeselearninggames');
 const computeLessonKey = (title, link) => {
   const classId = extractClassIdFromLink(link);
   return sanitizeKey(classId ? `${title}_${classId}` : title);
@@ -7370,6 +7379,19 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         } catch (e) { console.error('Animal Sound Quiz progress fetch:', e); }
       }
     }
+
+    // Burmese Learning Games: fetch trophy units (capped at 20, 1 per 30
+    // round-wins across its 4 mini-games) and drop the count into "completed".
+    if (isBurmeseLearningGamesUrl(activeSession.lessonLink)) {
+      const stuName = studentProfile?.name;
+      if (stuName) {
+        try {
+          const rosterSnap = await getDoc(doc(db, 'artifacts', BURMESE_LEARNING_GAMES_APP_ID, 'public', 'data', 'roster', sanitizeBurmeseLearningGamesKey(stuName)));
+          const trophyUnits = rosterSnap.exists() ? (rosterSnap.data().trophyUnits || 0) : 0;
+          if (trophyUnits > 0) setCompletedUnitInput(String(trophyUnits));
+        } catch (e) { console.error('Burmese Learning Games progress fetch:', e); }
+      }
+    }
   };
 
   const handleOpenRedoReport = async (session) => {
@@ -7497,6 +7519,17 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           const trophyWins = rosterSnap.exists() ? (rosterSnap.data().trophyWins || 0) : 0;
           if (trophyWins > 0) setCompletedUnitInput(String(trophyWins));
         } catch (e) { console.error('Animal Sound Quiz redo fetch:', e); }
+      }
+    }
+    // Burmese Learning Games redo fetch — same trophyUnits logic as handleEndSession
+    if (isBurmeseLearningGamesUrl(session.lessonLink)) {
+      const stuName = studentProfile?.name;
+      if (stuName) {
+        try {
+          const rosterSnap = await getDoc(doc(db, 'artifacts', BURMESE_LEARNING_GAMES_APP_ID, 'public', 'data', 'roster', sanitizeBurmeseLearningGamesKey(stuName)));
+          const trophyUnits = rosterSnap.exists() ? (rosterSnap.data().trophyUnits || 0) : 0;
+          if (trophyUnits > 0) setCompletedUnitInput(String(trophyUnits));
+        } catch (e) { console.error('Burmese Learning Games redo fetch:', e); }
       }
     }
   };
