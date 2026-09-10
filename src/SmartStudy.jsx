@@ -1370,14 +1370,14 @@ const ClassPickerView = React.memo(({ classList, highlightClassId, onSelectClass
                       Open now
                     </span>
                   )}
-                  {myRank > 0 && (
-                    <span className="text-xs font-bold text-yellow-700 bg-yellow-100 border border-yellow-300 px-2 py-0.5 rounded-full">
-                      🏆 Rank #{myRank}
-                    </span>
-                  )}
                   {myHearts > 0 && (
                     <span className="text-xs font-bold text-pink-700 bg-pink-100 border border-pink-300 px-2 py-0.5 rounded-full">
                       ❤️ {myHearts}
+                    </span>
+                  )}
+                  {myRank > 0 && (
+                    <span className="text-xs font-bold text-yellow-700 bg-yellow-100 border border-yellow-300 px-2 py-0.5 rounded-full">
+                      🏆 Rank #{myRank}
                     </span>
                   )}
                   {allDone ? (

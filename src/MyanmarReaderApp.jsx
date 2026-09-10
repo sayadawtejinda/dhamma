@@ -3533,7 +3533,7 @@ useEffect(() => {
                 <option value="" disabled hidden>Sheet</option>
                 {Array.from({length: TOTAL_CHAPTERS}, (_, i) => {
                     const col = getColumnName(i);
-                    return <option key={col} value={col}>{SHEET_CHAPTER_PREFIX} {i + 1}{effectiveCompletedFullChapters.has(i + 1) ? ' 🔵' : (i + 1 > maxUnlockedChapter ? ' 🟢' : '')}</option>
+                    return <option key={col} value={col}>{SHEET_CHAPTER_PREFIX} {i + 1}{effectiveCompletedFullChapters.has(i + 1) ? ' 🔵' : (i + 1 <= maxUnlockedChapter ? ' 🟢' : '')}</option>
                 })}
             </select>
         </div>
@@ -3573,7 +3573,7 @@ useEffect(() => {
                                 <option value="" disabled hidden>Sheet</option>
                                 {Array.from({length: TOTAL_CHAPTERS}, (_, i) => {
                                     const col = getColumnName(i);
-                                    return <option key={col} value={col}>{SHEET_CHAPTER_PREFIX} {i + 1}{effectiveCompletedFullChapters.has(i + 1) ? ' 🔵' : (i + 1 > maxUnlockedChapter ? ' 🟢' : '')}</option>
+                                    return <option key={col} value={col}>{SHEET_CHAPTER_PREFIX} {i + 1}{effectiveCompletedFullChapters.has(i + 1) ? ' 🔵' : (i + 1 <= maxUnlockedChapter ? ' 🟢' : '')}</option>
                                 })}
                             </select>
                         </div>
@@ -3624,7 +3624,7 @@ useEffect(() => {
                       <option value="" disabled hidden>Sheet</option>
                       {Array.from({length: TOTAL_CHAPTERS}, (_, i) => {
                           const col = getColumnName(i);
-                          return <option key={col} value={col}>{SHEET_CHAPTER_PREFIX} {i + 1}{effectiveCompletedFullChapters.has(i + 1) ? ' 🔵' : (i + 1 > maxUnlockedChapter ? ' 🟢' : '')}</option>
+                          return <option key={col} value={col}>{SHEET_CHAPTER_PREFIX} {i + 1}{effectiveCompletedFullChapters.has(i + 1) ? ' 🔵' : (i + 1 <= maxUnlockedChapter ? ' 🟢' : '')}</option>
                       })}
                     </select>
                 </div>
