@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { t } from './paramatthaStrings';
 
 // --- Data Definitions ---
 
@@ -100,21 +101,9 @@ const LOKUTTARA_8 = [
 // ယုဂဠှစေတသိက်များ (ကာယ/စိတ္တ တွဲစုံ ၆ စု) ကို ဝိုင်းပြရန် ID (odd/first-of-pair) များ
 const YUGALA_PAIR_STARTS = new Set([35, 37, 39, 41, 43, 45]);
 
-const VEDANA_TYPES = [
-  { id: 'somanassa', name: 'သောမနဿ' },
-  { id: 'domanassa', name: 'ဒေါမနဿ' },
-  { id: 'sukha', name: 'သုခ' },
-  { id: 'dukkha', name: 'ဒုက္ခ' },
-  { id: 'upekkha', name: 'ဥပေက္ခာ' },
-];
-
-// ဟေတုသင်္ဂဟ - ဟိတ်ပါးအရေအတွက် (၀,၁,၂,၃) အလိုက် စိတ်များကို ခွဲရန်
-const HETU_TYPES = [
-  { id: 0, name: 'အဟိတ်' },
-  { id: 1, name: 'ဧကဟိတ်' },
-  { id: 2, name: 'ဒွိဟိတ်' },
-  { id: 3, name: 'တိဟိတ်' },
-];
+// VEDANA_TYPES/HETU_TYPES moved inside App() below (lines ~1762+) as
+// lang-aware useMemo values -- their display names ("name") are translated,
+// their "id"s (used everywhere else for filtering/lookups) are unchanged.
 
 // citta id တစ်ခုစီ ယှဉ်တဲ့ ဟိတ်အရေအတွက်ကို ပြန်ပေးသည်
 function getHetuCount(id) {
@@ -1759,7 +1748,24 @@ function checkAssociation(cId, ctId) {
   return false;
 }
 
-export default function App() {
+export default function App({ lang = 'my' } = {}) {
+  // Pali technical-term lists whose display "name" depends on lang (Roman
+  // Pali for en/vi, Myanmar script for my) but whose "id"s -- used
+  // everywhere else in this file for filtering/lookups -- never change.
+  const VEDANA_TYPES = useMemo(() => [
+    { id: 'somanassa', name: t('vedana_somanassa', lang) },
+    { id: 'domanassa', name: t('vedana_domanassa', lang) },
+    { id: 'sukha', name: t('vedana_sukha', lang) },
+    { id: 'dukkha', name: t('vedana_dukkha', lang) },
+    { id: 'upekkha', name: t('vedana_upekkha', lang) },
+  ], [lang]);
+  const HETU_TYPES = useMemo(() => [
+    { id: 0, name: t('hetu_ahetuka', lang) },
+    { id: 1, name: t('hetu_ekahetuka', lang) },
+    { id: 2, name: t('hetu_dvihetuka', lang) },
+    { id: 3, name: t('hetu_tihetuka', lang) },
+  ], [lang]);
+
   const [filter, setFilter] = useState({ type: 'none', value: null });
   // { cittaId, key, stateIndex } — နာနာကဒါစိ long-press mode
   const [nanakadaciMode, setNanakadaciMode] = useState(null);
@@ -2827,7 +2833,7 @@ const isNibbanaActive = filter.type === 'sabba-detail' && cittaContext === null 
             isActiveFilter || isOpen ? 'bg-slate-700 text-white border-slate-700' : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'
           }`}
         >
-          {isActiveFilter ? filter.value.name : 'သဗ္ဗ'}
+          {isActiveFilter ? filter.value.name : t('cat_sabba', lang)}
         </button>
         {isOpen && menuPos && (
           <div
@@ -3011,8 +3017,8 @@ const isNibbanaActive = filter.type === 'sabba-detail' && cittaContext === null 
           }`}
         >
           {filter.type === 'akusala-name'
-            ? activeDetail.name || 'အကုသလ'
-            : (filter.type === 'akusala-cat' ? AKUSALA_CATEGORIES.find(c => c.id === filter.value)?.name : 'အကုသလ')}
+            ? activeDetail.name || t('cat_akusala', lang)
+            : (filter.type === 'akusala-cat' ? AKUSALA_CATEGORIES.find(c => c.id === filter.value)?.name : t('cat_akusala', lang))}
         </button>
         {isOpen && menuPos && (
           <div
@@ -3116,8 +3122,8 @@ const isNibbanaActive = filter.type === 'sabba-detail' && cittaContext === null 
           }`}
         >
           {filter.type === 'missaka-name'
-            ? activeDetail.name || 'မိဿက'
-            : (filter.type === 'missaka-cat' ? MISSAKA_CATEGORIES.find(c => c.id === filter.value)?.name : 'မိဿက')}
+            ? activeDetail.name || t('cat_missaka', lang)
+            : (filter.type === 'missaka-cat' ? MISSAKA_CATEGORIES.find(c => c.id === filter.value)?.name : t('cat_missaka', lang))}
         </button>
         {isOpen && menuPos && (
           <div className="fixed z-50 bg-white border border-slate-200 rounded-lg shadow-xl p-2 flex flex-col gap-1.5 max-w-[75vw] max-h-80 overflow-y-auto" style={{ left: menuPos.left, top: menuPos.top }}>
@@ -3210,8 +3216,8 @@ const isNibbanaActive = filter.type === 'sabba-detail' && cittaContext === null 
           }`}
         >
           {filter.type === 'bodhi-name'
-            ? activeDetail.name || 'ဗောဓိပက္ခိယ'
-            : (filter.type === 'bodhi-cat' ? BODHIPAKKHIYA_CATEGORIES.find(c => c.id === filter.value)?.name : 'ဗောဓိပက္ခိယ')}
+            ? activeDetail.name || t('cat_bodhipakkhiya', lang)
+            : (filter.type === 'bodhi-cat' ? BODHIPAKKHIYA_CATEGORIES.find(c => c.id === filter.value)?.name : t('cat_bodhipakkhiya', lang))}
         </button>
         {isOpen && menuPos && (
           <div className="fixed z-50 bg-white border border-slate-200 rounded-lg shadow-xl p-2 flex flex-col gap-1.5 max-w-[75vw] max-h-80 overflow-y-auto" style={{ left: menuPos.left, top: menuPos.top }}>
@@ -4016,7 +4022,7 @@ const NibbanaDot = ({ item }) => (
               <div className="flex justify-end items-center flex-wrap gap-2">
                 <div className="flex flex-wrap gap-1.5 justify-end">
                   <DropButton
-                    label="ဇာတိ"
+                    label={t('cat_jati', lang)}
                     activeLabel={filter.type === 'jati' ? JATI_TYPES.find(j => j.id === filter.value)?.name : null}
                     isOpen={openMenu === 'jati'}
                     isActiveFilter={filter.type === 'jati'}
@@ -4037,7 +4043,7 @@ const NibbanaDot = ({ item }) => (
                       </button>
                     ))}
                   </DropButton>
-                  <DropButton label="ဝေဒနာ" activeLabel={filter.type === 'vedana' ? VEDANA_TYPES.find(v => v.id === filter.value)?.name : null} isOpen={openMenu === 'vedana'} isActiveFilter={filter.type === 'vedana'} onToggle={() => setOpenMenu(p => p === 'vedana' ? null : 'vedana')} onClear={clearFilter}>
+                  <DropButton label={t('cat_vedana', lang)} activeLabel={filter.type === 'vedana' ? VEDANA_TYPES.find(v => v.id === filter.value)?.name : null} isOpen={openMenu === 'vedana'} isActiveFilter={filter.type === 'vedana'} onToggle={() => setOpenMenu(p => p === 'vedana' ? null : 'vedana')} onClear={clearFilter}>
                     {vedanaOptions.map(v => (
                       <button key={v.id} onClick={() => setFilterDirect('vedana', v.id, v)}
                         className={`text-[10px] px-2.5 py-1 rounded-full font-semibold border whitespace-nowrap ${filter.type === 'vedana' && filter.value === v.id ? 'bg-blue-600 text-white border-blue-600' : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'}`}>
@@ -4045,7 +4051,7 @@ const NibbanaDot = ({ item }) => (
                       </button>
                     ))}
                   </DropButton>
-                  <DropButton label="ဟေတု" activeLabel={filter.type === 'hetu' ? HETU_TYPES.find(h => h.id === filter.value)?.name : null} isOpen={openMenu === 'hetu'} isActiveFilter={filter.type === 'hetu'} onToggle={() => setOpenMenu(p => p === 'hetu' ? null : 'hetu')} onClear={clearFilter}>
+                  <DropButton label={t('cat_hetu', lang)} activeLabel={filter.type === 'hetu' ? HETU_TYPES.find(h => h.id === filter.value)?.name : null} isOpen={openMenu === 'hetu'} isActiveFilter={filter.type === 'hetu'} onToggle={() => setOpenMenu(p => p === 'hetu' ? null : 'hetu')} onClear={clearFilter}>
                     {hetuOptions.map(h => (
                       <button key={h.id} onClick={() => setFilterDirect('hetu', h.id, h)}
                         className={`text-[10px] px-2.5 py-1 rounded-full font-semibold border whitespace-nowrap ${filter.type === 'hetu' && filter.value === h.id ? 'bg-purple-600 text-white border-purple-600' : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'}`}>

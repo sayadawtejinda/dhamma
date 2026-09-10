@@ -1,16 +1,28 @@
 import React, { useState } from 'react';
-import MyanmarVersion from './Paramattha1App.jsx';
+import ParamatthaCore from './Paramattha1App.jsx';
 import VietnameseVersion from './Paramattha2App.jsx';
 
-// These two are independently-generated apps (not a single codebase with
-// swappable text) -- their internal logic has already drifted apart in
-// places (see the commit that added this file for specifics), so this
-// wraps them as two full alternatives behind one language switch rather
-// than attempting a deeper merge that could silently mix up citta data
-// between the two. A future edit made to only one of Paramattha1App.jsx /
-// Paramattha2App.jsx will NOT automatically appear in the other language.
+// Paramattha1App.jsx is being migrated, section by section, from hardcoded
+// Myanmar text to a lang-aware dictionary (see src/paramatthaStrings.js) --
+// it's the same component for 'my' and (eventually) 'en', just with a
+// different lang prop, so a piece of text only shows translated once it's
+// actually been migrated (everything else falls back to Myanmar -- see the
+// fallback logic in paramatthaStrings.js's t()).
+//
+// 'en' is NOT added to LANGUAGES below yet -- translation coverage is still
+// tiny (a handful of dropdown labels as of the commit that added this
+// comment), so flipping it on now would show real students mostly-Myanmar
+// text under an "English" button, which is worse than not offering English
+// at all. Add an 'en' entry here once enough of Paramattha1App.jsx's text
+// (citta names, category dropdowns, and the desc/explanation paragraphs)
+// has been migrated that the English mode is actually usable end to end.
+//
+// VietnameseVersion is a separate, still fully Myanmar-independent,
+// pre-existing file (see the commit that added this file for why it wasn't
+// merged into the same codebase) -- a future edit to ParamatthaCore will
+// NOT automatically appear there.
 const LANGUAGES = [
-  { key: 'my', label: 'မြန်မာ', Component: MyanmarVersion },
+  { key: 'my', label: 'မြန်မာ', Component: (props) => <ParamatthaCore {...props} lang="my" /> },
   { key: 'vi', label: 'Tiếng Việt', Component: VietnameseVersion },
 ];
 
