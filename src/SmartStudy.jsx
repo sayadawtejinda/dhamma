@@ -1715,6 +1715,10 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
   const [allScores, setAllScores] = useState([]);
   const [allReflections, setAllReflections] = useState([]);
   const [allMyScoresGlobal, setAllMyScoresGlobal] = useState([]);
+  // Coins pulled into Shrine Room (ShrineRoomApp.jsx) come from here on a
+  // student's first visit there -- subtracted from this app's own coin
+  // display so the same coins don't effectively exist in both places.
+  const [smartStudyCoinsTransferredOut, setSmartStudyCoinsTransferredOut] = useState(0);
   const [showClassSwitchPrompt, setShowClassSwitchPrompt] = useState(false);
   const [switchClassInput, setSwitchClassInput] = useState('');
   const classCompletePromptShownRef = useRef({});
@@ -1826,6 +1830,18 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
       const fetched = []; querySnapshot.forEach((doc) => fetched.push({ id: doc.id, ...doc.data() })); setAllMyScoresGlobal(fetched);
     });
     return () => unsub();
+  }, [isAuthReady, userName]);
+
+  // One-way read of how many of this student's coins Shrine Room already
+  // pulled in (see smartStudyCoinsTransferredOut above) -- not a listener,
+  // since that number only changes once, on a student's first Shrine Room
+  // visit.
+  useEffect(() => {
+    if (!isAuthReady || !userName) return;
+    const sanitize = (key) => (key || 'unknown').replace(/[.$#/\[\]]/g, '_');
+    getDoc(doc(db, 'artifacts/shrine-room-app/public/data/roster', sanitize(userName)))
+      .then(snap => setSmartStudyCoinsTransferredOut(snap.exists() ? (snap.data().smartStudyCoinsTransferred || 0) : 0))
+      .catch(() => {});
   }, [isAuthReady, userName]);
 
   useEffect(() => {
@@ -2926,7 +2942,7 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
           <OnlineStatusWidget
             rosterPath={getRosterCollectionRef().path}
             studentName={userName}
-            coinBalance={goldCoinsForScore(computeStudentTotalScore(allMyScoresGlobal, userName))}
+            coinBalance={Math.max(0, goldCoinsForScore(computeStudentTotalScore(allMyScoresGlobal, userName)) - smartStudyCoinsTransferredOut)}
             filterDocs={(d) => d.status === 'approved'}
             renderActivity={(s) => <span className="text-gray-600">{s.classId}{s.currentLessonId ? ` · ${s.currentLessonId}` : ''}</span>}
           />

@@ -432,6 +432,12 @@ const DAILY_LAMP_REWARD = 5;
 // Small merit bonus paid on top of an offering's cost -- the act of
 // donating is itself rewarded, per the teacher's direction.
 const MERIT_OFFERING_BONUS = 2;
+// Purchasing is frozen while the app is still being built -- per the
+// teacher's direction, browsing the shop still works, but buy/drag-to-buy
+// are disabled with a "coming soon" message instead of actually charging
+// coins. Flip this back to false once the app (and the reward system) is
+// ready for real spending.
+const SHOP_LOCKED = true;
 
 function playBellSound() {
   try {
@@ -549,13 +555,18 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   const [chantingOpen, setChantingOpen] = useState(false);
   const [chantFormat, setChantFormat] = useState('myanmar'); // 'romanized' | 'myanmar' | 'english'
   const [chantIndex, setChantIndex] = useState(0);
-  // Time-commitment: asked once per visit (not persisted -- a fresh choice
-  // every time), before anything else is usable. Reward is paid out only
-  // if the student stays until the countdown finishes; leaving early (🏡
-  // Home) pays nothing, since the coins are for the time actually kept.
-  const [hasChosenTime, setHasChosenTime] = useState(false);
-  const [committedMinutes, setCommittedMinutes] = useState(null);
-  const [remainingSeconds, setRemainingSeconds] = useState(0);
+  // Meditation: opt-in via its own button (not a mandatory splash on
+  // entry). A student picks a duration (1-60 min, typed in, not just
+  // presets), the shrine glows with radiating color while they sit, and
+  // only once the countdown finishes naturally is that many minutes added
+  // to their persisted lifetime total -- no coin reward yet (the teacher's
+  // still deciding what that should be). Leaving early (🏡 Home, or the
+  // component unmounting any other way) credits nothing, same as before.
+  const [meditationPickerOpen, setMeditationPickerOpen] = useState(false);
+  const [meditationMinutesInput, setMeditationMinutesInput] = useState('10');
+  const [meditatingMinutes, setMeditatingMinutes] = useState(null);
+  const [meditationRemainingSeconds, setMeditationRemainingSeconds] = useState(0);
+  const [totalMeditationMinutes, setTotalMeditationMinutes] = useState(0);
   const [dragOverSlot, setDragOverSlot] = useState(null);
   const [ringing, setRinging] = useState(false);
   const [toast, setToast] = useState(null);
@@ -600,13 +611,17 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
             setPlacedItems(data.placedItems || {});
             setBuddhaId(data.buddhaId || null);
             setLastLampLitDate(data.lastLampLitDate || null);
+            setTotalMeditationMinutes(data.totalMeditationMinutes || 0);
           }
           if (data.coinBalance == null) persist({ coinBalance: STARTER_COINS });
         } else {
           const smartStudyCoins = await fetchSmartStudyCoins(studentName);
           const startingBalance = STARTER_COINS + smartStudyCoins;
           if (isMounted) setCoinBalance(startingBalance);
-          persist({ coinBalance: startingBalance, placedItems: {}, buddhaId: null });
+          // smartStudyCoinsTransferred is read back by SmartStudy.jsx to
+          // subtract this amount from its own coin display, so the same
+          // coins don't count in both places at once.
+          persist({ coinBalance: startingBalance, placedItems: {}, buddhaId: null, smartStudyCoinsTransferred: smartStudyCoins });
           if (smartStudyCoins > 0) showToast(`🪙 Brought in ${smartStudyCoins} coins from Smart Study!`);
         }
       } catch (e) {
@@ -626,6 +641,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   };
 
   const handleBuyBuddha = (option) => {
+    if (SHOP_LOCKED) { showToast('🚧 Shopping opens soon -- still being built!'); return; }
     if (option.requiresBodhiStage > bodhiStageIndex) {
       showToast(`Grow your Bodhi Tree further to unlock this.`);
       return;
@@ -639,6 +655,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   };
 
   const handleBuyOffering = (option) => {
+    if (SHOP_LOCKED) { showToast('🚧 Shopping opens soon -- still being built!'); return; }
     if (option.requiresBodhiStage != null && option.requiresBodhiStage > bodhiStageIndex) {
       showToast(`Grow your Bodhi Tree further to unlock this.`);
       return;
@@ -673,6 +690,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   const handleDrop = (e, slotIndex) => {
     e.preventDefault();
     setDragOverSlot(null);
+    if (SHOP_LOCKED) { showToast('🚧 Shopping opens soon -- still being built!'); return; }
     const offeringId = e.dataTransfer.getData('text/plain');
     const option = findOffering(offeringId);
     if (!option || placedItems[slotIndex]) return;
@@ -736,23 +754,31 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     return () => clearInterval(interval);
   }, []);
 
-  const handleChooseTime = (minutes) => {
-    setHasChosenTime(true);
-    setCommittedMinutes(minutes);
-    setRemainingSeconds(minutes * 60);
+  const handleStartMeditation = () => {
+    const minutes = Math.max(1, Math.min(60, parseInt(meditationMinutesInput, 10) || 10));
+    setMeditationPickerOpen(false);
+    setMeditatingMinutes(minutes);
+    setMeditationRemainingSeconds(minutes * 60);
   };
 
+  // Only reaching 0 naturally adds to the persisted total -- leaving early
+  // (this effect's cleanup fires on unmount, e.g. pressing 🏡 Home) just
+  // stops the countdown with nothing credited, same idea as before.
   useEffect(() => {
-    if (committedMinutes == null) return;
-    if (remainingSeconds <= 0) {
-      awardCoins(committedMinutes);
-      showToast(`🙏 Well spent! +${committedMinutes} coins for your ${committedMinutes}-minute visit.`);
-      setCommittedMinutes(null);
+    if (meditatingMinutes == null) return;
+    if (meditationRemainingSeconds <= 0) {
+      setTotalMeditationMinutes(prev => {
+        const next = prev + meditatingMinutes;
+        persist({ totalMeditationMinutes: next });
+        return next;
+      });
+      showToast(`🧘 Meditation complete -- ${meditatingMinutes} minutes added to your total.`);
+      setMeditatingMinutes(null);
       return;
     }
-    const timer = setTimeout(() => setRemainingSeconds(s => s - 1), 1000);
+    const timer = setTimeout(() => setMeditationRemainingSeconds(s => s - 1), 1000);
     return () => clearTimeout(timer);
-  }, [committedMinutes, remainingSeconds]);
+  }, [meditatingMinutes, meditationRemainingSeconds]);
 
   const buddha = findBuddha(buddhaId);
   const dimmed = hasLampPlaced && lastLampLitDate === todayKey();
@@ -771,9 +797,9 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
         <div className="flex items-center gap-2 bg-white/90 backdrop-blur-sm px-3 py-2 rounded-full shadow-lg border border-amber-200">
           <span className="font-bold text-amber-700">🪙 {coinBalance}</span>
         </div>
-        {committedMinutes != null && (
+        {meditatingMinutes != null && (
           <div className="flex items-center gap-2 bg-indigo-50 px-3 py-1.5 rounded-full shadow border border-indigo-200 text-xs font-semibold text-indigo-700">
-            ⏳ {String(Math.floor(remainingSeconds / 60)).padStart(2, '0')}:{String(remainingSeconds % 60).padStart(2, '0')} left
+            🧘 {String(Math.floor(meditationRemainingSeconds / 60)).padStart(2, '0')}:{String(meditationRemainingSeconds % 60).padStart(2, '0')} left
           </div>
         )}
         <button
@@ -783,12 +809,57 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
           🙏 Chanting
         </button>
         <button
+          onClick={() => setMeditationPickerOpen(true)}
+          disabled={meditatingMinutes != null}
+          className="flex items-center gap-1 bg-white hover:bg-amber-50 text-amber-700 text-sm font-semibold px-3 py-2 rounded-full shadow-lg border-2 border-amber-300 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          🧘 Meditation
+        </button>
+        <button
           onClick={() => setShopOpen(prev => !prev)}
           className="flex items-center gap-1 bg-white hover:bg-amber-50 text-amber-700 text-sm font-semibold px-3 py-2 rounded-full shadow-lg border-2 border-amber-300"
         >
           {shopOpen ? '✕ Close Shop' : '🛒 Merit Shop'}
         </button>
       </div>
+
+      {/* Radiating color glow while meditating, per the teacher's request
+          ("colors coming out from the shrine room") -- an animated
+          background layer, not a takeover, so the altar/Buddha stay
+          exactly where they are on top of it. */}
+      {meditatingMinutes != null && (
+        <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
+          <div className="absolute inset-0 animate-[spin_12s_linear_infinite] opacity-60"
+            style={{ background: 'conic-gradient(from 0deg, #f9a8d4, #fde68a, #a7f3d0, #93c5fd, #c4b5fd, #f9a8d4)' }}
+          />
+          <div className="absolute inset-0 bg-white/50" />
+        </div>
+      )}
+
+      {/* Meditation duration picker -- a typed number (1-60), not presets. */}
+      {meditationPickerOpen && (
+        <div className="fixed inset-0 z-[10001] bg-black/50 flex items-center justify-center p-4" onClick={() => setMeditationPickerOpen(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-xs w-full p-6 text-center" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-bold text-emerald-800 mb-1">🧘 Meditation</h2>
+            <p className="text-sm text-gray-500 mb-4">How many minutes will you meditate?</p>
+            <input
+              type="number"
+              min="1"
+              max="60"
+              value={meditationMinutesInput}
+              onChange={(e) => setMeditationMinutesInput(e.target.value)}
+              className="w-full text-center text-2xl font-bold border-2 border-emerald-200 rounded-xl py-2 mb-4 focus:outline-none focus:border-emerald-500"
+            />
+            <p className="text-xs text-gray-400 mb-4">Total so far: {totalMeditationMinutes} minutes</p>
+            <button
+              onClick={handleStartMeditation}
+              className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 rounded-xl"
+            >
+              Begin
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Chanting -- full-screen panel. Buddha image/altar stays exactly
           where it is underneath (this is an overlay, not a layout change). */}
@@ -854,36 +925,13 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
         );
       })()}
 
-      {/* Asked once, before anything else, for a real student visit --
-          coins for the chosen time are paid out once the countdown above
-          finishes; leaving early (🏡 Home) before then pays nothing. */}
-      {!loading && !isTeacherPreview && !hasChosenTime && (
-        <div className="fixed inset-0 z-[10001] bg-black/60 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center">
-            <h2 className="text-lg font-bold text-emerald-800 mb-2">How long will you spend in the Shrine Room today?</h2>
-            <p className="text-sm text-gray-500 mb-4">You'll earn 1 coin for every minute you stay.</p>
-            <div className="grid grid-cols-3 gap-2">
-              {[1, 5, 10, 15, 30, 60].map(minutes => (
-                <button
-                  key={minutes}
-                  onClick={() => handleChooseTime(minutes)}
-                  className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold py-3 rounded-xl border-2 border-emerald-200"
-                >
-                  {minutes} min
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      <h1 className="text-2xl font-bold text-emerald-800 mt-16 mb-1 text-center">{studentName}'s Shrine Room</h1>
-      <p className="text-emerald-600 text-sm mb-6">🙏 Decorate your own altar and make daily offerings</p>
+      <h1 className="text-2xl font-bold text-emerald-800 mt-16 mb-1 text-center relative z-10">{studentName}'s Shrine Room</h1>
+      <p className="text-emerald-600 text-sm mb-6 relative z-10">🙏 Decorate your own altar and make daily offerings</p>
 
       {loading ? (
-        <p className="text-emerald-700">Loading your shrine...</p>
+        <p className="text-emerald-700 relative z-10">Loading your shrine...</p>
       ) : (
-        <div className="flex flex-col lg:flex-row gap-6 w-full max-w-4xl items-center lg:items-start justify-center">
+        <div className="relative z-10 flex flex-col lg:flex-row gap-6 w-full max-w-4xl items-center lg:items-start justify-center">
           <div className="flex flex-col items-center flex-shrink-0">
             {/* Explicit pixel width (not w-full/percentage) -- this div is a
                 flex item inside a chain of nested flex containers using
@@ -993,7 +1041,11 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
       {shopOpen && (
         <div className="fixed top-20 right-3 z-40 w-64 sm:w-72 max-h-[calc(100vh-6rem)] overflow-y-auto bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl border-2 border-amber-200 p-4">
             <h2 className="text-lg font-bold text-amber-700 mb-1">🛒 Merit Shop</h2>
-            <p className="text-xs text-gray-500 mb-3">🪙 {coinBalance} coins available -- tap or drag an item onto the altar</p>
+            {SHOP_LOCKED ? (
+              <p className="text-xs font-semibold text-amber-700 bg-amber-100 border border-amber-300 rounded-lg px-2 py-1.5 mb-3">🚧 Coming soon -- browsing only for now</p>
+            ) : (
+              <p className="text-xs text-gray-500 mb-3">🪙 {coinBalance} coins available -- tap or drag an item onto the altar</p>
+            )}
 
             <h3 className="text-sm font-bold text-gray-700 mb-2">Buddha Image</h3>
             <div className="space-y-2 mb-5">
@@ -1026,7 +1078,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
                 return (
                   <button
                     key={option.id}
-                    draggable={!locked}
+                    draggable={!locked && !SHOP_LOCKED}
                     onDragStart={(e) => handleDragStart(e, option.id)}
                     onClick={() => handleBuyOffering(option)}
                     disabled={locked}
