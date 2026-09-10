@@ -91,6 +91,21 @@ const COLORS = {
   barFill: '#16a34a',
 };
 
+// Fullness of the canopy -- tune these to make the tree bushier. Requested
+// by the teacher (branchFactor/leafCount naming matches the Three.js sample
+// they were given, but this canvas is 2D, so branches fan across an arc
+// instead of spinning around a 3D axis). leafCount is PER twig tip and this
+// whole tree is redrawn every animation frame, so push it up gradually and
+// watch for slowdown on an actual phone before going much past ~10-12 --
+// with branchFactor 3 and the deepest growth stage (maxDepth 5 in the
+// mapRange call below), that's already 3^5 = 243 tips.
+const TREE_PARAMS = {
+  branchFactor: 3,   // sub-branches per branch point (was a fixed 2, sometimes 3)
+  branchSpread: 0.85, // radians the branchFactor children fan across
+  leafCount: 6,      // small leaves scattered per twig tip (was 1 big leaf)
+  leafSize: 1,       // multiplier on the base leaf size
+};
+
 // The procedural fractal-branch tree + weather/wildlife canvas, adapted
 // almost directly from the reference widget's drawing code -- only the
 // WH.* helper calls (clamp/map/lerp/getColor/transparent) were swapped for
@@ -126,7 +141,19 @@ function TreeCanvas({ days }) {
       { x: 140, y: -240, vx: -1.0, vy: 0.1, flap: 1.5 },
     ];
 
-    function drawBranch(len, thick, angle, depth, maxDepth) {
+    // drawBranch runs every animation frame (60/sec) while the tree grows,
+    // so its branch/leaf jitter must NOT come from Math.random() -- that
+    // would reroll a new random shape every single frame and make the
+    // whole tree flicker instead of growing smoothly. seededRandom(seed)
+    // gives the same "random-looking" number for the same seed every time,
+    // so each branch/leaf keeps its own fixed shape across frames while
+    // still varying from its siblings.
+    function seededRandom(seed) {
+      const x = Math.sin(seed * 12.9898) * 43758.5453;
+      return x - Math.floor(x);
+    }
+
+    function drawBranch(len, thick, angle, depth, maxDepth, seed) {
       ctx.save();
       ctx.rotate(angle);
       ctx.beginPath();
@@ -141,15 +168,29 @@ function TreeCanvas({ days }) {
       if (depth < maxDepth) {
         const subLen = len * 0.72;
         const subThick = Math.max(1, thick * 0.68);
-        drawBranch(subLen, subThick, 0.32, depth + 1, maxDepth);
-        drawBranch(subLen, subThick, -0.35, depth + 1, maxDepth);
-        if (depth > 1) drawBranch(subLen * 0.8, subThick, 0.05, depth + 1, maxDepth);
+        const n = TREE_PARAMS.branchFactor;
+        for (let i = 0; i < n; i++) {
+          // Fan the children evenly across branchSpread radians (centered
+          // on straight-up), with a little jitter so it doesn't look
+          // mechanically symmetric.
+          const childSeed = seed * 7.13 + i * 3.7 + depth * 1.9;
+          const t = n === 1 ? 0 : (i / (n - 1)) - 0.5;
+          const branchAngle = t * TREE_PARAMS.branchSpread + (seededRandom(childSeed) - 0.5) * 0.12;
+          const lenJitter = 0.85 + seededRandom(childSeed + 0.33) * 0.15;
+          drawBranch(subLen * lenJitter, subThick, branchAngle, depth + 1, maxDepth, childSeed);
+        }
       } else {
-        const leafRadius = Math.min(10, 3 + currentFactor * 7);
+        const leafRadius = Math.min(10, 3 + currentFactor * 7) * TREE_PARAMS.leafSize;
         ctx.fillStyle = COLORS.leaf;
-        ctx.beginPath();
-        ctx.ellipse(0, 0, leafRadius * 0.6, leafRadius, 0.2, 0, Math.PI * 2);
-        ctx.fill();
+        for (let l = 0; l < TREE_PARAMS.leafCount; l++) {
+          const leafSeed = seed * 5.3 + l * 2.1;
+          const lx = (seededRandom(leafSeed) - 0.5) * leafRadius * 2.4;
+          const ly = -seededRandom(leafSeed + 0.17) * leafRadius * 1.8;
+          const rot = seededRandom(leafSeed + 0.41) * Math.PI;
+          ctx.beginPath();
+          ctx.ellipse(lx, ly, leafRadius * 0.25, leafRadius * 0.42, rot, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
       ctx.restore();
     }
@@ -238,7 +279,7 @@ function TreeCanvas({ days }) {
           });
         }
 
-        drawBranch(trunkLen, trunkThick, 0, 1, maxDepth);
+        drawBranch(trunkLen, trunkThick, 0, 1, maxDepth, 1);
 
         if (targetDays >= 120) {
           butterflies.forEach((b) => {
