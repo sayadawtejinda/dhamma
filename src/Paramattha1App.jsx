@@ -119,23 +119,8 @@ function getHetuCount(id) {
   return 3; // ရူပ၊ အရူပ၊ လောကုတ္တရာ (အကျယ်/အကျဉ်း ၂ မျိုးလုံး) - တိဟိတ်
 }
 
-// ကိစ္စသင်္ဂဟ - ကိစ္စ (၁၄) ပါး
-const KICCA_TYPES = [
-  { id: 1, name: 'ပဋိသန္ဓေကိစ္စ' },
-  { id: 2, name: 'ဘဝင်ကိစ္စ' },
-  { id: 3, name: 'အာဝဇ္ဇနကိစ္စ' },
-  { id: 4, name: 'ဒဿနကိစ္စ' },
-  { id: 5, name: 'သဝနကိစ္စ' },
-  { id: 6, name: 'ဃာယနကိစ္စ' },
-  { id: 7, name: 'သာယနကိစ္စ' },
-  { id: 8, name: 'ဖုသနကိစ္စ' },
-  { id: 9, name: 'သမ္ပဋိစ္ဆနကိစ္စ' },
-  { id: 10, name: 'သန္တီရဏကိစ္စ' },
-  { id: 11, name: 'ဝေါဋ္ဌဗ္ဗနကိစ္စ' },
-  { id: 12, name: 'ဇဝနကိစ္စ' },
-  { id: 13, name: 'တဒါရမ္မဏကိစ္စ' },
-  { id: 14, name: 'စုတိကိစ္စ' },
-];
+// KICCA_TYPES moved inside App() below as a lang-aware useMemo value (same
+// pattern as VEDANA_TYPES/HETU_TYPES) -- "id"s (used below) are unchanged.
 
 // citta id တစ်ခုစီ ဆောင်ရွက်တဲ့ ကိစ္စ id (များ) ကို array အနေနဲ့ ပြန်ပေးသည်
 function getCittaKiccas(id) {
@@ -164,16 +149,7 @@ function getCittaKiccas(id) {
   return [];
 }
 
-// ဒွါရသင်္ဂဟ - ဒွါရ (၆) ပါး + ဒွါရဝိမုတ်
-const DVARA_TYPES = [
-  { id: 1, name: 'စက္ခုဒွါရ' },
-  { id: 2, name: 'သောတဒွါရ' },
-  { id: 3, name: 'ဃာနဒွါရ' },
-  { id: 4, name: 'ဇိဝှါဒွါရ' },
-  { id: 5, name: 'ကာယဒွါရ' },
-  { id: 6, name: 'မနောဒွါရ' },
-  { id: 0, name: 'ဒွါရဝိမုတ်' },
-];
+// DVARA_TYPES moved inside App() below as a lang-aware useMemo value.
 
 // citta id တစ်ခုစီ ဖြစ်နိုင်တဲ့ ဒွါရ id (များ) ကို array အနေနဲ့ ပြန်ပေးသည် (0 = ဒွါရဝိမုတ်)
 function getCittaDvaras(id) {
@@ -202,19 +178,7 @@ function getCittaDvaras(id) {
   return [];
 }
 
-const ARAMMANA_TYPES = [
-  { id: 'present-rupa', name: 'ပစ္စုပ္ပန်ရူပါရုံ' },
-  { id: 'present-sadda', name: 'ပစ္စုပ္ပန်သဒ္ဒါရုံ' },
-  { id: 'present-gandha', name: 'ပစ္စုပ္ပန်ဂန္ဓာရုံ' },
-  { id: 'present-rasa', name: 'ပစ္စုပ္ပန်ရသာရုံ' },
-  { id: 'present-photthabba', name: 'ပစ္စုပ္ပန်ဖောဋ္ဌဗ္ဗာရုံ' },
-  { id: 'kama', name: 'ကာမအာရုံ' },
-  { id: 'mahaggata', name: 'မဟဂ္ဂုတ်အာရုံ' },
-  { id: 'lower-phala', name: 'အောက်မဂ်ဖိုလ်သုံးစုံအာရုံ' },
-  { id: 'lokuttara-citta', name: 'လောကုတ္တရာအာရုံ' },
-  { id: 'pannatti', name: 'ပညတ်အာရုံ' },
-  { id: 'nibbana', name: 'နိဗ္ဗာန်အာရုံ' },
-];
+// ARAMMANA_TYPES moved inside App() below as a lang-aware useMemo value.
 
 // citta id တစ်ခုစီ အာရုံပြုနိုင်တဲ့ အမျိုးအစား (များ) ကို array အနေနဲ့ ပြန်ပေးသည်
 function getCittaArammana(id) {
@@ -244,17 +208,7 @@ function getCittaArammana(id) {
   return [];
 }
 
-// ဝတ္ထုသင်္ဂဟ - ဝတ္ထုရုပ် (၆) ပါး + ဝတ္ထုဝိမုတ်
-const VATTHU_TYPES = [
-  { id: 1, name: 'စက္ခုဝတ္ထု' },
-  { id: 2, name: 'သောတဝတ္ထု' },
-  { id: 3, name: 'ဃာနဝတ္ထု' },
-  { id: 4, name: 'ဇိဝှါဝတ္ထု' },
-  { id: 5, name: 'ကာယဝတ္ထု' },
-  { id: 7, name: 'ဟဒယဝတ္ထု (အမြဲ)' },
-  { id: 6, name: 'ဟဒယဝတ္ထု (ရံခါ)' },
-  { id: 0, name: 'ဝတ္ထုဝိမုတ်' },
-];
+// VATTHU_TYPES moved inside App() below as a lang-aware useMemo value.
 function isMaranaJavanaCitta(id) {
   if (id <= 12) return true;                    // အကုသိုလ် ၁၂
   if (id >= 31 && id <= 38) return true;         // မဟာကုသိုလ် ၈
@@ -1162,12 +1116,7 @@ const CETASIKA_LAYOUT = [
   { title: "သောဘဏစေတသိက် (၂၅)", subGroups: [{ title: "သောဘဏသာဓာရဏ (၁၉)", id: "sobhana-sadharana" }, { title: "ဝိရတီ (၃)", id: "virati" }, { title: "အပ္ပမညာ (၂)", id: "appamanna" }, { title: "ပညိန္ဒြေ (၁)", id: "panna" }] }
 ];
 
-const JATI_TYPES = [
-  { id: 'akusala', name: 'အကုသိုလ်' },
-  { id: 'kusala', name: 'ကုသိုလ်' },
-  { id: 'vipaka', name: 'ဝိပါက်' },
-  { id: 'kiriya', name: 'ကြိယာ' }
-];
+// JATI_TYPES moved inside App() below as a lang-aware useMemo value.
 
 // အကုသလသင်္ဂဟ - အကုသိုလ်စေတသိက်များကို အုပ်စု (၁၀) မျိုးအလိုက် ပြန်စုစည်းထားသော ခွဲခြမ်းမှု
 // (cetasikaIds သည် CETASIKAS array ထဲက id များဖြစ်ပြီး၊ တစ်ခုတည်းသော cetasika ကို ဓမ္မအမည်များစွာက ကိုယ်စားပြုရာမှာ
@@ -1764,6 +1713,60 @@ export default function App({ lang = 'my' } = {}) {
     { id: 1, name: t('hetu_ekahetuka', lang) },
     { id: 2, name: t('hetu_dvihetuka', lang) },
     { id: 3, name: t('hetu_tihetuka', lang) },
+  ], [lang]);
+  const JATI_TYPES = useMemo(() => [
+    { id: 'akusala', name: t('jati_akusala', lang) },
+    { id: 'kusala', name: t('jati_kusala', lang) },
+    { id: 'vipaka', name: t('jati_vipaka', lang) },
+    { id: 'kiriya', name: t('jati_kiriya', lang) },
+  ], [lang]);
+  const KICCA_TYPES = useMemo(() => [
+    { id: 1, name: t('kicca_patisandhi', lang) },
+    { id: 2, name: t('kicca_bhavanga', lang) },
+    { id: 3, name: t('kicca_avajjana', lang) },
+    { id: 4, name: t('kicca_dassana', lang) },
+    { id: 5, name: t('kicca_savana', lang) },
+    { id: 6, name: t('kicca_ghayana', lang) },
+    { id: 7, name: t('kicca_sayana', lang) },
+    { id: 8, name: t('kicca_phusana', lang) },
+    { id: 9, name: t('kicca_sampaticchana', lang) },
+    { id: 10, name: t('kicca_santirana', lang) },
+    { id: 11, name: t('kicca_votthabbana', lang) },
+    { id: 12, name: t('kicca_javana', lang) },
+    { id: 13, name: t('kicca_tadarammana', lang) },
+    { id: 14, name: t('kicca_cuti', lang) },
+  ], [lang]);
+  const DVARA_TYPES = useMemo(() => [
+    { id: 1, name: t('dvara_cakkhu', lang) },
+    { id: 2, name: t('dvara_sota', lang) },
+    { id: 3, name: t('dvara_ghana', lang) },
+    { id: 4, name: t('dvara_jivha', lang) },
+    { id: 5, name: t('dvara_kaya', lang) },
+    { id: 6, name: t('dvara_mano', lang) },
+    { id: 0, name: t('dvara_vimutta', lang) },
+  ], [lang]);
+  const ARAMMANA_TYPES = useMemo(() => [
+    { id: 'present-rupa', name: t('arammana_present_rupa', lang) },
+    { id: 'present-sadda', name: t('arammana_present_sadda', lang) },
+    { id: 'present-gandha', name: t('arammana_present_gandha', lang) },
+    { id: 'present-rasa', name: t('arammana_present_rasa', lang) },
+    { id: 'present-photthabba', name: t('arammana_present_photthabba', lang) },
+    { id: 'kama', name: t('arammana_kama', lang) },
+    { id: 'mahaggata', name: t('arammana_mahaggata', lang) },
+    { id: 'lower-phala', name: t('arammana_lower_phala', lang) },
+    { id: 'lokuttara-citta', name: t('arammana_lokuttara_citta', lang) },
+    { id: 'pannatti', name: t('arammana_pannatti', lang) },
+    { id: 'nibbana', name: t('arammana_nibbana', lang) },
+  ], [lang]);
+  const VATTHU_TYPES = useMemo(() => [
+    { id: 1, name: t('vatthu_cakkhu', lang) },
+    { id: 2, name: t('vatthu_sota', lang) },
+    { id: 3, name: t('vatthu_ghana', lang) },
+    { id: 4, name: t('vatthu_jivha', lang) },
+    { id: 5, name: t('vatthu_kaya', lang) },
+    { id: 7, name: t('vatthu_hadaya_always', lang) },
+    { id: 6, name: t('vatthu_hadaya_sometimes', lang) },
+    { id: 0, name: t('vatthu_vimutta', lang) },
   ], [lang]);
 
   const [filter, setFilter] = useState({ type: 'none', value: null });
@@ -4059,7 +4062,7 @@ const NibbanaDot = ({ item }) => (
                       </button>
                     ))}
                   </DropButton>
-                  <DropButton label="ကိစ္စ" activeLabel={filter.type === 'kicca' ? KICCA_TYPES.find(k => k.id === filter.value)?.name : null} isOpen={openMenu === 'kicca'} isActiveFilter={filter.type === 'kicca'} onToggle={() => setOpenMenu(p => p === 'kicca' ? null : 'kicca')} onClear={clearFilter}>
+                  <DropButton label={t('cat_kicca', lang)} activeLabel={filter.type === 'kicca' ? KICCA_TYPES.find(k => k.id === filter.value)?.name : null} isOpen={openMenu === 'kicca'} isActiveFilter={filter.type === 'kicca'} onToggle={() => setOpenMenu(p => p === 'kicca' ? null : 'kicca')} onClear={clearFilter}>
                     {kiccaOptions.map(k => (
                       <button key={k.id} onClick={() => setFilterDirect('kicca', k.id, k)}
                         className={`text-[10px] px-2.5 py-1 rounded-full font-semibold border whitespace-nowrap ${filter.type === 'kicca' && filter.value === k.id ? 'bg-teal-600 text-white border-teal-600' : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'}`}>
@@ -4067,7 +4070,7 @@ const NibbanaDot = ({ item }) => (
                       </button>
                     ))}
                   </DropButton>
-                  <DropButton label="ဒွါရ" activeLabel={filter.type === 'dvara' ? DVARA_TYPES.find(d => d.id === filter.value)?.name : null} isOpen={openMenu === 'dvara'} isActiveFilter={filter.type === 'dvara'} onToggle={() => setOpenMenu(p => p === 'dvara' ? null : 'dvara')} onClear={clearFilter}>
+                  <DropButton label={t('cat_dvara', lang)} activeLabel={filter.type === 'dvara' ? DVARA_TYPES.find(d => d.id === filter.value)?.name : null} isOpen={openMenu === 'dvara'} isActiveFilter={filter.type === 'dvara'} onToggle={() => setOpenMenu(p => p === 'dvara' ? null : 'dvara')} onClear={clearFilter}>
                     {dvaraOptions.map(d => (
                       <button key={d.id} onClick={() => setFilterDirect('dvara', d.id, d)}
                         className={`text-[10px] px-2.5 py-1 rounded-full font-semibold border whitespace-nowrap ${filter.type === 'dvara' && filter.value === d.id ? 'bg-amber-600 text-white border-amber-600' : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'}`}>
@@ -4075,7 +4078,7 @@ const NibbanaDot = ({ item }) => (
                       </button>
                     ))}
                   </DropButton>
-                  <DropButton label="အာရမ္မဏ" activeLabel={filter.type === 'arammana' ? ARAMMANA_TYPES.find(a => a.id === filter.value)?.name : null} isOpen={openMenu === 'arammana'} isActiveFilter={filter.type === 'arammana'} onToggle={() => setOpenMenu(p => p === 'arammana' ? null : 'arammana')} onClear={clearFilter}>
+                  <DropButton label={t('cat_arammana', lang)} activeLabel={filter.type === 'arammana' ? ARAMMANA_TYPES.find(a => a.id === filter.value)?.name : null} isOpen={openMenu === 'arammana'} isActiveFilter={filter.type === 'arammana'} onToggle={() => setOpenMenu(p => p === 'arammana' ? null : 'arammana')} onClear={clearFilter}>
                     {arammanaOptions.map(a => (
                       <button key={a.id} onClick={() => setFilterDirect('arammana', a.id, a)}
                         className={`text-[10px] px-2.5 py-1 rounded-full font-semibold border whitespace-nowrap ${filter.type === 'arammana' && filter.value === a.id ? 'bg-pink-600 text-white border-pink-600' : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'}`}>
@@ -4083,7 +4086,7 @@ const NibbanaDot = ({ item }) => (
                       </button>
                     ))}
                   </DropButton>
-                  <DropButton label="ဝတ္ထု" activeLabel={filter.type === 'vatthu' ? VATTHU_TYPES.find(v => v.id === filter.value)?.name : null} isOpen={openMenu === 'vatthu'} isActiveFilter={filter.type === 'vatthu'} onToggle={() => setOpenMenu(p => p === 'vatthu' ? null : 'vatthu')}  onClear={clearFilter}>
+                  <DropButton label={t('cat_vatthu', lang)} activeLabel={filter.type === 'vatthu' ? VATTHU_TYPES.find(v => v.id === filter.value)?.name : null} isOpen={openMenu === 'vatthu'} isActiveFilter={filter.type === 'vatthu'} onToggle={() => setOpenMenu(p => p === 'vatthu' ? null : 'vatthu')}  onClear={clearFilter}>
                     {vatthuOptions.map(v => (
                       <button key={v.id} onClick={() => setFilterDirect('vatthu', v.id, v)}
                         className={`text-[10px] px-2.5 py-1 rounded-full font-semibold border whitespace-nowrap ${filter.type === 'vatthu' && filter.value === v.id ? 'bg-lime-600 text-white border-lime-600' : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'}`}>
