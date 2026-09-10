@@ -45,30 +45,38 @@ const getBodhiStageIndex = (days) => {
 
 const todayKey = () => new Date().toISOString().slice(0, 10);
 
-// --- Buddha statue artwork: seated meditation figure with a soft halo,
-// elongated ears, ushnisha, and a lotus base with petals -- one shared
-// silhouette recolored per statue material. ---
+// --- Buddha statue artwork: Myanmar-style seated meditation figure with
+// visible crossed legs, hands resting in dhyana mudra, a flame-tip
+// ushnisha, elongated ears, a soft halo, and a lotus base with petals --
+// one shared silhouette recolored per statue material. ---
 const buddhaSvg = (skinColor, robeColor, baseColor, haloColor, accentColor) => `
   <svg viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="100" cy="65" r="52" fill="${haloColor}" opacity="0.35"/>
+    <circle cx="100" cy="62" r="50" fill="${haloColor}" opacity="0.35"/>
     <g fill="${baseColor}">
-      <ellipse cx="100" cy="215" rx="72" ry="13"/>
-      <path d="M35,215 Q52,192 68,215 Z"/>
-      <path d="M63,215 Q80,186 97,215 Z"/>
-      <path d="M97,215 Q114,186 131,215 Z"/>
-      <path d="M126,215 Q148,192 165,215 Z"/>
+      <ellipse cx="100" cy="218" rx="75" ry="12"/>
+      <path d="M32,218 Q50,196 66,218 Z"/>
+      <path d="M60,218 Q78,192 96,218 Z"/>
+      <path d="M104,218 Q122,192 140,218 Z"/>
+      <path d="M134,218 Q150,196 168,218 Z"/>
     </g>
-    <path d="M48,208 C46,178 62,166 100,166 C138,166 154,178 152,208 Z" fill="${robeColor}"/>
-    <path d="M100,86 C68,96 56,128 60,166 L140,166 C144,128 132,96 100,86 Z" fill="${robeColor}"/>
-    <path d="M60,150 C50,152 45,160 46,172 L58,172 Z" fill="${robeColor}"/>
-    <path d="M140,150 C150,152 155,160 154,172 L142,172 Z" fill="${robeColor}"/>
-    <ellipse cx="100" cy="167" rx="19" ry="9" fill="${skinColor}"/>
-    <rect x="90" y="76" width="20" height="18" fill="${skinColor}"/>
-    <path d="M68,54 C59,60 59,76 68,80" stroke="${skinColor}" stroke-width="6" fill="none" stroke-linecap="round"/>
-    <path d="M132,54 C141,60 141,76 132,80" stroke="${skinColor}" stroke-width="6" fill="none" stroke-linecap="round"/>
-    <circle cx="100" cy="58" r="29" fill="${skinColor}"/>
-    <path d="M100,29 C90,29 86,18 100,12 C114,18 110,29 100,29 Z" fill="${skinColor}"/>
-    <circle cx="100" cy="56" r="2" fill="${accentColor}"/>
+    <path d="M45,206 C40,178 55,158 100,158 C145,158 160,178 155,206
+             C150,214 130,208 130,196 C130,186 118,182 100,182
+             C82,182 70,186 70,196 C70,208 50,214 45,206 Z" fill="${robeColor}"/>
+    <path d="M100,80 C72,88 60,116 62,158 L138,158 C140,116 128,88 100,80 Z" fill="${robeColor}"/>
+    <path d="M100,90 L100,155" stroke="${baseColor}" stroke-width="2" opacity="0.5"/>
+    <path d="M62,145 C50,148 44,158 46,172 L60,172 Z" fill="${robeColor}"/>
+    <path d="M138,145 C150,148 156,158 154,172 L140,172 Z" fill="${robeColor}"/>
+    <ellipse cx="100" cy="176" rx="17" ry="8" fill="${skinColor}"/>
+    <circle cx="88" cy="176" r="6" fill="${skinColor}"/>
+    <circle cx="112" cy="176" r="6" fill="${skinColor}"/>
+    <rect x="91" y="70" width="18" height="16" fill="${skinColor}"/>
+    <path d="M70,50 C60,56 60,74 70,79" stroke="${skinColor}" stroke-width="6" fill="none" stroke-linecap="round"/>
+    <path d="M130,50 C140,56 140,74 130,79" stroke="${skinColor}" stroke-width="6" fill="none" stroke-linecap="round"/>
+    <circle cx="100" cy="52" r="28" fill="${skinColor}"/>
+    <path d="M86,50 Q92,47 98,50" stroke="${accentColor}" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+    <path d="M102,50 Q108,47 114,50" stroke="${accentColor}" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+    <path d="M100,24 C92,24 88,14 94,4 C96,10 100,10 100,4 C100,10 104,10 106,4 C112,14 108,24 100,24 Z" fill="${skinColor}"/>
+    <circle cx="100" cy="56" r="1.8" fill="${accentColor}"/>
   </svg>
 `;
 
@@ -167,6 +175,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   const [buddhaId, setBuddhaId] = useState(null);
   const [lastLampLitDate, setLastLampLitDate] = useState(null);
   const [bodhiStageIndex, setBodhiStageIndex] = useState(0);
+  const [shopOpen, setShopOpen] = useState(false);
   const [dragOverSlot, setDragOverSlot] = useState(null);
   const [ringing, setRinging] = useState(false);
   const [toast, setToast] = useState(null);
@@ -355,44 +364,73 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
                     dangerouslySetInnerHTML={{ __html: buddha.svg }}
                   />
                 ) : (
-                  <p className="mb-2 text-xs font-semibold text-amber-800 bg-white/70 px-3 py-2 rounded-lg border border-dashed border-amber-600">
-                    ← Pick a Buddha image from the shop
-                  </p>
+                  <button
+                    onClick={() => setShopOpen(true)}
+                    className="mb-2 text-xs font-semibold text-amber-800 bg-white/70 hover:bg-white px-3 py-2 rounded-lg border border-dashed border-amber-600"
+                  >
+                    🛒 Open the shop to pick a Buddha image
+                  </button>
                 )}
               </div>
             </div>
 
-            <div className="grid grid-cols-6 gap-2 -mt-4 z-10">
-              {Array.from({ length: SLOT_COUNT }).map((_, i) => {
-                const offeringId = placedItems[i];
-                const offering = offeringId ? findOffering(offeringId) : null;
-                return (
-                  <div
-                    key={i}
-                    onDragOver={(e) => { e.preventDefault(); setDragOverSlot(i); }}
-                    onDragLeave={() => setDragOverSlot(null)}
-                    onDrop={(e) => handleDrop(e, i)}
-                    onClick={() => { if (offeringId === 'bell') handleRingBell(); }}
-                    className={`w-14 h-14 rounded-lg border-2 flex items-center justify-center text-2xl relative
-                      ${dragOverSlot === i ? 'border-emerald-500 bg-emerald-50 scale-105' : 'border-dashed border-amber-400 bg-white/60'}
-                      ${offering?.id === 'lamp' && lastLampLitDate === todayKey() ? 'animate-pulse' : ''}
-                      transition-transform`}
-                    title={offering ? offering.name : 'Empty slot'}
-                  >
-                    {offering && <span>{offering.emoji}</span>}
-                    {offering && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleRemoveItem(i); }}
-                        className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-xs leading-none flex items-center justify-center shadow"
-                        title="Remove"
+            {shopOpen ? (
+              // Shopping mode -- every slot shown (including empty ones) as
+              // a drop target, and placed items get a remove (×) button.
+              <div className="grid grid-cols-6 gap-2 -mt-4 z-10">
+                {Array.from({ length: SLOT_COUNT }).map((_, i) => {
+                  const offeringId = placedItems[i];
+                  const offering = offeringId ? findOffering(offeringId) : null;
+                  return (
+                    <div
+                      key={i}
+                      onDragOver={(e) => { e.preventDefault(); setDragOverSlot(i); }}
+                      onDragLeave={() => setDragOverSlot(null)}
+                      onDrop={(e) => handleDrop(e, i)}
+                      onClick={() => { if (offeringId === 'bell') handleRingBell(); }}
+                      className={`w-14 h-14 rounded-lg border-2 flex items-center justify-center text-2xl relative
+                        ${dragOverSlot === i ? 'border-emerald-500 bg-emerald-50 scale-105' : 'border-dashed border-amber-400 bg-white/60'}
+                        ${offering?.id === 'lamp' && lastLampLitDate === todayKey() ? 'animate-pulse' : ''}
+                        transition-transform`}
+                      title={offering ? offering.name : 'Empty slot'}
+                    >
+                      {offering && <span>{offering.emoji}</span>}
+                      {offering && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleRemoveItem(i); }}
+                          className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-xs leading-none flex items-center justify-center shadow"
+                          title="Remove"
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              // Display mode -- only occupied slots, no border/remove
+              // button, so an empty or half-full altar doesn't look cluttered
+              // with dashed placeholders.
+              Object.keys(placedItems).length > 0 && (
+                <div className="flex flex-wrap justify-center gap-2 -mt-4 z-10">
+                  {Object.entries(placedItems).map(([i, offeringId]) => {
+                    const offering = findOffering(offeringId);
+                    if (!offering) return null;
+                    return (
+                      <div
+                        key={i}
+                        onClick={() => { if (offeringId === 'bell') handleRingBell(); }}
+                        className={`w-14 h-14 rounded-lg flex items-center justify-center text-2xl bg-white/60 ${offeringId === 'lamp' && lastLampLitDate === todayKey() ? 'animate-pulse' : ''} ${offeringId === 'bell' ? 'cursor-pointer' : ''}`}
+                        title={offering.name}
                       >
-                        ×
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+                        {offering.emoji}
+                      </div>
+                    );
+                  })}
+                </div>
+              )
+            )}
 
             {hasLampPlaced && (
               <button
@@ -403,12 +441,24 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
                 {canLightLampToday ? `🪔 Light the Lamp (+${DAILY_LAMP_REWARD} coins)` : '🪔 Lamp lit for today -- come back tomorrow'}
               </button>
             )}
+
+            <button
+              onClick={() => setShopOpen(prev => !prev)}
+              className="mt-4 flex items-center gap-2 bg-white hover:bg-amber-50 text-amber-700 font-semibold px-5 py-2.5 rounded-xl shadow-md border-2 border-amber-300"
+            >
+              {shopOpen ? '✕ Close Shop' : '🛒 Merit Shop'}
+            </button>
           </div>
 
-          {/* Merit Shop -- a permanent side panel (not a popup) so items can
-              be dragged straight from here onto the altar slots to the left. */}
+          {/* Merit Shop -- only shown while shopping, as a side panel (not a
+              popup covering the altar) so items can be dragged straight
+              from here onto the altar slots to the left. */}
+          {shopOpen && (
           <div className="w-full lg:w-72 flex-shrink-0 bg-white/85 backdrop-blur-sm rounded-2xl shadow-lg border-2 border-amber-200 p-4 lg:sticky lg:top-24">
-            <h2 className="text-lg font-bold text-amber-700 mb-1">🛒 Merit Shop</h2>
+            <div className="flex justify-between items-center mb-1">
+              <h2 className="text-lg font-bold text-amber-700">🛒 Merit Shop</h2>
+              <button onClick={() => setShopOpen(false)} className="text-gray-400 hover:text-gray-700 text-xl leading-none">×</button>
+            </div>
             <p className="text-xs text-gray-500 mb-3">🪙 {coinBalance} coins available -- tap or drag an item onto the altar</p>
 
             <h3 className="text-sm font-bold text-gray-700 mb-2">Buddha Image</h3>
@@ -455,6 +505,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
               })}
             </div>
           </div>
+          )}
         </div>
       )}
 
