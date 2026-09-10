@@ -1324,11 +1324,16 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
   
   useEffect(() => {
     if (!user?.uid) return;
-    const q = query(lessonBankCollection, where("teacherUid", "==", user.uid));
+    // Not filtered by teacherUid -- this app only ever has one teacher, so
+    // scoping by "whichever device's Firebase uid happens to be signed in
+    // right now" only caused data to look "gone" after switching devices or
+    // recovering access (see handleRepairTeacherUid above, now unnecessary
+    // for this collection). Query the whole collection instead.
+    const q = query(lessonBankCollection);
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const bankList = snapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
-        .sort((a, b) => a.title.localeCompare(b.title)); 
+        .sort((a, b) => a.title.localeCompare(b.title));
       setLessonBank(bankList);
 
       // BUG (found while chasing why "Smart Study Lesson" kept snapping back
@@ -1408,7 +1413,8 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
   
   useEffect(() => {
     if (!user?.uid) return;
-    const q = query(groupsCollection, where("teacherUid", "==", user.uid));
+    // Not filtered by teacherUid -- see the lessonBank listener above.
+    const q = query(groupsCollection);
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const groupList = snapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
@@ -1487,7 +1493,8 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
   }, []);
 
   useEffect(() => {
-    const q = query(teacherScheduleCollection, where("teacherUid", "==", user.uid));
+    // Not filtered by teacherUid -- see the lessonBank listener above.
+    const q = query(teacherScheduleCollection);
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const scheduleList = snapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
@@ -2782,12 +2789,14 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
         });
       };
       
+      // Not filtered by teacherUid -- see the lessonBank listener above.
+      // A backup taken from one device used to miss data owned by another.
       const [lessonBankData, studentsData, scheduleData, sessionsData, groupsData, starAnnouncementsData] = await Promise.all([
-        fetchAndConvert(query(lessonBankCollection, where("teacherUid", "==", user.uid))),
+        fetchAndConvert(lessonBankCollection),
         fetchAndConvert(studentsCollection),
-        fetchAndConvert(query(teacherScheduleCollection, where("teacherUid", "==", user.uid))),
-        fetchAndConvert(sessionsCollection), 
-        fetchAndConvert(query(groupsCollection, where("teacherUid", "==", user.uid))),
+        fetchAndConvert(teacherScheduleCollection),
+        fetchAndConvert(sessionsCollection),
+        fetchAndConvert(groupsCollection),
         fetchAndConvert(starAnnouncementsCollection)
       ]);
       
