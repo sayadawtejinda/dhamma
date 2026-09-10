@@ -82,6 +82,12 @@ const MyanmarPart1And2App = lazyLoad(() => import('./MyanmarPart1And2App'));
 // own standalone app (not part of TutoringApp.jsx) per the teacher's
 // request, so the gamification layer can grow independently later.
 const BodhiTreeApp = lazyLoad(() => import('./BodhiTreeApp'));
+// Shrine Room — a second piece of the same gamified "Home" idea: a personal
+// altar a student decorates with offerings bought using coins (mainly
+// earned by lighting the lamp once a day). Same standalone-app pattern as
+// BodhiTreeApp.jsx, and reads that app's attendance-based Bodhi stage to
+// gate a couple of shrine items, without importing anything from it.
+const ShrineRoomApp = lazyLoad(() => import('./ShrineRoomApp'));
 // Watch & Learn — consolidates 5 previously-separate bare-link Lesson Bank
 // entries (each just a YouTube link, no content of its own) into one
 // assignable lesson with a list screen, extensible via its own "Add a
@@ -234,6 +240,7 @@ export default function App() {
   const [speakingMyanmarRequest, setSpeakingMyanmarRequest] = useState(null);
   const [myanmarPart1And2Request, setMyanmarPart1And2Request] = useState(null);
   const [bodhiTreeRequest, setBodhiTreeRequest] = useState(null);
+  const [shrineRoomRequest, setShrineRoomRequest] = useState(null);
   const [watchAndLearnRequest, setWatchAndLearnRequest] = useState(null);
 
   const openMyanmarSpelling = (request) => {
@@ -261,6 +268,15 @@ export default function App() {
   const closeBodhiTree = () => {
     setActiveApp('tutoring');
     setBodhiTreeRequest(null);
+  };
+
+  const openShrineRoom = (request) => {
+    setShrineRoomRequest(request || {});
+    setActiveApp('shrineroom');
+  };
+  const closeShrineRoom = () => {
+    setActiveApp('tutoring');
+    setShrineRoomRequest(null);
   };
 
   const openWatchAndLearn = (request) => {
@@ -463,6 +479,7 @@ export default function App() {
           onOpenSpeakingMyanmar={openSpeakingMyanmar}
           onOpenMyanmarPart1And2={openMyanmarPart1And2}
           onOpenBodhiTree={openBodhiTree}
+          onOpenShrineRoom={openShrineRoom}
           onOpenWatchAndLearn={openWatchAndLearn}
         />
       </div>
@@ -779,6 +796,12 @@ export default function App() {
         {activeApp === 'bodhitree' && (
           <div>
             <BodhiTreeApp entryRequest={bodhiTreeRequest} onExit={closeBodhiTree} />
+          </div>
+        )}
+
+        {activeApp === 'shrineroom' && (
+          <div>
+            <ShrineRoomApp entryRequest={shrineRoomRequest} onExit={closeShrineRoom} />
           </div>
         )}
 
