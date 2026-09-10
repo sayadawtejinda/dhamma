@@ -6420,6 +6420,12 @@ function StudentDashboard({ user, studentProfile, studentUid, announcements, onO
   const [mySessions, setMySessions] = useState([]);
   const [activeSession, setActiveSession] = useState(null);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  // Experimental homepage redesign: lessons/history move behind these two
+  // reading-room buttons instead of always rendering on the page, per the
+  // teacher's request to try a static house-illustration background with
+  // the button row as the only thing still visible on top of it. Exact
+  // button positions are a first pass, to be tuned together afterward.
+  const [showLessonsPanel, setShowLessonsPanel] = useState(false);
   
   const [feedbackNotes, setFeedbackNotes] = useState('');
   const [score, setScore] = useState('');
@@ -6629,6 +6635,19 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
   const activeSessionRef = useRef(null);
   const firstLessonRef = useRef(null);
   const hasInitialScrolledRef = useRef(false);
+
+  const handleOpenLatestLesson = () => {
+    setShowLessonsPanel(true);
+    setTimeout(() => {
+      if (activeSessionRef.current) {
+        activeSessionRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else if (firstLessonRef.current) {
+        firstLessonRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else if (lessonsSectionRef.current) {
+        lessonsSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 100);
+  };
 
   useEffect(() => {
     if (hasInitialScrolledRef.current) return;
@@ -7803,7 +7822,28 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
   const availableLessons = myLessons; 
 
   return (
-    <div className="p-6 relative">
+    <div
+      className="p-6 relative min-h-screen"
+      style={{ backgroundImage: 'url(images/0003.jpg)', backgroundSize: 'cover', backgroundPosition: 'center top', backgroundAttachment: 'fixed' }}
+    >
+      {/* Experimental: reading-room buttons over the house illustration --
+          rough first-pass placement, to be adjusted together once the
+          teacher has seen it live. */}
+      <div className="fixed z-30 flex flex-col gap-2" style={{ top: '16%', right: '6%' }}>
+        <button
+          onClick={handleOpenLatestLesson}
+          className="bg-white/90 hover:bg-white shadow-lg rounded-xl px-4 py-3 font-bold text-emerald-700 border border-emerald-300 whitespace-nowrap"
+        >
+          📖 Latest Lesson
+        </button>
+        <button
+          onClick={() => setShowLessonsPanel(true)}
+          className="bg-white/90 hover:bg-white shadow-lg rounded-xl px-4 py-3 font-bold text-amber-700 border border-amber-300 whitespace-nowrap"
+        >
+          📚 Lessons & History
+        </button>
+      </div>
+
       {isLessonOverlayOpen && (
         <div className="fixed inset-0 z-[9999] bg-indigo-900/95 flex flex-col justify-center items-center p-6 text-center">
            <h2 className="text-white text-2xl md:text-4xl font-bold mb-8">Lesson opened in another tab.</h2>
@@ -8175,6 +8215,12 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         )}
       </div>
 
+      {showLessonsPanel && (
+      <div className="fixed inset-0 z-[9900] bg-black/50 overflow-y-auto p-4" onClick={() => setShowLessonsPanel(false)}>
+        <div className="max-w-3xl mx-auto my-8" onClick={(e) => e.stopPropagation()}>
+          <div className="flex justify-end mb-2">
+            <button onClick={() => setShowLessonsPanel(false)} className="bg-white/90 hover:bg-white text-gray-700 font-bold px-4 py-2 rounded-lg shadow">✕ Close</button>
+          </div>
       {activeSession && (() => {
         // Same getEffectiveCompletedUnit() used by Available Lessons and the
         // Completed badge there, so the Active Session box (the "Studying
@@ -8549,6 +8595,9 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           )}
         </div>
       </div>
+        </div>
+      </div>
+      )}
     </div>
   );
 }
