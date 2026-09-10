@@ -80,7 +80,7 @@ export default function SpeakingMyanmarApp({ entryRequest, onExit }) {
   // migrated to their own widget yet, so this group-wide one (same shared
   // component, just less detail) still covers them, and the "Choose a
   // Part" landing screen where no part is active yet.
-  const OWN_WIDGET_PARTS = ['myanmarpoems', 'numberlearning', 'animalsound', 'burmeselearninggames'];
+  const OWN_WIDGET_PARTS = ['myanmarpoems', 'numberlearning', 'animalsound', 'burmeselearninggames', 'interactivequiz'];
   const showGroupBadge = !OWN_WIDGET_PARTS.includes(activePart);
   const OnlineBadge = (
     <OnlineStatusWidget

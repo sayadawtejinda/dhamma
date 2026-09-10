@@ -327,6 +327,14 @@ const sanitizeBurmeseLearningGamesKey = (key) => (key || 'unknown').replace(/[.$
 const isBurmeseLearningGamesUrl = (link) =>
   link === 'burmeselearninggames://' ||
   (groupSchemeOfLink(link) === 'speakingmyanmar://' && extractGroupPartKey(link) === 'burmeselearninggames');
+// Same idea for Interactive Learning Quiz -- standalone (interactivequiz://)
+// or as Speaking Myanmar's Part 5. Its own roster doc's completedPhases
+// (capped at 5, one per mastered Phase) is what the Report auto-fill reads.
+const INTERACTIVE_QUIZ_APP_ID = 'interactive-learning-quiz-app'; // Firestore appId used inside InteractiveLearningQuizApp.jsx
+const sanitizeInteractiveQuizKey = (key) => (key || 'unknown').replace(/[.$#/\[\]]/g, '_');
+const isInteractiveQuizUrl = (link) =>
+  link === 'interactivequiz://' ||
+  (groupSchemeOfLink(link) === 'speakingmyanmar://' && extractGroupPartKey(link) === 'interactivequiz');
 const computeLessonKey = (title, link) => {
   const classId = extractClassIdFromLink(link);
   return sanitizeKey(classId ? `${title}_${classId}` : title);
@@ -7392,6 +7400,19 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         } catch (e) { console.error('Burmese Learning Games progress fetch:', e); }
       }
     }
+
+    // Interactive Learning Quiz: fetch completedPhases count (capped at 5,
+    // 1 per mastered Phase) and drop the count into "completed".
+    if (isInteractiveQuizUrl(activeSession.lessonLink)) {
+      const stuName = studentProfile?.name;
+      if (stuName) {
+        try {
+          const rosterSnap = await getDoc(doc(db, 'artifacts', INTERACTIVE_QUIZ_APP_ID, 'public', 'data', 'roster', sanitizeInteractiveQuizKey(stuName)));
+          const completedPhases = rosterSnap.exists() && Array.isArray(rosterSnap.data().completedPhases) ? rosterSnap.data().completedPhases.length : 0;
+          if (completedPhases > 0) setCompletedUnitInput(String(completedPhases));
+        } catch (e) { console.error('Interactive Learning Quiz progress fetch:', e); }
+      }
+    }
   };
 
   const handleOpenRedoReport = async (session) => {
@@ -7530,6 +7551,17 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           const trophyUnits = rosterSnap.exists() ? (rosterSnap.data().trophyUnits || 0) : 0;
           if (trophyUnits > 0) setCompletedUnitInput(String(trophyUnits));
         } catch (e) { console.error('Burmese Learning Games redo fetch:', e); }
+      }
+    }
+    // Interactive Learning Quiz redo fetch — same completedPhases logic as handleEndSession
+    if (isInteractiveQuizUrl(session.lessonLink)) {
+      const stuName = studentProfile?.name;
+      if (stuName) {
+        try {
+          const rosterSnap = await getDoc(doc(db, 'artifacts', INTERACTIVE_QUIZ_APP_ID, 'public', 'data', 'roster', sanitizeInteractiveQuizKey(stuName)));
+          const completedPhases = rosterSnap.exists() && Array.isArray(rosterSnap.data().completedPhases) ? rosterSnap.data().completedPhases.length : 0;
+          if (completedPhases > 0) setCompletedUnitInput(String(completedPhases));
+        } catch (e) { console.error('Interactive Learning Quiz redo fetch:', e); }
       }
     }
   };

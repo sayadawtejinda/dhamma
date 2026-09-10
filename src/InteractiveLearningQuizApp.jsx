@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { doc, setDoc, updateDoc, onSnapshot, collection, serverTimestamp } from 'firebase/firestore';
-import { X } from 'lucide-react';
+import { doc, setDoc, updateDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { db } from './firebase';
+import OnlineStatusWidget from './OnlineStatusWidget';
 
 // ── Ported from the standalone "Interactive Learning Quiz for Kids" HTML app ──
 // Same hybrid approach as the other ported apps in this project: the
@@ -225,9 +225,9 @@ export default function InteractiveLearningQuizApp({ entryRequest, onExit, hideO
   const containerRef = useRef(null);
   const initializedRef = useRef(false);
   const studentName = entryRequest?.studentName || null;
-  const [onlineStudents, setOnlineStudents] = useState([]);
-  const [showOnlinePanel, setShowOnlinePanel] = useState(false);
-  const [nowForOnlineCheck, setNowForOnlineCheck] = useState(Date.now());
+  // Mirrors the vanilla-JS coinBalance variable into React state for the
+  // online-status pill (same split as ConsonantPracticeApp).
+  const [myCoinBalance, setMyCoinBalance] = useState(0);
 
   // Roster heartbeat — only pings when opened for a student (entryRequest
   // carries their name); a teacher just observes.
@@ -245,36 +245,6 @@ export default function InteractiveLearningQuizApp({ entryRequest, onExit, hideO
       goOffline();
     };
   }, [studentName]);
-
-  useEffect(() => {
-    const unsub = onSnapshot(collection(db, ILQ_ROSTER_PATH), (snap) => {
-      setOnlineStudents(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, e => console.error('Interactive Learning Quiz roster listen error:', e));
-    return () => unsub();
-  }, []);
-
-  useEffect(() => {
-    const interval = setInterval(() => setNowForOnlineCheck(Date.now()), 30000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const isRosterEntryOnline = (s) => {
-    const lastSeenMs = s.lastSeen?.toMillis ? s.lastSeen.toMillis() : (s.lastSeen?.seconds ? s.lastSeen.seconds * 1000 : 0);
-    return lastSeenMs > 0 && (nowForOnlineCheck - lastSeenMs) < 5 * 60 * 1000;
-  };
-  const weeklyRosterList = onlineStudents
-    .filter(s => {
-      const lastSeenMs = s.lastSeen?.toMillis ? s.lastSeen.toMillis() : (s.lastSeen?.seconds ? s.lastSeen.seconds * 1000 : 0);
-      return lastSeenMs > 0 && (nowForOnlineCheck - lastSeenMs) < 7 * 24 * 60 * 60 * 1000;
-    })
-    .map(s => ({ ...s, _isOnlineNow: isRosterEntryOnline(s) }))
-    .sort((a, b) => {
-      if (a._isOnlineNow !== b._isOnlineNow) return b._isOnlineNow ? 1 : -1;
-      const aMs = a.lastSeen?.toMillis ? a.lastSeen.toMillis() : 0;
-      const bMs = b.lastSeen?.toMillis ? b.lastSeen.toMillis() : 0;
-      return bMs - aMs;
-    });
-  const onlineCount = onlineStudents.filter(isRosterEntryOnline).length;
 
   useEffect(() => {
     // Dev-mode double-invoke / re-mount guard — this whole script wires up
@@ -304,10 +274,41 @@ export default function InteractiveLearningQuizApp({ entryRequest, onExit, hideO
         let currentLevelIndex = 0;
         let currentSetSize = LEVEL_SIZES[currentLevelIndex];
         let partStats = {};
-        let targetPart = null; 
+        let targetPart = null;
         let isLearningMode = true;
-        let awaitingAnswer = false; 
+        let awaitingAnswer = false;
         let quizSessionParts = [];
+
+        // --- Coins + Phase-mastery trophy persistence (mirrors the other
+        // migrated apps this session: coinBalance is a plain closure var
+        // mirrored into React state, completedPhases drives the 5-trophy cap
+        // and lets a returning student resume at their first unfinished phase). ---
+        const MAX_PHASE_TROPHIES = 5;
+        const progressRosterRef = studentName ? doc(db, ILQ_ROSTER_PATH, sanitizeIlqKey(studentName)) : null;
+        let completedPhases = [];
+        let coinBalance = 0;
+
+        function awardCoins(delta) {
+            if (!progressRosterRef) return;
+            coinBalance = Math.max(0, coinBalance + delta);
+            setMyCoinBalance(coinBalance);
+            setDoc(progressRosterRef, { coinBalance }, { merge: true }).catch(() => {});
+        }
+
+        function recordPhaseCompleted(phase) {
+            if (!progressRosterRef) return;
+            if (completedPhases.includes(phase)) return;
+            if (completedPhases.length >= MAX_PHASE_TROPHIES) return;
+            completedPhases = [...completedPhases, phase];
+            setDoc(progressRosterRef, { completedPhases }, { merge: true }).catch(() => {});
+        }
+
+        function firstUnfinishedPhase() {
+            for (let p = 1; p <= 5; p++) {
+                if (!completedPhases.includes(p)) return p;
+            }
+            return 1;
+        }
         const learningItems = [ // bodyParts မှ learningItems သို့ နာမည်ပြောင်း
             { id: 1, name: "ကျောကုန်း", en: "Back", start: 0.00, duration: 1.00 }, { id: 2, name: "ချက်", en: "Navel", start: 1.00, duration: 1.00 }, { id: 3, name: "ခြေထောက်", en: "Leg", start: 2.00, duration: 1.00 }, { id: 4, name: "ခြေသည်း", en: "Toenail", start: 3.00, duration: 1.00 }, { id: 5, name: "ခြေသလုံး", en: "Calf", start: 4.00, duration: 1.00 }, { id: 6, name: "ခါး", en: "Waist", start: 5.00, duration: 1.00 }, { id: 7, name: "ခေါင်း", en: "Head", start: 6.00, duration: 1.00 }, { id: 8, name: "ဂျိုင်း", en: "Armpit", start: 7.00, duration: 1.00 }, { id: 9, name: "ဆံပင်", en: "Hair", start: 8.00, duration: 1.00 }, { id: 10, name: "တင်ပါး", en: "Buttocks", start: 9.00, duration: 1.00 }, { id: 11, name: "ဒူးခေါင်း", en: "Knee", start: 10.00, duration: 1.00 }, { id: 12, name: "နှာခေါင်း", en: "Nose", start: 11.00, duration: 1.00 }, { id: 13, name: "နှုတ်ခမ်း", en: "Lips", start: 12.00, duration: 1.00 }, { id: 14, name: "နားရွက်", en: "Ear", start: 13.00, duration: 1.00 }, { id: 15, name: "ပခုံး", en: "Shoulder", start: 14.00, duration: 1.00 }, { id: 16, name: "ပါး", en: "Cheek", start: 15.00, duration: 1.00 }, { id: 17, name: "ပါးစပ်", en: "Mouth", start: 16.00, duration: 1.00 }, { id: 18, name: "ပေါင်", en: "Thigh", start: 17.00, duration: 1.00 }, { id: 19, name: "ဗိုက်", en: "Stomach", start: 18.00, duration: 1.00 }, { id: 20, name: "မျက်စိ", en: "Eye", start: 19.00, duration: 1.00 }, { id: 21, name: "မျက်နှာ", en: "Face", start: 20.00, duration: 1.00 }, { id: 22, name: "မေးစေ့", en: "Chin", start: 21.00, duration: 1.00 }, { id: 23, name: "ရင်ဘတ်", en: "Chest", start: 22.00, duration: 1.00 }, { id: 24, name: "လက်", en: "Hand", start: 23.00, duration: 1.00 }, { id: 25, name: "လက်သည်း", en: "Fingernail", start: 24.00, duration: 1.00 }, { id: 26, name: "လည်ပင်း", en: "Neck", start: 25.00, duration: 1.00 }, { id: 27, name: "လျှာ", en: "Tongue", start: 26.00, duration: 1.00 }, { id: 28, name: "သွား", en: "Tooth", start: 27.00, duration: 1.00 },
             // --- Phase 3: Clothes (IDs 29-42) ---
@@ -628,11 +629,13 @@ export default function InteractiveLearningQuizApp({ entryRequest, onExit, hideO
                     getActiveParts().forEach(part => { if (partStats[part.id] === undefined) partStats[part.id] = 0; });
                 } else {
                     if (currentPhase < 5) { // Phase 5 ထက်ငယ်နေသေးလျှင်
-                        showReward(`Phase ${currentPhase} Mastered! 🌟`, `Moving to Phase ${currentPhase + 1}.`); 
-                        initializeState(currentPhase + 1); 
+                        recordPhaseCompleted(currentPhase);
+                        showReward(`Phase ${currentPhase} Mastered! 🌟`, `Moving to Phase ${currentPhase + 1}.`);
+                        initializeState(currentPhase + 1);
                     } else { // Phase 5 ပြီးသွားလျှင်
-                        showReward(`Total Mastery! 🏆`, `Resetting to Phase 1.`); 
-                        initializeState(1); 
+                        recordPhaseCompleted(currentPhase);
+                        showReward(`Total Mastery! 🏆`, `Resetting to Phase 1.`);
+                        initializeState(1);
                     }
                 }
                 setTimeout(() => displayLearningMode(), 4500);
@@ -697,6 +700,7 @@ export default function InteractiveLearningQuizApp({ entryRequest, onExit, hideO
             feedbackMessage.textContent = isCorrect ? "Correct! Well Done! 🎉" : `Incorrect. The answer is "${targetPart.en}". 😥`;
             feedbackMessage.className = `mt-6 text-center text-2xl font-bold h-8 ${isCorrect ? 'text-green-600' : 'text-red-500'}`;
             if (isCorrect && (partStats[selectedId] || 0) < 2) partStats[selectedId]++;
+            awardCoins(isCorrect ? 20 : -1);
 
             const progressed = checkProgressionAndAdvance();
 
@@ -791,6 +795,7 @@ export default function InteractiveLearningQuizApp({ entryRequest, onExit, hideO
             const correctOptionIndex = question.options.findIndex(opt => opt.isCorrect);
             if (selectedIndex !== null && question.options[selectedIndex].isCorrect) {
                 generalQuizScore++;
+                awardCoins(20);
                 generalQuizFeedback.textContent = "Correct! 🎉";
                 generalQuizFeedback.className = 'mt-6 text-center text-2xl font-bold h-8 text-green-600';
                 byId(`general-opt-${selectedIndex}`).classList.add('correct');
@@ -810,6 +815,7 @@ export default function InteractiveLearningQuizApp({ entryRequest, onExit, hideO
                     playAudio(audioElement, correctOption.start, correctOption.duration);
                 }
             } else {
+                awardCoins(-1);
                 generalQuizFeedback.textContent = "Incorrect. 😥"; generalQuizFeedback.className = 'mt-6 text-center text-2xl font-bold h-8 text-red-500';
                 if(selectedIndex !== null) byId(`general-opt-${selectedIndex}`).classList.add('incorrect');
                 byId(`general-opt-${correctOptionIndex}`).classList.add('correct');
@@ -850,11 +856,31 @@ export default function InteractiveLearningQuizApp({ entryRequest, onExit, hideO
           playTargetAudio,
         };
 
-        initializeState(1);
-        displayLearningMode();
+        if (progressRosterRef) {
+            getDoc(progressRosterRef).then(snap => {
+                if (snap.exists()) {
+                    const data = snap.data();
+                    completedPhases = Array.isArray(data.completedPhases) ? data.completedPhases : [];
+                    coinBalance = data.coinBalance || 0;
+                    setMyCoinBalance(coinBalance);
+                }
+                initializeState(firstUnfinishedPhase());
+                displayLearningMode();
+            }).catch(() => {
+                initializeState(1);
+                displayLearningMode();
+            });
+        } else {
+            initializeState(1);
+            displayLearningMode();
+        }
 
     return () => {
       delete window.__ilqApp;
+      phase1_2_Audio.pause();
+      itemsAudio.pause();
+      generalQuizAudio.pause();
+      generalQuizAudio2.pause();
     };
   }, []);
 
@@ -866,39 +892,20 @@ export default function InteractiveLearningQuizApp({ entryRequest, onExit, hideO
         className="ilq-app-root"
         dangerouslySetInnerHTML={{ __html: ILQ_APP_BODY_HTML }}
       />
-      {!hideOwnOnlineBadge && (
-      <>
-      <button
-        onClick={() => setShowOnlinePanel(true)}
-        className="fixed top-16 left-3 z-[9990] flex items-center gap-1 text-sm font-bold bg-white/90 backdrop-blur-sm px-3 py-2 rounded-2xl shadow-lg border border-gray-200 text-emerald-600 hover:underline"
-      >
-        <span className="w-2 h-2 bg-emerald-500 rounded-full inline-block"></span>{onlineCount} online
-      </button>
-      {showOnlinePanel && (
-        <div className="fixed inset-0 z-[9995] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowOnlinePanel(false)}>
-          <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full max-h-[80vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-gray-800">🧠 Students {onlineCount > 0 && <span className="text-emerald-600">({onlineCount} online)</span>}</h2>
-              <button onClick={() => setShowOnlinePanel(false)} className="text-gray-400 hover:text-gray-700"><X size={22}/></button>
-            </div>
-            <p className="text-xs text-gray-400 mb-3">Showing everyone active in the last 7 days.</p>
-            <div className="space-y-2">
-              {weeklyRosterList.map(s => (
-                <div key={s.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
-                  <div className="flex items-center gap-2">
-                    <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${s._isOnlineNow ? 'bg-emerald-500' : 'bg-gray-300'}`}></span>
-                    <span className="font-bold text-gray-800">{s.studentName}</span>
-                  </div>
-                  <span className="text-xs text-gray-400">{s._isOnlineNow ? 'Online now' : 'Active this week'}</span>
-                </div>
-              ))}
-              {weeklyRosterList.length === 0 && <p className="text-center text-gray-400 py-6">No students active this week yet.</p>}
-            </div>
-          </div>
-        </div>
-      )}
-      </>
-      )}
+      <OnlineStatusWidget
+        rosterPath={ILQ_ROSTER_PATH}
+        studentName={studentName}
+        isTeacherMode={!studentName}
+        coinBalance={studentName ? myCoinBalance : null}
+        hidden={hideOwnOnlineBadge}
+        panelTitle="🧠 Students"
+        renderActivity={s => (
+          <span className="text-gray-600">
+            {Array.isArray(s.completedPhases) ? s.completedPhases.length : 0}/5 Phases
+            {s.coinBalance != null && <> · <span className="font-bold text-amber-600">🪙{s.coinBalance}</span></>}
+          </span>
+        )}
+      />
     </>
   );
 }
