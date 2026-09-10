@@ -1625,7 +1625,7 @@ const QuizView = React.memo(({ quiz, questionNumber, totalQuestions, timerValue,
   return (
     <div className="h-full flex flex-col bg-gray-800 text-white p-4 overflow-hidden">
       <div className="flex justify-between items-center mb-2 text-lg font-bold">
-        <div className="bg-black bg-opacity-30 px-4 py-2 rounded-lg">{questionNumber} / {totalQuestions}</div>
+        <div className="bg-black bg-opacity-30 px-4 py-2 rounded-lg ml-14 sm:ml-16">{questionNumber} / {totalQuestions}</div>
         <div className="bg-black bg-opacity-30 px-4 py-2 rounded-lg text-yellow-300">{totalScore} Points</div>
         <div className="bg-black bg-opacity-30 px-4 py-2 rounded-lg truncate max-w-[100px] md:max-w-xs">{userName}</div>
       </div>

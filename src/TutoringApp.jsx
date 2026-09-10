@@ -7209,7 +7209,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           }
           if (totalPts > 0) setScore(`${totalPts.toLocaleString()} pts`);
           if (completedLessonIds.size > 0) {
-            setCompletedUnitInput(String(completedLessonIds.size));
+            handleCompletedUnitChange(String(completedLessonIds.size));
           }
         } catch (e) {
           console.error('Error fetching SmartStudy score/completions for report modal:', e);
@@ -7249,7 +7249,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
             } catch (e) {}
           }
           if (totalScore > 0) setScore(`${totalScore.toLocaleString()} pts`);
-          if (completedLessonIds.size > 0) setCompletedUnitInput(String(completedLessonIds.size));
+          if (completedLessonIds.size > 0) handleCompletedUnitChange(String(completedLessonIds.size));
         } catch (e) { console.error('Dhammaschool score fetch:', e); }
       }
     }
@@ -7279,7 +7279,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
             });
           }
           if(totalPts>0) setScore(`${totalPts.toLocaleString()} pts`);
-          if(doneLessons.size>0) setCompletedUnitInput(String(doneLessons.size));
+          if(doneLessons.size>0) handleCompletedUnitChange(String(doneLessons.size));
         } catch(e) { console.error('Abhi score fetch:', e); }
       }
     }
@@ -7318,7 +7318,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         try {
           const rosterSnap = await getDoc(doc(db, 'artifacts', MYANMAR_SOUND_PRACTICE_APP_ID, 'public', 'data', 'roster', sanitizeSoundPracticeKey(stuName)));
           const passedLevels = rosterSnap.exists() && Array.isArray(rosterSnap.data().passedLevels) ? rosterSnap.data().passedLevels : [];
-          if (passedLevels.length > 0) setCompletedUnitInput(String(passedLevels.length));
+          if (passedLevels.length > 0) handleCompletedUnitChange(String(passedLevels.length));
         } catch (e) { console.error('Myanmar Sound Practice progress fetch:', e); }
       }
     }
@@ -7331,7 +7331,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         try {
           const rosterSnap = await getDoc(doc(db, 'artifacts', BURMESE_GAME_APP_ID, 'public', 'data', 'roster', sanitizeBurmeseGameKey(stuName)));
           const completedGames = rosterSnap.exists() && Array.isArray(rosterSnap.data().completedGames) ? rosterSnap.data().completedGames : [];
-          if (completedGames.length > 0) setCompletedUnitInput(String(completedGames.length));
+          if (completedGames.length > 0) handleCompletedUnitChange(String(completedGames.length));
         } catch (e) { console.error('Burmese Consonant Game progress fetch:', e); }
       }
     }
@@ -7344,7 +7344,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         try {
           const rosterSnap = await getDoc(doc(db, 'artifacts', MYANMAR_VOWELS_APP_ID, 'public', 'data', 'roster', sanitizeVowelsKey(stuName)));
           const completedGames = rosterSnap.exists() && Array.isArray(rosterSnap.data().completedGames) ? rosterSnap.data().completedGames : [];
-          if (completedGames.length > 0) setCompletedUnitInput(String(completedGames.length));
+          if (completedGames.length > 0) handleCompletedUnitChange(String(completedGames.length));
         } catch (e) { console.error('Myanmar Vowels Learning progress fetch:', e); }
       }
     }
@@ -7357,7 +7357,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         try {
           const rosterSnap = await getDoc(doc(db, 'artifacts', MYANMAR_POEMS_APP_ID, 'public', 'data', 'roster', sanitizePoemsKey(stuName)));
           const completedPoemIds = rosterSnap.exists() && Array.isArray(rosterSnap.data().completedPoemIds) ? rosterSnap.data().completedPoemIds : [];
-          if (completedPoemIds.length > 0) setCompletedUnitInput(String(completedPoemIds.length));
+          if (completedPoemIds.length > 0) handleCompletedUnitChange(String(completedPoemIds.length));
         } catch (e) { console.error('Myanmar Poems progress fetch:', e); }
       }
     }
@@ -7370,7 +7370,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         try {
           const rosterSnap = await getDoc(doc(db, 'artifacts', MYANMAR_NUMBER_LEARNING_APP_ID, 'public', 'data', 'roster', sanitizeNumberLearningKey(stuName)));
           const completedLevels = rosterSnap.exists() && Array.isArray(rosterSnap.data().completedLevels) ? rosterSnap.data().completedLevels : [];
-          if (completedLevels.length > 0) setCompletedUnitInput(String(completedLevels.length));
+          if (completedLevels.length > 0) handleCompletedUnitChange(String(completedLevels.length));
         } catch (e) { console.error('Myanmar Number Learning progress fetch:', e); }
       }
     }
@@ -7383,7 +7383,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         try {
           const rosterSnap = await getDoc(doc(db, 'artifacts', ANIMAL_SOUND_APP_ID, 'public', 'data', 'roster', sanitizeAnimalSoundKey(stuName)));
           const trophyWins = rosterSnap.exists() ? (rosterSnap.data().trophyWins || 0) : 0;
-          if (trophyWins > 0) setCompletedUnitInput(String(trophyWins));
+          if (trophyWins > 0) handleCompletedUnitChange(String(trophyWins));
         } catch (e) { console.error('Animal Sound Quiz progress fetch:', e); }
       }
     }
@@ -7396,7 +7396,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         try {
           const rosterSnap = await getDoc(doc(db, 'artifacts', BURMESE_LEARNING_GAMES_APP_ID, 'public', 'data', 'roster', sanitizeBurmeseLearningGamesKey(stuName)));
           const trophyUnits = rosterSnap.exists() ? (rosterSnap.data().trophyUnits || 0) : 0;
-          if (trophyUnits > 0) setCompletedUnitInput(String(trophyUnits));
+          if (trophyUnits > 0) handleCompletedUnitChange(String(trophyUnits));
         } catch (e) { console.error('Burmese Learning Games progress fetch:', e); }
       }
     }
@@ -7409,7 +7409,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         try {
           const rosterSnap = await getDoc(doc(db, 'artifacts', INTERACTIVE_QUIZ_APP_ID, 'public', 'data', 'roster', sanitizeInteractiveQuizKey(stuName)));
           const completedPhases = rosterSnap.exists() && Array.isArray(rosterSnap.data().completedPhases) ? rosterSnap.data().completedPhases.length : 0;
-          if (completedPhases > 0) setCompletedUnitInput(String(completedPhases));
+          if (completedPhases > 0) handleCompletedUnitChange(String(completedPhases));
         } catch (e) { console.error('Interactive Learning Quiz progress fetch:', e); }
       }
     }
@@ -7452,7 +7452,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
             });
           }
           if (totalPts > 0) setScore(`${totalPts.toLocaleString()} pts`);
-          if (completedIds.size > 0) setCompletedUnitInput(String(completedIds.size));
+          if (completedIds.size > 0) handleCompletedUnitChange(String(completedIds.size));
         } catch (e) {
           console.error('Error fetching SmartStudy data for redo report:', e);
         }
@@ -7472,7 +7472,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
             [...s1.docs,...s2.docs].forEach(d=>{const dt=d.data();if(dt.classId&&dt.classId!==abhiClassId)return;pts+=(Number(dt.score)||0);if(dt.lessonId)done.add(dt.lessonId);});
           }
           if(pts>0) setScore(`${pts.toLocaleString()} pts`);
-          if(done.size>0) setCompletedUnitInput(String(done.size));
+          if(done.size>0) handleCompletedUnitChange(String(done.size));
         }catch(e){console.error('Abhi redo:',e);}
       }
     }
@@ -7483,7 +7483,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         try {
           const rosterSnap = await getDoc(doc(db, 'artifacts', MYANMAR_SOUND_PRACTICE_APP_ID, 'public', 'data', 'roster', sanitizeSoundPracticeKey(stuName)));
           const passedLevels = rosterSnap.exists() && Array.isArray(rosterSnap.data().passedLevels) ? rosterSnap.data().passedLevels : [];
-          if (passedLevels.length > 0) setCompletedUnitInput(String(passedLevels.length));
+          if (passedLevels.length > 0) handleCompletedUnitChange(String(passedLevels.length));
         } catch (e) { console.error('Myanmar Sound Practice redo fetch:', e); }
       }
     }
@@ -7494,7 +7494,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         try {
           const rosterSnap = await getDoc(doc(db, 'artifacts', BURMESE_GAME_APP_ID, 'public', 'data', 'roster', sanitizeBurmeseGameKey(stuName)));
           const completedGames = rosterSnap.exists() && Array.isArray(rosterSnap.data().completedGames) ? rosterSnap.data().completedGames : [];
-          if (completedGames.length > 0) setCompletedUnitInput(String(completedGames.length));
+          if (completedGames.length > 0) handleCompletedUnitChange(String(completedGames.length));
         } catch (e) { console.error('Burmese Consonant Game redo fetch:', e); }
       }
     }
@@ -7505,7 +7505,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         try {
           const rosterSnap = await getDoc(doc(db, 'artifacts', MYANMAR_VOWELS_APP_ID, 'public', 'data', 'roster', sanitizeVowelsKey(stuName)));
           const completedGames = rosterSnap.exists() && Array.isArray(rosterSnap.data().completedGames) ? rosterSnap.data().completedGames : [];
-          if (completedGames.length > 0) setCompletedUnitInput(String(completedGames.length));
+          if (completedGames.length > 0) handleCompletedUnitChange(String(completedGames.length));
         } catch (e) { console.error('Myanmar Vowels Learning redo fetch:', e); }
       }
     }
@@ -7516,7 +7516,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         try {
           const rosterSnap = await getDoc(doc(db, 'artifacts', MYANMAR_POEMS_APP_ID, 'public', 'data', 'roster', sanitizePoemsKey(stuName)));
           const completedPoemIds = rosterSnap.exists() && Array.isArray(rosterSnap.data().completedPoemIds) ? rosterSnap.data().completedPoemIds : [];
-          if (completedPoemIds.length > 0) setCompletedUnitInput(String(completedPoemIds.length));
+          if (completedPoemIds.length > 0) handleCompletedUnitChange(String(completedPoemIds.length));
         } catch (e) { console.error('Myanmar Poems redo fetch:', e); }
       }
     }
@@ -7527,7 +7527,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         try {
           const rosterSnap = await getDoc(doc(db, 'artifacts', MYANMAR_NUMBER_LEARNING_APP_ID, 'public', 'data', 'roster', sanitizeNumberLearningKey(stuName)));
           const completedLevels = rosterSnap.exists() && Array.isArray(rosterSnap.data().completedLevels) ? rosterSnap.data().completedLevels : [];
-          if (completedLevels.length > 0) setCompletedUnitInput(String(completedLevels.length));
+          if (completedLevels.length > 0) handleCompletedUnitChange(String(completedLevels.length));
         } catch (e) { console.error('Myanmar Number Learning redo fetch:', e); }
       }
     }
@@ -7538,7 +7538,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         try {
           const rosterSnap = await getDoc(doc(db, 'artifacts', ANIMAL_SOUND_APP_ID, 'public', 'data', 'roster', sanitizeAnimalSoundKey(stuName)));
           const trophyWins = rosterSnap.exists() ? (rosterSnap.data().trophyWins || 0) : 0;
-          if (trophyWins > 0) setCompletedUnitInput(String(trophyWins));
+          if (trophyWins > 0) handleCompletedUnitChange(String(trophyWins));
         } catch (e) { console.error('Animal Sound Quiz redo fetch:', e); }
       }
     }
@@ -7549,7 +7549,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         try {
           const rosterSnap = await getDoc(doc(db, 'artifacts', BURMESE_LEARNING_GAMES_APP_ID, 'public', 'data', 'roster', sanitizeBurmeseLearningGamesKey(stuName)));
           const trophyUnits = rosterSnap.exists() ? (rosterSnap.data().trophyUnits || 0) : 0;
-          if (trophyUnits > 0) setCompletedUnitInput(String(trophyUnits));
+          if (trophyUnits > 0) handleCompletedUnitChange(String(trophyUnits));
         } catch (e) { console.error('Burmese Learning Games redo fetch:', e); }
       }
     }
@@ -7560,7 +7560,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         try {
           const rosterSnap = await getDoc(doc(db, 'artifacts', INTERACTIVE_QUIZ_APP_ID, 'public', 'data', 'roster', sanitizeInteractiveQuizKey(stuName)));
           const completedPhases = rosterSnap.exists() && Array.isArray(rosterSnap.data().completedPhases) ? rosterSnap.data().completedPhases.length : 0;
-          if (completedPhases > 0) setCompletedUnitInput(String(completedPhases));
+          if (completedPhases > 0) handleCompletedUnitChange(String(completedPhases));
         } catch (e) { console.error('Interactive Learning Quiz redo fetch:', e); }
       }
     }
