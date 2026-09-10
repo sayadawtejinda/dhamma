@@ -45,22 +45,38 @@ const getBodhiStageIndex = (days) => {
 
 const todayKey = () => new Date().toISOString().slice(0, 10);
 
-// --- Buddha statue artwork (simple respectful silhouette, 3 colorways) ---
-const buddhaSvg = (bodyColor, baseColor, accentColor) => `
-  <svg viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg">
-    <ellipse cx="50" cy="106" rx="36" ry="9" fill="${baseColor}"/>
-    <path d="M50,40 C30,55 22,80 30,100 C36,108 44,111 50,111 C56,111 64,108 70,100 C78,80 70,55 50,40 Z" fill="${bodyColor}"/>
-    <circle cx="50" cy="27" r="16" fill="${bodyColor}"/>
-    <circle cx="50" cy="9" r="6" fill="${bodyColor}"/>
-    <circle cx="50" cy="25" r="1.6" fill="${accentColor}"/>
+// --- Buddha statue artwork: seated meditation figure with a soft halo,
+// elongated ears, ushnisha, and a lotus base with petals -- one shared
+// silhouette recolored per statue material. ---
+const buddhaSvg = (skinColor, robeColor, baseColor, haloColor, accentColor) => `
+  <svg viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="100" cy="65" r="52" fill="${haloColor}" opacity="0.35"/>
+    <g fill="${baseColor}">
+      <ellipse cx="100" cy="215" rx="72" ry="13"/>
+      <path d="M35,215 Q52,192 68,215 Z"/>
+      <path d="M63,215 Q80,186 97,215 Z"/>
+      <path d="M97,215 Q114,186 131,215 Z"/>
+      <path d="M126,215 Q148,192 165,215 Z"/>
+    </g>
+    <path d="M48,208 C46,178 62,166 100,166 C138,166 154,178 152,208 Z" fill="${robeColor}"/>
+    <path d="M100,86 C68,96 56,128 60,166 L140,166 C144,128 132,96 100,86 Z" fill="${robeColor}"/>
+    <path d="M60,150 C50,152 45,160 46,172 L58,172 Z" fill="${robeColor}"/>
+    <path d="M140,150 C150,152 155,160 154,172 L142,172 Z" fill="${robeColor}"/>
+    <ellipse cx="100" cy="167" rx="19" ry="9" fill="${skinColor}"/>
+    <rect x="90" y="76" width="20" height="18" fill="${skinColor}"/>
+    <path d="M68,54 C59,60 59,76 68,80" stroke="${skinColor}" stroke-width="6" fill="none" stroke-linecap="round"/>
+    <path d="M132,54 C141,60 141,76 132,80" stroke="${skinColor}" stroke-width="6" fill="none" stroke-linecap="round"/>
+    <circle cx="100" cy="58" r="29" fill="${skinColor}"/>
+    <path d="M100,29 C90,29 86,18 100,12 C114,18 110,29 100,29 Z" fill="${skinColor}"/>
+    <circle cx="100" cy="56" r="2" fill="${accentColor}"/>
   </svg>
 `;
 
 // --- Shop catalog ---
 const BUDDHA_OPTIONS = [
-  { id: 'wood', name: 'Wooden Buddha', cost: 0, requiresBodhiStage: 0, svg: buddhaSvg('#8D6E63', '#6D4C41', '#3E2723') },
-  { id: 'golden', name: 'Golden Buddha', cost: 30, requiresBodhiStage: 0, svg: buddhaSvg('#FFC107', '#FFA000', '#5D4037') },
-  { id: 'jade', name: 'Jade Buddha', cost: 25, requiresBodhiStage: 5, svg: buddhaSvg('#4CAF50', '#2E7D32', '#1B5E20') },
+  { id: 'wood', name: 'Wooden Buddha', cost: 0, requiresBodhiStage: 0, svg: buddhaSvg('#8D6E63', '#5D4037', '#4E342E', '#D7CCC8', '#3E2723') },
+  { id: 'golden', name: 'Golden Buddha', cost: 30, requiresBodhiStage: 0, svg: buddhaSvg('#FFD54F', '#FFA000', '#FF8F00', '#FFF3C4', '#8D5A00') },
+  { id: 'jade', name: 'Jade Buddha', cost: 25, requiresBodhiStage: 5, svg: buddhaSvg('#66BB6A', '#2E7D32', '#1B5E20', '#C8E6C9', '#0D3D14') },
 ];
 const OFFERING_OPTIONS = [
   { id: 'flower', name: 'Lotus Flower', emoji: '🪷', cost: 10 },
@@ -151,7 +167,6 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   const [buddhaId, setBuddhaId] = useState(null);
   const [lastLampLitDate, setLastLampLitDate] = useState(null);
   const [bodhiStageIndex, setBodhiStageIndex] = useState(0);
-  const [shopOpen, setShopOpen] = useState(false);
   const [dragOverSlot, setDragOverSlot] = useState(null);
   const [ringing, setRinging] = useState(false);
   const [toast, setToast] = useState(null);
@@ -326,94 +341,75 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
       {loading ? (
         <p className="text-emerald-700">Loading your shrine...</p>
       ) : (
-        <>
-          <div className="relative w-full max-w-xl h-96">
-            <BodhiBackdropCanvas />
+        <div className="flex flex-col lg:flex-row gap-6 w-full max-w-4xl items-center lg:items-start justify-center">
+          <div className="flex flex-col items-center flex-shrink-0">
+            <div className="relative w-full max-w-xl h-96">
+              <BodhiBackdropCanvas />
 
-            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[340px] h-32 rounded-t-2xl border-4 border-amber-700 shadow-xl flex items-end justify-center pb-3"
-              style={{ background: 'linear-gradient(to bottom, #fde68a, #d4af37)' }}
-            >
-              {buddha ? (
-                <div
-                  className={`w-24 h-28 -mt-20 drop-shadow-lg ${ringing ? 'animate-pulse' : ''}`}
-                  dangerouslySetInnerHTML={{ __html: buddha.svg }}
-                />
-              ) : (
-                <button
-                  onClick={() => setShopOpen(true)}
-                  className="mb-2 text-xs font-semibold text-amber-800 bg-white/70 hover:bg-white px-3 py-2 rounded-lg border border-dashed border-amber-600"
-                >
-                  + Choose a Buddha image
-                </button>
-              )}
+              <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[340px] h-32 rounded-t-2xl border-4 border-amber-700 shadow-xl flex items-end justify-center pb-3"
+                style={{ background: 'linear-gradient(to bottom, #fde68a, #d4af37)' }}
+              >
+                {buddha ? (
+                  <div
+                    className={`w-24 h-28 -mt-20 drop-shadow-lg ${ringing ? 'animate-pulse' : ''}`}
+                    dangerouslySetInnerHTML={{ __html: buddha.svg }}
+                  />
+                ) : (
+                  <p className="mb-2 text-xs font-semibold text-amber-800 bg-white/70 px-3 py-2 rounded-lg border border-dashed border-amber-600">
+                    ← Pick a Buddha image from the shop
+                  </p>
+                )}
+              </div>
             </div>
+
+            <div className="grid grid-cols-6 gap-2 -mt-4 z-10">
+              {Array.from({ length: SLOT_COUNT }).map((_, i) => {
+                const offeringId = placedItems[i];
+                const offering = offeringId ? findOffering(offeringId) : null;
+                return (
+                  <div
+                    key={i}
+                    onDragOver={(e) => { e.preventDefault(); setDragOverSlot(i); }}
+                    onDragLeave={() => setDragOverSlot(null)}
+                    onDrop={(e) => handleDrop(e, i)}
+                    onClick={() => { if (offeringId === 'bell') handleRingBell(); }}
+                    className={`w-14 h-14 rounded-lg border-2 flex items-center justify-center text-2xl relative
+                      ${dragOverSlot === i ? 'border-emerald-500 bg-emerald-50 scale-105' : 'border-dashed border-amber-400 bg-white/60'}
+                      ${offering?.id === 'lamp' && lastLampLitDate === todayKey() ? 'animate-pulse' : ''}
+                      transition-transform`}
+                    title={offering ? offering.name : 'Empty slot'}
+                  >
+                    {offering && <span>{offering.emoji}</span>}
+                    {offering && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleRemoveItem(i); }}
+                        className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-xs leading-none flex items-center justify-center shadow"
+                        title="Remove"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {hasLampPlaced && (
+              <button
+                onClick={handleLightLamp}
+                disabled={!canLightLampToday}
+                className={`mt-6 px-5 py-2.5 rounded-xl font-semibold shadow-md ${canLightLampToday ? 'bg-amber-500 hover:bg-amber-600 text-white' : 'bg-gray-200 text-gray-500 cursor-not-allowed'}`}
+              >
+                {canLightLampToday ? `🪔 Light the Lamp (+${DAILY_LAMP_REWARD} coins)` : '🪔 Lamp lit for today -- come back tomorrow'}
+              </button>
+            )}
           </div>
 
-          <div className="grid grid-cols-6 gap-2 -mt-4 z-10">
-            {Array.from({ length: SLOT_COUNT }).map((_, i) => {
-              const offeringId = placedItems[i];
-              const offering = offeringId ? findOffering(offeringId) : null;
-              return (
-                <div
-                  key={i}
-                  onDragOver={(e) => { e.preventDefault(); setDragOverSlot(i); }}
-                  onDragLeave={() => setDragOverSlot(null)}
-                  onDrop={(e) => handleDrop(e, i)}
-                  onClick={() => { if (offeringId === 'bell') handleRingBell(); }}
-                  className={`w-14 h-14 rounded-lg border-2 flex items-center justify-center text-2xl relative
-                    ${dragOverSlot === i ? 'border-emerald-500 bg-emerald-50 scale-105' : 'border-dashed border-amber-400 bg-white/60'}
-                    ${offering?.id === 'lamp' && lastLampLitDate === todayKey() ? 'animate-pulse' : ''}
-                    transition-transform`}
-                  title={offering ? offering.name : 'Empty slot'}
-                >
-                  {offering && <span>{offering.emoji}</span>}
-                  {offering && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleRemoveItem(i); }}
-                      className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-xs leading-none flex items-center justify-center shadow"
-                      title="Remove"
-                    >
-                      ×
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          {hasLampPlaced && (
-            <button
-              onClick={handleLightLamp}
-              disabled={!canLightLampToday}
-              className={`mt-6 px-5 py-2.5 rounded-xl font-semibold shadow-md ${canLightLampToday ? 'bg-amber-500 hover:bg-amber-600 text-white' : 'bg-gray-200 text-gray-500 cursor-not-allowed'}`}
-            >
-              {canLightLampToday ? `🪔 Light the Lamp (+${DAILY_LAMP_REWARD} coins)` : '🪔 Lamp lit for today -- come back tomorrow'}
-            </button>
-          )}
-
-          <button
-            onClick={() => setShopOpen(true)}
-            className="mt-4 flex items-center gap-2 bg-white hover:bg-amber-50 text-amber-700 font-semibold px-5 py-2.5 rounded-xl shadow-md border-2 border-amber-300"
-          >
-            🛒 Merit Shop
-          </button>
-        </>
-      )}
-
-      {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[10001] bg-gray-900 text-white px-4 py-2 rounded-lg shadow-lg text-sm font-semibold">
-          {toast}
-        </div>
-      )}
-
-      {shopOpen && (
-        <div className="fixed inset-0 z-[10000] bg-black/50 flex items-center justify-center p-4" onClick={() => setShopOpen(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[85vh] overflow-y-auto p-5" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-amber-700">🛒 Merit Shop</h2>
-              <button onClick={() => setShopOpen(false)} className="text-gray-400 hover:text-gray-700 text-2xl leading-none">×</button>
-            </div>
-            <p className="text-sm text-gray-500 mb-4">🪙 {coinBalance} coins available</p>
+          {/* Merit Shop -- a permanent side panel (not a popup) so items can
+              be dragged straight from here onto the altar slots to the left. */}
+          <div className="w-full lg:w-72 flex-shrink-0 bg-white/85 backdrop-blur-sm rounded-2xl shadow-lg border-2 border-amber-200 p-4 lg:sticky lg:top-24">
+            <h2 className="text-lg font-bold text-amber-700 mb-1">🛒 Merit Shop</h2>
+            <p className="text-xs text-gray-500 mb-3">🪙 {coinBalance} coins available -- tap or drag an item onto the altar</p>
 
             <h3 className="text-sm font-bold text-gray-700 mb-2">Buddha Image</h3>
             <div className="space-y-2 mb-5">
@@ -439,7 +435,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
               })}
             </div>
 
-            <h3 className="text-sm font-bold text-gray-700 mb-2">Offerings (drag onto the altar too)</h3>
+            <h3 className="text-sm font-bold text-gray-700 mb-2">Offerings</h3>
             <div className="space-y-2">
               {OFFERING_OPTIONS.map(option => {
                 const locked = option.requiresBodhiStage != null && option.requiresBodhiStage > bodhiStageIndex;
@@ -450,7 +446,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
                     onDragStart={(e) => handleDragStart(e, option.id)}
                     onClick={() => handleBuyOffering(option)}
                     disabled={locked}
-                    className={`w-full flex items-center justify-between p-3 rounded-xl border ${locked ? 'bg-gray-50 border-gray-200 opacity-60' : 'bg-amber-50 border-amber-200 hover:bg-amber-100'}`}
+                    className={`w-full flex items-center justify-between p-3 rounded-xl border ${locked ? 'bg-gray-50 border-gray-200 opacity-60' : 'bg-amber-50 border-amber-200 hover:bg-amber-100 cursor-grab'}`}
                   >
                     <span className="font-semibold text-gray-800">{option.emoji} {option.name}</span>
                     <span className="text-sm font-bold text-amber-700">{locked ? '🔒 Bodhi Tree' : `🪙 ${option.cost}`}</span>
@@ -459,6 +455,12 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
               })}
             </div>
           </div>
+        </div>
+      )}
+
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[10001] bg-gray-900 text-white px-4 py-2 rounded-lg shadow-lg text-sm font-semibold">
+          {toast}
         </div>
       )}
     </div>
