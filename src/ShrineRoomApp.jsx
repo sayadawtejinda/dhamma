@@ -123,58 +123,87 @@ function playBellSound() {
 
 // Fractal Bodhi tree drawn once as a static backdrop (purely decorative --
 // unlike BodhiTreeApp.jsx's canvas, this one doesn't grow with attendance).
+// Sizing uses a ResizeObserver rather than measuring the parent once at
+// mount: this component sits inside a lazyLoad()-mounted app (see App.jsx's
+// custom lazyLoad, used instead of React.lazy/Suspense), and reading
+// getBoundingClientRect() synchronously in the mount effect sometimes ran
+// before the surrounding layout had actually settled, capturing a
+// near-zero size and permanently drawing the tree at the wrong scale (a
+// single bare trunk, no branches). ResizeObserver instead fires once the
+// browser has an actual settled size for the element, and again any time
+// it changes.
 function BodhiBackdropCanvas() {
   const canvasRef = useRef(null);
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = canvas.clientWidth * dpr;
-    canvas.height = canvas.clientHeight * dpr;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    function drawBranch(len, angle, depth) {
-      ctx.beginPath();
-      ctx.save();
-      ctx.strokeStyle = '#5D4037';
-      ctx.fillStyle = '#2E7D32';
-      ctx.lineWidth = Math.max(1.5, 12 * (len / 80));
-      ctx.rotate((angle * Math.PI) / 180);
-      ctx.moveTo(0, 0);
-      ctx.lineTo(0, -len);
-      ctx.stroke();
-      ctx.translate(0, -len);
-      if (len < 8) {
+    function draw(cssWidth, cssHeight) {
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = cssWidth * dpr;
+      canvas.height = cssHeight * dpr;
+      canvas.style.width = `${cssWidth}px`;
+      canvas.style.height = `${cssHeight}px`;
+      const ctx = canvas.getContext('2d');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      function drawBranch(len, angle, depth) {
         ctx.beginPath();
-        ctx.arc(0, 0, 7, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.save();
+        ctx.strokeStyle = '#5D4037';
+        ctx.fillStyle = '#2E7D32';
+        ctx.lineWidth = Math.max(1.5, 12 * (len / 80));
+        ctx.rotate((angle * Math.PI) / 180);
+        ctx.moveTo(0, 0);
+        ctx.lineTo(0, -len);
+        ctx.stroke();
+        ctx.translate(0, -len);
+        if (len < 8) {
+          ctx.beginPath();
+          ctx.arc(0, 0, 7, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+          return;
+        }
+        drawBranch(len * 0.75, 25, depth + 1);
+        drawBranch(len * 0.75, -25, depth + 1);
         ctx.restore();
-        return;
       }
-      drawBranch(len * 0.75, 25, depth + 1);
-      drawBranch(len * 0.75, -25, depth + 1);
+
+      ctx.clearRect(0, 0, cssWidth, cssHeight);
+      ctx.save();
+      ctx.translate(cssWidth / 2, cssHeight);
+      drawBranch(75, 0, 0);
       ctx.restore();
     }
 
-    ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
-    ctx.save();
-    ctx.translate(canvas.clientWidth / 2, canvas.clientHeight);
-    drawBranch(75, 0, 0);
-    ctx.restore();
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      const { width, height } = entry.contentRect;
+      if (width > 0 && height > 0) draw(width, height);
+    });
+    observer.observe(canvas.parentElement);
+    return () => observer.disconnect();
   }, []);
-  return <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none opacity-70" />;
+  return <canvas ref={canvasRef} className="absolute inset-0 pointer-events-none opacity-70" />;
 }
 
 export default function ShrineRoomApp({ entryRequest, onExit }) {
+  const isTeacherPreview = !entryRequest?.studentUid;
   const studentUid = entryRequest?.studentUid;
   const studentName = entryRequest?.studentName || 'Friend';
   const [loading, setLoading] = useState(true);
-  const [coinBalance, setCoinBalance] = useState(0);
+  // Teacher preview mode has no roster doc to load from (nothing persists),
+  // so it starts with enough coins to freely try every shop item instead of
+  // being stuck at 0.
+  const [coinBalance, setCoinBalance] = useState(isTeacherPreview ? 200 : 0);
   const [placedItems, setPlacedItems] = useState({}); // { slotIndex: offeringId }
   const [buddhaId, setBuddhaId] = useState(null);
   const [lastLampLitDate, setLastLampLitDate] = useState(null);
-  const [bodhiStageIndex, setBodhiStageIndex] = useState(0);
+  // Teacher preview also gets full access to the two Bodhi-tree-gated items
+  // (there's no real attendance to compute a stage from).
+  const [bodhiStageIndex, setBodhiStageIndex] = useState(isTeacherPreview ? BODHI_MILESTONES.length - 1 : 0);
   const [shopOpen, setShopOpen] = useState(false);
   const [dragOverSlot, setDragOverSlot] = useState(null);
   const [ringing, setRinging] = useState(false);
@@ -340,8 +369,16 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
         🏡
       </button>
 
-      <div className="fixed top-3 right-3 z-50 flex items-center gap-2 bg-white/90 backdrop-blur-sm px-3 py-2 rounded-full shadow-lg border border-amber-200">
-        <span className="font-bold text-amber-700">🪙 {coinBalance}</span>
+      <div className="fixed top-3 right-3 z-50 flex flex-col items-end gap-2">
+        <div className="flex items-center gap-2 bg-white/90 backdrop-blur-sm px-3 py-2 rounded-full shadow-lg border border-amber-200">
+          <span className="font-bold text-amber-700">🪙 {coinBalance}</span>
+        </div>
+        <button
+          onClick={() => setShopOpen(prev => !prev)}
+          className="flex items-center gap-1 bg-white hover:bg-amber-50 text-amber-700 text-sm font-semibold px-3 py-2 rounded-full shadow-lg border-2 border-amber-300"
+        >
+          {shopOpen ? '✕ Close Shop' : '🛒 Merit Shop'}
+        </button>
       </div>
 
       <h1 className="text-2xl font-bold text-emerald-800 mt-16 mb-1 text-center">{studentName}'s Shrine Room</h1>
@@ -441,24 +478,18 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
                 {canLightLampToday ? `🪔 Light the Lamp (+${DAILY_LAMP_REWARD} coins)` : '🪔 Lamp lit for today -- come back tomorrow'}
               </button>
             )}
-
-            <button
-              onClick={() => setShopOpen(prev => !prev)}
-              className="mt-4 flex items-center gap-2 bg-white hover:bg-amber-50 text-amber-700 font-semibold px-5 py-2.5 rounded-xl shadow-md border-2 border-amber-300"
-            >
-              {shopOpen ? '✕ Close Shop' : '🛒 Merit Shop'}
-            </button>
           </div>
+        </div>
+      )}
 
-          {/* Merit Shop -- only shown while shopping, as a side panel (not a
-              popup covering the altar) so items can be dragged straight
-              from here onto the altar slots to the left. */}
-          {shopOpen && (
-          <div className="w-full lg:w-72 flex-shrink-0 bg-white/85 backdrop-blur-sm rounded-2xl shadow-lg border-2 border-amber-200 p-4 lg:sticky lg:top-24">
-            <div className="flex justify-between items-center mb-1">
-              <h2 className="text-lg font-bold text-amber-700">🛒 Merit Shop</h2>
-              <button onClick={() => setShopOpen(false)} className="text-gray-400 hover:text-gray-700 text-xl leading-none">×</button>
-            </div>
+      {/* Merit Shop -- fixed to the viewport (not part of the flex layout
+          above) so opening/closing it never shifts or resizes the Shrine
+          Room content underneath. Anchored at the very top of the screen,
+          under the coin/shop toggle, and scrolls internally if the list is
+          taller than the viewport. */}
+      {shopOpen && (
+        <div className="fixed top-20 right-3 z-40 w-64 sm:w-72 max-h-[calc(100vh-6rem)] overflow-y-auto bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl border-2 border-amber-200 p-4">
+            <h2 className="text-lg font-bold text-amber-700 mb-1">🛒 Merit Shop</h2>
             <p className="text-xs text-gray-500 mb-3">🪙 {coinBalance} coins available -- tap or drag an item onto the altar</p>
 
             <h3 className="text-sm font-bold text-gray-700 mb-2">Buddha Image</h3>
@@ -504,8 +535,6 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
                 );
               })}
             </div>
-          </div>
-          )}
         </div>
       )}
 
