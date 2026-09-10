@@ -86,12 +86,19 @@ const BUDDHA_OPTIONS = [
   { id: 'golden', name: 'Golden Buddha', cost: 30, requiresBodhiStage: 0, svg: buddhaSvg('#FFD54F', '#FFA000', '#FF8F00', '#FFF3C4', '#8D5A00') },
   { id: 'jade', name: 'Jade Buddha', cost: 25, requiresBodhiStage: 5, svg: buddhaSvg('#66BB6A', '#2E7D32', '#1B5E20', '#C8E6C9', '#0D3D14') },
 ];
+// durationHours: how long the offering stays on the altar before it
+// "runs out" (candle burns down, water/fruit spoil, flowers wilt, an
+// umbrella lasts a full day) and needs to be re-offered -- per the
+// teacher's direction. Cost scales with durationHours (roughly 3 + 1.5
+// coins/hour, adjustable). Items with no durationHours (lamp/bell/canopy)
+// are permanent fixtures, not consumable offerings.
 const OFFERING_OPTIONS = [
-  { id: 'flower', name: 'Lotus Flower', emoji: '🪷', cost: 10 },
-  { id: 'water', name: 'Water Offering', emoji: '🥛', cost: 5 },
+  { id: 'candle', name: 'Candle', emoji: '🕯️', durationHours: 1, cost: 5 },
+  { id: 'water', name: 'Water Offering', emoji: '🥛', durationHours: 2, cost: 6 },
+  { id: 'fruit', name: 'Fruit Offering', emoji: '🍊', durationHours: 3, cost: 8 },
+  { id: 'flower', name: 'Lotus Flower', emoji: '🪷', durationHours: 10, cost: 18 },
+  { id: 'umbrella', name: 'Ceremonial Umbrella', emoji: '⛱️', durationHours: 24, cost: 39 },
   { id: 'lamp', name: 'Oil Lamp', emoji: '🪔', cost: 15 },
-  { id: 'candle', name: 'Candle', emoji: '🕯️', cost: 8 },
-  { id: 'fruit', name: 'Fruit Offering', emoji: '🍊', cost: 8 },
   { id: 'bell', name: 'Bell', emoji: '🔔', cost: 20 },
   { id: 'canopy', name: 'Golden Canopy', emoji: '🎐', cost: 25, requiresBodhiStage: 9 },
 ];
@@ -102,6 +109,9 @@ const findBuddha = (id) => BUDDHA_OPTIONS.find(o => o.id === id);
 const SLOT_COUNT = 6;
 const STARTER_COINS = 20;
 const DAILY_LAMP_REWARD = 5;
+// Small merit bonus paid on top of an offering's cost -- the act of
+// donating is itself rewarded, per the teacher's direction.
+const MERIT_OFFERING_BONUS = 2;
 
 function playBellSound() {
   try {
@@ -123,15 +133,15 @@ function playBellSound() {
 
 // Fractal Bodhi tree drawn once as a static backdrop (purely decorative --
 // unlike BodhiTreeApp.jsx's canvas, this one doesn't grow with attendance).
-// Sizing uses a ResizeObserver rather than measuring the parent once at
-// mount: this component sits inside a lazyLoad()-mounted app (see App.jsx's
-// custom lazyLoad, used instead of React.lazy/Suspense), and reading
-// getBoundingClientRect() synchronously in the mount effect sometimes ran
-// before the surrounding layout had actually settled, capturing a
-// near-zero size and permanently drawing the tree at the wrong scale (a
-// single bare trunk, no branches). ResizeObserver instead fires once the
-// browser has an actual settled size for the element, and again any time
-// it changes.
+// Root cause of the "just a bare trunk, no branches" bug this used to have:
+// its containing div used a percentage width (w-full) as a flex item
+// inside a chain of nested flex containers using align-items:center --
+// confirmed via getBoundingClientRect() that this resolved to width:0
+// (height was fine). Fixed at the source by giving that div a fixed pixel
+// width instead of a percentage one (see its className below). Sizing here
+// still uses a ResizeObserver rather than measuring the parent once at
+// mount, since that's more robust in general (fires once the browser has
+// an actual settled size for the element, and again any time it changes).
 function BodhiBackdropCanvas() {
   const canvasRef = useRef(null);
   useEffect(() => {
@@ -177,6 +187,17 @@ function BodhiBackdropCanvas() {
       ctx.restore();
     }
 
+    // Draw immediately with whatever size is available right now (guards
+    // against the ResizeObserver's first callback landing a frame or two
+    // late and the tree being invisible/wrong until something else -- like
+    // buying enough offerings to trigger a later layout change -- happens
+    // to nudge a resize), then let the observer correct it once the real
+    // settled size is known and keep it correct if the size ever changes.
+    const immediateRect = canvas.parentElement.getBoundingClientRect();
+    if (immediateRect.width > 0 && immediateRect.height > 0) {
+      draw(immediateRect.width, immediateRect.height);
+    }
+
     const observer = new ResizeObserver((entries) => {
       const entry = entries[0];
       if (!entry) return;
@@ -205,6 +226,14 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   // (there's no real attendance to compute a stage from).
   const [bodhiStageIndex, setBodhiStageIndex] = useState(isTeacherPreview ? BODHI_MILESTONES.length - 1 : 0);
   const [shopOpen, setShopOpen] = useState(false);
+  const [chantingOpen, setChantingOpen] = useState(false);
+  // Time-commitment: asked once per visit (not persisted -- a fresh choice
+  // every time), before anything else is usable. Reward is paid out only
+  // if the student stays until the countdown finishes; leaving early (🏡
+  // Home) pays nothing, since the coins are for the time actually kept.
+  const [hasChosenTime, setHasChosenTime] = useState(false);
+  const [committedMinutes, setCommittedMinutes] = useState(null);
+  const [remainingSeconds, setRemainingSeconds] = useState(0);
   const [dragOverSlot, setDragOverSlot] = useState(null);
   const [ringing, setRinging] = useState(false);
   const [toast, setToast] = useState(null);
@@ -292,13 +321,13 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     const emptySlot = Array.from({ length: SLOT_COUNT }).findIndex((_, i) => !placedItems[i]);
     if (emptySlot === -1) { showToast('Your altar is full -- remove something first.'); return; }
     if (coinBalance < option.cost) { showToast('Not enough coins.'); return; }
-    awardCoins(-option.cost);
+    awardCoins(MERIT_OFFERING_BONUS - option.cost);
     setPlacedItems(prev => {
-      const next = { ...prev, [emptySlot]: option.id };
+      const next = { ...prev, [emptySlot]: { id: option.id, placedAt: Date.now() } };
       persist({ placedItems: next });
       return next;
     });
-    showToast(`${option.name} placed on your altar.`);
+    showToast(`${option.name} placed on your altar. +${MERIT_OFFERING_BONUS} merit coins!`);
   };
 
   const handleRemoveItem = (slotIndex) => {
@@ -327,17 +356,17 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
       return;
     }
     if (coinBalance < option.cost) { showToast('Not enough coins.'); return; }
-    awardCoins(-option.cost);
+    awardCoins(MERIT_OFFERING_BONUS - option.cost);
     setPlacedItems(prev => {
-      const next = { ...prev, [slotIndex]: offeringId };
+      const next = { ...prev, [slotIndex]: { id: offeringId, placedAt: Date.now() } };
       persist({ placedItems: next });
       return next;
     });
-    showToast(`${option.name} placed on your altar.`);
+    showToast(`${option.name} placed on your altar. +${MERIT_OFFERING_BONUS} merit coins!`);
     if (offeringId === 'bell') { playBellSound(); setRinging(true); setTimeout(() => setRinging(false), 1200); }
   };
 
-  const hasLampPlaced = Object.values(placedItems).includes('lamp');
+  const hasLampPlaced = Object.values(placedItems).some(item => item.id === 'lamp');
   const canLightLampToday = hasLampPlaced && lastLampLitDate !== todayKey();
 
   const handleLightLamp = () => {
@@ -350,11 +379,55 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   };
 
   const handleRingBell = () => {
-    if (!Object.values(placedItems).includes('bell')) return;
+    if (!Object.values(placedItems).some(item => item.id === 'bell')) return;
     playBellSound();
     setRinging(true);
     setTimeout(() => setRinging(false), 1200);
   };
+
+  // Consumable offerings (candle/water/fruit/flower/umbrella) "run out" once
+  // their durationHours has passed and quietly leave the altar -- per the
+  // teacher's direction that each offering only stays in front of the
+  // Buddha for a set amount of time. Checked once a minute; lamp/bell/
+  // canopy have no durationHours so they're never touched here.
+  useEffect(() => {
+    const checkExpiry = () => {
+      setPlacedItems(prev => {
+        const now = Date.now();
+        let changed = false;
+        const next = {};
+        Object.entries(prev).forEach(([slot, item]) => {
+          const option = findOffering(item.id);
+          const expired = option?.durationHours != null && (now - item.placedAt) >= option.durationHours * 60 * 60 * 1000;
+          if (expired) { changed = true; return; }
+          next[slot] = item;
+        });
+        if (changed) persist({ placedItems: next });
+        return changed ? next : prev;
+      });
+    };
+    checkExpiry();
+    const interval = setInterval(checkExpiry, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleChooseTime = (minutes) => {
+    setHasChosenTime(true);
+    setCommittedMinutes(minutes);
+    setRemainingSeconds(minutes * 60);
+  };
+
+  useEffect(() => {
+    if (committedMinutes == null) return;
+    if (remainingSeconds <= 0) {
+      awardCoins(committedMinutes);
+      showToast(`🙏 Well spent! +${committedMinutes} coins for your ${committedMinutes}-minute visit.`);
+      setCommittedMinutes(null);
+      return;
+    }
+    const timer = setTimeout(() => setRemainingSeconds(s => s - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [committedMinutes, remainingSeconds]);
 
   const buddha = findBuddha(buddhaId);
   const dimmed = hasLampPlaced && lastLampLitDate === todayKey();
@@ -373,6 +446,17 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
         <div className="flex items-center gap-2 bg-white/90 backdrop-blur-sm px-3 py-2 rounded-full shadow-lg border border-amber-200">
           <span className="font-bold text-amber-700">🪙 {coinBalance}</span>
         </div>
+        {committedMinutes != null && (
+          <div className="flex items-center gap-2 bg-indigo-50 px-3 py-1.5 rounded-full shadow border border-indigo-200 text-xs font-semibold text-indigo-700">
+            ⏳ {String(Math.floor(remainingSeconds / 60)).padStart(2, '0')}:{String(remainingSeconds % 60).padStart(2, '0')} left
+          </div>
+        )}
+        <button
+          onClick={() => setChantingOpen(true)}
+          className="flex items-center gap-1 bg-white hover:bg-amber-50 text-amber-700 text-sm font-semibold px-3 py-2 rounded-full shadow-lg border-2 border-amber-300"
+        >
+          🙏 Chanting
+        </button>
         <button
           onClick={() => setShopOpen(prev => !prev)}
           className="flex items-center gap-1 bg-white hover:bg-amber-50 text-amber-700 text-sm font-semibold px-3 py-2 rounded-full shadow-lg border-2 border-amber-300"
@@ -380,6 +464,44 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
           {shopOpen ? '✕ Close Shop' : '🛒 Merit Shop'}
         </button>
       </div>
+
+      {/* Chanting -- placeholder full-screen panel; the teacher will supply
+          the actual chant text next. Buddha image/altar stays exactly
+          where it is underneath (this is an overlay, not a layout change). */}
+      {chantingOpen && (
+        <div className="fixed inset-0 z-[10000] bg-black/50 flex items-center justify-center p-4" onClick={() => setChantingOpen(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[80vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-amber-700">🙏 Chanting</h2>
+              <button onClick={() => setChantingOpen(false)} className="text-gray-400 hover:text-gray-700 text-2xl leading-none">×</button>
+            </div>
+            <p className="text-gray-500 text-sm">Chant text coming soon.</p>
+          </div>
+        </div>
+      )}
+
+      {/* Asked once, before anything else, for a real student visit --
+          coins for the chosen time are paid out once the countdown above
+          finishes; leaving early (🏡 Home) before then pays nothing. */}
+      {!loading && !isTeacherPreview && !hasChosenTime && (
+        <div className="fixed inset-0 z-[10001] bg-black/60 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center">
+            <h2 className="text-lg font-bold text-emerald-800 mb-2">How long will you spend in the Shrine Room today?</h2>
+            <p className="text-sm text-gray-500 mb-4">You'll earn 1 coin for every minute you stay.</p>
+            <div className="grid grid-cols-3 gap-2">
+              {[1, 5, 10, 15, 30, 60].map(minutes => (
+                <button
+                  key={minutes}
+                  onClick={() => handleChooseTime(minutes)}
+                  className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold py-3 rounded-xl border-2 border-emerald-200"
+                >
+                  {minutes} min
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       <h1 className="text-2xl font-bold text-emerald-800 mt-16 mb-1 text-center">{studentName}'s Shrine Room</h1>
       <p className="text-emerald-600 text-sm mb-6">🙏 Decorate your own altar and make daily offerings</p>
@@ -389,7 +511,13 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
       ) : (
         <div className="flex flex-col lg:flex-row gap-6 w-full max-w-4xl items-center lg:items-start justify-center">
           <div className="flex flex-col items-center flex-shrink-0">
-            <div className="relative w-full max-w-xl h-96">
+            {/* Explicit pixel width (not w-full/percentage) -- this div is a
+                flex item inside a chain of nested flex containers using
+                items-center for cross-axis alignment, which left a
+                percentage width resolving to 0 (confirmed via
+                getBoundingClientRect() live: width:0, height:384 -- the
+                canvas backdrop tree drew at the wrong scale as a result). */}
+            <div className="relative w-[360px] max-w-full h-96">
               <BodhiBackdropCanvas />
 
               <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[340px] h-32 rounded-t-2xl border-4 border-amber-700 shadow-xl flex items-end justify-center pb-3"
@@ -416,7 +544,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
               // a drop target, and placed items get a remove (×) button.
               <div className="grid grid-cols-6 gap-2 -mt-4 z-10">
                 {Array.from({ length: SLOT_COUNT }).map((_, i) => {
-                  const offeringId = placedItems[i];
+                  const offeringId = placedItems[i]?.id;
                   const offering = offeringId ? findOffering(offeringId) : null;
                   return (
                     <div
@@ -451,7 +579,8 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
               // with dashed placeholders.
               Object.keys(placedItems).length > 0 && (
                 <div className="flex flex-wrap justify-center gap-2 -mt-4 z-10">
-                  {Object.entries(placedItems).map(([i, offeringId]) => {
+                  {Object.entries(placedItems).map(([i, item]) => {
+                    const offeringId = item.id;
                     const offering = findOffering(offeringId);
                     if (!offering) return null;
                     return (
@@ -529,7 +658,14 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
                     disabled={locked}
                     className={`w-full flex items-center justify-between p-3 rounded-xl border ${locked ? 'bg-gray-50 border-gray-200 opacity-60' : 'bg-amber-50 border-amber-200 hover:bg-amber-100 cursor-grab'}`}
                   >
-                    <span className="font-semibold text-gray-800">{option.emoji} {option.name}</span>
+                    <span className="font-semibold text-gray-800">
+                      {option.emoji} {option.name}
+                      {option.durationHours != null && (
+                        <span className="block text-xs font-normal text-gray-500">
+                          lasts {option.durationHours < 24 ? `${option.durationHours}h` : `${option.durationHours / 24}d`}
+                        </span>
+                      )}
+                    </span>
                     <span className="text-sm font-bold text-amber-700">{locked ? '🔒 Bodhi Tree' : `🪙 ${option.cost}`}</span>
                   </button>
                 );
