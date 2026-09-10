@@ -1844,6 +1844,37 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
       .catch(() => {});
   }, [isAuthReady, userName]);
 
+  // User-initiated deposit into the Shrine Room wallet, replacing the old
+  // silent automatic pull-in: the student clicks their earned coins and
+  // confirms before anything moves. Same pattern to be reused by other
+  // apps' coin displays later.
+  const handleDepositCoinsToShrineRoom = useCallback(async () => {
+    const earned = goldCoinsForScore(computeStudentTotalScore(allMyScoresGlobal, userName));
+    const depositable = Math.max(0, earned - smartStudyCoinsTransferredOut);
+    if (depositable <= 0) return;
+    const confirmed = window.confirm(`Deposit ${depositable} gold coin(s) into your Shrine Room wallet?`);
+    if (!confirmed) return;
+    const sanitize = (key) => (key || 'unknown').replace(/[.$#/\[\]]/g, '_');
+    const shrineRef = doc(db, 'artifacts/shrine-room-app/public/data/roster', sanitize(userName));
+    try {
+      const shrineSnap = await getDoc(shrineRef);
+      // A student who has never opened Shrine Room yet still gets its usual
+      // 20-coin starter balance, on top of whatever they're depositing here.
+      const SHRINE_STARTER_COINS = 20;
+      const currentShrineBalance = shrineSnap.exists() ? (shrineSnap.data().coinBalance ?? 0) : SHRINE_STARTER_COINS;
+      const newTransferredOut = smartStudyCoinsTransferredOut + depositable;
+      await setDoc(shrineRef, {
+        studentName: userName,
+        coinBalance: currentShrineBalance + depositable,
+        smartStudyCoinsTransferred: newTransferredOut,
+      }, { merge: true });
+      setSmartStudyCoinsTransferredOut(newTransferredOut);
+      setModal({ message: `🪙 Deposited ${depositable} coin(s) into your Shrine Room wallet!`, type: 'success', visible: true });
+    } catch (e) {
+      console.error('Error depositing coins to Shrine Room:', e);
+    }
+  }, [allMyScoresGlobal, userName, smartStudyCoinsTransferredOut]);
+
   useEffect(() => {
     if (!isAuthReady || !classId) return;
     const q = query(getGlobalAnnouncementsCollectionRef(), where("classId", "==", classId));
@@ -2943,6 +2974,7 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
             rosterPath={getRosterCollectionRef().path}
             studentName={userName}
             coinBalance={Math.max(0, goldCoinsForScore(computeStudentTotalScore(allMyScoresGlobal, userName)) - smartStudyCoinsTransferredOut)}
+            onCoinClick={handleDepositCoinsToShrineRoom}
             filterDocs={(d) => d.status === 'approved'}
             renderActivity={(s) => <span className="text-gray-600">{s.classId}{s.currentLessonId ? ` · ${s.currentLessonId}` : ''}</span>}
           />

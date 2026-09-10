@@ -88,6 +88,7 @@ export default function OnlineStatusWidget({
   studentName,
   isTeacherMode,
   coinBalance,
+  onCoinClick,
   renderActivity,
   panelTitle = '📚 Students',
   teacherLabel = '👩‍🏫 Teacher',
@@ -109,9 +110,19 @@ export default function OnlineStatusWidget({
           <span className="font-bold text-gray-700">{studentName}</span>
         )}
         {!isTeacherMode && coinBalance != null && (
-          <span className="flex items-center gap-1 text-amber-600 font-bold" title="Gold coins earned">
-            <span>🪙</span>{coinBalance}
-          </span>
+          onCoinClick ? (
+            <button
+              onClick={onCoinClick}
+              className="flex items-center gap-1 text-amber-600 font-bold hover:underline"
+              title="Click to deposit into your Shrine Room wallet"
+            >
+              <span>🪙</span>{coinBalance}
+            </button>
+          ) : (
+            <span className="flex items-center gap-1 text-amber-600 font-bold" title="Gold coins earned">
+              <span>🪙</span>{coinBalance}
+            </span>
+          )
         )}
         <button onClick={() => setShowPanel(true)} className="flex items-center gap-1 text-emerald-600 font-bold hover:underline">
           <span className="w-2 h-2 bg-emerald-500 rounded-full inline-block"></span>{onlineCount} online

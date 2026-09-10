@@ -45,33 +45,6 @@ const getBodhiStageIndex = (days) => {
 
 const todayKey = () => new Date().toISOString().slice(0, 10);
 
-// First step of the eventual "shared coin wallet" the teacher asked for --
-// pulling in coins from Smart Study first, since that's where most
-// students already have the most coins. Smart Study never actually spends
-// this number (it's a derived score badge, recomputed from quiz scores
-// every time, not a real balance -- see SmartStudy.jsx's
-// computeStudentTotalScore/goldCoinsForScore), so it's only pulled in
-// ONCE, as Shrine Room's starting balance on a student's very first visit
-// (see the roster-doc-doesn't-exist-yet branch below) rather than kept in
-// continuous sync with it.
-const SMARTSTUDY_POINTS_PER_COIN = 50;
-async function fetchSmartStudyCoins(studentName) {
-  try {
-    const snap = await getDocs(query(collection(db, 'artifacts', appId, 'public', 'data', 'scores'), where('studentName', '==', studentName)));
-    const firstAttempts = {};
-    snap.docs.forEach(d => {
-      const s = d.data();
-      const key = `${s.classId}-${s.lessonId}`;
-      if (!firstAttempts[key] || s.timestamp < firstAttempts[key].timestamp) firstAttempts[key] = s;
-    });
-    const totalScore = Object.values(firstAttempts).reduce((sum, s) => sum + (s.score || 0), 0);
-    return Math.floor(totalScore / SMARTSTUDY_POINTS_PER_COIN);
-  } catch (e) {
-    console.error('Error pulling Smart Study coins into Shrine Room:', e);
-    return 0;
-  }
-}
-
 // Audio files live at this GitHub repo, one per chant, named after the
 // chant's English/Myanmar title (not the internal `title.romanized` key
 // used above, which doesn't match 1:1) -- filenames contain spaces,
@@ -625,14 +598,11 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
           }
           if (data.coinBalance == null) persist({ coinBalance: STARTER_COINS });
         } else {
-          const smartStudyCoins = await fetchSmartStudyCoins(studentName);
-          const startingBalance = STARTER_COINS + smartStudyCoins;
-          if (isMounted) setCoinBalance(startingBalance);
-          // smartStudyCoinsTransferred is read back by SmartStudy.jsx to
-          // subtract this amount from its own coin display, so the same
-          // coins don't count in both places at once.
-          persist({ coinBalance: startingBalance, placedItems: {}, buddhaId: null, smartStudyCoinsTransferred: smartStudyCoins });
-          if (smartStudyCoins > 0) showToast(`🪙 Brought in ${smartStudyCoins} coins from Smart Study!`);
+          // Starter balance only -- Smart Study coins no longer get pulled
+          // in automatically. Students now deposit those themselves by
+          // clicking their coin count in Smart Study and confirming.
+          if (isMounted) setCoinBalance(STARTER_COINS);
+          persist({ coinBalance: STARTER_COINS, placedItems: {}, buddhaId: null });
         }
       } catch (e) {
         console.error('Error loading Shrine Room data:', e);
