@@ -45,6 +45,293 @@ const getBodhiStageIndex = (days) => {
 
 const todayKey = () => new Date().toISOString().slice(0, 10);
 
+// First step of the eventual "shared coin wallet" the teacher asked for --
+// pulling in coins from Smart Study first, since that's where most
+// students already have the most coins. Smart Study never actually spends
+// this number (it's a derived score badge, recomputed from quiz scores
+// every time, not a real balance -- see SmartStudy.jsx's
+// computeStudentTotalScore/goldCoinsForScore), so it's only pulled in
+// ONCE, as Shrine Room's starting balance on a student's very first visit
+// (see the roster-doc-doesn't-exist-yet branch below) rather than kept in
+// continuous sync with it.
+const SMARTSTUDY_POINTS_PER_COIN = 50;
+async function fetchSmartStudyCoins(studentName) {
+  try {
+    const snap = await getDocs(query(collection(db, 'artifacts', appId, 'public', 'data', 'scores'), where('studentName', '==', studentName)));
+    const firstAttempts = {};
+    snap.docs.forEach(d => {
+      const s = d.data();
+      const key = `${s.classId}-${s.lessonId}`;
+      if (!firstAttempts[key] || s.timestamp < firstAttempts[key].timestamp) firstAttempts[key] = s;
+    });
+    const totalScore = Object.values(firstAttempts).reduce((sum, s) => sum + (s.score || 0), 0);
+    return Math.floor(totalScore / SMARTSTUDY_POINTS_PER_COIN);
+  } catch (e) {
+    console.error('Error pulling Smart Study coins into Shrine Room:', e);
+    return 0;
+  }
+}
+
+// --- Chanting text, from the teacher's Chanting.md, in the 3 formats it
+// was supplied in (Myanmar words spelled with English letters, Myanmar
+// script, and an English meaning-translation). Audio per chant is planned
+// but not supplied yet -- audioUrl stays null until then. Order follows
+// the liturgical order in that file.
+const CHANT_ITEMS = [
+  {
+    title: { romanized: 'Yay-Taw-Kat (Offering of Water)', myanmar: 'ရေတော်ကပ်', english: 'Offering of Water (Yay-Taw-Kat)' },
+    audioUrl: null,
+    text: {
+      romanized: `Araha-tadi nawa-gunay-hi – Ara-ham a-sa-shi-thaw ko-par-thaw gun-taw-to-hnet, Sa-man-na-ga-tam – pyit-sone-taw-mu-thaw, Na-tham – lu-nat-to-e ko-kway-yar-phit-taw-mu-thaw, Buddham – thet-taw-htin-shar sab-ban-nyu-myat-swar-bu-yar-ko, Ud-dis-sa – yi-hmat-yway, Ce-ti-yas-sa – dha-tu-ce-ti, dhamma-ce-ti, ud-dis-sa-ce-ti, pa-ri-bhaw-ga ce-ti-taw-myat-arr, Sud-dha si-ta-la pa-san-nam – thant-shin-ay-mya kyi-lin-hla-thaw, Imam pa-ni-yam pa-ri-bhaw-ja-ni-yam – e-thauk-taw-yay thone-saung-taw-yay-ko, Sak-kac-cam – yo-yo-thay-thay, De-mi – Nib-ban-yi-hman hlu-dan-par-e Ashin-buyar. Pu-ze-mi – Nib-ban-ko-myaw pu-zaw-par-e Ashin-buyar.
+
+Me – ta-pyit-taw-e, Idam pun-nyam – e-kaung-mu-the, A-sa-wak-kha-ya-wa-ham – a-tha-vaw-ta-yar lay-par-to-e kon-yar kon-kyaung-phit-thaw mag-nyan phola-nyan myat-nib-ban-ko ay-kan-yauk-aung yuet-saung-naing-the, Ho-tu – phit-par-say-tha-dee.`,
+      myanmar: `အရဟတာဒိ နဝဂုဏေဟိ – အရဟံအစရှိသော ကိုးပါးသော ဂုဏ်တော်တို့နှင့်၊ သမန္နာဂတံ – ပြည့်စုံတော်မူသော၊ နာထံ – လူနတ်တို့၏ ကိုးကွယ်ရာဖြစ်တော်မူသော၊ ဗုဒ္ဓံ – သက်တော်ထင်ရှား သဗ္ဗညုမြတ်စွာဘုရားကို၊ ဥဒ္ဒိဿ – ရည်မှတ်၍၊ စေတိယဿ – ဓာတုစေတီ, ဓမ္မစေတီ, ဥဒ္ဒိဿစေတီ, ပရိဘောဂစေတီတော်မြတ်အား၊ သုဒ္ဓ,သီတလ,ပသန္နံ – သန့်ရှင်းအေးမြ ကြည်လင်လှသော၊ ဣမံ ပါနီယ ပရိဘောဇနီယံ – ဤသောက်တော်ရေ သုံးဆောင်တော်ရေကို၊ သက္ကစ္စံ – ရိုရိုသေသေ၊ ဒေမိ – နိဗ္ဗာန်ရည်မှန်း လှူဒါန်းပါ၏ အရှင်ဘုရား။ ပူဇေမိ – နိဗ္ဗာန်ကိုမျှော် ပူဇော်ပါ၏ အရှင်ဘုရား။
+
+မေ – တပည့်တော်၏၊ ဣဒံ ပုညံ – ဤကောင်းမှုသည်၊ အာသဝက္ခယာဝဟံ – အာသဝေါတရားလေးပါးတို့၏ ကုန်ရာကုန်ကြောင်းဖြစ်သော မဂ်ဉာဏ်, ဖိုလ်ဉာဏ် မြတ်နိဗ္ဗာန်ကို ဧကန်ရောက်အောင် ရွက်ဆောင်နိုင်သည်၊ ဟောတု – ဖြစ်ပါစေသတည်း။`,
+      english: `I dedicate this to the Lord Buddha, who is endowed with the nine supreme attributes such as Araham, and who is the refuge of all celestial and human beings.
+
+I respectfully offer this pure, cool, and clear drinking and ritual water to the Most Exalted Relic Pagodas, Dhamma Pagodas, Representative Pagodas, and Pagodas of Personal Use.
+
+Through this meritorious deed, may I attain Nibbana—the cessation of all mental defilements and the realization of the Path and Fruition Knowledge.`,
+    },
+  },
+  {
+    title: { romanized: 'Okasa (The Prayer of Worship)', myanmar: 'ဩကာသ ကန်တော့ချိုး', english: 'Okasa (The Prayer of Forgiveness & Veneration)' },
+    audioUrl: null,
+    text: {
+      romanized: `Okasa, Okasa, Okasa, Kaya-kan, Waci-kan, Mano-kan, Sabba-dosa khat-thaim-thaw a-pyit-to-ko pyauk-par-say-chin a-kyo-ngar; Pa-tha-ma, Du-ti-ya, Ta-ti-ya, Tit-kyain, Hnit-kyain, Thone-kyain myauk-aung; Buyar-ya-da-na, Ta-yar-ya-da-na, Than-gha-ya-da-na, Ya-da-na-myat-thone-par-to-ko; A-yo-a-thay a-lay-a-myat let-oke-moe-yway, Shi-kho-pu-zaw phoo-myaw-man-lyawt kan-tawt-par-e Ashin-buyar.
+
+Kan-tawt-ya-thaw a-kyo-ar-kyaung; A-pay-lay-par, Kat-thone-par, Yat-pyit-shit-par, Yan-thu-myo-ngar-par, Wi-pat-ti-ta-yar-lay-par, Byat-tha-na-ta-yar-ngar-par-to-ma khat-thaim-thaw a-kha-khat-thaim kin-lut-nyaim-the-phit-yway; Magga-ta-yar, Phola-ta-yar, Nib-ban-ta-yar-taw-myat-ko ya-par-lo-e Ashin-buyar.`,
+      myanmar: `ဩကာသ, ဩကာသ, ဩကာသ, ကာယကံ, ဝစီကံ, မနောကံ သဗ္ဗဒေါသ ခပ်သိမ်းသော အပြစ်တို့ကို ပျောက်ပါစေခြင်းအကျိုးငှါ ပထမ, ဒုတိယ, တတိယ, တစ်ကြိမ်, နှစ်ကြိမ်, သုံးကြိမ် မြောက်အောင် ဘုရားရတနာ, တရားရတနာ, သံဃာရတနာ, ရတနာမြတ်သုံးပါးတို့ကို အရိုအသေ အလေးအမြတ် လက်အုပ်မိုး၍ ရှိခိုးပူဇော် ဖူးမျှော်မာန်လျှော့ ကန်တော့ပါ၏ အရှင်ဘုရား။
+
+ကန်တော့ရသော အကျိုးအားကြောင့် အပါယ်လေးပါး, ကပ်သုံးပါး, ရပ်ပြစ်ရှစ်ပါး, ရန်သူမျိုး(၅)ပါး, ဝိပတ္တိတရား(၄)ပါး, ဗျဿနတရားငါးပါးတို့မှ အခါခပ်သိမ်း ကင်းလွတ်ငြိမ်းသည်ဖြစ်၍ မဂ်တရား, ဖိုလ်တရား, နိဗ္ဗာန်တရားတော်မြတ်ကိုရပါလို၏ အရှင်ဘုရား။`,
+      english: `Permission, Permission, Permission! By way of body, speech, and mind, in order to be cleansed of all faults and mistakes, for the first, second, and third time, I pay most respectful homage to the Three Jewels: the Buddha, the Dhamma, and the Sangha, with joined palms and humble heart.
+
+By virtue of this act of worship, may I be forever free from: the 4 Lower Realms (Apaya), the 3 Scourges (Famine, War, Epidemic), the 8 Wrong Places of Birth, the 5 Enemies (Fire, Water, Evil Rulers, Thieves, Ill-willed Heirs), the 4 Misfortunes (Vipatti), and the 5 Losses (Byassana).
+
+And may I swiftly attain the Noble Path, Fruition, and the Supreme Bliss of Nibbana.`,
+    },
+  },
+  {
+    title: { romanized: 'Requesting the Five Precepts (Thila Taung Yan)', myanmar: 'သရဏဂုံ သီလ တောင်းရန်', english: 'Requesting the Five Precepts' },
+    audioUrl: null,
+    text: {
+      romanized: `A-ham Bhante, Ti-sa-ra-ne-na sa-ha, Pan-ca-si-lam dham-mam ya-ca-mi, A-nu-gga-ham ka-tva, Si-lam de-tha me bhante.
+Du-ti-yam-pi A-ham Bhante... (same as above)
+Ta-ti-yam-pi A-ham Bhante... (same as above)
+Response: Ama Bhante-par Ashin-buyar.`,
+      myanmar: `အဟံ ဘန္တေ တိသရဏေန သဟ ပဉ္စသီလံ ဓမ္မံ ယာစာမိ၊ အနုဂ္ဂဟံ ကတွာ သီလံ ဒေထ မေ ဘန္တေ။
+ဒုတိယမ္ပိ အဟံ ဘန္တေ ---------- မေ ဘန္တေ။
+တတိယမ္ပိ အဟံ ဘန္တေ --------- မေ ဘန္တေ။
+အာမ ဘန္တေပါ အရှင်ဘုရား။`,
+      english: `Venerable Sir, I request the Five Precepts along with the Three Refuges. Out of compassion, please grant me the Precepts. (Repeated for a second and third time)
+Response: "Yes, Venerable Sir."`,
+    },
+  },
+  {
+    title: { romanized: 'Homage to the Buddha', myanmar: 'ဘုရားရှိခိုးခြင်း', english: 'Homage to the Buddha' },
+    audioUrl: null,
+    text: {
+      romanized: `Namo Tassa Bhagavato Arahato Samma Sambuddhassa. (3 times)`,
+      myanmar: `နမော တဿ ဘဂဝတော အရဟတော သမ္မာသမ္ဗုဒ္ဓဿ။ (၃-ကြိမ်)`,
+      english: `Homage to the Blessed One, the Worthy One, the Perfectly Self-Enlightened One. (3 times)`,
+    },
+  },
+  {
+    title: { romanized: 'Taking Refuge (Sarana Gon)', myanmar: 'သရဏဂုံဆောက်တည်ခြင်း', english: 'The Three Refuges (Ti-Sarana)' },
+    audioUrl: null,
+    text: {
+      romanized: `Buddham Saranam Gacchami.
+Dhammam Saranam Gacchami.
+Sangham Saranam Gacchami.
+Du-ti-yam-pi... (repeat for 2nd time)
+Ta-ti-yam-pi... (repeat for 3rd time)
+Response: Ama Bhante-par Ashin-buyar.`,
+      myanmar: `ဗုဒ္ဓံ သရဏံ ဂစ္ဆာမိ။
+ဓမ္မံ သရဏံ ဂစ္ဆာမိ။
+သံဃံ သရဏံ ဂစ္ဆာမိ။
+ဒုတိယမ္ပိ------။
+တတိယမ္ပိ-----။
+အာမ ဘန္တေပါ အရှင်ဘုရား။`,
+      english: `1. Buddham Saranam Gacchami: I go to the Buddha for refuge.
+2. Dhammam Saranam Gacchami: I go to the Dhamma for refuge.
+3. Sangham Saranam Gacchami: I go to the Sangha for refuge. (Repeated for a second and third time)`,
+    },
+  },
+  {
+    title: { romanized: 'The Five Precepts (Ngar Par Thila)', myanmar: 'ငါးပါးသီလ ခံယူခြင်း', english: 'The Five Precepts (Panca-Sila)' },
+    audioUrl: null,
+    text: {
+      romanized: `1. Pa-na-ti-pa-ta Ve-ra-ma-ni sik-kha-pa-dam sa-ma-di-ya-mi.
+2. A-din-na-da-na Ve-ra-ma-ni sik-kha-pa-dam sa-ma-di-ya-mi.
+3. Ka-me-su-mic-cha-ca-ra Ve-ra-ma-ni sik-kha-pa-dam sa-ma-di-ya-mi.
+4. Mu-sa-va-da Ve-ra-ma-ni sik-kha-pa-dam sa-ma-di-ya-mi.
+5. Su-ra-me-ra-ya maj-ja-pa-ma-dat-tha-na Ve-ra-ma-ni sik-kha-pa-dam sa-ma-di-ya-mi.
+
+Response: Ama Bhante-par Ashin-buyar.`,
+      myanmar: `(၁) ပါဏာတိပါတာ ဝေရမဏိသိက္ခာပဒံ သမာဒိယာမိ။
+(၂) အဒိန္နာဒါနာ ဝေရမဏိသိက္ခာပဒံ သမာဒိယာမိ။
+(၃) ကာမေသုမိစ္ဆာစာရာ ဝေရမဏိသိက္ခာပဒံ သမာဒိယာမိ။
+(၄) မုသာဝါဒါ ဝေရမဏိသိက္ခာပဒံ သမာဒိယာမိ။
+(၅) သုရာမေရယ မဇ္ဇပမာဒဋ္ဌာနာ ဝေရမဏိသိက္ခာပဒံ သမာဒိယာမိ။
+အာမ ဘန္တေပါ အရှင်ဘုရား။`,
+      english: `1. I undertake the precept to abstain from killing living beings.
+2. I undertake the precept to abstain from taking what is not given.
+3. I undertake the precept to abstain from sexual misconduct.
+4. I undertake the precept to abstain from false speech.
+5. I undertake the precept to abstain from intoxicants that cause heedlessness.`,
+    },
+  },
+  {
+    title: { romanized: '9 Attributes of the Buddha', myanmar: 'ဘုရားဂုဏ်တော် ၉-ပါး', english: 'The Nine Attributes of the Buddha' },
+    audioUrl: null,
+    text: {
+      romanized: `Itipi so Bhagava:
+1. A-ra-ham
+2. Sam-ma-sam-bud-dho
+3. Vij-ja-ca-ra-na-sam-pan-no
+4. Su-ga-to
+5. Lo-ka-vi-du
+6. A-nut-ta-ro pu-ri-sa-dam-ma-sa-ra-thi
+7. Sat-tha-de-va-ma-nus-sa-nam
+8. Bud-dho
+9. Bha-ga-va`,
+      myanmar: `ဣတိပိ သော ဘဂဝါ –
+(၁) အရဟံ၊ (၂) သမ္မာသမ္ဗုဒ္ဓေါ၊
+(၃) ဝိဇ္ဇာစရဏသမ္ပန္နော၊ (၄) သုဂတော၊
+(၅) လောကဝိဒူ၊ (၆) အနုတ္တရောပုရိသဒမ္မသာရထိ၊
+(၇) သတ္ထာဒေဝမနုဿာနံ၊ (၈) ဗုဒ္ဓေါ၊
+(၉) ဘဂဝါ။`,
+      english: `He is the Blessed One:
+1. Araham: Worthy of veneration; free from defilements.
+2. Samma-Sambuddho: Perfectly Self-Enlightened.
+3. Vijja-Carana-Sampanno: Perfect in knowledge and conduct.
+4. Sugato: Gone to the good state (Nibbana).
+5. Lokavidu: Knower of the worlds.
+6. Anuttaro Purisadamma-Sarathi: Incomparable leader of those to be tamed.
+7. Sattha Deva-Manussanam: Teacher of gods and humans.
+8. Buddho: The Awakened One.
+9. Bhagava: The Blessed One.`,
+    },
+  },
+  {
+    title: { romanized: '6 Attributes of the Dhamma', myanmar: 'တရားဂုဏ်တော် ၆-ပါး', english: 'The Six Attributes of the Dhamma' },
+    audioUrl: null,
+    text: {
+      romanized: `1. Svak-kha-to Bha-ga-va-ta Dham-mo
+2. San-dit-thi-ko
+3. A-ka-li-ko
+4. E-hi-pas-si-ko
+5. O-pa-ney-yi-ko
+6. Pac-cat-tam ve-di-tab-bo vin-nu-hi`,
+      myanmar: `(၁) သွာက္ခာတော ဘဂဝတာ ဓမ္မော၊
+(၂) သန္ဒိဋ္ဌိကော၊
+(၃) အကာလိကော၊
+(၄) ဧဟိ ပဿိကော၊
+(၅) ဩပနေယျိကော၊
+(၆) ပစ္စတ္တံ ဝေဒိတဗ္ဗော ဝိညူဟိ။`,
+      english: `1. Svakkhato: Well-expounded by the Blessed One.
+2. Sanditthiko: To be seen here and now.
+3. Akaliko: Timeless (giving immediate results).
+4. Ehi-Passiko: Inviting one to "come and see."
+5. Opaneyyiko: Worthy of being followed (leading inward).
+6. Paccattam Veditabbo Vinnuhi: To be realized by the wise, each for themselves.`,
+    },
+  },
+  {
+    title: { romanized: '9 Attributes of the Sangha', myanmar: 'သံဃာ့ဂုဏ်တော် ၉-ပါး', english: 'The Nine Attributes of the Sangha' },
+    audioUrl: null,
+    text: {
+      romanized: `1. Sup-pa-ti-pan-no Bha-ga-va-to sa-va-ka-san-gho
+2. U-jup-pa-ti-pan-no Bha-ga-va-to sa-va-ka-san-gho
+3. Nya-yap-pa-ti-pan-no Bha-ga-va-to sa-va-ka-san-gho
+4. Sa-mi-cip-pa-ti-pan-no Bha-ga-va-to sa-va-ka-san-gho (Yad-idam cat-ta-ri pu-ri-sa-yu-ga-ni at-tha pu-ri-sa-pug-ga-la, Esa Bha-ga-va-to sa-va-ka-san-gho)
+5. A-hu-ney-yo
+6. Pa-hu-ney-yo
+7. Dak-khi-ney-yo
+8. An-ja-li-ka-ra-ni-yo
+9. A-nut-ta-ram pun-nak-khet-tam lo-kas-sa.`,
+      myanmar: `(၁) သုပ္ပဋိပန္နော ဘဂဝတော သာဝကသံဃော၊
+(၂) ဥဇုပ္ပဋိပန္နော ဘဂဝတော သာဝကသံဃော၊
+(၃) ဉာယပ္ပဋိပန္နော ဘဂဝတော သာဝကသံဃော၊
+(၄) သာမီစိပ္ပဋိပန္နော ဘဂဝတော သာဝကသံဃော၊
+(ယဒိဒံ စတ္တာရိ ပုရိသယုဂါနိ အဋ္ဌပုရိသပုဂ္ဂလာ၊ ဧသ ဘဂဝတော သာဝကသံဃော-)
+(၅) အာဟုနေယျော၊
+(၆) ပါဟုနေယျော၊
+(၇) ဒက္ခိဏေယျော၊
+(၈) အဉ္ဇလိကရဏီယျော၊
+(၉) အနုတ္တရံ ပုညက္ခေတ္တံ လောကဿ။`,
+      english: `The Disciples of the Blessed One are:
+1. Suppatipanno: Practicing the good way.
+2. Ujuppatipanno: Practicing the straight/upright way.
+3. Nayappatipanno: Practicing the right way (to Nibbana).
+4. Samicippatipanno: Practicing the proper way. They are:
+5. Ahuneyyo: Worthy of gifts brought from afar.
+6. Pahuneyyo: Worthy of hospitality.
+7. Dakkhineyo: Worthy of offerings.
+8. Anjali-Karaniyo: Worthy of respectful salutation.
+9. Anuttaram Punna-Khettam Lokassa: An incomparable field of merit for the world.`,
+    },
+  },
+  {
+    title: { romanized: 'Loving Kindness (Metta)', myanmar: 'မေတ္တာပို့', english: '11 Ways of Radiating Loving-Kindness (Metta)' },
+    audioUrl: null,
+    text: {
+      romanized: `1. Lone sone myar swar, that ta wa, chan thar ko sait myal par say. Up pat yan bay, kin sin way, nyeim aye gya par say.
+2. Kyauk tat - ma kyauk tat, hnit yat myar swar, that ta wa chan thar ko sait myal par say.
+3. Myin at - ma myin at, hnit yat myar swar, that ta wa chan thar ko sait myal par say.
+4. Way nay - nee nay, hnit hway myar swar, that ta wa chan thar ko sait myal par say.
+5. Ba wa zat sone - ma sone myar swar, that ta wa chan thar ko sait myal par say.
+6. Shay - to - a lat, thone yat khan thar that ta wa chan thar ko sait myal par say.
+7. Kyi - ngyal - a lat, thone yat khan thar that ta wa chan thar ko sait myal par say.
+8. Su - kyone - a lat, thone yat khan thar that ta wa chan thar ko sait myal par say.
+9. Lu a chin chin, hlyat pat chin, kin shin gya par say.
+10. A htin thay chin, a chin chin, kin shin gya par say.
+11. Sin yal lo chin, a chin chin, kin shin gya par say.`,
+      myanmar: `၁။ လုံးစုံများစွာ၊ သတ္တဝါ၊ ချမ်းသာကိုယ် စိတ်မြဲပါစေ၊ ဥပါဒ်ရန်ဘေး၊ ကင်းစင်ဝေး၊ ငြိမ်းအေးကြပါစေ။
+၂။ ကြောက်တတ်-မကြောက်တတ်၊ နှစ်ရပ်များစွာ၊ သတ္တဝါ ချမ်းသာကိုယ် စိတ်မြဲပါစေ၊
+၃။ မြင်အပ်-မမြင်အပ်၊ နှစ်ရပ်များစွာ သတ္တဝါ ချမ်းသာကိုယ် စိတ်မြဲပါစေ၊
+၄။ ဝေးနေ-နီးနေ၊ နှစ်ထွေများစွာ သတ္တဝါ ချမ်းသာကိုယ် စိတ်မြဲပါစေ၊
+၅။ ဘဝဇာတ်ဆုံး-မဆုံးများစွာ သတ္တဝါ ချမ်းသာကိုယ် စိတ်မြဲပါစေ၊
+၆။ ရှည်-တို-အလတ်၊ သုံးရပ်ခန္ဓာ သတ္တဝါ ချမ်းသာကိုယ် စိတ်မြဲပါစေ၊
+၇။ ကြီး-ငယ်-အလတ်၊ သုံးရပ်ခန္ဓာ သတ္တဝါ ချမ်းသာကိုယ် စိတ်မြဲပါစေ၊
+၈။ ဆူ-ကြုံ-အလတ်၊ သုံးရပ်ခန္ဓာ သတ္တဝါ ချမ်းသာကိုယ် စိတ်မြဲပါစေ၊
+၉။ လူအချင်းချင်း၊ လှည့်ပတ်ခြင်း၊ ကင်းရှင်းကြပါစေ။
+၁၀။ အထင်သေးခြင်း၊ အချင်းချင်း၊ ကင်းရှင်းကြပါစေ။
+၁၁။ ဆင်းရဲလိုခြင်း၊ အချင်းချင်း၊ ကင်းရှင်းကြပါစေ။`,
+      english: `1. All living beings: May they be mentally happy. May they be free from harm and danger. May they be peaceful and cool.
+2. Beings who are fearful and those who are fearless: May they be mentally happy.
+3. Beings who are seen and those who are unseen: May they be mentally happy.
+4. Beings who live far and those who live near: May they be mentally happy.
+5. Beings who have reached the end of their rebirths and those who have not: May they be mentally happy.
+6. Beings who are long, short, or medium-sized: May they be mentally happy.
+7. Beings who are large, small, or medium-sized: May they be mentally happy.
+8. Beings who are stout, thin, or medium-sized: May they be mentally happy.
+9. May people be free from deceiving one another.
+10. May people be free from despising (looking down on) one another.
+11. May people be free from wishing ill-will or suffering upon one another.`,
+    },
+  },
+  {
+    title: { romanized: 'Share Merit', myanmar: 'အမျှဝေ', english: 'Sharing Merit' },
+    audioUrl: null,
+    text: {
+      romanized: `Ei-tho pyu-ya, myat pu-nyat ko, kyee-hta myint-gaung, myin-mo taung-oo, ma-ka kyoo-thar, kye-zoo a-shin, mway mi-khin hnint, hpa-khin tho-arr, ya-nyar par-say, a-mya wai-ei.
+Ma-thway neit-sa, ei-ka-ya ko, saunt-hta pay-tat, ko-saunt-nat laee, ma-lat say-ya, pay-way nga-ei.
+Meit-ta hsway-nyar, sa-yar tha-mar, bo-bwa ka-sa, ya-ma-ra-zar, day-wa yet-kha, ein-da bo-ma, ar-kar-tha-nat, a-htu hmat-yu, a-myat pu-nyat, ku-tha-la ko, ya-kya par-say, a-mya wai-ei.
+Tha-bay that-tar, that-ta-wa hu, nar-nar law-ka, a-nan-ta twin, ma-pyat sin-kar, that-ta-wa-tha, bone ko-wa hnint, wein-nyar-na-hti-ti, te-shi khu-nhit-par, myar-swar lone-sone, bone thone-se-thit, hpyit-hpyit tha-mya, way-nay-ya-arr, a-mya ku-tho, pay-way lo-ei.
+Hto ku-tha-la, ei pu-nyat ko, a-mya ya-kya-thee, hpyit-say thawt. Wa-thone-da-yay, ei myay pan-thu, the-lar-htu laee, thet-thay a-mu, te-say thawt.`,
+      myanmar: `ဤသို့ပြုရ မြတ်ပုညကို ကြီးထမြင့်ခေါင်၊ မြင်းမိုရ်တောင်ဦး၊ မကကျူးသား၊ ကျေးဇူးအရှင်၊ မွေးမိခင်နှင့်၊ ဖခင်တို့အား၊ ရငြားပါစေ၊ အမျှဝေ၏၊ မသွေနိစ္စ၊ ဤကာယကို၊ စောင့်ထပေတတ်၊ ကိုယ်စောင့်နတ်လည်း၊ မလပ်စေရ၊ ပေးဝေငှ၏၊
+မိတ္တဆွေညာ၊ ဆရာသမား၊ ဘိုးဘွားကစ၊ ယမရာဇာ ဒေဝါယက္ခ၊ ဣန္ဒဘုမ္မာ၊ အာကာသနတ်၊ အထူးမှတ်၍၊ အမြတ်ပုည၊ ကုသလကို၊ ရကြပါစေ၊ အမျှဝေ၏၊ သဗ္ဗေ သတ္တာ၊ သတ္တဝါဟု၊ နာနာလောက၊ အနန္တတွင်၊ မပြတ်စဉ်ကာ၊ သတ္တဝါသ ဘုံကိုးဝနှင့်၊ ဝိညာဏဌိတိ၊ တည်ရှိခုနှစ်ပါး၊ များစွာလုံးစုံ၊ ဘုံးသုံးဆယ့်တစ်၊ ဖြစ်ဖြစ်သမျှ၊ ဝေနေယျအား၊ အမျှကုသိုလ်၊ ပေးဝေလို၏၊ ထိုကုသလ၊ ဤပုညကို အမျှရကြသည်၊ ဖြစ်စေသော်၊ ဝသုန္ဓရေ၊ ဤမြေပံသု၊ သိလာထုလည်း၊ သက်သေအမှု၊ တည်စေသော်။`,
+      english: `By the power of this noble deed, may the merit I have gained be shared with my beloved parents, whose kindness is greater and more sublime than the heights of Mount Meru.
+I also share this merit with my Guardian Spirit (the Nat who protects this body), ensuring they are never overlooked.
+To my friends and relatives, teachers, and grandparents; to Yama (King of the Underworld), the Devas, the Ogres, and the spirits of the Earth and Sky—may you all specifically receive and partake in this noble merit.
+To all sentient beings existing throughout the infinite universes—dwelling in the Nine Abodes of beings, the Seven Stations of consciousness, and across all Thirty-One Planes of existence—I share this merit with every one of you.
+May all beings receive an equal share of this merit. Let the Great Earth and the solid rocks of this world stand as my eternal witness.`,
+    },
+  },
+];
+
 // --- Buddha statue artwork: Myanmar-style seated meditation figure with
 // visible crossed legs, hands resting in dhyana mudra, a flame-tip
 // ushnisha, elongated ears, a soft halo, and a lotus base with petals --
@@ -86,6 +373,33 @@ const BUDDHA_OPTIONS = [
   { id: 'golden', name: 'Golden Buddha', cost: 30, requiresBodhiStage: 0, svg: buddhaSvg('#FFD54F', '#FFA000', '#FF8F00', '#FFF3C4', '#8D5A00') },
   { id: 'jade', name: 'Jade Buddha', cost: 25, requiresBodhiStage: 5, svg: buddhaSvg('#66BB6A', '#2E7D32', '#1B5E20', '#C8E6C9', '#0D3D14') },
 ];
+// Custom-drawn golden ceremonial umbrella (hti) -- the ⛱️ emoji looked like
+// a beach umbrella, not a Buddhist offering, so this replaces it: a domed
+// canopy with a finial and hanging tassels/bells around the rim.
+const umbrellaSvg = (canopyColor, poleColor, accentColor) => `
+  <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <line x1="50" y1="30" x2="50" y2="90" stroke="${poleColor}" stroke-width="3"/>
+    <circle cx="50" cy="18" r="4" fill="${accentColor}"/>
+    <path d="M50,18 L50,30" stroke="${poleColor}" stroke-width="2"/>
+    <path d="M15,38 Q50,10 85,38 Q75,32 50,32 Q25,32 15,38 Z" fill="${canopyColor}" stroke="${accentColor}" stroke-width="1"/>
+    <path d="M15,38 Q50,48 85,38" fill="none" stroke="${accentColor}" stroke-width="1.5"/>
+    <g stroke="${accentColor}" stroke-width="1.5">
+      <line x1="20" y1="40" x2="18" y2="50"/>
+      <line x1="35" y1="44" x2="34" y2="54"/>
+      <line x1="50" y1="45" x2="50" y2="56"/>
+      <line x1="65" y1="44" x2="66" y2="54"/>
+      <line x1="80" y1="40" x2="82" y2="50"/>
+    </g>
+    <g fill="${accentColor}">
+      <circle cx="18" cy="52" r="2"/>
+      <circle cx="34" cy="56" r="2"/>
+      <circle cx="50" cy="58" r="2"/>
+      <circle cx="66" cy="56" r="2"/>
+      <circle cx="82" cy="52" r="2"/>
+    </g>
+  </svg>
+`;
+
 // durationHours: how long the offering stays on the altar before it
 // "runs out" (candle burns down, water/fruit spoil, flowers wilt, an
 // umbrella lasts a full day) and needs to be re-offered -- per the
@@ -97,11 +411,17 @@ const OFFERING_OPTIONS = [
   { id: 'water', name: 'Water Offering', emoji: '🥛', durationHours: 2, cost: 6 },
   { id: 'fruit', name: 'Fruit Offering', emoji: '🍊', durationHours: 3, cost: 8 },
   { id: 'flower', name: 'Lotus Flower', emoji: '🪷', durationHours: 10, cost: 18 },
-  { id: 'umbrella', name: 'Ceremonial Umbrella', emoji: '⛱️', durationHours: 24, cost: 39 },
+  { id: 'umbrella', name: 'Golden Umbrella', svg: umbrellaSvg('#FFD54F', '#5D4037', '#B8860B'), durationHours: 24, cost: 39 },
   { id: 'lamp', name: 'Oil Lamp', emoji: '🪔', cost: 15 },
   { id: 'bell', name: 'Bell', emoji: '🔔', cost: 20 },
   { id: 'canopy', name: 'Golden Canopy', emoji: '🎐', cost: 25, requiresBodhiStage: 9 },
 ];
+// Renders an offering's icon whether it's a plain emoji or custom SVG
+// artwork (only the umbrella uses SVG so far).
+const OfferingIcon = ({ offering, className }) =>
+  offering.svg
+    ? <span className={className} dangerouslySetInnerHTML={{ __html: offering.svg }} />
+    : <span className={className}>{offering.emoji}</span>;
 const ALL_OFFERING_IDS = OFFERING_OPTIONS.map(o => o.id);
 const findOffering = (id) => OFFERING_OPTIONS.find(o => o.id === id);
 const findBuddha = (id) => BUDDHA_OPTIONS.find(o => o.id === id);
@@ -227,6 +547,8 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   const [bodhiStageIndex, setBodhiStageIndex] = useState(isTeacherPreview ? BODHI_MILESTONES.length - 1 : 0);
   const [shopOpen, setShopOpen] = useState(false);
   const [chantingOpen, setChantingOpen] = useState(false);
+  const [chantFormat, setChantFormat] = useState('myanmar'); // 'romanized' | 'myanmar' | 'english'
+  const [chantIndex, setChantIndex] = useState(0);
   // Time-commitment: asked once per visit (not persisted -- a fresh choice
   // every time), before anything else is usable. Reward is paid out only
   // if the student stays until the countdown finishes; leaving early (🏡
@@ -281,8 +603,11 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
           }
           if (data.coinBalance == null) persist({ coinBalance: STARTER_COINS });
         } else {
-          if (isMounted) setCoinBalance(STARTER_COINS);
-          persist({ coinBalance: STARTER_COINS, placedItems: {}, buddhaId: null });
+          const smartStudyCoins = await fetchSmartStudyCoins(studentName);
+          const startingBalance = STARTER_COINS + smartStudyCoins;
+          if (isMounted) setCoinBalance(startingBalance);
+          persist({ coinBalance: startingBalance, placedItems: {}, buddhaId: null });
+          if (smartStudyCoins > 0) showToast(`🪙 Brought in ${smartStudyCoins} coins from Smart Study!`);
         }
       } catch (e) {
         console.error('Error loading Shrine Room data:', e);
@@ -465,20 +790,69 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
         </button>
       </div>
 
-      {/* Chanting -- placeholder full-screen panel; the teacher will supply
-          the actual chant text next. Buddha image/altar stays exactly
+      {/* Chanting -- full-screen panel. Buddha image/altar stays exactly
           where it is underneath (this is an overlay, not a layout change). */}
-      {chantingOpen && (
-        <div className="fixed inset-0 z-[10000] bg-black/50 flex items-center justify-center p-4" onClick={() => setChantingOpen(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[80vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-amber-700">🙏 Chanting</h2>
-              <button onClick={() => setChantingOpen(false)} className="text-gray-400 hover:text-gray-700 text-2xl leading-none">×</button>
+      {chantingOpen && (() => {
+        const chant = CHANT_ITEMS[chantIndex];
+        return (
+          <div className="fixed inset-0 z-[10000] bg-black/50 flex items-center justify-center p-4" onClick={() => setChantingOpen(false)}>
+            <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+              <div className="flex justify-between items-center p-4 border-b">
+                <h2 className="text-xl font-bold text-amber-700">🙏 Chanting</h2>
+                <button onClick={() => setChantingOpen(false)} className="text-gray-400 hover:text-gray-700 text-2xl leading-none">×</button>
+              </div>
+
+              <div className="flex gap-1 px-4 pt-3">
+                {[
+                  { key: 'romanized', label: 'A-Ba-Ka' },
+                  { key: 'myanmar', label: 'မြန်မာ' },
+                  { key: 'english', label: 'English' },
+                ].map(f => (
+                  <button
+                    key={f.key}
+                    onClick={() => setChantFormat(f.key)}
+                    className={`px-3 py-1.5 rounded-full text-sm font-semibold border-2 ${chantFormat === f.key ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-amber-700 border-amber-200 hover:bg-amber-50'}`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-4">
+                <h3 className="text-lg font-bold text-emerald-800 mb-1">{chant.title[chantFormat]}</h3>
+                <p className="text-xs text-gray-400 mb-3">{chantIndex + 1} / {CHANT_ITEMS.length}</p>
+                <button
+                  disabled
+                  title="Audio coming soon"
+                  className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-400 bg-gray-100 px-3 py-1.5 rounded-lg cursor-not-allowed"
+                >
+                  🔊 Play audio (coming soon)
+                </button>
+                <p className={`whitespace-pre-line leading-relaxed text-gray-800 ${chantFormat === 'myanmar' ? 'font-medium' : ''}`}>
+                  {chant.text[chantFormat]}
+                </p>
+              </div>
+
+              <div className="flex justify-between items-center p-4 border-t">
+                <button
+                  onClick={() => setChantIndex(i => Math.max(0, i - 1))}
+                  disabled={chantIndex === 0}
+                  className="px-4 py-2 rounded-lg font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  ← Previous
+                </button>
+                <button
+                  onClick={() => setChantIndex(i => Math.min(CHANT_ITEMS.length - 1, i + 1))}
+                  disabled={chantIndex === CHANT_ITEMS.length - 1}
+                  className="px-4 py-2 rounded-lg font-semibold bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Next →
+                </button>
+              </div>
             </div>
-            <p className="text-gray-500 text-sm">Chant text coming soon.</p>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Asked once, before anything else, for a real student visit --
           coins for the chosen time are paid out once the countdown above
@@ -559,7 +933,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
                         transition-transform`}
                       title={offering ? offering.name : 'Empty slot'}
                     >
-                      {offering && <span>{offering.emoji}</span>}
+                      {offering && <OfferingIcon offering={offering} className="w-8 h-8 flex items-center justify-center text-2xl" />}
                       {offering && (
                         <button
                           onClick={(e) => { e.stopPropagation(); handleRemoveItem(i); }}
@@ -590,7 +964,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
                         className={`w-14 h-14 rounded-lg flex items-center justify-center text-2xl bg-white/60 ${offeringId === 'lamp' && lastLampLitDate === todayKey() ? 'animate-pulse' : ''} ${offeringId === 'bell' ? 'cursor-pointer' : ''}`}
                         title={offering.name}
                       >
-                        {offering.emoji}
+                        <OfferingIcon offering={offering} className="w-8 h-8 flex items-center justify-center text-2xl" />
                       </div>
                     );
                   })}
@@ -658,13 +1032,16 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
                     disabled={locked}
                     className={`w-full flex items-center justify-between p-3 rounded-xl border ${locked ? 'bg-gray-50 border-gray-200 opacity-60' : 'bg-amber-50 border-amber-200 hover:bg-amber-100 cursor-grab'}`}
                   >
-                    <span className="font-semibold text-gray-800">
-                      {option.emoji} {option.name}
-                      {option.durationHours != null && (
-                        <span className="block text-xs font-normal text-gray-500">
-                          lasts {option.durationHours < 24 ? `${option.durationHours}h` : `${option.durationHours / 24}d`}
-                        </span>
-                      )}
+                    <span className="font-semibold text-gray-800 flex items-center gap-2">
+                      <OfferingIcon offering={option} className="w-5 h-5 inline-flex items-center justify-center flex-shrink-0" />
+                      <span>
+                        {option.name}
+                        {option.durationHours != null && (
+                          <span className="block text-xs font-normal text-gray-500">
+                            lasts {option.durationHours < 24 ? `${option.durationHours}h` : `${option.durationHours / 24}d`}
+                          </span>
+                        )}
+                      </span>
                     </span>
                     <span className="text-sm font-bold text-amber-700">{locked ? '🔒 Bodhi Tree' : `🪙 ${option.cost}`}</span>
                   </button>
