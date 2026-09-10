@@ -72,15 +72,22 @@ async function fetchSmartStudyCoins(studentName) {
   }
 }
 
+// Audio files live at this GitHub repo, one per chant, named after the
+// chant's English/Myanmar title (not the internal `title.romanized` key
+// used above, which doesn't match 1:1) -- filenames contain spaces,
+// parentheses, and Myanmar script, so they need percent-encoding to be a
+// valid URL. Only "Offering of Water" was given as a working example; the
+// rest are assumed to follow the same naming pattern in that repo.
+const chantAudioUrl = (filename) => `https://raw.githubusercontent.com/nathantun93/bell/main/${encodeURIComponent(filename)}.mp3`;
+
 // --- Chanting text, from the teacher's Chanting.md, in the 3 formats it
 // was supplied in (Myanmar words spelled with English letters, Myanmar
-// script, and an English meaning-translation). Audio per chant is planned
-// but not supplied yet -- audioUrl stays null until then. Order follows
-// the liturgical order in that file.
+// script, and an English meaning-translation). Order follows the
+// liturgical order in that file.
 const CHANT_ITEMS = [
   {
     title: { romanized: 'Yay-Taw-Kat (Offering of Water)', myanmar: 'ရေတော်ကပ်', english: 'Offering of Water (Yay-Taw-Kat)' },
-    audioUrl: null,
+    audioUrl: chantAudioUrl('Offering of Water'),
     text: {
       romanized: `Araha-tadi nawa-gunay-hi – Ara-ham a-sa-shi-thaw ko-par-thaw gun-taw-to-hnet, Sa-man-na-ga-tam – pyit-sone-taw-mu-thaw, Na-tham – lu-nat-to-e ko-kway-yar-phit-taw-mu-thaw, Buddham – thet-taw-htin-shar sab-ban-nyu-myat-swar-bu-yar-ko, Ud-dis-sa – yi-hmat-yway, Ce-ti-yas-sa – dha-tu-ce-ti, dhamma-ce-ti, ud-dis-sa-ce-ti, pa-ri-bhaw-ga ce-ti-taw-myat-arr, Sud-dha si-ta-la pa-san-nam – thant-shin-ay-mya kyi-lin-hla-thaw, Imam pa-ni-yam pa-ri-bhaw-ja-ni-yam – e-thauk-taw-yay thone-saung-taw-yay-ko, Sak-kac-cam – yo-yo-thay-thay, De-mi – Nib-ban-yi-hman hlu-dan-par-e Ashin-buyar. Pu-ze-mi – Nib-ban-ko-myaw pu-zaw-par-e Ashin-buyar.
 
@@ -97,7 +104,7 @@ Through this meritorious deed, may I attain Nibbana—the cessation of all menta
   },
   {
     title: { romanized: 'Okasa (The Prayer of Worship)', myanmar: 'ဩကာသ ကန်တော့ချိုး', english: 'Okasa (The Prayer of Forgiveness & Veneration)' },
-    audioUrl: null,
+    audioUrl: chantAudioUrl('Okāsa Salutation'),
     text: {
       romanized: `Okasa, Okasa, Okasa, Kaya-kan, Waci-kan, Mano-kan, Sabba-dosa khat-thaim-thaw a-pyit-to-ko pyauk-par-say-chin a-kyo-ngar; Pa-tha-ma, Du-ti-ya, Ta-ti-ya, Tit-kyain, Hnit-kyain, Thone-kyain myauk-aung; Buyar-ya-da-na, Ta-yar-ya-da-na, Than-gha-ya-da-na, Ya-da-na-myat-thone-par-to-ko; A-yo-a-thay a-lay-a-myat let-oke-moe-yway, Shi-kho-pu-zaw phoo-myaw-man-lyawt kan-tawt-par-e Ashin-buyar.
 
@@ -114,7 +121,7 @@ And may I swiftly attain the Noble Path, Fruition, and the Supreme Bliss of Nibb
   },
   {
     title: { romanized: 'Requesting the Five Precepts (Thila Taung Yan)', myanmar: 'သရဏဂုံ သီလ တောင်းရန်', english: 'Requesting the Five Precepts' },
-    audioUrl: null,
+    audioUrl: chantAudioUrl('Requesting the Five Precepts (Thila Taung Yan)'),
     text: {
       romanized: `A-ham Bhante, Ti-sa-ra-ne-na sa-ha, Pan-ca-si-lam dham-mam ya-ca-mi, A-nu-gga-ham ka-tva, Si-lam de-tha me bhante.
 Du-ti-yam-pi A-ham Bhante... (same as above)
@@ -130,7 +137,7 @@ Response: "Yes, Venerable Sir."`,
   },
   {
     title: { romanized: 'Homage to the Buddha', myanmar: 'ဘုရားရှိခိုးခြင်း', english: 'Homage to the Buddha' },
-    audioUrl: null,
+    audioUrl: chantAudioUrl('The Formula of Paying Homage to the Buddha'),
     text: {
       romanized: `Namo Tassa Bhagavato Arahato Samma Sambuddhassa. (3 times)`,
       myanmar: `နမော တဿ ဘဂဝတော အရဟတော သမ္မာသမ္ဗုဒ္ဓဿ။ (၃-ကြိမ်)`,
@@ -139,7 +146,7 @@ Response: "Yes, Venerable Sir."`,
   },
   {
     title: { romanized: 'Taking Refuge (Sarana Gon)', myanmar: 'သရဏဂုံဆောက်တည်ခြင်း', english: 'The Three Refuges (Ti-Sarana)' },
-    audioUrl: null,
+    audioUrl: chantAudioUrl('Three Refuges'),
     text: {
       romanized: `Buddham Saranam Gacchami.
 Dhammam Saranam Gacchami.
@@ -160,7 +167,7 @@ Response: Ama Bhante-par Ashin-buyar.`,
   },
   {
     title: { romanized: 'The Five Precepts (Ngar Par Thila)', myanmar: 'ငါးပါးသီလ ခံယူခြင်း', english: 'The Five Precepts (Panca-Sila)' },
-    audioUrl: null,
+    audioUrl: chantAudioUrl('Five Precepts'),
     text: {
       romanized: `1. Pa-na-ti-pa-ta Ve-ra-ma-ni sik-kha-pa-dam sa-ma-di-ya-mi.
 2. A-din-na-da-na Ve-ra-ma-ni sik-kha-pa-dam sa-ma-di-ya-mi.
@@ -184,7 +191,7 @@ Response: Ama Bhante-par Ashin-buyar.`,
   },
   {
     title: { romanized: '9 Attributes of the Buddha', myanmar: 'ဘုရားဂုဏ်တော် ၉-ပါး', english: 'The Nine Attributes of the Buddha' },
-    audioUrl: null,
+    audioUrl: chantAudioUrl('Buddha Virtues Veneration'),
     text: {
       romanized: `Itipi so Bhagava:
 1. A-ra-ham
@@ -216,7 +223,7 @@ Response: Ama Bhante-par Ashin-buyar.`,
   },
   {
     title: { romanized: '6 Attributes of the Dhamma', myanmar: 'တရားဂုဏ်တော် ၆-ပါး', english: 'The Six Attributes of the Dhamma' },
-    audioUrl: null,
+    audioUrl: chantAudioUrl('Dhamma Virtues Veneration'),
     text: {
       romanized: `1. Svak-kha-to Bha-ga-va-ta Dham-mo
 2. San-dit-thi-ko
@@ -240,7 +247,7 @@ Response: Ama Bhante-par Ashin-buyar.`,
   },
   {
     title: { romanized: '9 Attributes of the Sangha', myanmar: 'သံဃာ့ဂုဏ်တော် ၉-ပါး', english: 'The Nine Attributes of the Sangha' },
-    audioUrl: null,
+    audioUrl: chantAudioUrl('Sangha Virtues Veneration'),
     text: {
       romanized: `1. Sup-pa-ti-pan-no Bha-ga-va-to sa-va-ka-san-gho
 2. U-jup-pa-ti-pan-no Bha-ga-va-to sa-va-ka-san-gho
@@ -275,7 +282,7 @@ Response: Ama Bhante-par Ashin-buyar.`,
   },
   {
     title: { romanized: 'Loving Kindness (Metta)', myanmar: 'မေတ္တာပို့', english: '11 Ways of Radiating Loving-Kindness (Metta)' },
-    audioUrl: null,
+    audioUrl: chantAudioUrl('မေတ္တာပွားနည်း (၁၁)နည်း'),
     text: {
       romanized: `1. Lone sone myar swar, that ta wa, chan thar ko sait myal par say. Up pat yan bay, kin sin way, nyeim aye gya par say.
 2. Kyauk tat - ma kyauk tat, hnit yat myar swar, that ta wa chan thar ko sait myal par say.
@@ -314,7 +321,7 @@ Response: Ama Bhante-par Ashin-buyar.`,
   },
   {
     title: { romanized: 'Share Merit', myanmar: 'အမျှဝေ', english: 'Sharing Merit' },
-    audioUrl: null,
+    audioUrl: chantAudioUrl('အမျှဝေ'),
     text: {
       romanized: `Ei-tho pyu-ya, myat pu-nyat ko, kyee-hta myint-gaung, myin-mo taung-oo, ma-ka kyoo-thar, kye-zoo a-shin, mway mi-khin hnint, hpa-khin tho-arr, ya-nyar par-say, a-mya wai-ei.
 Ma-thway neit-sa, ei-ka-ya ko, saunt-hta pay-tat, ko-saunt-nat laee, ma-lat say-ya, pay-way nga-ei.
@@ -432,12 +439,12 @@ const DAILY_LAMP_REWARD = 5;
 // Small merit bonus paid on top of an offering's cost -- the act of
 // donating is itself rewarded, per the teacher's direction.
 const MERIT_OFFERING_BONUS = 2;
-// Purchasing is frozen while the app is still being built -- per the
-// teacher's direction, browsing the shop still works, but buy/drag-to-buy
-// are disabled with a "coming soon" message instead of actually charging
-// coins. Flip this back to false once the app (and the reward system) is
-// ready for real spending.
-const SHOP_LOCKED = true;
+// Re-opened for real trial use per the teacher's direction: students can
+// spend coins now to help find what still needs adjusting, understanding
+// coin balances will get reset once the app is finalized (not implemented
+// yet -- add a reset step here when that day comes). Flip back to true if
+// spending needs to be paused again before then.
+const SHOP_LOCKED = false;
 
 function playBellSound() {
   try {
@@ -553,8 +560,11 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   const [bodhiStageIndex, setBodhiStageIndex] = useState(isTeacherPreview ? BODHI_MILESTONES.length - 1 : 0);
   const [shopOpen, setShopOpen] = useState(false);
   const [chantingOpen, setChantingOpen] = useState(false);
-  const [chantFormat, setChantFormat] = useState('myanmar'); // 'romanized' | 'myanmar' | 'english'
+  const [chantFormat, setChantFormat] = useState('romanized'); // 'romanized' | 'myanmar' | 'english'
   const [chantIndex, setChantIndex] = useState(0);
+  const [chantAudioPlaying, setChantAudioPlaying] = useState(false);
+  const [chantAudioError, setChantAudioError] = useState(false);
+  const chantAudioRef = useRef(null);
   // Meditation: opt-in via its own button (not a mandatory splash on
   // entry). A student picks a duration (1-60 min, typed in, not just
   // presets), the shrine glows with radiating color while they sit, and
@@ -754,6 +764,22 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     return () => clearInterval(interval);
   }, []);
 
+  const handleToggleChantAudio = () => {
+    const audio = chantAudioRef.current;
+    if (!audio) return;
+    if (chantAudioPlaying) { audio.pause(); return; }
+    audio.currentTime = 0;
+    audio.play().catch(() => setChantAudioError(true));
+  };
+
+  // Stop and reset audio whenever the chant changes (Next/Previous) or the
+  // panel closes, so a track never keeps playing into the wrong chant.
+  useEffect(() => {
+    setChantAudioPlaying(false);
+    setChantAudioError(false);
+    if (chantAudioRef.current) { chantAudioRef.current.pause(); chantAudioRef.current.currentTime = 0; }
+  }, [chantIndex, chantingOpen]);
+
   const handleStartMeditation = () => {
     const minutes = Math.max(1, Math.min(60, parseInt(meditationMinutesInput, 10) || 10));
     setMeditationPickerOpen(false);
@@ -861,65 +887,76 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
         </div>
       )}
 
-      {/* Chanting -- full-screen panel. Buddha image/altar stays exactly
-          where it is underneath (this is an overlay, not a layout change). */}
+      {/* Chanting -- a fixed side panel (same idea as the Merit Shop panel),
+          not a centered popup: on a computer/iPad it used to sit right on
+          top of the Buddha image, which the teacher pointed out is a real
+          problem for anyone chanting while looking at the statue. Anchored
+          right so the altar stays visible on the left; a phone held
+          landscape has enough room for both too. */}
       {chantingOpen && (() => {
         const chant = CHANT_ITEMS[chantIndex];
         return (
-          <div className="fixed inset-0 z-[10000] bg-black/50 flex items-center justify-center p-4" onClick={() => setChantingOpen(false)}>
-            <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
-              <div className="flex justify-between items-center p-4 border-b">
-                <h2 className="text-xl font-bold text-amber-700">🙏 Chanting</h2>
-                <button onClick={() => setChantingOpen(false)} className="text-gray-400 hover:text-gray-700 text-2xl leading-none">×</button>
-              </div>
+          <div className="fixed top-20 right-3 z-[10000] w-72 sm:w-80 max-h-[calc(100vh-6rem)] bg-white rounded-2xl shadow-2xl border-2 border-amber-200 flex flex-col">
+            <div className="flex justify-between items-center p-4 border-b">
+              <h2 className="text-xl font-bold text-amber-700">🙏 Chanting</h2>
+              <button onClick={() => setChantingOpen(false)} className="text-gray-400 hover:text-gray-700 text-2xl leading-none">×</button>
+            </div>
 
-              <div className="flex gap-1 px-4 pt-3">
-                {[
-                  { key: 'romanized', label: 'A-Ba-Ka' },
-                  { key: 'myanmar', label: 'မြန်မာ' },
-                  { key: 'english', label: 'English' },
-                ].map(f => (
-                  <button
-                    key={f.key}
-                    onClick={() => setChantFormat(f.key)}
-                    className={`px-3 py-1.5 rounded-full text-sm font-semibold border-2 ${chantFormat === f.key ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-amber-700 border-amber-200 hover:bg-amber-50'}`}
-                  >
-                    {f.label}
-                  </button>
-                ))}
-              </div>
+            <div className="flex gap-1 px-4 pt-3">
+              {[
+                { key: 'romanized', label: 'Roman' },
+                { key: 'myanmar', label: 'မြန်မာ' },
+                { key: 'english', label: 'English' },
+              ].map(f => (
+                <button
+                  key={f.key}
+                  onClick={() => setChantFormat(f.key)}
+                  className={`px-3 py-1.5 rounded-full text-sm font-semibold border-2 ${chantFormat === f.key ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-amber-700 border-amber-200 hover:bg-amber-50'}`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
 
-              <div className="flex-1 overflow-y-auto p-4">
-                <h3 className="text-lg font-bold text-emerald-800 mb-1">{chant.title[chantFormat]}</h3>
-                <p className="text-xs text-gray-400 mb-3">{chantIndex + 1} / {CHANT_ITEMS.length}</p>
-                <button
-                  disabled
-                  title="Audio coming soon"
-                  className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-400 bg-gray-100 px-3 py-1.5 rounded-lg cursor-not-allowed"
-                >
-                  🔊 Play audio (coming soon)
-                </button>
-                <p className={`whitespace-pre-line leading-relaxed text-gray-800 ${chantFormat === 'myanmar' ? 'font-medium' : ''}`}>
-                  {chant.text[chantFormat]}
-                </p>
-              </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              <h3 className="text-lg font-bold text-emerald-800 mb-1">{chant.title[chantFormat]}</h3>
+              <p className="text-xs text-gray-400 mb-3">{chantIndex + 1} / {CHANT_ITEMS.length}</p>
+              <audio
+                ref={chantAudioRef}
+                src={chant.audioUrl}
+                onEnded={() => setChantAudioPlaying(false)}
+                onPlay={() => setChantAudioPlaying(true)}
+                onPause={() => setChantAudioPlaying(false)}
+                onError={() => setChantAudioError(true)}
+              />
+              <button
+                onClick={handleToggleChantAudio}
+                disabled={chantAudioError}
+                title={chantAudioError ? 'Audio not available yet' : ''}
+                className={`mb-3 flex items-center gap-2 text-sm font-semibold px-3 py-1.5 rounded-lg ${chantAudioError ? 'text-gray-400 bg-gray-100 cursor-not-allowed' : 'text-amber-700 bg-amber-50 hover:bg-amber-100'}`}
+              >
+                {chantAudioError ? '🔇 Audio not available' : chantAudioPlaying ? '⏸ Pause audio' : '🔊 Play audio'}
+              </button>
+              <p className={`whitespace-pre-line leading-relaxed text-gray-800 ${chantFormat === 'myanmar' ? 'font-medium' : ''}`}>
+                {chant.text[chantFormat]}
+              </p>
+            </div>
 
-              <div className="flex justify-between items-center p-4 border-t">
-                <button
-                  onClick={() => setChantIndex(i => Math.max(0, i - 1))}
-                  disabled={chantIndex === 0}
-                  className="px-4 py-2 rounded-lg font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  ← Previous
-                </button>
-                <button
-                  onClick={() => setChantIndex(i => Math.min(CHANT_ITEMS.length - 1, i + 1))}
-                  disabled={chantIndex === CHANT_ITEMS.length - 1}
-                  className="px-4 py-2 rounded-lg font-semibold bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  Next →
-                </button>
-              </div>
+            <div className="flex justify-between items-center p-4 border-t">
+              <button
+                onClick={() => setChantIndex(i => Math.max(0, i - 1))}
+                disabled={chantIndex === 0}
+                className="px-4 py-2 rounded-lg font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                ← Previous
+              </button>
+              <button
+                onClick={() => setChantIndex(i => Math.min(CHANT_ITEMS.length - 1, i + 1))}
+                disabled={chantIndex === CHANT_ITEMS.length - 1}
+                className="px-4 py-2 rounded-lg font-semibold bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Next →
+              </button>
             </div>
           </div>
         );
