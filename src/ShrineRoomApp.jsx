@@ -640,7 +640,13 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
       showToast(`Grow your Bodhi Tree further to unlock this.`);
       return;
     }
-    const emptySlot = Array.from({ length: SLOT_COUNT }).findIndex((_, i) => !placedItems[i]);
+    // A slot counts as empty if it's unset OR holds a stale entry whose
+    // offering id no longer exists (e.g. left over from a since-renamed/
+    // removed offering) -- that stale data renders as an empty-looking
+    // dashed box (see the offering && ... check below) but was still
+    // treated as "occupied" here, silently skipping straight past those
+    // slots to the next real empty one every time.
+    const emptySlot = Array.from({ length: SLOT_COUNT }).findIndex((_, i) => !placedItems[i] || !findOffering(placedItems[i].id));
     if (emptySlot === -1) { showToast('Your altar is full -- remove something first.'); return; }
     if (coinBalance < option.cost) { showToast('Not enough coins.'); return; }
     awardCoins(MERIT_OFFERING_BONUS - option.cost);
@@ -673,7 +679,8 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     if (SHOP_LOCKED) { showToast('🚧 Shopping opens soon -- still being built!'); return; }
     const offeringId = e.dataTransfer.getData('text/plain');
     const option = findOffering(offeringId);
-    if (!option || placedItems[slotIndex]) return;
+    // Same stale-entry handling as handleBuyOffering's emptySlot search.
+    if (!option || (placedItems[slotIndex] && findOffering(placedItems[slotIndex].id))) return;
     if (option.requiresBodhiStage != null && option.requiresBodhiStage > bodhiStageIndex) {
       showToast(`Grow your Bodhi Tree further to unlock this.`);
       return;
@@ -860,7 +867,10 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
       {chantingOpen && (() => {
         const chant = CHANT_ITEMS[chantIndex];
         return (
-          <div className="fixed top-20 right-3 z-[10000] w-72 sm:w-80 max-h-[calc(100vh-6rem)] bg-white rounded-2xl shadow-2xl border-2 border-amber-200 flex flex-col">
+          <div
+            className="fixed top-20 right-3 z-[10000] max-h-[calc(100vh-6rem)] bg-white rounded-2xl shadow-2xl border-2 border-amber-200 flex flex-col resize-x overflow-auto"
+            style={{ width: '20rem', minWidth: '18rem', maxWidth: '90vw' }}
+          >
             <div className="flex justify-between items-center p-4 border-b">
               <h2 className="text-xl font-bold text-amber-700">🙏 Chanting</h2>
               <button onClick={() => setChantingOpen(false)} className="text-gray-400 hover:text-gray-700 text-2xl leading-none">×</button>
@@ -1003,7 +1013,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
                       onDrop={(e) => handleDrop(e, i)}
                       onClick={() => { if (offeringId === 'bell') handleRingBell(); }}
                       className={`w-14 h-14 rounded-lg border-2 flex items-center justify-center text-2xl relative
-                        ${dragOverSlot === i ? 'border-emerald-500 bg-emerald-50 scale-105' : 'border-dashed border-amber-400 bg-white/60'}
+                        ${dragOverSlot === i ? 'border-emerald-500 bg-emerald-50 scale-105' : offering ? 'border-solid border-amber-300 bg-white shadow-sm' : 'border-dashed border-amber-400 bg-white/60'}
                         ${offering?.id === 'lamp' && lastLampLitDate === todayKey() ? 'animate-pulse' : ''}
                         transition-transform`}
                       title={offering ? offering.name : 'Empty slot'}
@@ -1036,7 +1046,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
                       <div
                         key={i}
                         onClick={() => { if (offeringId === 'bell') handleRingBell(); }}
-                        className={`w-14 h-14 rounded-lg flex items-center justify-center text-2xl bg-white/60 ${offeringId === 'lamp' && lastLampLitDate === todayKey() ? 'animate-pulse' : ''} ${offeringId === 'bell' ? 'cursor-pointer' : ''}`}
+                        className={`w-14 h-14 rounded-lg flex items-center justify-center text-2xl bg-white shadow-sm ${offeringId === 'lamp' && lastLampLitDate === todayKey() ? 'animate-pulse' : ''} ${offeringId === 'bell' ? 'cursor-pointer' : ''}`}
                         title={offering.name}
                       >
                         <OfferingIcon offering={offering} className="w-8 h-8 flex items-center justify-center text-2xl" />
@@ -1126,6 +1136,26 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
                   </button>
                 );
               })}
+            </div>
+
+            {/* Quick chants to play alongside the offerings -- same audio
+                files as the full Chanting panel (Worship = "The Formula of
+                Paying Homage to the Buddha", Taking Refuge = "Three
+                Refuges"), just a one-tap play here instead of opening that
+                whole panel. */}
+            <div className="grid grid-cols-2 gap-2 mt-4">
+              <button
+                onClick={() => { new Audio(chantAudioUrl('The Formula of Paying Homage to the Buddha')).play().catch(() => {}); }}
+                className="flex items-center justify-center gap-1 text-sm font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl px-3 py-2"
+              >
+                🙏 Worship
+              </button>
+              <button
+                onClick={() => { new Audio(chantAudioUrl('Three Refuges')).play().catch(() => {}); }}
+                className="flex items-center justify-center gap-1 text-sm font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl px-3 py-2"
+              >
+                🕊️ Taking Refuge
+              </button>
             </div>
         </div>
       )}

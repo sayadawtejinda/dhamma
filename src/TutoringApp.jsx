@@ -6911,7 +6911,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     return () => clearInterval(intervalId);
   }, [activeSession, showFeedbackModal]);
   useEffect(() => {
-    // Keeps nowTick fresh so the 1-hour "Report" (redo) button window
+    // Keeps nowTick fresh so the 5-minute "Report" (redo) button window
     // expires on its own without requiring a manual page refresh.
     const intervalId = setInterval(() => setNowTick(Date.now()), 30 * 1000);
     return () => clearInterval(intervalId);
@@ -7867,15 +7867,9 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       if (Object.keys(studentUpdateData).length > 0) {
         await updateDoc(studentDocRef, studentUpdateData);
       }
-      
-      setPraiseModalInfo({ 
-        isOpen: true, 
-        newTrophy: false, 
-        totalTrophies: studentProfile?.trophyCount || 0, 
-        message: "Session complete!", 
-        emoji: '👍' 
-      });
-      
+      // No "Session complete!" popup here anymore -- the report just saves
+      // silently. The justEarnedTrophy praise modal above still fires on
+      // its own when a trophy is actually earned.
     } catch (error) {
       } finally {
       setShowFeedbackModal(false);
@@ -8343,6 +8337,34 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                       🛕
                     </button>
                   )}
+                  <button
+                    onClick={() => onNavigate && onNavigate('today')}
+                    className="flex items-center justify-center text-2xl bg-violet-50 hover:bg-violet-100 w-11 h-11 rounded-lg transition-colors border border-violet-200 flex-shrink-0"
+                    title="Today's Schedule"
+                  >
+                    🗓️
+                  </button>
+                  <button
+                    onClick={() => onNavigate && onNavigate('weekly')}
+                    className="flex items-center justify-center text-2xl bg-violet-50 hover:bg-violet-100 w-11 h-11 rounded-lg transition-colors border border-violet-200 flex-shrink-0"
+                    title="Weekly Schedule"
+                  >
+                    📅
+                  </button>
+                  <button
+                    onClick={() => onNavigate && onNavigate('attendance')}
+                    className="flex items-center justify-center text-2xl bg-indigo-50 hover:bg-indigo-100 w-11 h-11 rounded-lg transition-colors border border-indigo-200 flex-shrink-0"
+                    title="This Year's Attendance"
+                  >
+                    📊
+                  </button>
+                  <button
+                    onClick={() => onNavigate && onNavigate('trophies')}
+                    className="flex items-center justify-center text-2xl bg-yellow-50 hover:bg-yellow-100 w-11 h-11 rounded-lg transition-colors border border-yellow-200 flex-shrink-0"
+                    title="Trophies Awarded"
+                  >
+                    🏆
+                  </button>
                 </div>
                 {studentProfile?.pendingName && (
                   <div className="mb-2 inline-flex items-center gap-2 bg-yellow-50 border border-yellow-300 rounded-lg px-3 py-1.5">
@@ -8395,27 +8417,6 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
             <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
           </svg>
-        </button>
-      </div>
-
-      {/* Experimental: Today/Weekly/Attendance/Trophies -- previously one
-          small square button in the corner that cycled through all four on
-          repeated taps; now four separate buttons (same style as the
-          reading-room buttons above) at the reading room's bottom edge /
-          into the dining room, since desktop has plenty of room for all
-          four at once. */}
-      <div className="fixed z-30 flex flex-col gap-2" style={{ top: '48%', right: '4%' }}>
-        <button onClick={() => onNavigate && onNavigate('today')} className="bg-white/90 hover:bg-white shadow-lg rounded-xl px-4 py-3 font-bold text-violet-700 border border-violet-300 whitespace-nowrap">
-          🗓️ Today
-        </button>
-        <button onClick={() => onNavigate && onNavigate('weekly')} className="bg-white/90 hover:bg-white shadow-lg rounded-xl px-4 py-3 font-bold text-violet-700 border border-violet-300 whitespace-nowrap">
-          📅 Weekly
-        </button>
-        <button onClick={() => onNavigate && onNavigate('attendance')} className="bg-white/90 hover:bg-white shadow-lg rounded-xl px-4 py-3 font-bold text-indigo-700 border border-indigo-300 whitespace-nowrap">
-          📊 Attendance
-        </button>
-        <button onClick={() => onNavigate && onNavigate('trophies')} className="bg-white/90 hover:bg-white shadow-lg rounded-xl px-4 py-3 font-bold text-yellow-700 border border-yellow-300 whitespace-nowrap">
-          🏆 Trophies
         </button>
       </div>
 
@@ -8538,7 +8539,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                 })[0];
               const canRedoReport = recentCompletedSession
                 && recentCompletedSession.endTime?.toDate
-                && (nowTick - recentCompletedSession.endTime.toDate().getTime()) < 60 * 60 * 1000;
+                && (nowTick - recentCompletedSession.endTime.toDate().getTime()) < 5 * 60 * 1000;
 
               return (
                 <div key={lesson.id} ref={index === 0 ? firstLessonRef : null} className={`${divBg} ${divBorder} border p-4 rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center`}>
@@ -8627,7 +8628,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                     >
                       {buttonText}
                     </button>
-                    {/* Same 1-hour "Report" window for every linked app, including
+                    {/* Same 5-minute "Report" window for every linked app, including
                         SmartStudy — handleOpenRedoReport already re-fetches fresh
                         SmartStudy-specific data when needed, so there's no reason
                         this needed to be a special "always show" case. */}
