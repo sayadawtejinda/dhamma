@@ -1183,10 +1183,20 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
           above) so opening/closing it never shifts or resizes the Shrine
           Room content underneath. Anchored at the very top of the screen,
           under the coin/shop toggle, and scrolls internally if the list is
-          taller than the viewport. */}
+          taller than the viewport. z-[9940] -- above the z-50 button
+          column above it (coin badge + Chanting/Meditation/Shop toggle),
+          which used to render on top of this panel's own top edge and
+          block clicks on whatever shop items fell in that overlap. */}
       {shopOpen && (
-        <div className="fixed top-20 right-3 z-40 w-64 sm:w-72 max-h-[calc(100vh-6rem)] overflow-y-auto bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl border-2 border-amber-200 p-4">
-            <h2 className="text-lg font-bold text-amber-700 mb-1">🛒 Merit Shop</h2>
+        <div className="fixed top-20 right-3 z-[9940] w-64 sm:w-72 max-h-[calc(100vh-6rem)] overflow-y-auto bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl border-2 border-amber-200 p-4">
+            <div className="flex justify-between items-center mb-1">
+              <h2 className="text-lg font-bold text-amber-700">🛒 Merit Shop</h2>
+              {/* Own close button, same as the Chanting panel -- the
+                  outer toggle button (in the fixed top-right column) can
+                  end up rendered underneath this panel once it's open,
+                  so closing shouldn't depend on it staying reachable. */}
+              <button onClick={() => setShopOpen(false)} className="text-gray-400 hover:text-gray-700 text-2xl leading-none">×</button>
+            </div>
             {SHOP_LOCKED ? (
               <p className="text-xs font-semibold text-amber-700 bg-amber-100 border border-amber-300 rounded-lg px-2 py-1.5 mb-3">🚧 Coming soon -- browsing only for now</p>
             ) : (
