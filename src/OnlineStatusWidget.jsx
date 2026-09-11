@@ -100,6 +100,13 @@ export default function OnlineStatusWidget({
   // is stuck/idle -- there's nothing there a teacher would "warn" a
   // student about -- so the inactive badge/label doesn't apply there.
   showInactiveWarning = true,
+  // A second balance shown right next to the first (e.g. Shrine Room shows
+  // its lotus count via `coinBalance` above, plus its actual Merit Shop
+  // coin balance here) -- keeping both in this one always-visible pill
+  // means a student can watch the coin number tick down while shopping,
+  // instead of it living in a separate badge that a shop panel can cover.
+  secondaryBalance,
+  secondaryIcon = '🪙',
 }) {
   const { weeklyRosterList, onlineCount, warningCount: rawWarningCount } = useOnlineRoster(rosterPath, filterDocs, lastSeenField);
   const warningCount = showInactiveWarning ? rawWarningCount : 0;
@@ -129,6 +136,11 @@ export default function OnlineStatusWidget({
               <span>{coinIcon}</span>{coinBalance}
             </span>
           )
+        )}
+        {!isTeacherMode && secondaryBalance != null && (
+          <span className="flex items-center gap-1 text-amber-600 font-bold" title="Coins available to spend">
+            <span>{secondaryIcon}</span>{secondaryBalance}
+          </span>
         )}
         <button onClick={() => setShowPanel(true)} className="flex items-center gap-1 text-emerald-600 font-bold hover:underline">
           <span className="w-2 h-2 bg-emerald-500 rounded-full inline-block"></span>{onlineCount} online

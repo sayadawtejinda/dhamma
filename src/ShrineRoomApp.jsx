@@ -528,6 +528,27 @@ const MERIT_OFFERING_BONUS = 2;
 // spending needs to be paused again before then.
 const SHOP_LOCKED = false;
 
+// Small floating-emoji burst overlaid on a button while it's "active"
+// (a quick chant playing, or a meditation session running) -- purely
+// decorative, uses the same rise-and-fade keyframe as the big altar aura
+// (see the always-on <style> block in the component below), just over a
+// much shorter distance since these sit on small buttons, not the altar.
+function EmojiParticles({ emoji }) {
+  return (
+    <div className="absolute inset-x-0 -top-1 flex justify-center pointer-events-none z-10">
+      {[0, 1, 2].map(i => (
+        <span
+          key={i}
+          className="absolute text-base"
+          style={{ left: `${(i - 1) * 16}px`, animation: `buttonSparkleRise ${1.4 + i * 0.25}s ease-out ${i * 0.3}s infinite` }}
+        >
+          {emoji}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function playBellSound() {
   try {
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -689,6 +710,10 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
         chantAudioRef.current.pause();
         chantAudioRef.current.currentTime = 0;
       }
+      if (quickChantAudioRef.current) {
+        quickChantAudioRef.current.pause();
+        quickChantAudioRef.current.currentTime = 0;
+      }
     };
   }, []);
   // Roster heartbeat -- same pattern as every other app's OnlineStatusWidget
@@ -722,8 +747,22 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   // still deciding what that should be). Leaving early (🏡 Home, or the
   // component unmounting any other way) credits nothing, same as before.
   const [meditationPickerOpen, setMeditationPickerOpen] = useState(false);
-  const [meditationMinutesInput, setMeditationMinutesInput] = useState('10');
+  const [meditationMinutesInput, setMeditationMinutesInput] = useState('5');
   const [meditatingMinutes, setMeditatingMinutes] = useState(null);
+  // Keeps the screen from auto-locking while a meditation countdown is
+  // running, so the student doesn't lose their place mid-sit -- degrades
+  // silently on browsers without the Wake Lock API (e.g. older Safari)
+  // instead of blocking meditation on it.
+  useEffect(() => {
+    if (meditatingMinutes == null) return;
+    let wakeLock = null;
+    (async () => {
+      try {
+        if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
+      } catch (e) { /* not supported, or permission denied -- meditation still works */ }
+    })();
+    return () => { if (wakeLock) wakeLock.release().catch(() => {}); };
+  }, [meditatingMinutes != null]);
   const [meditationRemainingSeconds, setMeditationRemainingSeconds] = useState(0);
   const [totalMeditationMinutes, setTotalMeditationMinutes] = useState(0);
   // Shrine Room's own "online status" activity metric -- other apps show
@@ -733,6 +772,13 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   // here (see the activity-tracking effect below).
   const [lotusCount, setLotusCount] = useState(0);
   const [fullAltarBonusAwarded, setFullAltarBonusAwarded] = useState(false);
+  // Quick chant buttons (🙏 Worship / 🕊️ The Three Refuges) -- toggle
+  // play/pause, only one plays at a time, and listening to one all the way
+  // through awards a lotus, but only once per calendar day per button (so
+  // replaying the same one over and over doesn't farm lotus flowers).
+  const [quickChantPlaying, setQuickChantPlaying] = useState(null); // null | 'worship' | 'refuge'
+  const [quickChantLotusDates, setQuickChantLotusDates] = useState({});
+  const quickChantAudioRef = useRef(null);
   // One lotus flower per minute spent actually chanting (panel open, even
   // just reading along -- not gated on clicking anything) or actively
   // sitting through a meditation countdown. Deliberately NOT a blanket
@@ -812,6 +858,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
             setTotalMeditationMinutes(data.totalMeditationMinutes || 0);
             setLotusCount(data.lotusCount || 0);
             setFullAltarBonusAwarded(!!data.fullAltarBonusAwarded);
+            setQuickChantLotusDates(data.quickChantLotusDates || {});
           }
           if (data.coinBalance == null) persist({ coinBalance: STARTER_COINS });
         } else {
@@ -939,6 +986,38 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     setTimeout(() => setRinging(false), 1200);
   };
 
+  const stopQuickChant = () => {
+    if (quickChantAudioRef.current) {
+      quickChantAudioRef.current.pause();
+      quickChantAudioRef.current.currentTime = 0;
+    }
+    setQuickChantPlaying(null);
+  };
+
+  // Toggle play/pause; clicking the OTHER quick-chant button stops
+  // whichever one is currently playing before starting the new one, so
+  // only one ever plays at a time. Listening all the way to the end (the
+  // audio's own 'ended' event, not just clicking) awards a lotus, capped
+  // at once per calendar day per button so replaying doesn't farm it.
+  const playQuickChant = (key, filename) => {
+    if (quickChantPlaying === key) { stopQuickChant(); return; }
+    stopQuickChant();
+    const audio = new Audio(chantAudioUrl(filename));
+    audio.onended = () => {
+      setQuickChantPlaying(null);
+      const today = todayKey();
+      if (quickChantLotusDates[key] !== today) {
+        setQuickChantLotusDates(prev => ({ ...prev, [key]: today }));
+        setLotusCount(prev => prev + 1);
+        persist({ lotusCount: increment(1), quickChantLotusDates: { [key]: today } });
+        showToast('🪷 +1 lotus flower!');
+      }
+    };
+    quickChantAudioRef.current = audio;
+    audio.play().catch(() => setQuickChantPlaying(null));
+    setQuickChantPlaying(key);
+  };
+
   // Consumable offerings (candle/water/fruit/flower/umbrella) "run out" once
   // their durationHours has passed and quietly leave the altar -- per the
   // teacher's direction that each offering only stays in front of the
@@ -982,7 +1061,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   }, [chantIndex, chantingOpen]);
 
   const handleStartMeditation = () => {
-    const minutes = Math.max(1, Math.min(60, parseInt(meditationMinutesInput, 10) || 10));
+    const minutes = Math.max(1, Math.min(60, parseInt(meditationMinutesInput, 10) || 5));
     setMeditationPickerOpen(false);
     setMeditatingMinutes(minutes);
     setMeditationRemainingSeconds(minutes * 60);
@@ -1012,12 +1091,11 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
 
   return (
     <div className={`min-h-screen flex flex-col items-center px-4 pt-6 pb-16 transition-colors duration-1000 ${dimmed ? 'bg-gradient-to-b from-indigo-200 via-amber-100 to-amber-200' : 'bg-gradient-to-b from-sky-100 via-emerald-50 to-emerald-100'}`}>
-      {meditatingMinutes != null && (
-        <style>{`
-          @keyframes shrineAuraPulse { 0%, 100% { opacity: 0.35; transform: translateX(-50%) scale(1); } 50% { opacity: 0.65; transform: translateX(-50%) scale(1.18); } }
-          @keyframes shrineSparkleRise { 0% { opacity: 0; transform: translateY(0) scale(0.4); } 20% { opacity: 1; } 100% { opacity: 0; transform: translateY(-150px) scale(1); } }
-        `}</style>
-      )}
+      <style>{`
+        @keyframes shrineAuraPulse { 0%, 100% { opacity: 0.35; transform: translateX(-50%) scale(1); } 50% { opacity: 0.65; transform: translateX(-50%) scale(1.18); } }
+        @keyframes shrineSparkleRise { 0% { opacity: 0; transform: translateY(0) scale(0.4); } 20% { opacity: 1; } 100% { opacity: 0; transform: translateY(-150px) scale(1); } }
+        @keyframes buttonSparkleRise { 0% { opacity: 0; transform: translateY(0) scale(0.5); } 25% { opacity: 1; } 100% { opacity: 0; transform: translateY(-32px) scale(1); } }
+      `}</style>
       <button
         onClick={onExit}
         className="fixed top-3 left-3 z-50 w-12 h-12 flex items-center justify-center bg-gray-800 text-white rounded-full shadow-lg text-2xl hover:bg-gray-900"
@@ -1038,6 +1116,8 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
         isTeacherMode={isTeacherPreview}
         coinBalance={isTeacherPreview ? null : lotusCount}
         coinIcon="🪷"
+        secondaryBalance={isTeacherPreview ? null : coinBalance}
+        secondaryIcon="🪙"
         panelTitle="🛕 Students"
         teacherLabel="🧑‍🏫 Teacher"
         showInactiveWarning={false}
@@ -1045,9 +1125,6 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
       />
 
       <div className="fixed top-16 right-3 z-50 flex flex-col items-end gap-2">
-        <div className="flex items-center gap-2 bg-white/90 backdrop-blur-sm px-3 py-2 rounded-full shadow-lg border border-amber-200">
-          <span className="font-bold text-amber-700">🪙 {coinBalance}</span>
-        </div>
         {meditatingMinutes != null && (
           <div className="flex items-center gap-2 bg-indigo-50 px-3 py-1.5 rounded-full shadow border border-indigo-200 text-xs font-semibold text-indigo-700">
             🧘 {String(Math.floor(meditationRemainingSeconds / 60)).padStart(2, '0')}:{String(meditationRemainingSeconds % 60).padStart(2, '0')} left
@@ -1064,14 +1141,16 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
             </button>
           );
           const meditationBtn = (
-            <button
-              key="meditation"
-              onClick={() => setMeditationPickerOpen(true)}
-              disabled={meditatingMinutes != null}
-              className="flex items-center gap-1 bg-white hover:bg-amber-50 text-amber-700 text-sm font-semibold px-3 py-2 rounded-full shadow-lg border-2 border-amber-300 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              🧘 Meditation
-            </button>
+            <div key="meditation" className="relative">
+              <button
+                onClick={() => setMeditationPickerOpen(true)}
+                disabled={meditatingMinutes != null}
+                className="flex items-center gap-1 bg-white hover:bg-amber-50 text-amber-700 text-sm font-semibold px-3 py-2 rounded-full shadow-lg border-2 border-amber-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                🧘 Meditation
+              </button>
+              {meditatingMinutes != null && <EmojiParticles emoji="🧘" />}
+            </div>
           );
           const shopBtn = (
             <button
@@ -1327,18 +1406,24 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
                 offerings (not tucked inside the Merit Shop) -- one tap to
                 play, no need to open anything first. */}
             <div className="flex gap-2 mt-4">
-              <button
-                onClick={() => { new Audio(chantAudioUrl('Worship')).play().catch(() => {}); }}
-                className="flex items-center justify-center gap-1 text-sm font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl px-4 py-2"
-              >
-                🙏 Worship
-              </button>
-              <button
-                onClick={() => { new Audio(chantAudioUrl('Taking Refuge')).play().catch(() => {}); }}
-                className="flex items-center justify-center gap-1 text-sm font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl px-4 py-2"
-              >
-                🕊️ The Three Refuges
-              </button>
+              <div className="relative">
+                <button
+                  onClick={() => playQuickChant('worship', 'Worship')}
+                  className="flex items-center justify-center gap-1 text-sm font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl px-4 py-2"
+                >
+                  🙏 Worship
+                </button>
+                {quickChantPlaying === 'worship' && <EmojiParticles emoji="🙏" />}
+              </div>
+              <div className="relative">
+                <button
+                  onClick={() => playQuickChant('refuge', 'Taking Refuge')}
+                  className="flex items-center justify-center gap-1 text-sm font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl px-4 py-2"
+                >
+                  🕊️ The Three Refuges
+                </button>
+                {quickChantPlaying === 'refuge' && <EmojiParticles emoji="🕊️" />}
+              </div>
             </div>
 
             {hasLampPlaced && (
