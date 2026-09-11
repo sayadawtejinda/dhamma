@@ -14,7 +14,8 @@ import {
   deleteDoc,
   limit,
   runTransaction,
-  writeBatch
+  writeBatch,
+  increment
 } from 'firebase/firestore';
 import { 
     BookOpen, Users, Award, Sparkles, Loader2, RefreshCw, 
@@ -1860,12 +1861,17 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
       const shrineSnap = await getDoc(shrineRef);
       // A student who has never opened Shrine Room yet still gets its usual
       // 20-coin starter balance, on top of whatever they're depositing here.
+      // increment() (not "current balance + depositable") because
+      // coinBalance is also written concurrently from Shrine Room's own
+      // purchases and from Myanmar Poems/Abhidhamma's identical deposit
+      // buttons -- reading the balance and writing back a computed
+      // absolute number is a lost-update race: whichever of those writes
+      // commits last would silently discard the others.
       const SHRINE_STARTER_COINS = 20;
-      const currentShrineBalance = shrineSnap.exists() ? (shrineSnap.data().coinBalance ?? 0) : SHRINE_STARTER_COINS;
       const newTransferredOut = smartStudyCoinsTransferredOut + depositable;
       await setDoc(shrineRef, {
         studentName: userName,
-        coinBalance: currentShrineBalance + depositable,
+        coinBalance: shrineSnap.exists() ? increment(depositable) : SHRINE_STARTER_COINS + depositable,
         smartStudyCoinsTransferred: newTransferredOut,
       }, { merge: true });
       setSmartStudyCoinsTransferredOut(newTransferredOut);

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { collection, query, where, getDocs, doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc, setDoc, updateDoc, serverTimestamp, increment } from 'firebase/firestore';
 import { db } from './firebase';
 import { appId } from './firebaseConfig';
 import OnlineStatusWidget from './OnlineStatusWidget';
@@ -715,11 +715,8 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     const interval = setInterval(() => {
       if (hasActivity) {
         hasActivity = false;
-        setLotusCount(prev => {
-          const next = prev + 1;
-          persist({ lotusCount: next });
-          return next;
-        });
+        setLotusCount(prev => prev + 1);
+        persist({ lotusCount: increment(1) });
       }
     }, 60000);
     return () => {
@@ -808,12 +805,19 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     return () => { isMounted = false; };
   }, [studentUid]);
 
+  // Writes the DELTA via Firestore's atomic increment(), not the computed
+  // absolute balance -- coinBalance is now also written from SmartStudy,
+  // Myanmar Poems, and Abhidhamma's own "deposit into Shrine Room" buttons,
+  // each on their own read-then-write of the same field. Two of those
+  // (from here and from one of those apps) landing close together used to
+  // silently lose whichever one committed first, since each one just
+  // overwrote the field with its own locally-computed number -- reported
+  // as a student's coins "disappearing" with no obvious cause. increment()
+  // is safe regardless of what else is writing to the same field at the
+  // same time.
   const awardCoins = (delta) => {
-    setCoinBalance(prev => {
-      const next = Math.max(0, prev + delta);
-      persist({ coinBalance: next });
-      return next;
-    });
+    setCoinBalance(prev => Math.max(0, prev + delta));
+    if (rosterRef) setDoc(rosterRef, { studentName, coinBalance: increment(delta) }, { merge: true }).catch(() => {});
   };
 
   const handleBuyBuddha = (option) => {

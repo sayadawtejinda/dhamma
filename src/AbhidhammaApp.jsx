@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useLayoutEffect } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, doc, setDoc, updateDoc, arrayUnion, onSnapshot, query, orderBy, serverTimestamp, addDoc, getDoc, where, getDocs, limit, deleteDoc, writeBatch } from 'firebase/firestore';
+import { collection, doc, setDoc, updateDoc, arrayUnion, onSnapshot, query, orderBy, serverTimestamp, addDoc, getDoc, where, getDocs, limit, deleteDoc, writeBatch, increment } from 'firebase/firestore';
 import {
   BookOpen, Edit2, Zap, RotateCw, Upload, Download, CheckCircle, MessageCircle, Send, Heart,
   Trophy, Timer, Pause, ChevronDown, ChevronRight, Gamepad2, X, ExternalLink, Youtube, Music,
@@ -1340,11 +1340,16 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
     const sanitize=k=>(k||'unknown').replace(/[.$#/\[\]]/g,'_');
     const shrineRef=doc(db,'artifacts/shrine-room-app/public/data/roster',sanitize(studentProfile.name));
     try{
+      // increment() (not "current balance + depositable") -- coinBalance
+      // is also written concurrently from Shrine Room's own purchases and
+      // from SmartStudy/Myanmar Poems' identical deposit buttons, so
+      // reading the balance and writing back a computed absolute number
+      // is a lost-update race: whichever write commits last would
+      // silently discard the others.
       const shrineSnap=await getDoc(shrineRef);
       const SHRINE_STARTER_COINS=20;
-      const currentShrineBalance=shrineSnap.exists()?(shrineSnap.data().coinBalance??0):SHRINE_STARTER_COINS;
       const newTransferredOut=abhiCoinsTransferredOut+depositable;
-      await setDoc(shrineRef,{studentName:studentProfile.name,coinBalance:currentShrineBalance+depositable,abhidhammaCoinsTransferred:newTransferredOut},{merge:true});
+      await setDoc(shrineRef,{studentName:studentProfile.name,coinBalance:shrineSnap.exists()?increment(depositable):SHRINE_STARTER_COINS+depositable,abhidhammaCoinsTransferred:newTransferredOut},{merge:true});
       setAbhiCoinsTransferredOut(newTransferredOut);
     }catch(e){console.error('Error depositing coins to Shrine Room:',e);}
   };

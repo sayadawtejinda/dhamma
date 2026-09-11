@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { doc, setDoc, updateDoc, serverTimestamp, getDoc, arrayUnion } from 'firebase/firestore';
+import { doc, setDoc, updateDoc, serverTimestamp, getDoc, arrayUnion, increment } from 'firebase/firestore';
 import { db } from './firebase';
 import OnlineStatusWidget from './OnlineStatusWidget';
 
@@ -277,9 +277,14 @@ export default function MyanmarPoemsApp({ entryRequest, onExit, hideOwnOnlineBad
       const shrineSnap = await getDoc(shrineRef);
       // A student who has never opened Shrine Room yet still gets its usual
       // 20-coin starter balance, on top of whatever they're depositing here.
+      // increment() (not "current balance + depositable") because
+      // coinBalance is also written concurrently from Shrine Room's own
+      // purchases and from SmartStudy/Abhidhamma's identical deposit
+      // buttons -- reading the balance and writing back a computed
+      // absolute number is a lost-update race: whichever of those writes
+      // commits last would silently discard the others.
       const SHRINE_STARTER_COINS = 20;
-      const currentShrineBalance = shrineSnap.exists() ? (shrineSnap.data().coinBalance ?? 0) : SHRINE_STARTER_COINS;
-      await setDoc(shrineRef, { studentName, coinBalance: currentShrineBalance + depositable }, { merge: true });
+      await setDoc(shrineRef, { studentName, coinBalance: shrineSnap.exists() ? increment(depositable) : SHRINE_STARTER_COINS + depositable }, { merge: true });
       await setDoc(myRosterRef, { coinBalance: 0 }, { merge: true });
       coinBalanceRef.current = 0;
       setMyCoinBalance(0);
