@@ -376,7 +376,21 @@ const getEffectiveCompletedUnit = (lesson, studentProfile, sessionsForLesson, ss
   // guess is left out entirely there instead of being allowed to
   // overrule it via max(). Reported as a lesson showing "✅ Completed /
   // 10 of 10" while the student had only actually finished 8.
-  const derivedCompletedUnit = (ssClassId == null && unitCount > 0 && maxAvailable > 0)
+  //
+  // Abhidhamma is excluded for a related but distinct reason: a lesson
+  // assigned as the bare "abhidhamma://" (whole-app, no specific class
+  // picked) lets the student open ANY class inside the app, but the
+  // resulting session is still recorded under the ASSIGNED lesson's own
+  // title/key -- so a trophy earned from a completely different class
+  // (e.g. student opens "BEING GOOD AND BEING KIND" while assigned
+  // "BASIC-ABHIDHAMMA-2") gets this same lessonKey's `previouslyEarned`
+  // bumped, and the proportional guess then falsely claims progress
+  // ("You completed up to Lesson 1 / 34") on a lesson the student never
+  // actually opened. Only directly-tracked signals (an explicit
+  // completedUnits entry, or a real session logged against this exact
+  // lesson) are trusted here.
+  const isAbhi = lesson.link?.startsWith('abhidhamma://');
+  const derivedCompletedUnit = (ssClassId == null && !isAbhi && unitCount > 0 && maxAvailable > 0)
     ? Math.min(unitCount, Math.ceil((previouslyEarned * unitCount) / maxAvailable))
     : 0;
   const effective = Math.max(trackedCompletedUnit, derivedCompletedUnit, highestSessionCompletedUnit, ssCount);
@@ -7116,7 +7130,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       if (onOpenAbhidhamma) {
         onOpenAbhidhamma({
           mode: 'student',
-          lessonId: extractAbhidhammaLessonId(url),
+          classId: extractAbhidhammaLessonId(url),
           studentName: studentProfile?.name,
           ageGroup: studentProfile?.smartStudyAgeLevel || null,
         });
@@ -7295,9 +7309,16 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       const lessonId = extractAbhidhammaLessonId(lesson.link);
       if (onOpenAbhidhamma) {
         const ageGroupMap = { storyteller:'storytellers', explorer:'explorers', adventurer:'adventurers', voyager:'voyagers' };
+        // AbhidhammaApp reads `entryRequest.classId`, not `lessonId` -- this
+        // used to send the wrong key, so the app never knew which class was
+        // actually assigned and let the student open any class at all. That
+        // silently broke the assigned-class star/prompt inside Abhidhamma
+        // AND let progress/trophies from a totally different class (e.g. a
+        // student assigned "BASIC-ABHIDHAMMA-2" opening "BEING GOOD AND
+        // BEING KIND" instead) get reported against this assigned lesson.
         onOpenAbhidhamma({
           mode: 'student',
-          lessonId,
+          classId: lessonId,
           studentName: studentProfile?.name,
           ageGroup: studentProfile?.smartStudyAgeLevel || null,
         });
