@@ -6457,18 +6457,36 @@ function StudentDashboard({ user, studentProfile, studentUid, announcements, onO
   // The house-illustration background needs landscape width to show
   // everything (shrine/reading/play/dining rooms and the buttons over
   // them) without cropping -- on a phone held upright there isn't enough
-  // width, so a rotate prompt blocks the page until the phone is turned
-  // sideways, rather than letting the layout render badly squeezed.
+  // width. Rather than just telling the student to rotate their phone,
+  // the page itself rotates 90deg (same trick mobile games use) so it's
+  // already showing landscape the instant it loads; once the student
+  // actually turns their phone to match, it reads upright and normal.
   const [isPortraitPhone, setIsPortraitPhone] = useState(false);
+  const [viewportSize, setViewportSize] = useState({ w: typeof window !== 'undefined' ? window.innerWidth : 0, h: typeof window !== 'undefined' ? window.innerHeight : 0 });
   useEffect(() => {
     const mq = window.matchMedia('(orientation: portrait) and (max-width: 768px)');
-    const update = () => setIsPortraitPhone(mq.matches);
+    const update = () => {
+      setIsPortraitPhone(mq.matches);
+      setViewportSize({ w: window.innerWidth, h: window.innerHeight });
+    };
     update();
     mq.addEventListener ? mq.addEventListener('change', update) : mq.addListener(update);
+    window.addEventListener('resize', update);
     return () => {
       mq.removeEventListener ? mq.removeEventListener('change', update) : mq.removeListener(update);
+      window.removeEventListener('resize', update);
     };
   }, []);
+  // Rotate -90deg around the top-left corner, then translate down by the
+  // screen's own height to bring the box back from just-off-screen-above
+  // into view -- see ShrineRoomApp.jsx's identical trick for the derivation.
+  const rotateLandscapeStyle = isPortraitPhone ? {
+    position: 'fixed', top: 0, left: 0,
+    width: `${viewportSize.h}px`, height: `${viewportSize.w}px`,
+    transformOrigin: 'top left',
+    transform: `translateY(${viewportSize.h}px) rotate(-90deg)`,
+    overflowY: 'auto', overflowX: 'hidden',
+  } : undefined;
 
   const [feedbackNotes, setFeedbackNotes] = useState('');
   const [score, setScore] = useState('');
@@ -8007,16 +8025,13 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
 
   return (
     <div
-      className="p-6 relative min-h-screen"
-      style={{ backgroundImage: 'url(images/0003.jpg)', backgroundSize: 'cover', backgroundPosition: 'center top', backgroundAttachment: 'fixed' }}
+      className={`p-6 relative ${isPortraitPhone ? '' : 'min-h-screen'}`}
+      style={{
+        backgroundImage: 'url(images/0003.jpg)', backgroundSize: 'cover', backgroundPosition: 'center top',
+        backgroundAttachment: isPortraitPhone ? 'scroll' : 'fixed',
+        ...rotateLandscapeStyle,
+      }}
     >
-      {isPortraitPhone && (
-        <div className="fixed inset-0 z-[9990] bg-indigo-900 flex flex-col items-center justify-center gap-4 p-6 text-center">
-          <div className="text-6xl animate-pulse">🔄</div>
-          <p className="text-white text-xl font-bold">Please rotate your phone sideways</p>
-          <p className="text-indigo-200 text-sm">Turn your phone to landscape to see the full page</p>
-        </div>
-      )}
       {/* Experimental: reading-room buttons over the house illustration --
           rough first-pass placement, to be adjusted together once the
           teacher has seen it live. */}
