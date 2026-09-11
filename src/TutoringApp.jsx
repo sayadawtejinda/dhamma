@@ -133,6 +133,13 @@ const extractAbhidhammaLessonId = (link) => {
   return link.replace('abhidhamma://', '') || null;
 };
 
+// ── Shrine Room app roster (for the Chanting-trophies-to-lotus migration below) ──
+const SHRINE_ROSTER_PATH_LOCAL = 'artifacts/shrine-room-app/public/data/roster';
+// Matches ShrineRoomApp.jsx's own sanitizeShrineKey exactly (including the
+// .trim()) -- any mismatch would write this migration's lotus flowers to a
+// different roster doc than the one Shrine Room actually reads from.
+const sanitizeShrineKeyLocal = (key) => (key || 'unknown').trim().replace(/[.$#/\[\]]/g, '_');
+
 // ── Dhammaschool app (standalone HTML app — opened via window.open, NOT mounted as React component) ──
 const DHAMMASCHOOL_APP_ID = 'dhammaschool-app'; // Firestore appId used inside the HTML app's PATHS.*
 const MYANMAR_SPEAKING_APP_ID = 'myanmar-speaking-app'; // Firestore appId used inside myanmar-speaking-app.jsx
@@ -3962,6 +3969,54 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
     }
   };
 
+  // One-time migration: the old "Chanting" Lesson Bank entry gave trophies
+  // to students who chanted/meditated, before Shrine Room's own lotus
+  // flowers existed. Converts each student's already-earned Chanting
+  // trophies into Shrine Room lotus flowers (30 lotus per trophy) so that
+  // history isn't lost once the Chanting lesson itself gets deleted.
+  // Safe to run more than once: each student's roster doc tracks how many
+  // trophies have already been converted, so a repeat run (e.g. after the
+  // teacher fills in a few more students' trophies later) only tops up the
+  // new amount instead of double-crediting.
+  const [isConvertingChantingLotus, setIsConvertingChantingLotus] = useState(false);
+  const LOTUS_PER_CHANTING_TROPHY = 30;
+  const handleConvertChantingTrophiesToLotus = async () => {
+    const chantingLesson = lessonBank.find(l => l.title.trim().toLowerCase() === 'chanting');
+    if (!chantingLesson) {
+      alert('No Lesson Bank entry titled "Chanting" was found.');
+      return;
+    }
+    if (!window.confirm(`This finds every student with trophies earned from the "Chanting" lesson and adds ${LOTUS_PER_CHANTING_TROPHY} lotus flowers per trophy to their Shrine Room wallet. Safe to run more than once (only tops up trophies not already converted). Continue?`)) {
+      return;
+    }
+    setIsConvertingChantingLotus(true);
+    try {
+      const lessonKey = computeLessonKey(chantingLesson.title, chantingLesson.link);
+      const results = [];
+      for (const student of students) {
+        const trophies = student.earnedTrophies?.[lessonKey] || 0;
+        if (trophies <= 0) continue;
+        const alreadyConverted = student.chantingLotusConverted?.[lessonKey] || 0;
+        const newTrophies = trophies - alreadyConverted;
+        if (newTrophies <= 0) continue;
+        const lotusToAdd = newTrophies * LOTUS_PER_CHANTING_TROPHY;
+        const shrineRef = doc(db, SHRINE_ROSTER_PATH_LOCAL, sanitizeShrineKeyLocal(student.name));
+        await setDoc(shrineRef, { studentName: student.name, lotusCount: increment(lotusToAdd) }, { merge: true });
+        await updateDoc(doc(db, `${publicDataPath}/students`, student.id), {
+          [`chantingLotusConverted.${lessonKey}`]: trophies,
+        });
+        results.push(`${student.name}: +${lotusToAdd} lotus (${newTrophies} new trophy${newTrophies === 1 ? '' : 'ies'})`);
+      }
+      alert(results.length > 0
+        ? `Converted for ${results.length} student(s):\n${results.join('\n')}`
+        : 'No new Chanting trophies to convert -- either none exist yet, or everything found was already converted in an earlier run.');
+    } catch (err) {
+      console.error('Error converting Chanting trophies to lotus:', err);
+      alert(`Conversion failed: ${err.message || err}`);
+    }
+    setIsConvertingChantingLotus(false);
+  };
+
   const completedSessions = sessions
     .filter(s => s.endTime)
     .sort((a, b) => b.startTime.toDate() - a.startTime.toDate());
@@ -5231,6 +5286,20 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                 )
               )}
             </div>
+          </div>
+
+          <div className="mt-8 pt-6 border-t border-violet-200">
+            <h4 className="text-lg font-semibold mb-3 text-gray-700">🪷 Convert Chanting Trophies into Shrine Room Lotus</h4>
+            <p className="text-sm text-gray-600 mb-4">
+              The old "Chanting" Lesson Bank entry gave trophies to students for chanting/meditating, before Shrine Room's own lotus flowers existed. Fill in (or fix) each student's earned trophies for that lesson as usual first -- once everyone who deserves credit has their trophies entered, run this once to convert all of them into Shrine Room lotus flowers at {LOTUS_PER_CHANTING_TROPHY} lotus per trophy. Safe to run more than once; only tops up students whose trophies changed since the last run. Only delete the "Chanting" lesson from the Lesson Bank below once you've confirmed the lotus flowers arrived correctly in Shrine Room.
+            </p>
+            <button
+              onClick={handleConvertChantingTrophiesToLotus}
+              disabled={isConvertingChantingLotus}
+              className="bg-pink-500 text-white px-4 py-2 rounded-lg font-semibold hover:bg-pink-600 disabled:opacity-50"
+            >
+              {isConvertingChantingLotus ? 'Converting...' : `Convert Chanting Trophies → Lotus (×${LOTUS_PER_CHANTING_TROPHY})`}
+            </button>
           </div>
 
           <div className="mt-8 pt-6 border-t border-violet-200">
