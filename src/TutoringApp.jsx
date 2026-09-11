@@ -1100,7 +1100,7 @@ function AttendanceReports({ students, teacherSchedule, sessions }) {
   );
 }
 
-function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenConsonantPractice, onOpenBurmeseGame, onOpenMyanmarSpeaking, onOpenNumberLearning, onOpenVowelsLearning, onOpenAnimalSound, onOpenBurmeseLearningGames, onOpenInteractiveQuiz, onOpenMyanmarPoems, onOpenConsonantEndings, onOpenTimeAndCalendar, onOpenMyanmarSpelling, onOpenMyanmarSoundPractice, onOpenReadingMyanmar, onOpenSpeakingMyanmar, onOpenMyanmarPart1And2, onOpenWatchAndLearn, onOpenBodhiTree, onOpenShrineRoom }) {
+function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenConsonantPractice, onOpenBurmeseGame, onOpenMyanmarSpeaking, onOpenNumberLearning, onOpenVowelsLearning, onOpenAnimalSound, onOpenBurmeseLearningGames, onOpenInteractiveQuiz, onOpenMyanmarPoems, onOpenConsonantEndings, onOpenTimeAndCalendar, onOpenMyanmarSpelling, onOpenMyanmarSoundPractice, onOpenReadingMyanmar, onOpenSpeakingMyanmar, onOpenMyanmarPart1And2, onOpenWatchAndLearn, onOpenBodhiTree, onOpenShrineRoom, onNavigate }) {
   const [students, setStudents] = useState([]);
   const [lessonBank, setLessonBank] = useState([]); 
   const [sessions, setSessions] = useState([]); 
@@ -4269,7 +4269,7 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
       <StudentAttendanceModal isOpen={showAttendanceModal} onClose={closeAttendanceModal} student={selectedStudentForHistory} />
       <EditScheduleModal isOpen={showEditModal} onClose={closeEditModal} onSave={handleUpdateSchedule} entry={editingEntry} students={students.filter(s => s.isActive)} />
       
-      <div className="flex items-center gap-3 mb-6">
+      <div className="flex items-center flex-wrap gap-3 mb-6">
         <h2 className="text-3xl font-bold text-indigo-700">Teacher Dashboard</h2>
         {onOpenBodhiTree && (
           <button
@@ -4289,6 +4289,34 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
             🛕
           </button>
         )}
+        <button
+          onClick={() => onNavigate && onNavigate('today')}
+          className="flex items-center justify-center text-2xl bg-violet-50 hover:bg-violet-100 px-4 py-2 rounded-lg transition-colors border border-violet-200"
+          title="Today's Schedule"
+        >
+          🗓️
+        </button>
+        <button
+          onClick={() => onNavigate && onNavigate('weekly')}
+          className="flex items-center justify-center text-2xl bg-violet-50 hover:bg-violet-100 px-4 py-2 rounded-lg transition-colors border border-violet-200"
+          title="Weekly Schedule"
+        >
+          📅
+        </button>
+        <button
+          onClick={() => onNavigate && onNavigate('attendance')}
+          className="flex items-center justify-center text-2xl bg-indigo-50 hover:bg-indigo-100 px-4 py-2 rounded-lg transition-colors border border-indigo-200"
+          title="This Year's Attendance"
+        >
+          📊
+        </button>
+        <button
+          onClick={() => onNavigate && onNavigate('trophies')}
+          className="flex items-center justify-center text-2xl bg-yellow-50 hover:bg-yellow-100 px-4 py-2 rounded-lg transition-colors border border-yellow-200"
+          title="Trophies Awarded"
+        >
+          🏆
+        </button>
       </div>
 
       <div className="mb-6 border-b border-gray-300">
@@ -8239,7 +8267,20 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           "Awesome News Update" cards with a compact bell + unread dot, so
           trophy announcements for OTHER students don't take up permanent
           space on the dashboard. */}
-      <div className="fixed top-4 right-4 z-[9500]">
+      <div className="fixed top-4 right-4 z-[9500] flex items-center gap-2">
+        {/* My own trophy count, right next to Notifications since both are
+            trophy-related -- the full leaderboard of everyone else's
+            trophies is still one tap away via the 🏆 icon in the row
+            above. Kept small (not the old giant 4xl emoji) since this is
+            just a quick-glance count, not the main focus of the header. */}
+        {studentProfile?.trophyCount > 0 && (
+          <span
+            className="flex items-center gap-1 bg-white border border-gray-200 rounded-full px-2.5 py-1.5 shadow-lg text-sm font-bold text-yellow-600"
+            title={`${studentProfile.trophyCount} Trophies`}
+          >
+            {studentProfile.trophyCount} 🏆
+          </span>
+        )}
         <button
           onClick={() => setShowNotifDropdown(v => !v)}
           className="relative bg-white hover:bg-gray-50 border border-gray-200 rounded-full w-11 h-11 flex items-center justify-center shadow-lg text-xl"
@@ -8313,12 +8354,6 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           <>
             <div className="w-full">
                 <div className="flex items-center flex-wrap gap-3 mb-2">
-                  {studentProfile?.trophyCount > 0 && (
-                      <span className="flex items-end gap-0.5 whitespace-nowrap" title={`${studentProfile.trophyCount} Trophies`}>
-                        <span className="text-4xl drop-shadow-sm">🏆</span>
-                        <span className="text-sm font-bold text-yellow-600 mb-1">{studentProfile.trophyCount}</span>
-                      </span>
-                  )}
                   {onOpenBodhiTree && (
                     <button
                       onClick={() => onOpenBodhiTree({ studentUid, studentName: studentProfile?.name || '' })}
@@ -9805,22 +9840,6 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpen
   const handledStarIdsRef = useRef(new Set());
   const hasShownStarThisSessionRef = useRef(false);
   const [roleCheckDone, setRoleCheckDone] = useState(false);
-  const [navIndex, setNavIndex] = useState(0);
-  // These four used to share one bottom-center button with Login/Register,
-  // cycling through all five on every click -- a student trying to log in
-  // could need up to four clicks just to reach the login option. Now they
-  // live in their own small square (below the 🔔), and Login/Register is
-  // its own always-visible button below.
-  const navItems = [
-    { label: 'Today', target: 'today' },
-    { label: 'Week', target: 'weekly' },
-    { label: 'Year', target: 'attendance' },
-    { label: '🏆', target: 'trophies' }
-  ];
-  const handleNavClick = () => {
-    setView(navItems[navIndex].target);
-    setNavIndex((navIndex + 1) % navItems.length);
-  };
   const handleLoginButtonClick = () => {
     if (role === 'teacher') {
       setView('teacher');
@@ -10202,7 +10221,7 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpen
     switch (view) {
       case 'teacher':
         if (role !== 'teacher') return <TodaySchedule role={role} />; 
-        return <TeacherDashboard user={user} announcements={announcements} onOpenSmartStudy={onOpenSmartStudy} onOpenAbhidhamma={onOpenAbhidhamma} onOpenMyanmarReader={onOpenMyanmarReader} onOpenDhammaschool={onOpenDhammaschool} onOpenConsonantPractice={onOpenConsonantPractice} onOpenBurmeseGame={onOpenBurmeseGame} onOpenMyanmarSpeaking={onOpenMyanmarSpeaking} onOpenNumberLearning={onOpenNumberLearning} onOpenVowelsLearning={onOpenVowelsLearning} onOpenAnimalSound={onOpenAnimalSound} onOpenBurmeseLearningGames={onOpenBurmeseLearningGames} onOpenInteractiveQuiz={onOpenInteractiveQuiz} onOpenMyanmarPoems={onOpenMyanmarPoems} onOpenConsonantEndings={onOpenConsonantEndings} onOpenTimeAndCalendar={onOpenTimeAndCalendar} onOpenMyanmarSpelling={onOpenMyanmarSpelling} onOpenMyanmarSoundPractice={onOpenMyanmarSoundPractice} onOpenReadingMyanmar={onOpenReadingMyanmar} onOpenSpeakingMyanmar={onOpenSpeakingMyanmar} onOpenMyanmarPart1And2={onOpenMyanmarPart1And2} onOpenWatchAndLearn={onOpenWatchAndLearn} onOpenBodhiTree={onOpenBodhiTree} onOpenShrineRoom={onOpenShrineRoom} />;
+        return <TeacherDashboard user={user} announcements={announcements} onOpenSmartStudy={onOpenSmartStudy} onOpenAbhidhamma={onOpenAbhidhamma} onOpenMyanmarReader={onOpenMyanmarReader} onOpenDhammaschool={onOpenDhammaschool} onOpenConsonantPractice={onOpenConsonantPractice} onOpenBurmeseGame={onOpenBurmeseGame} onOpenMyanmarSpeaking={onOpenMyanmarSpeaking} onOpenNumberLearning={onOpenNumberLearning} onOpenVowelsLearning={onOpenVowelsLearning} onOpenAnimalSound={onOpenAnimalSound} onOpenBurmeseLearningGames={onOpenBurmeseLearningGames} onOpenInteractiveQuiz={onOpenInteractiveQuiz} onOpenMyanmarPoems={onOpenMyanmarPoems} onOpenConsonantEndings={onOpenConsonantEndings} onOpenTimeAndCalendar={onOpenTimeAndCalendar} onOpenMyanmarSpelling={onOpenMyanmarSpelling} onOpenMyanmarSoundPractice={onOpenMyanmarSoundPractice} onOpenReadingMyanmar={onOpenReadingMyanmar} onOpenSpeakingMyanmar={onOpenSpeakingMyanmar} onOpenMyanmarPart1And2={onOpenMyanmarPart1And2} onOpenWatchAndLearn={onOpenWatchAndLearn} onOpenBodhiTree={onOpenBodhiTree} onOpenShrineRoom={onOpenShrineRoom} onNavigate={setView} />;
       case 'student':
         if (role !== 'student') return <TodaySchedule role={role} />; 
         if (!studentProfile) {
@@ -10247,24 +10266,6 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpen
 
       {isAuthReady && user && (
         <>
-          {/* Small square, no taller than the 🔔 (StudentDashboard's bell
-              sits at top-4, so this is positioned just below it) -- cycles
-              Today/Week/Year/Trophies one at a time on tap, short labels so
-              it stays compact on phones. Hidden for students now that the
-              student homepage has its own dedicated Today/Weekly/
-              Attendance/Trophies buttons (see StudentDashboard) -- kept for
-              teachers, who have no other way to reach these views. */}
-          {role !== 'student' && (
-            <div className="fixed top-16 right-4 z-[9400]">
-              <button
-                onClick={handleNavClick}
-                title={navItems[navIndex].target === 'today' ? "Today's Schedule" : navItems[navIndex].target === 'weekly' ? 'Weekly Schedule' : navItems[navIndex].target === 'attendance' ? 'This Year Attended' : 'Trophies Awarded'}
-                className="bg-white hover:bg-gray-50 border border-gray-200 rounded-xl w-11 h-11 flex items-center justify-center shadow-lg text-[11px] font-bold text-indigo-700 leading-none"
-              >
-                {navItems[navIndex].label}
-              </button>
-            </div>
-          )}
           {(role === 'teacher' || role === 'student') && view !== role && (
             // Same top-left circular 🏡 spot every other sub-app uses to exit
             // back to this dashboard -- moved here from a separate

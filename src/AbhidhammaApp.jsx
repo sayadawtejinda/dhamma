@@ -1308,6 +1308,31 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
   const [activeQuizId,setActiveQuizId]=useState(null);const [activeQuizData,setActiveQuizData]=useState(null);
   const [openLessonId,setOpenLessonId]=useState(null);const [editingLesson,setEditingLesson]=useState(null);
   const [newTitle,setNewTitle]=useState('');const [newContent,setNewContent]=useState('');const [newImgBase,setNewImgBase]=useState(DEFAULT_IMG_BASE);
+  // Sequential image numbering across the whole class -- scans every
+  // lesson already in this class (plus whatever's typed in the content
+  // box right now) for "NNN.jpg"-style filenames and returns one past the
+  // highest number found, so lesson 2 naturally continues from wherever
+  // lesson 1 left off (001-005 -> 006-010 -> ...) instead of the teacher
+  // having to track/type the next number by hand.
+  const contentTextareaRef=useRef(null);
+  const getNextImageNumber=()=>{
+    const nums=[];
+    lessons.forEach(l=>{for(const m of String(l.burmeseContent||'').matchAll(/(\d+)\.(?:jpg|jpeg|png)/gi))nums.push(parseInt(m[1],10));});
+    for(const m of String(newContent||'').matchAll(/(\d+)\.(?:jpg|jpeg|png)/gi))nums.push(parseInt(m[1],10));
+    return String((nums.length?Math.max(...nums):0)+1).padStart(3,'0');
+  };
+  const insertNextImage=()=>{
+    const token=`${getNextImageNumber()}.jpg`;
+    const ta=contentTextareaRef.current;
+    if(ta && document.activeElement===ta){
+      const start=ta.selectionStart,end=ta.selectionEnd;
+      const next=newContent.slice(0,start)+token+newContent.slice(end);
+      setNewContent(next);
+      requestAnimationFrame(()=>{ta.focus();ta.selectionStart=ta.selectionEnd=start+token.length;});
+    }else{
+      setNewContent(prev=>prev+(prev&&!prev.endsWith('\n')?'\n':'')+token);
+    }
+  };
   const [importClassId,setImportClassId]=useState('');const [newClassId,setNewClassId]=useState('');
   const [classImageBase,setClassImageBase]=useState(DEFAULT_IMG_BASE);
   const [teacherPreviewGroup,setTeacherPreviewGroup]=useState('storytellers'); // teacher preview mode age group // per-class default image URL
@@ -1804,7 +1829,10 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
                 <h3 className="text-xl font-bold text-teal-300 mb-4">{editingLesson?'Edit Lesson':'Add Lesson'} — <span className="text-amber-400">{classId}</span></h3>
                 <form onSubmit={handleSaveLesson} className="space-y-4">
                   <input value={newTitle} onChange={e=>setNewTitle(e.target.value)} placeholder="Lesson Title" className="w-full p-3 bg-gray-900 border border-gray-600 rounded text-white focus:border-teal-500 focus:outline-none" disabled={loading}/>
-                  <textarea value={newContent} onChange={e=>setNewContent(e.target.value)} placeholder="Lesson Content (Burmese)" rows="6" className="w-full p-3 bg-gray-900 border border-gray-600 rounded text-white focus:border-teal-500 focus:outline-none" disabled={loading}/>
+                  <textarea ref={contentTextareaRef} value={newContent} onChange={e=>setNewContent(e.target.value)} placeholder="Lesson Content (Burmese)" rows="6" className="w-full p-3 bg-gray-900 border border-gray-600 rounded text-white focus:border-teal-500 focus:outline-none" disabled={loading}/>
+                  <button type="button" onClick={insertNextImage} disabled={loading} className="text-sm bg-gray-700 hover:bg-gray-600 text-teal-300 px-3 py-2 rounded flex items-center gap-1">
+                    <ImageIcon className="w-4 h-4"/> Insert Next Image ({getNextImageNumber()}.jpg)
+                  </button>
                   <div className="flex gap-2">
                     <button type="submit" disabled={loading} className="flex-1 bg-teal-600 p-3 rounded hover:bg-teal-700 flex justify-center items-center font-bold">{loading?<RotateCw className="animate-spin w-5 h-5 mr-2"/>:<BookOpen className="w-5 h-5 mr-2"/>}{editingLesson?'Update':'Save Lesson'}</button>
                     {editingLesson&&<button type="button" onClick={()=>{setEditingLesson(null);setNewTitle('');setNewContent('');setNewImgBase(DEFAULT_IMG_BASE);}} className="bg-gray-600 p-3 rounded hover:bg-gray-500">Cancel</button>}

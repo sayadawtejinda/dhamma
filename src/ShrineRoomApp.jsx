@@ -534,6 +534,34 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   const [shopOpen, setShopOpen] = useState(false);
   const [chantingOpen, setChantingOpen] = useState(false);
   const [chantFormat, setChantFormat] = useState('romanized'); // 'romanized' | 'myanmar' | 'english'
+  // Custom drag-to-resize instead of the CSS `resize` property: the panel
+  // is anchored via `right` (fixed distance from the screen's right edge)
+  // with no `left`, so native corner resize grows the box by extending its
+  // left edge while its own bottom-right corner (where the browser draws
+  // the resize handle) stays visually pinned in place -- the handle never
+  // tracks the cursor, so dragging it does nothing the user can see. This
+  // handle instead widens the panel by growing towards the left directly,
+  // which is the one direction that actually has room on screen.
+  const [chantPanelWidth, setChantPanelWidth] = useState(320);
+  const chantResizeRef = useRef({ startX: 0, startWidth: 320 });
+  const handleChantResizeStart = (e) => {
+    e.preventDefault();
+    chantResizeRef.current = { startX: e.clientX, startWidth: chantPanelWidth };
+    const prevUserSelect = document.body.style.userSelect;
+    document.body.style.userSelect = 'none';
+    const onMove = (moveEvent) => {
+      const delta = chantResizeRef.current.startX - moveEvent.clientX;
+      const next = Math.min(window.innerWidth * 0.9, Math.max(288, chantResizeRef.current.startWidth + delta));
+      setChantPanelWidth(next);
+    };
+    const onUp = () => {
+      document.body.style.userSelect = prevUserSelect;
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
   const [chantIndex, setChantIndex] = useState(0);
   const [chantAudioPlaying, setChantAudioPlaying] = useState(false);
   const [chantAudioError, setChantAudioError] = useState(false);
@@ -868,9 +896,18 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
         const chant = CHANT_ITEMS[chantIndex];
         return (
           <div
-            className="fixed top-20 right-3 z-[10000] max-h-[calc(100vh-6rem)] bg-white rounded-2xl shadow-2xl border-2 border-amber-200 flex flex-col resize-x overflow-auto"
-            style={{ width: '20rem', minWidth: '18rem', maxWidth: '90vw' }}
+            className="fixed top-20 right-3 z-[10000] max-h-[calc(100vh-6rem)] bg-white rounded-2xl shadow-2xl border-2 border-amber-200 flex flex-col relative"
+            style={{ width: `${chantPanelWidth}px` }}
           >
+            {/* Drag left to widen -- see handleChantResizeStart for why this
+                is a custom handle instead of the CSS resize property. */}
+            <div
+              onMouseDown={handleChantResizeStart}
+              className="absolute -left-1.5 top-0 bottom-0 w-3 cursor-ew-resize flex items-center justify-center group z-10"
+              title="Drag to resize"
+            >
+              <div className="w-1 h-10 rounded-full bg-amber-300 group-hover:bg-amber-500 transition-colors" />
+            </div>
             <div className="flex justify-between items-center p-4 border-b">
               <h2 className="text-xl font-bold text-amber-700">🙏 Chanting</h2>
               <button onClick={() => setChantingOpen(false)} className="text-gray-400 hover:text-gray-700 text-2xl leading-none">×</button>
@@ -1057,6 +1094,24 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
               )
             )}
 
+            {/* Quick chants, always visible right under the altar's
+                offerings (not tucked inside the Merit Shop) -- one tap to
+                play, no need to open anything first. */}
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={() => { new Audio(chantAudioUrl('Worship')).play().catch(() => {}); }}
+                className="flex items-center justify-center gap-1 text-sm font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl px-4 py-2"
+              >
+                🙏 Worship
+              </button>
+              <button
+                onClick={() => { new Audio(chantAudioUrl('Taking Refuge')).play().catch(() => {}); }}
+                className="flex items-center justify-center gap-1 text-sm font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl px-4 py-2"
+              >
+                🕊️ Taking Refuge
+              </button>
+            </div>
+
             {hasLampPlaced && (
               <button
                 onClick={handleLightLamp}
@@ -1136,26 +1191,6 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
                   </button>
                 );
               })}
-            </div>
-
-            {/* Quick chants to play alongside the offerings -- same audio
-                files as the full Chanting panel (Worship = "The Formula of
-                Paying Homage to the Buddha", Taking Refuge = "Three
-                Refuges"), just a one-tap play here instead of opening that
-                whole panel. */}
-            <div className="grid grid-cols-2 gap-2 mt-4">
-              <button
-                onClick={() => { new Audio(chantAudioUrl('The Formula of Paying Homage to the Buddha')).play().catch(() => {}); }}
-                className="flex items-center justify-center gap-1 text-sm font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl px-3 py-2"
-              >
-                🙏 Worship
-              </button>
-              <button
-                onClick={() => { new Audio(chantAudioUrl('Three Refuges')).play().catch(() => {}); }}
-                className="flex items-center justify-center gap-1 text-sm font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl px-3 py-2"
-              >
-                🕊️ Taking Refuge
-              </button>
             </div>
         </div>
       )}
