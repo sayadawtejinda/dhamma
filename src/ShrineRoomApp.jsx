@@ -518,6 +518,12 @@ const findBuddha = (id) => BUDDHA_OPTIONS.find(o => o.id === id);
 const SLOT_COUNT = 6;
 const STARTER_COINS = 20;
 const DAILY_LAMP_REWARD = 5;
+// Per-session caps on the 1-lotus-per-minute chanting/meditation reward --
+// each resets when a new session starts (chant panel reopened, or a new
+// meditation sit begun), so leaving a tab open all day can't rack up
+// lotus flowers indefinitely.
+const CHANT_LOTUS_SESSION_CAP = 15;
+const MEDITATION_LOTUS_SESSION_CAP = 30;
 // Small merit bonus paid on top of an offering's cost -- the act of
 // donating is itself rewarded, per the teacher's direction.
 const MERIT_OFFERING_BONUS = 2;
@@ -663,6 +669,46 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   const [bodhiStageIndex, setBodhiStageIndex] = useState(isTeacherPreview ? BODHI_MILESTONES.length - 1 : 0);
   const [shopOpen, setShopOpen] = useState(false);
   const [chantingOpen, setChantingOpen] = useState(false);
+  // Goes true once 3 minutes pass with no touch/click/key while the chant
+  // panel is open -- a screen left face-up but untouched (e.g. propped up
+  // to read along) isn't worth a wake lock or lotus flowers forever, only
+  // for a few minutes of apparent real use. Any activity clears it again.
+  const [chantingIdle, setChantingIdle] = useState(false);
+  const chantLastActivityRef = useRef(Date.now());
+  useEffect(() => {
+    if (!chantingOpen) { setChantingIdle(false); return; }
+    chantLastActivityRef.current = Date.now();
+    setChantingIdle(false);
+    const markActive = () => {
+      chantLastActivityRef.current = Date.now();
+      setChantingIdle(false);
+    };
+    window.addEventListener('touchstart', markActive);
+    window.addEventListener('mousedown', markActive);
+    window.addEventListener('keydown', markActive);
+    const checkInterval = setInterval(() => {
+      if (Date.now() - chantLastActivityRef.current >= 3 * 60 * 1000) setChantingIdle(true);
+    }, 10000);
+    return () => {
+      window.removeEventListener('touchstart', markActive);
+      window.removeEventListener('mousedown', markActive);
+      window.removeEventListener('keydown', markActive);
+      clearInterval(checkInterval);
+    };
+  }, [chantingOpen]);
+  // Same screen-wake-lock idea as meditation below, but only while chanting
+  // is both open AND not idle -- released the moment 3 minutes pass
+  // untouched, same moment the lotus timer below stops crediting.
+  useEffect(() => {
+    if (!chantingOpen || chantingIdle) return;
+    let wakeLock = null;
+    (async () => {
+      try {
+        if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
+      } catch (e) { /* not supported, or permission denied -- chanting still works */ }
+    })();
+    return () => { if (wakeLock) wakeLock.release().catch(() => {}); };
+  }, [chantingOpen, chantingIdle]);
   const [chantFormat, setChantFormat] = useState('romanized'); // 'romanized' | 'myanmar' | 'english'
   // Custom drag-to-resize instead of the CSS `resize` property: the panel
   // is anchored via `right` (fixed distance from the screen's right edge)
@@ -772,6 +818,8 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   // here (see the activity-tracking effect below).
   const [lotusCount, setLotusCount] = useState(0);
   const [fullAltarBonusAwarded, setFullAltarBonusAwarded] = useState(false);
+  const chantSessionLotusRef = useRef(0);
+  const meditationSessionLotusRef = useRef(0);
   // Quick chant buttons (🙏 Worship / 🕊️ The Three Refuges) -- toggle
   // play/pause, only one plays at a time, and listening to one all the way
   // through awards a lotus, but only once per calendar day per button (so
@@ -780,20 +828,37 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   const [quickChantLotusDates, setQuickChantLotusDates] = useState({});
   const quickChantAudioRef = useRef(null);
   // One lotus flower per minute spent actually chanting (panel open, even
-  // just reading along -- not gated on clicking anything) or actively
+  // just reading along -- not gated on clicking anything, but paused once
+  // 3 minutes pass with no touch, see chantingIdle above) or actively
   // sitting through a meditation countdown. Deliberately NOT a blanket
   // "anywhere in the Shrine Room" timer -- closing the chant panel or
   // finishing/leaving meditation stops it immediately, and leaving to the
-  // Home page unmounts this whole component so it stops regardless.
+  // Home page unmounts this whole component so it stops regardless. Each
+  // capped per session (chantSessionLotusRef resets whenever the chant
+  // panel opens, meditationSessionLotusRef resets whenever a sit begins)
+  // so an all-day-open tab can't rack up lotus flowers forever.
   useEffect(() => {
     if (!studentUid) return;
-    if (!chantingOpen && meditatingMinutes == null) return;
+    if (chantingOpen) chantSessionLotusRef.current = 0;
+  }, [studentUid, chantingOpen]);
+  useEffect(() => {
+    if (!studentUid) return;
+    const chanting = chantingOpen && !chantingIdle;
+    const meditating = meditatingMinutes != null;
+    if (!chanting && !meditating) return;
     const interval = setInterval(() => {
+      if (chanting) {
+        if (chantSessionLotusRef.current >= CHANT_LOTUS_SESSION_CAP) return;
+        chantSessionLotusRef.current += 1;
+      } else {
+        if (meditationSessionLotusRef.current >= MEDITATION_LOTUS_SESSION_CAP) return;
+        meditationSessionLotusRef.current += 1;
+      }
       setLotusCount(prev => prev + 1);
       persist({ lotusCount: increment(1) });
     }, 60000);
     return () => clearInterval(interval);
-  }, [studentUid, chantingOpen, meditatingMinutes != null]);
+  }, [studentUid, chantingOpen, chantingIdle, meditatingMinutes != null]);
   // One-time +10 lotus bonus the moment every altar slot has an offering
   // in it. Fires as soon as this becomes true (even if the altar was
   // already full from before this feature existed) and never again.
@@ -1065,6 +1130,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     setMeditationPickerOpen(false);
     setMeditatingMinutes(minutes);
     setMeditationRemainingSeconds(minutes * 60);
+    meditationSessionLotusRef.current = 0;
   };
 
   // Only reaching 0 naturally adds to the persisted total -- leaving early
