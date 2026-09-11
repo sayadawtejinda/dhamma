@@ -1041,6 +1041,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
         panelTitle="🛕 Students"
         teacherLabel="🧑‍🏫 Teacher"
         showInactiveWarning={false}
+        renderActivity={(s) => <span className="text-amber-600 font-semibold">🪷 {s.lotusCount || 0}</span>}
       />
 
       <div className="fixed top-16 right-3 z-50 flex flex-col items-end gap-2">
@@ -1336,7 +1337,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
                 onClick={() => { new Audio(chantAudioUrl('Taking Refuge')).play().catch(() => {}); }}
                 className="flex items-center justify-center gap-1 text-sm font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl px-4 py-2"
               >
-                🕊️ Taking Refuge
+                🕊️ The Three Refuges
               </button>
             </div>
 
