@@ -716,6 +716,17 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     }, 60000);
     return () => clearInterval(interval);
   }, [studentUid]);
+  // One-time +10 lotus bonus the moment every altar slot has an offering
+  // in it. Fires as soon as this becomes true (even if the altar was
+  // already full from before this feature existed) and never again.
+  useEffect(() => {
+    if (!studentUid || fullAltarBonusAwarded) return;
+    if (Object.keys(placedItems).length < SLOT_COUNT) return;
+    setFullAltarBonusAwarded(true);
+    setLotusCount(prev => prev + 10);
+    persist({ lotusCount: increment(10), fullAltarBonusAwarded: true });
+    showToast('🪷 Full altar bonus! +10 lotus flowers');
+  }, [placedItems, fullAltarBonusAwarded, studentUid]);
   // Meditation: opt-in via its own button (not a mandatory splash on
   // entry). A student picks a duration (1-60 min, typed in, not just
   // presets), the shrine glows with radiating color while they sit, and
@@ -734,6 +745,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   // one lotus per minute the student spends actually clicking around in
   // here (see the activity-tracking effect below).
   const [lotusCount, setLotusCount] = useState(0);
+  const [fullAltarBonusAwarded, setFullAltarBonusAwarded] = useState(false);
   const [dragOverSlot, setDragOverSlot] = useState(null);
   const [ringing, setRinging] = useState(false);
   const [toast, setToast] = useState(null);
@@ -780,6 +792,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
             setLastLampLitDate(data.lastLampLitDate || null);
             setTotalMeditationMinutes(data.totalMeditationMinutes || 0);
             setLotusCount(data.lotusCount || 0);
+            setFullAltarBonusAwarded(!!data.fullAltarBonusAwarded);
           }
           if (data.coinBalance == null) persist({ coinBalance: STARTER_COINS });
         } else {

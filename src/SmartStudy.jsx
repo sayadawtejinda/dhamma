@@ -1845,17 +1845,43 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
     return () => unsub();
   }, [isAuthReady, userName]);
 
+  // Resolves the name Shrine Room/Tutoring actually use for this student,
+  // not necessarily this SmartStudy class's own `userName` -- if this
+  // roster entry is linked to a Tutoring account (see linkedToTutoring/
+  // renameStudentEverywhere elsewhere in this file), that canonical
+  // Tutoring name can differ from userName (e.g. typed differently when
+  // first joining this class). Reading smartStudyCoinsTransferredOut and
+  // depositing both have to resolve to the SAME name, or one ends up
+  // reading a different document than the other writes to -- silently
+  // letting a student re-deposit the same coins over and over, since the
+  // "already transferred" bookkeeping would always read back as 0 from
+  // the wrong (empty) document.
+  const resolveShrineTargetName = useCallback(async () => {
+    try {
+      const myRosterSnap = await getDoc(getRosterDocRef(classId, userName));
+      const linkedUid = myRosterSnap.exists() ? myRosterSnap.data().tutoringStudentUid : null;
+      if (myRosterSnap.exists() && myRosterSnap.data().linkedToTutoring && linkedUid) {
+        const studentDocSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'students', linkedUid));
+        if (studentDocSnap.exists() && studentDocSnap.data().name) return studentDocSnap.data().name;
+      }
+    } catch (e) { /* fall back to userName below */ }
+    return userName;
+  }, [classId, userName]);
+
   // One-way read of how many of this student's coins Shrine Room already
   // pulled in (see smartStudyCoinsTransferredOut above) -- not a listener,
   // since that number only changes once, on a student's first Shrine Room
   // visit.
   useEffect(() => {
-    if (!isAuthReady || !userName) return;
-    const sanitize = (key) => (key || 'unknown').replace(/[.$#/\[\]]/g, '_');
-    getDoc(doc(db, 'artifacts/shrine-room-app/public/data/roster', sanitize(userName)))
-      .then(snap => setSmartStudyCoinsTransferredOut(snap.exists() ? (snap.data().smartStudyCoinsTransferred || 0) : 0))
-      .catch(() => {});
-  }, [isAuthReady, userName]);
+    if (!isAuthReady || !userName || !classId) return;
+    const sanitize = (key) => (key || 'unknown').trim().replace(/[.$#/\[\]]/g, '_');
+    (async () => {
+      const targetName = await resolveShrineTargetName();
+      getDoc(doc(db, 'artifacts/shrine-room-app/public/data/roster', sanitize(targetName)))
+        .then(snap => setSmartStudyCoinsTransferredOut(snap.exists() ? (snap.data().smartStudyCoinsTransferred || 0) : 0))
+        .catch(() => {});
+    })();
+  }, [isAuthReady, userName, classId, resolveShrineTargetName]);
 
   // User-initiated deposit into the Shrine Room wallet, replacing the old
   // silent automatic pull-in: the student clicks their earned coins and
@@ -1867,8 +1893,9 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
     if (depositable <= 0) return;
     const confirmed = window.confirm(`Deposit ${depositable} gold coin(s) into your Shrine Room wallet?`);
     if (!confirmed) return;
-    const sanitize = (key) => (key || 'unknown').replace(/[.$#/\[\]]/g, '_');
-    const shrineRef = doc(db, 'artifacts/shrine-room-app/public/data/roster', sanitize(userName));
+    const sanitize = (key) => (key || 'unknown').trim().replace(/[.$#/\[\]]/g, '_');
+    const targetName = await resolveShrineTargetName();
+    const shrineRef = doc(db, 'artifacts/shrine-room-app/public/data/roster', sanitize(targetName));
     try {
       const shrineSnap = await getDoc(shrineRef);
       // A student who has never opened Shrine Room yet still gets its usual
@@ -1882,7 +1909,7 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
       const SHRINE_STARTER_COINS = 20;
       const newTransferredOut = smartStudyCoinsTransferredOut + depositable;
       await setDoc(shrineRef, {
-        studentName: userName,
+        studentName: targetName,
         coinBalance: shrineSnap.exists() ? increment(depositable) : SHRINE_STARTER_COINS + depositable,
         smartStudyCoinsTransferred: newTransferredOut,
       }, { merge: true });
@@ -1890,8 +1917,11 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
       setModal({ message: `🪙 Deposited ${depositable} coin(s) into your Shrine Room wallet!`, type: 'success', visible: true });
     } catch (e) {
       console.error('Error depositing coins to Shrine Room:', e);
+      // Previously failed silently -- a genuine write failure looked
+      // identical to a successful deposit from the student's side.
+      setModal({ message: `⚠️ Something went wrong depositing your coins. Please try again, or tell your teacher if it keeps happening.`, type: 'error', visible: true });
     }
-  }, [allMyScoresGlobal, userName, smartStudyCoinsTransferredOut]);
+  }, [allMyScoresGlobal, userName, smartStudyCoinsTransferredOut, resolveShrineTargetName]);
 
   useEffect(() => {
     if (!isAuthReady || !classId) return;

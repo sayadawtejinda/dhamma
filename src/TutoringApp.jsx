@@ -361,14 +361,24 @@ const getEffectiveCompletedUnit = (lesson, studentProfile, sessionsForLesson, ss
   const unitCount = lesson.unitCount || 0;
   const previouslyEarned = studentProfile?.earnedTrophies?.[lessonKey] || 0;
   const trackedCompletedUnit = studentProfile?.completedUnits?.[lessonKey] || 0;
-  const derivedCompletedUnit = (unitCount > 0 && maxAvailable > 0)
-    ? Math.min(unitCount, Math.ceil((previouslyEarned * unitCount) / maxAvailable))
-    : 0;
   const highestSessionCompletedUnit = (sessionsForLesson || []).reduce(
     (max, s) => (typeof s.completedUnit === 'number' ? Math.max(max, s.completedUnit) : max), 0
   );
   const ssClassId = lesson.link?.startsWith('smartstudy://') ? extractSmartStudyClassId(lesson.link) : null;
   const ssCount = ssClassId != null ? (ssCompletionCounts?.[ssClassId] || 0) : 0;
+  // The trophy-derived estimate assumes trophies awarded so far are
+  // proportional to lessons actually done -- an assumption that breaks
+  // the moment a teacher grants trophies for any other reason (a bonus,
+  // "Fix Previously Earned" used loosely, etc.), inflating this guess up
+  // to full completion even though real progress is lower. For Smart
+  // Study lessons, ssCount is a live, directly-measured completion count
+  // -- strictly more trustworthy than a proportional guess -- so the
+  // guess is left out entirely there instead of being allowed to
+  // overrule it via max(). Reported as a lesson showing "✅ Completed /
+  // 10 of 10" while the student had only actually finished 8.
+  const derivedCompletedUnit = (ssClassId == null && unitCount > 0 && maxAvailable > 0)
+    ? Math.min(unitCount, Math.ceil((previouslyEarned * unitCount) / maxAvailable))
+    : 0;
   const effective = Math.max(trackedCompletedUnit, derivedCompletedUnit, highestSessionCompletedUnit, ssCount);
   return unitCount > 0 ? Math.min(unitCount, effective) : effective;
 };
