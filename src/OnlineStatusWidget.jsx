@@ -96,8 +96,13 @@ export default function OnlineStatusWidget({
   filterDocs,
   hidden,
   lastSeenField = 'lastSeen',
+  // Some apps (e.g. Shrine Room) aren't used to monitor whether a student
+  // is stuck/idle -- there's nothing there a teacher would "warn" a
+  // student about -- so the inactive badge/label doesn't apply there.
+  showInactiveWarning = true,
 }) {
-  const { weeklyRosterList, onlineCount, warningCount } = useOnlineRoster(rosterPath, filterDocs, lastSeenField);
+  const { weeklyRosterList, onlineCount, warningCount: rawWarningCount } = useOnlineRoster(rosterPath, filterDocs, lastSeenField);
+  const warningCount = showInactiveWarning ? rawWarningCount : 0;
   const [showPanel, setShowPanel] = useState(false);
 
   if (hidden || (!isTeacherMode && !studentName)) return null;
@@ -141,14 +146,16 @@ export default function OnlineStatusWidget({
             </div>
             <p className="text-xs text-gray-400 mb-3">Showing everyone active in the last 7 days.</p>
             <div className="space-y-2">
-              {weeklyRosterList.map(s => (
-                <div key={s.id} className={`flex items-center justify-between p-3 rounded-xl border ${s._isWarning ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-100'}`}>
+              {weeklyRosterList.map(s => {
+                const isWarning = showInactiveWarning && s._isWarning;
+                return (
+                <div key={s.id} className={`flex items-center justify-between p-3 rounded-xl border ${isWarning ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-100'}`}>
                   <div className="flex items-center gap-2">
-                    <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${s._isOnlineNow ? 'bg-emerald-500' : s._isWarning ? 'bg-red-500' : 'bg-gray-300'}`}></span>
+                    <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${s._isOnlineNow ? 'bg-emerald-500' : isWarning ? 'bg-red-500' : 'bg-gray-300'}`}></span>
                     <span className="font-bold text-gray-800">{s.studentName || s.name}</span>
                   </div>
                   <div className="text-right text-sm">
-                    {s._isWarning ? (
+                    {isWarning ? (
                       <span className="text-red-600 font-bold text-xs">Inactive (please warn student)</span>
                     ) : renderActivity ? (
                       renderActivity(s)
@@ -157,7 +164,8 @@ export default function OnlineStatusWidget({
                     )}
                   </div>
                 </div>
-              ))}
+                );
+              })}
               {weeklyRosterList.length === 0 && <p className="text-center text-gray-400 py-6">No students active this week yet.</p>}
             </div>
           </div>

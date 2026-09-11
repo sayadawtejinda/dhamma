@@ -27,7 +27,7 @@ import OnlineStatusWidget from './OnlineStatusWidget';
 // app stays mounted simultaneously (just hidden via CSS) per App.jsx's design.
 
 const MPOEMS_ROSTER_PATH = 'artifacts/myanmar-poems-app/public/data/roster';
-const sanitizeMpoemsKey = (key) => (key || 'unknown').replace(/[.$#/\[\]]/g, '_');
+const sanitizeMpoemsKey = (key) => (key || 'unknown').trim().replace(/[.$#/\[\]]/g, '_');
 
 const MPOEMS_APP_CSS = `
         /* Custom styles for Burmese font and responsive layout */

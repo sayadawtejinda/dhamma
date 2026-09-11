@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { collection, query, where, getDocs, doc, getDoc, setDoc, updateDoc, serverTimestamp, increment } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc, getDocFromServer, setDoc, updateDoc, serverTimestamp, increment } from 'firebase/firestore';
 import { db } from './firebase';
 import { appId } from './firebaseConfig';
 import OnlineStatusWidget from './OnlineStatusWidget';
@@ -13,7 +13,11 @@ import OnlineStatusWidget from './OnlineStatusWidget';
 
 const publicDataPath = `/artifacts/${appId}/public/data`;
 const SHRINE_ROSTER_PATH = 'artifacts/shrine-room-app/public/data/roster';
-const sanitizeShrineKey = (key) => (key || 'unknown').replace(/[.$#/\[\]]/g, '_');
+// .trim() matters here -- SmartStudy's deposit-into-Shrine-Room code
+// (SmartStudy.jsx) sanitizes the same way, and any mismatch (e.g. a name
+// with stray leading/trailing whitespace) would make a deposit land on a
+// different roster doc than the one this app reads from, silently.
+const sanitizeShrineKey = (key) => (key || 'unknown').trim().replace(/[.$#/\[\]]/g, '_');
 
 const getAttendanceStatus = (entry, sessions) => {
   if (entry.overrideStatus === 'attended') return 'attended';
@@ -689,8 +693,15 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   }, []);
   // Roster heartbeat -- same pattern as every other app's OnlineStatusWidget
   // (e.g. MyanmarPoemsApp), only pings when opened for a real student.
+  // Deliberately waits for `loading` to clear before its first ping: firing
+  // a merge write to this roster doc at the exact same moment the roster-load
+  // effect below is reading it (both start on mount) can race the Firestore
+  // SDK's local-cache overlay for a pending write, occasionally handing that
+  // read back an incomplete document (missing fields like lotusCount/
+  // coinBalance that were saved just fine) -- sequencing them removes the
+  // race instead of fighting SDK internals.
   useEffect(() => {
-    if (!studentUid || !studentName) return;
+    if (!studentUid || !studentName || loading) return;
     const heartbeatRef = doc(db, SHRINE_ROSTER_PATH, sanitizeShrineKey(studentName));
     const ping = () => setDoc(heartbeatRef, { studentName, isOnline: true, lastSeen: serverTimestamp() }, { merge: true }).catch(() => {});
     ping();
@@ -702,7 +713,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
       window.removeEventListener('beforeunload', goOffline);
       goOffline();
     };
-  }, [studentUid, studentName]);
+  }, [studentUid, studentName, loading]);
   // Meditation: opt-in via its own button (not a mandatory splash on
   // entry). A student picks a duration (1-60 min, typed in, not just
   // presets), the shrine glows with radiating color while they sit, and
@@ -769,8 +780,14 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     let isMounted = true;
     (async () => {
       try {
+        // getDocFromServer, not the plain getDoc -- see the heartbeat
+        // effect above for why (the two used to race on mount). No
+        // fallback to the plain getDoc on failure: that fallback is
+        // exactly the cache-prone read this is avoiding, so on a genuine
+        // failure (e.g. actually offline) this falls through to the catch
+        // block below instead of silently risking the same bug.
         const [rosterSnap, scheduleSnap, sessionsSnap] = await Promise.all([
-          rosterRef ? getDoc(rosterRef) : Promise.resolve(null),
+          rosterRef ? getDocFromServer(rosterRef) : Promise.resolve(null),
           getDocs(query(collection(db, `${publicDataPath}/teacherSchedule`), where('studentUid', '==', studentUid))),
           getDocs(query(collection(db, `${publicDataPath}/studySessions`), where('studentUid', '==', studentUid))),
         ]);
@@ -1023,6 +1040,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
         coinIcon="🪷"
         panelTitle="🛕 Students"
         teacherLabel="🧑‍🏫 Teacher"
+        showInactiveWarning={false}
       />
 
       <div className="fixed top-16 right-3 z-50 flex flex-col items-end gap-2">

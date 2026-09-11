@@ -1327,7 +1327,7 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
   },[role,studentProfile?.name]);
   useEffect(()=>{
     if(role!=='Student'||!studentProfile?.name)return;
-    const sanitize=k=>(k||'unknown').replace(/[.$#/\[\]]/g,'_');
+    const sanitize=k=>(k||'unknown').trim().replace(/[.$#/\[\]]/g,'_');
     getDoc(doc(db,'artifacts/shrine-room-app/public/data/roster',sanitize(studentProfile.name)))
       .then(snap=>setAbhiCoinsTransferredOut(snap.exists()?(snap.data().abhidhammaCoinsTransferred||0):0))
       .catch(()=>{});
@@ -1337,7 +1337,7 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
     if(depositable<=0)return;
     const confirmed=window.confirm(`Deposit ${depositable} gold coin(s) into your Shrine Room wallet?`);
     if(!confirmed)return;
-    const sanitize=k=>(k||'unknown').replace(/[.$#/\[\]]/g,'_');
+    const sanitize=k=>(k||'unknown').trim().replace(/[.$#/\[\]]/g,'_');
     const shrineRef=doc(db,'artifacts/shrine-room-app/public/data/roster',sanitize(studentProfile.name));
     try{
       // increment() (not "current balance + depositable") -- coinBalance
