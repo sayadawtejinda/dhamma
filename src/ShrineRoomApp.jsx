@@ -703,26 +703,18 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
       goOffline();
     };
   }, [studentUid, studentName]);
-  // One lotus flower per minute of actual activity (any click anywhere in
-  // the app) -- ticks every 60s, only awarding a lotus if at least one
-  // click happened during that minute, so it reflects genuine engagement
-  // rather than just having the tab open.
+  // One lotus flower per minute spent in the Shrine Room -- purely time-based,
+  // not gated on clicking anything: a student listening to a chant or
+  // sitting through a meditation session isn't going to keep tapping the
+  // screen, so requiring a click every minute (the original design) would
+  // have shortchanged exactly the activities this is meant to reward.
   useEffect(() => {
     if (!studentUid) return;
-    let hasActivity = false;
-    const markActivity = () => { hasActivity = true; };
-    window.addEventListener('click', markActivity);
     const interval = setInterval(() => {
-      if (hasActivity) {
-        hasActivity = false;
-        setLotusCount(prev => prev + 1);
-        persist({ lotusCount: increment(1) });
-      }
+      setLotusCount(prev => prev + 1);
+      persist({ lotusCount: increment(1) });
     }, 60000);
-    return () => {
-      window.removeEventListener('click', markActivity);
-      clearInterval(interval);
-    };
+    return () => clearInterval(interval);
   }, [studentUid]);
   // Meditation: opt-in via its own button (not a mandatory splash on
   // entry). A student picks a duration (1-60 min, typed in, not just

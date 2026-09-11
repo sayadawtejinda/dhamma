@@ -1486,7 +1486,7 @@ const HomeView = React.memo(({ handleSetView }) => (
   </div>
 ));
 
-const TeacherLoginView = React.memo(({ targetClassId, setTargetClassId, handleTeacherLogin, handleSetView, allTeacherClasses, isLoading, onRenameClass, onDeleteClass, currentUserId, onReclaimAll }) => {
+const TeacherLoginView = React.memo(({ targetClassId, setTargetClassId, handleTeacherLogin, handleSetView, allTeacherClasses, isLoading, onRenameClass, onDeleteClass, currentUserId, onReclaimAll, onRestoreShrineWallets }) => {
   const [renaming, setRenaming] = React.useState(null); // classId being renamed
   const [newDisplayName, setNewDisplayName] = React.useState('');
   const mismatchedCount = allTeacherClasses.filter(c => c.teacherId && c.teacherId !== currentUserId).length;
@@ -1507,6 +1507,18 @@ const TeacherLoginView = React.memo(({ targetClassId, setTargetClassId, handleTe
           </button>
         </div>
       )}
+      {/* One-off repair for the coin-loss race condition -- see
+          handleRestoreShrineWallets. Always visible here (not gated on
+          anything), since it's a global check across every student, not
+          tied to a specific class. */}
+      <div className="p-3 bg-purple-50 border-2 border-purple-200 rounded-xl">
+        <p className="text-sm text-purple-800 font-semibold mb-2">
+          🪷 Restores any student's Shrine Room wallet that came up short of what SmartStudy already deposited into it.
+        </p>
+        <button onClick={onRestoreShrineWallets} disabled={isLoading} className="w-full bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 rounded-lg disabled:opacity-50">
+          🪷 Restore Shrine Room Wallets
+        </button>
+      </div>
       {/* Existing classes */}
       {allTeacherClasses.length > 0 && (
         <div className="space-y-2">
@@ -2107,6 +2119,47 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
     }
     setIsLoading(false);
   }, [allTeacherClasses, currentUserId]);
+
+  // One-off repair for a race condition that used to let a Shrine Room
+  // coin deposit get silently overwritten (and effectively lost) by
+  // another concurrent write to the same field -- see the coinBalance/
+  // lotusCount atomic-increment fix. smartStudyCoinsTransferred (on each
+  // student's Shrine Room roster doc) records exactly how much SmartStudy
+  // has ever handed over and was NOT itself affected by that bug (a
+  // Firestore merge write only touches the fields it includes, so a
+  // Shrine-side purchase overwriting coinBalance never touched this
+  // field) -- so it's a reliable floor to top coinBalance back up to.
+  // Only ever tops up, never reduces, and is safe to run more than once.
+  const handleRestoreShrineWallets = useCallback(async () => {
+    const confirmed = window.confirm(
+      "This checks every student's Shrine Room wallet against what SmartStudy has already deposited into it, and tops up (never reduces) any wallet that's come up short of that. Safe to run more than once. Continue?"
+    );
+    if (!confirmed) return;
+    setIsLoading(true);
+    try {
+      const rosterSnap = await getDocs(collection(db, 'artifacts/shrine-room-app/public/data/roster'));
+      const shortfalls = rosterSnap.docs
+        .map(d => ({ ref: d.ref, data: d.data() }))
+        .filter(({ data }) => (data.smartStudyCoinsTransferred || 0) > (data.coinBalance ?? 0))
+        .map(({ ref, data }) => ({ ref, name: data.studentName || ref.id, amount: (data.smartStudyCoinsTransferred || 0) - (data.coinBalance ?? 0) }));
+      if (shortfalls.length === 0) {
+        setModal({ message: 'No Shrine Room wallets are short -- nothing to restore.', type: 'success', visible: true });
+        setIsLoading(false);
+        return;
+      }
+      for (const { ref, amount } of shortfalls) {
+        await updateDoc(ref, { coinBalance: increment(amount) });
+      }
+      setModal({
+        message: `Restored ${shortfalls.length} wallet(s):\n` + shortfalls.map(s => `${s.name}: +${s.amount}`).join('\n'),
+        type: 'success', visible: true,
+      });
+    } catch (e) {
+      console.error('Error restoring Shrine Room wallets:', e);
+      setModal({ message: 'Error restoring wallets -- check console.', type: 'error', visible: true });
+    }
+    setIsLoading(false);
+  }, []);
 
   const handleTeacherLogin = useCallback(async (overrideId) => {
     const enteredClassId = (overrideId || targetClassId || '').toUpperCase().trim();
@@ -2920,7 +2973,7 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
     if (!isAuthReady) return <LoadingView />;
     switch (view) {
       case 'teacherPasscode': return <TeacherPasscodeView onVerified={() => setView('teacherLogin')} handleSetView={handleSetView} />;
-      case 'teacherLogin': return <TeacherLoginView targetClassId={targetClassId} setTargetClassId={setTargetClassId} handleTeacherLogin={handleTeacherLogin} handleSetView={handleSetView} allTeacherClasses={allTeacherClasses} isLoading={isLoading} onRenameClass={handleRenameClass} onDeleteClass={handleDeleteClass} currentUserId={currentUserId} onReclaimAll={handleReclaimAllClasses} />;
+      case 'teacherLogin': return <TeacherLoginView targetClassId={targetClassId} setTargetClassId={setTargetClassId} handleTeacherLogin={handleTeacherLogin} handleSetView={handleSetView} allTeacherClasses={allTeacherClasses} isLoading={isLoading} onRenameClass={handleRenameClass} onDeleteClass={handleDeleteClass} currentUserId={currentUserId} onReclaimAll={handleReclaimAllClasses} onRestoreShrineWallets={handleRestoreShrineWallets} />;
       case 'studentLogin': return <StudentLoginView targetClassId={targetClassId} setTargetClassId={setTargetClassId} userName={userName} setUserName={setUserName} studentAgeLevel={studentAgeLevel} setStudentAgeLevel={setStudentAgeLevel} handleStudentLogin={handleStudentLogin} handleSetView={handleSetView} />;
       case 'ageLevelPicker': return <AgeLevelPickerView studentAgeLevel={studentAgeLevel} setStudentAgeLevel={setStudentAgeLevel} onContinue={handleAgeLevelContinue} />;
       case 'classPicker': return <ClassPickerView classList={classPickerList} highlightClassId={entryRequest?.classId} onSelectClass={handleSelectClassFromPicker} loading={classPickerLoading} classPickerInfo={classPickerInfo} openClassId={openClassId} />;
