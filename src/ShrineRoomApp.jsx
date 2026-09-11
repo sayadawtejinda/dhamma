@@ -703,30 +703,6 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
       goOffline();
     };
   }, [studentUid, studentName]);
-  // One lotus flower per minute spent in the Shrine Room -- purely time-based,
-  // not gated on clicking anything: a student listening to a chant or
-  // sitting through a meditation session isn't going to keep tapping the
-  // screen, so requiring a click every minute (the original design) would
-  // have shortchanged exactly the activities this is meant to reward.
-  useEffect(() => {
-    if (!studentUid) return;
-    const interval = setInterval(() => {
-      setLotusCount(prev => prev + 1);
-      persist({ lotusCount: increment(1) });
-    }, 60000);
-    return () => clearInterval(interval);
-  }, [studentUid]);
-  // One-time +10 lotus bonus the moment every altar slot has an offering
-  // in it. Fires as soon as this becomes true (even if the altar was
-  // already full from before this feature existed) and never again.
-  useEffect(() => {
-    if (!studentUid || fullAltarBonusAwarded) return;
-    if (Object.keys(placedItems).length < SLOT_COUNT) return;
-    setFullAltarBonusAwarded(true);
-    setLotusCount(prev => prev + 10);
-    persist({ lotusCount: increment(10), fullAltarBonusAwarded: true });
-    showToast('🪷 Full altar bonus! +10 lotus flowers');
-  }, [placedItems, fullAltarBonusAwarded, studentUid]);
   // Meditation: opt-in via its own button (not a mandatory splash on
   // entry). A student picks a duration (1-60 min, typed in, not just
   // presets), the shrine glows with radiating color while they sit, and
@@ -746,6 +722,32 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   // here (see the activity-tracking effect below).
   const [lotusCount, setLotusCount] = useState(0);
   const [fullAltarBonusAwarded, setFullAltarBonusAwarded] = useState(false);
+  // One lotus flower per minute spent actually chanting (panel open, even
+  // just reading along -- not gated on clicking anything) or actively
+  // sitting through a meditation countdown. Deliberately NOT a blanket
+  // "anywhere in the Shrine Room" timer -- closing the chant panel or
+  // finishing/leaving meditation stops it immediately, and leaving to the
+  // Home page unmounts this whole component so it stops regardless.
+  useEffect(() => {
+    if (!studentUid) return;
+    if (!chantingOpen && meditatingMinutes == null) return;
+    const interval = setInterval(() => {
+      setLotusCount(prev => prev + 1);
+      persist({ lotusCount: increment(1) });
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [studentUid, chantingOpen, meditatingMinutes != null]);
+  // One-time +10 lotus bonus the moment every altar slot has an offering
+  // in it. Fires as soon as this becomes true (even if the altar was
+  // already full from before this feature existed) and never again.
+  useEffect(() => {
+    if (!studentUid || fullAltarBonusAwarded) return;
+    if (Object.keys(placedItems).length < SLOT_COUNT) return;
+    setFullAltarBonusAwarded(true);
+    setLotusCount(prev => prev + 10);
+    persist({ lotusCount: increment(10), fullAltarBonusAwarded: true });
+    showToast('🪷 Full altar bonus! +10 lotus flowers');
+  }, [placedItems, fullAltarBonusAwarded, studentUid]);
   const [dragOverSlot, setDragOverSlot] = useState(null);
   const [ringing, setRinging] = useState(false);
   const [toast, setToast] = useState(null);
