@@ -260,6 +260,34 @@ export default function MyanmarPoemsApp({ entryRequest, onExit, hideOwnOnlineBad
   const coinBalanceRef = useRef(0);
   const [myCoinBalance, setMyCoinBalance] = useState(0);
 
+  // User-initiated deposit into the Shrine Room wallet -- same pattern as
+  // SmartStudy's coin badge: click, confirm, and the coins move over.
+  // Unlike SmartStudy's coinBalance (a derived, never-spent score badge),
+  // this app's coinBalance is a real spendable total stored on its own
+  // roster doc, so depositing actually zeroes it out here rather than just
+  // tracking how much has been "claimed" elsewhere.
+  const handleDepositCoinsToShrineRoom = async () => {
+    const depositable = coinBalanceRef.current;
+    if (!studentName || depositable <= 0) return;
+    const confirmed = window.confirm(`Deposit ${depositable} gold coin(s) into your Shrine Room wallet?`);
+    if (!confirmed) return;
+    const myRosterRef = doc(db, MPOEMS_ROSTER_PATH, sanitizeMpoemsKey(studentName));
+    const shrineRef = doc(db, 'artifacts/shrine-room-app/public/data/roster', sanitizeMpoemsKey(studentName));
+    try {
+      const shrineSnap = await getDoc(shrineRef);
+      // A student who has never opened Shrine Room yet still gets its usual
+      // 20-coin starter balance, on top of whatever they're depositing here.
+      const SHRINE_STARTER_COINS = 20;
+      const currentShrineBalance = shrineSnap.exists() ? (shrineSnap.data().coinBalance ?? 0) : SHRINE_STARTER_COINS;
+      await setDoc(shrineRef, { studentName, coinBalance: currentShrineBalance + depositable }, { merge: true });
+      await setDoc(myRosterRef, { coinBalance: 0 }, { merge: true });
+      coinBalanceRef.current = 0;
+      setMyCoinBalance(0);
+    } catch (e) {
+      console.error('Error depositing coins to Shrine Room:', e);
+    }
+  };
+
   // Roster heartbeat — only pings when opened for a student (entryRequest
   // carries their name); a teacher just observes.
   useEffect(() => {
@@ -2492,6 +2520,7 @@ export default function MyanmarPoemsApp({ entryRequest, onExit, hideOwnOnlineBad
           studentName={studentName}
           isTeacherMode={!studentName}
           coinBalance={studentName ? myCoinBalance : null}
+          onCoinClick={studentName ? handleDepositCoinsToShrineRoom : undefined}
           panelTitle="📖 Students"
           renderActivity={s => (
             <span className="text-gray-600">
