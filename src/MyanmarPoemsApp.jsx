@@ -1980,7 +1980,13 @@ export default function MyanmarPoemsApp({ entryRequest, onExit, hideOwnOnlineBad
         let newPoemsCountedThisSession = 0;
         let poemStartTime = Date.now();
         let audioCoinAwardedForThisPoem = false;
-        const MIN_RECITE_SECONDS = 15;
+        // Lowered from 15s -- many of these poems are short enough that a
+        // student reciting fluently (especially a familiar one, or after
+        // the novelty of the first poem wears off) clears them in well
+        // under 15 seconds, so the prompt legitimately never fired for
+        // most poems even though the student genuinely sang. Still high
+        // enough to filter out an instant "click Next without looking" pass.
+        const MIN_RECITE_SECONDS = 6;
         const MAX_NEW_POEMS_PER_SESSION = 2;
         const todayKey = () => new Date().toISOString().slice(0, 10);
 
