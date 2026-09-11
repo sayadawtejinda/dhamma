@@ -899,7 +899,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
         const chant = CHANT_ITEMS[chantIndex];
         return (
           <div
-            className="fixed top-20 right-3 z-[10000] max-h-[calc(100vh-6rem)] bg-white rounded-2xl shadow-2xl border-2 border-amber-200 flex flex-col relative"
+            className="fixed top-20 right-3 z-[10000] max-h-[calc(100vh-6rem)] bg-white rounded-2xl shadow-2xl border-2 border-amber-200 flex flex-col"
             style={{ width: `${chantPanelWidth}px` }}
           >
             {/* Drag left to widen -- see handleChantResizeStart for why this
