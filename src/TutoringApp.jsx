@@ -6426,7 +6426,22 @@ function StudentDashboard({ user, studentProfile, studentUid, announcements, onO
   // the button row as the only thing still visible on top of it. Exact
   // button positions are a first pass, to be tuned together afterward.
   const [showLessonsPanel, setShowLessonsPanel] = useState(false);
-  
+  // The house-illustration background needs landscape width to show
+  // everything (shrine/reading/play/dining rooms and the buttons over
+  // them) without cropping -- on a phone held upright there isn't enough
+  // width, so a rotate prompt blocks the page until the phone is turned
+  // sideways, rather than letting the layout render badly squeezed.
+  const [isPortraitPhone, setIsPortraitPhone] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(orientation: portrait) and (max-width: 768px)');
+    const update = () => setIsPortraitPhone(mq.matches);
+    update();
+    mq.addEventListener ? mq.addEventListener('change', update) : mq.addListener(update);
+    return () => {
+      mq.removeEventListener ? mq.removeEventListener('change', update) : mq.removeListener(update);
+    };
+  }, []);
+
   const [feedbackNotes, setFeedbackNotes] = useState('');
   const [score, setScore] = useState('');
   const [requestTrophyChecked, setRequestTrophyChecked] = useState(false);
@@ -6637,17 +6652,27 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
   const hasInitialScrolledRef = useRef(false);
 
   // Opens the lesson directly instead of just revealing the panel: resumes
-  // whatever's already in progress (Active Session), or starts the most
-  // recently assigned lesson (availableLessons is sorted newest-first) if
-  // nothing's in progress yet. Only falls back to just showing the panel
-  // when there's genuinely nothing to open.
+  // whatever's already in progress (Active Session), or starts a freshly
+  // assigned lesson (status still 'pending', i.e. never opened) if nothing's
+  // in progress yet -- the same condition that lights up the button (see
+  // hasNewOrActiveLesson below), so this never "auto-starts" a lesson the
+  // student already worked through and simply hasn't reported yet. Also
+  // opens the Lessons & History panel in the background before navigating
+  // away, so returning via the 🏡 button lands back on the Active Session
+  // box (with Report/Close) instead of the bare home page -- TutoringApp
+  // stays mounted (just hidden) while another app is open, so this state
+  // survives the trip. Falls back to just showing the panel (Available
+  // Lessons) when there's nothing new or in progress to open.
   const handleOpenLatestLesson = () => {
     if (activeSession) {
+      setShowLessonsPanel(true);
       handleContinueActiveSession();
       return;
     }
-    if (availableLessons.length > 0) {
-      handleStartLesson(availableLessons[0]);
+    const pendingLesson = availableLessons.find(l => l.status === 'pending');
+    if (pendingLesson) {
+      setShowLessonsPanel(true);
+      handleStartLesson(pendingLesson);
       return;
     }
     setShowLessonsPanel(true);
@@ -7963,6 +7988,13 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       className="p-6 relative min-h-screen"
       style={{ backgroundImage: 'url(images/0003.jpg)', backgroundSize: 'cover', backgroundPosition: 'center top', backgroundAttachment: 'fixed' }}
     >
+      {isPortraitPhone && (
+        <div className="fixed inset-0 z-[9990] bg-indigo-900 flex flex-col items-center justify-center gap-4 p-6 text-center">
+          <div className="text-6xl animate-pulse">🔄</div>
+          <p className="text-white text-xl font-bold">Please rotate your phone sideways</p>
+          <p className="text-indigo-200 text-sm">Turn your phone to landscape to see the full page</p>
+        </div>
+      )}
       {/* Experimental: reading-room buttons over the house illustration --
           rough first-pass placement, to be adjusted together once the
           teacher has seen it live. */}

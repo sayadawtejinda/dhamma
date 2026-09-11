@@ -130,7 +130,14 @@ export default function SpeakingMyanmarApp({ entryRequest, onExit }) {
   return (
     <>
       <Suspense fallback={<SpeakingMyanmarLoading />}>
-        <div className="fixed top-3 left-3 z-[9999]">
+        <div className="fixed top-3 left-3 z-[9999] flex items-center gap-2">
+          <button
+            onClick={onExit}
+            className="w-12 h-12 flex items-center justify-center bg-gray-800 text-white rounded-full shadow-lg text-2xl hover:bg-gray-900"
+            aria-label="Back to Tutoring Dashboard"
+          >
+            🏡
+          </button>
           <button
             onClick={() => setActivePart(null)}
             className="px-4 py-2 bg-gray-800 text-white rounded-full shadow-lg font-semibold text-sm hover:bg-gray-900"
