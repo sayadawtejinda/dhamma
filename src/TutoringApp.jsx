@@ -6636,17 +6636,21 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
   const firstLessonRef = useRef(null);
   const hasInitialScrolledRef = useRef(false);
 
+  // Opens the lesson directly instead of just revealing the panel: resumes
+  // whatever's already in progress (Active Session), or starts the most
+  // recently assigned lesson (availableLessons is sorted newest-first) if
+  // nothing's in progress yet. Only falls back to just showing the panel
+  // when there's genuinely nothing to open.
   const handleOpenLatestLesson = () => {
+    if (activeSession) {
+      handleContinueActiveSession();
+      return;
+    }
+    if (availableLessons.length > 0) {
+      handleStartLesson(availableLessons[0]);
+      return;
+    }
     setShowLessonsPanel(true);
-    setTimeout(() => {
-      if (activeSessionRef.current) {
-        activeSessionRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      } else if (firstLessonRef.current) {
-        firstLessonRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      } else if (lessonsSectionRef.current) {
-        lessonsSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-    }, 100);
   };
 
   useEffect(() => {
@@ -7002,6 +7006,134 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       yearEntries,
     };
   }, [mySchedule, mySessions, studentUid]);
+
+  // Opens whatever app the current Active Session's lesson link points to,
+  // without creating a new session (one already exists) or touching lesson
+  // status -- extracted from the Active Session box's own Continue button
+  // so the 📖 Latest Lesson button can trigger the exact same behavior.
+  const handleContinueActiveSession = () => {
+    if (!activeSession) return;
+    let url = activeSession.lessonLink;
+    if (url && url.startsWith('smartstudy://')) {
+      if (onOpenSmartStudy) {
+        onOpenSmartStudy({
+          mode: 'student',
+          classId: extractSmartStudyClassId(url),
+          studentName: studentProfile?.name,
+          studentUid,
+          ageLevel: studentProfile?.smartStudyAgeLevel || null,
+          onAgeLevelChosen: async (level) => {
+            try {
+              await updateDoc(doc(db, `${publicDataPath}/students`, studentUid), { smartStudyAgeLevel: level });
+            } catch (e) { console.error('Error saving age level:', e); }
+          }
+        });
+      }
+      return;
+    }
+    if (url && url.startsWith('abhidhamma://')) {
+      if (onOpenAbhidhamma) {
+        onOpenAbhidhamma({
+          mode: 'student',
+          lessonId: extractAbhidhammaLessonId(url),
+          studentName: studentProfile?.name,
+          ageGroup: studentProfile?.smartStudyAgeLevel || null,
+        });
+      }
+      return;
+    }
+    if (url && url.startsWith('dhammaschool://')) {
+      if (onOpenDhammaschool) {
+        onOpenDhammaschool({
+          studentName: studentProfile?.name || '',
+          classId: extractDhammaschoolClassId(url) || '',
+        });
+      }
+      return;
+    }
+    if (url && url.startsWith('consonantpractice://')) {
+      if (onOpenConsonantPractice) onOpenConsonantPractice({ studentName: studentProfile?.name || '' });
+      return;
+    }
+    if (url && url.startsWith('burmesegame://')) {
+      if (onOpenBurmeseGame) onOpenBurmeseGame({ studentName: studentProfile?.name || '' });
+      return;
+    }
+    if (url && url.startsWith('numberlearning://')) {
+      if (onOpenNumberLearning) onOpenNumberLearning({ studentName: studentProfile?.name || '' });
+      return;
+    }
+    if (url && url.startsWith('vowelslearning://')) {
+      if (onOpenVowelsLearning) onOpenVowelsLearning({ studentName: studentProfile?.name || '' });
+      return;
+    }
+    if (url && url.startsWith('animalsound://')) {
+      if (onOpenAnimalSound) onOpenAnimalSound({ studentName: studentProfile?.name || '' });
+      return;
+    }
+    if (url && url.startsWith('burmeselearninggames://')) {
+      if (onOpenBurmeseLearningGames) onOpenBurmeseLearningGames({ studentName: studentProfile?.name || '' });
+      return;
+    }
+    if (url && url.startsWith('interactivequiz://')) {
+      if (onOpenInteractiveQuiz) onOpenInteractiveQuiz({ studentName: studentProfile?.name || '' });
+      return;
+    }
+    if (url && url.startsWith('myanmarpoems://')) {
+      if (onOpenMyanmarPoems) onOpenMyanmarPoems({ studentName: studentProfile?.name || '' });
+      return;
+    }
+    if (url && url.startsWith('consonantendings://')) {
+      if (onOpenConsonantEndings) onOpenConsonantEndings({ studentName: studentProfile?.name || '' });
+      return;
+    }
+    if (url && url.startsWith('timeandcalendar://')) {
+      if (onOpenTimeAndCalendar) onOpenTimeAndCalendar({ studentName: studentProfile?.name || '' });
+      return;
+    }
+    if (url && url.startsWith('myanmarspelling://')) {
+      if (onOpenMyanmarSpelling) onOpenMyanmarSpelling({ studentName: studentProfile?.name || '' });
+      return;
+    }
+    if (url && url.startsWith('myanmarsoundpractice://')) {
+      if (onOpenMyanmarSoundPractice) onOpenMyanmarSoundPractice({ studentName: studentProfile?.name || '' });
+      return;
+    }
+    if (url && url.startsWith('readingmyanmar://')) {
+      const initialPart = extractGroupPartKey(url);
+      if (onOpenReadingMyanmar) onOpenReadingMyanmar({ studentName: studentProfile?.name || '', ...(initialPart ? { initialPart } : {}) });
+      return;
+    }
+    if (url && url.startsWith('speakingmyanmar://')) {
+      const initialPart = extractGroupPartKey(url);
+      if (onOpenSpeakingMyanmar) onOpenSpeakingMyanmar({ studentName: studentProfile?.name || '', ...(initialPart ? { initialPart } : {}) });
+      return;
+    }
+    if (url && url.startsWith('myanmarpart1and2://')) {
+      const initialPart = extractGroupPartKey(url);
+      if (onOpenMyanmarPart1And2) onOpenMyanmarPart1And2({ studentName: studentProfile?.name || '', ...(initialPart ? { initialPart } : {}) });
+      return;
+    }
+    if (url && url.startsWith('watchandlearn://')) {
+      if (onOpenWatchAndLearn) onOpenWatchAndLearn({ studentName: studentProfile?.name || '' });
+      return;
+    }
+    if (!url.startsWith('http://') && !url.startsWith('https://')) url = `https://${url}`;
+    if (isMyanmarSpeakingUrl(url) && onOpenMyanmarSpeaking && studentProfile?.name) {
+      onOpenMyanmarSpeaking({ studentName: studentProfile.name });
+      return;
+    }
+    if (MYANMAR_READER_APP_URL && url.startsWith(MYANMAR_READER_APP_URL) && onOpenMyanmarReader && studentProfile?.name) {
+      onOpenMyanmarReader({ studentName: studentProfile.name });
+      return;
+    }
+    // Only the genuine window.open fallback below actually opens
+    // another tab -- every branch above mounts its app inline in
+    // this same page, so only this one needs the "opened in
+    // another tab, come back here when done" overlay.
+    openLink(url);
+    setIsLessonOverlayOpen(true);
+  };
 
   const handleStartLesson = async (lesson) => {
     if (lesson.link && lesson.link.startsWith('dhammaschool://')) {
@@ -7819,7 +7951,12 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       return bT - aT;
     });
     
-  const availableLessons = myLessons; 
+  const availableLessons = myLessons;
+  // Highlights the 📖 Latest Lesson button the moment the teacher assigns a
+  // lesson the student hasn't opened yet (status stays 'pending' until
+  // they start it) or while one is actively in progress, so it's obvious
+  // there's something new/ongoing without having to open the panel first.
+  const hasNewOrActiveLesson = !!activeSession || availableLessons.some(l => l.status === 'pending');
 
   return (
     <div
@@ -7832,9 +7969,13 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       <div className="fixed z-30 flex flex-col gap-2" style={{ top: '16%', right: '6%' }}>
         <button
           onClick={handleOpenLatestLesson}
-          className="bg-white/90 hover:bg-white shadow-lg rounded-xl px-4 py-3 font-bold text-emerald-700 border border-emerald-300 whitespace-nowrap"
+          className={`shadow-lg rounded-xl px-4 py-3 font-bold whitespace-nowrap border transition-all ${
+            hasNewOrActiveLesson
+              ? 'bg-emerald-500 hover:bg-emerald-600 text-white border-emerald-600 animate-pulse ring-4 ring-emerald-300'
+              : 'bg-white/90 hover:bg-white text-emerald-700 border-emerald-300'
+          }`}
         >
-          📖 Latest Lesson
+          📖 Latest Lesson{hasNewOrActiveLesson ? ' 🔔' : ''}
         </button>
         <button
           onClick={() => setShowLessonsPanel(true)}
@@ -7892,7 +8033,12 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       />
       
       {showFeedbackModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex justify-center items-center z-50">
+        // z-[9950] -- above the Lessons & History panel's z-[9900] (see
+        // showLessonsPanel below). Clicking Report from the Active Session
+        // box (which now lives inside that panel) used to leave this
+        // Feedback form rendering underneath it, invisible even though it
+        // was open.
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex justify-center items-center z-[9950]">
           <form onSubmit={handleSubmitFeedback} className="bg-white p-6 rounded-xl shadow-2xl w-full max-w-lg mx-4">
             <h3 className="text-xl font-semibold mb-4">Lesson Feedback</h3>
             <div className="mb-4">
@@ -8226,7 +8372,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           reading-room buttons above) at the reading room's bottom edge /
           into the dining room, since desktop has plenty of room for all
           four at once. */}
-      <div className="fixed z-30 flex flex-wrap gap-2 justify-end" style={{ top: '50%', right: '4%', maxWidth: '46%' }}>
+      <div className="fixed z-30 flex flex-col gap-2" style={{ top: '48%', right: '4%' }}>
         <button onClick={() => onNavigate && onNavigate('today')} className="bg-white/90 hover:bg-white shadow-lg rounded-xl px-4 py-3 font-bold text-violet-700 border border-violet-300 whitespace-nowrap">
           🗓️ Today
         </button>
@@ -8299,131 +8445,9 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           )}
           
           <div className="flex flex-col sm:flex-row items-center gap-3">
-            <button 
-              onClick={() => {
-                let url = activeSession.lessonLink;
-                if (url && url.startsWith('smartstudy://')) {
-                  if (onOpenSmartStudy) {
-                    onOpenSmartStudy({
-                      mode: 'student',
-                      classId: extractSmartStudyClassId(url),
-                      studentName: studentProfile?.name,
-                      studentUid,
-                      ageLevel: studentProfile?.smartStudyAgeLevel || null,
-                      onAgeLevelChosen: async (level) => {
-                        try {
-                          await updateDoc(doc(db, `${publicDataPath}/students`, studentUid), { smartStudyAgeLevel: level });
-                        } catch (e) { console.error('Error saving age level:', e); }
-                      }
-                    });
-                  }
-                  return;
-                }
-                if (url && url.startsWith('abhidhamma://')) {
-                  if (onOpenAbhidhamma) {
-                    const ageGroupMap = { storyteller:'storytellers', explorer:'explorers', adventurer:'adventurers', voyager:'voyagers' };
-                    onOpenAbhidhamma({
-                      mode: 'student',
-                      lessonId: extractAbhidhammaLessonId(url),
-                      studentName: studentProfile?.name,
-                      ageGroup: studentProfile?.smartStudyAgeLevel || null,
-                    });
-                  }
-                  return;
-                }
-                if (url && url.startsWith('dhammaschool://')) {
-                  if (onOpenDhammaschool) {
-                    onOpenDhammaschool({
-                      studentName: studentProfile?.name || '',
-                      classId: extractDhammaschoolClassId(url) || '',
-                    });
-                  }
-                  return;
-                }
-                if (url && url.startsWith('consonantpractice://')) {
-                  if (onOpenConsonantPractice) onOpenConsonantPractice({ studentName: studentProfile?.name || '' });
-                  return;
-                }
-                if (url && url.startsWith('burmesegame://')) {
-                  if (onOpenBurmeseGame) onOpenBurmeseGame({ studentName: studentProfile?.name || '' });
-                  return;
-                }
-                if (url && url.startsWith('numberlearning://')) {
-                  if (onOpenNumberLearning) onOpenNumberLearning({ studentName: studentProfile?.name || '' });
-                  return;
-                }
-                if (url && url.startsWith('vowelslearning://')) {
-                  if (onOpenVowelsLearning) onOpenVowelsLearning({ studentName: studentProfile?.name || '' });
-                  return;
-                }
-                if (url && url.startsWith('animalsound://')) {
-                  if (onOpenAnimalSound) onOpenAnimalSound({ studentName: studentProfile?.name || '' });
-                  return;
-                }
-                if (url && url.startsWith('burmeselearninggames://')) {
-                  if (onOpenBurmeseLearningGames) onOpenBurmeseLearningGames({ studentName: studentProfile?.name || '' });
-                  return;
-                }
-                if (url && url.startsWith('interactivequiz://')) {
-                  if (onOpenInteractiveQuiz) onOpenInteractiveQuiz({ studentName: studentProfile?.name || '' });
-                  return;
-                }
-                if (url && url.startsWith('myanmarpoems://')) {
-                  if (onOpenMyanmarPoems) onOpenMyanmarPoems({ studentName: studentProfile?.name || '' });
-                  return;
-                }
-                if (url && url.startsWith('consonantendings://')) {
-                  if (onOpenConsonantEndings) onOpenConsonantEndings({ studentName: studentProfile?.name || '' });
-                  return;
-                }
-                if (url && url.startsWith('timeandcalendar://')) {
-                  if (onOpenTimeAndCalendar) onOpenTimeAndCalendar({ studentName: studentProfile?.name || '' });
-                  return;
-                }
-                if (url && url.startsWith('myanmarspelling://')) {
-                  if (onOpenMyanmarSpelling) onOpenMyanmarSpelling({ studentName: studentProfile?.name || '' });
-                  return;
-                }
-                if (url && url.startsWith('myanmarsoundpractice://')) {
-                  if (onOpenMyanmarSoundPractice) onOpenMyanmarSoundPractice({ studentName: studentProfile?.name || '' });
-                  return;
-                }
-                if (url && url.startsWith('readingmyanmar://')) {
-                  const initialPart = extractGroupPartKey(url);
-                  if (onOpenReadingMyanmar) onOpenReadingMyanmar({ studentName: studentProfile?.name || '', ...(initialPart ? { initialPart } : {}) });
-                  return;
-                }
-                if (url && url.startsWith('speakingmyanmar://')) {
-                  const initialPart = extractGroupPartKey(url);
-                  if (onOpenSpeakingMyanmar) onOpenSpeakingMyanmar({ studentName: studentProfile?.name || '', ...(initialPart ? { initialPart } : {}) });
-                  return;
-                }
-                if (url && url.startsWith('myanmarpart1and2://')) {
-                  const initialPart = extractGroupPartKey(url);
-                  if (onOpenMyanmarPart1And2) onOpenMyanmarPart1And2({ studentName: studentProfile?.name || '', ...(initialPart ? { initialPart } : {}) });
-                  return;
-                }
-                if (url && url.startsWith('watchandlearn://')) {
-                  if (onOpenWatchAndLearn) onOpenWatchAndLearn({ studentName: studentProfile?.name || '' });
-                  return;
-                }
-                if (!url.startsWith('http://') && !url.startsWith('https://')) url = `https://${url}`;
-                if (isMyanmarSpeakingUrl(url) && onOpenMyanmarSpeaking && studentProfile?.name) {
-                  onOpenMyanmarSpeaking({ studentName: studentProfile.name });
-                  return;
-                }
-                if (MYANMAR_READER_APP_URL && url.startsWith(MYANMAR_READER_APP_URL) && onOpenMyanmarReader && studentProfile?.name) {
-                  onOpenMyanmarReader({ studentName: studentProfile.name });
-                  return;
-                }
-                // Only the genuine window.open fallback below actually opens
-                // another tab -- every branch above mounts its app inline in
-                // this same page, so only this one needs the "opened in
-                // another tab, come back here when done" overlay.
-                openLink(url);
-                setIsLessonOverlayOpen(true);
-              }} 
-              disabled={!activeSession.lessonLink} 
+            <button
+              onClick={handleContinueActiveSession}
+              disabled={!activeSession.lessonLink}
               className="w-full sm:w-1/2 bg-blue-500 text-white p-4 rounded-lg font-bold hover:bg-blue-600 transition-transform transform hover:scale-105 shadow-md disabled:opacity-50"
             >
               {isActiveFullyComplete ? '✅ Completed — Continue' : 'Continue'}
@@ -10193,16 +10217,21 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpen
           {/* Small square, no taller than the 🔔 (StudentDashboard's bell
               sits at top-4, so this is positioned just below it) -- cycles
               Today/Week/Year/Trophies one at a time on tap, short labels so
-              it stays compact on phones. */}
-          <div className="fixed top-16 right-4 z-[9400]">
-            <button
-              onClick={handleNavClick}
-              title={navItems[navIndex].target === 'today' ? "Today's Schedule" : navItems[navIndex].target === 'weekly' ? 'Weekly Schedule' : navItems[navIndex].target === 'attendance' ? 'This Year Attended' : 'Trophies Awarded'}
-              className="bg-white hover:bg-gray-50 border border-gray-200 rounded-xl w-11 h-11 flex items-center justify-center shadow-lg text-[11px] font-bold text-indigo-700 leading-none"
-            >
-              {navItems[navIndex].label}
-            </button>
-          </div>
+              it stays compact on phones. Hidden for students now that the
+              student homepage has its own dedicated Today/Weekly/
+              Attendance/Trophies buttons (see StudentDashboard) -- kept for
+              teachers, who have no other way to reach these views. */}
+          {role !== 'student' && (
+            <div className="fixed top-16 right-4 z-[9400]">
+              <button
+                onClick={handleNavClick}
+                title={navItems[navIndex].target === 'today' ? "Today's Schedule" : navItems[navIndex].target === 'weekly' ? 'Weekly Schedule' : navItems[navIndex].target === 'attendance' ? 'This Year Attended' : 'Trophies Awarded'}
+                className="bg-white hover:bg-gray-50 border border-gray-200 rounded-xl w-11 h-11 flex items-center justify-center shadow-lg text-[11px] font-bold text-indigo-700 leading-none"
+              >
+                {navItems[navIndex].label}
+              </button>
+            </div>
+          )}
           {(role === 'teacher' || role === 'student') && view !== role && (
             // Same top-left circular 🏡 spot every other sub-app uses to exit
             // back to this dashboard -- moved here from a separate
