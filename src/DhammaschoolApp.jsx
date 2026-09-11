@@ -957,7 +957,16 @@ let bilingualMode = false;
         // directly, now that multiple classes with different image sets share
         // this one app.
         function getCurrentImageBase() {
-            return (currentLessonId && allLessons[currentLessonId] && allLessons[currentLessonId].imageBaseUrl) || IMAGE_BASE_URL;
+            // Students (and a teacher in Preview Mode, who views a lesson the
+            // same way a student would) track the open lesson in
+            // studentCurrentLessonId, not currentLessonId -- this used to
+            // always read currentLessonId regardless of role, so a student
+            // viewing a lesson with its own imageBaseUrl override silently
+            // fell back to the shared default repo and saw broken images
+            // even though the teacher's own view (which does use
+            // currentLessonId) showed them fine.
+            const activeLessonId = (!isTeacher || isPreviewMode) ? studentCurrentLessonId : currentLessonId;
+            return (activeLessonId && allLessons[activeLessonId] && allLessons[activeLessonId].imageBaseUrl) || IMAGE_BASE_URL;
         }
 
         const els = {
