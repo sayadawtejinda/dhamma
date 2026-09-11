@@ -8310,7 +8310,12 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           )}
         </button>
         {showNotifDropdown && (
-          <div className="absolute right-0 mt-2 w-80 max-h-96 overflow-y-auto bg-white rounded-xl shadow-2xl border border-gray-200 p-3">
+          // top-full (not just "mt-2") -- this button now shares its fixed
+          // parent with the trophy badge in a flex row, so without an
+          // explicit top the dropdown could render over that whole row
+          // (including the bell itself) instead of strictly below it,
+          // leaving no way to close it by clicking the bell again.
+          <div className="absolute top-full right-0 mt-2 w-80 max-h-96 overflow-y-auto bg-white rounded-xl shadow-2xl border border-gray-200 p-3">
             <div className="flex justify-between items-center mb-2 px-1">
               <p className="font-bold text-gray-700 text-sm">Notifications (past week)</p>
               {visibleAnnouncements.length > 0 && (

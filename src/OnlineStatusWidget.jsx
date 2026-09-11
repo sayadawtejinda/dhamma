@@ -88,6 +88,7 @@ export default function OnlineStatusWidget({
   studentName,
   isTeacherMode,
   coinBalance,
+  coinIcon = '🪙',
   onCoinClick,
   renderActivity,
   panelTitle = '📚 Students',
@@ -116,11 +117,11 @@ export default function OnlineStatusWidget({
               className="flex items-center gap-1 text-amber-600 font-bold hover:underline"
               title="Click to deposit into your Shrine Room wallet"
             >
-              <span>🪙</span>{coinBalance}
+              <span>{coinIcon}</span>{coinBalance}
             </button>
           ) : (
             <span className="flex items-center gap-1 text-amber-600 font-bold" title="Gold coins earned">
-              <span>🪙</span>{coinBalance}
+              <span>{coinIcon}</span>{coinBalance}
             </span>
           )
         )}

@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { collection, query, where, getDocs, doc, getDoc, setDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase';
 import { appId } from './firebaseConfig';
+import OnlineStatusWidget from './OnlineStatusWidget';
 
 // A student's personal shrine room -- decorate an altar with offerings
 // bought using coins, earned mainly by lighting the lamp once a day.
@@ -310,6 +311,110 @@ To all sentient beings existing throughout the infinite universes—dwelling in 
 May all beings receive an equal share of this merit. Let the Great Earth and the solid rocks of this world stand as my eternal witness.`,
     },
   },
+  {
+    // No Myanmar-script version was supplied for this one -- the မြန်မာ
+    // tab falls back to the same Pali text as Roman, rather than being
+    // left blank or guessing at a transliteration.
+    title: { romanized: 'Sambuddhe Gatha', myanmar: 'သမ္ဗုဒ္ဓေဂါထာ', english: 'The Sambuddhe Gatha' },
+    audioUrl: chantAudioUrl('The Sambuddhe Gatha'),
+    text: {
+      romanized: `Sambuddhe aṭṭhavīsañca, dvādasañca sahassake,
+pañcasata sahassāni, namāmi sirasā mahaṃ,
+appakā vāḷukā gaṅgā, anantā nibbutā jinā,
+tesaṃ dhammañca saṅghañca, ādarena namāmahaṃ,
+namakkārā nubhāvena, hitvā sabbe upaddave,
+anekā antarāyāpi vinassantu asesato.`,
+      myanmar: `Sambuddhe aṭṭhavīsañca, dvādasañca sahassake,
+pañcasata sahassāni, namāmi sirasā mahaṃ,
+appakā vāḷukā gaṅgā, anantā nibbutā jinā,
+tesaṃ dhammañca saṅghañca, ādarena namāmahaṃ,
+namakkārā nubhāvena, hitvā sabbe upaddave,
+anekā antarāyāpi vinassantu asesato.`,
+      english: `Veneration to the 512,028 Buddhas — I pay homage with my head bowed low to the twenty-eight Buddhas, the twelve thousand Buddhas, and the five hundred thousand Buddhas.
+
+Veneration to the Infinite Buddhas, Dhamma, and Sangha — The number of Buddhas who have attained Nibbana and conquered the defilements is truly infinite, surpassing even the grains of sand in the Ganges River. I pay respectful homage to all those Buddhas, as well as to their Noble Dhamma and their Holy Sangha.
+
+The Prayer for Protection — By the power of this act of veneration, may all misfortunes be abandoned, and may the many dangers and obstacles be destroyed without exception.`,
+    },
+  },
+  {
+    title: { romanized: 'Patthana (24 Conditions)', myanmar: 'ပဌာန်း (ပစ္စည်း ၂၄ ပါး)', english: 'The 24 Conditions (Paccaya)' },
+    audioUrl: chantAudioUrl('Patthana'),
+    text: {
+      romanized: `1. Hetu-paccayo
+2. Ārammaṇa-paccayo
+3. Adhipati-paccayo
+4. Anantara-paccayo
+5. Samanantara-paccayo
+6. Sahajāta-paccayo
+7. Aññamañña-paccayo
+8. Nissaya-paccayo
+9. Upanissaya-paccayo
+10. Purejāta-paccayo
+11. Pacchājāta-paccayo
+12. Āsevana-paccayo
+13. Kamma-paccayo
+14. Vipāka-paccayo
+15. Āhāra-paccayo
+16. Indriya-paccayo
+17. Jhāna-paccayo
+18. Magga-paccayo
+19. Sampayutta-paccayo
+20. Vippayutta-paccayo
+21. Atthi-paccayo
+22. Natthi-paccayo
+23. Vigata-paccayo
+24. Avigata-paccayo`,
+      myanmar: `၁။ ဟေတုပစ္စည်း
+၂။ အာရမ္မဏပစ္စည်း
+၃။ အဓိပတိပစ္စည်း
+၄။ အနန္တရပစ္စည်း
+၅။ သမနန္တရပစ္စည်း
+၆။ သဟဇာတပစ္စည်း
+၇။ အညမညပစ္စည်း
+၈။ နိဿယပစ္စည်း
+၉။ ဥပနိဿယပစ္စည်း
+၁၀။ ပုရေဇာတပစ္စည်း
+၁၁။ ပစ္ဆာဇာတပစ္စည်း
+၁၂။ အာသေဝနပစ္စည်း
+၁၃။ ကမ္မပစ္စည်း
+၁၄။ ဝိပါကပစ္စည်း
+၁၅။ အာဟာရပစ္စည်း
+၁၆။ ဣန္ဒြိယပစ္စည်း
+၁၇။ ဈာနပစ္စည်း
+၁၈။ မဂ္ဂပစ္စည်း
+၁၉။ သမ္ပယုတ္တပစ္စည်း
+၂၀။ ဝိပ္ပယုတ္တပစ္စည်း
+၂၁။ အတ္ထိပစ္စည်း
+၂၂။ နတ္ထိပစ္စည်း
+၂၃။ ဝိဂတပစ္စည်း
+၂၄။ အဝိဂတပစ္စည်း`,
+      english: `1. Root Condition
+2. Object Condition
+3. Predominance Condition
+4. Proximity Condition
+5. Contiguity Condition
+6. Co-nascence Condition
+7. Mutuality Condition
+8. Dependence Condition
+9. Decisive Dependence Condition
+10. Pre-nascence Condition
+11. Post-nascence Condition
+12. Repetition Condition
+13. Kamma Condition
+14. Result Condition
+15. Nutriment Condition
+16. Faculty Condition
+17. Jhana Condition
+18. Path Condition
+19. Association Condition
+20. Dissociation Condition
+21. Presence Condition
+22. Absence Condition
+23. Disappearance Condition
+24. Non-disappearance Condition`,
+    },
+  },
 ];
 
 // --- Buddha statue artwork: Myanmar-style seated meditation figure with
@@ -569,6 +674,59 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   const [chantAudioPlaying, setChantAudioPlaying] = useState(false);
   const [chantAudioError, setChantAudioError] = useState(false);
   const chantAudioRef = useRef(null);
+  // Stops any playing chant the moment this app unmounts (leaving to the
+  // Home page, or any other way of navigating away) -- App.jsx only keeps
+  // the active app mounted, so unmounting reliably fires whenever the
+  // student actually leaves, unlike trying to catch every possible exit
+  // button individually.
+  useEffect(() => {
+    return () => {
+      if (chantAudioRef.current) {
+        chantAudioRef.current.pause();
+        chantAudioRef.current.currentTime = 0;
+      }
+    };
+  }, []);
+  // Roster heartbeat -- same pattern as every other app's OnlineStatusWidget
+  // (e.g. MyanmarPoemsApp), only pings when opened for a real student.
+  useEffect(() => {
+    if (!studentUid || !studentName) return;
+    const heartbeatRef = doc(db, SHRINE_ROSTER_PATH, sanitizeShrineKey(studentName));
+    const ping = () => setDoc(heartbeatRef, { studentName, isOnline: true, lastSeen: serverTimestamp() }, { merge: true }).catch(() => {});
+    ping();
+    const interval = setInterval(ping, 30000);
+    const goOffline = () => { updateDoc(heartbeatRef, { isOnline: false, lastSeen: serverTimestamp() }).catch(() => {}); };
+    window.addEventListener('beforeunload', goOffline);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('beforeunload', goOffline);
+      goOffline();
+    };
+  }, [studentUid, studentName]);
+  // One lotus flower per minute of actual activity (any click anywhere in
+  // the app) -- ticks every 60s, only awarding a lotus if at least one
+  // click happened during that minute, so it reflects genuine engagement
+  // rather than just having the tab open.
+  useEffect(() => {
+    if (!studentUid) return;
+    let hasActivity = false;
+    const markActivity = () => { hasActivity = true; };
+    window.addEventListener('click', markActivity);
+    const interval = setInterval(() => {
+      if (hasActivity) {
+        hasActivity = false;
+        setLotusCount(prev => {
+          const next = prev + 1;
+          persist({ lotusCount: next });
+          return next;
+        });
+      }
+    }, 60000);
+    return () => {
+      window.removeEventListener('click', markActivity);
+      clearInterval(interval);
+    };
+  }, [studentUid]);
   // Meditation: opt-in via its own button (not a mandatory splash on
   // entry). A student picks a duration (1-60 min, typed in, not just
   // presets), the shrine glows with radiating color while they sit, and
@@ -581,6 +739,12 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   const [meditatingMinutes, setMeditatingMinutes] = useState(null);
   const [meditationRemainingSeconds, setMeditationRemainingSeconds] = useState(0);
   const [totalMeditationMinutes, setTotalMeditationMinutes] = useState(0);
+  // Shrine Room's own "online status" activity metric -- other apps show
+  // coin balance there, but coins here already have their own meaning
+  // (Merit Shop currency), so this uses a lotus flower count instead:
+  // one lotus per minute the student spends actually clicking around in
+  // here (see the activity-tracking effect below).
+  const [lotusCount, setLotusCount] = useState(0);
   const [dragOverSlot, setDragOverSlot] = useState(null);
   const [ringing, setRinging] = useState(false);
   const [toast, setToast] = useState(null);
@@ -626,6 +790,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
             setBuddhaId(data.buddhaId || null);
             setLastLampLitDate(data.lastLampLitDate || null);
             setTotalMeditationMinutes(data.totalMeditationMinutes || 0);
+            setLotusCount(data.lotusCount || 0);
           }
           if (data.coinBalance == null) persist({ coinBalance: STARTER_COINS });
         } else {
@@ -833,7 +998,23 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
         🏡
       </button>
 
-      <div className="fixed top-3 right-3 z-50 flex flex-col items-end gap-2">
+      {/* Same online-status widget every other app has -- shows a lotus
+          flower count (one per minute of actual activity here) instead of
+          a coin balance, since coins already mean something else in this
+          app (Merit Shop currency). Positioned at its own default top-2
+          spot, so the app's own coin/button column below is pushed down
+          to top-16 to leave it room. */}
+      <OnlineStatusWidget
+        rosterPath={SHRINE_ROSTER_PATH}
+        studentName={isTeacherPreview ? null : studentName}
+        isTeacherMode={isTeacherPreview}
+        coinBalance={isTeacherPreview ? null : lotusCount}
+        coinIcon="🪷"
+        panelTitle="🛕 Students"
+        teacherLabel="🧑‍🏫 Teacher"
+      />
+
+      <div className="fixed top-16 right-3 z-50 flex flex-col items-end gap-2">
         <div className="flex items-center gap-2 bg-white/90 backdrop-blur-sm px-3 py-2 rounded-full shadow-lg border border-amber-200">
           <span className="font-bold text-amber-700">🪙 {coinBalance}</span>
         </div>
