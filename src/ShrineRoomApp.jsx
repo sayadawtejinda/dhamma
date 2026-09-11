@@ -533,6 +533,20 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   const [bodhiStageIndex, setBodhiStageIndex] = useState(isTeacherPreview ? BODHI_MILESTONES.length - 1 : 0);
   const [shopOpen, setShopOpen] = useState(false);
   const [chantingOpen, setChantingOpen] = useState(false);
+  // Same rotate-to-landscape prompt as the student homepage -- the altar,
+  // its buttons, and the Chanting/Merit Shop side panels all need
+  // landscape width to lay out without crowding or covering each other on
+  // a phone held upright.
+  const [isPortraitPhone, setIsPortraitPhone] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(orientation: portrait) and (max-width: 768px)');
+    const update = () => setIsPortraitPhone(mq.matches);
+    update();
+    mq.addEventListener ? mq.addEventListener('change', update) : mq.addListener(update);
+    return () => {
+      mq.removeEventListener ? mq.removeEventListener('change', update) : mq.removeListener(update);
+    };
+  }, []);
   const [chantFormat, setChantFormat] = useState('romanized'); // 'romanized' | 'myanmar' | 'english'
   // Custom drag-to-resize instead of the CSS `resize` property: the panel
   // is anchored via `right` (fixed distance from the screen's right edge)
@@ -819,6 +833,13 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
 
   return (
     <div className={`min-h-screen flex flex-col items-center px-4 pt-6 pb-16 transition-colors duration-1000 ${dimmed ? 'bg-gradient-to-b from-indigo-200 via-amber-100 to-amber-200' : 'bg-gradient-to-b from-sky-100 via-emerald-50 to-emerald-100'}`}>
+      {isPortraitPhone && (
+        <div className="fixed inset-0 z-[9990] bg-indigo-900 flex flex-col items-center justify-center gap-4 p-6 text-center">
+          <div className="text-6xl animate-pulse">🔄</div>
+          <p className="text-white text-xl font-bold">Please rotate your phone sideways</p>
+          <p className="text-indigo-200 text-sm">Turn your phone to landscape to see the full page</p>
+        </div>
+      )}
       {meditatingMinutes != null && (
         <style>{`
           @keyframes shrineAuraPulse { 0%, 100% { opacity: 0.35; transform: translateX(-50%) scale(1); } 50% { opacity: 0.65; transform: translateX(-50%) scale(1.18); } }
@@ -842,25 +863,40 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
             🧘 {String(Math.floor(meditationRemainingSeconds / 60)).padStart(2, '0')}:{String(meditationRemainingSeconds % 60).padStart(2, '0')} left
           </div>
         )}
-        <button
-          onClick={() => setChantingOpen(true)}
-          className="flex items-center gap-1 bg-white hover:bg-amber-50 text-amber-700 text-sm font-semibold px-3 py-2 rounded-full shadow-lg border-2 border-amber-300"
-        >
-          🙏 Chanting
-        </button>
-        <button
-          onClick={() => setMeditationPickerOpen(true)}
-          disabled={meditatingMinutes != null}
-          className="flex items-center gap-1 bg-white hover:bg-amber-50 text-amber-700 text-sm font-semibold px-3 py-2 rounded-full shadow-lg border-2 border-amber-300 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          🧘 Meditation
-        </button>
-        <button
-          onClick={() => setShopOpen(prev => !prev)}
-          className="flex items-center gap-1 bg-white hover:bg-amber-50 text-amber-700 text-sm font-semibold px-3 py-2 rounded-full shadow-lg border-2 border-amber-300"
-        >
-          {shopOpen ? '✕ Close Shop' : '🛒 Merit Shop'}
-        </button>
+        {(() => {
+          const chantingBtn = (
+            <button
+              key="chanting"
+              onClick={() => setChantingOpen(true)}
+              className="flex items-center gap-1 bg-white hover:bg-amber-50 text-amber-700 text-sm font-semibold px-3 py-2 rounded-full shadow-lg border-2 border-amber-300"
+            >
+              🙏 Chanting
+            </button>
+          );
+          const meditationBtn = (
+            <button
+              key="meditation"
+              onClick={() => setMeditationPickerOpen(true)}
+              disabled={meditatingMinutes != null}
+              className="flex items-center gap-1 bg-white hover:bg-amber-50 text-amber-700 text-sm font-semibold px-3 py-2 rounded-full shadow-lg border-2 border-amber-300 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              🧘 Meditation
+            </button>
+          );
+          const shopBtn = (
+            <button
+              key="shop"
+              onClick={() => setShopOpen(prev => !prev)}
+              className="flex items-center gap-1 bg-white hover:bg-amber-50 text-amber-700 text-sm font-semibold px-3 py-2 rounded-full shadow-lg border-2 border-amber-300"
+            >
+              {shopOpen ? '✕ Close Shop' : '🛒 Merit Shop'}
+            </button>
+          );
+          // While the shop is open, Chanting/Meditation move below it
+          // instead of above -- keeps the shop button anchored right under
+          // the coin badge, closest to where the shop panel itself opens.
+          return shopOpen ? [shopBtn, chantingBtn, meditationBtn] : [chantingBtn, meditationBtn, shopBtn];
+        })()}
       </div>
 
 
