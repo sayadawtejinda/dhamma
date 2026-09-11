@@ -8275,10 +8275,11 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
             just a quick-glance count, not the main focus of the header. */}
         {studentProfile?.trophyCount > 0 && (
           <span
-            className="flex items-center gap-1 bg-white border border-gray-200 rounded-full px-2.5 py-1.5 shadow-lg text-sm font-bold text-yellow-600"
+            className="flex items-center gap-1 bg-white border border-gray-200 rounded-full px-2.5 py-1.5 shadow-lg"
             title={`${studentProfile.trophyCount} Trophies`}
           >
-            {studentProfile.trophyCount} 🏆
+            <span className="text-sm font-bold text-yellow-600">{studentProfile.trophyCount}</span>
+            <span className="text-xl leading-none">🏆</span>
           </span>
         )}
         <button

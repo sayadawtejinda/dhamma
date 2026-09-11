@@ -1308,6 +1308,46 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
   const [activeQuizId,setActiveQuizId]=useState(null);const [activeQuizData,setActiveQuizData]=useState(null);
   const [openLessonId,setOpenLessonId]=useState(null);const [editingLesson,setEditingLesson]=useState(null);
   const [newTitle,setNewTitle]=useState('');const [newContent,setNewContent]=useState('');const [newImgBase,setNewImgBase]=useState(DEFAULT_IMG_BASE);
+  // Gold coins for the wallet system -- same derived-score pattern as
+  // SmartStudy (quiz score / 50, never actually spent at the source), and
+  // the same click-to-deposit-into-Shrine-Room flow. abhiCoinsTransferred
+  // (read back from the Shrine Room roster doc) is subtracted from the
+  // displayed total so the same points don't count in both places at once.
+  const ABHI_POINTS_PER_COIN=50;
+  const [myAbhiTotalScore,setMyAbhiTotalScore]=useState(0);
+  const [abhiCoinsTransferredOut,setAbhiCoinsTransferredOut]=useState(0);
+  const abhiCoinBalance=Math.max(0,Math.floor(myAbhiTotalScore/ABHI_POINTS_PER_COIN)-abhiCoinsTransferredOut);
+  useEffect(()=>{
+    if(role!=='Student'||!studentProfile?.name)return;
+    const unsub=onSnapshot(query(abhiScoresRef(),where('studentName','==',studentProfile.name)),snap=>{
+      let total=0;snap.forEach(d=>{total+=d.data().score||0;});
+      setMyAbhiTotalScore(total);
+    });
+    return unsub;
+  },[role,studentProfile?.name]);
+  useEffect(()=>{
+    if(role!=='Student'||!studentProfile?.name)return;
+    const sanitize=k=>(k||'unknown').replace(/[.$#/\[\]]/g,'_');
+    getDoc(doc(db,'artifacts/shrine-room-app/public/data/roster',sanitize(studentProfile.name)))
+      .then(snap=>setAbhiCoinsTransferredOut(snap.exists()?(snap.data().abhidhammaCoinsTransferred||0):0))
+      .catch(()=>{});
+  },[role,studentProfile?.name]);
+  const handleDepositAbhiCoinsToShrineRoom=async()=>{
+    const depositable=abhiCoinBalance;
+    if(depositable<=0)return;
+    const confirmed=window.confirm(`Deposit ${depositable} gold coin(s) into your Shrine Room wallet?`);
+    if(!confirmed)return;
+    const sanitize=k=>(k||'unknown').replace(/[.$#/\[\]]/g,'_');
+    const shrineRef=doc(db,'artifacts/shrine-room-app/public/data/roster',sanitize(studentProfile.name));
+    try{
+      const shrineSnap=await getDoc(shrineRef);
+      const SHRINE_STARTER_COINS=20;
+      const currentShrineBalance=shrineSnap.exists()?(shrineSnap.data().coinBalance??0):SHRINE_STARTER_COINS;
+      const newTransferredOut=abhiCoinsTransferredOut+depositable;
+      await setDoc(shrineRef,{studentName:studentProfile.name,coinBalance:currentShrineBalance+depositable,abhidhammaCoinsTransferred:newTransferredOut},{merge:true});
+      setAbhiCoinsTransferredOut(newTransferredOut);
+    }catch(e){console.error('Error depositing coins to Shrine Room:',e);}
+  };
   // Sequential image numbering across the whole class -- scans every
   // lesson already in this class (plus whatever's typed in the content
   // box right now) for "NNN.jpg"-style filenames and returns one past the
@@ -1316,9 +1356,13 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
   // having to track/type the next number by hand.
   const contentTextareaRef=useRef(null);
   const getNextImageNumber=()=>{
+    // Exactly 3 digits (with a word boundary before them) -- matches the
+    // "001.jpg" convention only, so an unrelated longer number elsewhere
+    // in a lesson's content (a photo's own filename, a date, etc.) never
+    // gets picked up as if it were part of this numbering scheme.
     const nums=[];
-    lessons.forEach(l=>{for(const m of String(l.burmeseContent||'').matchAll(/(\d+)\.(?:jpg|jpeg|png)/gi))nums.push(parseInt(m[1],10));});
-    for(const m of String(newContent||'').matchAll(/(\d+)\.(?:jpg|jpeg|png)/gi))nums.push(parseInt(m[1],10));
+    lessons.forEach(l=>{for(const m of String(l.burmeseContent||'').matchAll(/\b(\d{3})\.(?:jpg|jpeg|png)\b/gi))nums.push(parseInt(m[1],10));});
+    for(const m of String(newContent||'').matchAll(/\b(\d{3})\.(?:jpg|jpeg|png)\b/gi))nums.push(parseInt(m[1],10));
     return String((nums.length?Math.max(...nums):0)+1).padStart(3,'0');
   };
   const insertNextImage=()=>{
@@ -1705,6 +1749,8 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
           rosterPath={P('classRoster')}
           isTeacherMode={role==='Teacher'}
           studentName={role==='Student'?studentProfile?.name:null}
+          coinBalance={role==='Student'?abhiCoinBalance:null}
+          onCoinClick={role==='Student'?handleDepositAbhiCoinsToShrineRoom:undefined}
           filterDocs={d=>d.status==='approved'&&(!classId||d.classId===classId)}
           panelTitle="📚 Students"
           teacherLabel="👩‍🏫 Teacher"

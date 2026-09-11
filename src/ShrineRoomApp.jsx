@@ -551,7 +551,10 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     document.body.style.userSelect = 'none';
     const onMove = (moveEvent) => {
       const delta = chantResizeRef.current.startX - moveEvent.clientX;
-      const next = Math.min(window.innerWidth * 0.9, Math.max(288, chantResizeRef.current.startWidth + delta));
+      // Capped well short of covering the altar/Buddha on the left --
+      // this panel stays a side panel, not a takeover, even at its widest.
+      const maxWidth = Math.min(480, window.innerWidth * 0.5);
+      const next = Math.min(maxWidth, Math.max(288, chantResizeRef.current.startWidth + delta));
       setChantPanelWidth(next);
     };
     const onUp = () => {
