@@ -533,39 +533,6 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   const [bodhiStageIndex, setBodhiStageIndex] = useState(isTeacherPreview ? BODHI_MILESTONES.length - 1 : 0);
   const [shopOpen, setShopOpen] = useState(false);
   const [chantingOpen, setChantingOpen] = useState(false);
-  // Forces a landscape layout on a phone held upright -- the altar, its
-  // buttons, and the Chanting/Merit Shop side panels all need landscape
-  // width to lay out without crowding or covering each other. Rather than
-  // just telling the student to rotate their phone, the page itself
-  // rotates 90deg (same trick mobile games use) so it's already showing
-  // landscape the instant it loads.
-  const [isPortraitPhone, setIsPortraitPhone] = useState(false);
-  const [viewportSize, setViewportSize] = useState({ w: typeof window !== 'undefined' ? window.innerWidth : 0, h: typeof window !== 'undefined' ? window.innerHeight : 0 });
-  useEffect(() => {
-    const mq = window.matchMedia('(orientation: portrait) and (max-width: 768px)');
-    const update = () => {
-      setIsPortraitPhone(mq.matches);
-      setViewportSize({ w: window.innerWidth, h: window.innerHeight });
-    };
-    update();
-    mq.addEventListener ? mq.addEventListener('change', update) : mq.addListener(update);
-    window.addEventListener('resize', update);
-    return () => {
-      mq.removeEventListener ? mq.removeEventListener('change', update) : mq.removeListener(update);
-      window.removeEventListener('resize', update);
-    };
-  }, []);
-  // Rotate 90deg around the top-left corner, then translate along the
-  // (now-rotated) screen's own x-axis by the screen's width to bring the
-  // box back from just-off-screen-left into view -- see the derivation in
-  // the PR/commit description if this ever needs revisiting.
-  const rotateLandscapeStyle = isPortraitPhone ? {
-    position: 'fixed', top: 0, left: 0,
-    width: `${viewportSize.h}px`, height: `${viewportSize.w}px`,
-    transformOrigin: 'top left',
-    transform: `translateY(${viewportSize.h}px) rotate(-90deg)`,
-    overflowY: 'auto', overflowX: 'hidden',
-  } : undefined;
   const [chantFormat, setChantFormat] = useState('romanized'); // 'romanized' | 'myanmar' | 'english'
   // Custom drag-to-resize instead of the CSS `resize` property: the panel
   // is anchored via `right` (fixed distance from the screen's right edge)
@@ -851,10 +818,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   const dimmed = hasLampPlaced && lastLampLitDate === todayKey();
 
   return (
-    <div
-      className={`${isPortraitPhone ? '' : 'min-h-screen'} flex flex-col items-center px-4 pt-6 pb-16 transition-colors duration-1000 ${dimmed ? 'bg-gradient-to-b from-indigo-200 via-amber-100 to-amber-200' : 'bg-gradient-to-b from-sky-100 via-emerald-50 to-emerald-100'}`}
-      style={rotateLandscapeStyle}
-    >
+    <div className={`min-h-screen flex flex-col items-center px-4 pt-6 pb-16 transition-colors duration-1000 ${dimmed ? 'bg-gradient-to-b from-indigo-200 via-amber-100 to-amber-200' : 'bg-gradient-to-b from-sky-100 via-emerald-50 to-emerald-100'}`}>
       {meditatingMinutes != null && (
         <style>{`
           @keyframes shrineAuraPulse { 0%, 100% { opacity: 0.35; transform: translateX(-50%) scale(1); } 50% { opacity: 0.65; transform: translateX(-50%) scale(1.18); } }
