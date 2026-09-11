@@ -6414,7 +6414,7 @@ function SmartStudyProgressBadge({ classId, studentName, smartStudyNames, compac
   return null;
 }
 
-function StudentDashboard({ user, studentProfile, studentUid, announcements, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenMyanmarSpeaking, onOpenConsonantPractice, onOpenBurmeseGame, onOpenNumberLearning, onOpenVowelsLearning, onOpenAnimalSound, onOpenBurmeseLearningGames, onOpenInteractiveQuiz, onOpenMyanmarPoems, onOpenConsonantEndings, onOpenTimeAndCalendar, onOpenMyanmarSpelling, onOpenMyanmarSoundPractice, onOpenReadingMyanmar, onOpenSpeakingMyanmar, onOpenMyanmarPart1And2, onOpenBodhiTree, onOpenShrineRoom, onOpenWatchAndLearn, onLogout }) {
+function StudentDashboard({ user, studentProfile, studentUid, announcements, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenMyanmarSpeaking, onOpenConsonantPractice, onOpenBurmeseGame, onOpenNumberLearning, onOpenVowelsLearning, onOpenAnimalSound, onOpenBurmeseLearningGames, onOpenInteractiveQuiz, onOpenMyanmarPoems, onOpenConsonantEndings, onOpenTimeAndCalendar, onOpenMyanmarSpelling, onOpenMyanmarSoundPractice, onOpenReadingMyanmar, onOpenSpeakingMyanmar, onOpenMyanmarPart1And2, onOpenBodhiTree, onOpenShrineRoom, onOpenWatchAndLearn, onLogout, onNavigate }) {
   const [myLessons, setMyLessons] = useState([]);
   const [ssCompletionCounts, setSsCompletionCounts] = useState({}); // classId → SmartStudy completedCount
   const [mySessions, setMySessions] = useState([]);
@@ -8189,30 +8189,56 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                   </button>
                 )}
             </div>
-            <div className="absolute bottom-2 right-2 flex items-center gap-2">
-              <button
-                onClick={() => setShowLogoutConfirm(true)}
-                className="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-red-700 bg-gray-100 hover:bg-red-50 rounded-full transition-colors border border-gray-200"
-                title="Log out of this device (e.g. borrowed/shared device)"
-                aria-label="Log Out"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 001 1h6a1 1 0 100-2H4V5h5a1 1 0 000-2H3zm10.293 4.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L14.586 11H7a1 1 0 110-2h7.586l-1.293-1.293a1 1 0 010-1.414z" clipRule="evenodd" />
-                </svg>
-              </button>
-              <button
-                onClick={() => { setEditingNameText(studentProfile?.pendingName || studentProfile?.name || ''); setIsEditingName(true); }}
-                className="w-8 h-8 flex items-center justify-center text-emerald-600 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 rounded-full transition-colors border border-emerald-200"
-                title="Edit Profile"
-                aria-label="Edit Profile"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                  <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-                </svg>
-              </button>
-            </div>
           </>
         )}
+      </div>
+
+      {/* Experimental: moved out to the "in between the reading room and
+          dining room" spot on the house illustration, per the teacher's
+          request -- was previously pinned to the bottom-right of the
+          profile header box. */}
+      <div className="fixed z-30 flex items-center gap-2" style={{ top: '44%', left: '50%', transform: 'translateX(-50%)' }}>
+        <button
+          onClick={() => setShowLogoutConfirm(true)}
+          className="w-10 h-10 flex items-center justify-center text-gray-500 hover:text-red-700 bg-white/90 hover:bg-red-50 rounded-full shadow-lg transition-colors border border-gray-200"
+          title="Log out of this device (e.g. borrowed/shared device)"
+          aria-label="Log Out"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 001 1h6a1 1 0 100-2H4V5h5a1 1 0 000-2H3zm10.293 4.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L14.586 11H7a1 1 0 110-2h7.586l-1.293-1.293a1 1 0 010-1.414z" clipRule="evenodd" />
+          </svg>
+        </button>
+        <button
+          onClick={() => { setEditingNameText(studentProfile?.pendingName || studentProfile?.name || ''); setIsEditingName(true); }}
+          className="w-10 h-10 flex items-center justify-center text-emerald-600 hover:text-emerald-800 bg-white/90 hover:bg-emerald-50 rounded-full shadow-lg transition-colors border border-emerald-200"
+          title="Edit Profile"
+          aria-label="Edit Profile"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Experimental: Today/Weekly/Attendance/Trophies -- previously one
+          small square button in the corner that cycled through all four on
+          repeated taps; now four separate buttons (same style as the
+          reading-room buttons above) at the reading room's bottom edge /
+          into the dining room, since desktop has plenty of room for all
+          four at once. */}
+      <div className="fixed z-30 flex flex-wrap gap-2 justify-end" style={{ top: '50%', right: '4%', maxWidth: '46%' }}>
+        <button onClick={() => onNavigate && onNavigate('today')} className="bg-white/90 hover:bg-white shadow-lg rounded-xl px-4 py-3 font-bold text-violet-700 border border-violet-300 whitespace-nowrap">
+          🗓️ Today
+        </button>
+        <button onClick={() => onNavigate && onNavigate('weekly')} className="bg-white/90 hover:bg-white shadow-lg rounded-xl px-4 py-3 font-bold text-violet-700 border border-violet-300 whitespace-nowrap">
+          📅 Weekly
+        </button>
+        <button onClick={() => onNavigate && onNavigate('attendance')} className="bg-white/90 hover:bg-white shadow-lg rounded-xl px-4 py-3 font-bold text-indigo-700 border border-indigo-300 whitespace-nowrap">
+          📊 Attendance
+        </button>
+        <button onClick={() => onNavigate && onNavigate('trophies')} className="bg-white/90 hover:bg-white shadow-lg rounded-xl px-4 py-3 font-bold text-yellow-700 border border-yellow-300 whitespace-nowrap">
+          🏆 Trophies
+        </button>
       </div>
 
       {showLessonsPanel && (
@@ -10129,7 +10155,7 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpen
             </div>
           );
         }
-        return <StudentDashboard user={user} studentProfile={studentProfile} studentUid={targetStudentUid} announcements={announcements} onOpenSmartStudy={onOpenSmartStudy} onOpenAbhidhamma={onOpenAbhidhamma} onOpenMyanmarReader={onOpenMyanmarReader} onOpenDhammaschool={onOpenDhammaschool} onOpenMyanmarSpeaking={onOpenMyanmarSpeaking} onOpenConsonantPractice={onOpenConsonantPractice} onOpenBurmeseGame={onOpenBurmeseGame} onOpenNumberLearning={onOpenNumberLearning} onOpenVowelsLearning={onOpenVowelsLearning} onOpenAnimalSound={onOpenAnimalSound} onOpenBurmeseLearningGames={onOpenBurmeseLearningGames} onOpenInteractiveQuiz={onOpenInteractiveQuiz} onOpenMyanmarPoems={onOpenMyanmarPoems} onOpenConsonantEndings={onOpenConsonantEndings} onOpenTimeAndCalendar={onOpenTimeAndCalendar} onOpenMyanmarSpelling={onOpenMyanmarSpelling} onOpenMyanmarSoundPractice={onOpenMyanmarSoundPractice} onOpenReadingMyanmar={onOpenReadingMyanmar} onOpenSpeakingMyanmar={onOpenSpeakingMyanmar} onOpenMyanmarPart1And2={onOpenMyanmarPart1And2} onOpenBodhiTree={onOpenBodhiTree} onOpenShrineRoom={onOpenShrineRoom} onOpenWatchAndLearn={onOpenWatchAndLearn} onLogout={handleStudentLogout} />;
+        return <StudentDashboard user={user} studentProfile={studentProfile} studentUid={targetStudentUid} announcements={announcements} onOpenSmartStudy={onOpenSmartStudy} onOpenAbhidhamma={onOpenAbhidhamma} onOpenMyanmarReader={onOpenMyanmarReader} onOpenDhammaschool={onOpenDhammaschool} onOpenMyanmarSpeaking={onOpenMyanmarSpeaking} onOpenConsonantPractice={onOpenConsonantPractice} onOpenBurmeseGame={onOpenBurmeseGame} onOpenNumberLearning={onOpenNumberLearning} onOpenVowelsLearning={onOpenVowelsLearning} onOpenAnimalSound={onOpenAnimalSound} onOpenBurmeseLearningGames={onOpenBurmeseLearningGames} onOpenInteractiveQuiz={onOpenInteractiveQuiz} onOpenMyanmarPoems={onOpenMyanmarPoems} onOpenConsonantEndings={onOpenConsonantEndings} onOpenTimeAndCalendar={onOpenTimeAndCalendar} onOpenMyanmarSpelling={onOpenMyanmarSpelling} onOpenMyanmarSoundPractice={onOpenMyanmarSoundPractice} onOpenReadingMyanmar={onOpenReadingMyanmar} onOpenSpeakingMyanmar={onOpenSpeakingMyanmar} onOpenMyanmarPart1And2={onOpenMyanmarPart1And2} onOpenBodhiTree={onOpenBodhiTree} onOpenShrineRoom={onOpenShrineRoom} onOpenWatchAndLearn={onOpenWatchAndLearn} onLogout={handleStudentLogout} onNavigate={setView} />;
       case 'weekly': 
         return <WeeklySchedule role={role} targetStudentUid={targetStudentUid} />;
       case 'attendance':
