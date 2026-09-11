@@ -174,6 +174,11 @@ const MPOEMS_APP_BODY_HTML = `
                 <button id="next-poem" class="p-3 bg-indigo-500 text-white rounded-full shadow-lg transition duration-150 transform hover:scale-105 disabled:opacity-50" title="နောက် ကဗျာသို့">
                     <i data-lucide="chevron-right" class="w-6 h-6"></i>
                 </button>
+
+                <!-- My Poems List Icon -->
+                <button id="show-poem-list" class="p-3 bg-purple-500 text-white rounded-full shadow-lg hover:bg-purple-600 transition duration-150 transform hover:scale-105" title="My Poems">
+                    <i data-lucide="list-checks" class="w-6 h-6"></i>
+                </button>
             </div>
             
             <!-- Poem Display Area -->
@@ -205,6 +210,42 @@ const MPOEMS_APP_BODY_HTML = `
     <!-- ============================================= -->
     <div id="translation-overlay" class="translation-overlay rounded-t-2xl shadow-2xl">
         <!-- Translation text will be injected here -->
+    </div>
+
+    <!-- ============================================= -->
+    <!-- SING-ALONG CONFIRMATION -- pictures instead of a
+         yes/no question, since some students can't read yet.
+         English-only label text, per the teacher's request. -->
+    <!-- ============================================= -->
+    <div id="sing-confirm-modal" style="display:none;" class="fixed inset-0 z-[200] bg-black/60 flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl shadow-2xl p-6 max-w-sm w-full text-center">
+            <p class="text-lg font-bold text-gray-800 mb-4">Did you sing this yourself?</p>
+            <div class="flex gap-4 justify-center">
+                <button id="sing-yes-btn" class="flex-1 flex flex-col items-center gap-2 bg-emerald-50 hover:bg-emerald-100 border-2 border-emerald-300 rounded-2xl p-4 transition transform hover:scale-105">
+                    <span style="font-size:48px; line-height:1;">🎤😄</span>
+                    <span class="font-bold text-emerald-700 text-sm">Yes, I sang!</span>
+                </button>
+                <button id="sing-no-btn" class="flex-1 flex flex-col items-center gap-2 bg-gray-50 hover:bg-gray-100 border-2 border-gray-300 rounded-2xl p-4 transition transform hover:scale-105">
+                    <span style="font-size:48px; line-height:1;">🤐</span>
+                    <span class="font-bold text-gray-600 text-sm">Not yet</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================= -->
+    <!-- MY POEMS OVERVIEW -- a full list with a checkmark on
+         poems already recited, since the checkmark on the poem
+         screen itself is only visible one poem at a time. -->
+    <!-- ============================================= -->
+    <div id="poem-list-modal" style="display:none;" class="fixed inset-0 z-[200] bg-black/60 flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl shadow-2xl p-6 max-w-md w-full max-h-[80vh] flex flex-col">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold text-gray-800">My Poems</h3>
+                <button id="close-poem-list" class="text-gray-400 hover:text-gray-700 text-2xl leading-none">&times;</button>
+            </div>
+            <div id="poem-list-items" class="space-y-2 overflow-y-auto"></div>
+        </div>
     </div>
 
 `;
@@ -1912,6 +1953,13 @@ export default function MyanmarPoemsApp({ entryRequest, onExit, hideOwnOnlineBad
         const prevButton = byId('prev-poem');
         const nextButton = byId('next-poem');
         const openYoutubeButton = byId('open-youtube'); // Renamed ID
+        const showPoemListButton = byId('show-poem-list');
+        const closePoemListButton = byId('close-poem-list');
+        const poemListModal = byId('poem-list-modal');
+        const poemListItems = byId('poem-list-items');
+        const singConfirmModal = byId('sing-confirm-modal');
+        const singYesBtn = byId('sing-yes-btn');
+        const singNoBtn = byId('sing-no-btn');
 
         const COLOR_CLASSES = ['color-0', 'color-1', 'color-2', 'color-3', 'color-4'];
         const TRANSLATION_TIMEOUT_MS = 3000; // 3 seconds to hide the translation
@@ -1924,11 +1972,36 @@ export default function MyanmarPoemsApp({ entryRequest, onExit, hideOwnOnlineBad
         // a single sitting, no matter how many poems get recited today.
         const progressRosterRef = studentName ? doc(db, MPOEMS_ROSTER_PATH, sanitizeMpoemsKey(studentName)) : null;
         let completedPoemIds = [];
+        // recitedDates[poemIndex] = 'YYYY-MM-DD' of the last day this poem's
+        // sing-along was confirmed -- once set for today, navigatePoem skips
+        // the prompt entirely, so a student can't be asked (or paid) twice
+        // for the same poem on the same day.
+        let recitedDates = {};
         let newPoemsCountedThisSession = 0;
         let poemStartTime = Date.now();
         let audioCoinAwardedForThisPoem = false;
         const MIN_RECITE_SECONDS = 15;
         const MAX_NEW_POEMS_PER_SESSION = 2;
+        const todayKey = () => new Date().toISOString().slice(0, 10);
+
+        // Shows the pictures-only sing-along prompt and resolves true/false
+        // once the student taps one. Pictures + English-only label instead
+        // of a yes/no question, since some students can't read yet.
+        function askIfSangThemselves() {
+            return new Promise((resolve) => {
+                singConfirmModal.style.display = 'flex';
+                function cleanup(result) {
+                    singConfirmModal.style.display = 'none';
+                    singYesBtn.removeEventListener('click', onYes);
+                    singNoBtn.removeEventListener('click', onNo);
+                    resolve(result);
+                }
+                function onYes() { cleanup(true); }
+                function onNo() { cleanup(false); }
+                singYesBtn.addEventListener('click', onYes);
+                singNoBtn.addEventListener('click', onNo);
+            });
+        }
 
         // Gold coins: +20 for listening along via Play Audio (once per poem
         // visit), +50 for confirming self-recitation -- clamped at 0, same
@@ -1950,6 +2023,7 @@ export default function MyanmarPoemsApp({ entryRequest, onExit, hideOwnOnlineBad
             return getDoc(progressRosterRef).then(snap => {
                 const data = snap.exists() ? snap.data() : {};
                 completedPoemIds = Array.isArray(data.completedPoemIds) ? data.completedPoemIds : [];
+                recitedDates = (data.recitedDates && typeof data.recitedDates === 'object') ? data.recitedDates : {};
                 coinBalanceRef.current = data.coinBalance || 0;
                 setMyCoinBalance(coinBalanceRef.current);
                 const nextNewIndex = poemsData.findIndex((_, i) => !completedPoemIds.includes(i));
@@ -1998,6 +2072,26 @@ export default function MyanmarPoemsApp({ entryRequest, onExit, hideOwnOnlineBad
         }
 
         /**
+         * Fills the My Poems overview with every poem title and its done
+         * status, clickable to jump straight to that poem.
+         */
+        function renderPoemList() {
+            poemListItems.innerHTML = '';
+            poemsData.forEach((poem, index) => {
+                const done = completedPoemIds.includes(index);
+                const row = document.createElement('button');
+                row.className = `w-full flex items-center gap-3 text-left p-3 rounded-xl border-2 transition ${done ? 'bg-emerald-50 border-emerald-300 hover:bg-emerald-100' : 'bg-gray-50 border-gray-200 hover:bg-gray-100'}`;
+                row.innerHTML = `<span style="font-size:22px;">${done ? '✅' : '⭘'}</span><span class="font-semibold text-gray-800">${index + 1}. ${poem.title}</span>`;
+                row.addEventListener('click', () => {
+                    currentPoemIndex = index;
+                    renderPoem();
+                    poemListModal.style.display = 'none';
+                });
+                poemListItems.appendChild(row);
+            });
+        }
+
+        /**
          * Dynamically adjusts font size to fill the container height without overflowing.
          */
         function adjustFontSize() {
@@ -2035,23 +2129,31 @@ export default function MyanmarPoemsApp({ entryRequest, onExit, hideOwnOnlineBad
          * Navigates to the previous or next poem.
          * @param {number} direction - 1 for next, -1 for previous.
          */
-        function navigatePoem(direction) {
+        async function navigatePoem(direction) {
             // Moving to the Next poem after reciting for at least
             // MIN_RECITE_SECONDS asks whether the student actually recited
             // it themselves -- confirming awards coins, and (capped at
             // MAX_NEW_POEMS_PER_SESSION new poems per visit) marks it done.
+            // Skipped entirely if this poem was already confirmed today, so
+            // coins/the prompt never repeat for the same poem on the same day.
             if (direction === 1) {
                 const recitedSeconds = (Date.now() - poemStartTime) / 1000;
-                if (recitedSeconds >= MIN_RECITE_SECONDS) {
-                    const recitedThemselves = window.confirm('ဒီကဗျာကို မင်းကိုယ်တိုင် ရွတ်ဆိုခဲ့တာလား? (Did you recite this poem yourself?)');
+                const askedIndex = currentPoemIndex;
+                const alreadyRecitedToday = recitedDates[askedIndex] === todayKey();
+                if (recitedSeconds >= MIN_RECITE_SECONDS && !alreadyRecitedToday) {
+                    const recitedThemselves = await askIfSangThemselves();
                     if (recitedThemselves) {
+                        const today = todayKey();
+                        recitedDates[askedIndex] = today;
                         awardCoins(50);
-                        if (!completedPoemIds.includes(currentPoemIndex) && newPoemsCountedThisSession < MAX_NEW_POEMS_PER_SESSION) {
-                            completedPoemIds.push(currentPoemIndex);
+                        const rosterPatch = { recitedDates: { [askedIndex]: today } };
+                        if (!completedPoemIds.includes(askedIndex) && newPoemsCountedThisSession < MAX_NEW_POEMS_PER_SESSION) {
+                            completedPoemIds.push(askedIndex);
                             newPoemsCountedThisSession++;
-                            if (progressRosterRef) {
-                                setDoc(progressRosterRef, { completedPoemIds: arrayUnion(currentPoemIndex) }, { merge: true }).catch(() => {});
-                            }
+                            rosterPatch.completedPoemIds = arrayUnion(askedIndex);
+                        }
+                        if (progressRosterRef) {
+                            setDoc(progressRosterRef, rosterPatch, { merge: true }).catch(() => {});
                         }
                     }
                 }
@@ -2312,6 +2414,17 @@ export default function MyanmarPoemsApp({ entryRequest, onExit, hideOwnOnlineBad
             // Navigation Listeners
             prevButton.addEventListener('click', () => navigatePoem(-1));
             nextButton.addEventListener('click', () => navigatePoem(1));
+
+            // My Poems overview -- lets a student/teacher see every poem's
+            // done status at a glance instead of paging through one at a
+            // time to spot the ✅ tag.
+            showPoemListButton.addEventListener('click', () => {
+                renderPoemList();
+                poemListModal.style.display = 'flex';
+            });
+            closePoemListButton.addEventListener('click', () => {
+                poemListModal.style.display = 'none';
+            });
             
             // Add a resize listener to adjust font size when window changes size
             let resizeTimer;

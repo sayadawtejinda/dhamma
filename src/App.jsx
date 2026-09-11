@@ -138,6 +138,11 @@ class AppErrorBoundary extends React.Component {
       try {
         if (!sessionStorage.getItem('dhamma_auto_reload_attempted')) {
           sessionStorage.setItem('dhamma_auto_reload_attempted', '1');
+          // Read by App()'s mount effect after the reload lands, so the
+          // student sees a reassuring message instead of silently landing
+          // back on the home page with no explanation for why their tap
+          // didn't open anything.
+          sessionStorage.setItem('dhamma_recovering_from_update', '1');
           hardReload();
         }
       } catch (e) {}
@@ -206,13 +211,21 @@ const KEEP_ALIVE_APPS = new Set(['smartstudy', 'abhidhamma', 'myanmarreader', 'd
 export default function App() {
   const [activeApp, setActiveApp] = useState('tutoring');
   const [openedKeepAliveApps, setOpenedKeepAliveApps] = useState(() => new Set());
+  const [showUpdateToast, setShowUpdateToast] = useState(false);
   // A fresh mount only happens via an actual page load, so getting here at
   // all means this page's own chunk loaded fine -- clear the auto-reload
   // guard so a stale-chunk crash on a DIFFERENT lazy-loaded app later in
   // this same visit (e.g. opening Smart Study after Tutoring loaded fine)
   // is still allowed one automatic reload of its own.
   useEffect(() => {
-    try { sessionStorage.removeItem('dhamma_auto_reload_attempted'); } catch (e) {}
+    try {
+      sessionStorage.removeItem('dhamma_auto_reload_attempted');
+      if (sessionStorage.getItem('dhamma_recovering_from_update')) {
+        sessionStorage.removeItem('dhamma_recovering_from_update');
+        setShowUpdateToast(true);
+        setTimeout(() => setShowUpdateToast(false), 6000);
+      }
+    } catch (e) {}
   }, []);
   useEffect(() => {
     if (!KEEP_ALIVE_APPS.has(activeApp) || openedKeepAliveApps.has(activeApp)) return;
@@ -452,6 +465,11 @@ export default function App() {
 
   return (
     <div className="min-h-screen">
+      {showUpdateToast && (
+        <div className="fixed top-3 left-1/2 -translate-x-1/2 z-[9999] bg-indigo-600 text-white text-sm font-semibold px-4 py-2 rounded-full shadow-lg">
+          🔄 Just updated the app — tap your subject again
+        </div>
+      )}
       {/* The Tutoring Dashboard is the home screen, so it's the only app
           that's always mounted/eagerly loaded. Every other app below is
           lazy-loaded and only mounted while it's the active app, and
