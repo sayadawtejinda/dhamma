@@ -720,6 +720,51 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
     setDoc(readerRosterDocRef(studentName), { coinBalance: increment(amount) }, { merge: true }).catch(() => {});
   };
 
+  const SHRINE_ROSTER_PATH = 'artifacts/shrine-room-app/public/data/roster';
+  // Matches ShrineRoomApp.jsx's own sanitizeShrineKey exactly (including
+  // the .trim()) so a deposit lands on the same roster doc Shrine Room
+  // itself reads from.
+  const sanitizeShrineKey = (key) => (key || 'unknown').trim().replace(/[.$#/\[\]]/g, '_');
+  // Same name-resolution idea as SmartStudy/MyanmarPoems/Abhidhamma/
+  // Dhammaschool's deposit buttons: prefer the canonical Tutoring name
+  // (already tracked here as tutoringStudentUid) over whatever name this
+  // student happens to be using in Myanmar Reader, so a deposit can't land
+  // under the wrong Shrine Room roster doc.
+  const resolveShrineTargetName = async () => {
+    if (tutoringStudentUid) {
+      try {
+        const snap = await getDoc(doc(db, TUTORING_STUDENTS_PATH, tutoringStudentUid));
+        if (snap.exists() && snap.data().name) return snap.data().name;
+      } catch (e) { /* fall back to studentName below */ }
+    }
+    return studentName;
+  };
+  // coinBalance here is a direct spendable wallet (not a derived score
+  // needing a separate "already transferred" counter, unlike Smart Study)
+  // -- so depositing is simply "move what's here now into Shrine Room,
+  // then subtract that same amount back out here".
+  const handleDepositCoinsToShrineRoom = async () => {
+    const depositable = coinBalance;
+    if (depositable <= 0) return;
+    const confirmed = window.confirm(`Deposit ${depositable} coin(s) into your Shrine Room wallet?`);
+    if (!confirmed) return;
+    try {
+      const targetName = await resolveShrineTargetName();
+      const shrineRef = doc(db, SHRINE_ROSTER_PATH, sanitizeShrineKey(targetName));
+      const shrineSnap = await getDoc(shrineRef);
+      const SHRINE_STARTER_COINS = 20;
+      await setDoc(shrineRef, {
+        studentName: targetName,
+        coinBalance: shrineSnap.exists() ? increment(depositable) : SHRINE_STARTER_COINS + depositable,
+      }, { merge: true });
+      await setDoc(readerRosterDocRef(studentName), { coinBalance: increment(-depositable) }, { merge: true });
+      window.alert(`🪙 Deposited ${depositable} coin(s) into your Shrine Room wallet!`);
+    } catch (e) {
+      console.error('Error depositing coins to Shrine Room:', e);
+      window.alert('⚠️ Something went wrong depositing your coins. Please try again.');
+    }
+  };
+
   const finishNameSetup = (name, extra = {}) => {
     const trimmed = name.trim();
     if (!trimmed) return;
@@ -3020,7 +3065,7 @@ useEffect(() => {
       ) : studentName && (
         <div className="fixed top-2 right-2 z-[9800] flex items-center gap-2 bg-white/90 backdrop-blur-sm px-3 py-2 rounded-2xl shadow-lg border border-gray-200 text-sm">
           <span className="font-bold text-gray-700">{studentName}</span>
-          <span className="flex items-center gap-1 text-amber-600 font-bold" title="Gold coins earned from reading"><span>🪙</span>{coinBalance}</span>
+          <button onClick={handleDepositCoinsToShrineRoom} className="flex items-center gap-1 text-amber-600 font-bold hover:underline" title="Click to deposit into your Shrine Room wallet"><span>🪙</span>{coinBalance}</button>
           <button onClick={() => setShowOnlinePanel(true)} className="flex items-center gap-1 text-emerald-600 font-bold hover:underline">
             <span className="w-2 h-2 bg-emerald-500 rounded-full inline-block"></span>{onlineCount} online
           </button>
