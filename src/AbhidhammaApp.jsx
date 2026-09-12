@@ -1205,8 +1205,28 @@ const AbhiLessonItem = ({ lesson, classId, isTeacher, studentAgeGroup, studentNa
   if(!isTeacher&&studentAgeGroup){const v=variants[studentAgeGroup];if(v){dc=v.english;dt=v.englishTitle||lesson.title;qa=!!v.quiz;qd=v.quiz;discQ=v.discussionQuestions||[];}else dc='Content not available for your age group yet.';}
   const imgBase=lesson.imageBaseUrl||classImageBase||DEFAULT_IMG_BASE;
   
+  // Once a student has asked + answered a discussion question (unlocking
+  // the quiz) but hasn't taken it yet, a floating shortcut stays pinned to
+  // the screen's corner regardless of which tab (Lesson/Discussion) is
+  // open -- so a student who wants to keep browsing classmates' Q&A first
+  // can, without losing track of the quiz, and one who wants to jump
+  // straight to it doesn't have to scroll back to find the unlock box.
+  // Outside the tab==='content' block on purpose (unlike the lock box
+  // above it, which is content-tab-only) so it's visible from Discussion
+  // too. Tied to isOpen so only the lesson the student is actually looking
+  // at shows one, not every unlocked-but-uncompleted lesson at once.
+  const quizJustUnlocked = isOpen && !isTeacher && qa && !isCompleted && hasAsked && hasReplied;
+
   return(
     <div ref={ref} className={`relative rounded-xl shadow-md overflow-hidden border mb-4 ${isTeacher?'bg-gray-800 border-gray-700':'bg-gray-700 border-gray-600'}`}>
+      {quizJustUnlocked && (
+        <button
+          onClick={()=>onTakeQuiz(lesson.id,dt,qd)}
+          className="fixed top-16 right-4 z-40 flex items-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-sm font-bold pl-3 pr-4 py-2.5 rounded-full shadow-lg hover:scale-105 transition animate-pulse"
+        >
+          <Gamepad2 className="w-5 h-5"/> Quiz Unlocked!
+        </button>
+      )}
       {isGenerating&&<div className="absolute inset-0 bg-gray-900/80 z-10 flex flex-col items-center justify-center backdrop-blur-sm rounded-xl"><RotateCw className="w-12 h-12 text-teal-400 animate-spin mb-4"/><p className="text-white font-bold">Generating…</p></div>}
       <div onClick={onToggle} className="p-4 cursor-pointer hover:bg-gray-600/50 flex justify-between items-center">
         <div className="flex items-center gap-3">{isOpen?<ChevronDown className="w-5 h-5 text-gray-400"/>:<ChevronRight className="w-5 h-5 text-gray-400"/>}
