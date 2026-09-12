@@ -88,6 +88,11 @@ const BodhiTreeApp = lazyLoad(() => import('./BodhiTreeApp'));
 // BodhiTreeApp.jsx, and reads that app's attendance-based Bodhi stage to
 // gate a couple of shrine items, without importing anything from it.
 const ShrineRoomApp = lazyLoad(() => import('./ShrineRoomApp'));
+// Avatar -- a third piece of the gamified "Home" idea: a personal character
+// a student dresses up by spending coins straight out of their Shrine Room
+// wallet (not a separate currency of its own). Same standalone-app pattern
+// as BodhiTreeApp.jsx/ShrineRoomApp.jsx.
+const AvatarApp = lazyLoad(() => import('./AvatarApp'));
 // Watch & Learn — consolidates 5 previously-separate bare-link Lesson Bank
 // entries (each just a YouTube link, no content of its own) into one
 // assignable lesson with a list screen, extensible via its own "Add a
@@ -254,6 +259,7 @@ export default function App() {
   const [myanmarPart1And2Request, setMyanmarPart1And2Request] = useState(null);
   const [bodhiTreeRequest, setBodhiTreeRequest] = useState(null);
   const [shrineRoomRequest, setShrineRoomRequest] = useState(null);
+  const [avatarRequest, setAvatarRequest] = useState(null);
   const [watchAndLearnRequest, setWatchAndLearnRequest] = useState(null);
 
   const openMyanmarSpelling = (request) => {
@@ -290,6 +296,15 @@ export default function App() {
   const closeShrineRoom = () => {
     setActiveApp('tutoring');
     setShrineRoomRequest(null);
+  };
+
+  const openAvatar = (request) => {
+    setAvatarRequest(request || {});
+    setActiveApp('avatar');
+  };
+  const closeAvatar = () => {
+    setActiveApp('tutoring');
+    setAvatarRequest(null);
   };
 
   const openWatchAndLearn = (request) => {
@@ -498,6 +513,7 @@ export default function App() {
           onOpenMyanmarPart1And2={openMyanmarPart1And2}
           onOpenBodhiTree={openBodhiTree}
           onOpenShrineRoom={openShrineRoom}
+          onOpenAvatar={openAvatar}
           onOpenWatchAndLearn={openWatchAndLearn}
         />
       </div>
@@ -820,6 +836,12 @@ export default function App() {
         {activeApp === 'shrineroom' && (
           <div>
             <ShrineRoomApp entryRequest={shrineRoomRequest} onExit={closeShrineRoom} />
+          </div>
+        )}
+
+        {activeApp === 'avatar' && (
+          <div>
+            <AvatarApp entryRequest={avatarRequest} onExit={closeAvatar} />
           </div>
         )}
 
