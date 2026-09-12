@@ -10306,6 +10306,25 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpen
         if (setFormError) setFormError('An error occurred. Please try again.');
       }
     } else if (selectedRole === 'student') {
+      // Reject an exact-duplicate name outright -- two students sharing one
+      // name are otherwise indistinguishable to the teacher's roster and to
+      // classmates sending hearts. Firestore's `where` is exact-match/case-
+      // sensitive only, so this fetches every current name and compares
+      // case-insensitively instead of trusting a `where("name","==",...)`
+      // query to catch e.g. "john" vs "John".
+      const trimmedName = studentName.trim();
+      try {
+        const allStudentsSnap = await getDocs(studentsCollection);
+        const nameTaken = allStudentsSnap.docs.some(d => (d.data().name || '').trim().toLowerCase() === trimmedName.toLowerCase());
+        if (nameTaken) {
+          if (setFormError) setFormError(`The name "${trimmedName}" is already taken by another student. Please add a letter or number to make yours unique (e.g. "${trimmedName}2").`);
+          return;
+        }
+      } catch (error) {
+        console.error("Error checking for duplicate student name:", error);
+        if (setFormError) setFormError('An error occurred. Please try again.');
+        return;
+      }
       // Generate a numeric-only 6-digit display ID (all existing IDs are numeric —
       // uid.substring(0,6) previously produced alphanumeric IDs since Firebase
       // anonymous auth UIDs are base62 strings, not numeric).
