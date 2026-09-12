@@ -9342,7 +9342,7 @@ function WeeklySchedule({ role, targetStudentUid }) {
               })();
 
           return (
-            <div key={day.toISOString()} className="bg-white/90 backdrop-blur-sm p-4 rounded-xl shadow-lg border border-gray-200">
+            <div key={day.toISOString()} className="bg-white/90 p-4 rounded-xl shadow-lg border border-gray-200">
               <h4 className="font-bold text-lg text-gray-800 border-b pb-2 mb-3">
                 {day.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
               </h4>
