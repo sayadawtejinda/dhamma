@@ -4,7 +4,7 @@ import {
 } from 'firebase/auth';
 import {
   doc, setDoc, getDoc, updateDoc, onSnapshot, collection, query,
-  addDoc, where, getDocs, deleteDoc, arrayUnion, arrayRemove, writeBatch
+  addDoc, where, getDocs, deleteDoc, arrayUnion, arrayRemove, writeBatch, increment
 } from 'firebase/firestore';
 import { auth as sharedAuth, db as sharedDb } from './firebase';
 import OnlineStatusWidget from './OnlineStatusWidget';
@@ -789,7 +789,7 @@ export default function DhammaschoolApp({ entryRequest, onExit }) {
   // Mirrors the closure's isTeacher/studentName (plain `let`s, not React
   // state -- see DHAMMASCHOOL_PRESENCE_PATH above) so the shared
   // OnlineStatusWidget can render outside that closure.
-  const [rosterCtx, setRosterCtx] = useState({ isTeacherMode: false, studentName: null });
+  const [rosterCtx, setRosterCtx] = useState({ isTeacherMode: false, studentName: null, coinBalance: null });
 
   // FontAwesome is used throughout Dhammaschool's markup (fa-* icon classes)
   // — load it once if it isn't already on the page (harmless / idempotent if
@@ -933,8 +933,105 @@ export default function DhammaschoolApp({ entryRequest, onExit }) {
         // --- END FIX ---
         
         let answersUnsub; // For student's own answers
-        let lessonUnsub; 
+        let lessonUnsub;
         let completionsUnsub;
+        // --- COINS: earned by answering discussion questions and finishing
+        // quizzes, spendable via the shared OnlineStatusWidget's deposit-into-
+        // Shrine-Room click, same as Smart Study/Myanmar Poems/Abhidhamma.
+        // Stored on this student's own roster doc (the same one that already
+        // tracks linkedToTutoring/tutoringStudentUid for name resolution),
+        // keyed the same way the rest of this file keys per-class rosters.
+        // No real AI grading is wired up here (this codebase has no working
+        // Gemini API key configured anywhere -- see the empty `apiKey` a bit
+        // further down, a known pre-existing gap, not something added here).
+        // Word count is used as a stand-in for "answered thoughtfully vs.
+        // answered briefly", matching how the teacher herself described the
+        // two cases (short/perfunctory vs. interesting/engaged).
+        const DISCUSSION_COIN_WORD_THRESHOLD = 15;
+        const DISCUSSION_COIN_SHORT = 20;
+        const DISCUSSION_COIN_THOUGHTFUL = 50;
+        const QUIZ_POINTS_PER_COIN = 50;
+        let coinBalance = 0;
+        let coinBalanceUnsub;
+        // Assigned inside init() (where syncRosterCtx is actually created) --
+        // declared here so this outer-scope listener can call it too.
+        let syncRosterCtxFn = () => {};
+        const myRosterDocId = () => `${(selectedClassId && selectedClassId.trim()) ? selectedClassId.trim() : 'GENERAL'}_${studentName}`;
+        // studentName (and occasionally selectedClassId) is often still empty
+        // at the moment init() runs and only gets resolved a bit later by the
+        // login flow -- called once from init() and then again on every
+        // syncRosterCtx tick (every 2s, see below) so the listener actually
+        // attaches once a name exists, instead of only trying once too early.
+        let coinBalanceListenerDocId = null;
+        function ensureCoinBalanceListener() {
+            if (!studentName) return;
+            const docId = myRosterDocId();
+            if (coinBalanceListenerDocId === docId) return;
+            coinBalanceListenerDocId = docId;
+            if (coinBalanceUnsub) coinBalanceUnsub();
+            coinBalanceUnsub = onSnapshot(doc(db, PATHS.roster, docId), (snap) => {
+                coinBalance = snap.data()?.coinBalance || 0;
+                syncRosterCtxFn();
+            }, () => {});
+        }
+        // Fire-and-forget: the coinBalanceListener above will pick up the
+        // real new value and update the UI once Firestore round-trips.
+        function awardDhammaschoolCoins(amount) {
+            if (!studentName || amount <= 0) return;
+            setDoc(doc(db, PATHS.roster, myRosterDocId()), {
+                classId: (selectedClassId && selectedClassId.trim()) ? selectedClassId.trim() : 'GENERAL',
+                studentName,
+                coinBalance: increment(amount),
+            }, { merge: true }).catch(() => {});
+        }
+
+        const SHRINE_ROSTER_PATH = 'artifacts/shrine-room-app/public/data/roster';
+        // Matches ShrineRoomApp.jsx's own sanitizeShrineKey exactly (including
+        // the .trim()) so a deposit lands on the same roster doc Shrine Room
+        // itself reads from.
+        const sanitizeShrineKey = (key) => (key || 'unknown').trim().replace(/[.$#/\[\]]/g, '_');
+        // This roster doc already carries linkedToTutoring/tutoringStudentUid
+        // from the teacher's "Link to Tutoring" feature -- reused here so a
+        // deposit lands under the student's canonical Tutoring name instead
+        // of whatever name they happened to type into Dhammaschool.
+        async function resolveDhammaschoolShrineTargetName() {
+            try {
+                const myRosterSnap = await getDoc(doc(db, PATHS.roster, myRosterDocId()));
+                const data = myRosterSnap.exists() ? myRosterSnap.data() : null;
+                if (data?.linkedToTutoring && data?.tutoringStudentUid) {
+                    const studentDocSnap = await getDoc(doc(db, '/artifacts/dhamma-tutoring-app/public/data/students', data.tutoringStudentUid));
+                    if (studentDocSnap.exists() && studentDocSnap.data().name) return studentDocSnap.data().name;
+                }
+            } catch (e) { /* fall back to studentName below */ }
+            return studentName;
+        }
+        // Unlike Smart Study's coinBalance (a derived total needing a
+        // separate "already transferred" counter), Dhammaschool's coinBalance
+        // is already a direct spendable wallet -- so depositing is simply
+        // "move what's here now into Shrine Room, then subtract that same
+        // amount back out here", no extra bookkeeping field needed.
+        window.depositDhammaschoolCoinsToShrineRoom = async function() {
+            const depositable = coinBalance;
+            if (depositable <= 0) return;
+            const confirmed = window.confirm(`Deposit ${depositable} coin(s) into your Shrine Room wallet?`);
+            if (!confirmed) return;
+            try {
+                const targetName = await resolveDhammaschoolShrineTargetName();
+                const shrineRef = doc(db, SHRINE_ROSTER_PATH, sanitizeShrineKey(targetName));
+                const shrineSnap = await getDoc(shrineRef);
+                const SHRINE_STARTER_COINS = 20;
+                await setDoc(shrineRef, {
+                    studentName: targetName,
+                    coinBalance: shrineSnap.exists() ? increment(depositable) : SHRINE_STARTER_COINS + depositable,
+                }, { merge: true });
+                await updateDoc(doc(db, PATHS.roster, myRosterDocId()), { coinBalance: increment(-depositable) });
+                alertMessage(`🪙 Deposited ${depositable} coin(s) into your Shrine Room wallet!`, 'success');
+            } catch (e) {
+                console.error('Error depositing coins to Shrine Room:', e);
+                alertMessage('⚠️ Something went wrong depositing your coins. Please try again.', 'error');
+            }
+        };
+
         let myCompletedLessonIds = new Set();
         let allCompletions = [];
         let allCompletionsUnsub;
@@ -1340,14 +1437,21 @@ let bilingualMode = false;
             setInterval(updatePresence, 20000);
             setInterval(renderOnlineWidget, 20000);
 
-            // Mirror role/name into React state for the shared OnlineStatusWidget
-            // (see DHAMMASCHOOL_PRESENCE_PATH) -- isTeacher/studentName here are
-            // plain closure variables, not React state, so this is a poll rather
-            // than a set-on-every-assignment sync.
-            const syncRosterCtx = () => setRosterCtx(prev => {
-                const next = { isTeacherMode: isTeacher, studentName: !isTeacher ? (studentName || null) : null };
-                return (prev.isTeacherMode === next.isTeacherMode && prev.studentName === next.studentName) ? prev : next;
-            });
+            if (!isTeacher) ensureCoinBalanceListener();
+
+            // Mirror role/name/coinBalance into React state for the shared
+            // OnlineStatusWidget (see DHAMMASCHOOL_PRESENCE_PATH) -- isTeacher/
+            // studentName/coinBalance here are plain closure variables, not
+            // React state, so this is a poll rather than a set-on-every-
+            // assignment sync.
+            const syncRosterCtx = () => {
+                if (!isTeacher) ensureCoinBalanceListener();
+                setRosterCtx(prev => {
+                    const next = { isTeacherMode: isTeacher, studentName: !isTeacher ? (studentName || null) : null, coinBalance: !isTeacher ? coinBalance : null };
+                    return (prev.isTeacherMode === next.isTeacherMode && prev.studentName === next.studentName && prev.coinBalance === next.coinBalance) ? prev : next;
+                });
+            };
+            syncRosterCtxFn = syncRosterCtx;
             syncRosterCtx();
             setInterval(syncRosterCtx, 2000);
         }
@@ -3682,13 +3786,19 @@ function renderClickableWords(text) {
 
             if(targetLid) {
                 try {
-                    await addDoc(collection(db, PATHS.scores), { 
-                        lessonId: targetLid, 
-                        studentName: targetName, 
-                        score: gameScore, 
-                        timestamp: new Date().toISOString() 
+                    await addDoc(collection(db, PATHS.scores), {
+                        lessonId: targetLid,
+                        studentName: targetName,
+                        score: gameScore,
+                        timestamp: new Date().toISOString()
                     });
                     await recordLessonCompletion();
+                    // Quiz points -> coins, at QUIZ_POINTS_PER_COIN points per
+                    // coin. Each finished quiz is its own one-off event (this
+                    // function only runs once per "Finish & Close" click), so
+                    // there's no risk of double-crediting the same score.
+                    const quizCoins = Math.floor((gameScore || 0) / QUIZ_POINTS_PER_COIN);
+                    if (quizCoins > 0) awardDhammaschoolCoins(quizCoins);
                     console.log("Score saved successfully!");
                 } catch(e) {
                     console.error("Error saving score:", e);
@@ -4322,16 +4432,23 @@ function renderClickableWords(text) {
                          alertMessage('Answer updated!', 'success');
                     } else {
                         // Add new answer
-                        await addDoc(collection(db, PATHS.answers), { 
-                            lessonId: studentCurrentLessonId, 
-                            questionIndex: qIdx, 
-                            userId, 
-                            studentName, 
-                            answerContent: val, 
-                            likes: [], 
-                            timestamp: new Date().toISOString() 
+                        await addDoc(collection(db, PATHS.answers), {
+                            lessonId: studentCurrentLessonId,
+                            questionIndex: qIdx,
+                            userId,
+                            studentName,
+                            answerContent: val,
+                            likes: [],
+                            timestamp: new Date().toISOString()
                         });
-                         alertMessage('Answer saved!', 'success');
+                        // Coins for a brand-new answer only -- editing an
+                        // already-answered question (the branch above) isn't
+                        // re-rewarded, so a student can't farm coins by
+                        // resubmitting the same question over and over.
+                        const wordCount = val.split(/\s+/).filter(Boolean).length;
+                        const coinsEarned = wordCount >= DISCUSSION_COIN_WORD_THRESHOLD ? DISCUSSION_COIN_THOUGHTFUL : DISCUSSION_COIN_SHORT;
+                        awardDhammaschoolCoins(coinsEarned);
+                         alertMessage(`Answer saved! 🪙 +${coinsEarned} coins`, 'success');
                     }
                     
                     // The onSnapshot listener (setupMyAnswersListener) will auto-update the UI
@@ -4385,6 +4502,7 @@ function renderClickableWords(text) {
       delete window.selectMatchItem;
       delete window.cancelMatchSelection;
       delete window.saveAndExitGame;
+      delete window.depositDhammaschoolCoinsToShrineRoom;
       delete window.selectTeacherClass;
       delete window.backToClassPicker;
       delete window.createNewClass;
@@ -4409,6 +4527,9 @@ function renderClickableWords(text) {
         rosterPath={DHAMMASCHOOL_PRESENCE_PATH}
         isTeacherMode={rosterCtx.isTeacherMode}
         studentName={rosterCtx.studentName}
+        coinBalance={rosterCtx.isTeacherMode ? null : rosterCtx.coinBalance}
+        coinIcon="🪙"
+        onCoinClick={rosterCtx.isTeacherMode ? null : () => window.depositDhammaschoolCoinsToShrineRoom()}
         filterDocs={d => d.role === 'student'}
         lastSeenField="lastActive"
         panelTitle="📖 Students"
