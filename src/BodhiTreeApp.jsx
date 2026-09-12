@@ -335,13 +335,10 @@ function TreeCanvas({ days }) {
       tctx.translate(0, -len);
 
       if (depth < maxDepth) {
-        // depth === 1 is the split right off the trunk -- see
-        // TREE_PARAMS.trunkSplit* above for why this level is special-cased.
-        const isTrunkSplit = depth === 1;
         const n = TREE_PARAMS.branchFactor;
-        const spread = isTrunkSplit ? TREE_PARAMS.trunkSplitSpread : TREE_PARAMS.branchSpread;
-        const subLen = len * (isTrunkSplit ? TREE_PARAMS.trunkSplitLenFactor : 0.72);
-        const subThick = Math.max(1, thick * (isTrunkSplit ? TREE_PARAMS.trunkSplitTaper : 0.68));
+        const spread = TREE_PARAMS.branchSpread;
+        const subLen = len * 0.72;
+        const subThick = Math.max(1, thick * 0.68);
         for (let i = 0; i < n; i++) {
           // Fan the children evenly across branchSpread radians (centered
           // on straight-up), with a little jitter so it doesn't look
@@ -494,14 +491,33 @@ function TreeCanvas({ days }) {
             treeCacheCtx.stroke();
           }
 
-          // The trunk now forks after only half its length instead of at
+          // The trunk forks after only HALF its own length instead of at
           // the very top -- a real Bodhi tree's trunk splits low and wide,
           // not as one tall stick with a canopy stuck on top of it. Only
-          // this base segment is shortened; trunkLen itself still governs
-          // the aura/particle position above, so the overall silhouette
-          // doesn't shrink, just widens lower down.
+          // this single straight base stub is shortened here; the two big
+          // limbs it forks into (and everything above them) are still
+          // sized off the FULL trunkLen, same as before -- so the fork
+          // moves down without shrinking the canopy that grows above it.
           const baseTrunkLen = trunkLen * 0.5;
-          drawBranch(treeCacheCtx, currentFactor, baseTrunkLen, trunkThick, 0, 1, maxDepth, 1);
+          treeCacheCtx.strokeStyle = COLORS.trunk;
+          treeCacheCtx.lineWidth = trunkThick;
+          treeCacheCtx.lineCap = 'round';
+          treeCacheCtx.beginPath();
+          treeCacheCtx.moveTo(0, 0);
+          treeCacheCtx.lineTo(0, -baseTrunkLen);
+          treeCacheCtx.stroke();
+          treeCacheCtx.save();
+          treeCacheCtx.translate(0, -baseTrunkLen);
+          const limbLen = trunkLen * TREE_PARAMS.trunkSplitLenFactor;
+          const limbThick = Math.max(1, trunkThick * TREE_PARAMS.trunkSplitTaper);
+          for (let i = 0; i < 2; i++) {
+            const childSeed = 1 * 7.13 + i * 3.7 + 1 * 1.9; // matches the depth=1, seed=1 formula below
+            const t = i - 0.5; // n=2 -> (i/(n-1))-0.5
+            const branchAngle = t * TREE_PARAMS.trunkSplitSpread + (seededRandom(childSeed) - 0.5) * 0.12;
+            const lenJitter = 0.85 + seededRandom(childSeed + 0.33) * 0.15;
+            drawBranch(treeCacheCtx, currentFactor, limbLen * lenJitter, limbThick, branchAngle, 2, maxDepth, childSeed);
+          }
+          treeCacheCtx.restore();
           treeCacheCtx.restore();
           cachedFactor = currentFactor;
         }
