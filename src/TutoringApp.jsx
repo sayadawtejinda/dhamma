@@ -9152,6 +9152,16 @@ function WeeklySchedule({ role, targetStudentUid }) {
     return () => clearTimeout(timer);
   }, [schedule, targetStudentUid]);
 
+  // A student's own group class (e.g. "Parami") now clusters the same way
+  // the teacher's view does -- pre-expand whichever cluster contains this
+  // student's own entry so they land straight on their own row instead of
+  // having to find and tap the group first.
+  useEffect(() => {
+    if (!targetStudentUid || expandedGroupBatchKey) return;
+    const mine = schedule.find(e => e.studentUid === targetStudentUid && e.groupBatchKey);
+    if (mine) setExpandedGroupBatchKey(mine.groupBatchKey);
+  }, [schedule, targetStudentUid]);
+
   const daysOfWeek = useMemo(() => {
     return Array.from({ length: 7 }).map((_, i) => {
       const day = new Date(weekStartDate);
@@ -9305,14 +9315,14 @@ function WeeklySchedule({ role, targetStudentUid }) {
             return entryDate.getDate() === day.getDate() && entryDate.getMonth() === day.getMonth() && entryDate.getFullYear() === day.getFullYear();
           });
 
-          // Cluster same-occurrence Group entries into one display item for
-          // the teacher's view (the teacher picked "Group" once, so it
-          // should look like one class session, not N separate rows) -- a
-          // student's own schedule never clusters, every entry there is
-          // simply theirs like any other online entry.
-          const displayItems = targetStudentUid
-            ? dayEntries.map(entry => ({ isCluster: false, entry, sortTime: entry.startTime.toDate() }))
-            : (() => {
+          // Cluster same-occurrence Group entries into one display item --
+          // the teacher (or student) picked/belongs to "Group" once, so it
+          // should look like one class session, not N separate rows. Used
+          // for both the teacher's overview and a student's own schedule
+          // (a big group like "Parami" used to list all ~34 members as
+          // separate rows on a student's own page too, since this view
+          // never filtered by studentUid in the first place).
+          const displayItems = (() => {
                 const clusters = {};
                 const items = [];
                 dayEntries.forEach(entry => {
@@ -9349,9 +9359,10 @@ function WeeklySchedule({ role, targetStudentUid }) {
                       const attendedCount = statuses.filter(s => s === 'attended').length;
                       const absentCount = statuses.filter(s => s === 'absent').length;
                       const isExpanded = expandedGroupBatchKey === item.groupBatchKey;
+                      const containsMine = targetStudentUid && item.entries.some(e => e.studentUid === targetStudentUid);
 
                       return (
-                        <div key={item.groupBatchKey} className={`rounded-lg ${absentCount > 0 ? 'bg-orange-50' : 'bg-violet-50'}`}>
+                        <div key={item.groupBatchKey} ref={containsMine ? myEntryRef : null} className={`rounded-lg ${absentCount > 0 ? 'bg-orange-50' : 'bg-violet-50'} ${containsMine ? 'ring-2 ring-indigo-500' : ''}`}>
                           <button
                             onClick={() => setExpandedGroupBatchKey(isExpanded ? null : item.groupBatchKey)}
                             className="w-full text-left p-3"
@@ -9373,9 +9384,12 @@ function WeeklySchedule({ role, targetStudentUid }) {
                             <div className="px-3 pb-3 space-y-1">
                               {item.entries.map((entry, i) => {
                                 const status = statuses[i];
+                                const isMine = targetStudentUid && entry.studentUid === targetStudentUid;
                                 return (
-                                  <div key={entry.id} className="flex items-center justify-between bg-white/70 rounded-lg px-3 py-2">
-                                    <span className="text-sm font-medium text-gray-800">{entry.studentName}</span>
+                                  <div key={entry.id} className={`flex items-center justify-between bg-white/70 rounded-lg px-3 py-2 ${isMine ? 'ring-2 ring-indigo-500' : ''}`}>
+                                    <span className={`text-sm font-medium ${status === 'attended' ? 'text-emerald-900' : status === 'absent' ? 'text-red-900' : 'text-gray-800'}`}>
+                                      {entry.studentName}{isMine && <span className="ml-2 text-xs font-bold text-indigo-600">(You)</span>}
+                                    </span>
                                     <div className="flex items-center gap-1">
                                       {role === 'teacher' && isPast && (
                                         <>
