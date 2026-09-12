@@ -1666,7 +1666,7 @@ function checkAssociation(cId, ctId) {
   return false;
 }
 
-export default function App() {
+export default function App({ initialPage = null, onPageChange = null } = {}) {
   const [filter, setFilter] = useState({ type: 'none', value: null });
   const [nanakadaciMode, setNanakadaciMode] = useState(null);
   const [cittaContext, setCittaContext] = useState(null);
@@ -1676,17 +1676,17 @@ export default function App() {
   const [tooltipPos, setTooltipPos] = useState(null);
   const [lokuttaraExpanded, setLokuttaraExpanded] = useState(false);
   const [detailPick, setDetailPick] = useState(null);
-  const [openMenu, setOpenMenu] = useState(null);
-  const [akusalaGroupIdx, setAkusalaGroupIdx] = useState(null);
-  const [missakaGroupIdx, setMissakaGroupIdx] = useState(null);
-  const [bodhiGroupIdx, setBodhiGroupIdx] = useState(null);
+  const [openMenu, setOpenMenu] = useState(() => initialPage?.openMenu ?? null);
+  const [akusalaGroupIdx, setAkusalaGroupIdx] = useState(() => initialPage?.akusalaGroupIdx ?? null);
+  const [missakaGroupIdx, setMissakaGroupIdx] = useState(() => initialPage?.missakaGroupIdx ?? null);
+  const [bodhiGroupIdx, setBodhiGroupIdx] = useState(() => initialPage?.bodhiGroupIdx ?? null);
   const [photthabbaOn, setPhotthabbaOn] = useState(false);
   const [selectedKalapa, setSelectedKalapa] = useState(null);
   const [selectedSamutthana, setSelectedSamutthana] = useState(null);
   const [rupaTooltip, setRupaTooltip] = useState(null);
 
-  const [vithiOpen, setVithiOpen] = useState(false);
-  const [bhumiOpen, setBhumiOpen] = useState(false);
+  const [vithiOpen, setVithiOpen] = useState(() => initialPage?.vithiOpen ?? false);
+  const [bhumiOpen, setBhumiOpen] = useState(() => initialPage?.bhumiOpen ?? false);
   const [selectedBhumiItem, setSelectedBhumiItem] = useState(null);
   const [bhumiPos, setBhumiPos] = useState(() => ({
     x: typeof window !== 'undefined' ? Math.max(8, window.innerWidth / 2 - 320) : 100,
@@ -1716,8 +1716,16 @@ export default function App() {
     window.addEventListener('touchmove', handleBhumiDragMove, { passive: false });
     window.addEventListener('touchend', handleBhumiDragEnd);
   };
-  const [paticcaOpen, setPaticcaOpen] = useState(false);
+  const [paticcaOpen, setPaticcaOpen] = useState(() => initialPage?.paticcaOpen ?? false);
   const [selectedPaticcaId, setSelectedPaticcaId] = useState(null);
+
+  // Reports the current top-level "page" up to the language-switcher wrapper
+  // so it can be fed back in as `initialPage` on a language switch. See the
+  // matching comment in src/Paramattha1App.jsx for why `filter` and the
+  // drill-in selection states are deliberately excluded.
+  useEffect(() => {
+    onPageChange?.({ openMenu, akusalaGroupIdx, missakaGroupIdx, bodhiGroupIdx, vithiOpen, bhumiOpen, paticcaOpen });
+  }, [openMenu, akusalaGroupIdx, missakaGroupIdx, bodhiGroupIdx, vithiOpen, bhumiOpen, paticcaOpen]);
   const [paticcaPos, setPaticcaPos] = useState(() => ({
     x: typeof window !== 'undefined' ? Math.max(8, window.innerWidth / 2 - 200) : 100,
     y: typeof window !== 'undefined' ? Math.max(8, window.innerHeight / 2 - 220) : 60,

@@ -36,6 +36,16 @@ export default function ParamatthaApp() {
   const Active = current.Component;
   const cycleLang = () => setLangIdx(prev => (prev + 1) % LANGUAGES.length);
 
+  // Lives here in the wrapper (not in either language component) so it
+  // survives the full unmount/remount that happens when `Active` changes --
+  // the language-neutral "which top-level page" snapshot (open dropdown/
+  // category menu, expanded akusala/missaka/bodhi group, which of the
+  // vithi/bhumi/paticca floating panels is open) reported by whichever
+  // language component is currently mounted, fed back in as that
+  // component's `initialPage` so switching language keeps the user on the
+  // same page instead of resetting to the default screen.
+  const [pageState, setPageState] = useState(null);
+
   return (
     <div className="relative">
       <button
@@ -45,7 +55,7 @@ export default function ParamatthaApp() {
       >
         🌐 {current.label}
       </button>
-      <Active />
+      <Active initialPage={pageState} onPageChange={setPageState} />
     </div>
   );
 }

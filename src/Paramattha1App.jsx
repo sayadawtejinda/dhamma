@@ -1697,7 +1697,7 @@ function checkAssociation(cId, ctId) {
   return false;
 }
 
-export default function App({ lang = 'my' } = {}) {
+export default function App({ lang = 'my', initialPage = null, onPageChange = null } = {}) {
   // Pali technical-term lists whose display "name" depends on lang (Roman
   // Pali for en/vi, Myanmar script for my) but whose "id"s -- used
   // everywhere else in this file for filtering/lookups -- never change.
@@ -1791,13 +1791,13 @@ export default function App({ lang = 'my' } = {}) {
   // အခြားဘက်ခြမ်း၏ association ကိုသာ ထပ်ဆင့်ကျဉ်းအောင် (drill-down) ပြသရန် သီးခြားသိမ်းထားခြင်း
   const [detailPick, setDetailPick] = useState(null); // { type: 'citta' | 'cetasika', id }
   // ဇာတိ/အကုသလ/မိဿက/ဗောဓိပက္ခိယ/သဗ္ဗ ခလုတ်များထဲက ဘယ်ခလုတ်ရဲ့ dropdown ကို ဖွင့်ထားသလဲ
-  const [openMenu, setOpenMenu] = useState(null);
+  const [openMenu, setOpenMenu] = useState(() => initialPage?.openMenu ?? null);
   // "အကုသလ" dropdown ထဲမှာ ဘယ်အုပ်စု (index) ကို ချဲ့ပြထားသလဲ — AkusalaDropdown သည် App ပြန် render
   // ဖြစ်တိုင်း အသစ်ပြန်ဖန်တီးခံရသောကြောင့် (App ထဲမှာ inline ကြေညာထားသည့် component ဖြစ်၍) ဒီ state ကို
   // App-level မှာပဲ ထားရမည်၊ local state ဖြင့် ထားလျှင် toggleFilter ခေါ်တိုင်း reset ဖြစ်သွားလိမ့်မည်
-  const [akusalaGroupIdx, setAkusalaGroupIdx] = useState(null);
-  const [missakaGroupIdx, setMissakaGroupIdx] = useState(null);
-  const [bodhiGroupIdx, setBodhiGroupIdx] = useState(null);
+  const [akusalaGroupIdx, setAkusalaGroupIdx] = useState(() => initialPage?.akusalaGroupIdx ?? null);
+  const [missakaGroupIdx, setMissakaGroupIdx] = useState(() => initialPage?.missakaGroupIdx ?? null);
+  const [bodhiGroupIdx, setBodhiGroupIdx] = useState(() => initialPage?.bodhiGroupIdx ?? null);
   // ဖောဋ္ဌဗ္ဗာရုံ (ဝိသယရုပ်) dot ကို နှိပ်လိုက်ရင် မဟာဘုတ် ၄-ပါးထဲက ၃-ပါး (ပထဝီ/တေဇော/ဝါယော) ကို highlight ပြရန်
   const [photthabbaOn, setPhotthabbaOn] = useState(false);
   // "ရုပ်ကလာပ်" dropdown ကနေ ရွေးထားတဲ့ ကလာပ် (rupaIds set) — citta/cetasika panel ကို မသက်ဆိုင်ဘဲ ရုပ်ဘက်ကိုသာ highlight လုပ်ရန်
@@ -1808,8 +1808,8 @@ export default function App({ lang = 'my' } = {}) {
   const [rupaTooltip, setRupaTooltip] = useState(null); // { name, desc, x, y }
 
   // ဘဝတစ်ခုလုံး စိတ်အစဉ် (ဝီထိ) floating panel
-  const [vithiOpen, setVithiOpen] = useState(false);
-  const [bhumiOpen, setBhumiOpen] = useState(false);
+  const [vithiOpen, setVithiOpen] = useState(() => initialPage?.vithiOpen ?? false);
+  const [bhumiOpen, setBhumiOpen] = useState(() => initialPage?.bhumiOpen ?? false);
   // ၃၁-ဘုံ dialog ထဲက ဘုံတစ်ခုကို နှိပ်လိုက်ရင် citta-multi filter ချိတ်ဆက်ရန် သိမ်းထားသော item
   const [selectedBhumiItem, setSelectedBhumiItem] = useState(null);
   // panel ကို drag ဆွဲရွှေ့နိုင်ရန် — screen အလယ်မှာ default ပေါ်ပြီး ပြီးမှ ဆွဲရွှေ့နိုင်သည်
@@ -1841,8 +1841,21 @@ export default function App({ lang = 'my' } = {}) {
     window.addEventListener('touchmove', handleBhumiDragMove, { passive: false });
     window.addEventListener('touchend', handleBhumiDragEnd);
   };
-  const [paticcaOpen, setPaticcaOpen] = useState(false);
+  const [paticcaOpen, setPaticcaOpen] = useState(() => initialPage?.paticcaOpen ?? false);
   const [selectedPaticcaId, setSelectedPaticcaId] = useState(null);
+
+  // Reports the current top-level "page" (which dropdown/category menu is
+  // open, which akusala/missaka/bodhi group is expanded, and which of the
+  // vithi/bhumi/paticca floating panels is open) up to the language-switcher
+  // wrapper so it can be fed back in as `initialPage` on a language switch.
+  // Deliberately excludes `filter` (its `value` shape varies by category and
+  // can hold ids specific to a data array that may not line up 1:1 between
+  // the my/vi files) and drill-in specifics like `selectedBhumiItem` /
+  // `selectedPaticcaId` / `vithiCenterGroup` (some hold translated text) --
+  // see src/ParamatthaApp.jsx.
+  useEffect(() => {
+    onPageChange?.({ openMenu, akusalaGroupIdx, missakaGroupIdx, bodhiGroupIdx, vithiOpen, bhumiOpen, paticcaOpen });
+  }, [openMenu, akusalaGroupIdx, missakaGroupIdx, bodhiGroupIdx, vithiOpen, bhumiOpen, paticcaOpen]);
   const [paticcaPos, setPaticcaPos] = useState(() => ({
     x: typeof window !== 'undefined' ? Math.max(8, window.innerWidth / 2 - 200) : 100,
     y: typeof window !== 'undefined' ? Math.max(8, window.innerHeight / 2 - 220) : 60,

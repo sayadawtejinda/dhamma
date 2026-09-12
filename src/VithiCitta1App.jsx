@@ -790,7 +790,7 @@ const getDhatuBaseLabel = (t) => {
   if (t.includes("ကာယဝတ္ထု")) return "ကာယဓာတ်";
   return "ဓမ္မဓာတ်";
 };
-export default function App() {
+export default function App({ initialPage = null, onPageChange = null } = {}) {
   const [showNidanaMenu, setShowNidanaMenu] = useState(false);
   const [selectedNidana, setSelectedNidana] = useState(null);
 const [nidanaViewMode, setNidanaViewMode] = useState('cause'); // 'cause' | 'effect'
@@ -818,10 +818,10 @@ const [rupaRupaAyState, setRupaRupaAyState] = useState({ causeIdx: 0, effectIdx:
   "ဇာတိပစ္စယာ ဇရာမရဏံ..",
   ];
 
-  const [currentLifeOffset, setCurrentLifeOffset] = useState(0);
-  const [activePhase, setActivePhase] = useState('patisandhi');
+  const [currentLifeOffset, setCurrentLifeOffset] = useState(() => initialPage?.currentLifeOffset ?? 0);
+  const [activePhase, setActivePhase] = useState(() => initialPage?.activePhase ?? 'patisandhi');
 
-  const [puggalaByLife, setPuggalaByLife] = useState({ 0: 'tihetuka_kama' });
+  const [puggalaByLife, setPuggalaByLife] = useState(() => initialPage?.puggalaByLife ?? { 0: 'tihetuka_kama' });
   const [lifeLocks, setLifeLocks] = useState({ 0: false });
   const [isBhavangaAuto, setIsBhavangaAuto] = useState(true);
 
@@ -834,14 +834,23 @@ const [rupaRupaAyState, setRupaRupaAyState] = useState({ causeIdx: 0, effectIdx:
   const [showBhavangaMenu, setShowBhavangaMenu] = useState(false);
   const [expandedBhavangaGroup, setExpandedBhavangaGroup] = useState(null);
 
-  const [activeVithi, setActiveVithi] = useState('cakkhu');
-  const [javanaGroupId, setJavanaGroupId] = useState('akusala_lobha');
+  const [activeVithi, setActiveVithi] = useState(() => initialPage?.activeVithi ?? 'cakkhu');
+  const [javanaGroupId, setJavanaGroupId] = useState(() => initialPage?.javanaGroupId ?? 'akusala_lobha');
   const [javanaSubIndex, setJavanaSubIndex] = useState(0);
   const [lokuttaraJhanaIndex, setLokuttaraJhanaIndex] = useState(0);
   const [rupaArammanaIndex, setRupaArammanaIndex] = useState(0);
 
-  const [bhavangaGroupId, setBhavangaGroupId] = useState('maha_vipaka');
+  const [bhavangaGroupId, setBhavangaGroupId] = useState(() => initialPage?.bhavangaGroupId ?? 'maha_vipaka');
   const [bhavangaSubIndex, setBhavangaSubIndex] = useState(0);
+
+  // Reports the current top-level "page" (phase/vithi/javana-group/bhavanga-group/
+  // life-offset/puggala-by-life) up to the language-switcher wrapper so it can be
+  // fed back in as `initialPage` if the user switches language and lands back on
+  // this same component (or the other language's sibling, seeded with these
+  // language-neutral ids). See src/VithiCittaApp.jsx.
+  useEffect(() => {
+    onPageChange?.({ activePhase, activeVithi, javanaGroupId, bhavangaGroupId, currentLifeOffset, puggalaByLife });
+  }, [activePhase, activeVithi, javanaGroupId, bhavangaGroupId, currentLifeOffset, puggalaByLife]);
   
   const [selectedArammana, setSelectedArammana] = useState(DHAMMARAMMANA_RUPA[0].options[0]);
   const [kayaArammanaIndex, setKayaArammanaIndex] = useState(0);
