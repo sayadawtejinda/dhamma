@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
+import { signInAnonymously, signInWithCustomToken, onAuthStateChanged, signOut } from 'firebase/auth';
 import { 
   doc, 
   getDoc, 
@@ -10361,6 +10361,19 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpen
     setTargetStudentUid(null);
     setStudentProfile(null);
     setView('login');
+    // Clearing local state alone doesn't actually log this device out: the
+    // browser's Firebase anonymous-auth session persists across reloads on
+    // its own, and this device's uid is either this student's own primary
+    // doc id or listed in some student's authorizedUids -- either way, a
+    // refresh right after "logging out" was silently re-authenticating as
+    // the exact same student with no Student ID re-entry, which defeats the
+    // whole point of the rental-device auto-logout above (and of a student
+    // manually logging out on a borrowed/shared device). Signing out of
+    // Firebase auth forces a brand-new anonymous identity -- the
+    // onAuthStateChanged effect above re-signs-in anonymously whenever
+    // there's no current user -- that this device's next visitor genuinely
+    // isn't recognized by.
+    signOut(auth).catch(() => {});
   };
 
   const handleStudentLoginById = async (displayId, onError) => {

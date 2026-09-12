@@ -539,6 +539,42 @@ const SHOP_LOCKED = false;
 // decorative, uses the same rise-and-fade keyframe as the big altar aura
 // (see the always-on <style> block in the component below), just over a
 // much shorter distance since these sit on small buttons, not the altar.
+// Full-screen falling flower petals during meditation -- replaces the
+// earlier radiating-light aura behind the Buddha statue (the teacher found
+// petals raining down over the whole shrine nicer than a glow localized to
+// one spot). Positioned `fixed` (not tied to the altar column), so it drifts
+// over the entire screen regardless of layout. Each petal's random values
+// are generated once via useState's lazy initializer (not on every render),
+// so the shapes don't reroll and jump every time this component re-renders.
+function PetalRain() {
+  const [petals] = useState(() => Array.from({ length: 16 }, (_, i) => ({
+    id: i,
+    left: Math.random() * 100,
+    delay: Math.random() * 6,
+    duration: 7 + Math.random() * 5,
+    size: 14 + Math.random() * 16,
+    drift: Math.round((Math.random() - 0.5) * 80),
+    emoji: ['🌸', '🌺', '🌼', '🌷'][i % 4],
+  })));
+  return (
+    <div className="fixed inset-0 z-40 pointer-events-none overflow-hidden">
+      {petals.map((p) => (
+        <span
+          key={p.id}
+          className="absolute"
+          style={{
+            left: `${p.left}%`, top: '-40px', fontSize: p.size,
+            animation: `shrinePetalFall ${p.duration}s linear ${p.delay}s infinite`,
+            '--petal-drift': `${p.drift}px`,
+          }}
+        >
+          {p.emoji}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function EmojiParticles({ emoji }) {
   return (
     <div className="absolute inset-x-0 -top-1 flex justify-center pointer-events-none z-10">
@@ -1158,8 +1194,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   return (
     <div className={`min-h-screen flex flex-col items-center px-4 pt-6 pb-16 transition-colors duration-1000 ${dimmed ? 'bg-gradient-to-b from-indigo-200 via-amber-100 to-amber-200' : 'bg-gradient-to-b from-sky-100 via-emerald-50 to-emerald-100'}`}>
       <style>{`
-        @keyframes shrineAuraPulse { 0%, 100% { opacity: 0.35; transform: translateX(-50%) scale(1); } 50% { opacity: 0.65; transform: translateX(-50%) scale(1.18); } }
-        @keyframes shrineSparkleRise { 0% { opacity: 0; transform: translateY(0) scale(0.4); } 20% { opacity: 1; } 100% { opacity: 0; transform: translateY(-150px) scale(1); } }
+        @keyframes shrinePetalFall { 0% { transform: translate(0, 0) rotate(0deg); opacity: 0; } 8% { opacity: 0.9; } 92% { opacity: 0.9; } 100% { transform: translate(var(--petal-drift), 110vh) rotate(360deg); opacity: 0; } }
         @keyframes buttonSparkleRise { 0% { opacity: 0; transform: translateY(0) scale(0.5); } 25% { opacity: 1; } 100% { opacity: 0; transform: translateY(-32px) scale(1); } }
       `}</style>
       <button
@@ -1364,31 +1399,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
             <div className="relative w-[360px] max-w-full h-96">
               <BodhiBackdropCanvas />
 
-              {meditatingMinutes != null && buddha && (
-                <div className="absolute left-1/2 bottom-24 pointer-events-none" style={{ width: 0, height: 0 }}>
-                  <div
-                    className="absolute rounded-full"
-                    style={{
-                      left: '50%', bottom: 0, transform: 'translateX(-50%)',
-                      width: 220, height: 220,
-                      background: 'radial-gradient(circle, rgba(251,191,36,0.55) 0%, rgba(251,191,36,0.25) 40%, rgba(251,191,36,0) 70%)',
-                      animation: 'shrineAuraPulse 3.2s ease-in-out infinite',
-                    }}
-                  />
-                  {[0, 1, 2, 3, 4, 5].map((i) => (
-                    <div
-                      key={i}
-                      className="absolute rounded-full bg-amber-200"
-                      style={{
-                        left: `${-40 + i * 16}px`, bottom: '10px',
-                        width: 5, height: 5,
-                        boxShadow: '0 0 6px 2px rgba(253,230,138,0.9)',
-                        animation: `shrineSparkleRise ${2.4 + (i % 3) * 0.5}s ease-in ${i * 0.4}s infinite`,
-                      }}
-                    />
-                  ))}
-                </div>
-              )}
+              {meditatingMinutes != null && buddha && <PetalRain />}
 
               <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[340px] h-32 rounded-t-2xl border-4 border-amber-700 shadow-xl flex items-end justify-center pb-3"
                 style={{ background: 'linear-gradient(to bottom, #fde68a, #d4af37)' }}
