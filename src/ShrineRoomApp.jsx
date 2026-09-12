@@ -1515,18 +1515,21 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
           block clicks on whatever shop items fell in that overlap. */}
       {shopOpen && (
         <div className="fixed top-20 right-3 z-[9940] w-64 sm:w-72 max-h-[calc(100vh-6rem)] overflow-y-auto bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl border-2 border-amber-200 p-4">
-            <div className="flex justify-between items-center mb-1">
+            {/* Sticky, not just top-of-panel: scrolling through the offering
+                list below used to carry the header (and its only close
+                button) off-screen with it, leaving no visible way to close
+                the shop without scrolling all the way back up first. */}
+            <div className="sticky -top-4 -mx-4 -mt-4 px-4 pt-4 pb-1 bg-white/95 backdrop-blur-sm z-10 flex justify-between items-center mb-1">
               <h2 className="text-lg font-bold text-amber-700">🛒 Merit Shop</h2>
               {/* Own close button, same as the Chanting panel -- the
                   outer toggle button (in the fixed top-right column) can
                   end up rendered underneath this panel once it's open,
-                  so closing shouldn't depend on it staying reachable. */}
-              <button onClick={() => setShopOpen(false)} className="text-gray-400 hover:text-gray-700 text-2xl leading-none">×</button>
+                  so closing shouldn't depend on it staying reachable. Red
+                  and bold so it's easy to spot at a glance while scrolling. */}
+              <button onClick={() => setShopOpen(false)} className="text-red-600 hover:text-red-700 text-2xl leading-none font-bold">×</button>
             </div>
-            {SHOP_LOCKED ? (
+            {SHOP_LOCKED && (
               <p className="text-xs font-semibold text-amber-700 bg-amber-100 border border-amber-300 rounded-lg px-2 py-1.5 mb-3">🚧 Coming soon -- browsing only for now</p>
-            ) : (
-              <p className="text-xs text-gray-500 mb-3">🪙 {coinBalance} coins available -- tap or drag an item onto the altar</p>
             )}
 
             <h3 className="text-sm font-bold text-gray-700 mb-2">Buddha Image</h3>
