@@ -58,6 +58,42 @@ const todayKey = () => new Date().toISOString().slice(0, 10);
 // rest are assumed to follow the same naming pattern in that repo.
 const chantAudioUrl = (filename) => `https://raw.githubusercontent.com/nathantun93/bell/main/${encodeURIComponent(filename)}.mp3`;
 
+// Guided-meditation script, shown one line at a time in the empty space
+// above the Bodhi tree while a student meditates. English by default; the
+// "Myanmar" toggle in the duration picker switches the language for that
+// session (see meditationLanguage below).
+const MEDITATION_GUIDE = [
+  { en: 'Sit down comfortably with your legs crossed.', my: 'တင်ပလ္လင်ခွေထိုင်ပါ။' },
+  { en: 'Keep your back straight and relaxed.', my: 'သက်တောင့် သက်သာ ခါးကို ဖြောင့်ထားပါ။' },
+  { en: 'Gently close your eyes.', my: 'မျက်စိမှိတ်ထားပါ။' },
+  { en: "Don't look at anything around you.", my: 'ဘာမှ မကြည့်ရ။' },
+  { en: "Don't listen to any sounds.", my: 'ဘာမှ နားမထောင်ရ။' },
+  { en: "Don't focus on any smells.", my: 'ဘာမှ မနမ်းရှူရ။' },
+  { en: "Don't taste anything.", my: 'ဘာမှ အရသာခံ မစားရ။' },
+  { en: 'Feel only the floor beneath you and nothing else.', my: 'ကြမ်းပြင်ကလွဲ၍ ဘာနဲ့မှ မထိရ။' },
+  { en: 'Take slow, gentle breaths.', my: 'အေးအေးဆေးဆေး အသက်ရှု။' },
+  { en: 'Relax your whole body from head to toe.', my: 'ခန္ဓာကိုယ်နေရာအနှံ့ကို ဖြေလျော့ပေးပါ။' },
+  { en: 'Softly relax your face.', my: 'မျက်နှာကို ဖြေလျော့ပါ။' },
+  { en: 'Smooth out your forehead and relax.', my: 'နဖူးကို ဖြေလျော့ပါ။' },
+  { en: 'Let your shoulders drop and loosen up.', my: 'ပခုံးကို ဖြေလျော့ပါ။' },
+  { en: 'Relax your chest.', my: 'ရင်ဘတ်ကို ဖြေလျော့ပါ။' },
+  { en: "Don't hold any tightness or tension.", my: 'တောင့်တောင့်တင်းတင်း မဖြစ်စေပါနဲ့။' },
+  { en: 'Give both your body and mind a peaceful rest.', my: 'လူရော စိတ်ရော အနားပေးပါ။' },
+  { en: 'Wait patiently until everything feels quiet inside.', my: 'တဖြည်းဖြည်း ငြိမ်လာတဲ့ထိ စောင့်ပေးပါ။' },
+  { en: 'Focus on your breathing in and out, and gently notice each breath.', my: 'ဝင်လေ ထွက်လေကို အာရုံစူးစိုက်ပြီ စိတ်နဲ့ သိပေးနေပါ။' },
+  { en: 'Keep your eyes softly closed without opening them.', my: 'မျက်စိ မဖွင့်မိစေနဲ့။' },
+  { en: 'Let your eyes rest completely still behind your eyelids.', my: 'မျက်လုံးကိုပါ ငြိမ်အောင်လုပ်ပါ။' },
+  { en: 'Practice sitting as peaceful and still as a Buddha statue.', my: 'ဗုဒ္ဓရုပ်ပွားတော်လို ငြိမ်အောင် လေ့ကျင့်ပါ။' },
+  { en: "Don't let your mind jump around like a playful little monkey.", my: 'မျောက်တစ်ကောင်လို စိတ်ကို မပြေးစေနဲ့။' },
+  { en: 'Practice until your mind feels quiet, cool, and calm.', my: 'စိတ်ငြိမ်ပြီ အေးသွားတဲ့ထိ လေ့ကျင့်ပါ။' },
+  { en: 'Gently tell your mind to stay right here.', my: 'သင့်စိတ်ကို ဘယ်မှ မသွားရဘူးလို့ ပြောပါ။' },
+  { en: 'Be the gentle master of your own thoughts.', my: 'သင့်စိတ်ရဲ့ အရှင်သခင်ဖြစ်အောင် လုပ်ပါ။' },
+  { en: 'The world needs many peaceful hearts.', my: 'လောကကြီးမှာ အေးချမ်းသူတွေ အများကြီးလိုတယ်။' },
+  { en: 'I will do my best to bring peace to my own heart.', my: 'ငါ့စိတ်အေးချမ်းအောင် ငါကြိုးစားမယ်။' },
+  { en: 'When your meditation time is finished, stand up very slowly.', my: 'တရားထိုင်ဖို့ အချိန်ပြည့်သွားရင်လည်း ဖြည်းဖြည်းထပါ။' },
+  { en: 'Keep that cool, gentle quietness inside your heart all day long.', my: 'ရင်ထဲက အေးနေတာကို မပျောက်စေနဲ့။' },
+];
+
 // --- Chanting text, from the teacher's Chanting.md, in the 3 formats it
 // was supplied in (Myanmar words spelled with English letters, Myanmar
 // script, and an English meaning-translation). Order follows the
@@ -831,6 +867,18 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   const [meditationPickerOpen, setMeditationPickerOpen] = useState(false);
   const [meditationMinutesInput, setMeditationMinutesInput] = useState('5');
   const [meditatingMinutes, setMeditatingMinutes] = useState(null);
+  // Guided-meditation script language -- toggled once in the duration
+  // picker (see MEDITATION_GUIDE above), defaults to English.
+  const [meditationLanguage, setMeditationLanguage] = useState('en');
+  const [meditationLineIndex, setMeditationLineIndex] = useState(0);
+  useEffect(() => {
+    if (meditatingMinutes == null) return;
+    setMeditationLineIndex(0);
+    const interval = setInterval(() => {
+      setMeditationLineIndex(i => (i + 1) % MEDITATION_GUIDE.length);
+    }, 9000);
+    return () => clearInterval(interval);
+  }, [meditatingMinutes]);
   // Keeps the screen from auto-locking while a meditation countdown is
   // running, so the student doesn't lose their place mid-sit -- degrades
   // silently on browsers without the Wake Lock API (e.g. older Safari)
@@ -1195,6 +1243,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     <div className={`min-h-screen flex flex-col items-center px-4 pt-6 pb-16 transition-colors duration-1000 ${dimmed ? 'bg-gradient-to-b from-indigo-200 via-amber-100 to-amber-200' : 'bg-gradient-to-b from-sky-100 via-emerald-50 to-emerald-100'}`}>
       <style>{`
         @keyframes shrinePetalFall { 0% { transform: translate(0, 0) rotate(0deg); opacity: 0; } 8% { opacity: 0.9; } 92% { opacity: 0.9; } 100% { transform: translate(var(--petal-drift), 110vh) rotate(360deg); opacity: 0; } }
+        @keyframes shrineGuideLineFade { 0% { opacity: 0; transform: translateY(6px); } 15% { opacity: 1; transform: translateY(0); } 85% { opacity: 1; } 100% { opacity: 0; } }
         @keyframes buttonSparkleRise { 0% { opacity: 0; transform: translateY(0) scale(0.5); } 25% { opacity: 1; } 100% { opacity: 0; transform: translateY(-32px) scale(1); } }
       `}</style>
       <button
@@ -1274,7 +1323,16 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
       {meditationPickerOpen && (
         <div className="fixed inset-0 z-[10001] bg-black/50 flex items-center justify-center p-4" onClick={() => setMeditationPickerOpen(false)}>
           <div className="bg-white rounded-2xl shadow-2xl max-w-xs w-full p-6 text-center" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-bold text-emerald-800 mb-1">🧘 Meditation</h2>
+            <div className="flex items-center justify-center gap-2 mb-1">
+              <h2 className="text-lg font-bold text-emerald-800">🧘 Meditation</h2>
+              <button
+                onClick={() => setMeditationLanguage(l => (l === 'en' ? 'my' : 'en'))}
+                title="Language for the guided meditation lines"
+                className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${meditationLanguage === 'my' ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white text-emerald-600 border-emerald-300'}`}
+              >
+                မြန်မာ
+              </button>
+            </div>
             <p className="text-sm text-gray-500 mb-4">How many minutes will you meditate?</p>
             <input
               type="number"
@@ -1400,6 +1458,22 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
               <BodhiBackdropCanvas />
 
               {meditatingMinutes != null && buddha && <PetalRain />}
+
+              {/* Guided-meditation line, one at a time, fading in from the
+                  empty space above the tree's canopy. Keyed on the line
+                  index so React remounts the <p> on each change, which
+                  restarts the fade-in CSS animation for free. */}
+              {meditatingMinutes != null && (
+                <div className="absolute top-2 inset-x-3 text-center pointer-events-none z-20">
+                  <p
+                    key={meditationLineIndex}
+                    className="text-sm font-semibold text-emerald-900/80 leading-snug"
+                    style={{ animation: 'shrineGuideLineFade 9s ease-in-out' }}
+                  >
+                    {MEDITATION_GUIDE[meditationLineIndex][meditationLanguage]}
+                  </p>
+                </div>
+              )}
 
               <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[340px] h-32 rounded-t-2xl border-4 border-amber-700 shadow-xl flex items-end justify-center pb-3"
                 style={{ background: 'linear-gradient(to bottom, #fde68a, #d4af37)' }}

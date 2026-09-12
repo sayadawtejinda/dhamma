@@ -9951,9 +9951,7 @@ function RoleSelection({ user, onSelectRole, onStudentLogin, teacherUid, onRecov
               <h3 className="text-lg font-semibold text-gray-700 mb-4">Create New Student Account</h3>
               {deviceAccountCheck.checked && deviceAccountCheck.exists ? (
                 <div className="mb-4 p-3 bg-amber-50 border border-amber-300 rounded-lg text-amber-800 text-sm">
-                  This device already has a student account set up on it. Creating a new account here isn't supported -- it would replace the account already on this device instead of making a separate one.
-                  <br /><br />
-                  If this is your account, use <strong>Existing Account</strong> above to log back in with your Student ID. If you need a separate account of your own, please use a different device or browser.
+                  This device already has an account. Use <strong>Existing Account</strong> to log back in, or use a different device for a new one.
                 </div>
               ) : (
                 <>
