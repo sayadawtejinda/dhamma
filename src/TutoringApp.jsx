@@ -397,7 +397,17 @@ const getEffectiveCompletedUnit = (lesson, studentProfile, sessionsForLesson, ss
   // completedUnits entry, or a real session logged against this exact
   // lesson) are trusted here.
   const isAbhi = lesson.link?.startsWith('abhidhamma://');
-  const derivedCompletedUnit = (ssClassId == null && !isAbhi && unitCount > 0 && maxAvailable > 0)
+  // Myanmar Reader excluded for the same reason -- computeLessonKey() keys
+  // a link with no classId (this one has none) purely off the lesson
+  // TITLE, so any trophy landing under a student's earnedTrophies for that
+  // exact title (an old migration's leftover, a game played under a
+  // similarly-titled entry, etc.) feeds this guess even when the student
+  // never opened a single Myanmar Reader chapter. Reported as "You
+  // completed up to Chapter 14 / 29" for a student who'd only ever played
+  // a consonant-practice game, with the teacher confirming she never
+  // granted Myanmar Reader trophies herself.
+  const isMyanmarReader = lesson.link === MYANMAR_READER_APP_URL;
+  const derivedCompletedUnit = (ssClassId == null && !isAbhi && !isMyanmarReader && unitCount > 0 && maxAvailable > 0)
     ? Math.min(unitCount, Math.ceil((previouslyEarned * unitCount) / maxAvailable))
     : 0;
   const effective = Math.max(trackedCompletedUnit, derivedCompletedUnit, highestSessionCompletedUnit, ssCount);
