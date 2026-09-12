@@ -247,6 +247,16 @@ const TREE_PARAMS = {
   branchSpread: 0.85, // radians the branchFactor children fan across
   leafCount: 6,      // small leaves scattered per twig tip (was 1 big leaf)
   leafSize: 1,       // multiplier on the base leaf size
+  // The very first split off the trunk uses just 2 thick, barely-tapered
+  // limbs instead of the bushier branchFactor fan below it -- reads as two
+  // big trunks merged at the base (the look the teacher liked on the Shrine
+  // Room's simpler tree) before the canopy fans out above it. This also
+  // REDUCES total tip count vs a plain branchFactor fan at every level
+  // (2 * branchFactor^(depth-1) instead of branchFactor^depth), so it's
+  // safe performance headroom, not an added cost.
+  trunkSplitSpread: 0.55,
+  trunkSplitTaper: 0.85,
+  trunkSplitLenFactor: 0.82,
 };
 
 // The procedural fractal-branch tree + weather/wildlife canvas, adapted
@@ -309,16 +319,20 @@ function TreeCanvas({ days }) {
       ctx.translate(0, -len);
 
       if (depth < maxDepth) {
-        const subLen = len * 0.72;
-        const subThick = Math.max(1, thick * 0.68);
-        const n = TREE_PARAMS.branchFactor;
+        // depth === 1 is the split right off the trunk -- see
+        // TREE_PARAMS.trunkSplit* above for why this level is special-cased.
+        const isTrunkSplit = depth === 1;
+        const n = isTrunkSplit ? 2 : TREE_PARAMS.branchFactor;
+        const spread = isTrunkSplit ? TREE_PARAMS.trunkSplitSpread : TREE_PARAMS.branchSpread;
+        const subLen = len * (isTrunkSplit ? TREE_PARAMS.trunkSplitLenFactor : 0.72);
+        const subThick = Math.max(1, thick * (isTrunkSplit ? TREE_PARAMS.trunkSplitTaper : 0.68));
         for (let i = 0; i < n; i++) {
           // Fan the children evenly across branchSpread radians (centered
           // on straight-up), with a little jitter so it doesn't look
           // mechanically symmetric.
           const childSeed = seed * 7.13 + i * 3.7 + depth * 1.9;
           const t = n === 1 ? 0 : (i / (n - 1)) - 0.5;
-          const branchAngle = t * TREE_PARAMS.branchSpread + (seededRandom(childSeed) - 0.5) * 0.12;
+          const branchAngle = t * spread + (seededRandom(childSeed) - 0.5) * 0.12;
           const lenJitter = 0.85 + seededRandom(childSeed + 0.33) * 0.15;
           drawBranch(subLen * lenJitter, subThick, branchAngle, depth + 1, maxDepth, childSeed);
         }
@@ -345,7 +359,12 @@ function TreeCanvas({ days }) {
 
       const targetDays = daysRef.current || 0;
       const targetFactor = clamp(targetDays, 0, 120) / 120;
-      currentFactor = lerp(currentFactor, targetFactor, dt * 3.5);
+      // Slow enough (~3s to settle) that the maxDepth/trunkLen/trunkThick
+      // stages below visibly step through one at a time -- sprout, trunk
+      // splitting into its two big limbs, then each canopy level fanning
+      // out in turn -- instead of the whole tree popping into its final
+      // shape within a couple of frames.
+      currentFactor = lerp(currentFactor, targetFactor, dt * 1.1);
 
       const dpr = window.devicePixelRatio || 1;
       const width = canvas.width / dpr;
@@ -479,6 +498,15 @@ function TreeCanvas({ days }) {
     const resize = () => {
       const dpr = window.devicePixelRatio || 1;
       const rect = canvas.parentElement.getBoundingClientRect();
+      // Guard against measuring before layout has settled (e.g. right after
+      // this lazy-loaded app first mounts, before its container has taken
+      // its final width) -- baking in a too-narrow width here made the tree
+      // render tall and squeezed-looking the first time an app was opened,
+      // fine on every reopen after since the page layout was already
+      // settled by then. Skipping a zero/near-zero measurement and letting
+      // the ResizeObserver below fire again once the real size is known
+      // fixes it at the source instead of just papering over one symptom.
+      if (rect.width < 10) return;
       const cssHeight = 320;
       canvas.width = Math.max(1, rect.width) * dpr;
       canvas.height = cssHeight * dpr;
@@ -488,8 +516,13 @@ function TreeCanvas({ days }) {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
     resize();
+    const observer = new ResizeObserver(resize);
+    observer.observe(canvas.parentElement);
     window.addEventListener('resize', resize);
-    return () => window.removeEventListener('resize', resize);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', resize);
+    };
   }, []);
 
   return <canvas ref={canvasRef} className="w-full rounded-2xl shadow-inner" />;
