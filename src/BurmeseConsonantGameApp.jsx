@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { doc, setDoc, updateDoc, serverTimestamp, getDoc, arrayUnion } from 'firebase/firestore';
+import { doc, setDoc, updateDoc, serverTimestamp, getDoc, arrayUnion, increment } from 'firebase/firestore';
 import { db } from './firebase';
 import OnlineStatusWidget from './OnlineStatusWidget';
 
@@ -806,6 +806,37 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
             setMyCoinBalance(newBalance);
             setDoc(progressRosterRef, { coinBalance: newBalance }, { merge: true }).catch(() => {});
         }
+
+        // Deposits this student's entire local coin balance into their
+        // Shrine Room wallet (the shared wallet several other apps in this
+        // project already deposit into) via an atomic increment(), then
+        // zeroes the local balance out. No canonical-Tutoring-name lookup
+        // here since this app's own roster has no tutoringStudentUid to
+        // resolve (same as MyanmarPoemsApp.jsx's identical deposit button).
+        async function depositCoinsToShrineRoom() {
+            const depositable = coinBalanceRef.current;
+            if (!studentName || depositable <= 0) return;
+            const confirmed = window.confirm(`Deposit ${depositable} coin(s) into your Shrine Room wallet?`);
+            if (!confirmed) return;
+            try {
+                const sanitizedName = (studentName || 'unknown').trim().replace(/[.$#/\[\]]/g, '_');
+                const shrineRef = doc(db, 'artifacts/shrine-room-app/public/data/roster', sanitizedName);
+                const shrineSnap = await getDoc(shrineRef);
+                const SHRINE_STARTER_COINS = 20;
+                await setDoc(shrineRef, {
+                    studentName,
+                    coinBalance: shrineSnap.exists() ? increment(depositable) : SHRINE_STARTER_COINS + depositable,
+                }, { merge: true });
+                coinBalanceRef.current = 0;
+                setMyCoinBalance(0);
+                if (progressRosterRef) setDoc(progressRosterRef, { coinBalance: 0 }, { merge: true }).catch(() => {});
+                alert(`🪙 Deposited ${depositable} coin(s) into your Shrine Room wallet!`);
+            } catch (e) {
+                console.error('Error depositing coins to Shrine Room:', e);
+                alert('⚠️ Something went wrong depositing your coins. Please try again.');
+            }
+        }
+
         if (progressRosterRef) {
             getDoc(progressRosterRef).then(snap => {
                 const data = snap.exists() ? snap.data() : {};
@@ -1561,6 +1592,7 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
         // window.__cpApp for the same pattern).
         window.__bcgApp = {
           toggleSoundSet, togglePickGame, toggleClickGame, toggleImageGame, toggleTypingGame,
+          depositCoinsToShrineRoom,
         };
 
     // Stop any repeating audio (audioTimer replays a question's sound every
@@ -1588,6 +1620,8 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
           studentName={studentName}
           isTeacherMode={!studentName}
           coinBalance={studentName ? myCoinBalance : null}
+          coinIcon="🪙"
+          onCoinClick={studentName ? () => window.__bcgApp?.depositCoinsToShrineRoom?.() : undefined}
           panelTitle="🕷️ Students"
           renderActivity={s => (
             <span className="text-gray-600">

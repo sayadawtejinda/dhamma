@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { doc, getDoc, setDoc, updateDoc, onSnapshot, collection, serverTimestamp, arrayUnion } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, onSnapshot, collection, serverTimestamp, arrayUnion, increment } from 'firebase/firestore';
 import { X } from 'lucide-react';
 import { db } from './firebase';
 import OnlineStatusWidget from './OnlineStatusWidget';
@@ -1053,6 +1053,36 @@ export default function ConsonantPracticeApp({ entryRequest, onExit, hideOwnOnli
             coinBalanceRef.current = newBalance;
             setMyCoinBalance(newBalance);
             setDoc(consonantRosterRef, { coinBalance: newBalance }, { merge: true }).catch(() => {});
+        }
+
+        // Deposits this student's entire local coin balance into their
+        // Shrine Room wallet (the shared wallet several other apps in this
+        // project already deposit into) via an atomic increment(), then
+        // zeroes the local balance out. No canonical-Tutoring-name lookup
+        // here since this app's own roster has no tutoringStudentUid to
+        // resolve (same as MyanmarPoemsApp.jsx's identical deposit button).
+        async function depositCoinsToShrineRoom() {
+            const depositable = coinBalanceRef.current;
+            if (!studentName || depositable <= 0) return;
+            const confirmed = window.confirm(`Deposit ${depositable} coin(s) into your Shrine Room wallet?`);
+            if (!confirmed) return;
+            try {
+                const sanitizedName = (studentName || 'unknown').trim().replace(/[.$#/\[\]]/g, '_');
+                const shrineRef = doc(db, 'artifacts/shrine-room-app/public/data/roster', sanitizedName);
+                const shrineSnap = await getDoc(shrineRef);
+                const SHRINE_STARTER_COINS = 20;
+                await setDoc(shrineRef, {
+                    studentName,
+                    coinBalance: shrineSnap.exists() ? increment(depositable) : SHRINE_STARTER_COINS + depositable,
+                }, { merge: true });
+                coinBalanceRef.current = 0;
+                setMyCoinBalance(0);
+                if (consonantRosterRef) setDoc(consonantRosterRef, { coinBalance: 0 }, { merge: true }).catch(() => {});
+                alert(`🪙 Deposited ${depositable} coin(s) into your Shrine Room wallet!`);
+            } catch (e) {
+                console.error('Error depositing coins to Shrine Room:', e);
+                alert('⚠️ Something went wrong depositing your coins. Please try again.');
+            }
         }
 
         // So the online-status panel can show "practicing 10 consonants"
@@ -2327,6 +2357,7 @@ export default function ConsonantPracticeApp({ entryRequest, onExit, hideOwnOnli
           changeConsonantCount, cycleWaga, toggleWagaGame, handleGridClick,
           toggleClickGame, toggleInstructionAudio, toggleMatchingGame,
           togglePuzzleGame, toggleReadAloud, toggleTypingGame,
+          depositCoinsToShrineRoom,
         };
 
 
@@ -2363,6 +2394,8 @@ export default function ConsonantPracticeApp({ entryRequest, onExit, hideOwnOnli
           studentName={studentName}
           isTeacherMode={!studentName}
           coinBalance={studentName ? myCoinBalance : null}
+          coinIcon="🪙"
+          onCoinClick={studentName ? () => window.__cpApp?.depositCoinsToShrineRoom?.() : undefined}
           panelTitle="🔤 Students"
           renderActivity={(s) => (
             <span className="text-gray-600">
