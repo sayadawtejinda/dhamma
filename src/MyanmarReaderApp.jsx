@@ -32,7 +32,11 @@ const READER_LESSON_KEYS = ['MyanmarReader', 'Myanmar Reader Lesson'];
 
 // --- GOOGLE SHEET CONFIG ---
 const SHEET_CHAPTER_PREFIX = "Chapter"; 
-const TOTAL_CHAPTERS = 29; 
+const TOTAL_CHAPTERS = 29;
+// Coins for finishing one full round of Practice Mode's consonant-syllable
+// drill (the "gift box" reward, once every syllable for the chosen
+// consonant has been matched) -- per the teacher's request.
+const PRACTICE_MODE_REWARD_COINS = 99;
 // ပြင်ဆင်ရန် နေရာ - ဆွဲယူမည့် Sheet နာမည်များကို ဤနေရာတွင် စိတ်ကြိုက် သတ်မှတ်နိုင်ပါသည်
 const AVAILABLE_SHEETS = ['A', 'B']; 
 const SHEET_B_AUDIO = "https://raw.githubusercontent.com/nathantun93/bell/main/သူငယ်တန်း1.mp3";
@@ -701,6 +705,19 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
     if (studentName) {
       setDoc(readerRosterDocRef(studentName), { coinBalance: increment(Math.round(amount)) }, { merge: true }).catch(() => {});
     }
+  };
+
+  // Practice Mode's consonant-syllable drill is a separate activity from
+  // reading a chapter -- awarding its gift-box reward through awardScore()
+  // above would also bump the chapter "SCORE" box (and therefore chapter-
+  // completion tracking) for something that isn't reading a single word of
+  // the actual story, which is exactly the false "completed Chapter X"
+  // class of bug already fixed elsewhere for trophy-derived progress. Coins
+  // only, no score.
+  const awardPracticeModeCoins = (amount) => {
+    if (!amount || !studentName) return;
+    setCoinBalance(prev => prev + amount);
+    setDoc(readerRosterDocRef(studentName), { coinBalance: increment(amount) }, { merge: true }).catch(() => {});
   };
 
   const finishNameSetup = (name, extra = {}) => {
@@ -2334,6 +2351,7 @@ const closeQAPanel = () => {
             if (nextStep === validSyllables.length) {
                 setGiftCount(prev => prev + 1);
                 setShowGiftPopup(true);
+                awardPracticeModeCoins(PRACTICE_MODE_REWARD_COINS);
                 setTimeout(() => {
                     setShowGiftPopup(false);
                     setIsPracticeMode(false);
