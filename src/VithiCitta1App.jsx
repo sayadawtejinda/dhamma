@@ -1,0 +1,5242 @@
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Play, Pause, SkipForward, SkipBack, RotateCcw, Activity, Clock, Info, GripVertical, User, Heart, Cloud, Sun, Apple, Eye, Ear, Flower, Utensils, Brain, ChevronLeft, ChevronRight, RefreshCw, ChevronDown, Lock, Unlock, ChevronUp, Layers, Share2, ArrowDown } from 'lucide-react';
+
+// NOTE: the raw source this was ported from initialized Firebase here using
+// `typeof __firebase_config` / `typeof __app_id` / `typeof __initial_auth_token`
+// globals -- artifacts of the AI-studio/"Canvas" sandbox it was originally
+// generated in, which do not exist in this real deployed app. That made the
+// whole auth+persistence block (a per-user cloud sync of the "arammana"
+// settings below) permanently inert dead code: every path behind
+// `if (!auth) return` / `if (!user || !db) return` always short-circuited.
+// Deleted entirely here, same as this repo's Paramattha port did -- see
+// src/Paramattha1App.jsx / src/Paramattha2App.jsx for the precedent.
+
+// --- စေတသိက်များ အဘိဓာန် ---
+const CETASIKA_DICT = {
+  "ဖဿ": { lakkana: "အာရုံကို တွေ့ထိခြင်းသဘော", rasa: "အာရုံ-ဝိညာဏ်ကို ပွတ်ချုပ်ထိခိုက်ခြင်း", paccupatthana: "ဝတ္ထု+အာရုံ+ဝိညာဏ် (၃)ပါးတို့၏ ပေါင်းဆုံခြင်း", padatthana: "ထင်ခြင်းသို့ ရောက်ရှိလာသော အာရုံ" },
+  "စေတနာ": { lakkana: "သမ္ပယုတ်တရားတို့ကို အာရုံ၌ စေ့ဆော်ခြင်းသဘော", rasa: "ပေါင်းစုရုံးစည်းခြင်း", paccupatthana: "စီမံတတ်သော သဘောတရား", padatthana: "ယှဉ်ဖက်သမ္ပယုတ်တရား" },
+  "ဧကဂ္ဂတာ": { lakkana: "အာရုံ၌ မရွေ့မလည် တည်ခြင်းသဘော", rasa: "သဟဇာတ်တရားတို့ကို ပေါင်းစုခြင်း", paccupatthana: "ငြိမ်သက်သော သဘောတရား", padatthana: "များသောအားဖြင့် သုခဝေဒနာ" },
+  "ဇီဝိတ": { lakkana: "သဟဇာတ်တရားတို့ကို စောင့်ရှောက်ခြင်းသဘော", rasa: "သဟဇာတ်တရားတို့ကို ဖြစ်စေခြင်း", paccupatthana: "တည်အောင်ထားတတ်သော သဘောတရား", padatthana: "မိမိသည် မျှစေအပ်သောတရား" },
+  "မနသိကာရ": { lakkana: "အာရုံသို့ ဖြောင့်ဖြောင့်မတ်မတ် သွားစေခြင်းသဘော", rasa: "အာရုံနှင့် ယှဉ်စပ်စေခြင်း", paccupatthana: "အာရုံဘက်သို့ မျက်နှာမူတတ်သော သဘော", padatthana: "အာရုံ" },
+  "ဝိတက်": { lakkana: "အာရုံ၌ စိတ်ကို ရှေးရှူတင်ပေးခြင်းသဘော", rasa: "အာရုံကို ရှေးဦးအစစွာ တီးခေါက်ခြင်း", paccupatthana: "စိတ်ကို ရှေးရှူ ဆွဲဆောင်သွားတတ်သော သဘော", padatthana: "အာရုံ" },
+  "ဝိစာရ": { lakkana: "အာရုံကို အဖန်ဖန် သုံးသပ်ဆင်ခြင်ခြင်းသဘော", rasa: "အဖန်ဖန် ယှဉ်ကပ်စေခြင်း", paccupatthana: "စိတ်ကို အစဉ်မပြတ်အောင် ဖွဲ့စပ်တတ်သော သဘော", padatthana: "အာရုံ" },
+  "အဓိမောက္ခ": { lakkana: "အာရုံကို သန္နိဋ္ဌာန်ကျ ဆုံးဖြတ်ချက်ချခြင်းသဘော", rasa: "ဝိစိကိစ္ဆာ၏ ဆန့်ကျင်ဘက် ဖြစ်ခြင်း", paccupatthana: "အာရုံကို ဆုံးဖြတ်တတ်သော သဘောတရား", padatthana: "ဆုံးဖြတ်အပ်သော အာရုံဓမ္မ" },
+  "ဝီရိယ": { lakkana: "လွန်စွာ လုံ့လပြုခြင်းသဘော", rasa: "သဟဇာတ်တရားတို့ကို အားပေးထောက်ပံ့ခြင်း", paccupatthana: "မဆုတ်နစ်တတ်သော သဘောတရား", padatthana: "သံဝေဂဉာဏ်" },
+  "ပီတိ": { lakkana: "အာရုံကို နှစ်သက်ခြင်း သဘော", rasa: "ကိုယ်စိတ်နှစ်ပါးကို နှစ်သက်ပြည့်ဖြိုး ပွားတိုးစေခြင်း", paccupatthana: "ရွှင်လန်းတက်ကြွစေတတ်သော သဘောတရား", padatthana: "အာရုံ" },
+  "ဆန္ဒ": { lakkana: "အာရုံကို ပြုလုပ်လိုခြင်းသဘော", rasa: "အာရုံကို ရှာမှီးခြင်း", paccupatthana: "အာရုံကို လိုလားတောင့်တမှုသဘောတရား", padatthana: "အလိုရှိအပ်သော အာရုံ" },
+  "မောဟ": { lakkana: "သဘာဝမှန်ကို ဟုတ်တိုင်းမှန်စွာ မသိမမြင်နိုင်ခြင်း", rasa: "အာရုံ၏ သဘောမှန်ကို ဖုံးလွှမ်းခြင်း", paccupatthana: "မသင့်မလျော်သော ပဋိပတ်ကျင့်စဉ်ကို ဖြစ်စေတတ်သည်", padatthana: "အယောနိသောမနသိကာရ" },
+  "အဟိရိက": { lakkana: "အကုသိုလ်တရားတို့ကို မစက်ဆုပ်ခြင်းသဘော", rasa: "မရှက်သော အခြင်းအရာအားဖြင့် ပြုခြင်း", paccupatthana: "မကောင်းမှုမှ မတွန့်ဆုတ်တတ်သော သဘော", padatthana: "မိမိကိုယ်ကို မရိုသေခြင်း" },
+  "အနောတ္တပ္ပ": { lakkana: "အကုသိုလ်တရားတို့ကို မကြောက်ရွံ့ခြင်းသဘော", rasa: "မထိတ်လန့်သော အခြင်းအရာအားဖြင့် ပြုခြင်း", paccupatthana: "မကောင်းမှုမှ မတွန့်ဆုတ်တတ်သော သဘော", padatthana: "သူတစ်ပါးတို့၌ မရိုသေခြင်း" },
+  "ဥဒ္ဓစ္စ": { lakkana: "စိတ် မငြိမ်သက်ခြင်းသဘောတရား", rasa: "စိတ်ငြိမ်ဝပ်စွာ မတည်တံ့ခြင်း", paccupatthana: "စိတ် မရပ်မတည် တုန်လှုပ်တတ်သည့်သဘော", padatthana: "အယောနိသောမနသိကာရ" },
+  "လောဘ": { lakkana: "အာရုံကို ငါ့ဟာဟူ၍ စွဲယူခြင်းသဘော", rasa: "အာရုံ၌ အလွန်ငြိကပ်ခြင်း", paccupatthana: "အာရုံကို မစွန့်လွှတ်နိုင်ခြင်း သဘော", padatthana: "သာယာဖွယ် သုဘဟု ရှုမြင်တတ်သော ဒိဋ္ဌိ" },
+  "ဒိဋ္ဌိ": { lakkana: "နိစ္စ သုခ အတ္တ သုဘဟု မှားမှားယွင်းယွင်း နှလုံးသွင်းခြင်းသဘော", rasa: "မှားသောအားဖြင့် သုံးသပ်ခြင်း", paccupatthana: "စွဲမြဲစွာ နှလုံးသွင်းတတ်သော သဘော", padatthana: "အရိယာတို့ကို ဖူးမြင်ခြင်းငှာ အလိုမရှိသူဖြစ်ခြင်း" },
+  "မာန": { lakkana: "ထောင်လွှား တက်ကြွခြင်းသဘော", rasa: "သမ္ပယုတ်တရားတို့ကို ချီးမြှောက်ခြင်း", paccupatthana: "အရာရာတွင် အသာယူလိုသည့် သဘောတရား", padatthana: "ဒိဋ္ဌိနှင့် မယှဉ်သော လောဘ" },
+  "ဒေါသ": { lakkana: "စိတ် ရုန့်ရင်း ခက်ထန်ကြမ်းတမ်းခြင်းသဘော", rasa: "ကိုယ်စိတ်ကို ပြင်းစွာ လောင်ကျွမ်းခြင်း", paccupatthana: "အကျိုးစီးပွားကို ဖျက်ဆီးတတ်သော သဘော", padatthana: "အာဃာတဝတ္ထု" },
+  "ဣဿာ": { lakkana: "သူတစ်ပါးတို့၏ စည်းစိမ်တို့ကို ငြူစူခြင်းသဘော", rasa: "မမွေ့လျော်နိုင်ခြင်း", paccupatthana: "မျက်နှာလွှဲတတ်သော သဘောတရား", padatthana: "သူတစ်ပါးတို့၏ စည်းစိမ်" },
+  "မစ္ဆရိယ": { lakkana: "မိမိ၏ စည်းစိမ်တို့ကို လျှို့ဝှက်ခြင်းသဘော", rasa: "သူတစ်ပါးတို့နှင့် ဆက်ဆံမှုကို သည်းမခံနိုင်ခြင်း", paccupatthana: "တွန့်တိုခြင်းသဘောတရား", padatthana: "မိမိ၏ စည်းစိမ်ဥစ္စာ" },
+  "ကုက္ကုစ္စ": { lakkana: "နောင်တတစ်ဖန် ပူပန်ခြင်းသဘော", rasa: "အဖန်တလဲလဲ ဝမ်းနည်းခြင်း စိုးရိမ်ခြင်း", paccupatthana: "စိတ်နှလုံးပူပန်လျက် အဖန်ဖန် အောက်မေ့ခြင်း", padatthana: "ပြုပြီး ဒုစရိုက်၊ မပြုလိုက်မိသော သုစရိုက်" },
+  "ထိန": { lakkana: "အားမထုတ်ခြင်းသဘော = အားတက်သရော မရှိခြင်းသဘော", rasa: "ဝီရိယကို ဖျက်ဆီးခြင်း", paccupatthana: "ဆုတ်နစ်တတ်သော သဘောတရား", padatthana: "ပျင်းရိခြင်း" },
+  "မိဒ္ဓ": { lakkana: "မခံ့ညားသည်၏ အဖြစ်ဟူသော သဘော", rasa: "ဝိညာဏ် ဒွါရတို့ကို ပိတ်ထားခြင်း", paccupatthana: "အာရုံကို ယူခြင်း၌ တွန့်ဆုတ်တတ်သော သဘောတရား", padatthana: "ပျင်းရိခြင်း" },
+  "ဝိစိကိစ္ဆာ": { lakkana: "ယုံမှားခြင်းသဘော", rasa: "စိတ်၏ တုန်လှုပ်ခြင်း", paccupatthana: "အာရုံကို မဆုံးဖြတ်နိုင်ခြင်း", padatthana: "အယောနိသောမနသိကာရ" },
+  "သဒ္ဓါ": { lakkana: "သဒ္ဓေယျဝတ္ထုကို ယုံကြည်ခြင်းသဘော", rasa: "သမ္ပယုတ်တရားတို့ကို ကြည်လင်စေခြင်း", paccupatthana: "မနောက်ကျုသည်၏ အဖြစ်ဟူသော သဘောတရား", padatthana: "ယုံကြည်ထိုက်သော သဒ္ဓေယျဝတ္ထု" },
+  "သတိ": { lakkana: "အာရုံ၌ မြဲစွာ အောက်မေ့စေခြင်းသဘော", rasa: "မေ့လျော့ခြင်း ပမာဒကို ဖျက်ဆီးခြင်း", paccupatthana: "စိတ်ကို စောင့်ရှောက်တတ်သော သဘောတရား", padatthana: "မြဲမြံသော အမှတ်သညာ" },
+  "ဟိရီ": { lakkana: "မကောင်းမှုမှ စက်ဆုပ်ခြင်းသဘော", rasa: "ရှက်သော အခြင်းအရာအားဖြင့် မကောင်းမှုတို့ကို မပြုခြင်း", paccupatthana: "မကောင်းမှုမှ တွန့်ဆုတ်တတ်သော သဘော", padatthana: "မိမိကိုယ်ကို ရိုသေလေးစားခြင်း" },
+  "ဩတ္တပ္ပ": { lakkana: "မကောင်းမှုမှ ထိတ်လန့်ခြင်းသဘော", rasa: "ထိတ်လန့်သော အခြင်းအရာအားဖြင့် မကောင်းမှုတို့ကို မပြုခြင်း", paccupatthana: "မကောင်းမှုမှ တွန့်ဆုတ်တတ်သော သဘော", padatthana: "သူတစ်ပါးကို ရိုသေလေးစားခြင်း" },
+  "အလောဘ": { lakkana: "အာရုံ၌ စိတ်၏ မတပ်မက်ခြင်းသဘော", rasa: "မသိမ်းပိုက်ခြင်း", paccupatthana: "အာရုံ၌ မငြိကပ်လိုသော သဘော", padatthana: "ယောနိသောမနသိကာရ" },
+  "အဒေါသ": { lakkana: "သတ္တဝါတို့၏ အကျိုးစီးပွားကို ကျင့်သော အခြင်းအရာအားဖြင့် ဖြစ်ခြင်း လက္ခဏာရှိ၏", rasa: "သတ္တဝါတို့၏ အကျိုးစီးပွားကို ကပ်၍ ဆောင်ခြင်း ရှိ၏", paccupatthana: "ရန်ငြိုးဖွဲ့ခြင်းကို ပယ်ဖျောက်တတ်သော သဘောတရားဟု ဉာဏ်အား ထင်တတ်၏", padatthana: "သတ္တဝါတို့၏ မြတ်နိုးဖွယ်ရာ မနာပကိုသာ ရှုမြင်တတ်သော ယောနိသောမနသိကာရ" },
+  "တတြမဇ္ဈတ္တတာ": { lakkana: "သတ္တဝါတို့၌ အလယ်အလတ်သဘောရှိသော လျစ်လျူရှုခြင်းဟူသော အခြင်းအရာအားဖြင့် ဖြစ်ခြင်းသဘော", rasa: "မုန်းခြင်း ချစ်ခြင်းသို့ မကျရောက်ဘဲ ညီမျှသည်၏ အဖြစ်ကိုသာ ရှုခြင်း", paccupatthana: "သတ္တဝါတို့၌ မုန်းခြင်း ချစ်ခြင်းတို့ကို ငြိမ်းစေခြင်းကို ဖြစ်စေတတ်၏", padatthana: "ကံသာလျှင် မိမိ၏ ကိုယ်ပိုင်ဥစ္စာ ရှိသည်၏ အဖြစ်ကို ရှုတတ်သော ဉာဏ်" },
+  "ကာယပဿဒ္ဓိ": { lakkana: "စေတသိက်ပူတို့ကို ငြိမ်းအေးစေခြင်းသဘော", rasa: "စေတသိက်ပူတို့ကို ဖျက်ဆီးခြင်း", paccupatthana: "စေတသိက်တို့၏ ငြိမ်သက် အေးမြသော သဘော", padatthana: "စေတသိက်" },
+  "စိတ္တပဿဒ္ဓိ": { lakkana: "စိတ်ပူတို့ကို ငြိမ်းအေးစေခြင်းသဘော", rasa: "စိတ်ပူတို့ကို ဖျက်ဆီးခြင်း", paccupatthana: "စိတ်၏ ငြိမ်သက် အေးမြသော သဘော", padatthana: "စိတ်" },
+  "ကာယလဟုတာ": { lakkana: "စေတသိက်တို့၏ လေးလံမှုကို ငြိမ်းအေးစေခြင်းသဘော", rasa: "စေတသိက်တို့၏ လေးလံမှုကို ဖျက်ဆီးခြင်း", paccupatthana: "မလေးမလံ မနှေးကန်သည့် သဘော", padatthana: "စေတသိက်" },
+  "စိတ္တလဟုတာ": { lakkana: "စိတ်၏ လေးလံမှုကို ငြိမ်းအေးစေခြင်းသဘော", rasa: "စိတ်၏ လေးလံမှုကို ဖျက်ဆီးခြင်း", paccupatthana: "မလေးမလံ မနှေးကန်သည့် သဘော", padatthana: "စိတ်" },
+  "ကာယမုဒုတာ": { lakkana: "စေတသိက်တို့၏ ခက်ထန်ခိုင်မာမှုကို ငြိမ်းအေးစေခြင်း", rasa: "စေတသိက်တို့၏ ခက်ထန်ခိုင်မာမှုကို ဖျက်ဆီးခြင်း", paccupatthana: "မထိခိုက်သောသဘော", padatthana: "စေတသိက်" },
+  "စိတ္တမုဒုတာ": { lakkana: "စိတ်၏ ခက်ထန်ခိုင်မာမှုကို ငြိမ်းအေးစေခြင်း", rasa: "စိတ်၏ ခက်ထန်ခိုင်မာမှုကို ဖျက်ဆီးခြင်း", paccupatthana: "မထိခိုက်သောသဘော", padatthana: "စိတ်" },
+  "ကာယကမ္မညတာ": { lakkana: "စေတသိက်တို့၏ မခံ့ညားမှုကို ငြိမ်းအေးစေခြင်း", rasa: "မခံ့ညားမှုကို ဖျက်ဆီးခြင်း", paccupatthana: "အာရုံပြုခြင်း၏ပြည့်စုံကြောင်းသဘော", padatthana: "စေတသိက်" },
+  "စိတ္တကမ္မညတာ": { lakkana: "စိတ်၏ မခံ့ညားမှုကို ငြိမ်းအေးစေခြင်း", rasa: "မခံ့ညားမှုကို ဖျက်ဆီးခြင်း", paccupatthana: "အာရုံပြုခြင်း၏ပြည့်စုံကြောင်းသဘော", padatthana: "စိတ်" },
+  "ကာယပါဂုညတာ": { lakkana: "စေတသိက်တို့၏ မနာဖျားခြင်းသဘော", rasa: "နာဖျားခြင်းကို ဖျက်ဆီးခြင်း", paccupatthana: "အပြစ်အနာကင်းသော သဘော", padatthana: "စေတသိက်" },
+  "စိတ္တပါဂုညတာ": { lakkana: "စိတ်၏ မနာဖျားခြင်းသဘော", rasa: "နာဖျားခြင်းကို ဖျက်ဆီးခြင်း", paccupatthana: "အပြစ်အနာကင်းသော သဘော", padatthana: "စိတ်" },
+  "ကာယုဇုကတာ": { lakkana: "စေတသိက်တို့၏ ဖြောင့်မတ်ခြင်းသဘော", rasa: "ကောက်ကျစ်မှုတို့ကို ဖျက်ဆီးခြင်း", paccupatthana: "မကောက်ကျစ်သည့်သဘော", padatthana: "စေတသိက်" },
+  "စိတ္တုဇုကတာ": { lakkana: "စိတ်၏ ဖြောင့်မတ်ခြင်းသဘော", rasa: "ကောက်ကျစ်မှုတို့ကို ဖျက်ဆီးခြင်း", paccupatthana: "မကောက်ကျစ်သည့်သဘော", padatthana: "စိတ်" },
+  "ပညာ": { lakkana: "သဘာဝလက္ခဏာကို ထိုးထွင်းသိခြင်းသဘော", rasa: "ဆီမီးကဲ့သို့ အာရုံကို ထွန်းပြခြင်း လင်းစေခြင်း", paccupatthana: "မတွေဝေသော အခြင်းအရာ အားဖြင့် ဖြစ်ခြင်းသဘော", padatthana: "သမာဓိ" },
+  "သညာ": { lakkana: "အာရုံကို အမှတ်ပြု၍ သိခြင်း", rasa: "ရှေးအမှတ်ဖြင့် နောက်ထပ်သိခြင်း", paccupatthana: "အမှတ်နိမိတ်အတိုင်း အာရုံကို နှလုံးသွင်းခြင်း", padatthana: "ထင်လာတိုင်းသော အာရုံ" },
+  "သောမနဿ ဝေဒနာ": { lakkana: "ဣဋ္ဌာရုံကို ခံစားခြင်းသဘော", rasa: "အာရုံကို သုံးဆောင်ခံစားခြင်း", paccupatthana: "သာယာဖွယ် သဘောတရား", padatthana: "ပဿဒ္ဓိ" },
+  "ဥပေက္ခာ ဝေဒနာ": { lakkana: "အလယ်အလတ် မဇ္ဈတ္တာရုံကို အလယ်အလတ် လျစ်လျူခံစားခြင်း", rasa: "မတိုးပွားစေလွန်း မညှိုးကြုံစေလွန်းခြင်း", paccupatthana: "ငြိမ်သက်သော သဘောတရား", padatthana: "ပီတိကင်းသောစိတ်" },
+  "ဒေါမနဿ ဝေဒနာ": { lakkana: "အနိဋ္ဌာရုံကို ခံစားခြင်းသဘော", rasa: "အာရုံကို သုံးဆောင်ခံစားခြင်း", paccupatthana: "စိတ်၌မှီသော နှိပ်စက်တတ်သော သဘောတရား", padatthana: "ဟဒယဝတ္ထု" },
+  "ဒုက္ခ ဝေဒနာ": { lakkana: "အနိဋ္ဌဖောဋ္ဌဗ္ဗာရုံ၏ အရသာကို ခံစားခြင်းသဘော", rasa: "သမ္ပယုတ်တရားတို့ကို ညှိုးနွမ်းစေခြင်း", paccupatthana: "ကိုယ်၌ဖြစ်သော ဆင်းရဲသော သဘောတရား", padatthana: "ကာယိန္ဒြေ" },
+  "သုခ ဝေဒနာ": { lakkana: "ဣဋ္ဌဖောဋ္ဌဗ္ဗာရုံ၏ အရသာကို ခံစားခြင်းသဘော", rasa: "သမ္ပယုတ်တရားတို့ကို လွန်စွာ တိုးပွားစေခြင်း", paccupatthana: "ကိုယ်၌ဖြစ်သော သာယာအပ်သော သဘောတရား", padatthana: "ကာယိန္ဒြေ" },
+  "သမ္မာဝါစာ": { lakkana: "ဝစီဒုစရိုက်၏ တည်ရာဝတ္ထုတို့ကို မလွန်ကျူးခြင်းသဘော", rasa: "ဝစီဒုစရိုက်၏ တည်ရာဝတ္ထုမှ တွန့်ဆုတ်ခြင်း", paccupatthana: "ဝစီဒုစရိုက်ကို မပြုမကျင့် ရှောင်ကြဉ်သော သဘောတရား", padatthana: "သဒ္ဓါ, ဟိရီ, ဩတ္တပ္ပ" },
+  "သမ္မာကမ္မန္တ": { lakkana: "ကာယဒုစရိုက်၏ တည်ရာဝတ္ထုတို့ကို မလွန်ကျူးခြင်းသဘော", rasa: "ကာယဒုစရိုက်မှ တွန့်ဆုတ်ခြင်း", paccupatthana: "ကာယဒုစရိုက်ကို မပြုကျင့်သောသဘောတရား", padatthana: "သဒ္ဓါ, ဟိရီ, ဩတ္တပ္ပ" },
+  "သမ္မာအာဇီဝ": { lakkana: "မိစ္ဆာဇီဝကို မလွန်ကျူးခြင်းသဘော", rasa: "မိစ္ဆာဇီဝမှ တွန့်ဆုတ်ခြင်း", paccupatthana: "မိစ္ဆာဇီဝကို မပြုကျင့်သော သဘောတရား", padatthana: "သဒ္ဓါ, ဟိရီ, ဩတ္တပ္ပ" },
+  "ကရုဏာ": { lakkana: "သတ္တဝါတို့၏ ဆင်းရဲဒုက္ခကို ပယ်ရှားလိုသော အခြင်းအရာအားဖြင့် ဖြစ်ခြင်းသဘော", rasa: "သူတစ်ပါးတို့၏ ဆင်းရဲဒုက္ခကို သည်းမခံနိုင်ခြင်း", paccupatthana: "သတ္တဝါတို့ကို မညှဉ်းဆဲခြင်းကို ရှေးရှု ဖြစ်စေတတ်၏", padatthana: "ဆင်းရဲဒုက္ခခံနေရသော သတ္တဝါတို့အပေါ် ယောနိသောမနသိကာရ" },
+  "မုဒိတာ": { lakkana: "သုခိတသတ္တဝါတို့၏ စည်းစိမ်ဥစ္စာ ကုံလုံပြည့်စုံသည်ကို ကြည်ရွှင်ဝမ်းမြောက်ခြင်းသဘော", rasa: "သုခိတသတ္တဝါတို့၏ စည်းစိမ်ဥစ္စာ ကုံလုံပြည့်စုံသည်ကို မငြူစူခြင်း", paccupatthana: "မမွေ့လျော် မနှစ်သက်ခြင်းကို ပယ်ဖျောက်သော သဘောတရား", padatthana: "သုခိတသတ္တဝါတို့၏ စည်းစိမ်ဥစ္စာကို အသင့်ရှုနိုင်သော ယောနိသောမနသိကာရ" }
+};
+
+// --- ဝိညာဏက္ခန္ဓာ အဘိဓာန် ---
+const CITTA_DICT = {
+  "Generic": { lakkana: "အာရုံကို သိခြင်း = အာရုံကို ရယူခြင်းသဘော", rasa: "အာရုံကို သိမှု၌ ပဓာန ရှေ့သွားခေါင်းဆောင်ဖြစ်ခြင်း", paccupatthana: "စိတ်အစဉ်အဆက် မပြတ်ရအောင် ဖွဲ့စပ်တတ်သော သဘောတရား", padatthana: "နာမ်-ရုပ်" },
+  "ပဋိသန္ဓေ": { lakkana: "အတိတ်ဘဝ မရဏာသန္နဇောသည် ယူအပ်ခဲ့သော ကံ-ကမ္မနိမိတ်-ဂတိနိမိတ် တစ်မျိုးမျိုးကို ရယူခြင်းသဘော", rasa: "ရှေ့ဘဝစိတ်အစဉ်နှင့် နောက်ဘဝစိတ်အစဉ်ကို ဆက်စပ်ပေးခြင်း", paccupatthana: "ဘဝနှစ်ခုကို ဆက်စပ်ပေးတတ်သော သဘောတရား", padatthana: "ယှဉ်ဖက် စေတသိက် နာမ် + မှီရာဝတ္ထုရုပ်" },
+  "ဘဝင်": { lakkana: "အတိတ်ဘဝ မရဏာသန္နဇောသည် ယူအပ်ခဲ့သော အာရုံ တစ်မျိုးမျိုးကို ရယူခြင်းသဘော", rasa: "ရှေ့နောက် စိတ်အစဉ် မပြတ်ရအောင် ဘဝ၏အကြောင်းတရားအဖြစ် တည်နေခြင်း", paccupatthana: "စိတ်အစဉ်ကို ဆက်စပ်ပေးတတ်သော သဘောတရား", padatthana: "ယှဉ်ဖက် စေတသိက် နာမ် + မှီရာဝတ္ထုရုပ်" },
+  "ပဉ္စဒွါရာဝဇ္ဇန်း": { lakkana: "ရူပါရုံ စသည့် အာရုံတို့ကို သိခြင်းသဘော = ရယူခြင်းသဘော", rasa: "ရူပါရုံစသည့် ပဉ္စာရုံကို နှလုံးသွင်းခြင်း = ဆင်ခြင်ခြင်း", paccupatthana: "အာရုံဘက်သို့ ရှေးရှူ မျက်နှာမူသည့် သဘောတရား", padatthana: "ဘဝင်စိတ် ချုပ်ပျက်သွားခြင်း" },
+  "စက္ခုဝိညာဏ်": { lakkana: "စက္ခုဝတ္ထုကို မှီဖြစ်၍ ရူပါရုံကို သိခြင်းသဘော", rasa: "ရူပါရုံ အရောင်မျှကိုသာ သိခြင်း", paccupatthana: "ရူပါရုံဘက်သို့ ရှေးရှူမျက်နှာမူသည့် သဘောတရား", padatthana: "အာဝဇ္ဇန်းစိတ် ကင်းချုပ်ခြင်း" },
+  "သောတဝိညာဏ်": { lakkana: "သောတဝတ္ထုကို မှီဖြစ်၍ သဒ္ဒါရုံကို သိခြင်းသဘော", rasa: "သဒ္ဒါရုံ အသံမျှကိုသာ သိခြင်း", paccupatthana: "သဒ္ဒါရုံဘက်သို့ ရှေးရှူမျက်နှာမူသည့် သဘောတရား", padatthana: "အာဝဇ္ဇန်းစိတ်၏ ကင်းချုပ်ခြင်း" },
+  "ဃာနဝိညာဏ်": { lakkana: "ဃာနဝတ္ထုကို မှီဖြစ်၍ ဂန္ဓာရုံကို သိခြင်းသဘော", rasa: "ဂန္ဓာရုံ = အနံ့မျှကိုသာ သိခြင်း", paccupatthana: "ဂန္ဓာရုံဘက်သို့ ရှေးရှူမျက်နှာမူသည့် သဘောတရား", padatthana: "အာဝဇ္ဇန်းစိတ်၏ ကင်းချုပ်ခြင်း" },
+  "ဇိဝှါဝိညာဏ်": { lakkana: "ဇိဝှါဝတ္ထုကို မှီဖြစ်၍ ရသာရုံကို သိခြင်းသဘော", rasa: "ရသာရုံ = အရသာမျှကိုသာ သိခြင်း", paccupatthana: "ရသာရုံဘက်သို့ ရှေးရှူမျက်နှာမူသည့် သဘောတရား", padatthana: "အာဝဇ္ဇန်းစိတ်၏ ကင်းချုပ်ခြင်း" },
+  "ကာယဝိညာဏ်": { lakkana: "ကာယဝတ္ထုကို မှီဖြစ်၍ ဖောဋ္ဌဗ္ဗာရုံကို သိခြင်းသဘော", rasa: "ဖောဋ္ဌဗ္ဗာရုံ = အတွေ့အထိမျှကိုသာ သိခြင်း", paccupatthana: "ဖောဋ္ဌဗ္ဗာရုံဘက်သို့ ရှေးရှူမျက်နှာမူသည့် သဘောတရား", padatthana: "အာဝဇ္ဇန်းစိတ်၏ ကင်းချုပ်ခြင်း" },
+  "သမ္ပဋိစ္ဆိုင်း": { lakkana: "ရူပါရုံစသည်ကို သိခြင်းသဘော", rasa: "ရူပါရုံစသည့် အာရုံကို လက်ခံခြင်း", paccupatthana: "ရူပါရုံစသည့်အာရုံကို လက်ခံတတ်သော သဘောတရား", padatthana: "စက္ခုဝိညာဏ်စသည်တို့၏ ကင်းချုပ်ခြင်း" },
+  "သန္တီရဏ": { lakkana: "အာရုံ (၆)ပါးကို သိခြင်းသဘော", rasa: "အာရုံကို စူးစမ်းခြင်း", paccupatthana: "အာရုံကို စူးစမ်းတတ်သော သဘောတရား", padatthana: "မှီရာ ဟဒယဝတ္ထုရုပ်" },
+  "ဝုဋ္ဌော": { lakkana: "အာရုံ (၆)ပါးကို သိခြင်းသဘော", rasa: "ပဉ္စဒွါရ၌ အာရုံကို ဆုံးဖြတ်ခြင်း", paccupatthana: "ပဉ္စဒွါရ၌ အာရုံကို ဆုံးဖြတ်တတ်သော သဘောတရား", padatthana: "သန္တီရဏစိတ်၏ ချုပ်ပျက်ခြင်း" },
+  "ကုသိုလ်ဇော": { lakkana: "အပြစ်မရှိခြင်း ကောင်းသောအကျိုးကို ပေးခြင်းသဘော", rasa: "အကုသိုလ်ကို ဖျက်ဆီးခြင်း", paccupatthana: "ဖြူစင်သော သဘောတရား", padatthana: "ယောနိသောမနသိကာရ" },
+  "အကုသိုလ်ဇော": { lakkana: "အပြစ်နှင့်တကွဖြစ်ခြင်း မကောင်းသော အကျိုးရှိခြင်းသဘော", rasa: "အကျိုးမဲ့ကို ဖြစ်စေခြင်း", paccupatthana: "စိတ်အစဉ်ကို ညစ်နွမ်းစေတတ်သော သဘောတရား", padatthana: "အယောနိသောမနသိကာရ" },
+  "တဒါရုံ": { lakkana: "အာရုံ (၆)ပါးကို သိခြင်းသဘော", rasa: "ဇောယူသည့် အာရုံကိုပင် လိုက်၍ အာရုံယူခြင်း", paccupatthana: "ဇောယူသည့် အာရုံကိုပင် လိုက်၍ အာရုံယူတတ်သော သဘောတရား", padatthana: "ဇောစိတ်၏ ချုပ်ပျက်သွားခြင်း" },
+  "မနောဒွါရာဝဇ္ဇန်း": { lakkana: "အာရုံ (၆)ပါးကို သိခြင်းသဘော", rasa: "မနောဒွါရ၌ ထင်လာသော အာရုံကို ဆင်ခြင်ခြင်း", paccupatthana: "မနောဒွါရ၌ ထင်လာသော အာရုံကို ဆင်ခြင်တတ်သော သဘောတရား", padatthana: "ဘဝင်အယဉ် ကင်းချုပ်ခြင်း" },
+  "ဟသိတုပ္ပါဒ်": { lakkana: "အာရုံ (၆)ပါးကို သိခြင်းသဘော", rasa: "ရဟန္တာအရှင်မြတ်တို့၏ သန္တာန်၌သာ ပြုံးရွှင်ခြင်းကို ဖြစ်စေခြင်း", paccupatthana: "ပြုံးရွှင်ခြင်းကို ဖြစ်စေတတ်သော သဘောတရား", padatthana: "ဧကန်အားဖြင့် မှီရာဖြစ်သော ဟဒယဝတ္ထု" },
+  "စုတိ": { lakkana: "အတိတ်ဘဝ မရဏာသန္နဇောသည် ယူအပ်ခဲ့သော အာရုံ တစ်မျိုးမျိုးကို သိခြင်းသဘော", rasa: "ဘဝမှ ရွေ့လျောခြင်း", paccupatthana: "ဘဝမှ ရွေ့လျောတတ်သော သဘောတရား", padatthana: "ဘဝင်၊ တဒါရုံ သို့မဟုတ် ဇော၏ ချုပ်ပျက်ခြင်း" },
+  "အာဂန္တုကဘဝင်": { lakkana: "မလိုက်လျောသော ဇောနှင့် ဘဝင်အကြား ဆက်သွယ်ပေးခြင်းသဘော", rasa: "ဧည့်သည်ဘဝင်အဖြစ် ကြားဝင်ဆောင်ရွက်ခြင်း", paccupatthana: "အာရုံဟောင်းကို ပြန်လည်ယူငင်သည့် သဘောတရား", padatthana: "မလိုက်လျောသော ဇောနှင့် ဘဝင်" }
+};
+
+const getActiveCittaInfo = (name, javanaId) => {
+    const n = name || "";
+    if (n.includes("ပဋိသန္ဓေ")) return CITTA_DICT["ပဋိသန္ဓေ"];
+    if (n.includes("အာဂန္တုကဘဝင်")) return CITTA_DICT["အာဂန္တုကဘဝင်"];
+    if (n.includes("ဘဝင်")) return CITTA_DICT["ဘဝင်"];
+    if (n.includes("ပဉ္စဒွါရာဝဇ္ဇန်း")) return CITTA_DICT["ပဉ္စဒွါရာဝဇ္ဇန်း"];
+    if (n.includes("စက္ခုဝိညာဏ်")) return CITTA_DICT["စက္ခုဝိညာဏ်"];
+    if (n.includes("သောတဝိညာဏ်")) return CITTA_DICT["သောတဝိညာဏ်"];
+    if (n.includes("ဃာနဝိညာဏ်")) return CITTA_DICT["ဃာနဝိညာဏ်"];
+    if (n.includes("ဇိဝှါဝိညာဏ်")) return CITTA_DICT["ဇိဝှါဝိညာဏ်"];
+    if (n.includes("ကာယဝိညာဏ်")) return CITTA_DICT["ကာယဝိညာဏ်"];
+    if (n.includes("သမ္ပဋိစ္ဆိုင်း")) return CITTA_DICT["သမ္ပဋိစ္ဆိုင်း"];
+    if (n.includes("သန္တီရဏ")) return CITTA_DICT["သန္တီရဏ"];
+    if (n.includes("ဝုဋ္ဌော")) return CITTA_DICT["ဝုဋ္ဌော"];
+    if (n.includes("မနောဒွါရာဝဇ္ဇန်း")) return CITTA_DICT["မနောဒွါရာဝဇ္ဇန်း"];
+    if (n.includes("ဟသိတုပ္ပါဒ်")) return CITTA_DICT["ဟသိတုပ္ပါဒ်"];
+    if (n.includes("စုတိ")) return CITTA_DICT["စုတိ"];
+    if (n.includes("တဒါရုံ")) return CITTA_DICT["တဒါရုံ"];
+    if (n.includes("ဇော") || n.includes("မဂ်") || n.includes("ဖိုလ်") || n.includes("ဈာန်") || n.includes("ပရိကံ") || n.includes("ဥပစာရ") || n.includes("အနုလုံ") || n.includes("ဂေါတြဘု") || n.includes("ဝေါဒါန်") || n.includes("နေဝသညာ")) {
+        if (javanaId && (javanaId.includes('akusala') || javanaId.includes('lobha') || javanaId.includes('dosa') || javanaId.includes('moha'))) {
+            return CITTA_DICT["အကုသိုလ်ဇော"];
+        }
+        return CITTA_DICT["ကုသိုလ်ဇော"];
+    }
+    return CITTA_DICT["Generic"];
+};
+
+const toMyanmarNum = (n) => {
+  const myanmarNumerals = ['၀', '၁', '၂', '၃', '၄', '၅', '၆', '၇', '၈', '၉'];
+  return n.toString().split('').map(digit => myanmarNumerals[parseInt(digit)]).join('');
+};
+
+const SORT_ORDER = {
+  "အသိစိတ်": 1,
+  "ဖဿ": 2, "သောမနဿ ဝေဒနာ": 3, "ဥပေက္ခာ ဝေဒနာ": 4, "ဒေါမနဿ ဝေဒနာ": 5, "ဒုက္ခ ဝေဒနာ": 5.5, "သုခ ဝေဒနာ": 6, "သညာ": 7, "စေတနာ": 8, "ဧကဂ္ဂတာ": 9, "ဇီဝိတ": 10, "မနသိကာရ": 11,
+  "ဝိတက်": 12, "ဝိစာရ": 13, "အဓိမောက္ခ": 14, "ဝီရိယ": 15, "ပီတိ": 16, "ဆန္ဒ": 17,
+  "မောဟ": 18, "အဟိရိက": 19, "အနောတ္တပ္ပ": 20, "ဥဒ္ဓစ္စ": 21,
+  "လောဘ": 22, "ဒိဋ္ဌိ": 23, "မာန": 24, "ဒေါသ": 25, "ဣဿာ": 26, "မစ္ဆရိယ": 27, "ကုက္ကုစ္စ": 28, "ဝိစိကိစ္ဆာ": 29, "ထိန": 30, "မိဒ္ဓ": 31,
+  "သဒ္ဓါ": 32, "သတိ": 33, "ဟိရီ": 34, "ဩတ္တပ္ပ": 35, "အလောဘ": 36, "အဒေါသ": 37, "တတြမဇ္ဈတ္တတာ": 38,
+  "ကာယပဿဒ္ဓိ": 39, "စိတ္တပဿဒ္ဓိ": 40, "ကာယလဟုတာ": 41, "စိတ္တလဟုတာ": 42, "ကာယမုဒုတာ": 43, "စိတ္တမုဒုတာ": 44,
+  "ကာယကမ္မညတာ": 45, "စိတ္တကမ္မညတာ": 46, "ကာယပါဂုညတာ": 47, "စိတ္တပါဂုညတာ": 48, "ကာယုဇုကတာ": 49, "စိတ္တုဇုကတာ": 50,
+  "သမ္မာဝါစာ": 51, "သမ္မာကမ္မန္တ": 52, "သမ္မာအာဇီဝ": 53,
+  "ကရုဏာ": 54, "မုဒိတာ": 55,
+  "ပညာ": 56
+};
+
+const SABBACITTA = ["ဖဿ", "သောမနဿ ဝေဒနာ", "ဥပေက္ခာ ဝေဒနာ", "ဒေါမနဿ ဝေဒနာ", "သုခ ဝေဒနာ", "သညာ", "စေတနာ", "ဧကဂ္ဂတာ", "ဇီဝိတ", "မနသိကာရ"];
+const PAKINNAKA = ["ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ", "ဝီရိယ", "ပီတိ", "ဆန္ဒ"]; 
+const SOBHANA_SADHARANA = ["သဒ္ဓါ", "သတိ", "ဟိရီ", "ဩတ္တပ္ပ", "အလောဘ", "အဒေါသ", "တတြမဇ္ဈတ္တတာ", "ကာယပဿဒ္ဓိ", "စိတ္တပဿဒ္ဓိ", "ကာယလဟုတာ", "စိတ္တလဟုတာ", "ကာယမုဒုတာ", "စိတ္တမုဒုတာ", "ကာယကမ္မညတာ", "စိတ္တကမ္မညတာ", "ကာယပါဂုညတာ", "စိတ္တပါဂုညတာ", "ကာယုဇုကတာ", "စိတ္တုဇုကတာ"];
+const NANA_KADACI = ["မာန", "ဣဿာ", "မစ္ဆရိယ", "ကုက္ကုစ္စ", "ထိန", "မိဒ္ဓ", "သမ္မာဝါစာ", "သမ္မာကမ္မန္တ", "သမ္မာအာဇီဝ", "ကရုဏာ", "မုဒိတာ"];
+const AKUSALA_OTHER = ["မောဟ", "အဟိရိက", "အနောတ္တပ္ပ", "ဥဒ္ဓစ္စ", "လောဘ", "ဒိဋ္ဌိ", "ဒေါသ", "ဝိစိကိစ္ဆာ"];
+
+const getCetasikaStyle = (name) => {
+    if (name === "အသိစိတ်") return "bg-slate-800 text-white border-slate-600 hover:bg-slate-700 shadow-md";
+    if (name === "ပီတိ") return "bg-yellow-300 text-yellow-900 border-yellow-500 ring-2 ring-yellow-400 shadow-sm font-black hover:bg-yellow-400 scale-105 animate-pulse z-10";
+    if (name === "ပညာ") return "bg-fuchsia-200 text-fuchsia-900 border-fuchsia-500 ring-1 ring-fuchsia-400 shadow-sm font-bold hover:bg-fuchsia-300 z-10";
+    if (SABBACITTA.includes(name)) return "bg-sky-100 text-sky-800 border-sky-300 hover:bg-sky-200";
+    if (PAKINNAKA.includes(name)) return "bg-emerald-100 text-emerald-800 border-emerald-300 hover:bg-emerald-200";
+    if (SOBHANA_SADHARANA.includes(name)) return "bg-purple-100 text-purple-800 border-purple-300 hover:bg-purple-200";
+    if (NANA_KADACI.includes(name)) return "bg-orange-50 text-orange-900 border-orange-500 border-[2px] border-dashed hover:bg-orange-100 font-bold";
+    if (AKUSALA_OTHER.includes(name)) return "bg-red-100 text-red-800 border-red-300 hover:bg-red-200";
+    return "bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200";
+};
+
+const getCittaColor = (name, javanaId) => {
+    if (name.includes("စက္ခုဝိညာဏ်")) return { bg: 'bg-indigo-500 text-white border-indigo-600 ring-indigo-200', text: 'text-indigo-700' };
+    if (name.includes("သောတဝိညာဏ်")) return { bg: 'bg-cyan-500 text-white border-cyan-600 ring-cyan-200', text: 'text-cyan-700' };
+    if (name.includes("ဃာနဝိညာဏ်")) return { bg: 'bg-fuchsia-500 text-white border-fuchsia-600 ring-fuchsia-200', text: 'text-fuchsia-700' };
+    if (name.includes("ဇိဝှါဝိညာဏ်")) return { bg: 'bg-red-500 text-white border-red-600 ring-red-200', text: 'text-red-700' };
+    if (name.includes("ကာယဝိညာဏ်")) return { bg: 'bg-lime-500 text-white border-lime-600 ring-lime-200', text: 'text-lime-700' };
+    if (name.includes("တဒါရုံ")) return { bg: 'bg-purple-500 text-white border-purple-600 ring-purple-200', text: 'text-purple-700' };
+    if (name.includes("ပဋိသန္ဓေ") || name.includes("စုတိ") || name.includes("ဘဝင်") || name.includes("သန္တီရဏ") || name.includes("သမ္ပဋိစ္ဆိုင်း") || name.includes("ဝိညာဏ်") || name.includes("ဖိုလ်")) {
+        return { bg: 'bg-blue-500 text-white border-blue-600 ring-blue-200', text: 'text-blue-700' }; 
+    }
+    if (name.includes("အာဝဇ္ဇန်း") || name.includes("ဝုဋ္ဌော") || name.includes("မဟာကိရိယာ") || name.includes("ဟသိတုပ္ပါဒ်")) {
+        return { bg: 'bg-amber-500 text-white border-amber-600 ring-amber-200', text: 'text-amber-700' }; 
+    }
+    // ကာမဇော (အကုသိုလ်)
+if (javanaId && (javanaId.includes('akusala') || javanaId.includes('lobha') || javanaId.includes('dosa') || javanaId.includes('moha')) &&
+    (name.includes("ဇော") || name.includes("ကိရိယာ") || name.includes("ကုသိုလ်"))) {
+    return { bg: 'bg-rose-500 text-white border-rose-600 ring-rose-200', text: 'text-rose-700' };
+}
+// ပရိကံ/ဥပစာရ/အနုလုံ/ဂေါတြဘု/ဝေါဒါန် (ကာမကုသိုလ် pre-javana)
+if (name.includes("ပရိကံ") || name.includes("ဥပစာရ") || name.includes("အနုလုံ") || name.includes("ဂေါတြဘု") || name.includes("ဝေါဒါန်")) {
+    return { bg: 'bg-teal-400 text-white border-teal-500 ring-teal-200', text: 'text-teal-700' };
+}
+// အပ္ပနာဇော (မဂ်/ဖိုလ်/ဈာန်/အဘိညာဉ်/နေဝသညာ)
+if (name.includes("မဂ်") || name.includes("ဖိုလ်") || name.includes("ဈာန်") || name.includes("အဘိညာဉ်") || name.includes("နေဝသညာ")) {
+    return { bg: 'bg-violet-500 text-white border-violet-600 ring-violet-200', text: 'text-violet-700' };
+}
+// ကာမဇော (ကုသိုလ်/ကိရိယာ/ဒေါသမဟုတ်သော ဇော)
+if (name.includes("ဇော") || name.includes("ကုသိုလ်") || name.includes("ကိရိယာ")) {
+    return { bg: 'bg-emerald-500 text-white border-emerald-600 ring-emerald-200', text: 'text-emerald-700' };
+}
+    if (name.includes("နိရောဓ")) {
+        return { bg: 'bg-slate-700 text-white border-slate-800 ring-slate-300', text: 'text-slate-800' }; 
+    }
+    return { bg: 'bg-slate-500 text-white border-slate-600 ring-slate-200', text: 'text-slate-700' };
+};
+
+const baseRupas = "ပထဝီ, အာပေါ, တေဇော, ဝါယော, အဆင်း, အနံ့, အရသာ, ဩဇာ";
+const rupaKalapasData = {
+  kayaDasaka: { title: 'ကာယဒသကကလာပ် (၁၀ မျိုး)', elements: `${baseRupas}, ဇီဝိတ, ကာယ`, icon: User, color: "text-emerald-600", bg: "bg-emerald-50" },
+  bhavaDasaka: { title: 'ဘာဝဒသကကလာပ် (၁၀ မျိုး)', elements: `${baseRupas}, ဇီဝိတ, ဘာဝ(ဣတ္ထိ/ပုရိသ)`, icon: Heart, color: "text-pink-600", bg: "bg-pink-50" },
+  jivitaNavaka: { title: 'ဇီဝိတနဝကလာပ် (၉ မျိုး)', elements: `${baseRupas}, ဇီဝိတ`, icon: Activity, color: "text-purple-600", bg: "bg-purple-50" },
+  cittajaAtthaka: { title: 'စိတ္တဇ သုဒ္ဓဋ္ဌကကလာပ် (၈ မျိုး)', elements: baseRupas, icon: Cloud, color: "text-amber-600", bg: "bg-amber-50" },
+  utujaAtthaka: { title: 'ဥတုဇ သုဒ္ဓဋ္ဌကကလာပ် (၈ မျိုး)', elements: baseRupas, icon: Sun, color: "text-orange-600", bg: "bg-orange-50" },
+  aharajaAtthaka: { title: 'အာဟာရဇ သုဒ္ဓဋ္ဌကကလာပ် (၈ မျိုး)', elements: baseRupas, icon: Apple, color: "text-lime-600", bg: "bg-lime-50" },
+  hadayaDasaka: { title: 'ဟဒယဒသကကလာပ် (၁၀ မျိုး)', elements: `${baseRupas}, ဇီဝိတ, ဟဒယဝတ္ထု`, icon: Brain, color: "text-rose-600", bg: "bg-rose-50" },
+  cakkhuDasaka: { title: 'စက္ခုဒသကကလာပ် (၁၀ မျိုး)', elements: `${baseRupas}, ဇီဝိတ, စက္ခုဝတ္ထု`, icon: Eye, color: "text-blue-600", bg: "bg-blue-50" },
+  sotaDasaka: { title: 'သောတဒသကကလာပ် (၁၀ မျိုး)', elements: `${baseRupas}, ဇီဝိတ, သောတဝတ္ထု`, icon: Ear, color: "text-cyan-600", bg: "bg-cyan-50" },
+  ghanaDasaka: { title: 'ဃာနဒသကကလာပ် (၁၀ မျိုး)', elements: `${baseRupas}, ဇီဝိတ, ဃာနဝတ္ထု`, icon: Flower, color: "text-fuchsia-600", bg: "bg-fuchsia-50" },
+  jivhaDasaka: { title: 'ဇိဝှါဒသကကလာပ် (၁၀ မျိုး)', elements: `${baseRupas}, ဇီဝိတ, ဇိဝှါဝတ္ထု`, icon: Utensils, color: "text-red-600", bg: "bg-red-50" }
+};
+
+const getRupasForBase = (baseName) => {
+  const common53 = [rupaKalapasData.kayaDasaka, rupaKalapasData.bhavaDasaka, rupaKalapasData.jivitaNavaka, rupaKalapasData.cittajaAtthaka, rupaKalapasData.utujaAtthaka, rupaKalapasData.aharajaAtthaka];
+  if (baseName.includes("ဟဒယဝတ္ထု-၃၀")) return { title: "ပဋိသန္ဓေအခါ ဖြစ်သော ရုပ်ကလာပ် ၃-မျိုး", list: [rupaKalapasData.hadayaDasaka, rupaKalapasData.kayaDasaka, rupaKalapasData.bhavaDasaka] };
+  if (baseName.includes("ဟဒယဝတ္ထု-၄၆")) return { title: "ပထမဘဝင်မှစ၍ ပဝတ္တိအခါ ဖြစ်သော ရုပ်ကလာပ် ၅-မျိုး", list: [rupaKalapasData.hadayaDasaka, rupaKalapasData.kayaDasaka, rupaKalapasData.bhavaDasaka, rupaKalapasData.cittajaAtthaka, rupaKalapasData.utujaAtthaka] };
+  if (baseName.includes("ဟဒယဝတ္ထု-၆၃")) return { title: "ဟဒယဝတ္ထု (မနောဒွါရ) ၌ ဖြစ်သော ရုပ် ၆၃-မျိုး", list: [rupaKalapasData.hadayaDasaka, ...common53] };
+  if (baseName.includes("စက္ခုဝတ္ထု-၆၃")) return { title: "စက္ခုဝတ္ထု (မျက်စိ) ၌ ဖြစ်သော ရုပ် ၆၃-မျိုး", list: [rupaKalapasData.cakkhuDasaka, ...common53] };
+  if (baseName.includes("သောတဝတ္ထု-၆၃")) return { title: "သောတဝတ္ထု (နား) ၌ ဖြစ်သော ရုပ် ၆၃-မျိုး", list: [rupaKalapasData.sotaDasaka, ...common53] };
+  if (baseName.includes("ဃာနဝတ္ထု-၆၃")) return { title: "ဃာနဝတ္ထု (နှာခေါင်း) ၌ ဖြစ်သော ရုပ် ၆၃-မျိုး", list: [rupaKalapasData.ghanaDasaka, ...common53] };
+  if (baseName.includes("ဇိဝှါဝတ္ထု-၆၃")) return { title: "ဇိဝှါဝတ္ထု (လျှာ) ၌ ဖြစ်သော ရုပ် ၆၃-မျိုး", list: [rupaKalapasData.jivhaDasaka, ...common53] };
+  if (baseName.includes("ကာယဝတ္ထု-၅၃")) return { title: "ကာယဝတ္ထု (ကိုယ်) ၌ ဖြစ်သော ရုပ် ၅၃-မျိုး", list: [...common53] };
+  return null;
+};
+
+const FloatingControls = ({ handleReset, handlePrev, togglePlay, handleNext, isPlaying, currentIndex, totalLength }) => {
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragRef = useRef(null);
+
+  const onPointerDown = (e) => { setIsDragging(true); dragRef.current = { startX: e.clientX - position.x, startY: e.clientY - position.y }; e.target.setPointerCapture(e.pointerId); };
+  const onPointerMove = (e) => { if (!isDragging) return; setPosition({ x: e.clientX - dragRef.current.startX, y: e.clientY - dragRef.current.startY }); };
+  const onPointerUp = (e) => { setIsDragging(false); e.target.releasePointerCapture(e.pointerId); };
+
+  return (
+    <div className="absolute top-2 left-2 z-[60] flex items-center bg-white/95 backdrop-blur-md p-1.5 rounded-full shadow-2xl border border-slate-200" style={{ transform: `translate(${position.x}px, ${position.y}px)` }}>
+      <div className="px-3 cursor-move text-slate-400 hover:text-slate-600" onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} title="ဖိဆွဲ၍ ရွှေ့ပါ"><GripVertical className="w-5 h-5" /></div>
+      <div className="w-px h-6 bg-slate-200 mx-1"></div>
+      <div className="flex items-center gap-1.5 pr-2">
+        <button onClick={handleReset} className="p-2.5 hover:bg-slate-100 rounded-full text-slate-600 transition" title="ပြန်စရန်"><RotateCcw className="w-5 h-5" /></button>
+        <button onClick={handlePrev} disabled={currentIndex === 0} className="p-2.5 hover:bg-slate-100 disabled:opacity-30 rounded-full text-slate-600 transition" title="နောက်ဆုတ်ရန်"><SkipBack className="w-5 h-5" /></button>
+        <button onClick={togglePlay} className={`px-6 py-2.5 rounded-full flex items-center gap-2 text-sm font-bold text-white shadow-md hover:shadow-lg transition-all ${isPlaying ? 'bg-rose-500 hover:bg-rose-600' : 'bg-emerald-500 hover:bg-emerald-600'}`}>
+          {isPlaying ? <><Pause className="w-4 h-4" /> ရပ်မည်</> : <><Play className="w-4 h-4 ml-1" /> စတင်ရန်</>}
+        </button>
+        <button onClick={handleNext} disabled={currentIndex === totalLength - 1} className="p-2.5 hover:bg-slate-100 disabled:opacity-30 rounded-full text-slate-600 transition" title="ရှေ့ဆက်ရန်"><SkipForward className="w-5 h-5" /></button>
+      </div>
+    </div>
+  );
+};
+
+const getBase = (vedana) => ["အသိစိတ်", "ဖဿ", vedana, "သညာ", "စေတနာ", "ဧကဂ္ဂတာ", "ဇီဝိတ", "မနသိကာရ"];
+
+const akusala4 = ["မောဟ", "အဟိရိက", "အနောတ္တပ္ပ", "ဥဒ္ဓစ္စ"];
+const set8_Upekkha = getBase("ဥပေက္ခာ ဝေဒနာ");
+const set8_Sukha = getBase("သုခ ဝေဒနာ");
+const set11 = [...getBase("ဥပေက္ခာ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ"];
+const set12A = [...getBase("သောမနဿ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ", "ပီတိ"];
+const set12B = [...getBase("ဥပေက္ခာ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ", "ဝီရိယ"];
+
+const getLokuttaraCetasikas = (jhanaIdx) => {
+    let base = getBase(jhanaIdx === 4 ? "ဥပေက္ခာ ဝေဒနာ" : "သောမနဿ ဝေဒနာ");
+    let pakinnaka = [];
+    if (jhanaIdx === 0) pakinnaka = ["ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ", "ဝီရိယ", "ပီတိ", "ဆန္ဒ"];
+    if (jhanaIdx === 1) pakinnaka = ["ဝိစာရ", "အဓိမောက္ခ", "ဝီရိယ", "ပီတိ", "ဆန္ဒ"];
+    if (jhanaIdx === 2) pakinnaka = ["အဓိမောက္ခ", "ဝီရိယ", "ပီတိ", "ဆန္ဒ"];
+    if (jhanaIdx === 3) pakinnaka = ["အဓိမောက္ခ", "ဝီရိယ", "ဆန္ဒ"];
+    if (jhanaIdx === 4) pakinnaka = ["အဓိမောက္ခ", "ဝီရိယ", "ဆန္ဒ"];
+
+    let sobhana = [...SOBHANA_SADHARANA];
+    let virati = ["သမ္မာဝါစာ", "သမ္မာကမ္မန္တ", "သမ္မာအာဇီဝ"];
+    let panna = ["ပညာ"];
+
+    return [...base, ...pakinnaka, ...sobhana, ...virati, ...panna];
+};
+
+const rupa1Base = [...getBase("သောမနဿ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ", "ဝီရိယ", "ပီတိ", "ဆန္ဒ", ...SOBHANA_SADHARANA, "ပညာ"]; 
+const rupa2Base = [...getBase("သောမနဿ ဝေဒနာ"), "ဝိစာရ", "အဓိမောက္ခ", "ဝီရိယ", "ပီတိ", "ဆန္ဒ", ...SOBHANA_SADHARANA, "ပညာ"]; 
+const rupa3Base = [...getBase("သောမနဿ ဝေဒနာ"), "အဓိမောက္ခ", "ဝီရိယ", "ပီတိ", "ဆန္ဒ", ...SOBHANA_SADHARANA, "ပညာ"]; 
+const rupa4Base = [...getBase("သောမနဿ ဝေဒနာ"), "အဓိမောက္ခ", "ဝီရိယ", "ဆန္ဒ", ...SOBHANA_SADHARANA, "ပညာ"]; 
+const rupa5Base = [...getBase("ဥပေက္ခာ ဝေဒနာ"), "အဓိမောက္ခ", "ဝီရိယ", "ဆန္ဒ", ...SOBHANA_SADHARANA, "ပညာ"]; 
+const arupaBase = [...getBase("ဥပေက္ခာ ဝေဒနာ"), "အဓိမောက္ခ", "ဝီရိယ", "ဆန္ဒ", ...SOBHANA_SADHARANA, "ပညာ"]; 
+
+const JAVANA_GROUPS = [
+  {
+    id: 'akusala_lobha', label: "လောဘမူဇော (၈-မျိုး)",
+    options: [
+      { id: 'ld1', label: "၁။ သောမနဿ ဒိဋ္ဌိသမ္ပယုတ် အသင်္ခါရိက", cetasikas: [...getBase("သောမနဿ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ", "ဝီရိယ", "ပီတိ", "ဆန္ဒ", ...akusala4, "လောဘ", "ဒိဋ္ဌိ"] },
+      { id: 'ld2', label: "၂။ သောမနဿ ဒိဋ္ဌိသမ္ပယုတ် သသင်္ခါရိက", cetasikas: [...getBase("သောမနဿ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ", "ဝီရိယ", "ပီတိ", "ဆန္ဒ", ...akusala4, "လောဘ", "ဒိဋ္ဌိ", "ထိန", "မိဒ္ဓ"] },
+      { id: 'ld3', label: "၃။ သောမနဿ ဒိဋ္ဌိဝိပ္ပယုတ် [မာန] အသင်္ခါရိက", cetasikas: [...getBase("သောမနဿ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ", "ဝီရိယ", "ပီတိ", "ဆန္ဒ", ...akusala4, "လောဘ", "မာန"] },
+      { id: 'ld4', label: "၄။ သောမနဿ ဒိဋ္ဌိဝိပ္ပယုတ် [မာန] သသင်္ခါရိက", cetasikas: [...getBase("သောမနဿ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ", "ဝီရိယ", "ပီတိ", "ဆန္ဒ", ...akusala4, "လောဘ", "မာန", "ထိန", "မိဒ္ဓ"] },
+      { id: 'ld5', label: "၅။ ဥပေက္ခာ ဒိဋ္ဌိသမ္ပယုတ် အသင်္ခါရိက", cetasikas: [...getBase("ဥပေက္ခာ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ", "ဝီရိယ", "ဆန္ဒ", ...akusala4, "လောဘ", "ဒိဋ္ဌိ"] },
+      { id: 'ld6', label: "၆။ ဥပေက္ခာ ဒိဋ္ဌိသမ္ပယုတ် သသင်္ခါရိက", cetasikas: [...getBase("ဥပေက္ခာ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ", "ဝီရိယ", "ဆန္ဒ", ...akusala4, "လောဘ", "ဒိဋ္ဌိ", "ထိန", "မိဒ္ဓ"] },
+      { id: 'ld7', label: "၇။ ဥပေက္ခာ ဒိဋ္ဌိဝိပ္ပယုတ် [မာန] အသင်္ခါရိက", cetasikas: [...getBase("ဥပေက္ခာ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ", "ဝီရိယ", "ဆန္ဒ", ...akusala4, "လောဘ", "မာန"] },
+      { id: 'ld8', label: "၈။ ဥပေက္ခာ ဒိဋ္ဌိဝိပ္ပယုတ် [မာန] သသင်္ခါရိက", cetasikas: [...getBase("ဥပေက္ခာ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ", "ဝီရိယ", "ဆန္ဒ", ...akusala4, "လောဘ", "မာန", "ထိန", "မိဒ္ဓ"] }
+    ]
+  },
+  {
+    id: 'akusala_dosa', label: "ဒေါသမူဇော (၂-မျိုး)",
+    options: [
+      { id: 'd1', label: "၁။ ဒေါမနဿ ပဋိဃသမ္ပယုတ် အသင်္ခါရိက", cetasikas: [...getBase("ဒေါမနဿ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ", "ဝီရိယ", "ဆန္ဒ", ...akusala4, "ဒေါသ"] },
+      { id: 'd2', label: "၂။ ဒေါမနဿ ပဋိဃသမ္ပယုတ် သသင်္ခါရိက", cetasikas: [...getBase("ဒေါမနဿ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ", "ဝီရိယ", "ဆန္ဒ", ...akusala4, "ဒေါသ", "ထိန", "မိဒ္ဓ"] }
+    ]
+  },
+  {
+    id: 'akusala_dosa_issara', label: "ဒေါသ-ဣဿာ (၂-မျိုး)",
+    options: [
+      { id: 'di1', label: "၁။ ဒေါမနဿ ပဋိဃသမ္ပယုတ် [ဣဿာ] အသင်္ခါရိက", cetasikas: [...getBase("ဒေါမနဿ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ", "ဝီရိယ", "ဆန္ဒ", ...akusala4, "ဒေါသ", "ဣဿာ"] },
+      { id: 'di2', label: "၂။ ဒေါမနဿ ပဋိဃသမ္ပယုတ် [ဣဿာ] သသင်္ခါရိက", cetasikas: [...getBase("ဒေါမနဿ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ", "ဝီရိယ", "ဆန္ဒ", ...akusala4, "ဒေါသ", "ဣဿာ", "ထိန", "မိဒ္ဓ"] }
+    ]
+  },
+  {
+    id: 'akusala_dosa_macchariya', label: "ဒေါသ-မစ္ဆရိယ (၂-မျိုး)",
+    options: [
+      { id: 'dm1', label: "၁။ ဒေါမနဿ ပဋိဃသမ္ပယုတ် [မစ္ဆရိယ] အသင်္ခါရိက", cetasikas: [...getBase("ဒေါမနဿ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ", "ဝီရိယ", "ဆန္ဒ", ...akusala4, "ဒေါသ", "မစ္ဆရိယ"] },
+      { id: 'dm2', label: "၂။ ဒေါမနဿ ပဋိဃသမ္ပယုတ် [မစ္ဆရိယ] သသင်္ခါရိက", cetasikas: [...getBase("ဒေါမနဿ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ", "ဝီရိယ", "ဆန္ဒ", ...akusala4, "ဒေါသ", "မစ္ဆရိယ", "ထိန", "မိဒ္ဓ"] }
+    ]
+  },
+  {
+    id: 'akusala_dosa_kukkucca', label: "ဒေါသ-ကုက္ကုစ္စ (၂-မျိုး)",
+    options: [
+      { id: 'dk1', label: "၁။ ဒေါမနဿ ပဋိဃသမ္ပယုတ် [ကုက္ကုစ္စ] အသင်္ခါရိက", cetasikas: [...getBase("ဒေါမနဿ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ", "ဝီရိယ", "ဆန္ဒ", ...akusala4, "ဒေါသ", "ကုက္ကုစ္စ"] },
+      { id: 'dk2', label: "၂။ ဒေါမနဿ ပဋိဃသမ္ပယုတ် [ကုက္ကုစ္စ] သသင်္ခါရိက", cetasikas: [...getBase("ဒေါမနဿ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ", "ဝီရိယ", "ဆန္ဒ", ...akusala4, "ဒေါသ", "ကုက္ကုစ္စ", "ထိန", "မိဒ္ဓ"] }
+    ]
+  },
+  {
+    id: 'akusala_moha', label: "မောဟမူဇော (၂-မျိုး)",
+    options: [
+      { id: 'm1', label: "၁။ ဥပေက္ခာ ဝိစိကိစ္ဆာသမ္ပယုတ်", cetasikas: [...getBase("ဥပေက္ခာ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "ဝီရိယ", ...akusala4, "ဝိစိကိစ္ဆာ"] },
+      { id: 'm2', label: "၂။ ဥပေက္ခာ ဥဒ္ဓစ္စသမ္ပယုတ်", cetasikas: [...getBase("ဥပေက္ခာ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ", "ဝီရိယ", ...akusala4] } 
+    ]
+  },
+  {
+    id: 'ahetuka_hasituppada', label: "ဟသိတုပ္ပါဒ်ဇော (၁-မျိုး)",
+    options: [
+      { id: 'h1', label: "၁။ ဟသိတုပ္ပါဒ်စိတ်", cetasikas: [...getBase("သောမနဿ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ", "ဝီရိယ", "ပီတိ"] }
+    ]
+  },
+  {
+    id: 'kama_kusala', label: "မဟာကုသိုလ်ဇော (၈-မျိုး)",
+    options: [
+      { id: 'k1', label: "၁။ သောမနဿ ဉာဏသမ္ပယုတ် အသင်္ခါရိက", cetasikas: [...getBase("သောမနဿ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ", "ဝီရိယ", "ပီတိ", "ဆန္ဒ", ...SOBHANA_SADHARANA, "ပညာ"] },
+      { id: 'k2', label: "၂။ သောမနဿ ဉာဏသမ္ပယုတ် သသင်္ခါရိက", cetasikas: [...getBase("သောမနဿ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ", "ဝီရိယ", "ပီတိ", "ဆန္ဒ", ...SOBHANA_SADHARANA, "ပညာ"] },
+      { id: 'k3', label: "၃။ သောမနဿ ဉာဏဝိပ္ပယုတ် အသင်္ခါရိက", cetasikas: [...getBase("သောမနဿ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ", "ဝီရိယ", "ပီတိ", "ဆန္ဒ", ...SOBHANA_SADHARANA] },
+      { id: 'k4', label: "၄။ သောမနဿ ဉာဏဝိပ္ပယုတ် သသင်္ခါရိက", cetasikas: [...getBase("သောမနဿ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ", "ဝီရိယ", "ပီတိ", "ဆန္ဒ", ...SOBHANA_SADHARANA] },
+      { id: 'k5', label: "၅။ ဥပေက္ခာ ဉာဏသမ္ပယုတ် အသင်္ခါရိက", cetasikas: [...getBase("ဥပေက္ခာ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ", "ဝီရိယ", "ဆန္ဒ", ...SOBHANA_SADHARANA, "ပညာ"] },
+      { id: 'k6', label: "၆။ ဥပေက္ခာ ဉာဏသမ္ပယုတ် သသင်္ခါရိက", cetasikas: [...getBase("ဥပေက္ခာ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ", "ဝီရိယ", "ဆန္ဒ", ...SOBHANA_SADHARANA, "ပညာ"] },
+      { id: 'k7', label: "၇။ ဥပေက္ခာ ဉာဏဝိပ္ပယုတ် အသင်္ခါရိက", cetasikas: [...getBase("ဥပေက္ခာ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ", "ဝီရိယ", "ဆန္ဒ", ...SOBHANA_SADHARANA] },
+      { id: 'k8', label: "၈။ ဥပေက္ခာ ဉာဏဝိပ္ပယုတ် သသင်္ခါရိက", cetasikas: [...getBase("ဥပေက္ခာ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ", "ဝီရိယ", "ဆန္ဒ", ...SOBHANA_SADHARANA] }
+    ]
+  },
+  {
+    id: 'kama_kiriya', label: "မဟာကိရိယာဇော (၈-မျိုး)",
+    options: [
+      { id: 'ki1', label: "၁။ သောမနဿ ဉာဏသမ္ပယုတ် အသင်္ခါရိက", cetasikas: [...getBase("သောမနဿ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ", "ဝီရိယ", "ပီတိ", "ဆန္ဒ", ...SOBHANA_SADHARANA.filter(c=>c!=="တတြမဇ္ဈတ္တတာ"), "ပညာ"] },
+      { id: 'ki2', label: "၂။ သောမနဿ ဉာဏသမ္ပယုတ် သသင်္ခါရိက", cetasikas: [...getBase("သောမနဿ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ", "ဝီရိယ", "ပီတိ", "ဆန္ဒ", ...SOBHANA_SADHARANA.filter(c=>c!=="တတြမဇ္ဈတ္တတာ"), "ပညာ"] },
+      { id: 'ki3', label: "၃။ သောမနဿ ဉာဏဝိပ္ပယုတ် အသင်္ခါရိက", cetasikas: [...getBase("သောမနဿ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ", "ဝီရိယ", "ပီတိ", "ဆန္ဒ", ...SOBHANA_SADHARANA.filter(c=>c!=="တတြမဇ္ဈတ္တတာ")] },
+      { id: 'ki4', label: "၄။ သောမနဿ ဉာဏဝိပ္ပယုတ် သသင်္ခါရိက", cetasikas: [...getBase("သောမနဿ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ", "ဝီရိယ", "ပီတိ", "ဆန္ဒ", ...SOBHANA_SADHARANA.filter(c=>c!=="တတြမဇ္ဈတ္တတာ")] },
+      { id: 'ki5', label: "၅။ ဥပေက္ခာ ဉာဏသမ္ပယုတ် အသင်္ခါရိက", cetasikas: [...getBase("ဥပေက္ခာ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ", "ဝီရိယ", "ဆန္ဒ", ...SOBHANA_SADHARANA.filter(c=>c!=="တတြမဇ္ဈတ္တတာ"), "ပညာ"] },
+      { id: 'ki6', label: "၆။ ဥပေက္ခာ ဉာဏသမ္ပယုတ် သသင်္ခါရိက", cetasikas: [...getBase("ဥပေက္ခာ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ", "ဝီရိယ", "ဆန္ဒ", ...SOBHANA_SADHARANA.filter(c=>c!=="တတြမဇ္ဈတ္တတာ"), "ပညာ"] },
+      { id: 'ki7', label: "၇။ ဥပေက္ခာ ဉာဏဝိပ္ပယုတ် အသင်္ခါရိက", cetasikas: [...getBase("ဥပေက္ခာ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ", "ဝီရိယ", "ဆန္ဒ", ...SOBHANA_SADHARANA.filter(c=>c!=="တတြမဇ္ဈတ္တတာ")] },
+      { id: 'ki8', label: "၈။ ဥပေက္ခာ ဉာဏဝိပ္ပယုတ် သသင်္ခါရိက", cetasikas: [...getBase("ဥပေက္ခာ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ", "ဝီရိယ", "ဆန္ဒ", ...SOBHANA_SADHARANA.filter(c=>c!=="တတြမဇ္ဈတ္တတာ")] }
+    ]
+  },
+  {
+    id: 'rupa_jhana_kusala', label: "ရူပါဝစရ ကုသိုလ်ဇော (၅-မျိုး)",
+    options: [
+      { id: 'rk1', label: "၁။ ပထမဈာန် ကုသိုလ်", cetasikas: rupa1Base },
+      { id: 'rk2', label: "၂။ ဒုတိယဈာန် ကုသိုလ်", cetasikas: rupa2Base },
+      { id: 'rk3', label: "၃။ တတိယဈာန် ကုသိုလ်", cetasikas: rupa3Base },
+      { id: 'rk4', label: "၄။ စတုတ္ထဈာန် ကုသိုလ်", cetasikas: rupa4Base },
+      { id: 'rk5', label: "၅။ ပဉ္စမဈာန် ကုသိုလ်", cetasikas: rupa5Base }
+    ]
+  },
+  {
+    id: 'rupa_jhana_kiriya', label: "ရူပါဝစရ ကိရိယာဇော (၅-မျိုး)",
+    options: [
+      { id: 'rki1', label: "၁။ ပထမဈာန် ကိရိယာ", cetasikas: rupa1Base },
+      { id: 'rki2', label: "၂။ ဒုတိယဈာန် ကိရိယာ", cetasikas: rupa2Base },
+      { id: 'rki3', label: "၃။ တတိယဈာန် ကိရိယာ", cetasikas: rupa3Base },
+      { id: 'rki4', label: "၄။ စတုတ္ထဈာန် ကိရိယာ", cetasikas: rupa4Base },
+      { id: 'rki5', label: "၅။ ပဉ္စမဈာန် ကိရိယာ", cetasikas: rupa5Base }
+    ]
+  },
+  {
+    id: 'arupa_jhana_kusala', label: "အရူပါဝစရ ကုသိုလ်ဇော (၄-မျိုး)",
+    options: [
+      { id: 'ark1', label: "၁။ အာကာသာနဉ္စာယတန ကုသိုလ်", cetasikas: arupaBase },
+      { id: 'ark2', label: "၂။ ဝိညာဏဉ္စာယတန ကုသိုလ်", cetasikas: arupaBase },
+      { id: 'ark3', label: "၃။ အာကိဉ္စညာယတန ကုသိုလ်", cetasikas: arupaBase },
+      { id: 'ark4', label: "၄။ နေဝသညာနာသညာယတန ကုသိုလ်", cetasikas: arupaBase }
+    ]
+  },
+  {
+    id: 'arupa_jhana_kiriya', label: "အရူပါဝစရ ကိရိယာဇော (၄-မျိုး)",
+    options: [
+      { id: 'arki1', label: "၁။ အာကာသာနဉ္စာယတန ကိရိယာ", cetasikas: arupaBase },
+      { id: 'arki2', label: "၂။ ဝိညာဏဉ္စာယတန ကိရိယာ", cetasikas: arupaBase },
+      { id: 'arki3', label: "၃။ အာကိဉ္စညာယတန ကိရိယာ", cetasikas: arupaBase },
+      { id: 'arki4', label: "၄။ နေဝသညာနာသညာယတန ကိရိယာ", cetasikas: arupaBase }
+    ]
+  },
+  {
+    id: 'magga_1', label: "၁။ သောတာပတ္တိမဂ်",
+    options: [{ id: 'lm1', label: "သောတာပတ္တိမဂ်", cetasikas: [] }]
+  },
+  {
+    id: 'magga_2', label: "၂။ သကဒါဂါမိမဂ်",
+    options: [{ id: 'lm2', label: "သကဒါဂါမိမဂ်", cetasikas: [] }]
+  },
+  {
+    id: 'magga_3', label: "၃။ အနာဂါမိမဂ်",
+    options: [{ id: 'lm3', label: "အနာဂါမိမဂ်", cetasikas: [] }]
+  },
+  {
+    id: 'magga_4', label: "၄။ အရဟတ္တမဂ်",
+    options: [{ id: 'lm4', label: "အရဟတ္တမဂ်", cetasikas: [] }]
+  },
+  {
+    id: 'phala_1', label: "၁။ သောတာပတ္တိဖိုလ်",
+    options: [{ id: 'lp1', label: "သောတာပတ္တိဖိုလ်", cetasikas: [] }]
+  },
+  {
+    id: 'phala_2', label: "၂။ သကဒါဂါမိဖိုလ်",
+    options: [{ id: 'lp2', label: "သကဒါဂါမိဖိုလ်", cetasikas: [] }]
+  },
+  {
+    id: 'phala_3', label: "၃။ အနာဂါမိဖိုလ်",
+    options: [{ id: 'lp3', label: "အနာဂါမိဖိုလ်", cetasikas: [] }]
+  },
+  {
+    id: 'phala_4', label: "၄။ အရဟတ္တဖိုလ်",
+    options: [{ id: 'lp4', label: "အရဟတ္တဖိုလ်", cetasikas: [] }]
+  },
+  {
+    id: 'nirodha_3', label: "အနာဂါမ် (အနာဂါမိဖိုလ်)",
+    options: [{ id: 'np3', label: "အနာဂါမိဖိုလ်", cetasikas: [] }]
+  },
+  {
+    id: 'nirodha_4', label: "ရဟန္တာ (အရဟတ္တဖိုလ်)",
+    options: [{ id: 'np4', label: "အရဟတ္တဖိုလ်", cetasikas: [] }]
+  },
+  {
+    id: 'abhinna_kusala', label: "ရူပါဝစရ ကုသိုလ် ပဉ္စမဈာန် (အဘိညာဉ်)",
+    options: [
+      { id: 'abk', label: "ရူပါဝစရ ကုသိုလ် ပဉ္စမဈာန်", cetasikas: rupa5Base }
+    ]
+  },
+  {
+    id: 'abhinna_kiriya', label: "ရူပါဝစရ ကိရိယာ ပဉ္စမဈာန် (အဘိညာဉ်)",
+    options: [
+      { id: 'abki', label: "ရူပါဝစရ ကိရိယာ ပဉ္စမဈာန်", cetasikas: rupa5Base }
+    ]
+  }
+];
+
+const Ahetuka_Vipaka = [
+  { id: 'av1', label: "၁။ ဥပေက္ခာ သန္တီရဏ (အကုသလဝိပါက်)", cetasikas: [...getBase("ဥပေက္ခာ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ"] },
+  { id: 'av2', label: "၂။ ဥပေက္ခာ သန္တီရဏ (ကုသလဝိပါက်)", cetasikas: [...getBase("ဥပေက္ခာ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ"] },
+  { id: 'av3', label: "၃။ သောမနဿ သန္တီရဏ (ကုသလဝိပါက်)", cetasikas: [...getBase("သောမနဿ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ", "ပီတိ"] }
+];
+
+const Maha_Vipaka = [
+  { id: 'v1', label: "၁။ သောမနဿ ဉာဏသမ္ပယုတ် အသင်္ခါရိက", cetasikas: [...getBase("သောမနဿ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ", "ပီတိ", "ဝီရိယ", "ဆန္ဒ", ...SOBHANA_SADHARANA, "ပညာ"] },
+  { id: 'v2', label: "၂။ သောမနဿ ဉာဏသမ္ပယုတ် သသင်္ခါရိက", cetasikas: [...getBase("သောမနဿ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ", "ပီတိ", "ဝီရိယ", "ဆန္ဒ", ...SOBHANA_SADHARANA, "ပညာ"] },
+  { id: 'v3', label: "၃။ သောမနဿ ဉာဏဝိပ္ပယုတ် အသင်္ခါရိက", cetasikas: [...getBase("သောမနဿ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ", "ပီတိ", "ဝီရိယ", "ဆန္ဒ", ...SOBHANA_SADHARANA] },
+  { id: 'v4', label: "၄။ သောမနဿ ဉာဏဝိပ္ပယုတ် သသင်္ခါရိက", cetasikas: [...getBase("သောမနဿ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ", "ပီတိ", "ဝီရိယ", "ဆန္ဒ", ...SOBHANA_SADHARANA] },
+  { id: 'v5', label: "၅။ ဥပေက္ခာ ဉာဏသမ္ပယုတ် အသင်္ခါရိက", cetasikas: [...getBase("ဥပေက္ခာ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ", "ဝီရိယ", "ဆန္ဒ", ...SOBHANA_SADHARANA, "ပညာ"] },
+  { id: 'v6', label: "၆။ ဥပေက္ခာ ဉာဏသမ္ပယုတ် သသင်္ခါရိက", cetasikas: [...getBase("ဥပေက္ခာ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ", "ဝီရိယ", "ဆန္ဒ", ...SOBHANA_SADHARANA, "ပညာ"] },
+  { id: 'v7', label: "၇။ ဥပေက္ခာ ဉာဏဝိပ္ပယုတ် အသင်္ခါရိက", cetasikas: [...getBase("ဥပေက္ခာ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ", "ဝီရိယ", "ဆန္ဒ", ...SOBHANA_SADHARANA] },
+  { id: 'v8', label: "၈။ ဥပေက္ခာ ဉာဏဝိပ္ပယုတ် သသင်္ခါရိက", cetasikas: [...getBase("ဥပေက္ခာ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ", "ဝီရိယ", "ဆန္ဒ", ...SOBHANA_SADHARANA] },
+];
+
+const Mahaggata_Vipaka = [
+  { id: 'rv1', label: "၁။ ပထမဈာန် ဝိပါက်", cetasikas: [...getBase("သောမနဿ ဝေဒနာ"), "ဝိတက်", "ဝိစာရ", "အဓိမောက္ခ", "ပီတိ", "ဝီရိယ", "ဆန္ဒ", ...SOBHANA_SADHARANA, "ပညာ"] },
+  { id: 'rv2', label: "၂။ ဒုတိယဈာန် ဝိပါက်", cetasikas: [...getBase("သောမနဿ ဝေဒနာ"), "ဝိစာရ", "အဓိမောက္ခ", "ပီတိ", "ဝီရိယ", "ဆန္ဒ", ...SOBHANA_SADHARANA, "ပညာ"] },
+  { id: 'rv3', label: "၃။ တတိယဈာန် ဝိပါက်", cetasikas: [...getBase("သောမနဿ ဝေဒနာ"), "အဓိမောက္ခ", "ပီတိ", "ဝီရိယ", "ဆန္ဒ", ...SOBHANA_SADHARANA, "ပညာ"] },
+  { id: 'rv4', label: "၄။ စတုတ္ထဈာန် ဝိပါက်", cetasikas: [...getBase("သောမနဿ ဝေဒနာ"), "အဓိမောက္ခ", "ဝီရိယ", "ဆန္ဒ", ...SOBHANA_SADHARANA, "ပညာ"] },
+  { id: 'rv5', label: "၅။ ပဉ္စမဈာန် ဝိပါက်", cetasikas: [...getBase("ဥပေက္ခာ ဝေဒနာ"), "အဓိမောက္ခ", "ဝီရိယ", "ဆန္ဒ", ...SOBHANA_SADHARANA, "ပညာ"] },
+  { id: 'arv1', label: "၆။ အာကာသာနဉ္စာယတန ဝိပါက်", cetasikas: [...getBase("ဥပေက္ခာ ဝေဒနာ"), "အဓိမောက္ခ", "ဝီရိယ", "ဆန္ဒ", ...SOBHANA_SADHARANA, "ပညာ"] },
+  { id: 'arv2', label: "၇။ ဝိညာဏဉ္စာယတန ဝိပါက်", cetasikas: [...getBase("ဥပေက္ခာ ဝေဒနာ"), "အဓိမောက္ခ", "ဝီရိယ", "ဆန္ဒ", ...SOBHANA_SADHARANA, "ပညာ"] },
+  { id: 'arv3', label: "၈။ အာကိဉ္စညာယတန ဝိပါက်", cetasikas: [...getBase("ဥပေက္ခာ ဝေဒနာ"), "အဓိမောက္ခ", "ဝီရိယ", "ဆန္ဒ", ...SOBHANA_SADHARANA, "ပညာ"] },
+  { id: 'arv4', label: "၉။ နေဝသညာနာသညာယတန ဝိပါက်", cetasikas: [...getBase("ဥပေက္ခာ ဝေဒနာ"), "အဓိမောက္ခ", "ဝီရိယ", "ဆန္ဒ", ...SOBHANA_SADHARANA, "ပညာ"] },
+];
+
+const VIPAKA_GROUPS = [
+  { id: 'ahetuka_vipaka', label: 'အဟိတ်ဝိပါက် (၂-မျိုး)', colorClass: 'text-rose-600 bg-rose-50 border-rose-200 hover:bg-rose-100', options: Ahetuka_Vipaka.slice(0, 2) },
+  { id: 'maha_vipaka', label: 'မဟာဝိပါက် (၈-မျိုး)', colorClass: 'text-emerald-600 bg-emerald-50 border-emerald-200 hover:bg-emerald-100', options: Maha_Vipaka },
+  { id: 'rupa_vipaka', label: 'ရူပါဝစရဝိပါက် (၅-မျိုး)', colorClass: 'text-blue-600 bg-blue-50 border-blue-200 hover:bg-blue-100', options: Mahaggata_Vipaka.slice(0, 5) },
+  { id: 'arupa_vipaka', label: 'အရူပါဝစရဝိပါက် (၄-မျိုး)', colorClass: 'text-purple-600 bg-purple-50 border-purple-200 hover:bg-purple-100', options: Mahaggata_Vipaka.slice(5, 9) }
+];
+
+// --- PUGGALA DEFINITIONS ---
+const PUGGALA_LIST = [
+  {
+    group: "ဒုဂ္ဂတိဘုံသား", colorClass: 'text-rose-600 bg-rose-50 border-rose-200 hover:bg-rose-100',
+    options: [
+      { id: 'duggati', label: "ဒုဂ္ဂတိအဟိတ် ပုဂ္ဂိုလ်" }
+    ]
+  },
+  {
+    group: "ကာမာဝစရသုဂတိဘုံသား", colorClass: 'text-emerald-600 bg-emerald-50 border-emerald-200 hover:bg-emerald-100',
+    options: [
+      { id: 'sugati_ahetuka', label: "သုဂတိအဟိတ် ပုဂ္ဂိုလ်" },
+      { id: 'dvihetuka', label: "ဒွိဟိတ် ပုဂ္ဂိုလ်" },
+      { id: 'tihetuka_kama', label: "တိဟိတ် ပုထုဇဉ်" },
+      { id: 'sotapanna_kama', label: "သောတာပန်/သကဒါဂါမ်" },
+      { id: 'anagami_kama', label: "အနာဂါမ်" },
+      { id: 'arahant_kama', label: "ရဟန္တာ" }
+    ]
+  },
+  {
+    group: "ရူပါဝစရဘုံသား", colorClass: 'text-blue-600 bg-blue-50 border-blue-200 hover:bg-blue-100',
+    options: [
+      { id: 'tihetuka_rupa', label: "ရူပါဝစရဘုံသား တိဟိတ် ပုထုဇဉ်" },
+      { id: 'sotapanna_rupa', label: "ရူပါဝစရဘုံသား သောတာပန်/သကဒါဂါမ်" },
+      { id: 'anagami_rupa', label: "ရူပါဝစရဘုံသား အနာဂါမ်" },
+      { id: 'arahant_rupa', label: "ရူပါဝစရဘုံသား ရဟန္တာ" }
+    ]
+  },
+  {
+    group: "အရူပါဝစရဘုံသား", colorClass: 'text-purple-600 bg-purple-50 border-purple-200 hover:bg-purple-100',
+    options: [
+      { id: 'tihetuka_arupa', label: "အရူပါဝစရဘုံသား တိဟိတ် ပုထုဇဉ်" },
+      { id: 'sotapanna_arupa', label: "အရူပါဝစရဘုံသား သောတာပန်/သကဒါဂါမ်" },
+      { id: 'anagami_arupa', label: "အရူပါဝစရဘုံသား အနာဂါမ်" },
+      { id: 'arahant_arupa', label: "အရူပါဝစရဘုံသား ရဟန္တာ" }
+    ]
+  }
+];
+
+const getDefaultBhavanga = (puggalaId) => {
+    if (puggalaId === 'duggati') return 'av1';
+    if (puggalaId === 'sugati_ahetuka') return 'av2';
+    if (puggalaId === 'dvihetuka') return 'v3';
+    if (puggalaId.includes('kama')) return 'v1';
+    if (puggalaId.includes('rupa') && !puggalaId.includes('arupa')) return 'rv1';
+    if (puggalaId.includes('arupa')) return 'arv1';
+    return 'v1';
+};
+
+const getPuggalaFromBhavanga = (bhavangaId) => {
+    if (bhavangaId === 'av1') return 'duggati';
+    if (bhavangaId === 'av2') return 'sugati_ahetuka';
+    if (['v3', 'v4', 'v7', 'v8'].includes(bhavangaId)) return 'dvihetuka';
+    if (['v1', 'v2', 'v5', 'v6'].includes(bhavangaId)) return 'tihetuka_kama';
+    if (bhavangaId.startsWith('rv')) return 'tihetuka_rupa';
+    if (bhavangaId.startsWith('arv')) return 'tihetuka_arupa';
+    return 'tihetuka_kama';
+};
+
+const getAvailableVithis = (puggalaId) => {
+    let vithis = [
+      { group: "ပဉ္စဒွါရဝီထိ", options: [{ id: 'cakkhu', label: "စက္ခုဒွါရဝီထိ" }, { id: 'sota', label: "သောတဒွါရဝီထိ" }, { id: 'ghana', label: "ဃာနဒွါရဝီထိ" }, { id: 'jivha', label: "ဇိဝှါဒွါရဝီထိ" }, { id: 'kaya', label: "ကာယဒွါရဝီထိ" }] },
+      { group: "မနောဒွါရဝီထိ", options: [{ id: 'mano_kama', label: "ကာမဇော မနောဒွါရဝီထိ" }, { id: 'appana_jhana_1', label: "အာဒိကမ္မိကဈာနဝီထိ" }, { id: 'appana_jhana_later', label: "ဈာန်ဝင်စားခြင်း" }, { id: 'appana_abhinna', label: "အဘိညာဉ်" }, { id: 'appana_magga', label: "မဂ်ဝီထိ" }, { id: 'appana_phala', label: "ဖိုလ်ဝင်စားခြင်း" }, { id: 'appana_nirodha', label: "နိရောဓသမာပတ်" }, { id: 'appana_adhit', label: "အဓိဋ္ဌာန်ဝီထိ (ဘုရားရှင်)" }] }
+    ]; 
+    
+    if (['duggati', 'sugati_ahetuka', 'dvihetuka'].includes(puggalaId)) {
+        const manoGroup = vithis.find(g => g.group === "မနောဒွါရဝီထိ");
+        if (manoGroup) manoGroup.options = manoGroup.options.filter(o => o.id === 'mano_kama');
+    }
+    if (puggalaId.includes('rupa') && !puggalaId.includes('arupa')) {
+        const pancaGroup = vithis.find(g => g.group === "ပဉ္စဒွါရဝီထိ");
+        if (pancaGroup) pancaGroup.options = pancaGroup.options.filter(o => o.id === 'cakkhu' || o.id === 'sota');
+    }
+    if (puggalaId.includes('arupa')) {
+        vithis = vithis.filter(g => g.group !== "ပဉ္စဒွါရဝီထိ");
+    }
+    
+    const manoGroup = vithis.find(g => g.group === "မနောဒွါရဝီထိ");
+    if (manoGroup) {
+        if (puggalaId.includes('tihetuka')) {
+            manoGroup.options = manoGroup.options.filter(o => !['appana_phala', 'appana_nirodha', 'appana_adhit'].includes(o.id));
+        }
+        if (puggalaId === 'tihetuka_arupa') {
+            manoGroup.options = manoGroup.options.filter(o => o.id !== 'appana_magga');
+        }
+        if (puggalaId.includes('sotapanna')) {
+            manoGroup.options = manoGroup.options.filter(o => !['appana_nirodha', 'appana_adhit'].includes(o.id));
+        }
+        if (puggalaId.includes('anagami')) {
+            manoGroup.options = manoGroup.options.filter(o => o.id !== 'appana_adhit');
+        }
+        if (!puggalaId.includes('arahant')) {
+            manoGroup.options = manoGroup.options.filter(o => o.id !== 'appana_adhit');
+        }
+    }
+    
+    return vithis.filter(g => g.options && g.options.length > 0);
+};
+
+const getAvailableJavanaGroupsRaw = (vithi, puggalaId) => {
+    let groups = [];
+    if (['cakkhu', 'sota', 'ghana', 'jivha', 'kaya', 'mano_kama'].includes(vithi)) {
+        groups = JAVANA_GROUPS.filter(g => g.id.startsWith('akusala') || g.id === 'ahetuka_hasituppada' || g.id.startsWith('kama_'));
+    } else if (['appana_jhana_1', 'appana_jhana_later'].includes(vithi)) {
+        groups = JAVANA_GROUPS.filter(g => g.id.startsWith('rupa_') || g.id.startsWith('arupa_'));
+    } else if (vithi === 'appana_abhinna') {
+        groups = JAVANA_GROUPS.filter(g => g.id.startsWith('abhinna_'));
+    } else if (vithi === 'appana_magga') {
+        groups = JAVANA_GROUPS.filter(g => g.id.startsWith('magga_'));
+    } else if (vithi === 'appana_phala') {
+        groups = JAVANA_GROUPS.filter(g => g.id.startsWith('phala_'));
+    } else if (vithi === 'appana_nirodha') {
+        groups = JAVANA_GROUPS.filter(g => g.id.startsWith('nirodha_'));
+    } else if (vithi === 'appana_adhit') {
+        groups = JAVANA_GROUPS.filter(g => g.id === 'kama_kiriya');
+    } else {
+        groups = JAVANA_GROUPS;
+    }
+
+    if (['duggati', 'sugati_ahetuka', 'dvihetuka'].includes(puggalaId)) {
+        groups = groups.filter(g => g.id !== 'ahetuka_hasituppada' && !g.id.includes('kiriya') && !g.id.startsWith('magga_') && !g.id.startsWith('phala_'));
+    }
+
+    return groups;
+};
+
+const getFilteredJavanaOptions = (groupId, puggalaId) => {
+    const group = JAVANA_GROUPS.find(g => g.id === groupId);
+    if (!group) return [];
+    let opts = group.options;
+
+    const isArahant = puggalaId.includes('arahant');
+    const isAnagami = puggalaId.includes('anagami');
+    const isSotapanna = puggalaId.includes('sotapanna');
+    const isSekha = isSotapanna || isAnagami;
+    
+    if (isArahant) {
+        if (groupId.includes('akusala') || groupId.includes('kusala')) return [];
+        if (groupId.startsWith('magga_') && groupId !== 'magga_4') return [];
+        if (groupId.startsWith('phala_') && groupId !== 'phala_4') return [];
+        if (groupId.startsWith('nirodha_') && groupId !== 'nirodha_4') return [];
+    } else {
+        if (groupId.includes('kiriya') || groupId === 'ahetuka_hasituppada') return [];
+        
+        if (groupId.startsWith('nirodha_') && !isAnagami) return [];
+        if (groupId.startsWith('nirodha_') && isAnagami && groupId !== 'nirodha_3') return [];
+
+        if (groupId.startsWith('phala_')) {
+            if (isSotapanna && !['phala_1', 'phala_2'].includes(groupId)) return []; 
+            if (isAnagami && groupId !== 'phala_3') return [];
+            if (!isSekha && !isArahant) return [];
+        }
+
+        if (groupId.startsWith('magga_')) {
+            if (puggalaId === 'tihetuka_arupa') return [];
+            if (isAnagami && !['magga_3', 'magga_4'].includes(groupId)) return [];
+        }
+    }
+
+    if (isSekha || isArahant) {
+        if (groupId === 'akusala_lobha') opts = opts.filter(o => !['ld1', 'ld2', 'ld5', 'ld6'].includes(o.id));
+        if (groupId === 'akusala_moha') opts = opts.filter(o => o.id !== 'm1');
+    }
+
+    if (isAnagami || isArahant || puggalaId.includes('rupa') || puggalaId.includes('arupa')) {
+        if (groupId.includes('dosa')) return [];
+    }
+    
+    if (puggalaId.includes('arupa')) {
+        if (groupId.includes('rupa_jhana') || groupId.includes('abhinna')) return [];
+    }
+
+    return opts;
+};
+
+const getAvailableTadarammanas = (jVedana, aramQ, puggalaId) => {
+    let opts = [];
+    if (aramQ === 3) {
+        opts = [Ahetuka_Vipaka[0]]; 
+    } else if (aramQ === 0) { 
+        if (jVedana === 'D' || jVedana === 'U') opts = []; 
+        else opts = [Ahetuka_Vipaka[2], ...Maha_Vipaka.slice(0, 4)]; 
+    } else {
+        opts = [Ahetuka_Vipaka[1], ...Maha_Vipaka.slice(4, 8)]; 
+    }
+
+    if (puggalaId === 'duggati') {
+        opts = opts.filter(o => o.id.startsWith('av'));
+    } else if (puggalaId === 'sugati_ahetuka' || puggalaId === 'dvihetuka') {
+        opts = opts.filter(o => o.id.startsWith('av') || ['v3', 'v4', 'v7', 'v8'].includes(o.id));
+    } else if (puggalaId.includes('rupa') || puggalaId.includes('arupa')) {
+        opts = [];
+    }
+    return opts;
+};
+
+const ARAM_Q_LABELS = ["အတိဣဋ္ဌာရုံ", "ဣဋ္ဌာရုံ", "ဣဋ္ဌမဇ္ဈတ္တာရုံ", "အနိဋ္ဌာရုံ"];
+
+const RUPA_ARAMMANA_OPTIONS = [
+  "ကသိုဏ်း (၁၀-ပါး)ပဋိဘာဂနိမိတ်",
+  "အရိုးစုပဋိဘာဂနိမိတ်",
+  "အာနာပါနပဋိဘာဂနိမိတ်",
+  "အသုဘပဋိဘာဂနိမိတ်",
+  "(မေတ္တာ,ကရုဏာ,မုဒိတာ) သတ္တဝါပညတ်",
+  "(ဥပေက္ခာဗြဟ္မစိုရ်) သတ္တဝါပညတ်"
+];
+
+const ARUPA_ARAMMANA_OPTIONS = [
+  "ကသိုဏ်းပုဂ္ဂိုလ်မှ နုတ်ပယ်အပ်သော ကောင်းကင်ပညတ်",
+  "ပထမာရုပ္ပဝိညာဏ်",
+  "ပထမာရုပ္ပဝိညာဏ်၏ မရှိခြင်းဟူသော နတ္ထိဘောဝပညတ်",
+  "တတိယာရုပ္ပဝိညာဏ်"
+];
+
+// Returns which Jhana indices (0=1st, 1=2nd, 2=3rd, 3=4th, 4=5th) are valid for a selected Rupa Arammana
+const getValidJhanaIndices = (aramIdx) => {
+    if (aramIdx === 1 || aramIdx === 3) return [0]; // 1st Jhana only
+    if (aramIdx === 4) return [0, 1, 2, 3]; // up to 4th Jhana
+    if (aramIdx === 5) return [4]; // 5th Jhana only
+    return [0, 1, 2, 3, 4]; // All
+};
+
+const PANCADVARA_INFO = {
+  cakkhu: { viññāṇa: "စက္ခုဝိညာဏ်", vīthi: "စက္ခုဒွါရဝီထိ", ārammaṇa: "ပစ္စုပ္ပန် ရူပါရုံ", base: "စက္ခုဝတ္ထု-၆၃", vedanā: "ဥပေက္ခာ" },
+  sota: { viññāṇa: "သောတဝိညာဏ်", vīthi: "သောတဒွါရဝီထိ", ārammaṇa: "ပစ္စုပ္ပန် သဒ္ဒါရုံ", base: "သောတဝတ္ထု-၆၃", vedanā: "ဥပေက္ခာ" },
+  ghana: { viññāṇa: "ဃာနဝိညာဏ်", vīthi: "ဃာနဒွါရဝီထိ", ārammaṇa: "ပစ္စုပ္ပန် ဂန္ဓာရုံ", base: "ဃာနဝတ္ထု-၆၃", vedanā: "ဥပေက္ခာ" },
+  jivha: { viññāṇa: "ဇိဝှါဝိညာဏ်", vīthi: "ဇိဝှါဒွါရဝီထိ", ārammaṇa: "ပစ္စုပ္ပန် ရသာရုံ", base: "ဇိဝှါဝတ္ထု-၆၃", vedanā: "ဥပေက္ခာ" },
+  kaya: { viññāṇa: "ကာယဝိညာဏ်", vīthi: "ကာယဒွါရဝီထိ", ārammaṇa: "ပစ္စုပ္ပန် ဖောဋ္ဌဗ္ဗာရုံ", base: "ကာယဝတ္ထု-၅၃", vedanā: "သုခ" }
+};
+
+const KAYA_ARAMMANA_OPTIONS = ["ပစ္စုပ္ပန် ဖောဋ္ဌဗ္ဗာရုံ (ပထဝီဓာတ်)", "ပစ္စုပ္ပန် ဖောဋ္ဌဗ္ဗာရုံ (တေဇောဓာတ်)", "ပစ္စုပ္ပန် ဖောဋ္ဌဗ္ဗာရုံ (ဝါယောဓာတ်)"];
+
+const DHAMMARAMMANA_RUPA = [
+  { group: "ရုပ်အစစ် (၁၁) မျိုး", options: [ "စက္ခုအကြည်ဓာတ်", "သောတအကြည်ဓာတ်", "ဃာနအကြည်ဓာတ်", "ဇိဝှါအကြည်ဓာတ်", "ကာယအကြည်ဓာတ်", "အာပေါဓာတ်", "ဣတ္ထိဘာဝရုပ်", "ပုရိသဘာဝရုပ်", "ဟဒယဝတ္ထုရုပ်", "ဇီဝိတရုပ်", "ဩဇာရုပ်" ]},
+  { group: "ရုပ်အတု (၁၀) မျိုး", options: [ "အာကာသဓာတ်", "ကာယဝိညတ်", "ဝစီဝိညတ်", "လဟုတာ", "မုဒုတာ", "ကမ္မညတာ", "ဥပစယ", "သန္တတိ", "ဇရတာ", "အနိစ္စတာ" ]},
+  { group: "ဝိရတီ အာရုံ (၃) မျိုး", options: ["သမ္မာဝါစာ၏ အာရုံ", "သမ္မာကမ္မန္တ၏ အာရုံ", "သမ္မာအာဇီဝ၏ အာရုံ"] },
+  { group: "အပ္ပမညာ အာရုံ (၂) မျိုး", options: ["ကရုဏာ၏ အာရုံ (ဒုက္ခိတသတ္တဝါ)", "မုဒိတာ၏ အာရုံ (သုခိတသတ္တဝါ)"] }
+];
+
+const PHASES = [
+  { id: 'patisandhi', label: 'ပဋိသန္ဓေ' },
+  { id: 'pavatti', label: 'ပဝတ္တိ' },
+  { id: 'cuti', label: 'စုတိ' }
+];
+const VIPAKA_LABEL_MAP = {
+  'ပဋိသန္ဓေ':'ပဋိသန္ဓေဝိညာဏ်', 'ဘဝင်':'ဘဝင်ဝိညာဏ်', 'စုတိ':'စုတိဝိညာဏ်',
+  'သမ္ပဋိစ္ဆိုင်း':'သမ္ပဋိစ္ဆိုင်းဝိညာဏ်', 'သန္တီရဏ':'သန္တီရဏဝိညာဏ်', 'တဒါရုံ':'တဒါရုံဝိညာဏ်',
+};
+
+const PD_LABELS = [
+  "အတိမဟန္တာရုံ (တဒါရမ္မဏဝါရ)", "မဟန္တာရုံ ၁ (ဇဝနဝါရ)", "မဟန္တာရုံ ၂ (ဇဝနဝါရ)", "ပရိတ္တာရုံ ၁ (ဝုဋ္ဌောဝါရ)", "ပရိတ္တာရုံ ၂", "ပရိတ္တာရုံ ၃", "ပရိတ္တာရုံ ၄", "ပရိတ္တာရုံ ၅", "ပရိတ္တာရုံ ၆", "အတိပရိတ္တာရုံ ၁ (မောဃဝါရ)", "အတိပရိတ္တာရုံ ၂", "အတိပရိတ္တာရုံ ၃", "အတိပရိတ္တာရုံ ၄", "အတိပရိတ္တာရုံ ၅", "အတိပရိတ္တာရုံ ၆"
+];
+
+const MK_LABELS = ["အတိဝိဘူတာရုံ (တဒါရမ္မဏဝါရ)", "ဝိဘူတာရုံ (ဇဝနဝါရ)", "အဝိဘူတာရုံ (ဇောမစောသောဝါရ)", "အတိအဝိဘူတာရုံ (မောဃဝါရ)"];
+const AP_LABELS = ["မန္ဒပည (ပရိကံ ပါသည်)", "တိက္ခပည (ပရိကံ မပါ)"];
+
+const getAyatanaAramLabel = (t) => {
+  if (!t) return "ဓမ္မာယတန";
+  if (t.includes("ရူပါရုံ")) return "ရူပါယတန";
+  if (t.includes("သဒ္ဒါရုံ")) return "သဒ္ဒါယတန";
+  if (t.includes("ဂန္ဓာရုံ")) return "ဂန္ဓာယတန";
+  if (t.includes("ရသာရုံ")) return "ရသာယတန";
+  if (t.includes("ဖောဋ္ဌဗ္ဗာရုံ")) return "ဖောဋ္ဌဗ္ဗာယတန";
+  return "ဓမ္မာယတန";
+};
+const getAyatanaBaseLabel = (t) => {
+  if (!t) return "ဓမ္မာယတန";
+  if (t.includes("စက္ခုဝတ္ထု")) return "စက္ခာယတန";
+  if (t.includes("သောတဝတ္ထု")) return "သောတာယတန";
+  if (t.includes("ဃာနဝတ္ထု")) return "ဃာနာယတန";
+  if (t.includes("ဇိဝှါဝတ္ထု")) return "ဇိဝှါယတန";
+  if (t.includes("ကာယဝတ္ထု")) return "ကာယာယတန";
+  return "ဓမ္မာယတန";
+};
+const getDhatuVinnanaLabel = (name) => {
+  if (!name) return "မနောဝိညာဏဓာတ်";
+  if (name.includes("စက္ခုဝိညာဏ်")) return "စက္ခုဝိညာဏဓာတ်";
+  if (name.includes("သောတဝိညာဏ်")) return "သောတဝိညာဏဓာတ်";
+  if (name.includes("ဃာနဝိညာဏ်")) return "ဃာနဝိညာဏဓာတ်";
+  if (name.includes("ဇိဝှါဝိညာဏ်")) return "ဇိဝှါဝိညာဏဓာတ်";
+  if (name.includes("ကာယဝိညာဏ်")) return "ကာယဝိညာဏဓာတ်";
+  if (name.includes("ပဉ္စဒွါရာဝဇ္ဇန်း") || name.includes("သမ္ပဋိစ္ဆိုင်း")) return "မနောဓာတ်";
+  return "မနောဝိညာဏဓာတ်";
+};
+const getDhatuAramLabel = (t) => {
+  if (!t) return "ဓမ္မဓာတ်";
+  if (t.includes("ရူပါရုံ")) return "ရူပဓာတ်";
+  if (t.includes("သဒ္ဒါရုံ")) return "သဒ္ဒဓာတ်";
+  if (t.includes("ဂန္ဓာရုံ")) return "ဂန္ဓဓာတ်";
+  if (t.includes("ရသာရုံ")) return "ရသဓာတ်";
+  if (t.includes("ဖောဋ္ဌဗ္ဗာရုံ")) return "ဖောဋ္ဌဗ္ဗဓာတ်";
+  return "ဓမ္မဓာတ်";
+};
+const getDhatuBaseLabel = (t) => {
+  if (!t) return "ဓမ္မဓာတ်";
+  if (t.includes("စက္ခုဝတ္ထု")) return "စက္ခုဓာတ်";
+  if (t.includes("သောတဝတ္ထု")) return "သောတဓာတ်";
+  if (t.includes("ဃာနဝတ္ထု")) return "ဃာနဓာတ်";
+  if (t.includes("ဇိဝှါဝတ္ထု")) return "ဇိဝှါဓာတ်";
+  if (t.includes("ကာယဝတ္ထု")) return "ကာယဓာတ်";
+  return "ဓမ္မဓာတ်";
+};
+export default function App() {
+  const [showNidanaMenu, setShowNidanaMenu] = useState(false);
+  const [selectedNidana, setSelectedNidana] = useState(null);
+const [nidanaViewMode, setNidanaViewMode] = useState('cause'); // 'cause' | 'effect'
+const [nidanaCycleIndex, setNidanaCycleIndex] = useState(0);
+const [nidana2SubMode, setNidana2SubMode] = useState(null);
+const [nidana3SubMode, setNidana3SubMode] = useState(null);
+const [nidana4CycleIdx, setNidana4CycleIdx] = useState(0);
+const [nidana5SubMode, setNidana5SubMode] = useState('cause');
+const [nidana10EffectIdx, setNidana10EffectIdx] = useState(0);
+const [showAyatanaDetail, setShowAyatanaDetail] = useState(false);
+const [rupaRupaAyState, setRupaRupaAyState] = useState({ causeIdx: 0, effectIdx: 0 });
+  const [displayMode, setDisplayMode] = useState('rupa-nama');
+  const [khandhaViewIndex, setKhandhaViewIndex] = useState(0); 
+  const NIDANA_LIST = [
+  "အဝိဇ္ဇာပစ္စယာ သင်္ခါရာ",
+  "သင်္ခါရပစ္စယာ ဝိညာဏံ",
+  "ဝိညာဏပစ္စယာ နာမရူပံ",
+  "နာမရူပပစ္စယာ သဠာယတနံ",
+  "သဠာယတနပစ္စယာ ဖဿော",
+  "ဖဿပစ္စယာ ဝေဒနာ",
+  "ဝေဒနာပစ္စယာ တဏှာ",
+  "တဏှာပစ္စယာ ဥပါဒါနံ",
+  "ဥပါဒါနပစ္စယာ ဘဝေါ",
+  "ဘဝပစ္စယာ ဇာတိ",
+  "ဇာတိပစ္စယာ ဇရာမရဏံ..",
+  ];
+
+  const [currentLifeOffset, setCurrentLifeOffset] = useState(0);
+  const [activePhase, setActivePhase] = useState('patisandhi');
+
+  const [puggalaByLife, setPuggalaByLife] = useState({ 0: 'tihetuka_kama' });
+  const [lifeLocks, setLifeLocks] = useState({ 0: false });
+  const [isBhavangaAuto, setIsBhavangaAuto] = useState(true);
+
+  const activePuggalaId = puggalaByLife[currentLifeOffset] || 'tihetuka_kama';
+  const isLifeLocked = lifeLocks[currentLifeOffset] || false;
+
+  const [showPuggalaMenu, setShowPuggalaMenu] = useState(false);
+  const [expandedPuggalaGroup, setExpandedPuggalaGroup] = useState(null);
+
+  const [showBhavangaMenu, setShowBhavangaMenu] = useState(false);
+  const [expandedBhavangaGroup, setExpandedBhavangaGroup] = useState(null);
+
+  const [activeVithi, setActiveVithi] = useState('cakkhu');
+  const [javanaGroupId, setJavanaGroupId] = useState('akusala_lobha');
+  const [javanaSubIndex, setJavanaSubIndex] = useState(0);
+  const [lokuttaraJhanaIndex, setLokuttaraJhanaIndex] = useState(0);
+  const [rupaArammanaIndex, setRupaArammanaIndex] = useState(0);
+
+  const [bhavangaGroupId, setBhavangaGroupId] = useState('maha_vipaka');
+  const [bhavangaSubIndex, setBhavangaSubIndex] = useState(0);
+  
+  const [selectedArammana, setSelectedArammana] = useState(DHAMMARAMMANA_RUPA[0].options[0]);
+  const [kayaArammanaIndex, setKayaArammanaIndex] = useState(0);
+  
+  const [pancaDvaraVariation, setPancaDvaraVariation] = useState(0);
+  const [manoKamaVariation, setManoKamaVariation] = useState(0);
+  const [appanaVariation, setAppanaVariation] = useState(0);
+  const [cutiVariation, setCutiVariation] = useState(0); 
+  const [nidana10BaseOffset, setNidana10BaseOffset] = useState(0);
+  const [pastCutiVariation, setPastCutiVariation] = useState(0);
+
+  const [aramQIndex, setAramQIndex] = useState(0);
+  const [tadaCycleIndex, setTadaCycleIndex] = useState(0);
+  
+  const [paticcaStep, setPaticcaStep] = useState(0);
+  const [paticcaCittaName, setPaticcaCittaName] = useState("");
+const [paticcaKhandha, setPaticcaKhandha] = useState(0);
+const [paticcaLockedNodeData, setPaticcaLockedNodeData] = useState(null);
+const [paticcaOriginalNodeData, setPaticcaOriginalNodeData] = useState(null);
+const [sankharaOnlyCetana, setSankharaOnlyCetana] = useState(false);
+  const [paticcaSavedState, setPaticcaSavedState] = useState(null);
+
+  const [customArammanas, setCustomArammanas] = useState({
+      past_life: "အတိတ်ဘဝ ကံ/ကမ္မနိမိတ်/ဂတိနိမိတ်",
+      present_life: "ပစ္စုပ္ပန်ဘဝ ကံ/ကမ္မနိမိတ်/ဂတိနိမိတ်",
+      future_life: "နောင်ဘဝ ကံ/ကမ္မနိမိတ်/ဂတိနိမိတ်"
+  });
+
+  const [avijjaStateByLife, setAvijjaStateByLife] = useState({});
+  const [sankharaStateByLife, setSankharaStateByLife] = useState({});
+  const getAvijjaState = (offset) => avijjaStateByLife[offset] || { vara: 0, javanaIdx: 0, tadaIdx: 0 };
+  const getSankharaState = (offset) => sankharaStateByLife[offset] || { vara: 0, javanaGroupId: 'kama_kusala', javanaIdx: 0, tadaIdx: 0, aramQIndex: 0 };
+const avijjaState = getAvijjaState(currentLifeOffset - 1);
+const sankharaState = getSankharaState(currentLifeOffset - 1);
+  const availableVithis = useMemo(() => getAvailableVithis(activePuggalaId), [activePuggalaId]);
+  
+  const availableJavanaGroups = useMemo(() => {
+      let groups = getAvailableJavanaGroupsRaw(activeVithi, activePuggalaId);
+      groups = groups.map(g => {
+          const filteredOpts = getFilteredJavanaOptions(g.id, activePuggalaId);
+          return { ...g, options: filteredOpts };
+      }).filter(g => g.options && g.options.length > 0);
+      return groups;
+  }, [activeVithi, activePuggalaId]);
+
+  const currentBhavangaGroup = VIPAKA_GROUPS.find(g => g.id === bhavangaGroupId) || VIPAKA_GROUPS[1];
+
+  useEffect(() => {
+      const validVithiIds = availableVithis.flatMap(g => g.options.map(o => o.id));
+      if (!validVithiIds.includes(activeVithi)) {
+          setActiveVithi(validVithiIds.includes('mano_kama') ? 'mano_kama' : validVithiIds[0] || 'cakkhu');
+          setCurrentIndex(0);
+          setIsPlaying(false);
+          setPancaDvaraVariation(0);
+          setManoKamaVariation(0);
+          setAppanaVariation(0);
+      }
+  }, [availableVithis, activeVithi]);
+
+  useEffect(() => {
+      const validJavanaGroupIds = availableJavanaGroups.map(g => g.id);
+      if (validJavanaGroupIds.length > 0 && !validJavanaGroupIds.includes(javanaGroupId)) {
+          setJavanaGroupId(validJavanaGroupIds[0]);
+          setJavanaSubIndex(0);
+          setLokuttaraJhanaIndex(0);
+      }
+  }, [availableJavanaGroups, javanaGroupId]);
+
+  const toggleLifeLock = (offset) => {
+      setLifeLocks(prev => ({ ...prev, [offset]: !prev[offset] }));
+  };
+
+  const handlePuggalaChange = (newPuggId) => {
+      if (isLifeLocked) return;
+      setPuggalaByLife(prev => ({ ...prev, [currentLifeOffset]: newPuggId }));
+      if (isBhavangaAuto) {
+          const bhv = getDefaultBhavanga(newPuggId);
+          setBhavangaById(bhv);
+      }
+      setCurrentIndex(0);
+      setIsPlaying(false);
+  };
+
+  const handlePaticcaToggle = () => {
+      // khandhaViewIndex === 1 (ရူပ) => step 0-5, khandhaViewIndex === 5 (ဝိညာဏ) => step 0,1,2,3
+      const isViññana = khandhaViewIndex === 5;
+      // ဝိပါက်ဝိညာဏ် ဆိုရင် step 3 ထိ (1=avijja, 2=sankhara, 3=namarupa)
+      // ဝိပါက်မဟုတ်ရင် step 2 ထိ (1=avijja, 2=namarupa... မဟုတ် step 1 ပဲ ဆုံးမည်)
+      // အလွယ်ဆုံး: ဝိပါက်ဝိညာဏ်စစ်ဆေး
+      const vipakaKeywords = ["ဝိပါက်", "ပဋိသန္ဓေ", "ဘဝင်", "စုတိ", "သမ္ပဋိစ္ဆိုင်း", "သန္တီရဏ", "တဒါရုံ",
+        "စက္ခုဝိညာဏ်","သောတဝိညာဏ်","ဃာနဝိညာဏ်","ဇိဝှါဝိညာဏ်","ကာယဝိညာဏ်"];
+      // paticcaStep === 0 ဆိုရင် activeNode ကို သုံး (lock မလုပ်ရသေးသောကြောင့်)
+      // paticcaStep > 0 ဆိုရင် lockedNode ကို သုံး
+      const currentNodeName = paticcaStep === 0 ? activeNode.name : (paticcaLockedNodeData?.name || activeNode.name);
+      // ဝိညာဏ mode တွင်သာ vipaka စစ်ဆေးရမည်၊ ရူပ mode တွင် မသက်ဆိုင်
+      const isVedana = khandhaViewIndex === 2;
+      const isSanna = khandhaViewIndex === 3;
+      const isSankhara = khandhaViewIndex === 4 || khandhaViewIndex === 6;
+      const isNamaKhandha = isVedana || isSanna || isSankhara;
+      const lockedOrActive = paticcaStep === 0 ? activeNode : (paticcaLockedNodeData || activeNode);
+      
+      // ဘဝင်စိတ်များကိုပါ ထည့်သွင်းစစ်ဆေးရန် ပြင်ဆင်ချက်
+      const hasBhavangaSamphassa = lockedOrActive?.vithi?.includes("မနောဒွါရ") ||
+    lockedOrActive?.name?.includes("ပဉ္စဒွါရာဝဇ္ဇန်း");
+              
+      const isVipakaCheck = (isViññana || isNamaKhandha) && vipakaKeywords.some(k => currentNodeName.includes(k));
+      
+      const isPancaVinnana = ["စက္ခုဝိညာဏ်", "သောတဝိညာဏ်", "ဃာနဝိညာဏ်", "ဇိဝှါဝိညာဏ်", "ကာယဝိညာဏ်"].some(v => currentNodeName.includes(v));
+
+      // မနသိကာရ ရှိသော စိတ်များဖြစ်ကြောင်း စစ်ဆေးရန်
+      const hasManasikara = 
+    isPancaVinnana ||
+    currentNodeName.includes("ဇော") ||
+    currentNodeName.includes("မဂ်") ||
+    currentNodeName.includes("ဖိုလ်") ||
+    currentNodeName.includes("ဈာန်") ||
+    currentNodeName.includes("ဟသိတုပ္ပါဒ်") ||
+    currentNodeName.includes("ကိရိယာ") ||
+    // အပ္ပနာဝီထိ pre-javana nodes ထည့်ပါ
+    currentNodeName === "ပရိကံ" ||
+    currentNodeName === "ဥပစာရ" ||
+    currentNodeName === "အနုလုံ" ||
+    currentNodeName === "ဂေါတြဘု" ||
+    currentNodeName === "ဝေါဒါန်" ||
+    currentNodeName === "အဘိညာဉ်" ||
+    currentNodeName.includes("နေဝသညာ") ||
+    // vithi name ဖြင့် စစ်ဆေးခြင်း
+    (lockedOrActive?.vithi?.includes("အပ္ပနာ") && 
+     !currentNodeName.includes("မနောဒွါရာဝဇ္ဇန်း"));
+      const activeIdx = paticcaSavedState?.index ?? currentIndex;
+      const prevNode = vithiData[activeIdx - 1];
+      const isUpacaraAfterMano = currentNodeName.includes("ဥပစာ") && prevNode?.name.includes("မနောဒွါရာဝဇ္ဇန်း");
+      
+      // ဘဝင်/စုတိ/ပဋိသန္ဓေ nodes စစ်ဆေးရန်
+const isBhavangaOrVithimutta = 
+    currentNodeName === "ဘဝင်" ||
+    currentNodeName === "ဘဝင်္ဂစလန" ||
+    currentNodeName === "ဘဝင်္ဂုပစ္ဆေဒ" ||
+    currentNodeName === "အတီတဘဝင်" ||
+    currentNodeName === "စုတိ" ||
+    currentNodeName === "ပဋိသန္ဓေ";
+
+const hasPreSamphassa = (isNamaKhandha || isViññana) && (
+    // ဘဝင်/စုတိ/ပဋိသန္ဓေ အတွက် ရှေ့ကပ်ရပ်စိတ် ရှာမည်
+    isBhavangaOrVithimutta ||
+    // ရှိပြီးသား condition (non-bhavanga non-first-javana)
+    (!isPancaVinnana &&
+     !currentNodeName.includes("ပဉ္စဒွါရာဝဇ္ဇန်း") &&
+     !currentNodeName.includes("မနောဒွါရာဝဇ္ဇန်း") &&
+     !currentNodeName.includes("သမ္ပဋိစ္ဆိုင်း") &&
+     !currentNodeName.includes("ပရိကံ") &&
+     !isUpacaraAfterMano &&
+     !/^၁\s*-\s*ဇော/.test(currentNodeName))
+);
+
+      // "စက္ခုသမ္ဖဿ" စသည်ဖြင့် ကြောင်းကျိုးဆက်စပ်နိုင်သော စိတ်များ
+      const isPancaDvara = ['cakkhu', 'sota', 'ghana', 'jivha', 'kaya'].includes(activeVithi);
+      const isSamphassaTarget =
+          ["သမ္ပဋိစ္ဆိုင်း", "သန္တီရဏ"].some(v => currentNodeName.includes(v)) ||
+          (["ဝုဋ္ဌော", "ဇော", "တဒါရုံ"].some(v => currentNodeName.includes(v)) && isPancaDvara);
+
+      let nextStep = paticcaStep + 1;
+      
+      if ((isNamaKhandha || isViññana) && !isVipakaCheck && paticcaStep === 0) {
+          nextStep = 3;
+      } else if (isViññana || isNamaKhandha) {
+    const possibleSteps = [];
+    if (isVipakaCheck) {
+        possibleSteps.push(1, 2);   // ← ဤ ၂ လိုင်းသာ ထည့်ပါ
+    }
+    if (isViññana) {
+    possibleSteps.push(3);
+    const _cn = paticcaStep === 0 ? activeNode.name : (paticcaLockedNodeData?.name || activeNode.name);
+    if (["စက္ခုဝိညာဏ်","သောတဝိညာဏ်","ဃာနဝိညာဏ်","ဇိဝှါဝိညာဏ်","ကာယဝိညာဏ်"].some(v => _cn.includes(v))) possibleSteps.push(4);
+} else if (isNamaKhandha) {
+              possibleSteps.push(3, 4, 5);
+              if (isPancaVinnana) possibleSteps.push(7);
+          }
+          if (hasBhavangaSamphassa) possibleSteps.push(6);
+          if (hasManasikara) possibleSteps.push(8);
+          if (isSamphassaTarget) possibleSteps.push(9);
+          if (hasPreSamphassa) possibleSteps.push(10);
+          
+          nextStep = possibleSteps.find(s => s > paticcaStep) || 0;
+      } else {
+          if (paticcaStep >= 5) nextStep = 0;
+      }
+      const next = nextStep;
+      
+      if (next === 1) {
+    setPaticcaSavedState({ phase: activePhase, index: currentIndex });
+    if (activePhase !== 'patisandhi') setActivePhase('patisandhi');
+} else if (next === 3 && paticcaStep === 0) {
+    setPaticcaSavedState({ phase: activePhase, index: currentIndex });
+}
+      
+      setPaticcaStep(next);
+      if (next === 1 || (next === 3 && paticcaStep === 0)) {
+    const savedKhandha = khandhaViewIndex;
+    const snapNode = {...activeNode};
+    setPaticcaCittaName(snapNode.name);
+    setPaticcaKhandha(savedKhandha);
+    setPaticcaLockedNodeData(snapNode);
+setPaticcaOriginalNodeData(activeNode);
+    // ဝိညာဏ mode ဆိုရင် khandhaViewIndex 5 ကို ထားပါ
+    if ([2,3,4,5,6].includes(savedKhandha)) {
+        setKhandhaViewIndex(savedKhandha);
+    }
+}
+if (next === 0) {
+    setPaticcaLockedNodeData(null);
+}
+if (next === 0) {
+    setPaticcaCittaName("");
+    setPaticcaKhandha(0);
+    setSankharaOnlyCetana(false);
+}
+
+if (next > 0) {
+    if (![1,2,3,4,5,6].includes(khandhaViewIndex)) setKhandhaViewIndex(1);
+} else {
+   setKhandhaViewIndex(0);
+   if (paticcaSavedState) {
+       const restorePhase = paticcaSavedState.phase;
+       const restoreIndex = paticcaSavedState.index;
+       if (restorePhase !== activePhase) {
+           setActivePhase(restorePhase);
+           setTimeout(() => setCurrentIndex(restoreIndex), 100);
+       } else {
+           setCurrentIndex(restoreIndex);
+       }
+   }
+   setPaticcaSavedState(null);
+}
+  };
+
+  const handleBhavangaSelect = (gId, subIdx) => {
+      setBhavangaGroupId(gId);
+      setBhavangaSubIndex(subIdx);
+      setIsPlaying(false);
+      setTadaCycleIndex(0);
+      setShowBhavangaMenu(false);
+      
+      const group = VIPAKA_GROUPS.find(g => g.id === gId);
+      if (group && group.options[subIdx]) {
+          const bhvId = group.options[subIdx].id;
+          const linkedPuggala = getPuggalaFromBhavanga(bhvId);
+          if (linkedPuggala && !isLifeLocked) {
+              setPuggalaByLife(prev => ({ ...prev, [currentLifeOffset]: linkedPuggala }));
+          }
+      }
+  };
+
+  const handleVithiChange = (e) => {
+      const newVithi = e.target.value;
+      setActiveVithi(newVithi);
+      setCurrentIndex(0);
+      setIsPlaying(false);
+      setPancaDvaraVariation(0);
+      setManoKamaVariation(0);
+      setAppanaVariation(0);
+      
+      const validGroupsRaw = getAvailableJavanaGroupsRaw(newVithi, activePuggalaId);
+      const validGroups = validGroupsRaw.map(g => {
+          return { ...g, options: getFilteredJavanaOptions(g.id, activePuggalaId) };
+      }).filter(g => g.options && g.options.length > 0);
+
+      if (validGroups.length > 0 && !validGroups.some(g => g.id === javanaGroupId)) {
+          setJavanaGroupId(validGroups[0].id);
+          
+          if (validGroups[0].id.includes('rupa_jhana') || validGroups[0].id.includes('abhinna')) {
+              const valid = getValidJhanaIndices(rupaArammanaIndex);
+              setJavanaSubIndex(valid[0]);
+          } else {
+              setJavanaSubIndex(0);
+          }
+          setLokuttaraJhanaIndex(0);
+      }
+  };
+
+  const handleJavanaGroupChange = (e) => {
+      const val = e.target.value;
+      setJavanaGroupId(val);
+      
+      if (val.startsWith('rupa_jhana') || val.includes('abhinna')) {
+          const valid = getValidJhanaIndices(rupaArammanaIndex);
+          setJavanaSubIndex(valid[0]);
+      } else {
+          setJavanaSubIndex(0);
+      }
+
+      setLokuttaraJhanaIndex(0);
+      setIsPlaying(false); 
+      setTadaCycleIndex(0); 
+
+      if (val === 'nirodha_3' && !isLifeLocked) setPuggalaByLife(prev => ({ ...prev, [currentLifeOffset]: 'anagami_kama' }));
+      if (val === 'nirodha_4' && !isLifeLocked) setPuggalaByLife(prev => ({ ...prev, [currentLifeOffset]: 'arahant_kama' }));
+  };
+
+  const setBhavangaById = (id) => {
+      for(let g of VIPAKA_GROUPS) {
+          const idx = g.options.findIndex(o => o.id === id);
+          if (idx !== -1) {
+              setBhavangaGroupId(g.id);
+              setBhavangaSubIndex(idx);
+              setIsPlaying(false);
+              setTadaCycleIndex(0);
+              return;
+          }
+      }
+  };
+
+  const [promptModal, setPromptModal] = useState({ isOpen: false, type: '', value: '' });
+  const [toastMessage, setToastMessage] = useState("");
+
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [selectedCetasika, setSelectedCetasika] = useState(null); 
+  const [selectedBaseForModal, setSelectedBaseForModal] = useState(null);
+  const [hoverLakkana, setHoverLakkana] = useState(""); 
+
+  const timelineRef = useRef(null);
+
+  const getLifeName = (offset) => {
+    if (offset === 0) return "ပစ္စုပ္ပန်ဘဝ";
+    if (offset === -1) return "ပထမအတိတ်ဘဝ";
+    if (offset === -2) return "ဒုတိယအတိတ်ဘဝ";
+    if (offset === 1) return "ပထမအနာဂတ်ဘဝ";
+    if (offset === 2) return "ဒုတိယအနာဂတ်ဘဝ";
+    if (offset < -2) return `${toMyanmarNum(Math.abs(offset))} ဘဝမြောက် အတိတ်ဘဝ`;
+    return `${toMyanmarNum(offset)} ဘဝမြောက် အနာဂတ်ဘဝ`;
+  };
+
+  const handleMouseEnter = (itemName) => {
+    if (!itemName || itemName.includes("နိရောဓသမာပတ်")) return;
+
+    let details = "";
+    if (CETASIKA_DICT[itemName]) {
+        details = CETASIKA_DICT[itemName].lakkana;
+    } else {
+        const currentJavanaGroup = availableJavanaGroups.find(g => g.id === javanaGroupId) || availableJavanaGroups[0] || { options: [] };
+        const info = getActiveCittaInfo(itemName, currentJavanaGroup.options?.[javanaSubIndex]?.id);
+        if (info) details = info.lakkana;
+    }
+    if(details) {
+        const cleanName = itemName.replace(/^[၀-၉]+။\s*/, '').replace(/^[၀-၉]+\s*-\s*/, '');
+        setHoverLakkana(`${cleanName} - ${details}`);
+    }
+  };
+  const handleMouseLeave = () => setHoverLakkana("");
+
+  const getJavanaVedana = (jid, subIndex) => {
+      const opts = getFilteredJavanaOptions(jid, activePuggalaId);
+      if (!opts || opts.length === 0) return 'U';
+      const label = opts[subIndex]?.label || "";
+      if (label.includes("သောမနဿ")) return 'S';
+      if (label.includes("ဒေါမနဿ")) return 'D';
+      return 'U';
+  };
+
+  const getBhavangaVedana = (bid, subIndex) => {
+      const group = VIPAKA_GROUPS.find(g => g.id === bid);
+      if (!group) return 'U';
+      const opt = group.options[subIndex] || group.options[0];
+      if (opt && opt.label.includes("သောမနဿ")) return 'S';
+      return 'U';
+  };
+
+  const availableTadarammanas = useMemo(() => {
+      const jVedana = getJavanaVedana(javanaGroupId, javanaSubIndex);
+      return getAvailableTadarammanas(jVedana, aramQIndex, activePuggalaId);
+  }, [javanaGroupId, javanaSubIndex, aramQIndex, activePuggalaId]);
+
+  const vithiData = useMemo(() => {
+    const currentJavanaGroup = availableJavanaGroups.find(g => g.id === javanaGroupId) || availableJavanaGroups[0] || { options: [] };
+    const activeJavana = currentJavanaGroup.options?.[javanaSubIndex] || currentJavanaGroup.options?.[0] || { cetasikas: [], label: "" };
+    const activeBhavanga = currentBhavangaGroup.options?.[bhavangaSubIndex] || currentBhavangaGroup.options?.[0] || { cetasikas: [], label: "" };
+
+    const jVedana = getJavanaVedana(javanaGroupId, javanaSubIndex);
+    const bVedana = getBhavangaVedana(bhavangaGroupId, bhavangaSubIndex);
+    const selectedTada = availableTadarammanas.length > 0 ? availableTadarammanas[tadaCycleIndex % availableTadarammanas.length] : null;
+    const agantukaBhavanga = (aramQIndex === 3) ? Ahetuka_Vipaka[0] : Ahetuka_Vipaka[1];
+
+    const aramPast = customArammanas.past_life;
+    const aramPresent = customArammanas.present_life;
+    const aramFuture = customArammanas.future_life;
+
+    const result = [];
+
+    const pushNode = (vithiName, name, base, cetasikas, aramana, options = {}) => {
+      let finalCetasikas = [...(cetasikas || [])];
+
+      let finalBase = base;
+      if (activePuggalaId.includes('arupa')) {
+          finalBase = "မရှိ";
+      }
+
+      if (aramQIndex === 3) {
+          const vithiVipakaKeywords = ["ဝိညာဏ်", "သမ္ပဋိစ္ဆိုင်း", "သန္တီရဏ", "တဒါရုံ"];
+          const isVithiVipaka = vithiVipakaKeywords.some(v => name.includes(v));
+          
+          if (isVithiVipaka) {
+              finalCetasikas = finalCetasikas.filter(c => !["ပီတိ", "သောမနဿ ဝေဒနာ", "သုခ ဝေဒနာ", "ဥပေက္ခာ ဝေဒနာ", "ဒေါမနဿ ဝေဒနာ", "ဒုက္ခ ဝေဒနာ"].includes(c));
+              if (name.includes("ကာယဝိညာဏ်")) finalCetasikas.push("ဒုက္ခ ဝေဒနာ");
+              else finalCetasikas.push("ဥပေက္ခာ ဝေဒနာ");
+          }
+      }
+
+      if (name.includes("ဇော") && activePhase === 'pavatti' && activeVithi === 'mano_kama') {
+          const isMahaKusala = javanaGroupId === 'kama_kusala';
+          const isMahaKiriya = javanaGroupId === 'kama_kiriya';
+          if (isMahaKusala) {
+              if (aramana.includes("သမ္မာဝါစာ၏ အာရုံ") && !finalCetasikas.includes("သမ္မာဝါစာ")) finalCetasikas.push("သမ္မာဝါစာ");
+              if (aramana.includes("သမ္မာကမ္မန္တ၏ အာရုံ") && !finalCetasikas.includes("သမ္မာကမ္မန္တ")) finalCetasikas.push("သမ္မာကမ္မန္တ");
+              if (aramana.includes("သမ္မာအာဇီဝ၏ အာရုံ") && !finalCetasikas.includes("သမ္မာအာဇီဝ")) finalCetasikas.push("သမ္မာအာဇီဝ");
+          }
+          if (isMahaKusala || isMahaKiriya) {
+              finalCetasikas = finalCetasikas.filter(c => c !== "ကရုဏာ" && c !== "မုဒိတာ");
+              if (aramana.includes("ကရုဏာ၏ အာရုံ")) finalCetasikas.push("ကရုဏာ");
+              if (aramana.includes("မုဒိတာ၏ အာရုံ")) finalCetasikas.push("မုဒိတာ");
+          }
+      }
+
+      finalCetasikas.sort((a, b) => (SORT_ORDER[a] || 99) - (SORT_ORDER[b] || 99));
+
+      result.push({ 
+        id: Math.random().toString(36).substr(2, 9), 
+        vithi: vithiName, name, base: finalBase, 
+        cetasikas: finalCetasikas, count: finalCetasikas.length, cetasikaOnlyCount: finalCetasikas.filter(c => c !== "အသိစိတ်").length,
+        aramana, ...options 
+      });
+    };
+
+    const getJavanaNodeParams = (defaultAram) => {
+        let c = [...(activeJavana.cetasikas || [])];
+        let a = defaultAram;
+
+        if (javanaGroupId.startsWith('magga_') || javanaGroupId.startsWith('phala_') || javanaGroupId.startsWith('nirodha_')) {
+            c = getLokuttaraCetasikas(lokuttaraJhanaIndex);
+            a = "နိဗ္ဗာန်";
+        } else if (javanaGroupId.includes('arupa_jhana')) {
+            a = ARUPA_ARAMMANA_OPTIONS[javanaSubIndex] || ARUPA_ARAMMANA_OPTIONS[0];
+        } else if (javanaGroupId.startsWith('rupa_jhana') || javanaGroupId.includes('abhinna')) {
+            a = RUPA_ARAMMANA_OPTIONS[rupaArammanaIndex];
+            c = c.filter(cet => cet !== "ကရုဏာ" && cet !== "မုဒိတာ");
+            if (javanaSubIndex <= 3) {
+                if (rupaArammanaIndex === 4) { c.push("ကရုဏာ"); c.push("မုဒိတာ"); } 
+            }
+        }
+        return { c, a };
+    };
+
+    const generateJavanaName = () => {
+        if (javanaGroupId.startsWith('magga_') || javanaGroupId.startsWith('phala_') || javanaGroupId.startsWith('nirodha_')) {
+            return (activeJavana.label || "") + ` (${toMyanmarNum(lokuttaraJhanaIndex + 1)}-ဈာန်)`;
+        }
+        return activeJavana.label || "ဇော";
+    };
+
+    // Helper to build Avijja/Tanha vithis for past/future
+    const buildAvijjaSeq = (lifePhase, oldAram) => {
+        const avijjaOffset = lifePhase === 'past' ? currentLifeOffset - 1 : currentLifeOffset;
+        const avijjaState = getAvijjaState(avijjaOffset);
+        const lobhaOpts = JAVANA_GROUPS.find(g => g.id === 'akusala_lobha').options;
+        const _N6A = ['ရူပါရုံ','သဒ္ဒါရုံ','ဂန္ဓာရုံ','ရသာရုံ','ဖောဋ္ဌဗ္ဗာရုံ','ဓမ္မာရုံ'];
+const aramAvijja = selectedNidana === 6 ? _N6A[nidanaCycleIndex % 6] : "အာရုံ ၆-ပါး";
+        const pType = lifePhase === 'past' ? 'past_life' : 'present_life';
+
+        for (let v=0; v<2; v++) {
+            const jOpt = lobhaOpts[avijjaState.javanaIdx];
+            const vVara = avijjaState.vara;
+            const vName = v === 0 ? "အဝိဇ္ဇာ/တဏှာ မနောဒွါရဝီထိ" : "ဥပါဒါန် မနောဒွါရဝီထိ";
+            pushNode("ဝီထိမုတ်စိတ်", "ဘဝင်္ဂစလန", "ဟဒယဝတ္ထု-၆၃", activeBhavanga.cetasikas, oldAram, { isBhavangaNode: true, specificName: activeBhavanga.label });
+        pushNode("ဝီထိမုတ်စိတ်", "ဘဝင်္ဂုပစ္ဆေဒ", "ဟဒယဝတ္ထု-၆၃", activeBhavanga.cetasikas, oldAram, { isBhavangaNode: true, specificName: activeBhavanga.label });
+            pushNode(vName, "မနောဒွါရာဝဇ္ဇန်း", "ဟဒယဝတ္ထု-၆၃", set12B, aramAvijja, { isAvijjaNode: true, avijjaIdx: v, nodeType: 'vajjana' });
+            
+            for(let i=1; i<=7; i++) {
+                pushNode(vName, `${toMyanmarNum(i)} - ဇော (လောဘမူ)`, "ဟဒယဝတ္ထု-၆၃", jOpt.cetasikas, aramAvijja, { isAvijjaNode: true, avijjaIdx: v, nodeType: 'javana', specificName: jOpt.label });
+            }
+            
+            if (vVara === 0) { 
+                const jVedanaTemp = jOpt.label.includes("သောမနဿ") ? 'S' : 'U';
+                const avTadas = getAvailableTadarammanas(jVedanaTemp, aramQIndex, activePuggalaId);
+                const tOpt = avTadas.length > 0 ? avTadas[avijjaState.tadaIdx % avTadas.length] : null;
+                if (tOpt) {
+                    pushNode(vName, "၁ - တဒါရုံ", "ဟဒယဝတ္ထု-၆၃", tOpt.cetasikas, aramAvijja, { isAvijjaNode: true, avijjaIdx: v, nodeType: 'tada', specificName: tOpt.label });
+                    pushNode(vName, "၂ - တဒါရုံ", "ဟဒယဝတ္ထု-၆၃", tOpt.cetasikas, aramAvijja, { isAvijjaNode: true, avijjaIdx: v, nodeType: 'tada', specificName: tOpt.label });
+                }
+            }
+
+            for(let b=0; b<1; b++) {
+                pushNode("ဝီထိမုတ်စိတ်", "ဘဝင်", "ဟဒယဝတ္ထု-၆၃", activeBhavanga.cetasikas, oldAram, { isBhavangaNode: true, specificName: activeBhavanga.label });
+            }
+        }
+    };
+
+    // Helper to build Sankhara vithi
+    const buildSankharaSeq = (lifePhase, oldAram) => {
+        const sankharaOffset = lifePhase === 'past' ? currentLifeOffset - 1 : currentLifeOffset;
+        const sankharaState = getSankharaState(sankharaOffset);
+        const vName = "သင်္ခါရ မနောဒွါရဝီထိ";
+        const aram = "အာရုံ ၆-ပါး";
+        const isJhana = sankharaState.vara === 2;
+        const hasTada = sankharaState.vara === 0 && !isJhana;
+
+        const sGroup = JAVANA_GROUPS.find(g => g.id === sankharaState.javanaGroupId) || JAVANA_GROUPS.find(g => g.id === 'kama_kusala');
+        let sOpts = getFilteredJavanaOptions(sGroup.id, activePuggalaId);
+        if (sOpts.length === 0) sOpts = sGroup.options; // Fallback
+        const sOpt = sOpts[sankharaState.javanaIdx % sOpts.length] || sGroup.options[0];
+
+        if (isJhana) {
+            let actualAram = "ကသိုဏ်းနိမိတ် စသည်";
+            if (sankharaState.javanaGroupId.includes('arupa_jhana')) {
+                actualAram = ARUPA_ARAMMANA_OPTIONS[sankharaState.javanaIdx % 4] || ARUPA_ARAMMANA_OPTIONS[0];
+            }
+            pushNode("ဝီထိမုတ်စိတ်", "ဘဝင်္ဂစလန", "ဟဒယဝတ္ထု-၆၃", activeBhavanga.cetasikas, oldAram, { isBhavangaNode: true, specificName: activeBhavanga.label });
+            pushNode("ဝီထိမုတ်စိတ်", "ဘဝင်္ဂုပစ္ဆေဒ", "ဟဒယဝတ္ထု-၆၃", activeBhavanga.cetasikas, oldAram, { isBhavangaNode: true, specificName: activeBhavanga.label });
+            pushNode(vName, "မနောဒွါရာဝဇ္ဇန်း", "ဟဒယဝတ္ထု-၆၃", set12B, actualAram, { isSankharaNode: true, nodeType: 'vajjana' });
+            
+            const preCetasikas = JAVANA_GROUPS.find(g => g.id === 'kama_kusala').options[0].cetasikas;
+            pushNode(vName, "ပရိကံ", "ဟဒယဝတ္ထု-၆၃", preCetasikas, actualAram);
+            pushNode(vName, "ဥပစာရ", "ဟဒယဝတ္ထု-၆၃", preCetasikas, actualAram);
+            pushNode(vName, "အနုလုံ", "ဟဒယဝတ္ထု-၆၃", preCetasikas, actualAram);
+            pushNode(vName, "ဂေါတြဘု", "ဟဒယဝတ္ထု-၆၃", preCetasikas, actualAram);
+            
+            for(let i=1; i<=10; i++) {
+                pushNode(vName, `${toMyanmarNum(i)} - ဈာန်ဇော`, "ဟဒယဝတ္ထု-၆၃", sOpt.cetasikas, actualAram, { isSankharaNode: true, nodeType: 'javana', specificName: sOpt.label });
+            }
+            
+            for(let b=0; b<3; b++) {
+                pushNode("ဝီထိမုတ်စိတ်", "ဘဝင်", "ဟဒယဝတ္ထု-၆၃", activeBhavanga.cetasikas, oldAram, { isBhavangaNode: true, specificName: activeBhavanga.label });
+            }
+        } else {
+          pushNode("ဝီထိမုတ်စိတ်", "ဘဝင်္ဂစလန", "ဟဒယဝတ္ထု-၆၃", activeBhavanga.cetasikas, oldAram, { isBhavangaNode: true, specificName: activeBhavanga.label });
+            pushNode("ဝီထိမုတ်စိတ်", "ဘဝင်္ဂုပစ္ဆေဒ", "ဟဒယဝတ္ထု-၆၃", activeBhavanga.cetasikas, oldAram, { isBhavangaNode: true, specificName: activeBhavanga.label });
+            pushNode(vName, "မနောဒွါရာဝဇ္ဇန်း", "ဟဒယဝတ္ထု-၆၃", set12B, aram, { isSankharaNode: true, nodeType: 'vajjana' });
+            
+            for(let i=1; i<=7; i++) {
+                pushNode(vName, `${toMyanmarNum(i)} - ဇော`, "ဟဒယဝတ္ထု-၆၃", sOpt.cetasikas, aram, { isSankharaNode: true, nodeType: 'javana', specificName: sOpt.label });
+            }
+
+            if (hasTada) {
+                const jVedanaTemp = sOpt.label.includes("သောမနဿ") ? 'S' : (sOpt.label.includes("ဒေါမနဿ") ? 'D' : 'U');
+                const avTadas = getAvailableTadarammanas(jVedanaTemp, sankharaState.aramQIndex, activePuggalaId);
+                const tOpt = avTadas.length > 0 ? avTadas[sankharaState.tadaIdx % avTadas.length] : null;
+                if (tOpt) {
+                    pushNode(vName, "၁ - တဒါရုံ", "ဟဒယဝတ္ထု-၆၃", tOpt.cetasikas, aram, { isSankharaNode: true, nodeType: 'tada', specificName: tOpt.label });
+                    pushNode(vName, "၂ - တဒါရုံ", "ဟဒယဝတ္ထု-၆၃", tOpt.cetasikas, aram, { isSankharaNode: true, nodeType: 'tada', specificName: tOpt.label });
+                } else if (jVedanaTemp === 'D') {
+                     const agantukaBhavanga = (sankharaState.aramQIndex === 3) ? Ahetuka_Vipaka[0] : Ahetuka_Vipaka[1];
+                     pushNode(vName, "အာဂန္တုကဘဝင်", "ဟဒယဝတ္ထု-၆၃", agantukaBhavanga.cetasikas, aram, { isSankharaNode: true, nodeType: 'tada', specificName: agantukaBhavanga.label }); 
+                }
+            } else if (sOpt.label.includes("ဒေါမနဿ") && activeBhavanga.label.includes("သောမနဿ")) {
+                const agantukaBhavanga = (sankharaState.aramQIndex === 3) ? Ahetuka_Vipaka[0] : Ahetuka_Vipaka[1];
+                pushNode(vName, "အာဂန္တုကဘဝင်", "ဟဒယဝတ္ထု-၆၃", agantukaBhavanga.cetasikas, aram, { isSankharaNode: true, nodeType: 'tada', specificName: agantukaBhavanga.label }); 
+            }
+
+            for(let b=0; b<3; b++) {
+                pushNode("ဝီထိမုတ်စိတ်", "ဘဝင်", "ဟဒယဝတ္ထု-၆၃", activeBhavanga.cetasikas, oldAram, { isBhavangaNode: true, specificName: activeBhavanga.label });
+            }
+        }
+    };
+
+    const buildMaranasannaSeq = (variation, lifePhase, newAram, oldAram) => {
+        const seq = [];
+        const maranaOffset = lifePhase === 'past' ? currentLifeOffset - 1 : currentLifeOffset;
+        const sankharaState = getSankharaState(maranaOffset);
+        const mSGroup = JAVANA_GROUPS.find(g => g.id === sankharaState.javanaGroupId)
+let mSOpts = getFilteredJavanaOptions(mSGroup.id, activePuggalaId);
+if (!mSOpts || mSOpts.length === 0) mSOpts = mSGroup.options;
+const maranaJavana = mSOpts[sankharaState.javanaIdx % mSOpts.length] || mSGroup.options[0];
+        const isTadaAllowed = !activePuggalaId.includes('rupa') && !activePuggalaId.includes('arupa');
+        const hasTada = (variation === 0 || variation === 2) && isTadaAllowed;
+        const hasBhavanga = (variation === 2 || variation === 3);
+
+        seq.push({ vName: "ဝီထိမုတ်စိတ်", name: "ဘဝင်္ဂစလန", b: "ဟဒယဝတ္ထု-၆၃", c: activeBhavanga.cetasikas, a: oldAram, promptType: lifePhase === 'past' ? 'past_life' : 'present_life', isBhavangaNode: true, specificName: activeBhavanga.label });
+        seq.push({ vName: "ဝီထိမုတ်စိတ်", name: "ဘဝင်္ဂုပစ္ဆေဒ", b: "ဟဒယဝတ္ထု-၆၃", c: activeBhavanga.cetasikas, a: oldAram, isBhavangaNode: true, specificName: activeBhavanga.label });
+        seq.push({ vName: "မရဏာသန္န မနောဒွါရဝီထိ", name: "မနောဒွါရာဝဇ္ဇန်း", b: "ဟဒယဝတ္ထု-၆၃", c: set12B, a: newAram, promptType: lifePhase === 'past' ? 'present_life' : 'future_life' });
+        
+        for(let i=1; i<=5; i++) {
+            seq.push({ vName: "မရဏာသန္န မနောဒွါရဝီထိ", name: `${toMyanmarNum(i)} - ဇော`, b: "ဟဒယဝတ္ထု-၆၃", c: maranaJavana.cetasikas, a: newAram, isJavanaNode: true, specificName: maranaJavana.label });
+        }
+        
+        if (hasTada) {
+            if (selectedTada) {
+                seq.push({ vName: "မရဏာသန္န မနောဒွါရဝီထိ", name: "၁ - တဒါရုံ", b: "ဟဒယဝတ္ထု-၆၃", c: selectedTada.cetasikas, a: newAram, isTadarammana: true, specificName: selectedTada.label });
+                seq.push({ vName: "မရဏာသန္န မနောဒွါရဝီထိ", name: "၂ - တဒါရုံ", b: "ဟဒယဝတ္ထု-၆၃", c: selectedTada.cetasikas, a: newAram, isTadarammana: true, specificName: selectedTada.label });
+            } else if (jVedana === 'D' && bVedana === 'S') {
+                seq.push({ vName: "မရဏာသန္န မနောဒွါရဝီထိ", name: "အာဂန္တုကဘဝင်", b: "ဟဒယဝတ္ထု-၆၃", c: agantukaBhavanga.cetasikas, a: newAram, specificName: agantukaBhavanga.label });
+            }
+        } else if (jVedana === 'D' && bVedana === 'S' && isTadaAllowed) {
+            seq.push({ vName: "မရဏာသန္န မနောဒွါရဝီထိ", name: "အာဂန္တုကဘဝင်", b: "ဟဒယဝတ္ထု-၆၃", c: agantukaBhavanga.cetasikas, a: newAram, specificName: agantukaBhavanga.label });
+        }
+        
+        if (hasBhavanga) {
+            const bvCount = variation === 2 ? 2 : 1; 
+            for(let i=1; i<=bvCount; i++) {
+                seq.push({ vName: "ဝီထိမုတ်စိတ်", name: "ဘဝင်", b: "ဟဒယဝတ္ထု-၆၃", c: activeBhavanga.cetasikas, a: oldAram, isBhavangaNode: true, specificName: activeBhavanga.label });
+            }
+        }
+        
+        seq.push({ vName: "ဝီထိမုတ်စိတ်", name: "စုတိ", b: "ဟဒယဝတ္ထု-၆၃", c: activeBhavanga.cetasikas, a: oldAram, isCutiNode: true, lPhase: lifePhase, specificName: activeBhavanga.label });
+
+        const finalSeq = [];
+        const paddingNeed = 17 - seq.length;
+        for(let i=0; i<paddingNeed; i++) {
+            finalSeq.push({ vName: "ဝီထိမုတ်စိတ်", name: "ဘဝင်", b: "ဟဒယဝတ္ထု-၆၃", c: activeBhavanga.cetasikas, a: oldAram, isBhavangaNode: true, specificName: activeBhavanga.label });
+        }
+        finalSeq.push(...seq);
+
+        finalSeq.forEach((node, idx) => {
+            pushNode(node.vName, node.name, node.b, node.c, node.a, { displayNum: toMyanmarNum(17 - idx), isCutiNode: node.isCutiNode, lifePhase: node.lPhase, promptType: node.promptType, isTadarammana: node.isTadarammana, specificName: node.specificName, isBhavangaNode: node.isBhavangaNode, isJavanaNode: node.isJavanaNode, isMaranaNode: true });
+        });
+    };
+
+    if (activePhase === 'patisandhi') {
+      
+      // Add Avijja Vithis in Past Life
+      buildAvijjaSeq('past', aramPast);
+      
+      // Add Sankhara Vithi in Past Life
+      buildSankharaSeq('past', aramPast);
+
+      buildMaranasannaSeq(pastCutiVariation, 'past', aramPresent, aramPast);
+
+      pushNode("ဝီထိမုတ်စိတ်", "ပဋိသန္ဓေ", "ဟဒယဝတ္ထု-၃၀", activeBhavanga.cetasikas, aramPresent, { startNumberingHere: true, promptType: 'present_life', isLifeDividerBefore: true, isBhavangaNode: true, specificName: activeBhavanga.label });
+      for(let i=1; i<=14; i++) {
+        pushNode("ဝီထိမုတ်စိတ်", `ဘဝင်`, "ဟဒယဝတ္ထု-၄၆", activeBhavanga.cetasikas, aramPresent, { isBhavangaNode: true, specificName: activeBhavanga.label });
+      }
+      pushNode("ဝီထိမုတ်စိတ်", "ဘဝင်္ဂစလန", "ဟဒယဝတ္ထု-၄၆", activeBhavanga.cetasikas, aramPresent, { isBhavangaNode: true, specificName: activeBhavanga.label });
+      pushNode("ဝီထိမုတ်စိတ်", "ဘဝင်္ဂုပစ္ဆေဒ", "ဟဒယဝတ္ထု-၄၆", activeBhavanga.cetasikas, aramPresent, { isBhavangaNode: true, specificName: activeBhavanga.label });
+      const lobhaOptions = getFilteredJavanaOptions('akusala_lobha', activePuggalaId);
+      const lobhaJavana = lobhaOptions[0] || { cetasikas: [], label: "ဇော" };
+      
+      pushNode("ဘဝနိကန္တိ မနောဒွါရဝီထိ", "မနောဒွါရာဝဇ္ဇန်း", "ဟဒယဝတ္ထု-၄၆", set12B, "အဘိနဝဘဝ");
+      for(let i=1; i<=7; i++) {
+        pushNode("ဘဝနိကန္တိ မနောဒွါရဝီထိ", `${toMyanmarNum(i)} - ဇော (လောဘမူ)`, "ဟဒယဝတ္ထု-၄၆", lobhaJavana.cetasikas, "အဘိနဝဘဝ", { isJavanaNode: true, specificName: lobhaJavana.label });
+      }
+      for(let i=1; i<=3; i++) {
+        pushNode("ဝီထိမုတ်စိတ်", `ဘဝင်`, "ဟဒယဝတ္ထု-၄၆", activeBhavanga.cetasikas, aramPresent, { isBhavangaNode: true, specificName: activeBhavanga.label });
+      }
+
+    } else if (activePhase === 'pavatti') {
+      
+      if (['cakkhu', 'sota', 'ghana', 'jivha', 'kaya'].includes(activeVithi)) {
+          const pancaInfo = PANCADVARA_INFO[activeVithi];
+          const viññāṇaSet = pancaInfo.vedanā === "သုခ" ? set8_Sukha : set8_Upekkha;
+          let aramRaw = activeVithi === 'kaya' ? KAYA_ARAMMANA_OPTIONS[kayaArammanaIndex] : pancaInfo.ārammaṇa;
+          const aram = `${aramRaw} (${ARAM_Q_LABELS[aramQIndex]})`;
+          
+          let atitaCount = 0; let vara = ''; const type = pancaDvaraVariation;
+          if (type === 0) { atitaCount = 1; vara = 'Tadarammana'; }
+          else if (type === 1) { atitaCount = 2; vara = 'Javana'; }
+          else if (type === 2) { atitaCount = 3; vara = 'Javana'; }
+          else if (type >= 3 && type <= 8) { atitaCount = type + 1; vara = 'Votthappana'; }
+          else if (type >= 9 && type <= 14) { atitaCount = type + 1; vara = 'Mogha'; } 
+
+          const vithiNameWithVar = `${pancaInfo.vīthi}`;
+
+          for(let i=0; i<atitaCount; i++) pushNode("ဝီထိမုတ်စိတ်", "အတီတဘဝင်", "ဟဒယဝတ္ထု-၆၃", activeBhavanga.cetasikas, aramPresent, { isBhavangaNode: true, specificName: activeBhavanga.label });
+          pushNode("ဝီထိမုတ်စိတ်", "ဘဝင်္ဂစလန", "ဟဒယဝတ္ထု-၆၃", activeBhavanga.cetasikas, aramPresent, { isBhavangaNode: true, specificName: activeBhavanga.label });
+          pushNode("ဝီထိမုတ်စိတ်", "ဘဝင်္ဂုပစ္ဆေဒ", "ဟဒယဝတ္ထု-၆၃", activeBhavanga.cetasikas, aramPresent, { isBhavangaNode: true, specificName: activeBhavanga.label });
+
+          let viññāṇaSpecific = (aramQIndex === 3 ? "အကုသလဝိပါက် " : "အဟိတ်ကုသလဝိပါက် ") + pancaInfo.viññāṇa;
+          let sampaSpecific = (aramQIndex === 3 ? "အကုသလဝိပါက် " : "အဟိတ်ကုသလဝိပါက် ") + "သမ္ပဋိစ္ဆိုင်း";
+          
+          let santiSpecific = "";
+          if (aramQIndex === 3) santiSpecific = "အကုသလဝိပါက် ဥပေက္ခာသန္တီရဏ";
+          else if (aramQIndex === 1 || aramQIndex === 2) santiSpecific = "အဟိတ်ကုသလဝိပါက် ဥပေက္ခာသန္တီရဏ";
+          else santiSpecific = "အဟိတ်ကုသလဝိပါက် သောမနဿသန္တီရဏ";
+
+          const santiranaSet = (aramQIndex === 0) ? set12A : set11;
+
+          if (vara === 'Mogha') {
+              while(result.length < 17) pushNode("ဝီထိမုတ်စိတ်", "ဘဝင်", "ဟဒယဝတ္ထု-၆၃", activeBhavanga.cetasikas, aramPresent, { isBhavangaNode: true, specificName: activeBhavanga.label });
+          } else {
+              pushNode(vithiNameWithVar, "ပဉ္စဒွါရာဝဇ္ဇန်း", "ဟဒယဝတ္ထု-၆၃", set11, aram);
+              pushNode(vithiNameWithVar, pancaInfo.viññāṇa, pancaInfo.base, viññāṇaSet, aram, { specificName: viññāṇaSpecific });
+              pushNode(vithiNameWithVar, "သမ္ပဋိစ္ဆိုင်း", "ဟဒယဝတ္ထု-၆၃", set11, aram, { specificName: sampaSpecific });
+              pushNode(vithiNameWithVar, "သန္တီရဏ", "ဟဒယဝတ္ထု-၆၃", santiranaSet, aram, { specificName: santiSpecific });
+              
+              if (vara === 'Votthappana') {
+                  pushNode(vithiNameWithVar, "ဝုဋ္ဌော", "ဟဒယဝတ္ထု-၆၃", set12B, aram);
+                  pushNode(vithiNameWithVar, "ဝုဋ္ဌော", "ဟဒယဝတ္ထု-၆၃", set12B, aram);
+                  pushNode(vithiNameWithVar, "ဝုဋ္ဌော", "ဟဒယဝတ္ထု-၆၃", set12B, aram);
+                  while(result.length < 17) pushNode("ဝီထိမုတ်စိတ်", "ဘဝင်", "ဟဒယဝတ္ထု-၆၃", activeBhavanga.cetasikas, aramPresent, { isBhavangaNode: true, specificName: activeBhavanga.label });
+              } else {
+                  pushNode(vithiNameWithVar, "ဝုဋ္ဌော", "ဟဒယဝတ္ထု-၆၃", set12B, aram);
+                  const { c: jCetasikas, a: jAram } = getJavanaNodeParams(aram);
+                  for(let i=1; i<=7; i++) pushNode(vithiNameWithVar, `${toMyanmarNum(i)} - ဇော`, "ဟဒယဝတ္ထု-၆၃", jCetasikas, jAram, { isJavanaNode: true, specificName: generateJavanaName() });
+                  if (vara === 'Tadarammana') {
+                      if (selectedTada) {
+                          pushNode(vithiNameWithVar, "၁ - တဒါရုံ", "ဟဒယဝတ္ထု-၆၃", selectedTada.cetasikas, aram, { isTadarammana: true, specificName: selectedTada.label });
+                          pushNode(vithiNameWithVar, "၂ - တဒါရုံ", "ဟဒယဝတ္ထု-၆၃", selectedTada.cetasikas, aram, { isTadarammana: true, specificName: selectedTada.label });
+                      } else {
+                          if (jVedana === 'D' && bVedana === 'S') {
+                              pushNode(vithiNameWithVar, "အာဂန္တုကဘဝင်", "ဟဒယဝတ္ထု-၆၃", agantukaBhavanga.cetasikas, aram, { specificName: agantukaBhavanga.label });
+                          }
+                          while(result.length < 17) pushNode("ဝီထိမုတ်စိတ်", "ဘဝင်", "ဟဒယဝတ္ထု-၆၃", activeBhavanga.cetasikas, aramPresent, { isBhavangaNode: true, specificName: activeBhavanga.label });
+                      }
+                  } else {
+                      if (jVedana === 'D' && bVedana === 'S') {
+                          pushNode(vithiNameWithVar, "အာဂန္တုကဘဝင်", "ဟဒယဝတ္ထု-၆၃", agantukaBhavanga.cetasikas, aram, { specificName: agantukaBhavanga.label });
+                      }
+                      while(result.length < 17) pushNode("ဝီထိမုတ်စိတ်", "ဘဝင်", "ဟဒယဝတ္ထု-၆၃", activeBhavanga.cetasikas, aramPresent, { isBhavangaNode: true, specificName: activeBhavanga.label });
+                  }
+              }
+          }
+
+          const pushTadanuvattika = (vName, aramName) => {
+              pushNode("ဝီထိမုတ်စိတ်", "ဘဝင်္ဂစလန", "ဟဒယဝတ္ထု-၆၃", activeBhavanga.cetasikas, aramPresent, { isBhavangaNode: true, specificName: activeBhavanga.label });
+              pushNode("ဝီထိမုတ်စိတ်", "ဘဝင်္ဂုပစ္ဆေဒ", "ဟဒယဝတ္ထု-၆၃", activeBhavanga.cetasikas, aramPresent, { isBhavangaNode: true, specificName: activeBhavanga.label });
+              pushNode(vName, "မနောဒွါရာဝဇ္ဇန်း", "ဟဒယဝတ္ထု-၆၃", set12B, aramName);
+              const { c: jCetasikas, a: jAram } = getJavanaNodeParams(aramName);
+              for(let i=1; i<=7; i++) pushNode(vName, `${toMyanmarNum(i)} - ဇော`, "ဟဒယဝတ္ထု-၆၃", jCetasikas, jAram, { isJavanaNode: true, specificName: generateJavanaName() });
+              if (vara === 'Tadarammana') {
+                  if (selectedTada) {
+                      pushNode(vName, "၁ - တဒါရုံ", "ဟဒယဝတ္ထု-၆၃", selectedTada.cetasikas, aramName, { isTadarammana: true, specificName: selectedTada.label });
+                      pushNode(vName, "၂ - တဒါရုံ", "ဟဒယဝတ္ထု-၆၃", selectedTada.cetasikas, aramName, { isTadarammana: true, specificName: selectedTada.label });
+                  } else if (jVedana === 'D' && bVedana === 'S') {
+                      pushNode(vName, "အာဂန္တုကဘဝင်", "ဟဒယဝတ္ထု-၆၃", agantukaBhavanga.cetasikas, aramName, { specificName: agantukaBhavanga.label });
+                  }
+              } else if (jVedana === 'D' && bVedana === 'S') {
+                  pushNode(vName, "အာဂန္တုကဘဝင်", "ဟဒယဝတ္ထု-၆၃", agantukaBhavanga.cetasikas, aramName, { specificName: agantukaBhavanga.label });
+              }
+              pushNode("ဝီထိမုတ်စိတ်", "ဘဝင်", "ဟဒယဝတ္ထု-၆၃", activeBhavanga.cetasikas, aramPresent, { isBhavangaNode: true, specificName: activeBhavanga.label });
+          };
+
+          if (vara === 'Tadarammana' || vara === 'Javana') {
+              pushTadanuvattika("အတီတဂ္ဂဟဏ မနောဒွါရဝီထိ", `အတိတ် ပဉ္စဒွါရအာရုံ (${ARAM_Q_LABELS[aramQIndex]})`);
+              pushTadanuvattika("သမူဟဂ္ဂဟဏ မနောဒွါရဝီထိ", `အပေါင်းအစုအာရုံ (${ARAM_Q_LABELS[aramQIndex]})`);
+              pushTadanuvattika("အတ္ထဂ္ဂဟဏ မနောဒွါရဝီထိ", `အဓိပ္ပာယ်အာရုံ (${ARAM_Q_LABELS[aramQIndex]})`);
+              pushTadanuvattika("နာမဂ္ဂဟဏ မနောဒွါရဝီထိ", `အမည်နာမအာရုံ (${ARAM_Q_LABELS[aramQIndex]})`);
+          }
+
+      } else {
+          const isQuick = appanaVariation === 1;
+          const defaultAram = activeVithi === 'mano_kama' ? `${selectedArammana} (${ARAM_Q_LABELS[aramQIndex]})` : (activeVithi.includes('appana') && !activeVithi.includes('magga') && !activeVithi.includes('phala') && !activeVithi.includes('nirodha') ? "ကသိုဏ်းနိမိတ် စသည်" : "နိဗ္ဗာန်");
+          let vName = activeVithi === 'mano_kama' ? "ကာမဇော မနောဒွါရဝီထိ" : "အပ္ပနာဇော မနောဒွါရဝီထိ";
+
+          let prepAram = defaultAram;
+          if (activeVithi === 'appana_magga') prepAram = "သင်္ခါရအာရုံ";
+          else if (activeVithi === 'appana_nirodha') prepAram = "တတိယာရုပ္ပဝိညာဏ်";
+          else if (javanaGroupId.includes('arupa_jhana')) prepAram = ARUPA_ARAMMANA_OPTIONS[javanaSubIndex] || ARUPA_ARAMMANA_OPTIONS[0];
+          else if (javanaGroupId.startsWith('rupa_jhana') || javanaGroupId.includes('abhinna')) prepAram = RUPA_ARAMMANA_OPTIONS[rupaArammanaIndex] || "ကသိုဏ်းနိမိတ် စသည်";
+
+          const aram = prepAram; 
+
+          if (activeVithi === 'mano_kama' && manoKamaVariation === 3) {
+             pushNode("ဝီထိမုတ်စိတ်", "ဘဝင်္ဂစလန", "ဟဒယဝတ္ထု-၆၃", activeBhavanga.cetasikas, aramPresent, { isBhavangaNode: true, specificName: activeBhavanga.label });
+             pushNode("ဝီထိမုတ်စိတ်", "ဘဝင်္ဂုပစ္ဆေဒ", "ဟဒယဝတ္ထု-၆၃", activeBhavanga.cetasikas, aramPresent, { isBhavangaNode: true, specificName: activeBhavanga.label });
+             for(let i=0; i<3; i++) pushNode("ဝီထိမုတ်စိတ်", "ဘဝင်", "ဟဒယဝတ္ထု-၆၃", activeBhavanga.cetasikas, aramPresent, { isBhavangaNode: true, specificName: activeBhavanga.label });
+          } else {
+             pushNode("ဝီထိမုတ်စိတ်", "ဘဝင်္ဂစလန", "ဟဒယဝတ္ထု-၆၃", activeBhavanga.cetasikas, aramPresent, { isBhavangaNode: true, specificName: activeBhavanga.label });
+             pushNode("ဝီထိမုတ်စိတ်", "ဘဝင်္ဂုပစ္ဆေဒ", "ဟဒယဝတ္ထု-၆၃", activeBhavanga.cetasikas, aramPresent, { isBhavangaNode: true, specificName: activeBhavanga.label });
+             pushNode(vName, "မနောဒွါရာဝဇ္ဇန်း", "ဟဒယဝတ္ထု-၆၃", set12B, prepAram);
+
+             const kamaKusalaGroup = JAVANA_GROUPS.find(g => g.id === 'kama_kusala');
+             const kamaKiriyaGroup = JAVANA_GROUPS.find(g => g.id === 'kama_kiriya');
+             const kamaKusalaCetasikas = kamaKusalaGroup?.options[0]?.cetasikas || [];
+             const kamaKiriyaCetasikas = kamaKiriyaGroup?.options[0]?.cetasikas || [];
+             
+             const addAppanaProcess = (isPhala = false) => {
+                 let preCetasikas = kamaKusalaCetasikas;
+                 if (activeVithi === 'appana_phala' && javanaGroupId === 'phala_4') preCetasikas = kamaKiriyaCetasikas;
+                 if (activeVithi === 'appana_adhit') preCetasikas = kamaKiriyaCetasikas;
+                 if (javanaGroupId.includes('kiriya')) preCetasikas = kamaKiriyaCetasikas;
+                 
+                 let gotrabhuAram = prepAram;
+                 if (activeVithi === 'appana_magga') gotrabhuAram = "နိဗ္ဗာန်";
+
+                 if(!isQuick) pushNode(vName, "ပရိကံ", "ဟဒယဝတ္ထု-၆၃", preCetasikas, prepAram);
+                 pushNode(vName, "ဥပစာရ", "ဟဒယဝတ္ထု-၆၃", preCetasikas, prepAram);
+                 pushNode(vName, "အနုလုံ", "ဟဒယဝတ္ထု-၆၃", preCetasikas, prepAram);
+                 if (!isPhala) pushNode(vName, "ဂေါတြဘု", "ဟဒယဝတ္ထု-၆၃", preCetasikas, gotrabhuAram); 
+                 else pushNode(vName, "ဝေါဒါန်", "ဟဒယဝတ္ထု-၆၃", preCetasikas, prepAram);
+             };
+
+             if (activeVithi === 'mano_kama') {
+                 if (manoKamaVariation === 2) {
+                     pushNode(vName, "မနောဒွါရာဝဇ္ဇန်း", "ဟဒယဝတ္ထု-၆၃", set12B, aram);
+                     pushNode(vName, "မနောဒွါရာဝဇ္ဇန်း", "ဟဒယဝတ္ထု-၆၃", set12B, aram);
+                 } else {
+                     const { c: jCetasikas, a: jAram } = getJavanaNodeParams(aram);
+                     for(let i=1; i<=7; i++) pushNode(vName, `${toMyanmarNum(i)} - ဇော`, "ဟဒယဝတ္ထု-၆၃", jCetasikas, jAram, { isJavanaNode: true, specificName: generateJavanaName() });
+                     if (manoKamaVariation === 0) {
+                         if (selectedTada) {
+                             pushNode(vName, "၁ - တဒါရုံ", "ဟဒယဝတ္ထု-၆၃", selectedTada.cetasikas, aram, { isTadarammana: true, specificName: selectedTada.label });
+                             pushNode(vName, "၂ - တဒါရုံ", "ဟဒယဝတ္ထု-၆၃", selectedTada.cetasikas, aram, { isTadarammana: true, specificName: selectedTada.label });
+                         } else if (jVedana === 'D' && bVedana === 'S') {
+                             pushNode(vName, "အာဂန္တုကဘဝင်", "ဟဒယဝတ္ထု-၆၃", agantukaBhavanga.cetasikas, aram, { specificName: agantukaBhavanga.label });
+                         }
+                     } else if (manoKamaVariation === 1) {
+                         if (jVedana === 'D' && bVedana === 'S') {
+                             pushNode(vName, "အာဂန္တုကဘဝင်", "ဟဒယဝတ္ထု-၆၃", agantukaBhavanga.cetasikas, aram, { specificName: agantukaBhavanga.label });
+                         }
+                     }
+                 }
+             } else {
+                 const { c: appCetasikas, a: appAram } = getJavanaNodeParams(aram);
+                 const addJavana = (name, count = 1) => {
+                     for(let i=1; i<=count; i++) pushNode(vName, count > 1 ? `${toMyanmarNum(i)} - ${name}` : name, "ဟဒယဝတ္ထု-၆၃", appCetasikas, appAram, { isJavanaNode: true, specificName: generateJavanaName() });
+                 };
+
+                 switch(activeVithi) {
+                     case 'appana_jhana_1': addAppanaProcess(); addJavana("ဈာန်"); break;
+                     case 'appana_jhana_later': addAppanaProcess(); addJavana("ဈာန်", 15); break;
+                     case 'appana_abhinna': addAppanaProcess(); addJavana("အဘိညာဉ်"); break;
+                     case 'appana_magga':
+                         addAppanaProcess(); addJavana("မဂ်");
+                         for(let i=1; i<=(isQuick ? 3 : 2); i++) pushNode(vName, `${toMyanmarNum(i)} - ဖိုလ်`, "ဟဒယဝတ္ထု-၆၃", appCetasikas, appAram, { isJavanaNode: true, specificName: generateJavanaName() });
+                         
+                         for(let i=1; i<=3; i++) pushNode("ဝီထိမုတ်စိတ်", "ဘဝင်", "ဟဒယဝတ္ထု-၆၃", activeBhavanga.cetasikas, aramPresent, { isBhavangaNode: true, specificName: activeBhavanga.label });
+
+                         const isArahatta = javanaGroupId === 'magga_4'; 
+                         const reviewCount = isArahatta ? 4 : 5;
+                         const reviewTargets = ["မဂ်", "ဖိုလ်", "နိဗ္ဗာန်", "ပယ်အပ်ပြီးသော ကိလေသာ", "ကြွင်းကျန်သော ကိလေသာ"];
+                         const reviewJavanaCetasikas = isArahatta ? kamaKiriyaCetasikas : kamaKusalaCetasikas;
+
+                         for(let r=0; r<reviewCount; r++) {
+                             pushNode("ဝီထိမုတ်စိတ်", "ဘဝင်္ဂစလန", "ဟဒယဝတ္ထု-၆၃", activeBhavanga.cetasikas, aramPresent, { isBhavangaNode: true, specificName: activeBhavanga.label });
+                             pushNode("ဝီထိမုတ်စိတ်", "ဘဝင်္ဂုပစ္ဆေဒ", "ဟဒယဝတ္ထု-၆၃", activeBhavanga.cetasikas, aramPresent, { isBhavangaNode: true, specificName: activeBhavanga.label });
+                             
+                             const pVName = `ပစ္စဝေက္ခဏာ မနောဒွါရဝီထိ (${toMyanmarNum(r+1)})`;
+                             const pAram = `${reviewTargets[r]}ကို ဆင်ခြင်ခြင်း`;
+                             pushNode(pVName, "မနောဒွါရာဝဇ္ဇန်း", "ဟဒယဝတ္ထု-၆၃", set12B, pAram);
+                             for(let j=1; j<=7; j++) {
+                                 pushNode(pVName, `${toMyanmarNum(j)} - ဇော`, "ဟဒယဝတ္ထု-၆၃", reviewJavanaCetasikas, pAram); 
+                             }
+                             for(let b=1; b<=2; b++) pushNode("ဝီထိမုတ်စိတ်", "ဘဝင်", "ဟဒယဝတ္ထု-၆၃", activeBhavanga.cetasikas, aramPresent, { isBhavangaNode: true, specificName: activeBhavanga.label });
+                         }
+                         break;
+                     case 'appana_phala': addAppanaProcess(true); addJavana("ဖိုလ်", 15); break;
+                     case 'appana_nirodha':
+                         addAppanaProcess(); 
+                         pushNode(vName, "၁ - နေဝသညာနာသညာယတန", "ဟဒယဝတ္ထု-၆၃", arupaBase, "တတိယာရုပ္ပဝိညာဏ်");
+                         pushNode(vName, "၂ - နေဝသညာနာသညာယတန", "ဟဒယဝတ္ထု-၆၃", arupaBase, "တတိယာရုပ္ပဝိညာဏ်");
+                         for(let i=1; i<=7; i++) {
+                             pushNode(vName, "နိရောဓသမာပတ်", "မရှိ", [], "မရှိ", { specificName: "နိရောဓသမာပတ် (အချိန်ကြာမြင့်စွာ ဝင်စားခြင်း)" }); 
+                         }
+                         pushNode(vName, "ဖိုလ်", "ဟဒယဝတ္ထု-၆၃", getLokuttaraCetasikas(lokuttaraJhanaIndex), "နိဗ္ဗာန်", { isJavanaNode: true, specificName: generateJavanaName() }); 
+                         break;
+                     case 'appana_adhit': addJavana("မဟာကိရိယာ", 5); break;
+                 }
+             }
+          }
+      }
+      
+      if (activePhase === 'pavatti' && result.length > 0) {
+          for(let i=0; i<4; i++) {
+              pushNode("ဝီထိမုတ်စိတ်", "ဘဝင်", "ဟဒယဝတ္ထု-၆၃", activeBhavanga.cetasikas, aramPresent, { isBhavangaNode: true, specificName: activeBhavanga.label });
+          }
+      }
+      
+    } else if (activePhase === 'cuti') {
+      
+      buildAvijjaSeq('present', aramPresent);
+
+      // Add Sankhara Vithi in Present Life
+      buildSankharaSeq('present', aramPresent);
+      
+      buildMaranasannaSeq(cutiVariation, 'present', aramFuture, aramPresent);
+
+      const lobhaOptions = getFilteredJavanaOptions('akusala_lobha', activePuggalaId);
+      const lobhaJavana = lobhaOptions[0] || { cetasikas: [], label: "ဇော" };
+
+      pushNode("နောင်ဘဝ ဝီထိမုတ်", "ပဋိသန္ဓေ", "ဟဒယဝတ္ထု-၃၀", activeBhavanga.cetasikas, aramFuture, { promptType: 'future_life', isLifeDividerBefore: true, isBhavangaNode: true, specificName: activeBhavanga.label });
+      for(let i=1; i<=14; i++) {
+        pushNode("နောင်ဘဝ ဝီထိမုတ်", `ဘဝင်`, "ဟဒယဝတ္ထု-၄၆", activeBhavanga.cetasikas, aramFuture, { isBhavangaNode: true, specificName: activeBhavanga.label });
+      }
+      pushNode("နောင်ဘဝ ဝီထိမုတ်", "ဘဝင်္ဂစလန", "ဟဒယဝတ္ထု-၄၆", activeBhavanga.cetasikas, aramFuture, { isBhavangaNode: true, specificName: activeBhavanga.label });
+      pushNode("နောင်ဘဝ ဝီထိမုတ်", "ဘဝင်္ဂုပစ္ဆေဒ", "ဟဒယဝတ္ထု-၄၆", activeBhavanga.cetasikas, aramFuture, { isBhavangaNode: true, specificName: activeBhavanga.label });
+      pushNode("နောင်ဘဝ ဘဝနိကန္တိ", "မနောဒွါရာဝဇ္ဇန်း", "ဟဒယဝတ္ထု-၄၆", set12B, "အဘိနဝဘဝ");
+      for(let i=1; i<=7; i++) {
+        pushNode("နောင်ဘဝ ဘဝနိကန္တိ", `${toMyanmarNum(i)} - ဇော`, "ဟဒယဝတ္ထု-၄၆", lobhaJavana.cetasikas, "အဘိနဝဘဝ", { isJavanaNode: true, specificName: lobhaJavana.label });
+      }
+      for(let i=1; i<=3; i++) {
+        pushNode("နောင်ဘဝ ဝီထိမုတ်", `ဘဝင်`, "ဟဒယဝတ္ထု-၄၆", activeBhavanga.cetasikas, aramFuture, { isBhavangaNode: true, specificName: activeBhavanga.label });
+      }
+    }
+
+    if (activePhase !== 'cuti' && activePhase !== 'patisandhi') {
+        let currentNum = 1;
+        result.forEach(node => { node.displayNum = toMyanmarNum(currentNum++); });
+    } else if (activePhase === 'patisandhi' || activePhase === 'cuti') {
+        let currentNum = 1;
+        let foundPatisandhi = false;
+        result.forEach(node => {
+            if (node.name === 'ပဋိသန္ဓေ') { foundPatisandhi = true; currentNum = 1; }
+            if (foundPatisandhi) { node.displayNum = toMyanmarNum(currentNum++); }
+            else if (!node.displayNum) { node.displayNum = toMyanmarNum(currentNum++); }
+        });
+    }
+
+    return result;
+  }, [activePhase, activeVithi, availableJavanaGroups, currentBhavangaGroup, javanaGroupId, javanaSubIndex, bhavangaGroupId, bhavangaSubIndex, selectedArammana, pancaDvaraVariation, manoKamaVariation, appanaVariation, kayaArammanaIndex, cutiVariation, pastCutiVariation, aramQIndex, tadaCycleIndex, customArammanas, lokuttaraJhanaIndex, rupaArammanaIndex, availableTadarammanas, activePuggalaId, avijjaStateByLife, sankharaStateByLife, currentLifeOffset, selectedNidana, nidanaCycleIndex]);
+
+  useEffect(() => {
+    if (paticcaStep === 3 && paticcaSavedState && paticcaSavedState.phase === activePhase) {
+        return;
+    }
+    if (activePhase === 'patisandhi') setCurrentIndex(vithiData.findIndex(n => n.name === 'ပဋိသန္ဓေ') || 0);
+    else if (activePhase === 'cuti') setCurrentIndex(vithiData.findIndex(n => n.name === 'စုတိ') || 0);
+    else setCurrentIndex(0);
+  }, [activePhase]);
+
+  useEffect(() => {
+      if (paticcaStep === 2) {
+          const targetIdx = vithiData.findIndex(n => n.isAvijjaNode);
+          if (targetIdx !== -1) setCurrentIndex(targetIdx);
+      } else if (paticcaStep === 2) {
+          const targetIdx = vithiData.findIndex(n => n.isSankharaNode);
+          if (targetIdx !== -1) setCurrentIndex(targetIdx);
+      } else if (paticcaStep === 3) {
+          if (paticcaSavedState) {
+              if (activePhase !== paticcaSavedState.phase) {
+                  setActivePhase(paticcaSavedState.phase);
+              }
+              const timer = setTimeout(() => {
+                  setCurrentIndex(paticcaSavedState.index);
+              }, 100);
+              return () => clearTimeout(timer);
+          }
+      }
+  }, [paticcaStep]);
+
+  useEffect(() => {
+      if (paticcaStep === 1) {
+          const targetIdx = vithiData.findIndex(n => n.isAvijjaNode);
+          if (targetIdx !== -1) setCurrentIndex(targetIdx);
+      } else if (paticcaStep === 2) {
+          const targetIdx = vithiData.findIndex(n => n.isSankharaNode);
+          if (targetIdx !== -1) setCurrentIndex(targetIdx);
+      }
+  }, [paticcaStep, vithiData]);
+  useEffect(() => {
+    if (paticcaStep === 6) {
+        const savedIdx = paticcaSavedState?.index ?? currentIndex;
+        let foundIdx = -1;
+        for (let i = savedIdx - 1; i >= 0; i--) {
+            if (vithiData[i]?.isBhavangaNode) { foundIdx = i; break; }
+        }
+        if (foundIdx !== -1) setCurrentIndex(foundIdx);
+    }
+}, [paticcaStep, vithiData]);
+useEffect(() => {
+    if (paticcaStep === 10) {
+        const savedIdx = paticcaSavedState?.index ?? currentIndex;
+        const lockedName = paticcaLockedNodeData?.name || "";
+
+        const isBhavangaOrVithimutta = 
+            lockedName === "ဘဝင်" || lockedName === "ဘဝင်္ဂစလန" ||
+            lockedName === "ဘဝင်္ဂုပစ္ဆေဒ" || lockedName === "အတီတဘဝင်" ||
+            lockedName === "စုတိ" || lockedName === "ပဋိသန္ဓေ";
+
+        let foundIdx = -1;
+        if (isBhavangaOrVithimutta) {
+            // ဘဝင်/စုတိ/ပဋိသန္ဓေ → ရှေ့ကပ်ရပ်စိတ် (မည်သည့် type မဆို)
+            if (savedIdx - 1 >= 0) foundIdx = savedIdx - 1;
+        } else {
+            // Non-bhavanga → ရှေ့ non-bhavanga ရှာမည် (ရှိပြီးသား logic)
+            for (let i = savedIdx - 1; i >= 0; i--) {
+                if (!vithiData[i]?.isBhavangaNode) { foundIdx = i; break; }
+            }
+        }
+        if (foundIdx !== -1) setCurrentIndex(foundIdx);
+    }
+}, [paticcaStep, vithiData]);
+useEffect(() => {
+    const VIPAKA_TYPES = ['ပဋိသန္ဓေ','ဘဝင်','စုတိ','စက္ခုဝိညာဏ်','သောတဝိညာဏ်','ဃာနဝိညာဏ်','ဇိဝှါဝိညာဏ်','ကာယဝိညာဏ်','သမ္ပဋိစ္ဆိုင်း','သန္တီရဏ','တဒါရုံ'];
+    const isKammaVinnana = selectedNidana === 2 && nidana2SubMode === 'kamma';
+
+    if ((selectedNidana === 1 || isKammaVinnana) && nidanaViewMode === 'cause') {
+        const idx = vithiData.findIndex(n => n.isSankharaNode);
+        if (idx !== -1) setCurrentIndex(idx);
+        else if (activePhase !== 'patisandhi') setActivePhase('patisandhi');
+    }
+    if ((selectedNidana === 1 || isKammaVinnana) && nidanaViewMode === 'effect') {
+        const curType = VIPAKA_TYPES[nidanaCycleIndex % VIPAKA_TYPES.length];
+        const idx = vithiData.findIndex(n => n.name === curType || n.name.includes(curType));
+        if (idx !== -1) setCurrentIndex(idx);
+        if (selectedNidana === 2 && nidana2SubMode === 'sahajata') {
+        const VIPAKA_TYPES2 = ['ပဋိသန္ဓေ','ဘဝင်','စုတိ','စက္ခုဝိညာဏ်','သောတဝိညာဏ်','ဃာနဝိညာဏ်','ဇိဝှါဝိညာဏ်','ကာယဝိညာဏ်','သမ္ပဋိစ္ဆိုင်း','သန္တီရဏ','တဒါရုံ'];
+        const curType2 = VIPAKA_TYPES2[nidanaCycleIndex % VIPAKA_TYPES2.length];
+        const idx2 = vithiData.findIndex(n => n.name === curType2 || n.name.includes(curType2));
+        if (idx2 !== -1) setCurrentIndex(idx2);
+    }
+    }
+}, [activePhase, activeVithi, vithiData.length, nidanaCycleIndex, nidanaViewMode, nidana2SubMode, selectedNidana]);
+useEffect(() => {
+    const isSah = selectedNidana === 2 && nidana2SubMode === 'sahajata';
+    const isNM = selectedNidana === 3 && nidana3SubMode === 'nama_mana';
+    if (isSah || isNM) {
+        const SAHCYC = ['ပဋိသန္ဓေ','ဘဝင်','စုတိ','စက္ခုဝိညာဏ်','သောတဝိညာဏ်','ဃာနဝိညာဏ်','ဇိဝှါဝိညာဏ်','ကာယဝိညာဏ်','သမ္ပဋိစ္ဆိုင်း','သန္တီရဏ','တဒါရုံ'];
+        const curNode = vithiData[currentIndex];
+        if (curNode) {
+            const fi = SAHCYC.findIndex(t => curNode.name === t);
+            if (fi !== -1 && fi !== nidanaCycleIndex) setNidanaCycleIndex(fi);
+        }
+    }
+}, [currentIndex, nidana2SubMode, nidana3SubMode, selectedNidana, isPlaying]);
+
+useEffect(() => {
+    const isSah2 = selectedNidana === 2 && nidana2SubMode === 'sahajata';
+    const isNM2 = selectedNidana === 3 && nidana3SubMode === 'nama_mana';
+    if ((isSah2 || isNM2) && !isPlaying) {
+    const SAHCYC = ['ပဋိသန္ဓေ','ဘဝင်','စုတိ','စက္ခုဝိညာဏ်','သောတဝိညာဏ်','ဃာနဝိညာဏ်','ဇိဝှါဝိညာဏ်','ကာယဝိညာဏ်','သမ္ပဋိစ္ဆိုင်း','သန္တီရဏ','တဒါရုံ'];
+    const targetType = SAHCYC[nidanaCycleIndex % SAHCYC.length];
+    let targetIdx = -1;
+    if (targetType === 'ဘဝင်') {
+        const patIdx = vithiData.findIndex(n => n.name === 'ပဋိသန္ဓေ');
+        targetIdx = vithiData.findIndex((n, i) => i > patIdx && n.isBhavangaNode && n.name === 'ဘဝင်');
+    } else {
+        targetIdx = vithiData.findIndex(n => n.name === targetType || n.name.includes(targetType));
+    }
+    if (targetIdx !== -1 && targetIdx !== currentIndex) setCurrentIndex(targetIdx);
+}
+}, [nidanaCycleIndex, nidana2SubMode, nidana3SubMode, selectedNidana, vithiData.length]);
+useEffect(() => {
+      if (paticcaStep === 8 || paticcaStep === 9) {
+          const savedIdx = paticcaSavedState?.index ?? currentIndex;
+          let targetName = "";
+          
+          if (paticcaStep === 8) {
+              // မနသိကာရ ရှာရန်
+              if (["စက္ခုဝိညာဏ်", "သောတဝိညာဏ်", "ဃာနဝိညာဏ်", "ဇိဝှါဝိညာဏ်", "ကာယဝိညာဏ်"].some(v => vithiData[savedIdx]?.name.includes(v))) {
+                  targetName = "ပဉ္စဒွါရာဝဇ္ဇန်း";
+              } else {
+                  const vName = vithiData[savedIdx]?.vithi || "";
+                  if (vName.includes("မနောဒွါရ") || vName.includes("အပ္ပနာ")) targetName = "မနောဒွါရာဝဇ္ဇန်း";
+                  else targetName = "ဝုဋ္ဌော";
+              }
+          } else if (paticcaStep === 9) {
+              // ပဉ္စဝိညာဏ် (သမ္ဖဿ) ရှာရန်
+              targetName = "ဝိညာဏ်"; // ယာယီအားဖြင့် ဝိညာဏ်ပါသောစိတ်ကို ရှာရန်
+          }
+
+          let foundIdx = -1;
+          for (let i = savedIdx - 1; i >= 0; i--) {
+              if (vithiData[i]?.name.includes(targetName)) {
+                  // ပဉ္စဝိညာဏ်ရှာရာတွင် မနောဝိညာဏ်များ မပါစေရန် စစ်ဆေးခြင်း
+                  if (paticcaStep === 9 && !["စက္ခု", "သောတ", "ဃာန", "ဇိဝှါ", "ကာယ"].some(v => vithiData[i]?.name.includes(v))) continue;
+                  foundIdx = i; break; 
+              }
+          }
+          if (foundIdx !== -1) setCurrentIndex(foundIdx);
+      }
+  }, [paticcaStep, vithiData]);
+  useEffect(() => {
+    if (selectedNidana !== 5 && selectedNidana !== 6) return;
+    if (activePhase !== 'pavatti') {
+  if (!(selectedNidana === 6 && nidana5SubMode === 'effect')) setNidanaCycleIndex(5);
+  return;
+}
+    const m = {'cakkhu':0,'sota':1,'ghana':2,'jivha':3,'kaya':4};
+    setNidanaCycleIndex(m[activeVithi] !== undefined ? m[activeVithi] : 5);
+  }, [activeVithi, selectedNidana, activePhase, nidana5SubMode]);
+  useEffect(() => {
+  if (selectedNidana !== 6) return;
+  if (nidana5SubMode === 'cause' && activePhase === 'pavatti') {
+    const jIdx = vithiData.findIndex(n => n.isJavanaNode);
+    if (jIdx !== -1) setCurrentIndex(jIdx);
+  } else if (nidana5SubMode === 'effect') {
+    if (activePhase !== 'cuti') { setActivePhase('cuti'); return; }
+    const aIdx = vithiData.findIndex(n => n.isAvijjaNode);
+    if (aIdx !== -1) setCurrentIndex(aIdx);
+  }
+}, [selectedNidana, nidana5SubMode, nidanaCycleIndex, activePhase, vithiData.length]);
+useEffect(() => {
+  if (selectedNidana !== 7) return;
+  if (activePhase !== 'cuti') { setActivePhase('cuti'); return; }
+  const avijjaIdx = nidanaViewMode === 'cause' ? 0 : 1;
+  const idx = vithiData.findIndex(n => n.isAvijjaNode && n.avijjaIdx === avijjaIdx);
+  if (idx !== -1) setCurrentIndex(idx);
+}, [selectedNidana, nidanaViewMode, activePhase, vithiData.length]);
+useEffect(() => {
+    if (selectedNidana !== 10 || nidanaViewMode !== 'effect') return;
+    const N10_E = ["ဇရာမရဏ","သောက","ပရိဒေဝ","ဒုက္ခ","ဒေါမနဿ","ဥပါယာသ"];
+    const eff = N10_E[nidana10EffectIdx % 6];
+    if (eff === 'ဇရာမရဏ') {
+        const idx = vithiData.findIndex(n => n.name === 'စုတိ');
+        if (idx !== -1) setCurrentIndex(idx);
+    } else if (['သောက','ပရိဒေဝ','ဒေါမနဿ','ဥပါယာသ'].includes(eff)) {
+        const idx = vithiData.findIndex(n => n.name === 'မနောဒွါရာဝဇ္ဇန်း');
+        if (idx !== -1) setCurrentIndex(idx);
+    } else if (eff === 'ဒုက္ခ') {
+        const idx = vithiData.findIndex(n => n.name.includes('ကာယဝိညာဏ်'));
+        if (idx !== -1) setCurrentIndex(idx);
+    }
+}, [selectedNidana, nidanaViewMode, nidana10EffectIdx, activePhase, activeVithi, vithiData.length]);
+useEffect(() => {
+    if (selectedNidana !== 10 || nidanaViewMode !== 'cause' || activePhase !== 'cuti') return;
+    const allPat = vithiData.reduce((acc,n,i) => n.name==='ပဋိသန္ဓေ' ? [...acc,i] : acc, []);
+    const lastPat = allPat[allPat.length-1];
+    if (lastPat !== undefined) setCurrentIndex(lastPat);
+}, [selectedNidana, nidanaViewMode, activePhase, vithiData.length]);
+useEffect(() => {
+  if (selectedNidana !== 5 || activePhase !== 'pavatti' || nidana5SubMode !== 'cause') return;
+  const N5_SRC2 = ['စက္ခုဝိညာဏ်','သောတဝိညာဏ်','ဃာနဝိညာဏ်','ဇိဝှါဝိညာဏ်','ကာယဝိညာဏ်','ဘဝင်္ဂုပစ္ဆေဒ'];
+  const tIdx = vithiData.findIndex(n => n.name.includes(N5_SRC2[nidanaCycleIndex % 6]) || n.name === N5_SRC2[nidanaCycleIndex % 6]);
+  if (tIdx !== -1) setCurrentIndex(tIdx);
+}, [selectedNidana, activePhase, nidana5SubMode, nidanaCycleIndex, vithiData]);
+useEffect(() => {
+    let interval;
+    if (isPlaying) {
+      interval = setInterval(() => {
+        setCurrentIndex((prev) => {
+          if (prev >= vithiData.length - 1) { setIsPlaying(false); return prev; }
+          return prev + 1;
+        });
+      }, 1500);
+    }
+    return () => clearInterval(interval);
+}, [isPlaying, vithiData.length]);
+  useEffect(() => {
+    if (timelineRef.current && timelineRef.current.children) {
+      const nodes = Array.from(timelineRef.current.querySelectorAll('.citta-node'));
+      if (nodes[currentIndex]) nodes[currentIndex].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    }
+  }, [currentIndex]);
+useEffect(() => {
+    const _VT = ['ပဋိသန္ဓေ','ဘဝင်','စုတိ','စက္ခုဝိညာဏ်','သောတဝိညာဏ်','ဃာနဝိညာဏ်','ဇိဝှါဝိညာဏ်','ကာယဝိညာဏ်','သမ္ပဋိစ္ဆိုင်း','သန္တီရဏ','တဒါရုံ'];
+    const cur = _VT[nidanaCycleIndex % _VT.length];
+    const isActive = (selectedNidana === 1 || (selectedNidana === 2 && nidana2SubMode === 'kamma')) && nidanaViewMode === 'effect' && cur === 'ဘဝင်';
+    if (!isActive || !timelineRef.current) return;
+    const patIdx = vithiData.findIndex(n => n.name === 'ပဋိသန္ဓေ');
+    const targetIdx = vithiData.findIndex((n, i) => {
+        if (!n.isBhavangaNode) return false;
+        if (activePhase === 'patisandhi') return patIdx !== -1 && i >= patIdx;
+        if (activePhase === 'cuti') return patIdx === -1 || i < patIdx;
+        return true;
+    });
+    if (targetIdx !== -1) setCurrentIndex(targetIdx);
+}, [selectedNidana, nidana2SubMode, nidanaViewMode, nidanaCycleIndex, activePhase, vithiData.length]);
+  const activeNode = vithiData[currentIndex] || vithiData[0] || { name: "", cetasikas: [], count: 0, cetasikaOnlyCount: 0 };
+
+  const vipakaKeywords = ["ဝိပါက်", "ပဋိသန္ဓေ", "ဘဝင်", "စုတိ", "သမ္ပဋိစ္ဆိုင်း", "သန္တီရဏ", "တဒါရုံ",
+    "စက္ခုဝိညာဏ်","သောတဝိညာဏ်","ဃာနဝိညာဏ်","ဇိဝှါဝိညာဏ်","ကာယဝိညာဏ်"];
+  const paticcaNodeName = paticcaLockedNodeData?.name || activeNode.name;
+const isVipaka = [2,3,4,5,6].includes(paticcaKhandha) && vipakaKeywords.some(k => paticcaNodeName.includes(k));
+
+  // --- NEW: Calculate Valid Rupas based on Active Node ---
+  const validRupas = useMemo(() => {
+      const rupas = { kammaja: true, cittaja: true, utuja: true, aharaja: true };
+      const name = activeNode?.name || "";
+      
+      // အရူပဘုံ (ရုပ်မရှိပါ)
+      if (activeNode?.base === "မရှိ" && !name.includes("နိရောဓ")) {
+          return { kammaja: false, cittaja: false, utuja: false, aharaja: false };
+      }
+
+      // စိတ္တဇရုပ် မဖြစ်သော စိတ်များ (ပဋိသန္ဓေ၊ ဒွိပဉ္စဝိညာဏ် ၁၀၊ ရဟန္တာစုတိ)
+      if (name.includes("ပဋိသန္ဓေ")) rupas.cittaja = false;
+      if (["စက္ခုဝိညာဏ်", "သောတဝိညာဏ်", "ဃာနဝိညာဏ်", "ဇိဝှါဝိညာဏ်", "ကာယဝိညာဏ်"].some(v => name.includes(v))) rupas.cittaja = false;
+      if (name === "စုတိ" && activePuggalaId.includes('arahant')) rupas.cittaja = false;
+
+      // အာဟာရဇရုပ် မဖြစ်သော အချိန် (ပဋိသန္ဓေနှင့် ရှေးဦးဘဝင်များ)
+      if (activePhase === 'patisandhi' && name.includes("ဘဝင်")) {
+    rupas.aharaja = false;
+}
+      // နောင်ဘဝ ပဋိသန္ဓေ (စုတိ Phase ၏ အဆုံးတွင်)
+      if (activePhase === 'cuti' && name.includes("ပဋိသန္ဓေ")) {
+          rupas.aharaja = false;
+      }
+
+      return rupas;
+  }, [activeNode, activePhase, activePuggalaId]);
+
+
+  const cittaGroup = (activeNode.cetasikas || []).filter(c => c === "အသိစိတ်");
+  const vedanaGroup = (activeNode.cetasikas || []).filter(c => c.includes("ဝေဒနာ"));
+  const sannaGroup = (activeNode.cetasikas || []).filter(c => c === "သညာ");
+  const sankharaPrimary = (activeNode.cetasikas || []).filter(c => c === "စေတနာ");
+  const sankharaSecondary = (activeNode.cetasikas || []).filter(c => c !== "အသိစိတ်" && !c.includes("ဝေဒနာ") && c !== "သညာ" && c !== "စေတနာ");
+
+  const CetasikaBtn = ({ cName, label }) => (
+      <button 
+        onClick={() => setSelectedCetasika(cName)}
+        onMouseEnter={() => handleMouseEnter(cName)}
+        onMouseLeave={handleMouseLeave}
+        className={`px-2 py-1 md:px-2.5 md:py-1 rounded-lg text-[10px] md:text-[11px] transition-all duration-200 border cursor-pointer hover:-translate-y-0.5 ${getCetasikaStyle(cName)}`}
+      >
+        {label || cName}
+      </button>
+  );
+
+  useEffect(() => {
+      if (activeNode?.specificName) {
+          setToastMessage(activeNode.specificName.replace(/^[၀-၉]+။\s*/, ''));
+          const timer = setTimeout(() => setToastMessage(""), 2000);
+          return () => clearTimeout(timer);
+      } else {
+          setToastMessage("");
+      }
+  }, [currentIndex, activeNode, tadaCycleIndex, lokuttaraJhanaIndex, javanaSubIndex, bhavangaSubIndex, aramQIndex, avijjaState, sankharaState]);
+
+  const handleNext = () => setCurrentIndex(p => Math.min(vithiData.length - 1, p + 1));
+  const handlePrev = () => setCurrentIndex(p => Math.max(0, p - 1));
+  const handleReset = () => {
+    if (activePhase === 'patisandhi') setCurrentIndex(vithiData.findIndex(n => n.name === 'ပဋိသန္ဓေ') || 0);
+    else if (activePhase === 'cuti') setCurrentIndex(vithiData.findIndex(n => n.name === 'စုတိ') || 0);
+    else setCurrentIndex(0);
+    setIsPlaying(false);
+  };
+  const togglePlay = () => setIsPlaying(!isPlaying);
+
+  const handleSaveArammana = () => {
+      const aramOffset = promptModal.type === 'past_life' ? currentLifeOffset - 1 : promptModal.type === 'future_life' ? currentLifeOffset + 1 : currentLifeOffset;
+      if (lifeLocks[aramOffset]) { setPromptModal({isOpen: false, type: '', value: ''}); return; }
+      const newArammanas = { ...customArammanas, [promptModal.type]: promptModal.value };
+    setCustomArammanas(newArammanas);
+    setPromptModal({isOpen: false, type: '', value: ''});
+  };
+
+  const currentJavanaGroup = availableJavanaGroups.find(g => g.id === javanaGroupId) || availableJavanaGroups[0] || { options: [] };
+  let modalDisplayInfo = null;
+  if (selectedCetasika === "အသိစိတ်") modalDisplayInfo = getActiveCittaInfo(activeNode.name, currentJavanaGroup.options?.[javanaSubIndex]?.id);
+  else if (selectedCetasika) modalDisplayInfo = CETASIKA_DICT[selectedCetasika];
+  if (modalDisplayInfo && selectedCetasika === "အသိစိတ်" && activeNode.specificName) {
+      modalDisplayInfo = { ...modalDisplayInfo, name: activeNode.specificName };
+  }
+
+  const rupaBaseData = selectedBaseForModal ? getRupasForBase(selectedBaseForModal) : null;
+  const isSpecialArammana = activeNode.aramana && activeNode.aramana !== "အတိတ်ဘဝ မရဏသန္နဇောအာရုံ" && activeNode.aramana !== "နောင်ဘဝ အတိတ်ဘဝ မရဏသန္နဇောအာရုံ" && activeNode.aramana !== "မရှိ" && !activeNode.aramana.includes("ကံ");
+  const isSpecialBase = activeNode.base && activeNode.base !== "မရှိ" && !activeNode.base.includes("ဟဒယ");
+
+  let javanaSelectContent;
+  if (activePhase === 'patisandhi') {
+      javanaSelectContent = <option value="akusala_lobha">လောဘမူ ဒိဋ္ဌိဂတသမ္ပယုတ်</option>;
+  } else {
+      javanaSelectContent = availableJavanaGroups.map(g => (
+          <option key={g.id} value={g.id}>{g.label}</option>
+      ));
+  }
+
+  let activePuggalaLabel = "ပုဂ္ဂိုလ် ရွေးရန်";
+  for(let g of PUGGALA_LIST) {
+      const p = g.options.find(o => o.id === activePuggalaId);
+      if(p) { activePuggalaLabel = p.label; break; }
+  }
+
+  let activeBhavangaLabel = "ဘဝင်စိတ် ရွေးရန်";
+  for(let g of VIPAKA_GROUPS) {
+      if(g.id === bhavangaGroupId) {
+          activeBhavangaLabel = g.options[bhavangaSubIndex]?.label || "ဘဝင်စိတ်";
+          break;
+      }
+  }
+
+  let utujaCauseText = "စတုဇရုပ်များရှိ တေဇောဓာတ်(ဥတု)";
+  if (activeNode.name.includes("ပဋိသန္ဓေ")) {
+      utujaCauseText = "ကမ္မဇရုပ်များရှိ တေဇောဓာတ်(ဥတု)";
+  } else if (activePhase === 'patisandhi' && activeNode.name.includes("ဘဝင်")) {
+      utujaCauseText = "တိဇရုပ်များရှိ တေဇောဓာတ်(ဥတု)";
+  }
+
+  const isPaticcaActive = paticcaStep > 0;
+const showRupaColumn = true;
+const rupaNode = (isPaticcaActive && paticcaKhandha === 1 && paticcaLockedNodeData)
+    ? paticcaLockedNodeData
+    : activeNode;
+  const isRupaHighlighted = khandhaViewIndex === 1 || isPaticcaActive;
+  const preSamphassaLabel =
+    ["ဘဝင်","ဘဝင်္ဂစလန","ဘဝင်္ဂုပစ္ဆေဒ","အတီတဘဝင်","စုတိ","ပဋိသန္ဓေ"].some(n =>
+        (paticcaLockedNodeData?.name || activeNode.name) === n)
+    ? "ရှေးရှေးဘဝင်မနောသမ္ဖဿ"
+    : "ရှေးရှေးမနောသမ္ဖဿ";
+  const rupaBoxStyle = (isPaticcaActive && paticcaKhandha === 1)
+      ? 'ring-[3px] ring-amber-500 bg-amber-50 shadow-2xl border-transparent z-10 scale-[1.03]' 
+      : (khandhaViewIndex === 1 ? 'ring-[3px] ring-indigo-500 bg-indigo-50 shadow-xl border-transparent z-10 scale-[1.02]' : 'shadow-sm bg-white border-slate-200');
+
+  const getRupaBadgeStyle = (rupaType) => {
+      let baseStyle = "text-[8px] md:text-[9px] px-2 py-1 rounded font-bold border transition-all duration-500 ";
+
+      // Invalid Rupas များကို မှိန်ထားရန်
+      let isValid = true;
+      if (rupaType === "ကမ္မဇရုပ်") isValid = validRupas.kammaja;
+      if (rupaType === "စိတ္တဇရုပ်") isValid = validRupas.cittaja;
+      if (rupaType === "ဥတုဇရုပ်") isValid = validRupas.utuja;
+      if (rupaType === "အာဟာရဇရုပ်") isValid = validRupas.aharaja;
+
+      if (!isValid) {
+          return baseStyle + "bg-slate-100 text-slate-300 border-slate-200 opacity-40 line-through";
+      }
+
+if (paticcaKhandha !== 1 && paticcaStep > 0) {
+          if (rupaType === "ကမ္မဇရုပ်") return baseStyle + "bg-emerald-100 text-emerald-800 border-emerald-200 shadow-sm";
+          if (rupaType === "စိတ္တဇရုပ်") return baseStyle + "bg-blue-100 text-blue-800 border-blue-200 shadow-sm";
+          if (rupaType === "ဥတုဇရုပ်") return baseStyle + "bg-orange-100 text-orange-800 border-orange-200 shadow-sm";
+          if (rupaType === "အာဟာရဇရုပ်") return baseStyle + "bg-rose-100 text-rose-800 border-rose-200 shadow-sm";
+      }
+      if (paticcaStep === 0) {
+          if (rupaType === "ကမ္မဇရုပ်") return baseStyle + "bg-emerald-100 text-emerald-800 border-emerald-200 shadow-sm";
+          if (rupaType === "စိတ္တဇရုပ်") return baseStyle + "bg-blue-100 text-blue-800 border-blue-200 shadow-sm";
+          if (rupaType === "ဥတုဇရုပ်") return baseStyle + "bg-orange-100 text-orange-800 border-orange-200 shadow-sm";
+          if (rupaType === "အာဟာရဇရုပ်") return baseStyle + "bg-rose-100 text-rose-800 border-rose-200 shadow-sm";
+      }
+
+      let isTarget = false;
+      let isCause = false;
+
+      if (paticcaStep === 1 && rupaType === "ကမ္မဇရုပ်") isTarget = true;
+      if (paticcaStep === 2 && rupaType === "ကမ္မဇရုပ်") isTarget = true;
+      if (paticcaStep === 3 && rupaType === "စိတ္တဇရုပ်") isTarget = true;
+      
+      if (paticcaStep === 4) {
+          isCause = true;
+          if (rupaType === "ဥတုဇရုပ်") { isTarget = true; isCause = false; }
+      }
+      if (paticcaStep === 5) {
+          isCause = true;
+          if (rupaType === "အာဟာရဇရုပ်") { isTarget = true; isCause = false; }
+      }
+
+      if (isTarget) {
+          if (rupaType === "ကမ္မဇရုပ်") return baseStyle + "bg-emerald-500 text-white ring-[3px] ring-offset-1 ring-emerald-300 scale-[1.15] animate-pulse shadow-lg z-10";
+          if (rupaType === "စိတ္တဇရုပ်") return baseStyle + "bg-blue-500 text-white ring-[3px] ring-offset-1 ring-blue-300 scale-[1.15] animate-pulse shadow-lg z-10";
+          if (rupaType === "ဥတုဇရုပ်") return baseStyle + "bg-orange-500 text-white ring-[3px] ring-offset-1 ring-orange-300 scale-[1.15] animate-pulse shadow-lg z-10";
+          if (rupaType === "အာဟာရဇရုပ်") return baseStyle + "bg-rose-500 text-white ring-[3px] ring-offset-1 ring-rose-300 scale-[1.15] animate-pulse shadow-lg z-10";
+      }
+      
+      if (isCause) {
+          return baseStyle + "bg-slate-100 text-slate-600 border-dashed border-slate-400 opacity-80 shadow-sm";
+      }
+      
+      return baseStyle + "bg-slate-100 text-slate-400 border-slate-200 opacity-40 grayscale";
+  };
+const displayLifeOffset = (() => {
+    const dIdx = vithiData.findIndex(n => n.isLifeDividerBefore);
+    if (dIdx !== -1) {
+        if (activePhase === 'patisandhi' && currentIndex < dIdx) return currentLifeOffset - 1;
+        if (activePhase === 'cuti' && currentIndex >= dIdx) return currentLifeOffset + 1;
+    }
+    return currentLifeOffset;
+})();
+  return (
+    <div className="h-screen w-screen overflow-hidden bg-slate-100 p-2 md:p-4 flex justify-center items-center font-sans text-slate-800">
+      <div className="max-w-6xl w-full h-full flex flex-col bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-200 relative">
+        
+        {/* Full Screen Overlay for Dropdowns */}
+        {(showPuggalaMenu || showBhavangaMenu) && (
+            <div className="fixed inset-0 z-40" onClick={() => { setShowPuggalaMenu(false); setShowBhavangaMenu(false); }}></div>
+        )}
+
+        {/* --- Life Timeline Header --- */}
+        <div className="shrink-0 bg-slate-900 px-4 py-2 flex justify-between items-center text-slate-300 z-30">
+           <button onClick={() => {setCurrentLifeOffset(p=>p-1); setCurrentIndex(0); setIsPlaying(false);}} className="hover:text-white flex gap-1 items-center px-2 py-1 bg-slate-800 rounded hover:bg-slate-700 transition">
+             <ChevronLeft className="w-4 h-4"/> <span className="text-xs">{getLifeName(displayLifeOffset - 1)}</span>
+           </button>
+           <div className="flex items-center gap-2 relative">
+               <div className="font-black text-emerald-400 text-base md:text-lg tracking-wide px-2 text-center">
+                   {getLifeName(displayLifeOffset)}
+               </div>
+               <button 
+                  onClick={() => toggleLifeLock(currentLifeOffset)} 
+                  className={`p-1.5 rounded-md transition-colors ${isLifeLocked ? 'text-rose-400 bg-rose-900/50 hover:bg-rose-900' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
+                  title={isLifeLocked ? "ဤဘဝအတွက် ပုဂ္ဂိုလ်ပြောင်းလဲခွင့် ပိတ်ထားသည်" : "ဤဘဝအတွက် ပုဂ္ဂိုလ်ပြောင်းလဲခွင့် ဖွင့်ထားသည်"}
+               >
+                  {isLifeLocked ? <Lock className="w-4 h-4"/> : <Unlock className="w-4 h-4"/>}
+               </button>
+           </div>
+           <button onClick={() => {setCurrentLifeOffset(p=>p+1); setCurrentIndex(0); setIsPlaying(false);}} className="hover:text-white flex gap-1 items-center px-2 py-1 bg-slate-800 rounded hover:bg-slate-700 transition">
+             <span className="text-xs">{getLifeName(displayLifeOffset + 1)}</span> <ChevronRight className="w-4 h-4"/>
+           </button>
+        </div>
+
+        {/* --- Phase Tabs --- */}
+        <div className="shrink-0 bg-slate-800 p-2 flex justify-center items-center border-t border-slate-700 z-50 relative">
+          <div className="flex bg-slate-700 rounded-xl p-1 gap-1 max-w-md w-full">
+            {PHASES.map((phase) => (
+              <button
+                key={phase.id}
+                onClick={() => { setActivePhase(phase.id); setIsPlaying(false); setPaticcaStep(0); }}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-1 px-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${
+                  ((() => { const ep = (activeNode.isAvijjaNode || activeNode.isSankharaNode) ? 'pavatti' : activeNode.name === 'ပဋိသန္ဓေ' ? 'patisandhi' : activePhase; return ep === phase.id; })())
+                    ? 'bg-emerald-500 text-white shadow-md'
+                    : 'text-slate-300 hover:text-white hover:bg-slate-600'
+                }`}
+              >
+                <Clock className="w-3 h-3" />
+                {phase.label}
+              </button>
+            ))}
+          </div>
+          {/* Paticcasamuppada Toggle Icon */}
+          <div className="absolute right-3 md:right-6 top-1/2 -translate-y-1/2">
+          {/* Phase Tabs ထဲ right side buttons */}
+<div className="absolute right-3 md:right-6 top-1/2 -translate-y-1/2 flex items-center gap-2">
+
+  {/* ပထမနည်း icon — NEW */}
+  <div className="relative flex flex-col items-center">
+    <button
+      onClick={() => {
+  if (selectedNidana !== null) {
+    setSelectedNidana(null); setNidanaViewMode('cause');
+    setNidanaCycleIndex(0); setNidana2SubMode(null);
+    setNidana3SubMode(null);  // ← ဤ line ထည့်ပါ
+    setNidana5SubMode('cause');
+  } else { setShowNidanaMenu(v => !v); }
+}}
+      className="p-1.5 md:p-2 rounded-full bg-slate-700 text-cyan-400 hover:bg-slate-600 shadow-md transition-all"
+      title="ပဋိစ္စသမုပ္ပါဒ် ပထမနည်း"
+    >
+      <Layers className="w-4 h-4 md:w-5 md:h-5" />
+    </button>
+    
+    {/* ရွေးချယ်ထားသော ပဋိစ္စသမုပ္ပါဒ် စာသား ပြသရန် */}
+    {selectedNidana !== null && (
+        <div className="absolute top-full mt-1 px-2 py-0.5 bg-cyan-800 text-cyan-100 text-[9px] md:text-[10px] font-bold rounded shadow-md whitespace-nowrap z-50 pointer-events-none">
+            {NIDANA_LIST[selectedNidana]}
+        </div>
+    )}
+
+    {showNidanaMenu && (
+      <>
+        {/* overlay */}
+        <div className="fixed inset-0 z-40" onClick={() => setShowNidanaMenu(false)} />
+        <div className="absolute right-0 top-full mt-2 w-[320px] bg-white rounded-xl shadow-2xl border border-slate-200 z-50 overflow-hidden">
+          <div className="bg-cyan-700 text-white px-4 py-2 font-bold text-sm">
+            ပဋိစ္စသမုပ္ပါဒ် ပထမနည်း
+          </div>
+          <div className="overflow-y-auto max-h-[60vh]">
+            {NIDANA_LIST.map((pali, i) => (
+  <div key={i}
+    className={`flex items-center gap-3 px-4 py-2.5 border-b border-slate-100 cursor-pointer transition-colors
+      ${selectedNidana === i ? 'bg-cyan-100 border-l-4 border-l-cyan-500' : (i % 2 === 0 ? 'bg-slate-50 hover:bg-cyan-50' : 'bg-white hover:bg-cyan-50')}`}
+    onClick={() => { setSelectedNidana(i); setNidanaViewMode('cause'); setNidanaCycleIndex(0); setNidana4CycleIdx(0); setNidana2SubMode(null); setNidana10EffectIdx(0); setNidana10BaseOffset(currentLifeOffset); setShowNidanaMenu(false); if (i === 5 || i === 6) { if (activePhase !== 'pavatti') setActivePhase('pavatti'); setActiveVithi('cakkhu'); setNidana5SubMode('cause'); } if (i === 7) { setActivePhase('cuti'); setNidanaViewMode('cause'); } if (i === 8) { setActivePhase('cuti'); setNidanaViewMode('cause'); } if (i === 10) { setActivePhase('cuti'); } }}
+  >
+    <span className="text-cyan-600 font-black text-xs w-5 shrink-0">{toMyanmarNum(i + 1)}</span>
+    <span className={`text-xs font-medium leading-snug ${selectedNidana === i ? 'text-cyan-800 font-bold' : 'text-slate-800'}`}>{pali}</span>
+  </div>
+))}
+          </div>
+        </div>
+      </>
+    )}
+  </div>
+
+  
+</div>
+          </div>
+        </div>
+
+        {/* --- Filters Area --- */}
+        <div className="shrink-0 bg-slate-100 p-3 md:p-4 border-b border-slate-200 flex flex-col items-center relative z-40">
+          
+          {/* Floating Puggala Custom Selector (Top Left) */}
+          <div className="absolute top-2 left-2 md:top-4 md:left-4 z-50 flex items-center">
+             <div className="relative">
+                 <div 
+                    onClick={() => { if(!isLifeLocked) setShowPuggalaMenu(!showPuggalaMenu) }}
+                    className={`pl-2.5 pr-6 py-1.5 rounded-lg text-[10px] md:text-xs font-black shadow-md flex items-center gap-1.5 transition-colors border ${isLifeLocked ? 'bg-slate-100 text-slate-500 border-slate-200 cursor-not-allowed' : 'bg-white text-slate-800 border-slate-300 cursor-pointer hover:shadow-lg'}`}
+                 >
+                    <User className={`w-3.5 h-3.5 md:w-4 md:h-4 ${isLifeLocked ? 'text-slate-400' : 'text-indigo-600'}`} />
+                    <span>{activePuggalaLabel}</span>
+                    <div className="absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none">
+                        {showPuggalaMenu ? <ChevronUp className="w-3 h-3 md:w-4 md:h-4 text-indigo-500" /> : <ChevronDown className="w-3 h-3 md:w-4 md:h-4 text-slate-500" />}
+                    </div>
+                 </div>
+
+                 {/* Custom Puggala Dropdown List */}
+                 {showPuggalaMenu && (
+                     <div className="absolute top-full left-0 mt-1 w-[280px] bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[60vh]">
+                         <div className="overflow-y-auto">
+                             {PUGGALA_LIST.map((g, i) => (
+                                 <div key={i}>
+                                     <div 
+                                        className={`px-3 py-2.5 font-bold cursor-pointer transition-colors border-b border-slate-100 flex items-center justify-between ${expandedPuggalaGroup === i ? g.colorClass : 'text-slate-700 bg-slate-50 hover:bg-slate-100'}`}
+                                        onClick={() => setExpandedPuggalaGroup(expandedPuggalaGroup === i ? null : i)}
+                                     >
+                                         <span className="text-xs md:text-sm">{g.group}</span>
+                                         {expandedPuggalaGroup === i ? <ChevronUp className="w-4 h-4"/> : <ChevronDown className="w-4 h-4"/>}
+                                     </div>
+                                     {expandedPuggalaGroup === i && (
+                                         <div className="bg-white flex flex-col py-1">
+                                             {g.options.map(p => (
+                                                 <div 
+                                                    key={p.id}
+                                                    className={`px-4 py-2 text-xs md:text-sm cursor-pointer transition-colors ${activePuggalaId === p.id ? 'bg-indigo-50 text-indigo-700 font-bold border-l-4 border-indigo-500' : 'text-slate-600 hover:bg-slate-50 hover:text-indigo-600 border-l-4 border-transparent'}`}
+                                                    onClick={() => {
+                                                        handlePuggalaChange(p.id);
+                                                        setShowPuggalaMenu(false);
+                                                    }}
+                                                 >
+                                                     {p.label}
+                                                </div>
+                                             ))}
+                                         </div>
+                                     )}
+                                 </div>
+                             ))}
+                         </div>
+                     </div>
+                 )}
+             </div>
+          </div>
+
+          <div className="flex flex-wrap justify-center items-end gap-4 md:gap-6 w-full max-w-5xl pt-10 md:pt-0">
+            
+            {activePhase === 'pavatti' ? (
+                <>
+                    <div className="flex flex-col gap-1.5 relative">
+                      <label className="text-slate-600 font-bold text-xs uppercase tracking-wider text-center">
+                        ဝီထိအမျိုးအစား
+                      </label>
+                      
+                      <div className="flex gap-1.5 justify-center">
+                        <select
+                          value={activeVithi}
+                          onChange={handleVithiChange}
+                          className="w-auto px-3 py-1.5 rounded-lg font-medium text-xs border border-slate-300 bg-white text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                        >
+                          {availableVithis.map((group, idx) => (
+                            <optgroup key={idx} label={group.group}>
+                              {group.options.map(opt => (
+                                <option key={opt.id} value={opt.id}>{opt.label}</option>
+                              ))}
+                            </optgroup>
+                          ))}
+                        </select>
+                        
+                        {(['cakkhu', 'sota', 'ghana', 'jivha', 'kaya'].includes(activeVithi)) && (
+                          <button onClick={() => {setPancaDvaraVariation(p=>(p+1)%15); setCurrentIndex(0); setIsPlaying(false);}} className="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-2 py-1.5 rounded-lg border border-indigo-300 flex items-center transition-colors shadow-sm" title="၁၅ မျိုးသော ဝီထိများ">
+                            <RefreshCw className="w-3 h-3" />
+                          </button>
+                        )}
+
+                        {activeVithi === 'mano_kama' && (
+                          <button onClick={() => {setManoKamaVariation(p=>(p+1)%4); setCurrentIndex(0); setIsPlaying(false);}} className="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-2 py-1.5 rounded-lg border border-indigo-300 flex items-center transition-colors shadow-sm" title="၄ မျိုးသော ဝီထိများ">
+                            <RefreshCw className="w-3 h-3" />
+                          </button>
+                        )}
+
+                        {(activeVithi.includes('appana') && activeVithi !== 'appana_adhit') && (
+                          <button onClick={() => {setAppanaVariation(p=>(p+1)%2); setCurrentIndex(0); setIsPlaying(false);}} className="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-2 py-1.5 rounded-lg border border-indigo-300 flex items-center transition-colors shadow-sm" title="မန္ဒပည နှင့် တိက္ခပည">
+                            <RefreshCw className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-1.5 relative">
+                      <label className="text-slate-600 font-bold text-xs uppercase tracking-wider text-center flex justify-center">
+                        <span>
+                            {(activeVithi === 'appana_magga' || activeVithi === 'appana_phala' || activeVithi === 'appana_nirodha') ? "အပ္ပနာဇော ၂၆-ပါး" : 
+                             (activeVithi === 'appana_abhinna') ? "အပ္ပနာဇော ၂၆-ပါး" : 
+                             (activeVithi === 'appana_jhana_1' || activeVithi === 'appana_jhana_later') ? "အပ္ပနာဇော ၂၆-ပါး" : "ကာမဇော ၂၉-ပါး"}
+                        </span>
+                      </label>
+                      <div className="flex gap-1.5 justify-center">
+                        <select
+                          value={javanaGroupId}
+                          onChange={handleJavanaGroupChange}
+                          className="w-auto px-3 py-1.5 rounded-lg font-medium text-xs border border-slate-300 bg-white text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 max-w-full overflow-hidden text-ellipsis"
+                        >
+                          {javanaSelectContent}
+                        </select>
+                      </div>
+                    </div>
+                </>
+            ) : (
+                <div className="flex flex-col gap-1.5 relative">
+                    <label className="text-slate-600 font-bold text-xs uppercase tracking-wider text-center">သင်္ခါရဝီထိ ဇော</label>
+                    <select
+                        value={sankharaState.javanaGroupId}
+    onChange={(e) => {
+        const val = e.target.value;
+        const offset = activePhase === 'cuti' ? currentLifeOffset : currentLifeOffset - 1;
+        if (lifeLocks[offset]) return;   // ← ဒါထည့်ပါ
+        const cur = getSankharaState(offset);
+        const isJhana = val.includes('jhana');
+        setSankharaStateByLife(prev => ({
+            ...prev,
+            [offset]: {
+                ...cur,
+                javanaGroupId: val,
+                vara: isJhana ? 2 : (cur.vara === 2 ? 0 : cur.vara),
+                javanaIdx: 0
+            }
+        }));
+        setIsPlaying(false);
+    }}
+                        className="w-auto px-3 py-1.5 rounded-lg font-medium text-xs border border-slate-300 bg-white text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    >
+                        <option value="kama_kusala">မဟာကုသိုလ်ဇော (၈-မျိုး)</option>
+                        <option value="akusala_lobha">လောဘမူဇော (၈-မျိုး)</option>
+                        <option value="akusala_dosa">ဒေါသမူဇော (၂-မျိုး)</option>
+                        <option value="akusala_moha">မောဟမူဇော (၂-မျိုး)</option>
+                        <option value="rupa_jhana_kusala">ရူပါဝစရ ကုသိုလ်ဇော (၅-မျိုး)</option>
+                        <option value="arupa_jhana_kusala">အရူပါဝစရ ကုသိုလ်ဇော (၄-မျိုး)</option>
+                    </select>
+                </div>
+            )}
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-slate-600 font-bold text-xs uppercase tracking-wider text-center">ပဋိသန္ဓေ/ဘဝင်/စုတိစိတ် ၁၉-ပါး</label>
+              <div className="flex gap-1.5 justify-center items-center bg-white rounded-lg p-0.5 border border-slate-300 shadow-sm relative z-40">
+                
+                {/* Bhavanga Custom Dropdown Trigger */}
+                <div 
+                   className={`relative px-2 py-1 rounded-md text-xs font-medium cursor-pointer flex items-center justify-between min-w-[140px] ${isBhavangaAuto ? 'opacity-60 cursor-not-allowed text-slate-700' : 'hover:bg-slate-50 text-indigo-700'}`}
+                   onClick={() => { if(!isBhavangaAuto) setShowBhavangaMenu(!showBhavangaMenu) }}
+                >
+                   <span className="truncate max-w-[150px]">{activeBhavangaLabel}</span>
+                   {showBhavangaMenu ? <ChevronUp className="w-3 h-3 ml-1" /> : <ChevronDown className="w-3 h-3 ml-1" />}
+                </div>
+
+                {/* Bhavanga Custom Dropdown Menu */}
+                {showBhavangaMenu && (
+                     <div className="absolute top-full left-0 mt-2 w-[320px] bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[60vh] z-50">
+                         <div className="overflow-y-auto">
+                             {VIPAKA_GROUPS.map((g, i) => (
+                                 <div key={g.id}>
+                                     <div 
+                                        className={`px-3 py-2.5 font-bold cursor-pointer transition-colors border-b border-slate-100 flex items-center justify-between ${expandedBhavangaGroup === i ? g.colorClass : 'text-slate-700 bg-slate-50 hover:bg-slate-100'}`}
+                                        onClick={() => setExpandedBhavangaGroup(expandedBhavangaGroup === i ? null : i)}
+                                     >
+                                         <span className="text-xs md:text-sm">{g.label}</span>
+                                         {expandedBhavangaGroup === i ? <ChevronUp className="w-4 h-4"/> : <ChevronDown className="w-4 h-4"/>}
+                                     </div>
+                                     {expandedBhavangaGroup === i && (
+                                         <div className="bg-white flex flex-col py-1">
+                                             {g.options.map((opt, optIdx) => {
+                                                 const isSelected = bhavangaGroupId === g.id && bhavangaSubIndex === optIdx;
+                                                 return (
+                                                     <div 
+                                                        key={opt.id}
+                                                        className={`px-4 py-2 text-xs md:text-sm cursor-pointer transition-colors ${isSelected ? 'bg-indigo-50 text-indigo-700 font-bold border-l-4 border-indigo-500' : 'text-slate-600 hover:bg-slate-50 hover:text-indigo-600 border-l-4 border-transparent'}`}
+                                                        onClick={() => handleBhavangaSelect(g.id, optIdx)}
+                                                     >
+                                                         {opt.label}
+                                                     </div>
+                                                 );
+                                             })}
+                                         </div>
+                                     )}
+                                 </div>
+                             ))}
+                         </div>
+                     </div>
+                 )}
+
+                <div className="w-px h-5 bg-slate-200"></div>
+                <button 
+                  onClick={() => {
+                      const newAuto = !isBhavangaAuto;
+                      setIsBhavangaAuto(newAuto);
+                      if (newAuto) setBhavangaById(getDefaultBhavanga(activePuggalaId));
+                  }}
+                  className={`p-1.5 rounded-md transition-colors ${isBhavangaAuto ? 'text-rose-600 hover:bg-rose-50' : 'text-emerald-600 hover:bg-emerald-50'}`}
+                  title={isBhavangaAuto ? "ပုဂ္ဂိုလ်အလိုက် အလိုအလျောက် သတ်မှတ်မည်" : "စိတ်ကြိုက် ရွေးချယ်နိုင်သည်"}
+                >
+                  {isBhavangaAuto ? <Lock className="w-3.5 h-3.5"/> : <Unlock className="w-3.5 h-3.5"/>}
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        {/* --- Timeline Header (Dynamic) --- */}
+        <div className="shrink-0 bg-slate-50 border-b border-slate-200 flex flex-col items-center justify-center py-2 md:py-3 transition-all min-h-[50px] z-20 relative">
+            {selectedNidana !== null ? (
+        <div className="w-full max-w-2xl px-4 animate-in fade-in zoom-in duration-300 flex flex-col items-center">
+          <h4 className="text-cyan-600 font-black text-xs md:text-sm uppercase tracking-widest bg-cyan-100 px-3 py-1 rounded-full mb-1 border border-cyan-200 shadow-sm">ပဋိစ္စသမုပ္ပါဒ် ပထမနည်း</h4>
+          </div>
+    ) : paticcaStep > 0 ? (
+        <div className="w-full max-w-2xl px-4 animate-in fade-in zoom-in duration-300 flex flex-col items-center">
+           <h4 className="text-amber-600 font-black text-xs md:text-sm uppercase tracking-widest bg-amber-100 px-3 py-1 rounded-full mb-1 border border-amber-200 shadow-sm">ပဋိစ္စသမုပ္ပါဒ် ပဉ္စမနည်း</h4>
+                   <p className="text-amber-800 text-sm md:text-base font-bold text-center">
+                      {paticcaKhandha === 5 ? (
+                        <>
+                          <>
+                            {isVipaka && paticcaStep === 1 && ""}
+                            {isVipaka && paticcaStep === 2 && ""}
+                            {paticcaStep === 3 && ""}
+                            {paticcaStep === 4 && ""}
+                            {paticcaStep === 6 && ""}
+                            {paticcaStep === 8 && ""}
+                            {paticcaStep === 9 && ""}
+                            </>
+                        </>
+                      ) : paticcaKhandha === 1 ? (
+        <>
+          {paticcaStep === 1 && ""}
+          {paticcaStep === 2 && ""}
+          {paticcaStep === 3 && ""}
+          {paticcaStep === 4 && ``}
+          {paticcaStep === 5 && ""}
+        </>
+      ) : (
+        <>
+          {(() => {
+            const kLabel = paticcaKhandha === 2 ? "ဝေဒနာက္ခန္ဓာ" : paticcaKhandha === 3 ? "သညာက္ခန္ဓာ" : "သင်္ခါရက္ခန္ဓာ";
+            return <>
+              {isVipaka && paticcaStep === 1 && ``}
+              {isVipaka && paticcaStep === 2 && ``}
+              {paticcaStep === 3 && ``}
+              {paticcaStep === 4 && ``}
+              {paticcaStep === 5 && ``}
+              {paticcaStep === 7 && ``}
+              {paticcaStep === 8 && ``}
+              {paticcaStep === 9 && ``}
+            </>;
+          })()}
+        </>
+      )}
+                   </p>
+                </div>
+            ) : (
+                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest text-center whitespace-pre-line leading-tight">
+                  {activeNode.vithi}
+                  {activePhase === 'pavatti' && (['cakkhu', 'sota', 'ghana', 'jivha', 'kaya'].includes(activeVithi)) && <span className="block mt-0.5 text-indigo-500 font-semibold">{PD_LABELS[pancaDvaraVariation]}</span>}
+                  {activePhase === 'pavatti' && activeVithi === 'mano_kama' && <span className="block mt-0.5 text-indigo-500 font-semibold">{MK_LABELS[manoKamaVariation]}</span>}
+                  {activePhase === 'pavatti' && (activeVithi.includes('appana') && activeVithi !== 'appana_adhit') && <span className="block mt-0.5 text-indigo-500 font-semibold">{AP_LABELS[appanaVariation]}</span>}
+                </h3>
+            )}
+        </div>
+
+        {/* --- Timeline --- */}
+        <div className="shrink-0 bg-white border-b border-slate-200 relative z-10">
+          <div 
+            ref={timelineRef}
+            className="flex items-end gap-0 overflow-x-auto pb-4 pt-4 px-4 md:px-12 snap-x scrollbar-hide min-h-[90px] md:min-h-[110px]"
+            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          >
+            <div className="w-[10vw] shrink-0"></div>
+            {vithiData.map((node, idx) => {
+              const isActive = currentIndex === idx;
+              const { bg } = getCittaColor(node.name, node.isAvijjaNode ? 'akusala_lobha' : (node.isSankharaNode ? sankharaState.javanaGroupId : (currentJavanaGroup.options?.[javanaSubIndex]?.id || 'k1')));
+
+              let shortName = node.name;
+              let numPrefix = "";
+              const match = node.name.match(/^([၀-၉]+)\s*-\s*(.*)/);
+              if (match) {
+                  numPrefix = match[1];
+                  shortName = match[2];
+              }
+
+              let tooltipText = "";
+              if (node.promptType) tooltipText = "အာရုံပြင်ဆင်ရန် ၂-ချက်နှိပ်ပါ";
+              else if (node.isCutiNode) tooltipText = "မရဏသန္နဇောဝီထိပြောင်းရန် နှိပ်ပါ";
+              else if (node.specificName) tooltipText = `${node.specificName}`;
+             
+             const nidanaHlType = (() => {
+  if (selectedNidana === null) return null;
+  if (selectedNidana === 0) {
+    if (nidanaViewMode === 'cause' && node.isAvijjaNode) return 'cause';
+    if (nidanaViewMode === 'effect' && node.isSankharaNode) return 'effect';
+  }
+  if (selectedNidana === 1) {
+    if (nidanaViewMode === 'cause' && node.isSankharaNode) return 'cause';
+    if (nidanaViewMode === 'effect') {
+      const _VT=['ပဋိသန္ဓေ','ဘဝင်','စုတိ','စက္ခုဝိညာဏ်','သောတဝိညာဏ်','ဃာနဝိညာဏ်','ဇိဝှါဝိညာဏ်','ကာယဝိညာဏ်','သမ္ပဋိစ္ဆိုင်း','သန္တီရဏ','တဒါရုံ'];
+const cur = _VT[nidanaCycleIndex % _VT.length];
+      if (node.name === cur || node.name.includes(cur)) {
+        if (cur === 'ဘဝင်') {
+    if (!node.isBhavangaNode) return null;
+    const patIdx = vithiData.findIndex(n => n.name === 'ပဋိသန္ဓေ');
+    if (activePhase === 'patisandhi') return (patIdx !== -1 && idx >= patIdx) ? 'effect' : null;
+    if (activePhase === 'cuti') return (patIdx === -1 || idx < patIdx) ? 'effect' : null;
+    return 'effect';
+} else { return 'effect'; }
+      }
+    }
+  }
+  const _VCYC = ['ပဋိသန္ဓေ','ဘဝင်','စုတိ','စက္ခုဝိညာဏ်','သောတဝိညာဏ်','ဃာနဝိညာဏ်','ဇိဝှါဝိညာဏ်','ကာယဝိညာဏ်','သမ္ပဋိစ္ဆိုင်း','သန္တီရဏ','တဒါရုံ'];
+  if (selectedNidana === 2 && nidana2SubMode === 'kamma') {
+    if (nidanaViewMode === 'cause' && node.isSankharaNode) return 'cause';
+    if (nidanaViewMode === 'effect') {
+      const cur = _VCYC[nidanaCycleIndex % _VCYC.length];
+      if (node.name === cur || node.name.includes(cur)) {
+        if (cur === 'ဘဝင်') {
+    if (!node.isBhavangaNode) return null;
+    const patIdx = vithiData.findIndex(n => n.name === 'ပဋိသန္ဓေ');
+    if (activePhase === 'patisandhi') return (patIdx !== -1 && idx >= patIdx) ? 'effect' : null;
+    if (activePhase === 'cuti') return (patIdx === -1 || idx < patIdx) ? 'effect' : null;
+    return 'effect';
+} else { return 'effect'; }
+      }
+    }
+  }
+  if ((selectedNidana === 2 && nidana2SubMode === 'sahajata') || (selectedNidana === 3 && nidana3SubMode === 'nama_mana')) {
+    if (idx === currentIndex) return 'cause';
+  }
+  if (selectedNidana === 5) {
+    const N5_SRC = ['စက္ခုဝိညာဏ်','သောတဝိညာဏ်','ဃာနဝိညာဏ်','ဇိဝှါဝိညာဏ်','ကာယဝိညာဏ်','ဘဝင်္ဂုပစ္ဆေဒ'];
+    const N5_PV = ['စက္ခုဒွါရဝီထိ','သောတဒွါရဝီထိ','ဃာနဒွါရဝီထိ','ဇိဝှါဒွါရဝီထိ','ကာယဒွါရဝီထိ'];
+    const _ci5 = nidanaCycleIndex % 6;
+    if (nidana5SubMode === 'cause') {
+      if (node.name.includes(N5_SRC[_ci5]) || node.name === N5_SRC[_ci5]) return 'cause';
+    }
+    if (nidana5SubMode === 'effect') {
+      if (_ci5 < 5) {
+        const _inV = node.vithi?.includes(N5_PV[_ci5]);
+        const _isVin = node.name.includes(N5_SRC[_ci5]);
+        const _isMano = node.vithi?.includes('မနောဒွါရဝီထိ') || node.vithi?.includes('ဂ္ဂဟဏ');
+        if ((_inV && !_isVin) || _isMano) return 'effect';
+      } else {
+        const _upIdx = vithiData.findIndex(n => n.name === 'ဘဝင်္ဂုပစ္ဆေဒ');
+        if (_upIdx !== -1 && idx > _upIdx && (node.vithi?.includes('မနောဒွါရ') || node.vithi?.includes('ဂ္ဂဟဏ'))) return 'effect';
+      }
+    }
+  }
+  if (selectedNidana === 3 && nidana3SubMode === 'nama_rupa_ay') {
+  if (idx === currentIndex) return 'cause';
+  if (idx === currentIndex - 1 && currentIndex - 1 >= 0) return 'effect';
+}
+  if (selectedNidana === 3 && (nidana3SubMode === 'rupa_mana' || nidana3SubMode === 'namarupa_mana')) {
+    const _cutiIdx = vithiData.findIndex(n => n.name === "စုတိ");
+    if (idx === currentIndex) return 'effect';
+    const curName = vithiData[currentIndex]?.name || "";
+    const isPVin = ["စက္ခုဝိညာဏ်","သောတဝိညာဏ်","ဃာနဝိညာဏ်","ဇိဝှါဝိညာဏ်","ကာယဝိညာဏ်"].some(v => curName.includes(v));
+    if (isPVin) {
+        let atitaIdx = -1;
+        for (let i = currentIndex - 1; i >= 0; i--) {
+            if (vithiData[i]?.name === "အတီတဘဝင်") { atitaIdx = i; break; }
+        }
+        if (atitaIdx !== -1 && idx === atitaIdx) return 'cause';
+    } else {
+        const _curName2 = vithiData[currentIndex]?.name || "";
+        if (_curName2 === "ပဋိသန္ဓေ") {
+            // ပဋိသန္ဓေ = ကမ္မဇရုပ်သာ မှီ၊ ရှေ့ပြောင်းစိတ် မရှိ၊ highlight မပြ
+        } else {
+            const _cutiIdx2 = vithiData.findIndex(n => n.name === "စုတိ");
+            if (_cutiIdx2 !== -1 && currentIndex >= _cutiIdx2 - 16 && currentIndex <= _cutiIdx2) {
+                if (idx === _cutiIdx2 - 17) return 'cause';
+            } else {
+                if (currentIndex - 1 >= 0 && idx === currentIndex - 1) return 'cause';
+            }
+        }
+    }
+}
+if (selectedNidana === 4) {
+    if (idx === currentIndex) return 'effect';
+  }
+  if (selectedNidana === 6) {
+    const N6_PV = ['စက္ခုဒွါရဝီထိ','သောတဒွါရဝီထိ','ဃာနဒွါရဝီထိ','ဇိဝှါဒွါရဝီထိ','ကာယဒွါရဝီထိ'];
+    const N6_SRC = ['စက္ခုဝိညာဏ်','သောတဝိညာဏ်','ဃာနဝိညာဏ်','ဇိဝှါဝိညာဏ်','ကာယဝိညာဏ်','ဘဝင်္ဂုပစ္ဆေဒ'];
+    const _ci6 = nidanaCycleIndex % 6;
+    if (nidana5SubMode === 'cause') {
+      if (_ci6 < 5) {
+        const _inV = node.vithi?.includes(N6_PV[_ci6]);
+        const _isVin = node.name.includes(N6_SRC[_ci6]);
+        const _isMano = node.vithi?.includes('မနောဒွါရဝီထိ') || node.vithi?.includes('ဂ္ဂဟဏ');
+        if ((_inV && !_isVin) || _isMano) return 'cause';
+      } else {
+        const _upIdx6 = vithiData.findIndex(n => n.name === 'ဘဝင်္ဂုပစ္ဆေဒ');
+        if (_upIdx6 !== -1 && idx > _upIdx6 && (node.vithi?.includes('မနောဒွါရ') || node.vithi?.includes('ဂ္ဂဟဏ'))) return 'cause';
+      }
+    }
+    if (nidana5SubMode === 'effect') {
+      if (node.isAvijjaNode && node.avijjaIdx === 0) return 'effect';
+    }
+  }
+  if (selectedNidana === 7) {
+    if (nidanaViewMode === 'cause' && node.isAvijjaNode && node.avijjaIdx === 0) return 'cause';
+    if (nidanaViewMode === 'effect' && node.isAvijjaNode && node.avijjaIdx === 1) return 'effect';
+  }
+  if (selectedNidana === 8) {
+  if (nidana4CycleIdx === 0) {
+    if (nidanaViewMode === 'cause' && node.isAvijjaNode && node.avijjaIdx === 1) return 'cause';
+    if (nidanaViewMode === 'effect' && node.isSankharaNode) return 'effect';
+  } else {
+    if (nidanaViewMode === 'cause' && node.isSankharaNode) return 'cause';
+    if (nidanaViewMode === 'effect' && node.name === 'ပဋိသန္ဓေ') return 'effect';
+  }
+}
+if (selectedNidana === 9) {
+  if (selectedNidana === 10) {
+  const N10_EFFECTS = ["ဇရာမရဏ","သောက","ပရိဒေဝ","ဒုက္ခ","ဒေါမနဿ","ဥပါယာသ"];
+  const curEff = N10_EFFECTS[nidana10EffectIdx % 6];
+  if (nidanaViewMode === 'cause') {
+    const allPat = vithiData.reduce((acc,n,i)=>n.name==='ပဋိသန္ဓေ'?[...acc,i]:acc,[]);
+    const lastPat = allPat[allPat.length-1];
+    if (lastPat !== undefined && idx === lastPat) return 'cause';
+  }
+  if (nidanaViewMode === 'effect') {
+    if (curEff === 'ဇရာမရဏ' && node.name === 'စုတိ') return 'effect';
+    if (['သောက','ပရိဒေဝ','ဒေါမနဿ','ဥပါယာသ'].includes(curEff) && node.isJavanaNode && node.vithi?.includes('မနောဒွါရဝီထိ')) return 'effect';
+    if (curEff === 'ဒုက္ခ' && node.name.includes('ကာယဝိညာဏ်')) return 'effect';
+  }
+}
+  if (nidanaViewMode === 'cause' && node.isSankharaNode) return 'cause';
+  if (nidanaViewMode === 'effect' && node.name === 'ပဋိသန္ဓေ') return 'effect';
+}
+if (selectedNidana === 10) {
+  const N10_EFFECTS = ["ဇရာမရဏ","သောက","ပရိဒေဝ","ဒုက္ခ","ဒေါမနဿ","ဥပါယာသ"];
+  const curEff = N10_EFFECTS[nidana10EffectIdx % 6];
+  if (nidanaViewMode === 'cause') {
+    const allPat = vithiData.reduce((acc,n,i)=>n.name==='ပဋိသန္ဓေ'?[...acc,i]:acc,[]);
+    const lastPat = allPat[allPat.length-1];
+    if (lastPat !== undefined && idx === lastPat) return 'cause';
+  }
+  if (nidanaViewMode === 'effect') {
+    if (curEff === 'ဇရာမရဏ' && node.name === 'စုတိ') return 'effect';
+    if (['သောက','ပရိဒေဝ','ဒေါမနဿ','ဥပါယာသ'].includes(curEff) && node.isJavanaNode && node.vithi?.includes('မနောဒွါရဝီထိ')) return 'effect';
+    if (curEff === 'ဒုက္ခ' && node.name.includes('ကာယဝိညာဏ်')) return 'effect';
+  }
+}
+})();
+              const isPaticcaTarget = (paticcaStep === 1 && node.isAvijjaNode) || 
+                        (paticcaStep === 2 && node.isSankharaNode) || 
+                        ((paticcaStep === 3 || paticcaStep === 4 || paticcaStep === 5 || paticcaStep === 7) && isActive && paticcaStep !== 0) ||
+                        (paticcaStep === 6 && node.isBhavangaNode && isActive) ||
+                        (paticcaStep === 8 && isActive) || // မနသိကာရ စိတ်အလုံး
+                        (paticcaStep === 9 && isActive) ||   // || ထည့်ပြီး semicolon ဖျက်ပါ
+                        (paticcaStep === 10 && isActive);
+                                      
+              const nidanaHasTargets = selectedNidana !== null && (() => {
+  if (selectedNidana === 0) return vithiData.some(n => n.isAvijjaNode || n.isSankharaNode);
+  if (selectedNidana === 1) {
+    if (nidanaViewMode === 'effect') return true;
+    return vithiData.some(n => n.isSankharaNode);
+}
+  return true;
+})();
+const nodeOpacity = (selectedNidana !== null && nidanaHasTargets)
+  ? (nidanaHlType ? 'opacity-100 grayscale-0 z-30' : 'opacity-20 grayscale')
+  : (isActive ? 'z-20 opacity-100 grayscale-0' : node.isBhavangaNode ? 'z-10 opacity-20 grayscale hover:opacity-80 hover:grayscale-0' : 'z-10 opacity-60 grayscale-[30%] hover:opacity-100 hover:grayscale-0');
+
+              let circleStyles = `w-[48px] h-[48px] md:w-[52px] md:h-[52px] rounded-full flex flex-col items-center justify-center shadow-sm border-[2px] transition-all duration-300 relative overflow-hidden ${bg} `;
+              
+              if (isPaticcaTarget && paticcaStep > 0) {
+                  circleStyles += (paticcaStep === 1) ? 'scale-[1.2] ring-[4px] ring-offset-2 ring-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.6)] ' :
+                              (paticcaStep === 2) ? 'scale-[1.2] ring-[4px] ring-offset-2 ring-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.6)] ' :
+                              (paticcaStep === 6) ? 'scale-[1.2] ring-[4px] ring-offset-2 ring-amber-400 shadow-[0_0_20px_rgba(251,191,36,0.8)] animate-pulse ' :
+                              (paticcaStep === 8) ? 'scale-[1.2] ring-[4px] ring-offset-2 ring-purple-500 shadow-[0_0_20px_rgba(168,85,247,0.8)] animate-pulse ' :
+                              (paticcaStep === 9) ? 'scale-[1.2] ring-[4px] ring-offset-2 ring-fuchsia-500 shadow-[0_0_20px_rgba(217,70,239,0.8)] animate-pulse ' :
+                              (paticcaStep === 10) ? 'scale-[1.2] ring-[4px] ring-offset-2 ring-violet-500 shadow-[0_0_20px_rgba(139,92,246,0.8)] animate-pulse ' :
+                              'scale-[1.2] ring-[4px] ring-offset-2 ring-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.6)] ';
+              } else if (isActive && paticcaStep === 0) {
+                  circleStyles += 'scale-[1.15] ring-2 ring-offset-1 ring-emerald-400 shadow-md ';
+              } else {
+                  circleStyles += 'scale-100 ';
+              }
+if (nidanaHlType === 'cause') circleStyles += 'scale-[1.2] ring-[4px] ring-offset-2 ring-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.6)] animate-pulse ';
+if (nidanaHlType === 'effect') circleStyles += 'scale-[1.2] ring-[4px] ring-offset-2 ring-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.6)] animate-pulse ';
+              return (
+                <React.Fragment key={node.id}>
+                  <div 
+                    className={`citta-node snap-center shrink-0 flex flex-col items-center cursor-pointer transition-all duration-300 ease-out w-[52px] md:w-[56px] relative ${nodeOpacity}`}
+                    onClick={() => { 
+                       setCurrentIndex(idx); 
+                       setIsPlaying(false); 
+// Cross-life navigation: patisandhi မတိုင်ခင်/ပြီးနောက် node ကို နှိပ်ရင် ဘဝပြောင်းသည်
+const dividerIdx = vithiData.findIndex(n => n.isLifeDividerBefore);
+if (dividerIdx !== -1) {
+    if (activePhase === 'patisandhi' && idx < dividerIdx) {
+        setCurrentLifeOffset(p => p - 1);
+        setActivePhase('cuti');
+        return;
+    }
+    if (activePhase === 'cuti' && idx >= dividerIdx) {
+        setCurrentLifeOffset(p => p + 1);
+        setActivePhase('patisandhi');
+        return;
+    }
+}
+if (selectedNidana === 1 || (selectedNidana === 2 && (nidana2SubMode === 'kamma' || nidana2SubMode === 'sahajata'))) {
+  const VIPAKA_TYPES = ['ပဋိသန္ဓေ','ဘဝင်','စုတိ','စက္ခုဝိညာဏ်','သောတဝိညာဏ်','ဃာနဝိညာဏ်','ဇိဝှါဝိညာဏ်','ကာယဝိညာဏ်','သမ္ပဋိစ္ဆိုင်း','သန္တီရဏ','တဒါရုံ'];
+  const tIdx = VIPAKA_TYPES.findIndex(t => node.name === t || node.name.includes(t));
+  if (tIdx !== -1) {
+    setNidanaCycleIndex(tIdx);
+    if (nidana2SubMode !== 'sahajata') setNidanaViewMode('effect');
+    return;
+  }
+}
+                       if (node.promptType) return;
+
+                       if (node.isAvijjaNode) {
+    const locked = activePhase === 'cuti' ? lifeLocks[currentLifeOffset] : lifeLocks[currentLifeOffset - 1];
+    if (locked) return;
+    const savedName = node.name;
+    const savedAvijjaIdx = node.avijjaIdx;
+    const avijjaOffset = activePhase === 'cuti' ? currentLifeOffset : currentLifeOffset - 1;
+                    setAvijjaStateByLife(prev => {
+                        const next = { ...getAvijjaState(avijjaOffset) };
+        if (node.nodeType === 'vajjana') next.vara = (next.vara + 1) % 2;
+        if (node.nodeType === 'javana') next.javanaIdx = (next.javanaIdx + 1) % 4;
+        if (node.nodeType === 'tada') next.tadaIdx = (next.tadaIdx + 1) % 11;
+        return { ...prev, [avijjaOffset]: next };
+                    });
+    if (node.nodeType !== 'javana') {
+        setTimeout(() => {
+            const targetIdx = vithiData.findIndex(n => n.isAvijjaNode && n.nodeType === 'vajjana' && n.avijjaIdx === savedAvijjaIdx);
+            if (targetIdx !== -1) {
+    const nodes = Array.from(timelineRef.current.querySelectorAll('.citta-node'));
+    if (nodes[targetIdx]) nodes[targetIdx].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+}
+        }, 50);
+    }
+    return;
+}
+
+                       if (node.isSankharaNode) {
+    const locked = activePhase === 'cuti' ? lifeLocks[currentLifeOffset] : lifeLocks[currentLifeOffset - 1];
+    if (locked) return;
+                           const sankharaOffset = activePhase === 'cuti' ? currentLifeOffset : currentLifeOffset - 1;
+                           setSankharaStateByLife(prev => {
+                               const next = { ...getSankharaState(sankharaOffset) };
+                               if (node.nodeType === 'vajjana') {
+                                   next.vara = (next.vara + 1) % 3;
+                                   if (next.vara === 2 && !next.javanaGroupId.includes('jhana')) {
+                                       next.javanaGroupId = 'rupa_jhana_kusala';
+                                       next.javanaIdx = 0;
+                                   } else if (next.vara !== 2 && next.javanaGroupId.includes('jhana')) {
+                                       next.javanaGroupId = 'kama_kusala';
+                                       next.javanaIdx = 0;
+                                   }
+                               } else if (node.nodeType === 'javana') {
+                                   next.javanaIdx = (next.javanaIdx + 1) % 4;
+                               } else if (node.nodeType === 'tada') {
+                                   next.aramQIndex = next.aramQIndex === 0 ? 1 : (next.aramQIndex === 1 ? 3 : 0);
+                                   next.tadaIdx = next.tadaIdx + 1;
+                               }
+                               return { ...prev, [sankharaOffset]: next };
+                           });
+                           return;
+                       }
+
+                       if (node.isTadarammana && !node.isMaranaNode) {
+                           setTadaCycleIndex(p => p + 1);
+                       } else if (['စက္ခုဝိညာဏ်', 'သောတဝိညာဏ်', 'ဃာနဝိညာဏ်', 'ဇိဝှါဝိညာဏ်', 'ကာယဝိညာဏ်', 'သမ္ပဋိစ္ဆိုင်း'].includes(node.name)) {
+                           setAramQIndex(p => p === 3 ? 1 : 3);
+                       } else if (node.name === 'သန္တီရဏ') {
+                           setAramQIndex(p => {
+                               if (p === 3) return 1;
+                               if (p === 1 || p === 2) return 0;
+                               return 3;
+                           });
+                       } else if (node.isJavanaNode && !node.isMaranaNode) {
+                           setTadaCycleIndex(0);
+                           if (javanaGroupId.startsWith('magga_') || javanaGroupId.startsWith('phala_') || javanaGroupId.startsWith('nirodha_')) {
+                               setLokuttaraJhanaIndex(p => (p + 1) % 5);
+                           } else if (javanaGroupId === 'abhinna_kusala' || javanaGroupId === 'abhinna_kiriya') {
+                               // fixed for these or handled differently
+                           } else if (javanaGroupId.includes('arupa_jhana')) {
+                               setJavanaSubIndex(p => (p + 1) % currentJavanaGroup.options.length);
+                           } else if (javanaGroupId.includes('rupa_jhana')) {
+                               const valid = getValidJhanaIndices(rupaArammanaIndex);
+                               const curr = valid.indexOf(javanaSubIndex);
+                               setJavanaSubIndex(valid[(curr + 1) % valid.length]);
+                           } else {
+                               setJavanaSubIndex(p => (p + 1) % currentJavanaGroup.options.length);
+                           }
+                           } else if (node.isJavanaNode && node.isMaranaNode) {
+    const maranaOffset = activePhase === 'cuti' ? currentLifeOffset : currentLifeOffset - 1;
+    const curSankharaState = getSankharaState(maranaOffset);
+    const mSGroup = JAVANA_GROUPS.find(g => g.id === curSankharaState.javanaGroupId);
+    let mSOpts = getFilteredJavanaOptions(mSGroup.id, activePuggalaId);
+    if (!mSOpts || mSOpts.length === 0) mSOpts = mSGroup.options;
+    setSankharaStateByLife(prev => ({
+        ...prev,
+        [maranaOffset]: { ...curSankharaState, javanaIdx: (curSankharaState.javanaIdx + 1) % mSOpts.length }
+    }));
+} else if (node.isBhavangaNode) {
+                           if (!isBhavangaAuto) {
+                               const bhvGrp = VIPAKA_GROUPS.find(g => g.id === bhavangaGroupId) || VIPAKA_GROUPS[1];
+                               setBhavangaSubIndex(p => (p + 1) % bhvGrp.options.length);
+                           }
+                       } else if (node.name === "စုတိ") {
+    const locked = activePhase === 'cuti' ? lifeLocks[currentLifeOffset] : lifeLocks[currentLifeOffset - 1];
+    if (locked) return;
+                           if (node.lifePhase === 'past') setPastCutiVariation(p=>(p+1)%4);
+                           else setCutiVariation(p=>(p+1)%4);
+                       }
+                    }}
+                    onDoubleClick={() => {
+       if (node.promptType) {
+           const aramOffset = node.promptType === 'past_life' ? currentLifeOffset - 1 : node.promptType === 'future_life' ? currentLifeOffset + 1 : currentLifeOffset;
+           if (lifeLocks[aramOffset]) return;
+           setPromptModal({ isOpen: true, type: node.promptType, value: customArammanas[node.promptType] });
+       }
+    }}
+                    onMouseEnter={() => handleMouseEnter(node.name)}
+                    onMouseLeave={handleMouseLeave}
+                  >
+                    {node.isLifeDividerBefore && (
+                       <div className="absolute left-0 top-1/2 -translate-y-1/2 -ml-[2px] w-0 h-24 border-l-[4px] border-dashed border-rose-500 z-0 opacity-80"></div>
+                    )}
+
+                    {isActive && (
+                       <div className="absolute bottom-[75px] flex flex-col items-center justify-center w-max z-30 pointer-events-none drop-shadow-md">
+                           <div className="flex flex-row items-center gap-1.5">
+                               <div className="bg-indigo-100 text-indigo-800 text-[10px] font-bold px-2 py-0.5 rounded-md border border-indigo-200 whitespace-nowrap shadow-sm">
+                                   {node.vithi}
+                               </div>
+                           </div>
+                           <div className="w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-t-[5px] border-t-indigo-200 mt-1"></div>
+                       </div>
+                    )}
+
+                    <span className={`text-[9px] mb-0.5 font-bold ${isActive ? 'text-indigo-600 opacity-100' : 'opacity-60 text-slate-500'}`}>
+                      {node.displayNum}
+                    </span>
+                    
+                    <div className="w-[52px] h-[52px] md:w-[56px] md:h-[56px] flex items-center justify-center">
+                        <div className={circleStyles} title={tooltipText}>
+                          {node.isCutiNode && isActive && <div className="absolute inset-0 bg-white/20 animate-pulse"></div>}
+                          {node.promptType && isActive && <div className="absolute inset-0 bg-white/20 animate-pulse"></div>}
+                          {node.isTadarammana && isActive && <div className="absolute inset-0 bg-white/20 animate-pulse"></div>}
+                          {numPrefix && <span className="text-[8px] font-mono opacity-80 mb-0.5">{numPrefix}</span>}
+                          <span className="text-[8px] md:text-[9px] font-bold text-center px-0.5 leading-tight break-words">
+                            {shortName}
+                          </span>
+                        </div>
+                    </div>
+
+                    <div className="flex gap-0.5 mt-1.5 justify-center bg-slate-50 px-1.5 py-0.5 rounded-full shadow-inner border border-slate-200">
+                      <div className={`w-1 h-1 rounded-full ${isActive ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} title="ဥပါဒ်"></div>
+                      <div className={`w-1 h-1 rounded-full ${isActive ? 'bg-amber-500 animate-pulse' : 'bg-slate-300'}`} title="ဌီ"></div>
+                      <div className={`w-1 h-1 rounded-full ${isActive ? 'bg-rose-500 animate-pulse' : 'bg-slate-300'}`} title="ဘင်"></div>
+                    </div>
+                  </div>
+                </React.Fragment>
+              );
+            })}
+            <div className="w-[10vw] shrink-0"></div>
+          </div>
+          
+          <div className="h-5 flex justify-center items-center mt-1 px-4 border-t border-slate-100 bg-slate-50">
+              <span className={`text-[11px] font-bold text-indigo-700 transition-opacity duration-300 ease-in-out truncate ${hoverLakkana ? 'opacity-100' : 'opacity-0'}`}>
+                  {hoverLakkana || " "}
+              </span>
+          </div>
+        </div>
+
+        {/* --- Info Area (Scrollable Columns) --- */}
+        <div className="flex-1 min-h-0 overflow-hidden bg-slate-50 relative flex flex-col">
+           <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 flex-1 p-3 md:p-4 pb-24 md:pb-20 overflow-y-auto">
+              <div className={`lg:col-span-1 flex flex-col h-full ${!showRupaColumn ? 'hidden' : ''}`}>
+                <div className={`p-4 rounded-xl h-auto flex flex-col justify-start shrink-0 mb-4 lg:mb-0 transition-all duration-300 relative ${rupaBoxStyle}`}>
+                  <div className="flex justify-between items-center mb-4 border-b border-slate-200 pb-2">
+                    <h3 className="text-sm font-bold text-slate-800">
+                        {displayMode === 'khandha' ? 'ရူပက္ခန္ဓာ' : 'ရုပ်တရား'}
+                    </h3>
+                    {/* ရှိပြီးသား ပဉ္စမနည်း button */}
+  
+                    <button 
+                        onClick={() => { setDisplayMode(m => m === 'rupa-nama' ? 'khandha' : m === 'khandha' ? 'ayatana' : m === 'ayatana' ? 'dhatu' : 'rupa-nama'); setKhandhaViewIndex(0); }} 
+                        className="p-1.5 bg-indigo-50 border border-indigo-200 rounded shadow-sm hover:bg-indigo-100 transition text-indigo-700 shrink-0"
+                        title={displayMode === 'rupa-nama' ? 'ခန္ဓာ (၅) ပါး' : displayMode === 'khandha' ? 'အာယတန (၁၂) ပါး' : displayMode === 'ayatana' ? 'ဓာတ် (၁၈) ပါး' : 'ရုပ်နာမ် (၂) ပါး'}
+                    >
+                        <Layers className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+    onClick={() => { if (khandhaViewIndex !== 0) handlePaticcaToggle(); }}
+    className={`p-1.5 md:p-2 rounded-full transition-all duration-300 shadow-md 
+      ${paticcaStep > 0 
+        ? 'bg-amber-500 text-white ring-[3px] ring-amber-300 animate-pulse' 
+        : 'bg-slate-700 text-amber-400 hover:bg-slate-600'}`}
+    title="ပဋိစ္စသမုပ္ပါဒ် ပဉ္စမနည်း"
+  >
+    <Share2 className="w-4 h-4 md:w-5 md:h-5" />
+  </button>
+                  </div>
+                  
+                  <div className="flex flex-col gap-3">
+                    <div className={`p-3 rounded-lg border shadow-sm transition-colors duration-300 ${(isPaticcaActive && paticcaKhandha !== 1) ? 'bg-slate-50 border-slate-200' : isSpecialArammana ? 'bg-amber-100 border-amber-300' : 'bg-slate-50 border-slate-200'}`}>
+                      <div className="flex justify-between items-center mb-1">
+                        <p className={`text-[10px] font-bold uppercase ${isSpecialArammana ? 'text-amber-800' : 'text-slate-500'}`}>{displayMode === 'ayatana' ? getAyatanaAramLabel((isPaticcaActive && paticcaLockedNodeData) ? paticcaLockedNodeData.aramana : activeNode.aramana) : displayMode === 'dhatu' ? getDhatuAramLabel((isPaticcaActive && paticcaLockedNodeData) ? paticcaLockedNodeData.aramana : activeNode.aramana) : 'အာရုံ'}</p>
+                        
+                        {(activePhase === 'pavatti' && (['cakkhu', 'sota', 'ghana', 'jivha', 'kaya'].includes(activeVithi) || activeVithi === 'mano_kama')) && (
+                          <button onClick={() => { setAramQIndex(p => (p + 1) % 4); setIsPlaying(false); setTadaCycleIndex(0); }} className="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-bold hover:bg-indigo-200 transition shadow-sm" title="အာရုံအနုအရင့် ပြောင်းရန် နှိပ်ပါ">
+                              {ARAM_Q_LABELS[aramQIndex]} ⟳
+                          </button>
+                        )}
+                      </div>
+                      
+                      {activePhase === 'pavatti' && (javanaGroupId.startsWith('rupa_jhana') || javanaGroupId.includes('abhinna')) ? (
+                        <select
+                          value={rupaArammanaIndex}
+                          onChange={(e) => { 
+                              const newAramIdx = parseInt(e.target.value);
+                              setRupaArammanaIndex(newAramIdx); 
+                              const validIndices = getValidJhanaIndices(newAramIdx);
+                              if (!validIndices.includes(javanaSubIndex)) {
+                                  setJavanaSubIndex(validIndices[0]);
+                              }
+                              setIsPlaying(false); 
+                              setTadaCycleIndex(0); 
+                          }}
+                          className="w-full mt-1 p-1.5 rounded-md text-[11px] font-semibold border border-indigo-200 bg-indigo-50 text-indigo-800 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                        >
+                          {RUPA_ARAMMANA_OPTIONS.map((opt, i) => (
+                            <option key={i} value={i}>{opt}</option>
+                          ))}
+                        </select>
+                      ) : activePhase === 'pavatti' && javanaGroupId.includes('arupa_jhana') ? (
+                        <select
+                          value={javanaSubIndex}
+                          onChange={(e) => { 
+                              setJavanaSubIndex(parseInt(e.target.value));
+                              setIsPlaying(false); 
+                              setTadaCycleIndex(0); 
+                          }}
+                          className="w-full mt-1 p-1.5 rounded-md text-[11px] font-semibold border border-indigo-200 bg-indigo-50 text-indigo-800 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                        >
+                          {ARUPA_ARAMMANA_OPTIONS.map((opt, i) => (
+                            <option key={i} value={i}>{opt}</option>
+                          ))}
+                        </select>
+                      ) : activePhase === 'pavatti' && activeVithi === 'mano_kama' ? (
+                        <select
+                          value={selectedArammana}
+                          onChange={(e) => { setSelectedArammana(e.target.value); setIsPlaying(false); setTadaCycleIndex(0); }}
+                          className="w-full mt-1 p-1.5 rounded-md text-[11px] font-semibold border border-indigo-200 bg-indigo-50 text-indigo-800 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                        >
+                          {DHAMMARAMMANA_RUPA.map((group, idx) => (
+                            <optgroup key={idx} label={group.group}>
+                              {group.options.map(opt => (
+                                <option key={opt} value={opt}>{opt}</option>
+                              ))}
+                            </optgroup>
+                          ))}
+                        </select>
+                      ) : activePhase === 'pavatti' && activeVithi === 'kaya' ? (
+                        <select
+                          value={kayaArammanaIndex}
+                          onChange={(e) => { setKayaArammanaIndex(parseInt(e.target.value)); setIsPlaying(false); setTadaCycleIndex(0); }}
+                          className="w-full mt-1 p-1.5 rounded-md text-[11px] font-semibold border border-indigo-200 bg-indigo-50 text-indigo-800 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                        >
+                          {KAYA_ARAMMANA_OPTIONS.map((opt, i) => (
+                            <option key={i} value={i}>{opt}</option>
+                          ))}
+                        </select>
+                      ) : selectedNidana === 7 ? (
+  <div onClick={() => setNidanaCycleIndex(p => p + 1)}
+    className="cursor-pointer mt-1 p-2 rounded-lg bg-amber-50 border border-amber-200 hover:bg-amber-100 transition">
+    <p className="font-black text-sm text-amber-900">{['ရူပါရုံ','သဒ္ဒါရုံ','ဂန္ဓာရုံ','ရသာရုံ','ဖောဋ္ဌဗ္ဗာရုံ','ဓမ္မာရုံ'][nidanaCycleIndex % 6]}</p>
+    </div>
+) : (
+  <p className={`font-bold text-xs mt-1 ${isSpecialArammana ? 'text-amber-900' : 'text-slate-800'}`}>{(isPaticcaActive && paticcaLockedNodeData) ? paticcaLockedNodeData.aramana : activeNode.aramana}</p>
+)}
+                    </div>
+                    
+                    <div className={`p-3 rounded-lg border shadow-sm transition-colors duration-300 cursor-pointer hover:opacity-80 flex flex-col items-center sm:items-start ${isSpecialBase ? 'bg-indigo-100 border-indigo-300' : 'bg-slate-50 border-slate-200'}`} onClick={() => {if(rupaNode.base && rupaNode.base !== "မရှိ") setSelectedBaseForModal(rupaNode.base)}}>
+      <p className={`text-[10px] font-bold uppercase mb-1 ${isSpecialBase ? 'text-indigo-800' : 'text-slate-500'}`}>{displayMode === 'ayatana' ? getAyatanaBaseLabel((isPaticcaActive && paticcaLockedNodeData) ? paticcaLockedNodeData.base : activeNode.base) : displayMode === 'dhatu' ? getDhatuBaseLabel((isPaticcaActive && paticcaLockedNodeData) ? paticcaLockedNodeData.base : activeNode.base) : 'မှီရာဝတ္ထု'}</p>
+      <p className={`font-bold text-xs mt-1 text-center sm:text-left ${rupaNode.base && rupaNode.base !== "မရှိ" ? "text-blue-600 underline" : "text-slate-800"}`} title="ရုပ်ကလာပ်များ ကြည့်ရန် နှိပ်ပါ">
+        {(isPaticcaActive && paticcaLockedNodeData) ? paticcaLockedNodeData.base : activeNode.base}
+      </p>
+      {rupaNode.base && rupaNode.base !== "မရှိ" && (
+                         <div className={`flex flex-wrap gap-2 mt-3 justify-center sm:justify-start`}>
+                             <span className={getRupaBadgeStyle("ကမ္မဇရုပ်")}>ကမ္မဇရုပ်</span>
+                             {activeNode.base !== "ဟဒယဝတ္ထု-၃၀" && (
+                                 <>
+                                     <span className={getRupaBadgeStyle("စိတ္တဇရုပ်")}>စိတ္တဇရုပ်</span>
+                                     <span className={getRupaBadgeStyle("ဥတုဇရုပ်")}>ဥတုဇရုပ်</span>
+                                 </>
+                             )}
+                             {activeNode.base !== "ဟဒယဝတ္ထု-၃၀" && activeNode.base !== "ဟဒယဝတ္ထု-၄၆" && (
+                                 <span className={getRupaBadgeStyle("အာဟာရဇရုပ်")}>အာဟာရဇရုပ်</span>
+                             )}
+                         </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="lg:col-span-3 flex flex-col h-full">
+                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm h-full relative shrink-0 flex flex-col">
+                  
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-4 gap-3 border-b border-slate-200 pb-2 relative shrink-0">
+                    <div className="flex items-center gap-2">
+                      <button 
+                          onClick={() => setKhandhaViewIndex(m => m === 0 ? 1 : m >= 5 ? 1 : m + 1)} 
+                          className="p-1.5 bg-indigo-50 border border-indigo-200 rounded shadow-sm hover:bg-indigo-100 transition text-indigo-700 shrink-0"
+                          title="ခန္ဓာငါးပါးကို တစ်လှည့်စီ ပြပေးရန်"
+                      >
+                          <Layers className="w-3.5 h-3.5" />
+                      </button>
+                      <h3 className="text-sm font-bold text-slate-800 flex flex-wrap items-center gap-2">
+                        <span
+                        className={(khandhaViewIndex === 4 || khandhaViewIndex === 6) ? 'cursor-pointer hover:text-emerald-600 underline decoration-dashed' : ''}
+                        onClick={() => {
+                          if (khandhaViewIndex === 4) setKhandhaViewIndex(6);
+                          else if (khandhaViewIndex === 6) setKhandhaViewIndex(4);
+                        }}
+                        title={(khandhaViewIndex === 4 || khandhaViewIndex === 6) ? 'သင်္ခါရက္ခန္ဓာ ၂-မျိုးပြောင်းနိုင်သည်' : ''}
+                      >
+                      {(selectedNidana !== null && khandhaViewIndex === 0)
+        ? NIDANA_LIST[selectedNidana]
+        : khandhaViewIndex === 0
+        ? (displayMode === 'khandha' ? 'နာမ်ခန္ဓာ (၄) ပါး' : 'နာမ်တရားများ')
+        : khandhaViewIndex === 1 ? 'ရူပက္ခန္ဓာ'
+        : khandhaViewIndex === 2 ? 'ဝေဒနာက္ခန္ဓာ'
+        : khandhaViewIndex === 3 ? 'သညာက္ခန္ဓာ'
+        : khandhaViewIndex === 4 ? 'သင်္ခါရက္ခန္ဓာ'
+        : khandhaViewIndex === 5 ? 'ဝိညာဏက္ခန္ဓာ'
+        : 'သင်္ခါရက္ခန္ဓာ (စေတနာ)'}
+                      </span>
+                        {(selectedNidana !== null && khandhaViewIndex === 0) ? null : khandhaViewIndex === 0 ? (
+                            <>
+                                <span className="text-emerald-700 font-bold bg-emerald-100 px-1.5 py-0.5 rounded border border-emerald-200">
+                                  ({toMyanmarNum(activeNode.count || 0)} ပါး)
+                                </span>
+                                <span className="text-[10px] font-semibold text-slate-500 ml-1">
+                                  [ စိတ် (၁) + စေတသိက် ({toMyanmarNum(activeNode.cetasikaOnlyCount || 0)}) ]
+                                </span>
+                            </>
+                        ) : khandhaViewIndex === 1 ? (
+                            <span className="text-emerald-700 font-bold bg-emerald-100 px-1.5 py-0.5 rounded border border-emerald-200">
+                                
+                            </span>
+                        ) : (
+                            <span className="text-emerald-700 font-bold bg-emerald-100 px-1.5 py-0.5 rounded border border-emerald-200">
+                                ({toMyanmarNum(
+                                    khandhaViewIndex === 2 ? vedanaGroup.length :
+                                    khandhaViewIndex === 3 ? sannaGroup.length :
+                                    khandhaViewIndex === 4 ? sankharaPrimary.length + sankharaSecondary.length :
+                            khandhaViewIndex === 5 ? cittaGroup.length :
+                            khandhaViewIndex === 6 ? sankharaPrimary.length : 0
+                                )} ပါး)
+                            </span>
+                        )}
+                      </h3>
+                    </div>
+                    
+                    <div className={`absolute left-0 -top-8 bg-indigo-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-lg transition-all duration-300 pointer-events-none z-10 ${toastMessage ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}>
+                      {toastMessage}
+                    </div>
+                    
+                    <div className="flex flex-wrap gap-1.5 text-[9px] font-bold mt-2 sm:mt-0">
+                      <span className="px-1.5 py-0.5 bg-sky-100 text-sky-800 rounded">သဗ္ဗစိတ္တ</span>
+                      <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 rounded">ပကိဏ်း</span>
+                      <span className="px-1.5 py-0.5 bg-purple-100 text-purple-800 rounded">သောဘဏ</span>
+                      <span className="px-1.5 py-0.5 bg-orange-50 text-orange-900 border border-dashed border-orange-500 rounded">နာနာကဒါစိ</span>
+                      <span className="px-1.5 py-0.5 bg-red-100 text-red-800 rounded">အကုသိုလ်</span>
+                    </div>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto pr-2">
+                  {(selectedNidana !== null && khandhaViewIndex === 0) ? (() => {
+  const VIPAKA_TYPES = ['ပဋိသန္ဓေ','ဘဝင်','စုတိ','စက္ခုဝိညာဏ်','သောတဝိညာဏ်','ဃာနဝိညာဏ်','ဇိဝှါဝိညာဏ်','ကာယဝိညာဏ်','သမ္ပဋိစ္ဆိုင်း','သန္တီရဏ','တဒါရုံ'];
+  if (selectedNidana === 2) {
+    const N2_CYCLE = ['ပဋိသန္ဓေ','ဘဝင်','စုတိ','စက္ခုဝိညာဏ်','သောတဝိညာဏ်','ဃာနဝိညာဏ်','ဇိဝှါဝိညာဏ်','ကာယဝိညာဏ်','သမ္ပဋိစ္ဆိုင်း','သန္တီရဏ','တဒါရုံ'];
+    const PVMAP = {'စက္ခုဝိညာဏ်':'cakkhu','သောတဝိညာဏ်':'sota','ဃာနဝိညာဏ်':'ghana','ဇိဝှါဝိညာဏ်':'jivha','ကာယဝိညာဏ်':'kaya','သမ္ပဋိစ္ဆိုင်း':'cakkhu','သန္တီရဏ':'cakkhu','တဒါရုံ':'cakkhu'};
+    const BASE_K = {'ဟဒယဝတ္ထု-၃၀':30,'ဟဒယဝတ္ထု-၄၆':39,'ဟဒယဝတ္ထု-၆၃':39,'စက္ခုဝတ္ထု-၆၃':39,'သောတဝတ္ထု-၆၃':39,'ဃာနဝတ္ထု-၆၃':39,'ဇိဝှါဝတ္ထု-၆၃':39,'ကာယဝတ္ထု-၅၃':30};
+
+    if (!nidana2SubMode) return (
+      <div className="flex flex-col items-center justify-center h-full gap-4">
+        {[{mode:'kamma',label:'ကမ္မဝိညာဏ်',desc:'အတိတ်ကမ္မဝိညာဏ်',color:'bg-blue-100 text-blue-800 border-blue-200'},
+          {mode:'sahajata',label:'သဟဇာတဝိညာဏ်',desc:'အတူဖြစ်ဝိညာဏ်',color:'bg-indigo-100 text-indigo-800 border-indigo-200'}
+        ].map(o => (
+          <button key={o.mode} onClick={()=>{setNidana2SubMode(o.mode);setNidanaViewMode('cause');setNidanaCycleIndex(0);}}
+            className={`px-6 py-4 rounded-xl border-2 w-72 text-left hover:scale-105 transition-all shadow-sm ${o.color}`}>
+            <p className="font-black text-base">{o.label}</p>
+            <p className="text-xs font-normal mt-1 opacity-80">{o.desc}</p>
+          </button>
+        ))}
+      </div>
+    );
+if (nidana2SubMode === 'sahajata') {
+  const SAH_CYCS = ['ပဋိသန္ဓေ','ဘဝင်','စုတိ','စက္ခုဝိညာဏ်','သောတဝိညာဏ်','ဃာနဝိညာဏ်','ဇိဝှါဝိညာဏ်','ကာယဝိညာဏ်','သမ္ပဋိစ္ဆိုင်း','သန္တီရဏ','တဒါရုံ'];
+  const SAH_PVMAP = {'စက္ခုဝိညာဏ်':'cakkhu','သောတဝိညာဏ်':'sota','ဃာနဝိညာဏ်':'ghana','ဇိဝှါဝိညာဏ်':'jivha','ကာယဝိညာဏ်':'kaya','သမ္ပဋိစ္ဆိုင်း':'cakkhu','သန္တီရဏ':'cakkhu','တဒါရုံ':'cakkhu'};
+  const curSahType = SAH_CYCS[nidanaCycleIndex % SAH_CYCS.length];
+  const matchSah = vithiData.find(n => n.name === curSahType || n.name.includes(curSahType));
+  const isPancaVin2 = ['စက္ခုဝိညာဏ်','သောတဝိညာဏ်','ဃာနဝိညာဏ်','ဇိဝှါဝိညာဏ်','ကာယဝိညာဏ်'].some(v => curSahType.includes(v));
+  const sahRupa = curSahType === 'ပဋိသန္ဓေ' ? 'ကမ္မဇရုပ် ၃၀' : isPancaVin2 ? '' : 'စိတ္တဇရုပ် ၈';
+
+  const n2SahClick = () => {
+    const ni = (nidanaCycleIndex + 1) % SAH_CYCS.length;
+    setNidanaCycleIndex(ni);
+    const nt = SAH_CYCS[ni];
+    const vt = SAH_PVMAP[nt];
+    if (vt) { if (activePhase !== 'pavatti') setActivePhase('pavatti'); if (activeVithi !== vt) setActiveVithi(vt); }
+    else if (nt === 'ပဋိသန္ဓေ') { if (activePhase !== 'patisandhi') setActivePhase('patisandhi'); }
+else if (nt === 'ဘဝင်') {
+    if (activePhase !== 'patisandhi') setActivePhase('patisandhi');
+    setTimeout(() => {
+        const patIdx = vithiData.findIndex(n => n.name === 'ပဋိသန္ဓေ');
+        const bhvIdx = vithiData.findIndex((n, i) => i > patIdx && n.isBhavangaNode && n.name === 'ဘဝင်');
+        if (bhvIdx !== -1) setCurrentIndex(bhvIdx);
+    }, 50);
+}
+    else if (nt === 'စုတိ') { if (activePhase !== 'cuti') setActivePhase('cuti'); }
+  };
+
+  const causeNode = activeNode;
+const causeCount = causeNode.cetasikaOnlyCount || 0;
+const hasCittaja = validRupas?.cittaja;
+const effectDesc = `စေတသိက် ${toMyanmarNum(causeCount)}${hasCittaja ? ' + စိတ္တဇရုပ် ၈' : ''}`;
+
+return (
+    <div className="flex flex-col items-center justify-center h-full gap-3 py-2">
+      <button onClick={()=>setNidana2SubMode(null)} className="text-[10px] text-cyan-600 font-bold self-start px-2 py-1 bg-cyan-50 rounded">← သဟဇာတဝိညာဏ်</button>
+      <div className="cursor-pointer px-5 py-2.5 rounded-lg text-center border-2 bg-blue-500 text-white ring-2 ring-blue-300 shadow-md w-56" onClick={n2SahClick}>
+        <p className="font-black text-sm">{(() => { const n = activeNode.name.replace(/^[၀-၉]+\s*-\s*/,''); return n.includes('ဝိညာဏ်') ? n : n + 'ဝိညာဏ်'; })()}</p>
+        <p className="text-xs mt-0.5 opacity-80">စိတ်</p>
+      </div>
+      <ArrowDown className="text-cyan-500 w-5 h-5 animate-bounce" />
+      <div className="px-5 py-2.5 rounded-lg text-center border-2 bg-emerald-500 text-white ring-2 ring-emerald-300 shadow-md w-56">
+        <p className="font-black text-sm">{causeNode.name.replace(/^[၀-၉]+\s*-\s*/,'')} နာမ်ရုပ်</p>
+        <p className="text-xs mt-0.5 opacity-80">{effectDesc}</p>
+      </div>
+      </div>
+  );
+}
+    const isKamma = nidana2SubMode === 'kamma';
+    const curEffType = N2_CYCLE[nidanaCycleIndex % N2_CYCLE.length];
+    const matchEffNode = vithiData.find(n => n.name === curEffType || n.name.includes(curEffType));
+    const kammaCount = BASE_K[matchEffNode?.base] ?? 39;
+    const n2EffClick = () => {
+      const ni = (nidanaCycleIndex + 1) % N2_CYCLE.length;
+      setNidanaCycleIndex(ni);
+      const nt = N2_CYCLE[ni];
+      const vt = PVMAP[nt];
+      if (vt) { if (activePhase !== 'pavatti') setActivePhase('pavatti'); if (activeVithi !== vt) setActiveVithi(vt); }
+      else if (nt === 'ပဋိသန္ဓေ' || nt === 'ဘဝင်') { if (activePhase !== 'patisandhi') setActivePhase('patisandhi'); }
+      else if (nt === 'စုတိ') { if (activePhase !== 'cuti') setActivePhase('cuti'); }
+      setNidanaViewMode('effect');
+    };
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-3 py-4">
+        <button onClick={()=>setNidana2SubMode(null)} className="text-[10px] text-cyan-600 font-bold self-start px-2 py-1 bg-cyan-50 rounded">
+          ← {isKamma ? 'ကမ္မဝိညာဏ်' : 'သဟဇာတဝိညာဏ်'}
+        </button>
+        <div onClick={()=>{ if(activePhase!=='patisandhi') setActivePhase('patisandhi'); setNidanaViewMode('cause'); }} className={`cursor-pointer px-6 py-3 rounded-lg text-center border-2 transition-all w-32 ${nidanaViewMode==='cause'?'bg-rose-500 text-white ring-2 ring-rose-300 scale-105':'bg-rose-50 text-rose-800 border-rose-200 hover:scale-105'}`}>
+          <p className="font-black text-sm">{isKamma ? 'ကမ္မဝိညာဏ်' : 'သဟဇာတဝိညာဏ်'}</p>
+        </div>
+        <ArrowDown className="text-cyan-500 w-6 h-6 animate-bounce" />
+        <div onClick={n2EffClick} className={`cursor-pointer px-6 py-3 rounded-lg text-center border-2 transition-all w-52 ${nidanaViewMode==='effect'?'bg-emerald-500 text-white ring-2 ring-emerald-300 scale-105':'bg-emerald-50 text-emerald-800 border-emerald-200 hover:scale-105'}`}>
+          <p className="font-black text-sm">{curEffType}နာမ်ရုပ်</p>
+{matchEffNode && <p className="text-xs mt-1 opacity-80">နာမ် {toMyanmarNum(matchEffNode.count)} လုံး{isKamma ? ` + ကမ္မဇရုပ် ${toMyanmarNum(kammaCount)}` : ''}</p>}
+          {matchEffNode && <p className="text-[10px] mt-0.5 opacity-60"></p>}
+        </div>
+      </div>
+    );
+  }
+  if (selectedNidana === 3) {
+  const N3_MODES = [
+    { id:'nama_mana', label:'နာမ် → မနာယတန', cause:'နာမ်', effect:'မနာယတန' },
+    { id:'nama_rupa_ay', label:'နာမ် → ရုပ်အာယတန', cause:'နာမ်', effect:'ရုပ်အာယတန (စက္ခုစသည်)' },
+    { id:'rupa_rupa_ay', label:'ရုပ် → ရုပ်အာယတန', cause:'ကမ္မဇရုပ်', effect:'ရုပ်အာယတန' },
+    { id:'rupa_mana', label:'ရုပ် → မနာယတန', cause:'ဟဒယဝတ္ထုရုပ်', effect:'မနာယတန' },
+    { id:'namarupa_mana', label:'နာမ်ရုပ် → မနာယတန', cause:'နာမ်ရုပ်', effect:'မနာယတန' },
+  ];
+  const curN3 = N3_MODES.find(m=>m.id===nidana3SubMode);
+  const curCitta = activeNode;
+  const cetCount = curCitta.cetasikaOnlyCount || 0;
+  const SAH_CYCS_N3 = ['ပဋိသန္ဓေ','ဘဝင်','စုတိ','စက္ခုဝိညာဏ်','သောတဝိညာဏ်','ဃာနဝိညာဏ်','ဇိဝှါဝိညာဏ်','ကာယဝိညာဏ်','သမ္ပဋိစ္ဆိုင်း','သန္တီရဏ','တဒါရုံ'];
+  const curN3VipType = SAH_CYCS_N3[nidanaCycleIndex % SAH_CYCS_N3.length];
+  const matchN3 = vithiData.find(n => n.name === curN3VipType || n.name.includes(curN3VipType));
+  const n3NamaManaClick = () => {
+    const n3NamaRupaAyClick = () => {
+    if (activePhase !== 'patisandhi') { setActivePhase('patisandhi'); setTimeout(() => setCurrentIndex(vithiData.findIndex(n => n.name === 'ပဋိသန္ဓေ') + 1 || 0), 100); return; }
+    const patIdx = vithiData.findIndex(n => n.name === 'ပဋိသန္ဓေ');
+    if (currentIndex <= patIdx) setCurrentIndex(patIdx + 1);
+    else setCurrentIndex(currentIndex + 1 < vithiData.length ? currentIndex + 1 : patIdx + 1);
+  };
+    const ni = (nidanaCycleIndex + 1) % SAH_CYCS_N3.length;
+    setNidanaCycleIndex(ni);
+    const nt = SAH_CYCS_N3[ni];
+    const PVMAP_N3 = {'စက္ခုဝိညာဏ်':'cakkhu','သောတဝိညာဏ်':'sota','ဃာနဝိညာဏ်':'ghana','ဇိဝှါဝိညာဏ်':'jivha','ကာယဝိညာဏ်':'kaya','သမ္ပဋိစ္ဆိုင်း':'cakkhu','သန္တီရဏ':'cakkhu','တဒါရုံ':'cakkhu'};
+    const vt = PVMAP_N3[nt];
+    if (vt) { if (activePhase !== 'pavatti') setActivePhase('pavatti'); if (activeVithi !== vt) setActiveVithi(vt); }
+    else if (nt === 'ပဋိသန္ဓေ' || nt === 'ဘဝင်') { if (activePhase !== 'patisandhi') setActivePhase('patisandhi'); }
+    else if (nt === 'စုတိ') { if (activePhase !== 'cuti') setActivePhase('cuti'); }
+};
+
+  if (!nidana3SubMode) return (
+    <div className="flex flex-col items-center justify-center h-full gap-2 py-2">
+      {N3_MODES.map(m=>(
+        <button key={m.id} onClick={()=>setNidana3SubMode(m.id)}
+          className="px-4 py-2.5 rounded-xl border-2 w-64 text-left hover:scale-105 transition-all shadow-sm bg-teal-50 text-teal-800 border-teal-200 hover:bg-teal-100">
+          <p className="font-black text-xs">{m.label}</p>
+        </button>
+      ))}
+    </div>
+  );
+
+  const getCauseContent = () => {
+    if (curN3.id === 'nama_mana')
+  return `${activeNode.name.replace(/^[၀-၉]+\s*-\s*/,'')} (နာမ်) = စေတသိက် ${toMyanmarNum(activeNode.cetasikaOnlyCount || 0)}`;
+    if (curN3.id === 'nama_rupa_ay') {
+      if (curCitta.name === 'ပဋိသန္ဓေ') return '';
+  const cleanName = curCitta.name.replace(/^[၀-၉]+\s*-\s*/,'');
+  return `${cleanName}နာမက္ခန္ဓာ (${toMyanmarNum(curCitta.count)}) လုံး`;
+}
+    if (curN3.id === 'rupa_rupa_ay') {
+      const CAUSES = ['မဟာဘုတ်လေးပါး','ဇီဝိတ','ဩဇာ'];
+      const KALAPAS = ['(စက္ခုဒသကကလာပ်)','(သောတဒသကကလာပ်)','(ဃာနဒသကကလာပ်)','(ဇိဝှါဒသကကလာပ်)','(ကာယဒသကကလာပ်)'];
+      return `${CAUSES[rupaRupaAyState.causeIdx]} ${KALAPAS[rupaRupaAyState.effectIdx]}`;
+    }
+    if (curN3.id === 'rupa_mana') {
+      const curName = vithiData[currentIndex]?.name || '';
+      if (curName === 'ပဋိသန္ဓေ') return 'ပဋိသန္ဓေကမ္မဇရုပ် (၃၀)';
+      const pancaPassada = {'စက္ခုဝိညာဏ်':'စက္ခုဝတ္ထု','သောတဝိညာဏ်':'သောတဝတ္ထု','ဃာနဝိညာဏ်':'ဃာနဝတ္ထု','ဇိဝှါဝိညာဏ်':'ဇိဝှါဝတ္ထု','ကာယဝိညာဏ်':'ကာယဝတ္ထု'};
+      for (const [key, val] of Object.entries(pancaPassada)) {
+        if (curName.includes(key)) return `${val} (၆၃)`;
+      }
+      const _cutiIdx = vithiData.findIndex(n => n.name === 'စုတိ');
+    let refIdx;
+    if (_cutiIdx !== -1 && currentIndex >= _cutiIdx - 16 && currentIndex <= _cutiIdx) {
+        refIdx = _cutiIdx - 17;
+    } else {
+        refIdx = currentIndex - 1;
+    }
+    const causeCitta = vithiData[refIdx];
+    const causeName = causeCitta ? causeCitta.name : '';
+    const curBase = vithiData[currentIndex]?.base || '';
+    let rupaCount = '၆၃';
+    if (curBase.includes('၃၀')) rupaCount = '၃၀';
+    else if (curBase.includes('၄၆')) {
+        rupaCount = vithiData[currentIndex - 1]?.name === 'ပဋိသန္ဓေ' ? '၃၈' : '၄၆';
+    } else if (curBase.includes('၅၃')) rupaCount = '၅၃';
+    return `${causeName} ဟဒယဝတ္ထု (${rupaCount})`;
+    }
+    const _nm = vithiData[currentIndex]?.name || '';
+    let _rupaDesc = '';
+    if (_nm === 'ပဋိသန္ဓေ') _rupaDesc = 'ကမ္မဇရုပ် (၃၀)';
+    else {
+        const _pp = {'စက္ခုဝိညာဏ်':'စက္ခုဝတ္ထု','သောတဝိညာဏ်':'သောတဝတ္ထု','ဃာနဝိညာဏ်':'ဃာနဝတ္ထု','ဇိဝှါဝိညာဏ်':'ဇိဝှါဝတ္ထု','ကာယဝိညာဏ်':'ကာယဝတ္ထု'};
+        let _found = false;
+        for (const [k, v] of Object.entries(_pp)) {
+            if (_nm.includes(k)) { _rupaDesc = `${v} (${k === 'ကာယဝိညာဏ်' ? '၅၃' : '၆၃'})`; _found = true; break; }
+        }
+        if (!_found) {
+            const _ci = vithiData.findIndex(n => n.name === 'စုတိ');
+            const _ref = (_ci !== -1 && currentIndex >= _ci - 16 && currentIndex <= _ci)
+                ? vithiData[_ci - 17] : vithiData[currentIndex - 1];
+            const _rn = _ref ? _ref.name : '';
+            const _baseNum = vithiData[currentIndex]?.base?.includes('၄၆') ? '၄၆' : '၆၃';
+            _rupaDesc = `${_rn} ဟဒယဝတ္ထု (${_baseNum})`;
+        }
+    }
+    return `နာမ် (စေတသိက် ${toMyanmarNum(curCitta.cetasikaOnlyCount || 0)} လုံး) + ရုပ် ${_rupaDesc}`;
+  };
+  const getEffectContent = () => {
+    if (curN3.id === 'rupa_rupa_ay') {
+      const EFFECTS = ['စက္ခာယတန','သောတာယတန','ဃာနာယတန','ဇိဝှါယတန','ကာယာယတန'];
+      return EFFECTS[rupaRupaAyState.effectIdx];
+    }
+    if (curN3.id === 'nama_rupa_ay') {
+      if (curCitta.name === 'ပဋိသန္ဓေ') return '—';
+      const allPatIndices = vithiData.reduce((acc, n, i) =>
+        n.name === 'ပဋိသန္ဓေ' ? [...acc, i] : acc, []);
+      for (const patIdx of allPatIndices) {
+        if (currentIndex === patIdx + 1) return 'ပဋိသန္ဓေ ဒွိဇရုပ် (ကမ္မဇ + ဥတုဇ)';
+        if (currentIndex === patIdx + 2) return 'ပထမဘဝင် တိဇရုပ် (ကမ္မဇ + စိတ္တဇ + ဥတုဇ)';
+      }
+      const rupaTypes = [];
+  if (validRupas.kammaja) rupaTypes.push('ကမ္မဇ');
+  if (validRupas.cittaja) rupaTypes.push('စိတ္တဇ');
+  if (validRupas.utuja) rupaTypes.push('ဥတုဇ');
+  if (validRupas.aharaja) rupaTypes.push('အာဟာရဇ');
+  const prefixMap = {4:'စတုဇရုပ်',3:'တိဇရုပ်',2:'ဒိဇရုပ်',1:'ဧကဇရုပ်'};
+  return `${prefixMap[rupaTypes.length]||'ဇရုပ်'} (${rupaTypes.join(' + ')})`;
+    }
+    if (curN3.id === 'nama_mana') return `${activeNode.name.replace(/^[၀-၉]+\s*-\s*/,'')}မနာယတန`;
+    return `${curCitta.name}မနာယတန`;
+  };
+
+  return (
+    <div className="flex flex-col items-center justify-center h-full gap-3 py-2">
+      <button onClick={()=>setNidana3SubMode(null)} className="text-[10px] text-teal-600 font-bold self-start px-2 py-1 bg-teal-50 rounded">← {curN3.label}</button>
+      <div onClick={curN3.id === 'nama_mana' ? n3NamaManaClick : curN3.id === 'rupa_rupa_ay' ? () => setRupaRupaAyState(prev => ({...prev, causeIdx: (prev.causeIdx+1)%3})) : undefined} className={`px-5 py-2.5 rounded-lg text-center border-2 bg-rose-500 text-white ring-2 ring-rose-300 shadow-md w-60 ${(curN3.id === 'nama_mana' || curN3.id === 'rupa_rupa_ay') ? 'cursor-pointer hover:scale-105 transition-all' : ''}`}>
+        <p className="font-black text-xs leading-snug">{getCauseContent()}</p>
+      </div>
+      <ArrowDown className="text-teal-500 w-5 h-5 animate-bounce" />
+      <div onClick={curN3.id === 'nama_mana' ? n3NamaManaClick : curN3.id === 'rupa_rupa_ay' ? () => setRupaRupaAyState(prev => ({...prev, effectIdx: (prev.effectIdx+1)%5})) : undefined} className={`px-5 py-2.5 rounded-lg text-center border-2 bg-teal-500 text-white ring-2 ring-teal-300 shadow-md w-60 ${(curN3.id === 'nama_mana' || curN3.id === 'rupa_rupa_ay') ? 'cursor-pointer hover:scale-105 transition-all' : ''}`}>
+        {curN3.id === 'nama_rupa_ay' && activePhase === 'pavatti' && showAyatanaDetail ? (
+          <div className="flex flex-col gap-1 items-center">
+            {['စက္ခာယတန','သောတာယတန','ဃာနာယတန','ဇိဝှါယတန','ကာယာယတန'].map((a,i)=>(
+              <span key={i} className="text-[10px] font-bold bg-white/20 rounded px-2 py-0.5">{a}</span>
+            ))}
+          </div>
+        ) : (
+          <p className="font-black text-xs leading-snug">{getEffectContent()}</p>
+        )}
+      </div>
+      {curN3.id === 'nama_rupa_ay' && activePhase === 'pavatti' && (
+        <button onClick={()=>setShowAyatanaDetail(v=>!v)} className="px-3 py-1.5 text-[10px] font-bold rounded-lg bg-teal-700 text-white hover:bg-teal-800 shadow border border-teal-500 transition-all">
+          {showAyatanaDetail ? '← ပဝတ္တိကာလ ရုပ်ကလာပ်' : 'ရုပ်အာယတန ၅-ပါး ▶'}
+        </button>
+      )}
+    </div>
+  );
+}
+if (selectedNidana === 4) {
+    const _n4name = activeNode.name.replace(/^[၀-၉]+\s*-\s*/,'');
+    const _n4phassa = (n => {
+      if (n.includes("စက္ခုဝိညာဏ်")) return "စက္ခုသမ္ဖဿ";
+      if (n.includes("သောတဝိညာဏ်")) return "သောတသမ္ဖဿ";
+      if (n.includes("ဃာနဝိညာဏ်")) return "ဃာနသမ္ဖဿ";
+      if (n.includes("ဇိဝှါဝိညာဏ်")) return "ဇိဝှါသမ္ဖဿ";
+      if (n.includes("ကာယဝိညာဏ်")) return "ကာယသမ္ဖဿ";
+      return "မနောသမ္ဖဿ";
+    })(activeNode.name);
+    const _n4vatthu = (n => {
+      if (n.includes("စက္ခုဝိညာဏ်")) return "စက္ခာယတန (= စက္ခုဝတ္ထု)";
+      if (n.includes("သောတဝိညာဏ်")) return "သောတာယတန (= သောတဝတ္ထု)";
+      if (n.includes("ဃာနဝိညာဏ်")) return "ဃာနာယတန (= ဃာနဝတ္ထု)";
+      if (n.includes("ဇိဝှါဝိညာဏ်")) return "ဇိဝှါယတန (= ဇိဝှါဝတ္ထု)";
+      if (n.includes("ကာယဝိညာဏ်")) return "ကာယာယတန (= ကာယဝတ္ထု)";
+      return "ဟဒယဝတ္ထု (ဓမ္မာယတန)";
+    })(activeNode.name);
+    const _n4aram = ["ပဋိသန္ဓေ","ဘဝင်","စုတိ"].some(k=>activeNode.name.includes(k))
+      ? "ကံ/ကမ္မနိမိတ်/ဂတိနိမိတ် (ဗဟိရာ ဓမ္မာယတန)"
+      : ["cakkhu","sota","ghana","jivha","kaya"].includes(activeVithi)
+        ? {"cakkhu":"ရူပါယတန","sota":"သဒ္ဒါယတန","ghana":"ဂန္ဓာယတန","jivha":"ရသာယတန","kaya":"ဖောဋ္ဌဗ္ဗာယတန"}[activeVithi]
+        : `${activeNode.aramana || "ဓမ္မ"} (ဓမ္မာယတန)`;
+    const _n4list = [
+      _n4vatthu,
+      _n4aram,
+      `${_n4name} မနာယတန`,
+      `သမ္ပယုတ်ဓမ္မာယတန (= ${toMyanmarNum(activeNode.cetasikaOnlyCount - 1)} လုံး)`
+    ];
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-4">
+      <p className="text-[9px] font-bold opacity-70 mb-1">({toMyanmarNum(nidana4CycleIdx+1)}/၄)</p>
+          <div onClick={()=>setNidana4CycleIdx(p=>(p+1)%4)}
+          className="cursor-pointer px-5 py-3 rounded-xl text-center border-2 bg-rose-500 text-white ring-2 ring-rose-300 shadow-md w-64 hover:scale-105 transition-all">
+          <p className="font-black text-sm leading-snug">{_n4list[nidana4CycleIdx]}</p>
+        </div>
+        <ArrowDown className="text-teal-500 w-6 h-6 animate-bounce" />
+          <div className="px-5 py-3 rounded-xl text-center border-2 bg-teal-500 text-white ring-2 ring-teal-300 shadow-md w-64">
+          <p className="font-black text-sm">{_n4name} {_n4phassa}</p>
+        </div>
+      </div>
+    );
+  }
+  if (selectedNidana === 5) {
+    const N5_S = ['စက္ခုသမ္ဖဿ','သောတသမ္ဖဿ','ဃာနသမ္ဖဿ','ဇိဝှါသမ္ဖဿ','ကာယသမ္ဖဿ','မနောသမ္ဖဿ'];
+    const N5_V = ['စက္ခုသမ္ဖဿဇာဝေဒနာ','သောတသမ္ဖဿဇာဝေဒနာ','ဃာနသမ္ဖဿဇာဝေဒနာ','ဇိဝှါသမ္ဖဿဇာဝေဒနာ','ကာယသမ္ဖဿဇာဝေဒနာ','မနောသမ္ဖဿဇာဝေဒနာ'];
+    const _ci5 = nidanaCycleIndex % 6;
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-5 py-4">
+        <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">အကြောင်းတရား</p>
+        <div onClick={() => {
+          setNidana5SubMode('cause');
+          const N5_VITHI = ['cakkhu','sota','ghana','jivha','kaya','mano_kama'];
+          const N5_SRC2 = ['စက္ခုဝိညာဏ်','သောတဝိညာဏ်','ဃာနဝိညာဏ်','ဇိဝှါဝိညာဏ်','ကာယဝိညာဏ်','ဘဝင်္ဂုပစ္ဆေဒ'];
+          const _ci = nidanaCycleIndex % 6;
+          if (_ci < 5) { if (activePhase !== 'pavatti') setActivePhase('pavatti'); setActiveVithi(N5_VITHI[_ci]); }
+          const tIdx = vithiData.findIndex(n => n.name.includes(N5_SRC2[_ci]) || n.name === N5_SRC2[_ci]);
+          if (tIdx !== -1) setCurrentIndex(tIdx);
+        }} onDoubleClick={() => {
+          const next = (nidanaCycleIndex + 1) % 6;
+          setNidana5SubMode('cause');
+          setNidanaCycleIndex(next);
+          const N5_VITHI = ['cakkhu','sota','ghana','jivha','kaya','mano_kama'];
+          const N5_SRC2 = ['စက္ခုဝိညာဏ်','သောတဝိညာဏ်','ဃာနဝိညာဏ်','ဇိဝှါဝိညာဏ်','ကာယဝိညာဏ်','ဘဝင်္ဂုပစ္ဆေဒ'];
+          if (activePhase !== 'pavatti') setActivePhase('pavatti');
+          setActiveVithi(N5_VITHI[next]);
+          const tIdx = vithiData.findIndex(n => n.name.includes(N5_SRC2[next]) || n.name === N5_SRC2[next]);
+          if (tIdx !== -1) setCurrentIndex(tIdx);
+        }}
+          className={`cursor-pointer px-6 py-3 rounded-lg text-center border-2 transition-all w-72 shadow-sm
+            ${nidana5SubMode==='cause' ? 'bg-rose-500 text-white ring-2 ring-rose-300 scale-105' : 'bg-rose-50 text-rose-800 border-rose-200 hover:scale-105'}`}>
+          <p className="font-black text-sm">{N5_S[_ci5]}</p>
+        </div>
+        <ArrowDown className="text-pink-500 w-8 h-8 animate-bounce" />
+        <div onClick={() => {
+          setNidana5SubMode('effect');
+          const N5_SRC2 = ['စက္ခုဝိညာဏ်','သောတဝိညာဏ်','ဃာနဝိညာဏ်','ဇိဝှါဝိညာဏ်','ကာယဝိညာဏ်','ဘဝင်္ဂုပစ္ဆေဒ'];
+          const N5_PV2 = ['စက္ခုဒွါရဝီထိ','သောတဒွါရဝီထိ','ဃာနဒွါရဝီထိ','ဇိဝှါဒွါရဝီထိ','ကာယဒွါရဝီထိ'];
+          const _ci = nidanaCycleIndex % 6;
+          let tIdx = -1;
+          if (_ci < 5) {
+            tIdx = vithiData.findIndex(n => n.vithi?.includes(N5_PV2[_ci]) && !n.name.includes(N5_SRC2[_ci]));
+          } else {
+            const upIdx = vithiData.findIndex(n => n.name === 'ဘဝင်္ဂုပစ္ဆေဒ');
+            if (upIdx !== -1) tIdx = vithiData.findIndex((n, i) => i > upIdx && (n.vithi?.includes('မနောဒွါရ') || n.vithi?.includes('ဂ္ဂဟဏ')));
+          }
+          if (tIdx !== -1) setCurrentIndex(tIdx);
+        }} onDoubleClick={() => {
+          const next = (nidanaCycleIndex + 1) % 6;
+          setNidana5SubMode('cause');
+          setNidanaCycleIndex(next);
+          const N5_VITHI = ['cakkhu','sota','ghana','jivha','kaya','mano_kama'];
+          const N5_SRC2 = ['စက္ခုဝိညာဏ်','သောတဝိညာဏ်','ဃာနဝိညာဏ်','ဇိဝှါဝိညာဏ်','ကာယဝိညာဏ်','ဘဝင်္ဂုပစ္ဆေဒ'];
+          if (activePhase !== 'pavatti') setActivePhase('pavatti');
+          setActiveVithi(N5_VITHI[next]);
+          const tIdx2 = vithiData.findIndex(n => n.name.includes(N5_SRC2[next]) || n.name === N5_SRC2[next]);
+          if (tIdx2 !== -1) setCurrentIndex(tIdx2);
+        }}
+          className={`cursor-pointer px-6 py-3 rounded-lg text-center border-2 transition-all w-72 shadow-sm
+            ${nidana5SubMode==='effect' ? 'bg-emerald-500 text-white ring-2 ring-emerald-300 scale-105' : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:scale-105'}`}>
+          <p className="font-black text-sm">{N5_V[_ci5]}</p>
+        </div>
+      </div>
+    );
+  }
+  if (selectedNidana === 6) {
+    const N6_VEDANA = ['စက္ခုသမ္ဖဿဇာ ဝေဒနာ','သောတသမ္ဖဿဇာ ဝေဒနာ','ဃာနသမ္ဖဿဇာ ဝေဒနာ','ဇိဝှါသမ္ဖဿဇာ ဝေဒနာ','ကာယသမ္ဖဿဇာ ဝေဒနာ','မနောသမ္ဖဿဇာ ဝေဒနာ'];
+    const N6_TANHA = ['ရူပတဏှာ','သဒ္ဒတဏှာ','ဂန္ဓတဏှာ','ရသတဏှာ','ဖောဋ္ဌဗ္ဗတဏှာ','ဓမ္မတဏှာ'];
+    const N6_ARAM = ['ရူပါရုံ','သဒ္ဒါရုံ','ဂန္ဓာရုံ','ရသာရုံ','ဖောဋ္ဌဗ္ဗာရုံ','ဓမ္မာရုံ'];
+    const N6_VITHI = ['cakkhu','sota','ghana','jivha','kaya','mano_kama'];
+    const N6_SRC = ['စက္ခုဝိညာဏ်','သောတဝိညာဏ်','ဃာနဝိညာဏ်','ဇိဝှါဝိညာဏ်','ကာယဝိညာဏ်','ဘဝင်္ဂုပစ္ဆေဒ'];
+    const N6_PV = ['စက္ခုဒွါရဝီထိ','သောတဒွါရဝီထိ','ဃာနဒွါရဝီထိ','ဇိဝှါဒွါရဝီထိ','ကာယဒွါရဝီထိ'];
+    const _ci6 = nidanaCycleIndex % 6;
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-5 py-4">
+        <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">အကြောင်းတရား</p>
+        <div onClick={() => {
+          setNidana5SubMode('cause');
+          const _ci = nidanaCycleIndex % 6;
+          if (activePhase !== 'pavatti') setActivePhase('pavatti');
+          setActiveVithi(N6_VITHI[_ci] || 'mano_kama');
+          
+        }} onDoubleClick={() => {
+          const next = (nidanaCycleIndex + 1) % 6;
+          setNidana5SubMode('cause');
+          setNidanaCycleIndex(next);
+          if (activePhase !== 'pavatti') setActivePhase('pavatti');
+          setActiveVithi(N6_VITHI[next] || 'mano_kama');
+        }}
+          className={`cursor-pointer px-6 py-3 rounded-lg text-center border-2 transition-all w-72 shadow-sm
+            ${nidana5SubMode==='cause' ? 'bg-rose-500 text-white ring-2 ring-rose-300 scale-105' : 'bg-rose-50 text-rose-800 border-rose-200 hover:scale-105'}`}>
+          <p className="font-black text-sm">{N6_VEDANA[_ci6]}</p>
+        </div>
+        <ArrowDown className="text-pink-500 w-8 h-8 animate-bounce" />
+        <div onClick={() => { setNidana5SubMode('effect'); }}
+         onDoubleClick={() => {
+          const next = (nidanaCycleIndex + 1) % 6;
+          setNidana5SubMode('effect');
+          setNidanaCycleIndex(next);
+        }}
+          className={`cursor-pointer px-6 py-3 rounded-lg text-center border-2 transition-all w-72 shadow-sm
+            ${nidana5SubMode==='effect' ? 'bg-emerald-500 text-white ring-2 ring-emerald-300 scale-105' : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:scale-105'}`}>
+          <p className="font-black text-sm">{N6_TANHA[_ci6]}</p>
+          <p className="text-xs mt-1 opacity-80">{N6_ARAM[_ci6]}</p>
+        </div>
+      </div>
+    );
+  }
+  if (selectedNidana === 7) {
+  const N7_PAIRS = [
+    { tanha: 'ကာမတဏှာ', upadana: 'ကာမုပါဒါန်' },
+    { tanha: 'ဘဝတဏှာ', upadana: 'ဒိဋ္ဌုပါဒါန်/အတ္တဝါဒုပါဒါန်' },
+    { tanha: 'ဝိဘဝတဏှာ', upadana: 'ဒိဋ္ဌုပါဒါန်/အတ္တဝါဒုပါဒါန်' },
+  ];
+  const N7_TANHA6 = ['ရူပါရုံ','သဒ္ဒါရုံ','ဂန္ဓာရုံ','ရသာရုံ','ဖောဋ္ဌဗ္ဗာရုံ','ဓမ္မာရုံ'];
+  const N7_ARAM6 = ['ရူပတဏှာ','သဒ္ဒတဏှာ','ဂန္ဓတဏှာ','ရသတဏှာ','ဖောဋ္ဌဗ္ဗတဏှာ','ဓမ္မတဏှာ'];
+  const curPair = N7_PAIRS[nidana4CycleIdx % 3];
+  const curTanha6 = N7_TANHA6[nidanaCycleIndex % 6];
+  const curAram6 = N7_ARAM6[nidanaCycleIndex % 6];
+  return (
+    <div className="flex flex-col items-center justify-center h-full gap-3 py-2">
+      <div
+        onClick={() => setNidanaViewMode('cause')}
+        onDoubleClick={() => setNidana4CycleIdx(p => (p + 1) % 3)}
+        className={`cursor-pointer px-6 py-3 rounded-lg text-center border-2 transition-all w-72 shadow-sm
+          ${nidanaViewMode === 'cause' ? 'bg-rose-500 text-white ring-2 ring-rose-300 scale-105' : 'bg-rose-50 text-rose-800 border-rose-200 hover:scale-105'}`}>
+        <p className="font-black text-sm">{curPair.tanha}</p>
+        <p className="text-xs mt-0.5 opacity-75">{curAram6}</p>
+      </div>
+      <ArrowDown className="text-pink-500 w-8 h-8 animate-bounce" />
+      <div
+        onClick={() => setNidanaViewMode('effect')}
+        onDoubleClick={() => setNidana4CycleIdx(p => (p + 1) % 3)}
+        className={`cursor-pointer px-6 py-3 rounded-lg text-center border-2 transition-all w-72 shadow-sm
+          ${nidanaViewMode === 'effect' ? 'bg-emerald-500 text-white ring-2 ring-emerald-300 scale-105' : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:scale-105'}`}>
+        <p className="font-black text-sm">{curPair.upadana}</p>
+      </div>
+    </div>
+  );
+}
+if (selectedNidana === 8) {
+  const goToCutiAvijja = () => {
+    if (activePhase !== 'cuti') { setActivePhase('cuti'); return; }
+    const idx = vithiData.findIndex(n => n.isAvijjaNode && n.avijjaIdx === 1);
+    if (idx !== -1) setCurrentIndex(idx);
+  };
+  const goToCutiSankhara = () => {
+    if (activePhase !== 'cuti') { setActivePhase('cuti'); return; }
+    const idx = vithiData.findIndex(n => n.isSankharaNode);
+    if (idx !== -1) setCurrentIndex(idx);
+  };
+  const goToCutiPatisandhi = () => {
+    if (activePhase !== 'cuti') { setActivePhase('cuti'); return; }
+    const allPat = vithiData.reduce((acc, n, i) => n.name === 'ပဋိသန္ဓေ' ? [...acc, i] : acc, []);
+    const lastPat = allPat[allPat.length - 1];
+    if (lastPat !== undefined) setCurrentIndex(lastPat);
+  };
+  const n8Btn = (row, mode, label, sub) => {
+    const active = nidana4CycleIdx === row && nidanaViewMode === mode;
+    const isRose = mode === 'cause';
+    return (
+      <div className={`cursor-pointer px-4 py-3 rounded-lg text-center border-2 shadow-md w-36 hover:scale-105 transition-all ${
+        active ? (isRose ? 'bg-rose-600 text-white ring-4 ring-rose-300 scale-105' : 'bg-emerald-600 text-white ring-4 ring-emerald-300 scale-105')
+               : (isRose ? 'bg-rose-100 text-rose-800 border-rose-300' : 'bg-emerald-100 text-emerald-800 border-emerald-300')
+      }`}
+        onClick={() => {
+          setNidana4CycleIdx(row); setNidanaViewMode(mode);
+          if (row === 0 && mode === 'cause') goToCutiAvijja();
+          else if (mode === 'cause') goToCutiSankhara();
+          else if (row === 0) goToCutiSankhara();
+          else goToCutiPatisandhi();
+        }}>
+        <p className="font-black text-xs">{label}</p>
+        {sub && <p className="text-[10px] mt-0.5 opacity-80">{sub}</p>}
+      </div>
+    );
+  };
+  return (
+    <div className="flex flex-col items-center justify-center h-full gap-5 py-2">
+      <div className="flex items-center gap-3 w-full justify-center">
+        {n8Btn(0, 'cause', 'ကာမုပါဒါန်')}
+        <ChevronRight className="text-pink-500 w-6 h-6 shrink-0" />
+        {n8Btn(0, 'effect', 'ကမ္မဘဝ', 'ကုသိုလ်/အကုသိုလ်ကံ')}
+      </div>
+      <div className="flex items-center gap-3 w-full justify-center">
+        {n8Btn(1, 'cause', 'ကမ္မဘဝ', 'ကုသိုလ်/အကုသိုလ်ကံ')}
+        <ChevronRight className="text-pink-500 w-6 h-6 shrink-0" />
+        {n8Btn(1, 'effect', 'ဥပပတ္တိဘဝ', 'နောင်ဘဝ ပဋိသန္ဓေ')}
+      </div>
+    </div>
+  );
+}
+if (selectedNidana === 9) {
+  return (
+    <div className="flex flex-col items-center justify-center h-full gap-5 py-2">
+      <div onClick={() => {
+        setNidanaViewMode('cause');
+        if (activePhase !== 'cuti') { setActivePhase('cuti'); return; }
+        const idx = vithiData.findIndex(n => n.isSankharaNode);
+        if (idx !== -1) setCurrentIndex(idx);
+      }} className={`cursor-pointer px-6 py-3 rounded-lg text-center border-2 transition-all w-60 shadow-sm
+        ${nidanaViewMode === 'cause' ? 'bg-rose-500 text-white ring-2 ring-rose-300 scale-105' : 'bg-rose-50 text-rose-800 border-rose-200 hover:scale-105'}`}>
+        <p className="font-black text-sm">ကမ္မဘဝ</p>
+        <p className="text-xs mt-0.5 opacity-80">ကုသိုလ်/အကုသိုလ်ကံ</p>
+      </div>
+      <ArrowDown className="text-pink-500 w-8 h-8 animate-bounce" />
+      <div onClick={() => {
+        setNidanaViewMode('effect');
+        if (activePhase !== 'cuti') { setActivePhase('cuti'); return; }
+        const allPat = vithiData.reduce((acc, n, i) => n.name === 'ပဋိသန္ဓေ' ? [...acc, i] : acc, []);
+        const lastPat = allPat[allPat.length - 1];
+        if (lastPat !== undefined) setCurrentIndex(lastPat);
+      }} className={`cursor-pointer px-6 py-3 rounded-lg text-center border-2 transition-all w-60 shadow-sm
+        ${nidanaViewMode === 'effect' ? 'bg-emerald-500 text-white ring-2 ring-emerald-300 scale-105' : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:scale-105'}`}>
+        <p className="font-black text-sm">ဇာတိ</p>
+        <p className="text-xs mt-0.5 opacity-80">နောင်ဘဝ ပဋိသန္ဓေ</p>
+      </div>
+    </div>
+  );
+}
+if (selectedNidana === 10) {
+  const N10_EFFECTS = ["ဇရာမရဏ","သောက","ပရိဒေဝ","ဒုက္ခ","ဒေါမနဿ","ဥပါယာသ"];
+  const curEff = N10_EFFECTS[nidana10EffectIdx % 6];
+
+  const goToCause = () => {
+    setNidanaViewMode('cause');
+    setCurrentLifeOffset(nidana10BaseOffset);
+    setActivePhase('cuti');
+  };
+
+  const goToEffect = () => {
+    setNidanaViewMode('effect');
+    setCurrentLifeOffset(nidana10BaseOffset + 1);
+    if (curEff === 'ဇရာမရဏ') {
+      setCurrentLifeOffset(nidana10BaseOffset + 1);
+      setActivePhase('cuti');
+    } else if (['သောက','ပရိဒေဝ','ဒေါမနဿ','ဥပါယာသ'].includes(curEff)) {
+      setCurrentLifeOffset(nidana10BaseOffset + 1);
+      setActivePhase('pavatti');
+      setActiveVithi('mano_kama');
+      setJavanaGroupId('akusala_dosa');
+      setJavanaSubIndex(0);
+    } else if (curEff === 'ဒုက္ခ') {
+      setCurrentLifeOffset(nidana10BaseOffset + 1);
+      setActivePhase('pavatti');
+      setActiveVithi('kaya');
+      setAramQIndex(3);
+    
+      setJavanaGroupId('kama_kusala');
+  setJavanaSubIndex(0);
+      setTimeout(() => {
+        const idx = vithiData.findIndex(n => n.name.includes('ကာယဝိညာဏ်'));
+        if (idx !== -1) setCurrentIndex(idx);
+      }, 100);
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-center justify-center h-full gap-5 py-2">
+      <div onClick={goToCause}
+        className={`cursor-pointer px-6 py-3 rounded-lg text-center border-2 transition-all w-60 shadow-sm
+          ${nidanaViewMode==='cause'?'bg-rose-500 text-white ring-2 ring-rose-300 scale-105':'bg-rose-50 text-rose-800 border-rose-200 hover:scale-105'}`}>
+        <p className="font-black text-sm">ဇာတိ</p>
+        <p className="text-xs mt-0.5 opacity-80">ပဋိသန္ဓေစိတ် ဖြစ်ပေါ်ခြင်း</p>
+      </div>
+      <ArrowDown className="text-pink-500 w-8 h-8 animate-bounce" />
+      <div
+        onClick={goToEffect}
+        onDoubleClick={() => setNidana10EffectIdx(p => (p+1) % 6)}
+        className={`cursor-pointer px-6 py-3 rounded-lg text-center border-2 transition-all w-60 shadow-sm
+          ${nidanaViewMode==='effect'?'bg-emerald-500 text-white ring-2 ring-emerald-300 scale-105':'bg-emerald-50 text-emerald-800 border-emerald-200 hover:scale-105'}`}>
+        <p className="font-black text-sm">{curEff}</p>
+        <p className="text-xs mt-0.5 opacity-60">({toMyanmarNum(nidana10EffectIdx % 6 + 1)}/၆)</p>
+      </div>
+    </div>
+  );
+}
+  const isN0 = selectedNidana === 0;
+  const isN1 = selectedNidana === 1;
+  const _VT2=['ပဋိသန္ဓေ','ဘဝင်','စုတိ','စက္ခုဝိညာဏ်','သောတဝိညာဏ်','ဃာနဝိညာဏ်','ဇိဝှါဝိညာဏ်','ကာယဝိညာဏ်','သမ္ပဋိစ္ဆိုင်း','သန္တီရဏ','တဒါရုံ'];
+const curType = _VT2[nidanaCycleIndex % _VT2.length];
+  const matchNode = vithiData.find(n => n.name === curType || n.name.includes(curType));
+
+  const causeClick = () => {
+    setNidanaViewMode('cause');
+    if (isN0) {
+        if (activePhase !== 'patisandhi') { setActivePhase('patisandhi'); return; }
+        const idx = vithiData.findIndex(n => n.isAvijjaNode);
+        if (idx !== -1) { setCurrentIndex(idx); setNidanaViewMode('cause'); }
+    } 
+};
+  const PANCAVITHI_MAP = {'စက္ခုဝိညာဏ်':'cakkhu','သောတဝိညာဏ်':'sota','ဃာနဝိညာဏ်':'ghana','ဇိဝှါဝိညာဏ်':'jivha','ကာယဝိညာဏ်':'kaya','သမ္ပဋိစ္ဆိုင်း':'cakkhu','သန္တီရဏ':'cakkhu','တဒါရုံ':'cakkhu'};
+  const effectClick = () => {
+    if (isN0) {
+      if (activePhase !== 'patisandhi') { setActivePhase('patisandhi'); return; }
+      const idx = vithiData.findIndex(n => n.isSankharaNode);
+      if (idx !== -1) { setCurrentIndex(idx); setNidanaViewMode('effect'); }
+    } else if (isN1) {
+      const nextIdx = (nidanaCycleIndex + 1) % VIPAKA_TYPES.length;
+      setNidanaCycleIndex(nextIdx);
+      const nextType = VIPAKA_TYPES[nextIdx];
+      const vithiTarget = PANCAVITHI_MAP[nextType];
+      if (vithiTarget) {
+        if (activePhase !== 'pavatti') setActivePhase('pavatti');
+        if (activeVithi !== vithiTarget) setActiveVithi(vithiTarget);
+      } else if (nextType === 'ပဋိသန္ဓေ' || nextType === 'ဘဝင်') {
+        if (activePhase !== 'patisandhi') setActivePhase('patisandhi');
+      } else if (nextType === 'စုတိ') {
+        if (activePhase !== 'cuti') setActivePhase('cuti');
+      }
+      setNidanaViewMode('effect');
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-center justify-center h-full gap-5 py-4">
+      {/* Cause */}
+      <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">အကြောင်းတရား</p>
+      <div onClick={causeClick}
+        className={`cursor-pointer px-6 py-3 rounded-lg text-center border-2 transition-all w-72 shadow-sm
+          ${nidanaViewMode==='cause' ? 'bg-rose-500 text-white ring-2 ring-rose-300 scale-105 shadow-lg' : 'bg-rose-50 text-rose-800 border-rose-200 hover:scale-105'}`}>
+        
+        <p className="font-black text-sm">{isN0 ? 'အဝိဇ္ဇာ' : 'သင်္ခါရ'}</p>
+        </div>
+        <ArrowDown className="text-pink-500 w-8 h-8 animate-bounce" />
+        {/* Effect */}
+      <div onClick={effectClick}
+        className={`cursor-pointer px-6 py-3 rounded-lg text-center border-2 transition-all w-72 shadow-sm
+          ${nidanaViewMode==='effect' ? 'bg-emerald-500 text-white ring-2 ring-emerald-300 scale-105 shadow-lg' : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:scale-105'}`}>
+        
+        <p className="font-black text-sm">{isN0 ? 'သင်္ခါရ' : (VIPAKA_LABEL_MAP[curType] || curType)}</p>
+        {isN1 && matchNode && (
+          <>
+            <p className="text-xs mt-1 opacity-80">
+              ({toMyanmarNum(matchNode.count)} လုံး)
+            </p>
+            
+          </>
+        )}
+        {isN0 && <p className="text-xs mt-1 opacity-80"></p>}
+      </div>
+    </div>
+  );
+  
+})() : khandhaViewIndex === 0 ? (
+        displayMode === 'rupa-nama' ? (
+                          <div className="flex flex-wrap gap-1 md:gap-1.5 content-start">
+                            {activeNode.cetasikas && activeNode.cetasikas.map((cName, i) => (
+                              <CetasikaBtn key={i} cName={cName} />
+                            ))}
+                          </div>
+                        ) : displayMode === 'ayatana' ? (
+                          <div className="flex flex-wrap gap-1 md:gap-1.5 content-start">
+                            {cittaGroup.length > 0 && (
+                                <div className="flex flex-wrap gap-1 p-0.5 rounded-lg border-2 border-indigo-200 bg-indigo-50/50" title="မနာယတန">
+                                    {cittaGroup.map((c, i) => <CetasikaBtn key={`ay-c-${i}`} cName={c} label="မနာယတန" />)}
+                                </div>
+                            )}
+                            {(activeNode.cetasikas || []).filter(c => c !== "အသိစိတ်").length > 0 && (
+                                <div className="flex flex-col gap-1 p-1 rounded-lg border-2 border-teal-200 bg-teal-50/50">
+                                    <span className="text-[9px] font-bold text-teal-700 px-1">ဓမ္မာယတန</span>
+                                    <div className="flex flex-wrap gap-1">
+                                        {(activeNode.cetasikas || []).filter(c => c !== "အသိစိတ်").map((c, i) => <CetasikaBtn key={`ay-d-${i}`} cName={c} />)}
+                                    </div>
+                                </div>
+                            )}
+                          </div>
+                        ) : displayMode === 'dhatu' ? (
+                          <div className="flex flex-wrap gap-1 md:gap-1.5 content-start">
+                            {cittaGroup.length > 0 && (
+                                <div className="flex flex-wrap gap-1 p-0.5 rounded-lg border-2 border-fuchsia-200 bg-fuchsia-50/50">
+                                    {cittaGroup.map((c, i) => <CetasikaBtn key={`dh-c-${i}`} cName={c} label={getDhatuVinnanaLabel(activeNode.name)} />)}
+                                </div>
+                            )}
+                            {(activeNode.cetasikas || []).filter(c => c !== "အသိစိတ်").length > 0 && (
+                                <div className="flex flex-col gap-1 p-1 rounded-lg border-2 border-orange-200 bg-orange-50/50">
+                                    <span className="text-[9px] font-bold text-orange-700 px-1">ဓမ္မဓာတ်</span>
+                                    <div className="flex flex-wrap gap-1">
+                                        {(activeNode.cetasikas || []).filter(c => c !== "အသိစိတ်").map((c, i) => <CetasikaBtn key={`dh-d-${i}`} cName={c} />)}
+                                    </div>
+                                </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="flex flex-wrap gap-1 md:gap-1.5 content-start">
+                            {cittaGroup.length > 0 && (
+                                <div className="flex flex-wrap gap-1 p-0.5 rounded-lg border-2 border-indigo-200 bg-indigo-50/50" title="ဝိညာဏက္ခန္ဓာ">
+                                    {cittaGroup.map((c, i) => <CetasikaBtn key={`c-${i}`} cName={c} label="ဝိညာဏက္ခန္ဓာ" />)}
+                                </div>
+                            )}
+                            {vedanaGroup.length > 0 && (
+                                <div className="flex flex-wrap gap-1 p-0.5 rounded-lg border-2 border-pink-200 bg-pink-50/50" title="ဝေဒနာက္ခန္ဓာ">
+                                    {vedanaGroup.map((c, i) => <CetasikaBtn key={`v-${i}`} cName={c} label={c.replace('ဝေဒနာ', 'ဝေဒနာက္ခန္ဓာ')} />)}
+                                </div>
+                            )}
+                            {sannaGroup.length > 0 && (
+                                <div className="flex flex-wrap gap-1 p-0.5 rounded-lg border-2 border-amber-200 bg-amber-50/50" title="သညာက္ခန္ဓာ">
+                                    {sannaGroup.map((c, i) => <CetasikaBtn key={`s-${i}`} cName={c} label="သညာက္ခန္ဓာ" />)}
+                                </div>
+                            )}
+                            {sankharaPrimary.length > 0 && (
+                                <div className="flex flex-wrap gap-1 p-0.5 rounded-lg border-2 border-emerald-200 bg-emerald-50/50" title="သင်္ခါရက္ခန္ဓာ">
+                                    {sankharaPrimary.map((c, i) => <CetasikaBtn key={`sp-${i}`} cName={c} label="သင်္ခါရက္ခန္ဓာ (စေတနာ)" />)}
+                                </div>
+                            )}
+                            {sankharaSecondary.length > 0 && (
+                                <div className="flex flex-wrap gap-1 p-0.5 rounded-lg border-2 border-dashed border-emerald-300 bg-emerald-50/20" title="သင်္ခါရက္ခန္ဓာ (ကြွင်း စေတသိက်များ)">
+                                    {sankharaSecondary.map((c, i) => <CetasikaBtn key={`ss-${i}`} cName={c} label={c} />)}
+                                </div>
+                            )}
+                          </div>
+                        )
+                    ) : khandhaViewIndex === 1 ? (
+                        <div className="flex flex-col gap-4 p-2 h-full">
+                            {paticcaStep > 0 ? (
+                                <div className="bg-amber-50 rounded-xl p-4 border-2 border-amber-200 flex flex-col items-center justify-center text-center h-full">
+                                    {(paticcaStep === 1 || paticcaStep === 2) && (
+                                        <div className="flex flex-col items-center gap-3">
+                                        <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">အတိတ်အကြောင်းတရား</p>
+                                            <div className="bg-slate-700 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm">
+                                                {paticcaStep === 1 ? "အဝိဇ္ဇာ၊ တဏှာ၊ ဥပါဒါန်" : "သင်္ခါရ၊ ကံ"}
+                                            </div>
+                                            <ArrowDown className="text-amber-500 w-8 h-8 animate-bounce" />
+<p className="text-indigo-700 font-bold text-sm mt-1">{paticcaCittaName || activeNode.name}စိတ် (ရူပက္ခန္ဓာ)</p>
+                                            {validRupas.kammaja ? (
+                                                <div className="bg-emerald-500 text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] ring-emerald-300 animate-pulse font-bold text-sm">
+                                                    ကမ္မဇရုပ်
+                                                </div>
+                                            ) : (
+                                                <div className="bg-slate-200 text-slate-500 px-6 py-3 rounded-lg border-2 border-dashed border-slate-300 font-bold text-sm flex flex-col items-center gap-1">
+                                                    <span>ကမ္မဇရုပ် မဖြစ်ပေါ်ပါ</span>
+                                                    <span className="text-[10px] font-normal">(အရူပဘုံ၌ ရုပ်မရှိပါ)</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {paticcaStep === 3 && (
+                                        <div className="flex flex-col items-center gap-3">
+                                        <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">ပစ္စုပ္ပန်အကြောင်းတရား</p>
+                                            <div className="bg-blue-600 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm flex flex-col items-center">
+                                                <span className="text-base">{activeNode.name}</span>
+                                            </div>
+                                            <ArrowDown className="text-amber-500 w-8 h-8 animate-bounce" />
+<p className="text-indigo-700 font-bold text-sm mt-1">{paticcaCittaName || activeNode.name}စိတ် (ရူပက္ခန္ဓာ)</p>
+                                            {validRupas.cittaja ? (
+                                                <div className="bg-blue-500 text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] ring-blue-300 animate-pulse font-bold text-sm">
+                                                    စိတ္တဇရုပ်
+                                                </div>
+                                            ) : (
+                                                <div className="bg-slate-200 text-slate-500 px-6 py-3 rounded-lg border-2 border-dashed border-slate-300 font-bold text-sm flex flex-col items-center gap-1">
+                                                    <span>စိတ္တဇရုပ် မဖြစ်ပေါ်ပါ</span>
+                                                    
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {paticcaStep === 4 && (
+                                        <div className="flex flex-col items-center gap-3">
+                                        <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">ပစ္စုပ္ပန်အကြောင်းတရား</p>
+                                            <div className="bg-orange-600 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm">
+                                                {utujaCauseText}
+                                            </div>
+                                            <ArrowDown className="text-amber-500 w-8 h-8 animate-bounce" />
+<p className="text-indigo-700 font-bold text-sm mt-1">{paticcaCittaName || activeNode.name}စိတ် (ရူပက္ခန္ဓာ)</p>
+                                            {validRupas.utuja ? (
+                                                <div className="bg-orange-500 text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] ring-orange-300 animate-pulse font-bold text-sm">
+                                                    ဥတုဇရုပ်
+                                                </div>
+                                            ) : (
+                                                <div className="bg-slate-200 text-slate-500 px-6 py-3 rounded-lg border-2 border-dashed border-slate-300 font-bold text-sm">
+                                                    ဥတုဇရုပ် မဖြစ်ပေါ်ပါ (အရူပဘုံ)
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {paticcaStep === 5 && (
+                                        <div className="flex flex-col items-center gap-3">
+                                        <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">ပစ္စုပ္ပန်အကြောင်းတရား</p>
+                                            <div className="bg-rose-600 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm">
+                                                စတုဇရုပ်များရှိ ဩဇာ (အာဟာရ)
+                                            </div>
+                                            <ArrowDown className="text-amber-500 w-8 h-8 animate-bounce" />
+<p className="text-indigo-700 font-bold text-sm mt-1">{paticcaCittaName || activeNode.name}စိတ် (ရူပက္ခန္ဓာ)</p>
+                                            {validRupas.aharaja ? (
+                                                <div className="bg-rose-500 text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] ring-rose-300 animate-pulse font-bold text-sm">
+                                                    အာဟာရဇရုပ်
+                                                </div>
+                                            ) : (
+                                                <div className="bg-slate-200 text-slate-500 px-6 py-3 rounded-lg border-2 border-dashed border-slate-300 font-bold text-sm flex flex-col items-center gap-1">
+                                                    <span>အာဟာရဇရုပ် မဖြစ်ပေါ်သေးပါ / မရှိပါ</span>
+                                                    
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 h-full">
+                                    <div className={`p-4 rounded-xl border-2 flex flex-col items-center text-center justify-center transition-all ${validRupas.kammaja ? 'bg-emerald-50 border-emerald-200 text-emerald-800 shadow-sm hover:scale-[1.02]' : 'bg-slate-50 border-slate-200 text-slate-400 opacity-60'}`}>
+                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center mb-2 ${validRupas.kammaja ? 'bg-emerald-200 text-emerald-700' : 'bg-slate-200 text-slate-500'}`}><User className="w-4 h-4"/></div>
+                                        <span className="font-bold text-xs">ကမ္မဇရုပ်</span>
+                                        <span className="text-[10px] mt-1 opacity-80">{validRupas.kammaja ? 'ကံကြောင့်ဖြစ်သော ရုပ်' : 'မရှိပါ'}</span>
+                                    </div>
+                                    <div className={`p-4 rounded-xl border-2 flex flex-col items-center text-center justify-center transition-all ${validRupas.cittaja ? 'bg-blue-50 border-blue-200 text-blue-800 shadow-sm hover:scale-[1.02]' : 'bg-slate-50 border-slate-200 text-slate-400 opacity-60'}`}>
+                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center mb-2 ${validRupas.cittaja ? 'bg-blue-200 text-blue-700' : 'bg-slate-200 text-slate-500'}`}><Cloud className="w-4 h-4"/></div>
+                                        <span className="font-bold text-xs">စိတ္တဇရုပ်</span>
+                                        <span className="text-[10px] mt-1 opacity-80">{validRupas.cittaja ? 'စိတ်ကြောင့်ဖြစ်သော ရုပ်' : 'ဤစိတ်ကြောင့် မဖြစ်ပါ'}</span>
+                                    </div>
+                                    <div className={`p-4 rounded-xl border-2 flex flex-col items-center text-center justify-center transition-all ${validRupas.utuja ? 'bg-orange-50 border-orange-200 text-orange-800 shadow-sm hover:scale-[1.02]' : 'bg-slate-50 border-slate-200 text-slate-400 opacity-60'}`}>
+                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center mb-2 ${validRupas.utuja ? 'bg-orange-200 text-orange-700' : 'bg-slate-200 text-slate-500'}`}><Sun className="w-4 h-4"/></div>
+                                        <span className="font-bold text-xs">ဥတုဇရုပ်</span>
+                                        <span className="text-[10px] mt-1 opacity-80">{validRupas.utuja ? 'ဥတုကြောင့်ဖြစ်သော ရုပ်' : 'မရှိပါ'}</span>
+                                    </div>
+                                    <div className={`p-4 rounded-xl border-2 flex flex-col items-center text-center justify-center transition-all ${validRupas.aharaja ? 'bg-rose-50 border-rose-200 text-rose-800 shadow-sm hover:scale-[1.02]' : 'bg-slate-50 border-slate-200 text-slate-400 opacity-60'}`}>
+                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center mb-2 ${validRupas.aharaja ? 'bg-rose-200 text-rose-700' : 'bg-slate-200 text-slate-500'}`}><Apple className="w-4 h-4"/></div>
+                                        <span className="font-bold text-xs">အာဟာရဇရုပ်</span>
+                                        <span className="text-[10px] mt-1 opacity-80">{validRupas.aharaja ? 'အာဟာရကြောင့်ဖြစ်သော ရုပ်' : 'မရှိသေးပါ / မရှိပါ'}</span>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    ) : khandhaViewIndex === 2 ? (
+        isPaticcaActive ? (
+          <div className="bg-pink-50 rounded-xl p-4 border-2 border-pink-200 flex flex-col items-center justify-center text-center h-full">
+            {paticcaStep === 1 && isVipaka && (
+              <div className="flex flex-col items-center gap-3">
+                <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">အတိတ်အကြောင်းတရား</p>
+                <div className="bg-slate-700 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm">အဝိဇ္ဇာ၊ တဏှာ၊ ဥပါဒါန်</div>
+                <ArrowDown className="text-pink-500 w-8 h-8 animate-bounce" />
+                <p className="text-pink-700 font-bold text-sm">{paticcaCittaName || activeNode.name}စိတ်</p>
+                <div className="bg-pink-500 text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] ring-pink-300 animate-pulse font-bold text-sm">ဝေဒနာက္ခန္ဓာ</div>
+              </div>
+            )}
+            {paticcaStep === 2 && isVipaka && (
+              <div className="flex flex-col items-center gap-3">
+                <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">အတိတ်အကြောင်းတရား</p>
+                <div className="bg-slate-700 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm">သင်္ခါရ၊ ကံ</div>
+                <ArrowDown className="text-pink-500 w-8 h-8 animate-bounce" />
+                <p className="text-pink-700 font-bold text-sm">{paticcaCittaName || activeNode.name}စိတ်</p>
+                <div className="bg-pink-500 text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] ring-pink-300 animate-pulse font-bold text-sm">ဝေဒနာက္ခန္ဓာ</div>
+              </div>
+            )}
+            {paticcaStep === 3 && (
+              <div className="flex flex-col items-center gap-3">
+                <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">ပစ္စုပ္ပန်အကြောင်းတရား</p>
+                {paticcaLockedNodeData?.aramana && <div className="bg-blue-600 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm">အာရုံ: {paticcaLockedNodeData.aramana}</div>}
+                <ArrowDown className="text-pink-500 w-8 h-8 animate-bounce" />
+                <p className="text-pink-700 font-bold text-sm">{paticcaCittaName || activeNode.name}စိတ်</p>
+                <div className="bg-pink-500 text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] ring-pink-300 animate-pulse font-bold text-sm">ဝေဒနာက္ခန္ဓာ</div>
+              </div>
+            )}
+            {paticcaStep === 4 && (
+              <div className="flex flex-col items-center gap-3">
+                <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">ပစ္စုပ္ပန်အကြောင်းတရား</p>
+                {paticcaLockedNodeData?.base && <div className="bg-blue-600 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm">မှီရာဝတ္ထု: {paticcaLockedNodeData.base}</div>}
+                <ArrowDown className="text-pink-500 w-8 h-8 animate-bounce" />
+                <p className="text-pink-700 font-bold text-sm">{paticcaCittaName || activeNode.name}စိတ်</p>
+                <div className="bg-pink-500 text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] ring-pink-300 animate-pulse font-bold text-sm">ဝေဒနာက္ခန္ဓာ</div>
+              </div>
+            )}
+            {paticcaStep === 5 && (
+              <div className="flex flex-col items-center gap-3">
+                <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">ပစ္စုပ္ပန်အကြောင်းတရား</p>
+                <div className="bg-pink-700 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm flex flex-col items-center gap-1">
+    <span>ဖဿ</span> 
+    <span className="text-xs font-normal opacity-80">
+        = {toMyanmarNum((paticcaLockedNodeData?.count || activeNode.count || 1) - 1)} လုံး
+    </span>
+</div>
+                <div className="flex flex-wrap gap-1 justify-center">
+                  {(paticcaLockedNodeData?.cetasikas || []).filter(c => !c.includes("ဝေဒနာ")).map((c, i) => (
+                    <span key={i} className={`px-1.5 py-0.5 rounded text-[11px] font-bold border ${getCetasikaStyle(c)}`}>{c}</span>
+                  ))}
+                </div>
+                <ArrowDown className="text-pink-500 w-8 h-8 animate-bounce" />
+                <p className="text-pink-700 font-bold text-sm">{paticcaCittaName || activeNode.name}စိတ်</p>
+                <div className="bg-pink-500 text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] ring-pink-300 animate-pulse font-bold text-sm">ဝေဒနာက္ခန္ဓာ</div>
+              </div>
+            )}
+            {paticcaStep === 7 && (() => {
+              let specialCause = "";
+              const cName = paticcaCittaName || activeNode.name;
+              if (cName.includes("စက္ခုဝိညာဏ်")) specialCause = "အာလောက (အလင်းရောင်)";
+              else if (cName.includes("သောတဝိညာဏ်")) specialCause = "အာကာသ (ဟာလာဟင်းလင်းဖြစ်ခြင်း)";
+              else if (cName.includes("ဃာနဝိညာဏ်")) specialCause = "ဝါတ (လေ)";
+              else if (cName.includes("ဇိဝှါဝိညာဏ်")) specialCause = "အာပေါ (ရေ)";
+              else if (cName.includes("ကာယဝိညာဏ်")) specialCause = "ထဒ္ဓပထဝီ (ခက်မာသော ပထဝီ)";
+              
+              const isVedana = khandhaViewIndex === 2;
+              const isSanna = khandhaViewIndex === 3;
+              const isSankhara = khandhaViewIndex === 4;
+              
+              const label = isVedana ? "ဝေဒနာက္ခန္ဓာ" : isSanna ? "သညာက္ခန္ဓာ" : isSankhara ? "သင်္ခါရက္ခန္ဓာ" : "သင်္ခါရက္ခန္ဓာ (စေတနာ)";
+              const bgClass = isVedana ? "bg-pink-500 ring-pink-300" : isSanna ? "bg-amber-500 ring-amber-300" : isSankhara ? "bg-emerald-500 ring-emerald-300" : "bg-amber-500 ring-amber-300";
+              const arrowColor = isSankhara ? "text-emerald-500" : "text-pink-500";
+              const textColor = isSankhara ? "text-emerald-700" : "text-pink-700";
+
+              return specialCause ? (
+                <div className="flex flex-col items-center gap-3">
+                  <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">ပစ္စုပ္ပန်အကြောင်းတရား</p>
+                  <div className="bg-slate-700 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm">{specialCause}</div>
+                  <ArrowDown className={`${arrowColor} w-8 h-8 animate-bounce`} />
+                  <p className={`${textColor} font-bold text-sm`}>{cName}စိတ်</p>
+                  <div className={`${bgClass} text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] animate-pulse font-bold text-sm`}>{label}</div>
+                </div>
+              ) : null;
+            })()}
+            {paticcaStep === 8 && (() => {
+              const cName = paticcaCittaName;
+              let manasikaraName = "";
+              if (["စက္ခုဝိညာဏ်", "သောတဝိညာဏ်", "ဃာနဝိညာဏ်", "ဇိဝှါဝိညာဏ်", "ကာယဝိညာဏ်"].some(v => cName.includes(v))) {
+                  manasikaraName = "ပဉ္စဒွါရာဝဇ္ဇန်းစိတ်";
+              } else {
+                  const vithiName = paticcaLockedNodeData?.vithi || activeNode.vithi || "";
+                  if (vithiName.includes("မနောဒွါရ") || vithiName.includes("အပ္ပနာ")) manasikaraName = "မနောဒွါရာဝဇ္ဇန်းစိတ်";
+                  else manasikaraName = "ဝုဋ္ဌောစိတ်";
+              }
+              
+              const isVedana = khandhaViewIndex === 2;
+              const isSanna = khandhaViewIndex === 3;
+              const isSankhara = khandhaViewIndex === 4 || khandhaViewIndex === 6;
+              const isVinnana = khandhaViewIndex === 5;
+              
+              const label = isVedana ? "ဝေဒနာက္ခန္ဓာ" : isSanna ? "သညာက္ခန္ဓာ" : khandhaViewIndex === 6 ? "သင်္ခါရက္ခန္ဓာ (စေတနာ)" : isSankhara ? "သင်္ခါရက္ခန္ဓာ" : "ဝိညာဏက္ခန္ဓာ";
+              const bgClass = isVedana ? "bg-pink-500 ring-pink-300" : isSanna ? "bg-amber-500 ring-amber-300" : isSankhara ? "bg-emerald-500 ring-emerald-300" : "bg-indigo-500 ring-indigo-300";
+              const arrowColor = isSankhara ? "text-emerald-500" : isVinnana ? "text-indigo-500" : "text-pink-500";
+              const textColor = isSankhara ? "text-emerald-700" : isVinnana ? "text-indigo-700" : "text-pink-700";
+
+              return manasikaraName ? (
+                <div className="flex flex-col items-center gap-3 w-full">
+                  <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">ပစ္စုပ္ပန်အကြောင်းတရား</p>
+                  <div className="bg-purple-600 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm flex flex-col items-center gap-1">
+                      <span>မနသိကာရ</span>
+                      <span className="text-xs font-normal opacity-80">({activeNode.name})</span>
+                  </div>
+                  <ArrowDown className={`${arrowColor} w-8 h-8 animate-bounce`} />
+                  <p className={`${textColor} font-bold text-sm`}>{cName}စိတ်</p>
+                  <div className={`${bgClass} text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] animate-pulse font-bold text-sm`}>{label}</div>
+                </div>
+              ) : null;
+            })()}
+            {paticcaStep === 9 && (() => {
+              const targetCitta = paticcaCittaName;
+              let samphassaName = activeNode.name.replace("ဝိညာဏ်", "သမ္ဖဿ");
+              
+              const isVedana = khandhaViewIndex === 2;
+              const isSanna = khandhaViewIndex === 3;
+              const isSankhara = khandhaViewIndex === 4 || khandhaViewIndex === 6;
+              const isVinnana = khandhaViewIndex === 5;
+              
+              const label = isVedana ? "ဝေဒနာက္ခန္ဓာ" : isSanna ? "သညာက္ခန္ဓာ" : khandhaViewIndex === 6 ? "သင်္ခါရက္ခန္ဓာ (စေတနာ)" : isSankhara ? "သင်္ခါရက္ခန္ဓာ" : "ဝိညာဏက္ခန္ဓာ";
+              const bgClass = isVedana ? "bg-pink-500 ring-pink-300" : isSanna ? "bg-amber-500 ring-amber-300" : isSankhara ? "bg-emerald-500 ring-emerald-300" : "bg-indigo-500 ring-indigo-300";
+              const arrowColor = isSankhara ? "text-emerald-500" : isVinnana ? "text-indigo-500" : "text-pink-500";
+              const textColor = isSankhara ? "text-emerald-700" : isVinnana ? "text-indigo-700" : "text-pink-700";
+
+              return samphassaName ? (
+                <div className="flex flex-col items-center gap-3 w-full">
+                  <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">ပစ္စုပ္ပန်အကြောင်းတရား</p>
+                  <div className="bg-fuchsia-600 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm flex flex-col items-center gap-1">
+                      <span>{samphassaName}</span>
+                      <span className="text-xs font-normal opacity-80">({activeNode.name}စိတ်)</span>
+                  </div>
+                  <ArrowDown className={`${arrowColor} w-8 h-8 animate-bounce`} />
+                  <p className={`${textColor} font-bold text-sm`}>{targetCitta}စိတ်</p>
+                  <div className={`${bgClass} text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] animate-pulse font-bold text-sm`}>{label}</div>
+                </div>
+              ) : null;
+            })()}
+            {paticcaStep === 10 && (() => {
+    const kLabel = khandhaViewIndex === 2 ? "ဝေဒနာက္ခန္ဓာ"
+        : khandhaViewIndex === 3 ? "သညာက္ခန္ဓာ"
+        : khandhaViewIndex === 4 ? "သင်္ခါရက္ခန္ဓာ"
+        : khandhaViewIndex === 5 ? "ဝိညာဏက္ခန္ဓာ"
+        : "သင်္ခါရက္ခန္ဓာ (စေတနာ)";
+    const kColor = khandhaViewIndex === 2 ? "bg-pink-500 ring-pink-300"
+        : khandhaViewIndex === 3 ? "bg-amber-500 ring-amber-300"
+        : khandhaViewIndex === 4 ? "bg-emerald-500 ring-emerald-300"
+        : khandhaViewIndex === 5 ? "bg-indigo-500 ring-indigo-300"
+        : "bg-amber-500 ring-amber-300";
+    // activeNode က step 10 တွင် ရှေးစိတ်ကိုယ်တိုင် ဖြစ်နေသည်
+    const prevCount = activeNode.count || 0;
+    return (
+        <div className="flex flex-col items-center gap-3">
+            <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">ပစ္စုပ္ပန်အကြောင်းတရား</p>
+            <div className="bg-violet-700 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm flex flex-col items-center gap-1">
+                <span>{preSamphassaLabel}</span>
+                <span className="text-xs font-normal opacity-80">
+                    ({activeNode.name}) = {toMyanmarNum(prevCount)} ပါး
+                </span>
+            </div>
+            <ArrowDown className="text-violet-500 w-8 h-8 animate-bounce" />
+            <p className="text-violet-700 font-bold text-sm">{paticcaCittaName}စိတ်</p>
+            <div className={`${kColor} text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] animate-pulse font-bold text-sm`}>
+                {kLabel}
+            </div>
+        </div>
+    );
+})()}
+            {paticcaStep === 6 && (() => {
+    const bhvCetasikas = (currentBhavangaGroup.options?.[bhavangaSubIndex] || currentBhavangaGroup.options?.[0])?.cetasikas || [];
+    const bhvCount = bhvCetasikas.length;
+    const kLabel = khandhaViewIndex === 2 ? "ဝေဒနာက္ခန္ဓာ"
+        : khandhaViewIndex === 3 ? "သညာက္ခန္ဓာ"
+        : khandhaViewIndex === 4 ? "သင်္ခါရက္ခန္ဓာ"
+        : khandhaViewIndex === 5 ? "ဝိညာဏက္ခန္ဓာ"
+        : "သင်္ခါရက္ခန္ဓာ (စေတနာ)";
+    const kColor = khandhaViewIndex === 2 ? "bg-pink-500 ring-pink-300"
+        : khandhaViewIndex === 3 ? "bg-amber-500 ring-amber-300"
+        : khandhaViewIndex === 4 ? "bg-emerald-500 ring-emerald-300"
+        : khandhaViewIndex === 5 ? "bg-indigo-500 ring-indigo-300"
+        : "bg-amber-500 ring-amber-300";
+    return (
+        <div className="flex flex-col items-center gap-3">
+            <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">ပစ္စုပ္ပန်အကြောင်းတရား</p>
+            <div className="bg-slate-700 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm flex flex-col items-center gap-1">
+                <span>ဘဝင်မနောသမ္ဖဿ</span>
+                <span className="text-xs font-normal opacity-80">
+                    = {toMyanmarNum(bhvCount)} ပါး (စိတ် ၁ + စေတသိက် {toMyanmarNum(bhvCount - 1)})
+                </span>
+            </div>
+            <ArrowDown className="text-indigo-500 w-8 h-8 animate-bounce" />
+            <p className="text-indigo-700 font-bold text-sm">{paticcaCittaName || activeNode.name}စိတ်</p>
+            <div className={`${kColor} text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] animate-pulse font-bold text-sm`}>
+                {kLabel}
+            </div>
+        </div>
+    );
+})()}
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-1 p-2 rounded-lg border-2 border-pink-200 bg-pink-50/50" title="ဝေဒနာက္ခန္ဓာ">
+            {vedanaGroup.map((c, i) => <CetasikaBtn key={`v-${i}`} cName={c} label={c.replace('ဝေဒနာ', 'ဝေဒနာက္ခန္ဓာ')} />)}
+          </div>
+        )
+                    ) : khandhaViewIndex === 3 ? (
+                        isPaticcaActive ? (
+                          <div className="bg-amber-50 rounded-xl p-4 border-2 border-amber-200 flex flex-col items-center justify-center text-center h-full">
+                            {paticcaStep === 1 && isVipaka && (
+              <div className="flex flex-col items-center gap-3">
+                <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">အတိတ်အကြောင်းတရား</p>
+                <div className="bg-slate-700 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm">အဝိဇ္ဇာ၊ တဏှာ၊ ဥပါဒါန်</div>
+                <ArrowDown className="text-pink-500 w-8 h-8 animate-bounce" />
+                <p className="text-pink-700 font-bold text-sm">{paticcaCittaName || activeNode.name}စိတ်</p>
+                <div className="bg-amber-500 text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] ring-amber-300 animate-pulse font-bold text-sm">သညာက္ခန္ဓာ</div>
+              </div>
+            )}
+            {paticcaStep === 2 && isVipaka && (
+              <div className="flex flex-col items-center gap-3">
+                <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">အတိတ်အကြောင်းတရား</p>
+                <div className="bg-slate-700 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm">သင်္ခါရ၊ ကံ</div>
+                <ArrowDown className="text-pink-500 w-8 h-8 animate-bounce" />
+                <p className="text-pink-700 font-bold text-sm">{paticcaCittaName || activeNode.name}စိတ်</p>
+                <div className="bg-amber-500 text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] ring-amber-300 animate-pulse font-bold text-sm">သညာက္ခန္ဓာ</div>
+              </div>
+            )}
+            {paticcaStep === 3 && (
+              <div className="flex flex-col items-center gap-3">
+                <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">ပစ္စုပ္ပန်အကြောင်းတရား</p>
+                {paticcaLockedNodeData?.aramana && <div className="bg-blue-600 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm">အာရုံ: {paticcaLockedNodeData.aramana}</div>}
+                <ArrowDown className="text-pink-500 w-8 h-8 animate-bounce" />
+                <p className="text-pink-700 font-bold text-sm">{paticcaCittaName || activeNode.name}စိတ်</p>
+                <div className="bg-amber-500 text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] ring-amber-300 animate-pulse font-bold text-sm">သညာက္ခန္ဓာ</div>
+              </div>
+            )}
+            {paticcaStep === 4 && (
+              <div className="flex flex-col items-center gap-3">
+                <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">ပစ္စုပ္ပန်အကြောင်းတရား</p>
+                {paticcaLockedNodeData?.base && <div className="bg-blue-600 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm">မှီရာဝတ္ထု: {paticcaLockedNodeData.base}</div>}
+                <ArrowDown className="text-pink-500 w-8 h-8 animate-bounce" />
+                <p className="text-pink-700 font-bold text-sm">{paticcaCittaName || activeNode.name}စိတ်</p>
+                <div className="bg-amber-500 text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] ring-amber-300 animate-pulse font-bold text-sm">သညာက္ခန္ဓာ</div>
+              </div>
+            )}
+            {paticcaStep === 5 && (
+              <div className="flex flex-col items-center gap-3">
+                <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">ပစ္စုပ္ပန်အကြောင်းတရား</p>
+                <div className="bg-pink-700 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm flex flex-col items-center gap-1">
+    <span>ဖဿ</span>
+    <span className="text-xs font-normal opacity-80">
+        = {toMyanmarNum((paticcaLockedNodeData?.count || activeNode.count || 1) - 1)} လုံး
+    </span>
+</div>
+                <div className="flex flex-wrap gap-1 justify-center">
+                  {(paticcaLockedNodeData?.cetasikas || []).filter(c => c !== "သညာ").map((c, i) => (
+                    <span key={i} className={`px-1.5 py-0.5 rounded text-[11px] font-bold border ${getCetasikaStyle(c)}`}>{c}</span>
+                  ))}
+                </div>
+                <ArrowDown className="text-pink-500 w-8 h-8 animate-bounce" />
+                <p className="text-pink-700 font-bold text-sm">{paticcaCittaName || activeNode.name}စိတ်</p>
+                <div className="bg-amber-500 text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] ring-amber-300 animate-pulse font-bold text-sm">သညာက္ခန္ဓာ</div>
+              </div>
+            )}
+            {paticcaStep === 7 && (() => {
+              let specialCause = "";
+              const cName = paticcaCittaName || activeNode.name;
+              if (cName.includes("စက္ခုဝိညာဏ်")) specialCause = "အာလောက (အလင်းရောင်)";
+              else if (cName.includes("သောတဝိညာဏ်")) specialCause = "အာကာသ (ဟာလာဟင်းလင်းဖြစ်ခြင်း)";
+              else if (cName.includes("ဃာနဝိညာဏ်")) specialCause = "ဝါတ (လေ)";
+              else if (cName.includes("ဇိဝှါဝိညာဏ်")) specialCause = "အာပေါ (ရေ)";
+              else if (cName.includes("ကာယဝိညာဏ်")) specialCause = "ထဒ္ဓပထဝီ (ခိုင်မာသော ပထဝီ)";
+              
+              const isVedana = khandhaViewIndex === 2;
+              const isSanna = khandhaViewIndex === 3;
+              const isSankhara = khandhaViewIndex === 4;
+              
+              const label = isVedana ? "ဝေဒနာက္ခန္ဓာ" : isSanna ? "သညာက္ခန္ဓာ" : isSankhara ? "သင်္ခါရက္ခန္ဓာ" : "သင်္ခါရက္ခန္ဓာ (စေတနာ)";
+              const bgClass = isVedana ? "bg-pink-500 ring-pink-300" : isSanna ? "bg-amber-500 ring-amber-300" : isSankhara ? "bg-emerald-500 ring-emerald-300" : "bg-amber-500 ring-amber-300";
+              const arrowColor = isSankhara ? "text-emerald-500" : "text-pink-500";
+              const textColor = isSankhara ? "text-emerald-700" : "text-pink-700";
+
+              return specialCause ? (
+                <div className="flex flex-col items-center gap-3">
+                  <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">ပစ္စုပ္ပန်အကြောင်းတရား</p>
+                  <div className="bg-slate-700 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm">{specialCause}</div>
+                  <ArrowDown className={`${arrowColor} w-8 h-8 animate-bounce`} />
+                  <p className={`${textColor} font-bold text-sm`}>{cName}စိတ်</p>
+                  <div className={`${bgClass} text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] animate-pulse font-bold text-sm`}>{label}</div>
+                </div>
+              ) : null;
+            })()}
+            {paticcaStep === 8 && (() => {
+              const cName = paticcaCittaName || activeNode.name;
+              let manasikaraName = "";
+              if (["စက္ခုဝိညာဏ်", "သောတဝိညာဏ်", "ဃာနဝိညာဏ်", "ဇိဝှါဝိညာဏ်", "ကာယဝိညာဏ်"].some(v => cName.includes(v))) {
+                  manasikaraName = "ပဉ္စဒွါရာဝဇ္ဇန်းစိတ်";
+              } else {
+                  const vithiName = paticcaLockedNodeData?.vithi || activeNode.vithi || "";
+                  if (vithiName.includes("မနောဒွါရ") || vithiName.includes("အပ္ပနာ")) manasikaraName = "မနောဒွါရာဝဇ္ဇန်းစိတ်";
+                  else manasikaraName = "ဝုဋ္ဌောစိတ်";
+              }
+              
+              const isVedana = khandhaViewIndex === 2;
+              const isSanna = khandhaViewIndex === 3;
+              const isSankhara = khandhaViewIndex === 4 || khandhaViewIndex === 6;
+              const isVinnana = khandhaViewIndex === 5;
+              
+              const label = isVedana ? "ဝေဒနာက္ခန္ဓာ" : isSanna ? "သညာက္ခန္ဓာ" : khandhaViewIndex === 6 ? "သင်္ခါရက္ခန္ဓာ (စေတနာ)" : isSankhara ? "သင်္ခါရက္ခန္ဓာ" : "ဝိညာဏက္ခန္ဓာ";
+              const bgClass = isVedana ? "bg-pink-500 ring-pink-300" : isSanna ? "bg-amber-500 ring-amber-300" : isSankhara ? "bg-emerald-500 ring-emerald-300" : "bg-indigo-500 ring-indigo-300";
+              const arrowColor = isSankhara ? "text-emerald-500" : isVinnana ? "text-indigo-500" : "text-pink-500";
+              const textColor = isSankhara ? "text-emerald-700" : isVinnana ? "text-indigo-700" : "text-pink-700";
+
+              return manasikaraName ? (
+                <div className="flex flex-col items-center gap-3 w-full">
+                  <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">ပစ္စုပ္ပန်အကြောင်းတရား</p>
+                  <div className="bg-slate-700 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm flex flex-col items-center gap-1">
+                      <span>မနသိကာရ</span>
+                      <span className="text-xs font-normal opacity-80">({manasikaraName})</span>
+                  </div>
+                  <ArrowDown className={`${arrowColor} w-8 h-8 animate-bounce`} />
+                  <p className={`${textColor} font-bold text-sm`}>{cName}စိတ်</p>
+                  <div className={`${bgClass} text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] animate-pulse font-bold text-sm`}>{label}</div>
+                </div>
+              ) : null;
+            })()}
+            {paticcaStep === 9 && (() => {
+              const targetCitta = paticcaCittaName;
+              let samphassaName = activeNode.name.replace("ဝိညာဏ်", "သမ္ဖဿ");
+              
+              const isVedana = khandhaViewIndex === 2;
+              const isSanna = khandhaViewIndex === 3;
+              const isSankhara = khandhaViewIndex === 4 || khandhaViewIndex === 6;
+              const isVinnana = khandhaViewIndex === 5;
+              
+              const label = isVedana ? "ဝေဒနာက္ခန္ဓာ" : isSanna ? "သညာက္ခန္ဓာ" : khandhaViewIndex === 6 ? "သင်္ခါရက္ခန္ဓာ (စေတနာ)" : isSankhara ? "သင်္ခါရက္ခန္ဓာ" : "ဝိညာဏက္ခန္ဓာ";
+              const bgClass = isVedana ? "bg-pink-500 ring-pink-300" : isSanna ? "bg-amber-500 ring-amber-300" : isSankhara ? "bg-emerald-500 ring-emerald-300" : "bg-indigo-500 ring-indigo-300";
+              const arrowColor = isSankhara ? "text-emerald-500" : isVinnana ? "text-indigo-500" : "text-pink-500";
+              const textColor = isSankhara ? "text-emerald-700" : isVinnana ? "text-indigo-700" : "text-pink-700";
+
+              return samphassaName ? (
+                <div className="flex flex-col items-center gap-3 w-full">
+                  <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">ပစ္စုပ္ပန်အကြောင်းတရား</p>
+                  <div className="bg-fuchsia-600 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm flex flex-col items-center gap-1">
+                      <span>{samphassaName}</span>
+                      <span className="text-xs font-normal opacity-80">({activeNode.name}စိတ်)</span>
+                  </div>
+                  <ArrowDown className={`${arrowColor} w-8 h-8 animate-bounce`} />
+                  <p className={`${textColor} font-bold text-sm`}>{targetCitta}စိတ်</p>
+                  <div className={`${bgClass} text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] animate-pulse font-bold text-sm`}>{label}</div>
+                </div>
+              ) : null;
+            })()}
+            {paticcaStep === 10 && (() => {
+    const kLabel = khandhaViewIndex === 2 ? "ဝေဒနာက္ခန္ဓာ"
+        : khandhaViewIndex === 3 ? "သညာက္ခန္ဓာ"
+        : khandhaViewIndex === 4 ? "သင်္ခါရက္ခန္ဓာ"
+        : khandhaViewIndex === 5 ? "ဝိညာဏက္ခန္ဓာ"
+        : "သင်္ခါရက္ခန္ဓာ (စေတနာ)";
+    const kColor = khandhaViewIndex === 2 ? "bg-pink-500 ring-pink-300"
+        : khandhaViewIndex === 3 ? "bg-amber-500 ring-amber-300"
+        : khandhaViewIndex === 4 ? "bg-emerald-500 ring-emerald-300"
+        : khandhaViewIndex === 5 ? "bg-indigo-500 ring-indigo-300"
+        : "bg-amber-500 ring-amber-300";
+    // activeNode က step 10 တွင် ရှေးစိတ်ကိုယ်တိုင် ဖြစ်နေသည်
+    const prevCount = activeNode.count || 0;
+    return (
+        <div className="flex flex-col items-center gap-3">
+            <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">ပစ္စုပ္ပန်အကြောင်းတရား</p>
+            <div className="bg-violet-700 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm flex flex-col items-center gap-1">
+                <span>{preSamphassaLabel}</span>
+                <span className="text-xs font-normal opacity-80">
+                    ({activeNode.name}) = {toMyanmarNum(prevCount)} ပါး
+                </span>
+            </div>
+            <ArrowDown className="text-violet-500 w-8 h-8 animate-bounce" />
+            <p className="text-violet-700 font-bold text-sm">{paticcaCittaName}စိတ်</p>
+            <div className={`${kColor} text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] animate-pulse font-bold text-sm`}>
+                {kLabel}
+            </div>
+        </div>
+    );
+})()}
+            {paticcaStep === 6 && (() => {
+    const bhvCetasikas = (currentBhavangaGroup.options?.[bhavangaSubIndex] || currentBhavangaGroup.options?.[0])?.cetasikas || [];
+    const bhvCount = bhvCetasikas.length;
+    const kLabel = khandhaViewIndex === 2 ? "ဝေဒနာက္ခန္ဓာ"
+        : khandhaViewIndex === 3 ? "သညာက္ခန္ဓာ"
+        : khandhaViewIndex === 4 ? "သင်္ခါရက္ခန္ဓာ"
+        : khandhaViewIndex === 5 ? "ဝိညာဏက္ခန္ဓာ"
+        : "သင်္ခါရက္ခန္ဓာ (စေတနာ)";
+    const kColor = khandhaViewIndex === 2 ? "bg-pink-500 ring-pink-300"
+        : khandhaViewIndex === 3 ? "bg-amber-500 ring-amber-300"
+        : khandhaViewIndex === 4 ? "bg-emerald-500 ring-emerald-300"
+        : khandhaViewIndex === 5 ? "bg-indigo-500 ring-indigo-300"
+        : "bg-amber-500 ring-amber-300";
+    return (
+        <div className="flex flex-col items-center gap-3">
+            <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">ပစ္စုပ္ပန်အကြောင်းတရား</p>
+            <div className="bg-slate-700 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm flex flex-col items-center gap-1">
+                <span>ဘဝင်မနောသမ္ဖဿ</span>
+                <span className="text-xs font-normal opacity-80">
+                    = {toMyanmarNum(bhvCount)} ပါး (စိတ် ၁ + စေတသိက် {toMyanmarNum(bhvCount - 1)})
+                </span>
+            </div>
+            <ArrowDown className="text-indigo-500 w-8 h-8 animate-bounce" />
+            <p className="text-indigo-700 font-bold text-sm">{paticcaCittaName || activeNode.name}စိတ်</p>
+            <div className={`${kColor} text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] animate-pulse font-bold text-sm`}>
+                {kLabel}
+            </div>
+        </div>
+    );
+})()}
+                          </div>
+                        ) : (
+                          <div className="flex flex-wrap gap-1 p-2 rounded-lg border-2 border-amber-200 bg-amber-50/50" title="သညာက္ခန္ဓာ">
+                            {sannaGroup.map((c, i) => <CetasikaBtn key={`s-${i}`} cName={c} label="သညာက္ခန္ဓာ" />)}
+                          </div>
+                        )
+                    ) : khandhaViewIndex === 4 ? (
+                        isPaticcaActive ? (() => {
+                          const tLabel = sankharaOnlyCetana ? "သင်္ခါရက္ခန္ဓာ (စေတနာ)" : "သင်္ခါရက္ခန္ဓာ";
+                          return (
+                            <div className="bg-emerald-50 rounded-xl p-4 border-2 border-emerald-200 flex flex-col items-center justify-center text-center h-full">
+                              {(paticcaStep === 1) && (isVipaka ? (
+                                <div className="flex flex-col items-center gap-3">
+                                <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">အတိတ်အကြောင်းတရား</p>
+                                  <div className="bg-slate-700 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm">အဝိဇ္ဇာ၊ တဏှာ၊ ဥပါဒါန်</div>
+                                  <ArrowDown className="text-emerald-500 w-8 h-8 animate-bounce" />
+                                  <p className="text-emerald-700 font-bold text-sm">{paticcaCittaName}စိတ်</p>
+                                  <div className="bg-emerald-500 text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] ring-emerald-300 animate-pulse font-bold text-sm">{tLabel}</div>
+                                </div>
+                              ) : (
+                                <div className="flex flex-col items-center gap-3">
+                                <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">ပစ္စုပ္ပန်အကြောင်းတရား</p>
+                                  <div className="bg-emerald-600 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm">အာရုံ: {paticcaLockedNodeData?.aramana}</div>
+                                  <ArrowDown className="text-emerald-500 w-8 h-8 animate-bounce" />
+                                  <p className="text-emerald-700 font-bold text-sm">{paticcaCittaName}စိတ်</p>
+                                  <div className="bg-emerald-500 text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] ring-emerald-300 animate-pulse font-bold text-sm">{tLabel}</div>
+                                </div>
+                              ))}
+                              {(paticcaStep === 2) && (isVipaka ? (
+                                <div className="flex flex-col items-center gap-3">
+                                <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">အတိတ်အကြောင်းတရား</p>
+                                  <div className="bg-slate-700 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm">သင်္ခါရ၊ ကံ</div>
+                                  <ArrowDown className="text-emerald-500 w-8 h-8 animate-bounce" />
+                                  <p className="text-emerald-700 font-bold text-sm">{paticcaCittaName}စိတ်</p>
+                                  <div className="bg-emerald-500 text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] ring-emerald-300 animate-pulse font-bold text-sm">{tLabel}</div>
+                                </div>
+                              ) : (
+                                <div className="flex flex-col items-center gap-3">
+                                <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">ပစ္စုပ္ပန်အကြောင်းတရား</p>
+                                  <div className="bg-indigo-600 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm">မှီရာဝတ္ထု: {paticcaLockedNodeData?.base}</div>
+                                  <ArrowDown className="text-emerald-500 w-8 h-8 animate-bounce" />
+                                  <p className="text-emerald-700 font-bold text-sm">{paticcaCittaName}စိတ်</p>
+                                  <div className="bg-emerald-500 text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] ring-emerald-300 animate-pulse font-bold text-sm">{tLabel}</div>
+                                </div>
+                              ))}
+                              {paticcaStep === 3 && (
+                <div className="flex flex-col items-center gap-3">
+                <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">ပစ္စုပ္ပန်အကြောင်းတရား</p>
+                  {paticcaLockedNodeData?.aramana && <div className="bg-emerald-600 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm">အာရုံ: {paticcaLockedNodeData.aramana}</div>}
+                                  <ArrowDown className="text-emerald-500 w-8 h-8 animate-bounce" />
+                                  <p className="text-emerald-700 font-bold text-sm">{paticcaCittaName}စိတ်</p>
+                                  <div className="bg-emerald-500 text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] ring-emerald-300 animate-pulse font-bold text-sm">{tLabel}</div>
+                                </div>
+                              )}
+                              {(paticcaStep === 4) && (
+                                <div className="flex flex-col items-center gap-3">
+                                <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">ပစ္စုပ္ပန်အကြောင်းတရား</p>
+                                  <div className="bg-indigo-600 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm">မှီရာဝတ္ထု: {paticcaLockedNodeData?.base}</div>
+                                  <ArrowDown className="text-emerald-500 w-8 h-8 animate-bounce" />
+                                  <p className="text-emerald-700 font-bold text-sm">{paticcaCittaName}စိတ်</p>
+                                  <div className="bg-emerald-500 text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] ring-emerald-300 animate-pulse font-bold text-sm">{tLabel}</div>
+                                </div>
+                              )}
+                              {paticcaStep === 5 && (
+                                <div className="flex flex-col items-center gap-3">
+                                  <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">ပစ္စုပ္ပန်အကြောင်းတရား</p>
+                <div className="bg-pink-700 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm">ဖဿ</div>
+                <div className="flex flex-wrap gap-1 justify-center">
+                                    {(paticcaLockedNodeData?.cetasikas || []).filter(c => c === "အသိစိတ်" || c.includes("ဝေဒနာ") || c === "သညာ").map((c, i) => (
+                                      <span key={i} className={`px-1.5 py-0.5 rounded text-[11px] font-bold border ${getCetasikaStyle(c)}`}>{c}</span>
+                                    ))}
+                                  </div>
+                                  <ArrowDown className="text-emerald-500 w-8 h-8 animate-bounce" />
+                                  <p className="text-emerald-700 font-bold text-sm">{paticcaCittaName}စိတ်</p>
+                                  <div className="bg-emerald-500 text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] ring-emerald-300 animate-pulse font-bold text-sm">{tLabel}</div>
+                                </div>
+                              )}
+                              {paticcaStep === 7 && (() => {
+              let specialCause = "";
+              const cName = paticcaCittaName || activeNode.name;
+              if (cName.includes("စက္ခုဝိညာဏ်")) specialCause = "အာလောက (အလင်းရောင်)";
+              else if (cName.includes("သောတဝိညာဏ်")) specialCause = "အာကာသ (ဟာလာဟင်းလင်းဖြစ်ခြင်း)";
+              else if (cName.includes("ဃာနဝိညာဏ်")) specialCause = "ဝါတ (လေ)";
+              else if (cName.includes("ဇိဝှါဝိညာဏ်")) specialCause = "အာပေါ (ရေ)";
+              else if (cName.includes("ကာယဝိညာဏ်")) specialCause = "ထဒ္ဓပထဝီ (ခိုင်မာသော ပထဝီ)";
+              
+              const isVedana = khandhaViewIndex === 2;
+              const isSanna = khandhaViewIndex === 3;
+              const isSankhara = khandhaViewIndex === 4;
+              
+              const label = isVedana ? "ဝေဒနာက္ခန္ဓာ" : isSanna ? "သညာက္ခန္ဓာ" : isSankhara ? "သင်္ခါရက္ခန္ဓာ" : "သင်္ခါရက္ခန္ဓာ (စေတနာ)";
+              const bgClass = isVedana ? "bg-pink-500 ring-pink-300" : isSanna ? "bg-amber-500 ring-amber-300" : isSankhara ? "bg-emerald-500 ring-emerald-300" : "bg-amber-500 ring-amber-300";
+              const arrowColor = isSankhara ? "text-emerald-500" : "text-pink-500";
+              const textColor = isSankhara ? "text-emerald-700" : "text-pink-700";
+
+              return specialCause ? (
+                <div className="flex flex-col items-center gap-3">
+                  <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">ပစ္စုပ္ပန်အကြောင်းတရား</p>
+                  <div className="bg-slate-700 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm">{specialCause}</div>
+                  <ArrowDown className={`${arrowColor} w-8 h-8 animate-bounce`} />
+                  <p className={`${textColor} font-bold text-sm`}>{cName}စိတ်</p>
+                  <div className={`${bgClass} text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] animate-pulse font-bold text-sm`}>{label}</div>
+                </div>
+              ) : null;
+            })()}
+            {paticcaStep === 8 && (() => {
+              const cName = paticcaCittaName || activeNode.name;
+              let manasikaraName = "";
+              if (["စက္ခုဝိညာဏ်", "သောတဝိညာဏ်", "ဃာနဝိညာဏ်", "ဇိဝှါဝိညာဏ်", "ကာယဝိညာဏ်"].some(v => cName.includes(v))) {
+                  manasikaraName = "ပဉ္စဒွါရာဝဇ္ဇန်းစိတ်";
+              } else {
+                  const vithiName = paticcaLockedNodeData?.vithi || activeNode.vithi || "";
+                  if (vithiName.includes("မနောဒွါရ") || vithiName.includes("အပ္ပနာ")) manasikaraName = "မနောဒွါရာဝဇ္ဇန်းစိတ်";
+                  else manasikaraName = "ဝုဋ္ဌောစိတ်";
+              }
+              
+              const isVedana = khandhaViewIndex === 2;
+              const isSanna = khandhaViewIndex === 3;
+              const isSankhara = khandhaViewIndex === 4 || khandhaViewIndex === 6;
+              const isVinnana = khandhaViewIndex === 5;
+              
+              const label = isVedana ? "ဝေဒနာက္ခန္ဓာ" : isSanna ? "သညာက္ခန္ဓာ" : khandhaViewIndex === 6 ? "သင်္ခါရက္ခန္ဓာ (စေတနာ)" : isSankhara ? "သင်္ခါရက္ခန္ဓာ" : "ဝိညာဏက္ခန္ဓာ";
+              const bgClass = isVedana ? "bg-pink-500 ring-pink-300" : isSanna ? "bg-amber-500 ring-amber-300" : isSankhara ? "bg-emerald-500 ring-emerald-300" : "bg-indigo-500 ring-indigo-300";
+              const arrowColor = isSankhara ? "text-emerald-500" : isVinnana ? "text-indigo-500" : "text-pink-500";
+              const textColor = isSankhara ? "text-emerald-700" : isVinnana ? "text-indigo-700" : "text-pink-700";
+
+              return manasikaraName ? (
+                <div className="flex flex-col items-center gap-3 w-full">
+                  <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">ပစ္စုပ္ပန်အကြောင်းတရား</p>
+                  <div className="bg-slate-700 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm flex flex-col items-center gap-1">
+                      <span>မနသိကာရ</span>
+                      <span className="text-xs font-normal opacity-80">({manasikaraName})</span>
+                  </div>
+                  <ArrowDown className={`${arrowColor} w-8 h-8 animate-bounce`} />
+                  <p className={`${textColor} font-bold text-sm`}>{cName}စိတ်</p>
+                  <div className={`${bgClass} text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] animate-pulse font-bold text-sm`}>{label}</div>
+                </div>
+              ) : null;
+            })()}
+            {paticcaStep === 9 && (() => {
+              const targetCitta = paticcaCittaName;
+              let samphassaName = activeNode.name.replace("ဝိညာဏ်", "သမ္ဖဿ");
+              
+              const isVedana = khandhaViewIndex === 2;
+              const isSanna = khandhaViewIndex === 3;
+              const isSankhara = khandhaViewIndex === 4 || khandhaViewIndex === 6;
+              const isVinnana = khandhaViewIndex === 5;
+              
+              const label = isVedana ? "ဝေဒနာက္ခန္ဓာ" : isSanna ? "သညာက္ခန္ဓာ" : khandhaViewIndex === 6 ? "သင်္ခါရက္ခန္ဓာ (စေတနာ)" : isSankhara ? "သင်္ခါရက္ခန္ဓာ" : "ဝိညာဏက္ခန္ဓာ";
+              const bgClass = isVedana ? "bg-pink-500 ring-pink-300" : isSanna ? "bg-amber-500 ring-amber-300" : isSankhara ? "bg-emerald-500 ring-emerald-300" : "bg-indigo-500 ring-indigo-300";
+              const arrowColor = isSankhara ? "text-emerald-500" : isVinnana ? "text-indigo-500" : "text-pink-500";
+              const textColor = isSankhara ? "text-emerald-700" : isVinnana ? "text-indigo-700" : "text-pink-700";
+
+              return samphassaName ? (
+                <div className="flex flex-col items-center gap-3 w-full">
+                  <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">ပစ္စုပ္ပန်အကြောင်းတရား</p>
+                  <div className="bg-fuchsia-600 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm flex flex-col items-center gap-1">
+                      <span>{samphassaName}</span>
+                      <span className="text-xs font-normal opacity-80">({activeNode.name}စိတ်)</span>
+                  </div>
+                  <ArrowDown className={`${arrowColor} w-8 h-8 animate-bounce`} />
+                  <p className={`${textColor} font-bold text-sm`}>{targetCitta}စိတ်</p>
+                  <div className={`${bgClass} text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] animate-pulse font-bold text-sm`}>{label}</div>
+                </div>
+              ) : null;
+            })()}
+            {paticcaStep === 10 && (() => {
+    const kLabel = khandhaViewIndex === 2 ? "ဝေဒနာက္ခန္ဓာ"
+        : khandhaViewIndex === 3 ? "သညာက္ခန္ဓာ"
+        : khandhaViewIndex === 4 ? "သင်္ခါရက္ခန္ဓာ"
+        : khandhaViewIndex === 5 ? "ဝိညာဏက္ခန္ဓာ"
+        : "သင်္ခါရက္ခန္ဓာ (စေတနာ)";
+    const kColor = khandhaViewIndex === 2 ? "bg-pink-500 ring-pink-300"
+        : khandhaViewIndex === 3 ? "bg-amber-500 ring-amber-300"
+        : khandhaViewIndex === 4 ? "bg-emerald-500 ring-emerald-300"
+        : khandhaViewIndex === 5 ? "bg-indigo-500 ring-indigo-300"
+        : "bg-amber-500 ring-amber-300";
+    // activeNode က step 10 တွင် ရှေးစိတ်ကိုယ်တိုင် ဖြစ်နေသည်
+    const prevCount = activeNode.count || 0;
+    return (
+        <div className="flex flex-col items-center gap-3">
+            <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">ပစ္စုပ္ပန်အကြောင်းတရား</p>
+            <div className="bg-violet-700 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm flex flex-col items-center gap-1">
+                <span>{preSamphassaLabel}</span>
+                <span className="text-xs font-normal opacity-80">
+                    ({activeNode.name}) = {toMyanmarNum(prevCount)} ပါး
+                </span>
+            </div>
+            <ArrowDown className="text-violet-500 w-8 h-8 animate-bounce" />
+            <p className="text-violet-700 font-bold text-sm">{paticcaCittaName}စိတ်</p>
+            <div className={`${kColor} text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] animate-pulse font-bold text-sm`}>
+                {kLabel}
+            </div>
+        </div>
+    );
+})()}
+                              {paticcaStep === 6 && (() => {
+    const bhvCetasikas = (currentBhavangaGroup.options?.[bhavangaSubIndex] || currentBhavangaGroup.options?.[0])?.cetasikas || [];
+    const bhvCount = bhvCetasikas.length;
+    const kLabel = khandhaViewIndex === 2 ? "ဝေဒနာက္ခန္ဓာ"
+        : khandhaViewIndex === 3 ? "သညာက္ခန္ဓာ"
+        : khandhaViewIndex === 4 ? "သင်္ခါရက္ခန္ဓာ"
+        : khandhaViewIndex === 5 ? "ဝိညာဏက္ခန္ဓာ"
+        : "သင်္ခါရက္ခန္ဓာ (စေတနာ)";
+    const kColor = khandhaViewIndex === 2 ? "bg-pink-500 ring-pink-300"
+        : khandhaViewIndex === 3 ? "bg-amber-500 ring-amber-300"
+        : khandhaViewIndex === 4 ? "bg-emerald-500 ring-emerald-300"
+        : khandhaViewIndex === 5 ? "bg-indigo-500 ring-indigo-300"
+        : "bg-amber-500 ring-amber-300";
+    return (
+        <div className="flex flex-col items-center gap-3">
+            <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">ပစ္စုပ္ပန်အကြောင်းတရား</p>
+            <div className="bg-slate-700 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm flex flex-col items-center gap-1">
+                <span>ဘဝင်မနောသမ္ဖဿ</span>
+                <span className="text-xs font-normal opacity-80">
+                    = {toMyanmarNum(bhvCount)} ပါး (စိတ် ၁ + စေတသိက် {toMyanmarNum(bhvCount - 1)})
+                </span>
+            </div>
+            <ArrowDown className="text-indigo-500 w-8 h-8 animate-bounce" />
+            <p className="text-indigo-700 font-bold text-sm">{paticcaCittaName || activeNode.name}စိတ်</p>
+            <div className={`${kColor} text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] animate-pulse font-bold text-sm`}>
+                {kLabel}
+            </div>
+        </div>
+    );
+})()}
+                            </div>
+                          );
+                        })() : (
+                          <div className="flex flex-wrap gap-1 p-2 rounded-lg border-2 border-emerald-200 bg-emerald-50/50" title="သင်္ခါရက္ခန္ဓာ">
+                            {sankharaPrimary.map((c, i) => (
+                              <button key={`sp-${i}`}
+                                onClick={() => setSelectedCetasika(c)}
+                                onMouseEnter={() => handleMouseEnter(c)}
+                                onMouseLeave={handleMouseLeave}
+                                className={`px-2 py-1 md:px-2.5 md:py-1 rounded-lg text-[10px] md:text-[11px] transition-all duration-200 border cursor-pointer hover:-translate-y-0.5 ${getCetasikaStyle(c)}`}>
+                                သင်္ခါရက္ခန္ဓာ (စေတနာ)
+                              </button>
+                            ))}
+                            {sankharaSecondary.map((c, i) => <CetasikaBtn key={`ss-${i}`} cName={c} label={c} />)}
+                          </div>
+                        )
+                    ) : khandhaViewIndex === 5 ? (
+                        isPaticcaActive ? (
+                          <div className="bg-indigo-50 rounded-xl p-4 border-2 border-indigo-200 flex flex-col items-center justify-center text-center h-full">
+                            {/* ဝိပါက်ဝိညာဏ် ဆိုရင် step 1,2,3 */}
+                            {paticcaStep === 1 && isVipaka && (
+                              <div className="flex flex-col items-center gap-3">
+                                <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">အတိတ်အကြောင်းတရား</p>
+                                <div className="bg-slate-700 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm">အဝိဇ္ဇာ၊ တဏှာ၊ ဥပါဒါန်</div>
+                                <ArrowDown className="text-indigo-500 w-8 h-8 animate-bounce" />
+                                <p className="text-indigo-700 font-bold text-sm">{paticcaCittaName || activeNode.name}စိတ်</p>
+                                <div className="bg-indigo-500 text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] ring-indigo-300 animate-pulse font-bold text-sm">ဝိညာဏက္ခန္ဓာ</div>
+                              </div>
+                            )}
+                            {paticcaStep === 2 && isVipaka && (
+                              <div className="flex flex-col items-center gap-3">
+                                <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">အတိတ်အကြောင်းတရား</p>
+                                <div className="bg-slate-700 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm">သင်္ခါရ၊ ကံ</div>
+                                <ArrowDown className="text-indigo-500 w-8 h-8 animate-bounce" />
+                                <p className="text-indigo-700 font-bold text-sm">{paticcaCittaName || activeNode.name}စိတ်</p>
+                                <div className="bg-indigo-500 text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] ring-indigo-300 animate-pulse font-bold text-sm">ဝိညာဏက္ခန္ဓာ</div>
+                              </div>
+                            )}
+                            {paticcaStep === 3 && (() => {
+                              const lockedNode = paticcaLockedNodeData || activeNode;
+                              const nonVipakaC = lockedNode.cetasikas?.filter(c => c !== "အသိစိတ်") || [];
+                              const aramana = lockedNode.aramana || "";
+                              const base = lockedNode.base || "";
+                              const baseLabel = base && base !== "မရှိ" ? base.replace(/-[၀-၉]+$/, "") : "";
+                              return (
+                                <div className="flex flex-col items-center gap-3">
+                                  <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">ပစ္စုပ္ပန်အကြောင်းတရား</p>
+                                  <div className="bg-indigo-600 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm">နာမ်ရုပ်</div>
+                                  <div className="flex flex-wrap gap-1 justify-center">
+                                    {nonVipakaC.map((c, i) => (
+                                      <span key={i} className={`px-1.5 py-0.5 rounded text-[11px] font-bold border ${getCetasikaStyle(c)}`}>{c}</span>
+                                    ))}
+                                    {aramana && <span className="px-1.5 py-0.5 rounded text-[11px] font-bold border bg-amber-100 text-amber-800 border-amber-300">အာရုံ: {aramana}</span>}
+                                    {baseLabel && <span className="px-1.5 py-0.5 rounded text-[11px] font-bold border bg-indigo-100 text-indigo-800 border-indigo-300">ဝတ္ထု: {baseLabel}</span>}
+                                  </div>
+                                  <ArrowDown className="text-indigo-500 w-8 h-8 animate-bounce" />
+                                  <p className="text-indigo-700 font-bold text-sm">{paticcaCittaName || activeNode.name}စိတ်</p>
+                                  <div className="bg-indigo-500 text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] ring-indigo-300 animate-pulse font-bold text-sm">ဝိညာဏက္ခန္ဓာ</div>
+                                </div>
+                              );
+                            })()}
+                            {paticcaStep === 4 && (() => {
+                              let specialCause = "";
+                              const cName = paticcaCittaName || activeNode.name;
+                              if (cName.includes("စက္ခုဝိညာဏ်")) specialCause = "အာလောက (အလင်းရောင်)";
+                              else if (cName.includes("သောတဝိညာဏ်")) specialCause = "အာကာသ (ဟာလာဟင်းလင်းဖြစ်ခြင်း)";
+                              else if (cName.includes("ဃာနဝိညာဏ်")) specialCause = "ဝါတ (လေ)";
+                              else if (cName.includes("ဇိဝှါဝိညာဏ်")) specialCause = "အာပေါ (ရေ)";
+                              else if (cName.includes("ကာယဝိညာဏ်")) specialCause = "ထဒ္ဓပထဝီ (ခိုင်မာသော ပထဝီ)";
+
+                              return specialCause ? (
+                                <div className="flex flex-col items-center gap-3">
+                                  <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">ပစ္စုပ္ပန်အကြောင်းတရား</p>
+                                  <div className="bg-slate-700 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm">
+                                    {specialCause}
+                                  </div>
+                                  <ArrowDown className="text-indigo-500 w-8 h-8 animate-bounce" />
+                                  <p className="text-indigo-700 font-bold text-sm">{cName}စိတ်</p>
+                                  <div className="bg-indigo-500 text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] ring-indigo-300 animate-pulse font-bold text-sm">ဝိညာဏက္ခန္ဓာ</div>
+                                </div>
+                              ) : null;
+                            })()}
+                            {paticcaStep === 7 && (() => {
+              let specialCause = "";
+              const cName = paticcaCittaName || activeNode.name;
+              if (cName.includes("စက္ခုဝိညာဏ်")) specialCause = "အာလောက (အလင်းရောင်)";
+              else if (cName.includes("သောတဝိညာဏ်")) specialCause = "အာကာသ (ဟာလာဟင်းလင်းဖြစ်ခြင်း)";
+              else if (cName.includes("ဃာနဝိညာဏ်")) specialCause = "ဝါတ (လေ)";
+              else if (cName.includes("ဇိဝှါဝိညာဏ်")) specialCause = "အာပေါ (ရေ)";
+              else if (cName.includes("ကာယဝိညာဏ်")) specialCause = "ထဒ္ဓပထဝီ (ခိုင်မာသော ပထဝီ)";
+              
+              const isVedana = khandhaViewIndex === 2;
+              const isSanna = khandhaViewIndex === 3;
+              const isSankhara = khandhaViewIndex === 4;
+              
+              const label = isVedana ? "ဝေဒနာက္ခန္ဓာ" : isSanna ? "သညာက္ခန္ဓာ" : isSankhara ? "သင်္ခါရက္ခန္ဓာ" : "သင်္ခါရက္ခန္ဓာ (စေတနာ)";
+              const bgClass = isVedana ? "bg-pink-500 ring-pink-300" : isSanna ? "bg-amber-500 ring-amber-300" : isSankhara ? "bg-emerald-500 ring-emerald-300" : "bg-amber-500 ring-amber-300";
+              const arrowColor = isSankhara ? "text-emerald-500" : "text-pink-500";
+              const textColor = isSankhara ? "text-emerald-700" : "text-pink-700";
+
+              return specialCause ? (
+                <div className="flex flex-col items-center gap-3">
+                  <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">ပစ္စုပ္ပန်အကြောင်းတရား</p>
+                  <div className="bg-slate-700 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm">{specialCause}</div>
+                  <ArrowDown className={`${arrowColor} w-8 h-8 animate-bounce`} />
+                  <p className={`${textColor} font-bold text-sm`}>{cName}စိတ်</p>
+                  <div className={`${bgClass} text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] animate-pulse font-bold text-sm`}>{label}</div>
+                </div>
+              ) : null;
+            })()}
+            {paticcaStep === 8 && (() => {
+              const cName = paticcaCittaName || activeNode.name;
+              let manasikaraName = "";
+              if (["စက္ခုဝိညာဏ်", "သောတဝိညာဏ်", "ဃာနဝိညာဏ်", "ဇိဝှါဝိညာဏ်", "ကာယဝိညာဏ်"].some(v => cName.includes(v))) {
+                  manasikaraName = "ပဉ္စဒွါရာဝဇ္ဇန်းစိတ်";
+              } else {
+                  const vithiName = paticcaLockedNodeData?.vithi || activeNode.vithi || "";
+                  if (vithiName.includes("မနောဒွါရ") || vithiName.includes("အပ္ပနာ")) manasikaraName = "မနောဒွါရာဝဇ္ဇန်းစိတ်";
+                  else manasikaraName = "ဝုဋ္ဌောစိတ်";
+              }
+              
+              const isVedana = khandhaViewIndex === 2;
+              const isSanna = khandhaViewIndex === 3;
+              const isSankhara = khandhaViewIndex === 4 || khandhaViewIndex === 6;
+              const isVinnana = khandhaViewIndex === 5;
+              
+              const label = isVedana ? "ဝေဒနာက္ခန္ဓာ" : isSanna ? "သညာက္ခန္ဓာ" : khandhaViewIndex === 6 ? "သင်္ခါရက္ခန္ဓာ (စေတနာ)" : isSankhara ? "သင်္ခါရက္ခန္ဓာ" : "ဝိညာဏက္ခန္ဓာ";
+              const bgClass = isVedana ? "bg-pink-500 ring-pink-300" : isSanna ? "bg-amber-500 ring-amber-300" : isSankhara ? "bg-emerald-500 ring-emerald-300" : "bg-indigo-500 ring-indigo-300";
+              const arrowColor = isSankhara ? "text-emerald-500" : isVinnana ? "text-indigo-500" : "text-pink-500";
+              const textColor = isSankhara ? "text-emerald-700" : isVinnana ? "text-indigo-700" : "text-pink-700";
+
+              return manasikaraName ? (
+                <div className="flex flex-col items-center gap-3 w-full">
+                  <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">ပစ္စုပ္ပန်အကြောင်းတရား</p>
+                  <div className="bg-slate-700 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm flex flex-col items-center gap-1">
+                      <span>မနသိကာရ</span>
+                      <span className="text-xs font-normal opacity-80">({manasikaraName})</span>
+                  </div>
+                  <ArrowDown className={`${arrowColor} w-8 h-8 animate-bounce`} />
+                  <p className={`${textColor} font-bold text-sm`}>{cName}စိတ်</p>
+                  <div className={`${bgClass} text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] animate-pulse font-bold text-sm`}>{label}</div>
+                </div>
+              ) : null;
+            })()}
+            {paticcaStep === 9 && (() => {
+              const targetCitta = paticcaCittaName;
+              let samphassaName = activeNode.name.replace("ဝိညာဏ်", "သမ္ဖဿ");
+              
+              const isVedana = khandhaViewIndex === 2;
+              const isSanna = khandhaViewIndex === 3;
+              const isSankhara = khandhaViewIndex === 4 || khandhaViewIndex === 6;
+              const isVinnana = khandhaViewIndex === 5;
+              
+              const label = isVedana ? "ဝေဒနာက္ခန္ဓာ" : isSanna ? "သညာက္ခန္ဓာ" : khandhaViewIndex === 6 ? "သင်္ခါရက္ခန္ဓာ (စေတနာ)" : isSankhara ? "သင်္ခါရက္ခန္ဓာ" : "ဝိညာဏက္ခန္ဓာ";
+              const bgClass = isVedana ? "bg-pink-500 ring-pink-300" : isSanna ? "bg-amber-500 ring-amber-300" : isSankhara ? "bg-emerald-500 ring-emerald-300" : "bg-indigo-500 ring-indigo-300";
+              const arrowColor = isSankhara ? "text-emerald-500" : isVinnana ? "text-indigo-500" : "text-pink-500";
+              const textColor = isSankhara ? "text-emerald-700" : isVinnana ? "text-indigo-700" : "text-pink-700";
+
+              return samphassaName ? (
+                <div className="flex flex-col items-center gap-3 w-full">
+                  <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">ပစ္စုပ္ပန်အကြောင်းတရား</p>
+                  <div className="bg-fuchsia-600 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm flex flex-col items-center gap-1">
+                      <span>{samphassaName}</span>
+                      <span className="text-xs font-normal opacity-80">({activeNode.name}စိတ်)</span>
+                  </div>
+                  <ArrowDown className={`${arrowColor} w-8 h-8 animate-bounce`} />
+                  <p className={`${textColor} font-bold text-sm`}>{targetCitta}စိတ်</p>
+                  <div className={`${bgClass} text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] animate-pulse font-bold text-sm`}>{label}</div>
+                </div>
+              ) : null;
+            })()}
+            {paticcaStep === 10 && (() => {
+    const kLabel = khandhaViewIndex === 2 ? "ဝေဒနာက္ခန္ဓာ"
+        : khandhaViewIndex === 3 ? "သညာက္ခန္ဓာ"
+        : khandhaViewIndex === 4 ? "သင်္ခါရက္ခန္ဓာ"
+        : khandhaViewIndex === 5 ? "ဝိညာဏက္ခန္ဓာ"
+        : "သင်္ခါရက္ခန္ဓာ (စေတနာ)";
+    const kColor = khandhaViewIndex === 2 ? "bg-pink-500 ring-pink-300"
+        : khandhaViewIndex === 3 ? "bg-amber-500 ring-amber-300"
+        : khandhaViewIndex === 4 ? "bg-emerald-500 ring-emerald-300"
+        : khandhaViewIndex === 5 ? "bg-indigo-500 ring-indigo-300"
+        : "bg-amber-500 ring-amber-300";
+    // activeNode က step 10 တွင် ရှေးစိတ်ကိုယ်တိုင် ဖြစ်နေသည်
+    const prevCount = activeNode.count || 0;
+    return (
+        <div className="flex flex-col items-center gap-3">
+            <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">ပစ္စုပ္ပန်အကြောင်းတရား</p>
+            <div className="bg-violet-700 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm flex flex-col items-center gap-1">
+                <span>{preSamphassaLabel}</span>
+                <span className="text-xs font-normal opacity-80">
+                    ({activeNode.name}) = {toMyanmarNum(prevCount)} ပါး
+                </span>
+            </div>
+            <ArrowDown className="text-violet-500 w-8 h-8 animate-bounce" />
+            <p className="text-violet-700 font-bold text-sm">{paticcaCittaName}စိတ်</p>
+            <div className={`${kColor} text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] animate-pulse font-bold text-sm`}>
+                {kLabel}
+            </div>
+        </div>
+    );
+})()}
+                            {paticcaStep === 6 && (() => {
+    const bhvCetasikas = (currentBhavangaGroup.options?.[bhavangaSubIndex] || currentBhavangaGroup.options?.[0])?.cetasikas || [];
+    const bhvCount = bhvCetasikas.length;
+    const kLabel = khandhaViewIndex === 2 ? "ဝေဒနာက္ခန္ဓာ"
+        : khandhaViewIndex === 3 ? "သညာက္ခန္ဓာ"
+        : khandhaViewIndex === 4 ? "သင်္ခါရက္ခန္ဓာ"
+        : khandhaViewIndex === 5 ? "ဝိညာဏက္ခန္ဓာ"
+        : "သင်္ခါရက္ခန္ဓာ (စေတနာ)";
+    const kColor = khandhaViewIndex === 2 ? "bg-pink-500 ring-pink-300"
+        : khandhaViewIndex === 3 ? "bg-amber-500 ring-amber-300"
+        : khandhaViewIndex === 4 ? "bg-emerald-500 ring-emerald-300"
+        : khandhaViewIndex === 5 ? "bg-indigo-500 ring-indigo-300"
+        : "bg-amber-500 ring-amber-300";
+    return (
+        <div className="flex flex-col items-center gap-3">
+            <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">ပစ္စုပ္ပန်အကြောင်းတရား</p>
+            <div className="bg-slate-700 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm flex flex-col items-center gap-1">
+                <span>ဘဝင်မနောသမ္ဖဿ</span>
+                <span className="text-xs font-normal opacity-80">
+                    = {toMyanmarNum(bhvCount)} ပါး (စိတ် ၁ + စေတသိက် {toMyanmarNum(bhvCount - 1)})
+                </span>
+            </div>
+            <ArrowDown className="text-indigo-500 w-8 h-8 animate-bounce" />
+            <p className="text-indigo-700 font-bold text-sm">{paticcaCittaName || activeNode.name}စိတ်</p>
+            <div className={`${kColor} text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] animate-pulse font-bold text-sm`}>
+                {kLabel}
+            </div>
+        </div>
+    );
+})()}
+                          </div>
+                        ) : (
+                          <div className="flex flex-wrap gap-1 p-2 rounded-lg border-2 border-indigo-200 bg-indigo-50/50" title="ဝိညာဏက္ခန္ဓာ">
+                            {cittaGroup.map((c, i) => <CetasikaBtn key={`c-${i}`} cName={c} label="ဝိညာဏက္ခန္ဓာ" />)}
+                          </div>
+                        )
+                        ) : khandhaViewIndex === 6 ? (
+                        isPaticcaActive ? (
+                          <div className="bg-amber-50 rounded-xl p-4 border-2 border-amber-200 flex flex-col items-center justify-center text-center h-full">
+                            {paticcaStep === 1 && isVipaka && (
+              <div className="flex flex-col items-center gap-3">
+                <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">အတိတ်အကြောင်းတရား</p>
+                <div className="bg-slate-700 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm">အဝိဇ္ဇာ၊ တဏှာ၊ ဥပါဒါန်</div>
+                <ArrowDown className="text-pink-500 w-8 h-8 animate-bounce" />
+                <p className="text-pink-700 font-bold text-sm">{paticcaCittaName || activeNode.name}စိတ်</p>
+                <div className="bg-amber-500 text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] ring-amber-300 animate-pulse font-bold text-sm">သင်္ခါရက္ခန္ဓာ (စေတနာ)</div>
+              </div>
+            )}
+            {paticcaStep === 2 && isVipaka && (
+              <div className="flex flex-col items-center gap-3">
+                <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">အတိတ်အကြောင်းတရား</p>
+                <div className="bg-slate-700 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm">သင်္ခါရ၊ ကံ</div>
+                <ArrowDown className="text-pink-500 w-8 h-8 animate-bounce" />
+                <p className="text-pink-700 font-bold text-sm">{paticcaCittaName || activeNode.name}စိတ်</p>
+                <div className="bg-amber-500 text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] ring-amber-300 animate-pulse font-bold text-sm">သင်္ခါရက္ခန္ဓာ (စေတနာ)</div>
+              </div>
+            )}
+            {paticcaStep === 3 && (
+              <div className="flex flex-col items-center gap-3">
+                <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">ပစ္စုပ္ပန်အကြောင်းတရား</p>
+                {paticcaLockedNodeData?.aramana && <div className="bg-blue-600 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm">အာရုံ: {paticcaLockedNodeData.aramana}</div>}
+                <ArrowDown className="text-pink-500 w-8 h-8 animate-bounce" />
+                <p className="text-pink-700 font-bold text-sm">{paticcaCittaName || activeNode.name}စိတ်</p>
+                <div className="bg-amber-500 text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] ring-amber-300 animate-pulse font-bold text-sm">သင်္ခါရက္ခန္ဓာ (စေတနာ)</div>
+              </div>
+            )}
+            {paticcaStep === 4 && (
+              <div className="flex flex-col items-center gap-3">
+                <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">ပစ္စုပ္ပန်အကြောင်းတရား</p>
+                {paticcaLockedNodeData?.base && <div className="bg-blue-600 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm">မှီရာဝတ္ထု: {paticcaLockedNodeData.base}</div>}
+                <ArrowDown className="text-pink-500 w-8 h-8 animate-bounce" />
+                <p className="text-pink-700 font-bold text-sm">{paticcaCittaName || activeNode.name}စိတ်</p>
+                <div className="bg-amber-500 text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] ring-amber-300 animate-pulse font-bold text-sm">သင်္ခါရက္ခန္ဓာ (စေတနာ)</div>
+              </div>
+            )}
+            {paticcaStep === 5 && (
+              <div className="flex flex-col items-center gap-3">
+                <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">ပစ္စုပ္ပန်အကြောင်းတရား</p>
+                <div className="bg-pink-700 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm flex flex-col items-center gap-1">
+    <span>ဖဿ</span>
+    <span className="text-xs font-normal opacity-80">
+        = {toMyanmarNum((paticcaLockedNodeData?.count || activeNode.count || 1) - 1)} လုံး
+    </span>
+</div>
+                <div className="flex flex-wrap gap-1 justify-center">
+                  {(paticcaLockedNodeData?.cetasikas || []).filter(c => c !== "စေတနာ").map((c, i) => (
+                    <span key={i} className={`px-1.5 py-0.5 rounded text-[11px] font-bold border ${getCetasikaStyle(c)}`}>{c}</span>
+                  ))}
+                </div>
+                <ArrowDown className="text-pink-500 w-8 h-8 animate-bounce" />
+                <p className="text-pink-700 font-bold text-sm">{paticcaCittaName || activeNode.name}စိတ်</p>
+                <div className="bg-amber-500 text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] ring-amber-300 animate-pulse font-bold text-sm">သင်္ခါရက္ခန္ဓာ (စေတနာ)</div>
+              </div>
+            )}
+            {paticcaStep === 7 && (() => {
+              let specialCause = "";
+              const cName = paticcaCittaName || activeNode.name;
+              if (cName.includes("စက္ခုဝိညာဏ်")) specialCause = "အာလောက (အလင်းရောင်)";
+              else if (cName.includes("သောတဝိညာဏ်")) specialCause = "အာကာသ (ဟာလာဟင်းလင်းဖြစ်ခြင်း)";
+              else if (cName.includes("ဃာနဝိညာဏ်")) specialCause = "ဝါတ (လေ)";
+              else if (cName.includes("ဇိဝှါဝိညာဏ်")) specialCause = "အာပေါ (ရေ)";
+              else if (cName.includes("ကာယဝိညာဏ်")) specialCause = "ထဒ္ဓပထဝီ (ခိုင်မာသော ပထဝီ)";
+              
+              const isVedana = khandhaViewIndex === 2;
+              const isSanna = khandhaViewIndex === 3;
+              const isSankhara = khandhaViewIndex === 4;
+              
+              const label = isVedana ? "ဝေဒနာက္ခန္ဓာ" : isSanna ? "သညာက္ခန္ဓာ" : isSankhara ? "သင်္ခါရက္ခန္ဓာ" : "သင်္ခါရက္ခန္ဓာ (စေတနာ)";
+              const bgClass = isVedana ? "bg-pink-500 ring-pink-300" : isSanna ? "bg-amber-500 ring-amber-300" : isSankhara ? "bg-emerald-500 ring-emerald-300" : "bg-amber-500 ring-amber-300";
+              const arrowColor = isSankhara ? "text-emerald-500" : "text-pink-500";
+              const textColor = isSankhara ? "text-emerald-700" : "text-pink-700";
+
+              return specialCause ? (
+                <div className="flex flex-col items-center gap-3">
+                  <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">ပစ္စုပ္ပန်အကြောင်းတရား</p>
+                  <div className="bg-slate-700 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm">{specialCause}</div>
+                  <ArrowDown className={`${arrowColor} w-8 h-8 animate-bounce`} />
+                  <p className={`${textColor} font-bold text-sm`}>{cName}စိတ်</p>
+                  <div className={`${bgClass} text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] animate-pulse font-bold text-sm`}>{label}</div>
+                </div>
+              ) : null;
+            })()}
+            {paticcaStep === 8 && (() => {
+              const cName = paticcaCittaName || activeNode.name;
+              let manasikaraName = "";
+              if (["စက္ခုဝိညာဏ်", "သောတဝိညာဏ်", "ဃာနဝိညာဏ်", "ဇိဝှါဝိညာဏ်", "ကာယဝိညာဏ်"].some(v => cName.includes(v))) {
+                  manasikaraName = "ပဉ္စဒွါရာဝဇ္ဇန်းစိတ်";
+              } else {
+                  const vithiName = paticcaLockedNodeData?.vithi || activeNode.vithi || "";
+                  if (vithiName.includes("မနောဒွါရ") || vithiName.includes("အပ္ပနာ")) manasikaraName = "မနောဒွါရာဝဇ္ဇန်းစိတ်";
+                  else manasikaraName = "ဝုဋ္ဌောစိတ်";
+              }
+              
+              const isVedana = khandhaViewIndex === 2;
+              const isSanna = khandhaViewIndex === 3;
+              const isSankhara = khandhaViewIndex === 4 || khandhaViewIndex === 6;
+              const isVinnana = khandhaViewIndex === 5;
+              
+              const label = isVedana ? "ဝေဒနာက္ခန္ဓာ" : isSanna ? "သညာက္ခန္ဓာ" : khandhaViewIndex === 6 ? "သင်္ခါရက္ခန္ဓာ (စေတနာ)" : isSankhara ? "သင်္ခါရက္ခန္ဓာ" : "ဝိညာဏက္ခန္ဓာ";
+              const bgClass = isVedana ? "bg-pink-500 ring-pink-300" : isSanna ? "bg-amber-500 ring-amber-300" : isSankhara ? "bg-emerald-500 ring-emerald-300" : "bg-indigo-500 ring-indigo-300";
+              const arrowColor = isSankhara ? "text-emerald-500" : isVinnana ? "text-indigo-500" : "text-pink-500";
+              const textColor = isSankhara ? "text-emerald-700" : isVinnana ? "text-indigo-700" : "text-pink-700";
+
+              return manasikaraName ? (
+                <div className="flex flex-col items-center gap-3 w-full">
+                  <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">ပစ္စုပ္ပန်အကြောင်းတရား</p>
+                  <div className="bg-slate-700 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm flex flex-col items-center gap-1">
+                      <span>မနသိကာရ</span>
+                      <span className="text-xs font-normal opacity-80">({manasikaraName})</span>
+                  </div>
+                  <ArrowDown className={`${arrowColor} w-8 h-8 animate-bounce`} />
+                  <p className={`${textColor} font-bold text-sm`}>{cName}စိတ်</p>
+                  <div className={`${bgClass} text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] animate-pulse font-bold text-sm`}>{label}</div>
+                </div>
+              ) : null;
+            })()}
+            {paticcaStep === 9 && (() => {
+              const targetCitta = paticcaCittaName;
+              let samphassaName = activeNode.name.replace("ဝိညာဏ်", "သမ္ဖဿ");
+              
+              const isVedana = khandhaViewIndex === 2;
+              const isSanna = khandhaViewIndex === 3;
+              const isSankhara = khandhaViewIndex === 4 || khandhaViewIndex === 6;
+              const isVinnana = khandhaViewIndex === 5;
+              
+              const label = isVedana ? "ဝေဒနာက္ခန္ဓာ" : isSanna ? "သညာက္ခန္ဓာ" : khandhaViewIndex === 6 ? "သင်္ခါရက္ခန္ဓာ (စေတနာ)" : isSankhara ? "သင်္ခါရက္ခန္ဓာ" : "ဝိညာဏက္ခန္ဓာ";
+              const bgClass = isVedana ? "bg-pink-500 ring-pink-300" : isSanna ? "bg-amber-500 ring-amber-300" : isSankhara ? "bg-emerald-500 ring-emerald-300" : "bg-indigo-500 ring-indigo-300";
+              const arrowColor = isSankhara ? "text-emerald-500" : isVinnana ? "text-indigo-500" : "text-pink-500";
+              const textColor = isSankhara ? "text-emerald-700" : isVinnana ? "text-indigo-700" : "text-pink-700";
+
+              return samphassaName ? (
+                <div className="flex flex-col items-center gap-3 w-full">
+                  <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">ပစ္စုပ္ပန်အကြောင်းတရား</p>
+                  <div className="bg-fuchsia-600 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm flex flex-col items-center gap-1">
+                      <span>{samphassaName}</span>
+                      <span className="text-xs font-normal opacity-80">({activeNode.name}စိတ်)</span>
+                  </div>
+                  <ArrowDown className={`${arrowColor} w-8 h-8 animate-bounce`} />
+                  <p className={`${textColor} font-bold text-sm`}>{targetCitta}စိတ်</p>
+                  <div className={`${bgClass} text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] animate-pulse font-bold text-sm`}>{label}</div>
+                </div>
+              ) : null;
+            })()}
+            {paticcaStep === 10 && (() => {
+    const kLabel = khandhaViewIndex === 2 ? "ဝေဒနာက္ခန္ဓာ"
+        : khandhaViewIndex === 3 ? "သညာက္ခန္ဓာ"
+        : khandhaViewIndex === 4 ? "သင်္ခါရက္ခန္ဓာ"
+        : khandhaViewIndex === 5 ? "ဝိညာဏက္ခန္ဓာ"
+        : "သင်္ခါရက္ခန္ဓာ (စေတနာ)";
+    const kColor = khandhaViewIndex === 2 ? "bg-pink-500 ring-pink-300"
+        : khandhaViewIndex === 3 ? "bg-amber-500 ring-amber-300"
+        : khandhaViewIndex === 4 ? "bg-emerald-500 ring-emerald-300"
+        : khandhaViewIndex === 5 ? "bg-indigo-500 ring-indigo-300"
+        : "bg-amber-500 ring-amber-300";
+    // activeNode က step 10 တွင် ရှေးစိတ်ကိုယ်တိုင် ဖြစ်နေသည်
+    const prevCount = activeNode.count || 0;
+    return (
+        <div className="flex flex-col items-center gap-3">
+            <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">ပစ္စုပ္ပန်အကြောင်းတရား</p>
+            <div className="bg-violet-700 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm flex flex-col items-center gap-1">
+                <span>{preSamphassaLabel}</span>
+                <span className="text-xs font-normal opacity-80">
+                    ({activeNode.name}) = {toMyanmarNum(prevCount)} ပါး
+                </span>
+            </div>
+            <ArrowDown className="text-violet-500 w-8 h-8 animate-bounce" />
+            <p className="text-violet-700 font-bold text-sm">{paticcaCittaName}စိတ်</p>
+            <div className={`${kColor} text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] animate-pulse font-bold text-sm`}>
+                {kLabel}
+            </div>
+        </div>
+    );
+})()}
+            {paticcaStep === 6 && (() => {
+    const bhvCetasikas = (currentBhavangaGroup.options?.[bhavangaSubIndex] || currentBhavangaGroup.options?.[0])?.cetasikas || [];
+    const bhvCount = bhvCetasikas.length;
+    const kLabel = khandhaViewIndex === 2 ? "ဝေဒနာက္ခန္ဓာ"
+        : khandhaViewIndex === 3 ? "သညာက္ခန္ဓာ"
+        : khandhaViewIndex === 4 ? "သင်္ခါရက္ခန္ဓာ"
+        : khandhaViewIndex === 5 ? "ဝိညာဏက္ခန္ဓာ"
+        : "သင်္ခါရက္ခန္ဓာ (စေတနာ)";
+    const kColor = khandhaViewIndex === 2 ? "bg-pink-500 ring-pink-300"
+        : khandhaViewIndex === 3 ? "bg-amber-500 ring-amber-300"
+        : khandhaViewIndex === 4 ? "bg-emerald-500 ring-emerald-300"
+        : khandhaViewIndex === 5 ? "bg-indigo-500 ring-indigo-300"
+        : "bg-amber-500 ring-amber-300";
+    return (
+        <div className="flex flex-col items-center gap-3">
+            <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">ပစ္စုပ္ပန်အကြောင်းတရား</p>
+            <div className="bg-slate-700 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm flex flex-col items-center gap-1">
+                <span>ဘဝင်မနောသမ္ဖဿ</span>
+                <span className="text-xs font-normal opacity-80">
+                    = {toMyanmarNum(bhvCount)} ပါး (စိတ် ၁ + စေတသိက် {toMyanmarNum(bhvCount - 1)})
+                </span>
+            </div>
+            <ArrowDown className="text-indigo-500 w-8 h-8 animate-bounce" />
+            <p className="text-indigo-700 font-bold text-sm">{paticcaCittaName || activeNode.name}စိတ်</p>
+            <div className={`${kColor} text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] animate-pulse font-bold text-sm`}>
+                {kLabel}
+            </div>
+        </div>
+    );
+})()}
+                          </div>
+                        ) : (
+                          <div className="flex flex-wrap gap-1 p-2 rounded-lg border-2 border-amber-200 bg-amber-50/50" title="သင်္ခါရက္ခန္ဓာ (စေတနာ)">
+                            {sannaGroup.map((c, i) => <CetasikaBtn key={`s-${i}`} cName={c} label="သင်္ခါရက္ခန္ဓာ (စေတနာ)" />)}
+                          </div>
+                        )
+                    ) : (() => {
+                                const lockedNode = paticcaLockedNodeData || activeNode;
+                                const nonVipakaC = lockedNode.cetasikas?.filter(c => c !== "အသိစိတ်") || [];
+                                const aramana = lockedNode.aramana || "";
+                                const base = lockedNode.base || "";
+                                const baseLabel = base && base !== "မရှိ" ? base.replace(/-[၀-၉]+$/, "") : "";
+                                return (
+                                  <div className="flex flex-col items-center gap-3 w-full">
+                                    <div className="flex flex-col items-center gap-2 w-full">
+                                    <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">ပစ္စုပ္ပန်အကြောင်းတရား</p>
+                                      <div className="bg-indigo-600 text-white px-6 py-3 rounded-lg shadow-md font-bold text-sm">
+                                    နာမ်ရုပ်
+                                  </div>
+                                      <div className="flex gap-3 w-full justify-center items-start">
+                                        <div className="flex flex-col items-center gap-1 flex-1">
+                                          <p className="text-[10px] font-bold text-slate-500 mb-1">နာမ်</p>
+                                          <div className="flex flex-wrap gap-1 justify-center">
+                                            {nonVipakaC.map((c, i) => (
+                                              <span key={i} className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${getCetasikaStyle(c)}`}>{c}</span>
+                                            ))}
+                                            {aramana && <span className="px-1.5 py-0.5 rounded text-[9px] font-bold border bg-amber-100 text-amber-800 border-amber-300">အာရုံ: {aramana}</span>}
+                                            {baseLabel && <span className="px-1.5 py-0.5 rounded text-[9px] font-bold border bg-indigo-100 text-indigo-800 border-indigo-300">ဝတ္ထု: {baseLabel}</span>}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <ArrowDown className="text-indigo-500 w-8 h-8 animate-bounce" />
+                                    <p className="text-indigo-700 font-bold text-sm">{paticcaCittaName || activeNode.name} (ဝိညာဏက္ခန္ဓာ)</p>
+                                    <div className="bg-indigo-500 text-white px-6 py-3 rounded-lg shadow-lg ring-[4px] ring-indigo-300 animate-pulse font-bold text-sm">
+                                      ဝိညာဏက္ခန္ဓာ
+                                    </div>
+                                  </div>
+                                );
+                              })()}
+                  </div>
+
+                </div>
+              </div>
+
+           </div>
+        </div>
+
+        {/* --- Floating Play Controls --- */}
+        <FloatingControls 
+          handleReset={handleReset} 
+          handlePrev={handlePrev} 
+          togglePlay={togglePlay} 
+          handleNext={handleNext} 
+          isPlaying={isPlaying} 
+          currentIndex={currentIndex} 
+          totalLength={vithiData.length} 
+        />
+
+        {/* --- Modals --- */}
+        {/* Base Rupa Modal */}
+        {selectedBaseForModal && rupaBaseData && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden border border-slate-200">
+              <div className="bg-indigo-600 px-6 py-4 flex justify-between items-center text-white">
+                <h3 className="font-bold text-lg md:text-xl flex items-center gap-2">
+                  <Activity className="w-5 h-5"/> {rupaBaseData.title}
+                </h3>
+                <button onClick={() => setSelectedBaseForModal(null)} className="text-indigo-200 hover:text-white p-1 rounded-lg hover:bg-indigo-500 transition">✕</button>
+              </div>
+              <div className="p-6 overflow-y-auto max-h-[60vh] bg-slate-50">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {rupaBaseData.list.map((kalapa, idx) => {
+                    const Icon = kalapa.icon || Info;
+                    return (
+                      <div key={idx} className={`${kalapa.bg} p-4 rounded-xl border border-white shadow-sm hover:shadow-md transition-shadow`}>
+                        <h4 className={`font-bold ${kalapa.color} mb-2 flex items-center gap-2`}>
+                          <Icon className="w-4 h-4"/> {kalapa.title}
+                        </h4>
+                        <p className="text-sm text-slate-700 leading-relaxed font-medium">
+                          {kalapa.elements}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="bg-slate-100 px-6 py-3 flex justify-end border-t border-slate-200">
+                <button onClick={() => setSelectedBaseForModal(null)} className="px-6 py-2 bg-white border border-slate-300 text-slate-700 rounded-xl font-bold hover:bg-slate-50 shadow-sm transition">ပိတ်မည်</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Cetasika Info Modal */}
+        {selectedCetasika && modalDisplayInfo && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden border border-slate-200">
+              <div className="bg-indigo-600 px-6 py-4 flex justify-between items-center text-white">
+                <h3 className="font-bold text-xl">{modalDisplayInfo.name || selectedCetasika}</h3>
+                <button onClick={() => setSelectedCetasika(null)} className="text-indigo-200 hover:text-white p-1 rounded-lg hover:bg-indigo-500 transition">✕</button>
+              </div>
+              <div className="p-6 space-y-4">
+                {modalDisplayInfo.lakkana && (
+                  <div>
+                    <h4 className="text-xs font-bold text-indigo-500 uppercase mb-1">လက္ခဏာ</h4>
+                    <p className="text-slate-800 font-medium">{modalDisplayInfo.lakkana}</p>
+                  </div>
+                )}
+                {modalDisplayInfo.rasa && (
+                  <div>
+                    <h4 className="text-xs font-bold text-indigo-500 uppercase mb-1">ရသ</h4>
+                    <p className="text-slate-800 font-medium">{modalDisplayInfo.rasa}</p>
+                  </div>
+                )}
+                {modalDisplayInfo.paccupatthana && (
+                  <div>
+                    <h4 className="text-xs font-bold text-indigo-500 uppercase mb-1">ပစ္စုပဋ္ဌာန်</h4>
+                    <p className="text-slate-800 font-medium">{modalDisplayInfo.paccupatthana}</p>
+                  </div>
+                )}
+                {modalDisplayInfo.padatthana && (
+                  <div>
+                    <h4 className="text-xs font-bold text-indigo-500 uppercase mb-1">ပဒဋ္ဌာန်</h4>
+                    <p className="text-slate-800 font-medium">{modalDisplayInfo.padatthana}</p>
+                  </div>
+                )}
+              </div>
+              <div className="bg-slate-50 px-6 py-3 border-t border-slate-200">
+                <button onClick={() => setSelectedCetasika(null)} className="w-full py-2.5 bg-indigo-100 text-indigo-700 font-bold rounded-xl hover:bg-indigo-200 transition">နားလည်ပါပြီ</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Prompt Input Modal */}
+        {promptModal.isOpen && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden border border-slate-200 p-6">
+              <h3 className="font-bold text-lg text-slate-800 mb-4">အာရုံကို ပြင်ဆင်ရန်</h3>
+              <input 
+                type="text" 
+                value={promptModal.value}
+                onChange={(e) => setPromptModal({ ...promptModal, value: e.target.value })}
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-slate-700 mb-6"
+                placeholder="အာရုံ ရိုက်ထည့်ပါ..."
+                autoFocus
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSaveArammana();
+                }}
+              />
+              <div className="flex gap-3 justify-end">
+                <button onClick={() => setPromptModal({ isOpen: false, type: '', value: '' })} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold transition">ပယ်ဖျက်မည်</button>
+                <button onClick={handleSaveArammana} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold transition shadow-sm">သိမ်းမည်</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+}

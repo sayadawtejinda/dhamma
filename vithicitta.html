@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="my">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vithi Citta</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔄</text></svg>" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      /* Top-right corner, same row as the 🌐 language switch button (which
+         lives at top-left, rendered by React once a language is chosen) --
+         kept out of the way of any in-app content either way. */
+      #vithicitta-download {
+        position: fixed;
+        top: 12px;
+        right: 12px;
+        z-index: 10000;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: #1f2937;
+        color: #fff;
+        font-weight: 700;
+        font-size: 12px;
+        padding: 8px 14px;
+        border-radius: 999px;
+        box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+        text-decoration: none;
+      }
+      #vithicitta-download:hover { background: #111827; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <a id="vithicitta-download" href="downloads/VithiCitta.html" download="VithiCitta.html" title="Download this whole page (both languages) as one file you can open without internet">
+      ⬇️ Download
+    </a>
+    <script type="module" src="/src/vithicitta-main.jsx"></script>
+  </body>
+</html>
