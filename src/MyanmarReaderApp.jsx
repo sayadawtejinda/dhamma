@@ -931,13 +931,11 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
     : completedChapterSheets;
 
   // Chapters are meant to be studied in order, but a capable student is
-  // allowed to read ahead of that -- this isn't a hard lock, just a label
-  // in the picker ("(ahead)") marking chapters beyond wherever
-  // resumePosition currently points. Whether reading ahead actually earns a
-  // trophy is a separate, teacher-approved decision (see the trophy-request
-  // flow in TutoringApp) -- reading ahead is always allowed, it just isn't
-  // credited until the teacher reviews and approves it.
-  const maxUnlockedChapter = resumePosition ? resumePosition.chapterNum : 1;
+  // allowed to read ahead of that -- this isn't a hard lock. Whether
+  // reading ahead actually earns a trophy is a separate, teacher-approved
+  // decision (see the trophy-request flow in TutoringApp) -- reading ahead
+  // is always allowed, it just isn't credited until the teacher reviews
+  // and approves it.
 
   // Keeps this student's live score for the CURRENT chapter+sheet written to
   // Firestore as they read, so the online panel can show "reading Chapter 3
@@ -3551,7 +3549,7 @@ useEffect(() => {
                 <option value="" disabled hidden>Sheet</option>
                 {Array.from({length: TOTAL_CHAPTERS}, (_, i) => {
                     const col = getColumnName(i);
-                    return <option key={col} value={col}>{SHEET_CHAPTER_PREFIX} {i + 1}{effectiveCompletedFullChapters.has(i + 1) ? ' 🔵' : (i + 1 <= maxUnlockedChapter ? ' 🟢' : '')}</option>
+                    return <option key={col} value={col}>{SHEET_CHAPTER_PREFIX} {i + 1}{effectiveCompletedFullChapters.has(i + 1) ? ' 🔵' : ' 🟢'}</option>
                 })}
             </select>
         </div>
@@ -3591,7 +3589,7 @@ useEffect(() => {
                                 <option value="" disabled hidden>Sheet</option>
                                 {Array.from({length: TOTAL_CHAPTERS}, (_, i) => {
                                     const col = getColumnName(i);
-                                    return <option key={col} value={col}>{SHEET_CHAPTER_PREFIX} {i + 1}{effectiveCompletedFullChapters.has(i + 1) ? ' 🔵' : (i + 1 <= maxUnlockedChapter ? ' 🟢' : '')}</option>
+                                    return <option key={col} value={col}>{SHEET_CHAPTER_PREFIX} {i + 1}{effectiveCompletedFullChapters.has(i + 1) ? ' 🔵' : ' 🟢'}</option>
                                 })}
                             </select>
                         </div>
@@ -3642,7 +3640,7 @@ useEffect(() => {
                       <option value="" disabled hidden>Sheet</option>
                       {Array.from({length: TOTAL_CHAPTERS}, (_, i) => {
                           const col = getColumnName(i);
-                          return <option key={col} value={col}>{SHEET_CHAPTER_PREFIX} {i + 1}{effectiveCompletedFullChapters.has(i + 1) ? ' 🔵' : (i + 1 <= maxUnlockedChapter ? ' 🟢' : '')}</option>
+                          return <option key={col} value={col}>{SHEET_CHAPTER_PREFIX} {i + 1}{effectiveCompletedFullChapters.has(i + 1) ? ' 🔵' : ' 🟢'}</option>
                       })}
                     </select>
                 </div>
