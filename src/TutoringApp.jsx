@@ -9836,13 +9836,40 @@ function RoleSelection({ user, onSelectRole, onStudentLogin, teacherUid, onRecov
     }
   }, []);
 
+  // Anonymous auth gives this browser/device ONE uid that persists across
+  // logins and logouts -- it's not reset by "logging out" of a student
+  // account inside this app. A brand-new student account is created AT
+  // that uid's own document (see handleSelectRole's setDoc), so creating a
+  // SECOND new account on the same device silently overwrites the first
+  // one's document instead of making a separate one. Rather than let that
+  // data loss happen, check up front whether this device's uid already has
+  // a student doc, and refuse to show the "New Student" form if so --
+  // signing back into the existing account (Existing Account tab) or
+  // switching device/browser are the two ways to actually get a second
+  // account.
+  const [deviceAccountCheck, setDeviceAccountCheck] = useState({ checked: false, exists: false });
+  useEffect(() => {
+    if (!user?.uid) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const snap = await getDoc(doc(db, `${publicDataPath}/students`, user.uid));
+        if (!cancelled) setDeviceAccountCheck({ checked: true, exists: snap.exists() });
+      } catch (e) {
+        if (!cancelled) setDeviceAccountCheck({ checked: true, exists: false });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user?.uid]);
+
   const handleSelectStudent = (e) => {
     e.preventDefault();
-    setFormError(''); 
+    setFormError('');
+    if (deviceAccountCheck.exists) return;
     if (studentName.trim()) {
-      onSelectRole('student', studentName.trim(), setFormError); 
+      onSelectRole('student', studentName.trim(), setFormError);
     } else {
-      setFormError('Please enter your name.'); 
+      setFormError('Please enter your name.');
     }
   };
   
@@ -9922,12 +9949,22 @@ function RoleSelection({ user, onSelectRole, onStudentLogin, teacherUid, onRecov
           {view === 'new' && (
             <form onSubmit={handleSelectStudent}>
               <h3 className="text-lg font-semibold text-gray-700 mb-4">Create New Student Account</h3>
-              {formError && <p className="text-red-500 text-sm mb-4">{formError}</p>} 
-              <div className="mb-4">
-                <label className="block text-gray-700 mb-2">Your Name</label>
-                <input type="text" value={studentName} onChange={(e) => setStudentName(e.target.value)} placeholder="e.g., John Doe" className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-              </div>
-              <button type="submit" className="w-full bg-emerald-500 text-white p-3 rounded-lg font-semibold hover:bg-emerald-600 transition-colors shadow-md">Create Account</button>
+              {deviceAccountCheck.checked && deviceAccountCheck.exists ? (
+                <div className="mb-4 p-3 bg-amber-50 border border-amber-300 rounded-lg text-amber-800 text-sm">
+                  This device already has a student account set up on it. Creating a new account here isn't supported -- it would replace the account already on this device instead of making a separate one.
+                  <br /><br />
+                  If this is your account, use <strong>Existing Account</strong> above to log back in with your Student ID. If you need a separate account of your own, please use a different device or browser.
+                </div>
+              ) : (
+                <>
+                  {formError && <p className="text-red-500 text-sm mb-4">{formError}</p>}
+                  <div className="mb-4">
+                    <label className="block text-gray-700 mb-2">Your Name</label>
+                    <input type="text" value={studentName} onChange={(e) => setStudentName(e.target.value)} placeholder="e.g., John Doe" className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                  </div>
+                  <button type="submit" className="w-full bg-emerald-500 text-white p-3 rounded-lg font-semibold hover:bg-emerald-600 transition-colors shadow-md">Create Account</button>
+                </>
+              )}
             </form>
           )}
           

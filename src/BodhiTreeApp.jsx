@@ -473,7 +473,35 @@ function TreeCanvas({ days }) {
           treeCacheCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
           treeCacheCtx.save();
           treeCacheCtx.translate(cx, groundY);
-          drawBranch(treeCacheCtx, currentFactor, trunkLen, trunkThick, 0, 1, maxDepth, 1);
+
+          // A few short buttress roots fanning out along the soil line, so
+          // the trunk reads as planted in the ground instead of just
+          // resting on top of it.
+          treeCacheCtx.strokeStyle = COLORS.trunk;
+          treeCacheCtx.lineCap = 'round';
+          const rootCount = 5;
+          for (let i = 0; i < rootCount; i++) {
+            const rootSeed = i * 4.7 + 1.3;
+            const t = (i / (rootCount - 1)) - 0.5; // -0.5..0.5
+            const spread = t * 1.5; // radians either side of straight down
+            const rootLen = trunkThick * (1.8 + seededRandom(rootSeed) * 0.8);
+            const dx = Math.sin(spread) * rootLen;
+            const dy = Math.abs(Math.cos(spread)) * rootLen * 0.35;
+            treeCacheCtx.lineWidth = Math.max(1.5, trunkThick * 0.35 * (1 - Math.abs(t) * 0.4));
+            treeCacheCtx.beginPath();
+            treeCacheCtx.moveTo(0, 0);
+            treeCacheCtx.lineTo(dx, dy);
+            treeCacheCtx.stroke();
+          }
+
+          // The trunk now forks after only half its length instead of at
+          // the very top -- a real Bodhi tree's trunk splits low and wide,
+          // not as one tall stick with a canopy stuck on top of it. Only
+          // this base segment is shortened; trunkLen itself still governs
+          // the aura/particle position above, so the overall silhouette
+          // doesn't shrink, just widens lower down.
+          const baseTrunkLen = trunkLen * 0.5;
+          drawBranch(treeCacheCtx, currentFactor, baseTrunkLen, trunkThick, 0, 1, maxDepth, 1);
           treeCacheCtx.restore();
           cachedFactor = currentFactor;
         }
