@@ -235,25 +235,24 @@ const COLORS = {
 };
 
 // Fullness of the canopy -- tune these to make the tree bushier. Requested
-// by the teacher (branchFactor/leafCount naming matches the Three.js sample
-// they were given, but this canvas is 2D, so branches fan across an arc
-// instead of spinning around a 3D axis). leafCount is PER twig tip and this
-// whole tree is redrawn every animation frame, so push it up gradually and
-// watch for slowdown on an actual phone before going much past ~10-12 --
-// with branchFactor 3 and the deepest growth stage (maxDepth 5 in the
-// mapRange call below), that's already 3^5 = 243 tips.
+// by the teacher, matching the same "keeps forking into 2" shape the Shrine
+// Room's simpler backdrop tree uses (2 trunks -> 4 -> 8 -> 16 -> 32 -> 64 ->
+// 128 tips at full maturity) instead of the old wider 3-way fan. A plain
+// binary fork like this is CHEAPER than a 3-way fan for the same visual
+// fullness (2^n grows slower than 3^n), and the actual per-frame cost is
+// now bounded regardless of tip count -- see the drawTreeToCache/imageBitmap
+// caching in TreeCanvas below, which redraws this recursion only while the
+// tree's growth factor is actually changing (a few seconds around opening
+// the app), not on every one of the animation loop's frames forever after.
 const TREE_PARAMS = {
-  branchFactor: 3,   // sub-branches per branch point (was a fixed 2, sometimes 3)
+  branchFactor: 2,   // sub-branches per branch point
   branchSpread: 0.85, // radians the branchFactor children fan across
   leafCount: 6,      // small leaves scattered per twig tip (was 1 big leaf)
   leafSize: 1,       // multiplier on the base leaf size
-  // The very first split off the trunk uses just 2 thick, barely-tapered
-  // limbs instead of the bushier branchFactor fan below it -- reads as two
+  // The very first split off the trunk uses thicker, barely-tapered limbs
+  // and a narrower spread than the canopy forks above it -- reads as two
   // big trunks merged at the base (the look the teacher liked on the Shrine
-  // Room's simpler tree) before the canopy fans out above it. This also
-  // REDUCES total tip count vs a plain branchFactor fan at every level
-  // (2 * branchFactor^(depth-1) instead of branchFactor^depth), so it's
-  // safe performance headroom, not an added cost.
+  // Room's tree) before the bushier canopy fans out.
   trunkSplitSpread: 0.55,
   trunkSplitTaper: 0.85,
   trunkSplitLenFactor: 0.82,
@@ -273,6 +272,20 @@ function TreeCanvas({ days }) {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
+    // The branch/leaf fractal is the only expensive part of this drawing
+    // (hundreds of strokes/fills once the canopy is fully forked out) --
+    // everything else per frame (ground, aura glow, drifting particles,
+    // birds/butterflies) is a handful of shapes. Rendering the fractal to
+    // this offscreen canvas only when the tree's growth factor has actually
+    // moved since the last time (see needsTreeRedraw below), then just
+    // stamping that bitmap onto the visible canvas every frame, keeps the
+    // steady-state cost (tree fully grown, animation loop still running
+    // forever for the birds/butterflies) independent of how bushy the
+    // canopy is -- a bushier tree only costs more during the few seconds
+    // it's actively growing in, never after it settles.
+    const treeCache = document.createElement('canvas');
+    const treeCacheCtx = treeCache.getContext('2d');
+    let cachedFactor = null;
     let raf;
     let currentFactor = 0;
     let lastTime = performance.now();
@@ -306,23 +319,26 @@ function TreeCanvas({ days }) {
       return x - Math.floor(x);
     }
 
-    function drawBranch(len, thick, angle, depth, maxDepth, seed) {
-      ctx.save();
-      ctx.rotate(angle);
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(0, -len);
-      ctx.strokeStyle = COLORS.trunk;
-      ctx.lineWidth = thick;
-      ctx.lineCap = 'round';
-      ctx.stroke();
-      ctx.translate(0, -len);
+    // tctx (target ctx) is explicit, not closed over -- this gets called
+    // against the offscreen treeCacheCtx (see needsTreeRedraw below), never
+    // directly against the visible canvas's ctx.
+    function drawBranch(tctx, leafFactor, len, thick, angle, depth, maxDepth, seed) {
+      tctx.save();
+      tctx.rotate(angle);
+      tctx.beginPath();
+      tctx.moveTo(0, 0);
+      tctx.lineTo(0, -len);
+      tctx.strokeStyle = COLORS.trunk;
+      tctx.lineWidth = thick;
+      tctx.lineCap = 'round';
+      tctx.stroke();
+      tctx.translate(0, -len);
 
       if (depth < maxDepth) {
         // depth === 1 is the split right off the trunk -- see
         // TREE_PARAMS.trunkSplit* above for why this level is special-cased.
         const isTrunkSplit = depth === 1;
-        const n = isTrunkSplit ? 2 : TREE_PARAMS.branchFactor;
+        const n = TREE_PARAMS.branchFactor;
         const spread = isTrunkSplit ? TREE_PARAMS.trunkSplitSpread : TREE_PARAMS.branchSpread;
         const subLen = len * (isTrunkSplit ? TREE_PARAMS.trunkSplitLenFactor : 0.72);
         const subThick = Math.max(1, thick * (isTrunkSplit ? TREE_PARAMS.trunkSplitTaper : 0.68));
@@ -334,22 +350,22 @@ function TreeCanvas({ days }) {
           const t = n === 1 ? 0 : (i / (n - 1)) - 0.5;
           const branchAngle = t * spread + (seededRandom(childSeed) - 0.5) * 0.12;
           const lenJitter = 0.85 + seededRandom(childSeed + 0.33) * 0.15;
-          drawBranch(subLen * lenJitter, subThick, branchAngle, depth + 1, maxDepth, childSeed);
+          drawBranch(tctx, leafFactor, subLen * lenJitter, subThick, branchAngle, depth + 1, maxDepth, childSeed);
         }
       } else {
-        const leafRadius = Math.min(10, 3 + currentFactor * 7) * TREE_PARAMS.leafSize;
-        ctx.fillStyle = COLORS.leaf;
+        const leafRadius = Math.min(10, 3 + leafFactor * 7) * TREE_PARAMS.leafSize;
+        tctx.fillStyle = COLORS.leaf;
         for (let l = 0; l < TREE_PARAMS.leafCount; l++) {
           const leafSeed = seed * 5.3 + l * 2.1;
           const lx = (seededRandom(leafSeed) - 0.5) * leafRadius * 2.4;
           const ly = -seededRandom(leafSeed + 0.17) * leafRadius * 1.8;
           const rot = seededRandom(leafSeed + 0.41) * Math.PI;
-          ctx.beginPath();
-          ctx.ellipse(lx, ly, leafRadius * 0.25, leafRadius * 0.42, rot, 0, Math.PI * 2);
-          ctx.fill();
+          tctx.beginPath();
+          tctx.ellipse(lx, ly, leafRadius * 0.25, leafRadius * 0.42, rot, 0, Math.PI * 2);
+          tctx.fill();
         }
       }
-      ctx.restore();
+      tctx.restore();
     }
 
     function frame(now) {
@@ -412,7 +428,7 @@ function TreeCanvas({ days }) {
         ctx.ellipse(4, -sproutH, 4, 2, 0.4, 0, Math.PI * 2);
         ctx.fill();
       } else {
-        const maxDepth = Math.min(5, Math.floor(mapRange(currentFactor, 0.04, 1, 2, 5)));
+        const maxDepth = Math.min(8, Math.floor(mapRange(currentFactor, 0.04, 1, 2, 8)));
         const trunkLen = mapRange(currentFactor, 0.04, 1, 25, 75);
         const trunkThick = mapRange(currentFactor, 0.04, 1, 4, 18);
 
@@ -441,7 +457,35 @@ function TreeCanvas({ days }) {
           });
         }
 
-        drawBranch(trunkLen, trunkThick, 0, 1, maxDepth, 1);
+        // Resize the offscreen cache to match the visible canvas (e.g. after
+        // a window/container resize), which forces a redraw at the new
+        // size, then redraw the fractal onto it only if the growth factor
+        // has moved enough to actually change its shape since last time --
+        // not on every one of this loop's frames forever.
+        if (treeCache.width !== canvas.width || treeCache.height !== canvas.height) {
+          treeCache.width = canvas.width;
+          treeCache.height = canvas.height;
+          cachedFactor = null;
+        }
+        if (cachedFactor === null || Math.abs(currentFactor - cachedFactor) > 0.0008) {
+          treeCacheCtx.setTransform(1, 0, 0, 1, 0, 0);
+          treeCacheCtx.clearRect(0, 0, treeCache.width, treeCache.height);
+          treeCacheCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          treeCacheCtx.save();
+          treeCacheCtx.translate(cx, groundY);
+          drawBranch(treeCacheCtx, currentFactor, trunkLen, trunkThick, 0, 1, maxDepth, 1);
+          treeCacheCtx.restore();
+          cachedFactor = currentFactor;
+        }
+        // Stamp the cached bitmap in raw device-pixel space (both canvases
+        // share the same backing size, and the cache already baked in the
+        // dpr scale + cx/groundY translate above), then restore ctx's
+        // current CSS-pixel transform (the cx/groundY translate from just
+        // above this if/else chain) for the wildlife drawn after it.
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.drawImage(treeCache, 0, 0);
+        ctx.restore();
 
         if (targetDays >= 120) {
           butterflies.forEach((b) => {
