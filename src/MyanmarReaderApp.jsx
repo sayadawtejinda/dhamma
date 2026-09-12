@@ -989,9 +989,32 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
   // only the persistence + completion threshold are new).
   const persistChapterScore = async (chapterNum, sheetName, currentScore) => {
     if (!studentName || chapterNum == null || !sheetName) return;
-    const isComplete = currentScore >= 700;
     const scoreId = `${sanitizeReaderKey(studentName)}_ch${chapterNum}_${sheetName}`;
     const scoreRef = doc(db, READER_SCORES_PATH, scoreId);
+
+    // Once a sheet has reached 700 and earned isComplete:true, a later
+    // re-read of the same sheet (a student revisiting a finished chapter
+    // out of curiosity, or just re-opening it) must never undo that --
+    // this used to unconditionally overwrite score/isComplete with
+    // whatever the CURRENT session reached, so simply reopening an
+    // already-completed sheet without re-crossing 700 before leaving
+    // silently erased its earlier completion (and any trophy that should
+    // follow from it), which is exactly why a student who'd clearly read
+    // past a chapter could still show it as "not yet earned" in the
+    // picker. previouslyComplete/previousScore make this monotonic: the
+    // recorded score only ever goes up, and completion, once earned,
+    // stays earned.
+    let previouslyComplete = false;
+    let previousScore = 0;
+    try {
+      const existingSnap = await getDoc(scoreRef);
+      if (existingSnap.exists()) {
+        previouslyComplete = !!existingSnap.data().isComplete;
+        previousScore = existingSnap.data().score || 0;
+      }
+    } catch (e) { /* treat as no prior record */ }
+    const isComplete = previouslyComplete || currentScore >= 700;
+    const bestScore = Math.max(previousScore, Math.round(currentScore));
 
     // If this sheet just became complete, check its sibling sheet (the other
     // of A/B for the same chapter) — if THAT one is also complete, the whole
@@ -1013,8 +1036,8 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
 
     setDoc(scoreRef, {
       studentName, name: studentName, userId, chapterNum, sheetName,
-      score: Math.round(currentScore), isComplete, chapterComplete,
-      ...(isComplete ? { completedAt: serverTimestamp() } : {}),
+      score: bestScore, isComplete, chapterComplete,
+      ...(isComplete && !previouslyComplete ? { completedAt: serverTimestamp() } : {}),
       timestamp: serverTimestamp()
     }, { merge: true }).catch(e => console.error('Persist chapter score error:', e));
 
