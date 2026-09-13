@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { doc, setDoc, updateDoc, serverTimestamp, getDoc, arrayUnion, increment } from 'firebase/firestore';
+import { doc, setDoc, updateDoc, serverTimestamp, getDoc, getDocFromServer, arrayUnion, increment } from 'firebase/firestore';
 import { db } from './firebase';
 import OnlineStatusWidget from './OnlineStatusWidget';
 
@@ -437,8 +437,8 @@ const MVL_APP_BODY_HTML = `
          screen corners. -->
     <div class="mvl-side-buttons">
         <button id="btn-mode-b" onclick="window.__mvlApp.switchMode('B')" class="w-14 h-14 rounded-full font-bold text-2xl shadow-lg z-50 flex items-center justify-center transition-all bg-indigo-600 text-white border-4 border-indigo-300 transform hover:scale-110">B</button>
-        <button id="btn-mode-p" onclick="window.__mvlApp.switchMode('P')" class="w-14 h-14 rounded-full font-bold text-2xl shadow-lg z-50 flex items-center justify-center transition-all bg-white text-gray-600 border-4 border-gray-300 hover:bg-gray-100 transform hover:scale-110">P</button>
         <button id="btn-consonant" onclick="window.__mvlApp.openConsonantModal()" class="w-14 h-14 rounded-full font-bold text-2xl shadow-lg z-50 flex items-center justify-center transition-all bg-yellow-400 text-yellow-900 border-4 border-yellow-200 hover:bg-yellow-300 transform hover:scale-110">အ</button>
+        <button id="btn-mode-p" onclick="window.__mvlApp.switchMode('P')" class="w-14 h-14 rounded-full font-bold text-2xl shadow-lg z-50 flex items-center justify-center transition-all bg-white text-gray-600 border-4 border-gray-300 hover:bg-gray-100 transform hover:scale-110">P</button>
     </div>
 
     <!-- Game Toolbar Fixed Bottom Center -->
@@ -763,8 +763,18 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
             }
         }
 
+        // getDocFromServer, not the plain getDoc -- the roster heartbeat
+        // effect above writes {studentName, isOnline, lastSeen} to this
+        // SAME document on mount via a merge setDoc, and that write's
+        // optimistic local-cache entry can win a race against this read,
+        // handing back a document missing whatever real fields (coinBalance,
+        // completedGames) the heartbeat's own write didn't touch --
+        // confirmed live: a student with a real coinBalance saw 0 on load
+        // because this getDoc returned the heartbeat's partial cached view
+        // instead of the actual server document. Same root cause as the
+        // fix in ShrineRoomApp.jsx's roster-load effect.
         if (progressRosterRef) {
-            getDoc(progressRosterRef).then(snap => {
+            getDocFromServer(progressRosterRef).then(snap => {
                 const data = snap.exists() ? snap.data() : {};
                 completedGameIds = new Set(Array.isArray(data.completedGames) ? data.completedGames : []);
                 coinBalanceRef.current = data.coinBalance || 0;

@@ -1452,13 +1452,17 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
             <div className="relative w-[360px] max-w-full h-96">
               <BodhiBackdropCanvas />
 
-              {/* Pinned to the treetop (not off in the corner with the
-                  Chanting/Meditation/Merit Shop buttons) -- the teacher
-                  pointed out that spot goes unnoticed while actually
-                  meditating, since attention is on the tree, not the
-                  corner of the screen. */}
+              {/* Pinned to the treetop itself (not off in the corner with
+                  the Chanting/Meditation/Merit Shop buttons, and not
+                  sharing the empty-sky band with the guide-text line below,
+                  which sits higher at top-2 -- those two overlapped when
+                  this was placed just above the canopy box). 104px lands
+                  roughly on the canopy's own top edge (BodhiBackdropCanvas
+                  draws the fractal tree from the box's bottom edge upward
+                  by ~260px in a 384px-tall box, so the canopy peak is
+                  around 384-260=124px down, just below this badge). */}
               {meditatingMinutes != null && (
-                <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1 bg-indigo-50 px-3 py-1.5 rounded-full shadow-lg border border-indigo-200 text-xs font-semibold text-indigo-700 whitespace-nowrap">
+                <div className="absolute top-[104px] left-1/2 -translate-x-1/2 z-30 flex items-center gap-1 bg-indigo-50 px-3 py-1.5 rounded-full shadow-lg border border-indigo-200 text-xs font-semibold text-indigo-700 whitespace-nowrap">
                   🧘 {String(Math.floor(meditationRemainingSeconds / 60)).padStart(2, '0')}:{String(meditationRemainingSeconds % 60).padStart(2, '0')} left
                 </div>
               )}
