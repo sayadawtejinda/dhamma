@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Play, Square, ChevronLeft, ChevronRight, BookOpen, Sparkles, Volume2, X } from 'lucide-react';
 import { doc, setDoc, updateDoc, onSnapshot, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase';
+import { rosterDocRefByUid, migrateNameKeyedRosterDoc } from './studentRosterIdentity';
 
 // ── "Myanmar Part 2B" ──
 // Unlike the other ported apps in this project, this one arrived as a
@@ -222,13 +223,17 @@ export default function MyanmarPart2BApp({ entryRequest, onExit, hideOwnOnlineBa
   const audioRef = useRef(null);
 
   const studentName = entryRequest?.studentName || null;
+  const studentUid = entryRequest?.studentUid || null;
   const [onlineStudents, setOnlineStudents] = useState([]);
   const [showOnlinePanel, setShowOnlinePanel] = useState(false);
   const [nowForOnlineCheck, setNowForOnlineCheck] = useState(Date.now());
 
   useEffect(() => {
-    if (!studentName) return;
-    const rosterRef = doc(db, P2B_ROSTER_PATH, sanitizeP2bKey(studentName));
+    if (!studentName || !studentUid) return;
+    const rosterRef = rosterDocRefByUid(db, P2B_ROSTER_PATH, studentUid);
+    migrateNameKeyedRosterDoc(db, P2B_ROSTER_PATH, studentUid, studentName, sanitizeP2bKey)
+      .then(carried => { if (carried) return setDoc(rosterRef, carried, { merge: true }); })
+      .catch(e => console.error('Roster migration error:', e));
     const ping = () => setDoc(rosterRef, { studentName, isOnline: true, lastSeen: serverTimestamp() }, { merge: true }).catch(() => {});
     ping();
     const interval = setInterval(ping, 30000);
@@ -239,7 +244,7 @@ export default function MyanmarPart2BApp({ entryRequest, onExit, hideOwnOnlineBa
       window.removeEventListener('beforeunload', goOffline);
       goOffline();
     };
-  }, [studentName]);
+  }, [studentName, studentUid]);
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, P2B_ROSTER_PATH), (snap) => {

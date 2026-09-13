@@ -7297,79 +7297,79 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       return;
     }
     if (url && url.startsWith('consonantpractice://')) {
-      if (onOpenConsonantPractice) onOpenConsonantPractice({ studentName: studentProfile?.name || '' });
+      if (onOpenConsonantPractice) onOpenConsonantPractice({ studentName: studentProfile?.name || '', studentUid });
       return;
     }
     if (url && url.startsWith('burmesegame://')) {
-      if (onOpenBurmeseGame) onOpenBurmeseGame({ studentName: studentProfile?.name || '' });
+      if (onOpenBurmeseGame) onOpenBurmeseGame({ studentName: studentProfile?.name || '', studentUid });
       return;
     }
     if (url && url.startsWith('numberlearning://')) {
-      if (onOpenNumberLearning) onOpenNumberLearning({ studentName: studentProfile?.name || '' });
+      if (onOpenNumberLearning) onOpenNumberLearning({ studentName: studentProfile?.name || '', studentUid });
       return;
     }
     if (url && url.startsWith('vowelslearning://')) {
-      if (onOpenVowelsLearning) onOpenVowelsLearning({ studentName: studentProfile?.name || '' });
+      if (onOpenVowelsLearning) onOpenVowelsLearning({ studentName: studentProfile?.name || '', studentUid });
       return;
     }
     if (url && url.startsWith('animalsound://')) {
-      if (onOpenAnimalSound) onOpenAnimalSound({ studentName: studentProfile?.name || '' });
+      if (onOpenAnimalSound) onOpenAnimalSound({ studentName: studentProfile?.name || '', studentUid });
       return;
     }
     if (url && url.startsWith('burmeselearninggames://')) {
-      if (onOpenBurmeseLearningGames) onOpenBurmeseLearningGames({ studentName: studentProfile?.name || '' });
+      if (onOpenBurmeseLearningGames) onOpenBurmeseLearningGames({ studentName: studentProfile?.name || '', studentUid });
       return;
     }
     if (url && url.startsWith('interactivequiz://')) {
-      if (onOpenInteractiveQuiz) onOpenInteractiveQuiz({ studentName: studentProfile?.name || '' });
+      if (onOpenInteractiveQuiz) onOpenInteractiveQuiz({ studentName: studentProfile?.name || '', studentUid });
       return;
     }
     if (url && url.startsWith('myanmarpoems://')) {
-      if (onOpenMyanmarPoems) onOpenMyanmarPoems({ studentName: studentProfile?.name || '' });
+      if (onOpenMyanmarPoems) onOpenMyanmarPoems({ studentName: studentProfile?.name || '', studentUid });
       return;
     }
     if (url && url.startsWith('consonantendings://')) {
-      if (onOpenConsonantEndings) onOpenConsonantEndings({ studentName: studentProfile?.name || '' });
+      if (onOpenConsonantEndings) onOpenConsonantEndings({ studentName: studentProfile?.name || '', studentUid });
       return;
     }
     if (url && url.startsWith('timeandcalendar://')) {
-      if (onOpenTimeAndCalendar) onOpenTimeAndCalendar({ studentName: studentProfile?.name || '' });
+      if (onOpenTimeAndCalendar) onOpenTimeAndCalendar({ studentName: studentProfile?.name || '', studentUid });
       return;
     }
     if (url && url.startsWith('myanmarspelling://')) {
-      if (onOpenMyanmarSpelling) onOpenMyanmarSpelling({ studentName: studentProfile?.name || '' });
+      if (onOpenMyanmarSpelling) onOpenMyanmarSpelling({ studentName: studentProfile?.name || '', studentUid });
       return;
     }
     if (url && url.startsWith('myanmarsoundpractice://')) {
-      if (onOpenMyanmarSoundPractice) onOpenMyanmarSoundPractice({ studentName: studentProfile?.name || '' });
+      if (onOpenMyanmarSoundPractice) onOpenMyanmarSoundPractice({ studentName: studentProfile?.name || '', studentUid });
       return;
     }
     if (url && url.startsWith('readingmyanmar://')) {
       const initialPart = extractGroupPartKey(url);
-      if (onOpenReadingMyanmar) onOpenReadingMyanmar({ studentName: studentProfile?.name || '', ...(initialPart ? { initialPart } : {}) });
+      if (onOpenReadingMyanmar) onOpenReadingMyanmar({ studentName: studentProfile?.name || '', studentUid, ...(initialPart ? { initialPart } : {}) });
       return;
     }
     if (url && url.startsWith('speakingmyanmar://')) {
       const initialPart = extractGroupPartKey(url);
-      if (onOpenSpeakingMyanmar) onOpenSpeakingMyanmar({ studentName: studentProfile?.name || '', ...(initialPart ? { initialPart } : {}) });
+      if (onOpenSpeakingMyanmar) onOpenSpeakingMyanmar({ studentName: studentProfile?.name || '', studentUid, ...(initialPart ? { initialPart } : {}) });
       return;
     }
     if (url && url.startsWith('myanmarpart1and2://')) {
       const initialPart = extractGroupPartKey(url);
-      if (onOpenMyanmarPart1And2) onOpenMyanmarPart1And2({ studentName: studentProfile?.name || '', ...(initialPart ? { initialPart } : {}) });
+      if (onOpenMyanmarPart1And2) onOpenMyanmarPart1And2({ studentName: studentProfile?.name || '', studentUid, ...(initialPart ? { initialPart } : {}) });
       return;
     }
     if (url && url.startsWith('watchandlearn://')) {
-      if (onOpenWatchAndLearn) onOpenWatchAndLearn({ studentName: studentProfile?.name || '' });
+      if (onOpenWatchAndLearn) onOpenWatchAndLearn({ studentName: studentProfile?.name || '', studentUid });
       return;
     }
     if (!url.startsWith('http://') && !url.startsWith('https://')) url = `https://${url}`;
     if (isMyanmarSpeakingUrl(url) && onOpenMyanmarSpeaking && studentProfile?.name) {
-      onOpenMyanmarSpeaking({ studentName: studentProfile.name });
+      onOpenMyanmarSpeaking({ studentName: studentProfile.name, studentUid });
       return;
     }
     if (MYANMAR_READER_APP_URL && url.startsWith(MYANMAR_READER_APP_URL) && onOpenMyanmarReader && studentProfile?.name) {
-      onOpenMyanmarReader({ studentName: studentProfile.name });
+      onOpenMyanmarReader({ studentName: studentProfile.name, studentUid });
       return;
     }
     // Only the genuine window.open fallback below actually opens
@@ -7434,7 +7434,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       const matchedScheme = groupSchemeOfLink(lesson.link) || (lesson.link.startsWith('watchandlearn://') ? 'watchandlearn://' : lesson.link);
       const opener = openerByLink[matchedScheme];
       const initialPart = extractGroupPartKey(lesson.link);
-      if (opener) opener({ studentName: studentProfile?.name || '', ...(initialPart ? { initialPart } : {}) });
+      if (opener) opener({ studentName: studentProfile?.name || '', studentUid, ...(initialPart ? { initialPart } : {}) });
       if (lesson.status === 'pending') {
         try { await updateDoc(doc(db, `${publicDataPath}/lessons`, lesson.id), { status: 'started' }); } catch (e) {}
       }
@@ -7564,9 +7564,9 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     // logic on that side needs to change).
     const isMyanmarReaderLesson = MYANMAR_READER_APP_URL && formattedUrl.startsWith(MYANMAR_READER_APP_URL);
     if (isMyanmarSpeakingUrl(formattedUrl) && onOpenMyanmarSpeaking && studentProfile?.name) {
-      onOpenMyanmarSpeaking({ studentName: studentProfile.name });
+      onOpenMyanmarSpeaking({ studentName: studentProfile.name, studentUid });
     } else if (isMyanmarReaderLesson && onOpenMyanmarReader && studentProfile?.name) {
-      onOpenMyanmarReader({ studentName: studentProfile.name });
+      onOpenMyanmarReader({ studentName: studentProfile.name, studentUid });
     } else {
       // Only this genuine window.open fallback actually opens another tab --
       // both branches above mount their app inline in this same page, so

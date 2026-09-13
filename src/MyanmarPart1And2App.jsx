@@ -1,6 +1,7 @@
 import React, { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { doc, setDoc, updateDoc, onSnapshot, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase';
+import { rosterDocRefByUid, migrateNameKeyedRosterDoc } from './studentRosterIdentity';
 
 // "Myanmar Part 1 & 2" — third combined group, same pattern as
 // ReadingMyanmarApp.jsx / SpeakingMyanmarApp.jsx: bundles 4 apps behind
@@ -41,6 +42,7 @@ function P1And2Loading() {
 export default function MyanmarPart1And2App({ entryRequest, onExit }) {
   const [activePart, setActivePart] = useState(() => entryRequest?.initialPart || null);
   const studentName = entryRequest?.studentName || null;
+  const studentUid = entryRequest?.studentUid || null;
   const [onlineStudents, setOnlineStudents] = useState([]);
   const [showOnlinePanel, setShowOnlinePanel] = useState(false);
   const [nowForOnlineCheck, setNowForOnlineCheck] = useState(Date.now());
@@ -48,8 +50,11 @@ export default function MyanmarPart1And2App({ entryRequest, onExit }) {
   activePartRef.current = activePart;
 
   useEffect(() => {
-    if (!studentName) return;
-    const rosterRef = doc(db, P1AND2_ROSTER_PATH, sanitizeP1and2Key(studentName));
+    if (!studentName || !studentUid) return;
+    const rosterRef = rosterDocRefByUid(db, P1AND2_ROSTER_PATH, studentUid);
+    migrateNameKeyedRosterDoc(db, P1AND2_ROSTER_PATH, studentUid, studentName, sanitizeP1and2Key)
+      .then(carried => { if (carried) return setDoc(rosterRef, carried, { merge: true }); })
+      .catch(e => console.error('Roster migration error:', e));
     const ping = () => setDoc(rosterRef, { studentName, isOnline: true, currentPart: activePartRef.current, lastSeen: serverTimestamp() }, { merge: true }).catch(() => {});
     ping();
     const interval = setInterval(ping, 30000);
@@ -60,13 +65,13 @@ export default function MyanmarPart1And2App({ entryRequest, onExit }) {
       window.removeEventListener('beforeunload', goOffline);
       goOffline();
     };
-  }, [studentName]);
+  }, [studentName, studentUid]);
 
   useEffect(() => {
-    if (!studentName) return;
-    const rosterRef = doc(db, P1AND2_ROSTER_PATH, sanitizeP1and2Key(studentName));
+    if (!studentName || !studentUid) return;
+    const rosterRef = rosterDocRefByUid(db, P1AND2_ROSTER_PATH, studentUid);
     setDoc(rosterRef, { studentName, isOnline: true, currentPart: activePart, lastSeen: serverTimestamp() }, { merge: true }).catch(() => {});
-  }, [activePart, studentName]);
+  }, [activePart, studentName, studentUid]);
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, P1AND2_ROSTER_PATH), (snap) => {

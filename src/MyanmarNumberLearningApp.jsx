@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { doc, setDoc, updateDoc, serverTimestamp, getDoc, arrayUnion, increment } from 'firebase/firestore';
 import { db } from './firebase';
+import { rosterDocRefByUid, migrateNameKeyedRosterDoc } from './studentRosterIdentity';
 import OnlineStatusWidget from './OnlineStatusWidget';
 
 // ── Ported from the standalone "Myanmar Number Learning" HTML app ──
@@ -329,6 +330,7 @@ export default function MyanmarNumberLearningApp({ entryRequest, onExit, hideOwn
   const containerRef = useRef(null);
   const initializedRef = useRef(false);
   const studentName = entryRequest?.studentName || null;
+  const studentUid = entryRequest?.studentUid || null;
   // Mirrors the vanilla-JS coinBalance variable into React state for the
   // online-status pill (same split as ConsonantPracticeApp).
   const [myCoinBalance, setMyCoinBalance] = useState(0);
@@ -336,8 +338,8 @@ export default function MyanmarNumberLearningApp({ entryRequest, onExit, hideOwn
   // Roster heartbeat — only pings when opened for a student (entryRequest
   // carries their name); a teacher just observes.
   useEffect(() => {
-    if (!studentName) return;
-    const rosterRef = doc(db, MNL_ROSTER_PATH, sanitizeMnlKey(studentName));
+    if (!studentName || !studentUid) return;
+    const rosterRef = rosterDocRefByUid(db, MNL_ROSTER_PATH, studentUid);
     const ping = () => setDoc(rosterRef, { studentName, isOnline: true, lastSeen: serverTimestamp() }, { merge: true }).catch(() => {});
     ping();
     const interval = setInterval(ping, 30000);
@@ -348,7 +350,7 @@ export default function MyanmarNumberLearningApp({ entryRequest, onExit, hideOwn
       window.removeEventListener('beforeunload', goOffline);
       goOffline();
     };
-  }, [studentName]);
+  }, [studentName, studentUid]);
 
   useEffect(() => {
     // Dev-mode double-invoke / re-mount guard — this whole script wires up
@@ -410,7 +412,7 @@ export default function MyanmarNumberLearningApp({ entryRequest, onExit, hideOwn
         // never get added here except via the one-off backfill for students
         // who were already given trophies for them before this tracking
         // existed (see the standalone backfill script, not part of this app).
-        const progressRosterRef = studentName ? doc(db, MNL_ROSTER_PATH, sanitizeMnlKey(studentName)) : null;
+        const progressRosterRef = studentUid ? rosterDocRefByUid(db, MNL_ROSTER_PATH, studentUid) : null;
         let completedLevels = [];
         let coinBalance = 0;
 
@@ -1313,13 +1315,21 @@ export default function MyanmarNumberLearningApp({ entryRequest, onExit, hideOwn
         runMasterInit();
 
         if (progressRosterRef) {
-            getDoc(progressRosterRef).then(snap => {
-                const data = snap.exists() ? snap.data() : {};
-                completedLevels = Array.isArray(data.completedLevels) ? data.completedLevels : [];
-                coinBalance = data.coinBalance || 0;
-                setMyCoinBalance(coinBalance);
-                refreshLevelButtonLabels();
-            }).catch(e => console.error('Error loading Myanmar Number Learning progress:', e));
+            (async () => {
+                // One-time carry-forward from this student's old name-keyed
+                // roster doc -- safe/idempotent, see studentRosterIdentity.js.
+                try {
+                    const carried = await migrateNameKeyedRosterDoc(db, MNL_ROSTER_PATH, studentUid, studentName, sanitizeMnlKey);
+                    if (carried) await setDoc(progressRosterRef, carried, { merge: true });
+                } catch (e) { console.error('Roster migration error:', e); }
+                getDoc(progressRosterRef).then(snap => {
+                    const data = snap.exists() ? snap.data() : {};
+                    completedLevels = Array.isArray(data.completedLevels) ? data.completedLevels : [];
+                    coinBalance = data.coinBalance || 0;
+                    setMyCoinBalance(coinBalance);
+                    refreshLevelButtonLabels();
+                }).catch(e => console.error('Error loading Myanmar Number Learning progress:', e));
+            })();
         }
 
     return () => {

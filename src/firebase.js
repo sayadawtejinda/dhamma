@@ -18,3 +18,4 @@ try {
 } catch (e) {
   console.error('Firebase setLogLevel failed:', e);
 }
+

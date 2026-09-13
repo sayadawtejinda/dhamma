@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { doc, setDoc, updateDoc, onSnapshot, collection, serverTimestamp } from 'firebase/firestore';
 import { X } from 'lucide-react';
 import { db } from './firebase';
+import { rosterDocRefByUid, migrateNameKeyedRosterDoc } from './studentRosterIdentity';
 
 // ── Ported from the standalone "မြန်မာစာလုံးဖတ်အက်ပ်" (Myanmar Spelling)
 // HTML app ──
@@ -278,6 +279,7 @@ export default function MyanmarSpellingApp({ entryRequest, onExit, hideOwnOnline
   const containerRef = useRef(null);
   const initializedRef = useRef(false);
   const studentName = entryRequest?.studentName || null;
+  const studentUid = entryRequest?.studentUid || null;
   const [onlineStudents, setOnlineStudents] = useState([]);
   const [showOnlinePanel, setShowOnlinePanel] = useState(false);
   const [nowForOnlineCheck, setNowForOnlineCheck] = useState(Date.now());
@@ -285,8 +287,11 @@ export default function MyanmarSpellingApp({ entryRequest, onExit, hideOwnOnline
   // Roster heartbeat — only pings when opened for a student (entryRequest
   // carries their name); a teacher just observes.
   useEffect(() => {
-    if (!studentName) return;
-    const rosterRef = doc(db, MS_ROSTER_PATH, sanitizeMsKey(studentName));
+    if (!studentName || !studentUid) return;
+    const rosterRef = rosterDocRefByUid(db, MS_ROSTER_PATH, studentUid);
+    migrateNameKeyedRosterDoc(db, MS_ROSTER_PATH, studentUid, studentName, sanitizeMsKey)
+      .then(carried => { if (carried) return setDoc(rosterRef, carried, { merge: true }); })
+      .catch(e => console.error('Roster migration error:', e));
     const ping = () => setDoc(rosterRef, { studentName, isOnline: true, lastSeen: serverTimestamp() }, { merge: true }).catch(() => {});
     ping();
     const interval = setInterval(ping, 30000);
@@ -297,7 +302,7 @@ export default function MyanmarSpellingApp({ entryRequest, onExit, hideOwnOnline
       window.removeEventListener('beforeunload', goOffline);
       goOffline();
     };
-  }, [studentName]);
+  }, [studentName, studentUid]);
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, MS_ROSTER_PATH), (snap) => {

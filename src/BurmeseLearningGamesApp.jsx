@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { doc, setDoc, updateDoc, serverTimestamp, getDoc, increment } from 'firebase/firestore';
 import { db } from './firebase';
+import { rosterDocRefByUid, migrateNameKeyedRosterDoc } from './studentRosterIdentity';
 import OnlineStatusWidget from './OnlineStatusWidget';
 
 // ── Ported from the standalone "Burmese Learning Games Collection" HTML app ──
@@ -272,6 +273,7 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
   const containerRef = useRef(null);
   const initializedRef = useRef(false);
   const studentName = entryRequest?.studentName || null;
+  const studentUid = entryRequest?.studentUid || null;
   // Mirrors the vanilla-JS coinBalance variable into React state for the
   // online-status pill (same split as ConsonantPracticeApp).
   const [myCoinBalance, setMyCoinBalance] = useState(0);
@@ -279,8 +281,8 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
   // Roster heartbeat — only pings when opened for a student (entryRequest
   // carries their name); a teacher just observes.
   useEffect(() => {
-    if (!studentName) return;
-    const rosterRef = doc(db, BLG_ROSTER_PATH, sanitizeBlgKey(studentName));
+    if (!studentName || !studentUid) return;
+    const rosterRef = rosterDocRefByUid(db, BLG_ROSTER_PATH, studentUid);
     const ping = () => setDoc(rosterRef, { studentName, isOnline: true, lastSeen: serverTimestamp() }, { merge: true }).catch(() => {});
     ping();
     const interval = setInterval(ping, 30000);
@@ -291,7 +293,7 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
       window.removeEventListener('beforeunload', goOffline);
       goOffline();
     };
-  }, [studentName]);
+  }, [studentName, studentUid]);
 
   useEffect(() => {
     // Dev-mode double-invoke / re-mount guard — this whole script wires up
@@ -876,7 +878,7 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
         // win" -- 30 of those = 1 real Tutoring trophy, capped at 20 total
         // (so 600 wins is the max this ever credits); coins are separate
         // and keep coming after the cap. Both persist across visits.
-        const progressRosterRef = studentName ? doc(db, BLG_ROSTER_PATH, sanitizeBlgKey(studentName)) : null;
+        const progressRosterRef = studentUid ? rosterDocRefByUid(db, BLG_ROSTER_PATH, studentUid) : null;
         const WINS_PER_TROPHY = 30;
         const MAX_TROPHIES = 20;
         let totalWins = 0;
@@ -927,12 +929,20 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
         }
 
         if (progressRosterRef) {
-            getDoc(progressRosterRef).then(snap => {
-                const data = snap.exists() ? snap.data() : {};
-                totalWins = data.totalWins || 0;
-                coinBalance = data.coinBalance || 0;
-                setMyCoinBalance(coinBalance);
-            }).catch(e => console.error('Error loading Burmese Learning Games progress:', e));
+            (async () => {
+                // One-time carry-forward from this student's old name-keyed
+                // roster doc -- safe/idempotent, see studentRosterIdentity.js.
+                try {
+                    const carried = await migrateNameKeyedRosterDoc(db, BLG_ROSTER_PATH, studentUid, studentName, sanitizeBlgKey);
+                    if (carried) await setDoc(progressRosterRef, carried, { merge: true });
+                } catch (e) { console.error('Roster migration error:', e); }
+                getDoc(progressRosterRef).then(snap => {
+                    const data = snap.exists() ? snap.data() : {};
+                    totalWins = data.totalWins || 0;
+                    coinBalance = data.coinBalance || 0;
+                    setMyCoinBalance(coinBalance);
+                }).catch(e => console.error('Error loading Burmese Learning Games progress:', e));
+            })();
         }
 
         const habitatQuestionTextEl = byId('habitat-question-text');

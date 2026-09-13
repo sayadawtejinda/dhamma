@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { doc, getDoc, setDoc, updateDoc, onSnapshot, collection, serverTimestamp, arrayUnion, increment } from 'firebase/firestore';
 import { X } from 'lucide-react';
 import { db } from './firebase';
+import { rosterDocRefByUid, migrateNameKeyedRosterDoc } from './studentRosterIdentity';
 import OnlineStatusWidget from './OnlineStatusWidget';
 
 // Live "who's online" roster — same simple heartbeat pattern as
@@ -747,6 +748,7 @@ export default function ConsonantPracticeApp({ entryRequest, onExit, hideOwnOnli
   const containerRef = useRef(null);
   const initializedRef = useRef(false);
   const studentName = entryRequest?.studentName || null;
+  const studentUid = entryRequest?.studentUid || null;
   // Gold coins: +5 per correct answer, -1 per wrong, in the Bubble/Matching/
   // Puzzle games (see awardCoins() inside the game-engine effect below).
   // coinBalanceRef is the source of truth the vanilla-JS game code reads and
@@ -759,8 +761,8 @@ export default function ConsonantPracticeApp({ entryRequest, onExit, hideOwnOnli
   // Roster heartbeat — only pings when opened for a student (entryRequest
   // carries their name); a teacher just observes.
   useEffect(() => {
-    if (!studentName) return;
-    const rosterRef = doc(db, CONSONANT_ROSTER_PATH, sanitizeConsonantKey(studentName));
+    if (!studentName || !studentUid) return;
+    const rosterRef = rosterDocRefByUid(db, CONSONANT_ROSTER_PATH, studentUid);
     const ping = () => setDoc(rosterRef, { studentName, isOnline: true, lastSeen: serverTimestamp() }, { merge: true }).catch(() => {});
     ping();
     const interval = setInterval(ping, 30000);
@@ -771,7 +773,7 @@ export default function ConsonantPracticeApp({ entryRequest, onExit, hideOwnOnli
       window.removeEventListener('beforeunload', goOffline);
       goOffline();
     };
-  }, [studentName]);
+  }, [studentName, studentUid]);
 
   useEffect(() => {
     // Dev-mode double-invoke / re-mount guard — this whole script wires up
@@ -1040,7 +1042,7 @@ export default function ConsonantPracticeApp({ entryRequest, onExit, hideOwnOnli
 
         // --- Gold coins + group progression (persisted to the roster doc
         // this student already pings every 30s for the online panel) ---
-        const consonantRosterRef = studentName ? doc(db, CONSONANT_ROSTER_PATH, sanitizeConsonantKey(studentName)) : null;
+        const consonantRosterRef = studentUid ? rosterDocRefByUid(db, CONSONANT_ROSTER_PATH, studentUid) : null;
 
         // +5 per correct answer, -1 per wrong, in Waga (Bubble), Matching,
         // and Puzzle only -- called from handleCorrectAnswer() and each of
@@ -1112,23 +1114,31 @@ export default function ConsonantPracticeApp({ entryRequest, onExit, hideOwnOnli
         // whichever one they last finished (a brand-new student starts at
         // index 0 / 5 consonants, not the old default of "all 33").
         if (consonantRosterRef) {
-            getDoc(consonantRosterRef).then((snap) => {
-                const data = snap.exists() ? snap.data() : {};
-                coinBalanceRef.current = data.coinBalance || 0;
-                setMyCoinBalance(coinBalanceRef.current);
-                completedGroupSizes = Array.isArray(data.completedGroups) ? data.completedGroups : [];
-                if (completedGroupSizes.length > 0) {
-                    const highestDoneIndex = Math.max(...completedGroupSizes.map(s => consonantCountOptions.indexOf(s)).filter(i => i >= 0));
-                    const unlockedIndex = Math.min(consonantCountOptions.length - 1, highestDoneIndex + 1);
-                    currentConsonantCountIndex = unlockedIndex;
-                    if (consonantCountIcon) consonantCountIcon.innerText = consonantCountEmojis[unlockedIndex];
-                    createMessage(`Welcome back! You can now study ${consonantCountOptions[unlockedIndex]} consonants. 🎉`, false);
-                } else {
-                    currentConsonantCountIndex = 0;
-                    if (consonantCountIcon) consonantCountIcon.innerText = consonantCountEmojis[0];
-                }
-                persistCurrentGroupSize();
-            }).catch((e) => console.error('Error loading consonant practice progress:', e));
+            (async () => {
+                // One-time carry-forward from this student's old name-keyed
+                // roster doc -- safe/idempotent, see studentRosterIdentity.js.
+                try {
+                    const carried = await migrateNameKeyedRosterDoc(db, CONSONANT_ROSTER_PATH, studentUid, studentName, sanitizeConsonantKey);
+                    if (carried) await setDoc(consonantRosterRef, carried, { merge: true });
+                } catch (e) { console.error('Roster migration error:', e); }
+                getDoc(consonantRosterRef).then((snap) => {
+                    const data = snap.exists() ? snap.data() : {};
+                    coinBalanceRef.current = data.coinBalance || 0;
+                    setMyCoinBalance(coinBalanceRef.current);
+                    completedGroupSizes = Array.isArray(data.completedGroups) ? data.completedGroups : [];
+                    if (completedGroupSizes.length > 0) {
+                        const highestDoneIndex = Math.max(...completedGroupSizes.map(s => consonantCountOptions.indexOf(s)).filter(i => i >= 0));
+                        const unlockedIndex = Math.min(consonantCountOptions.length - 1, highestDoneIndex + 1);
+                        currentConsonantCountIndex = unlockedIndex;
+                        if (consonantCountIcon) consonantCountIcon.innerText = consonantCountEmojis[unlockedIndex];
+                        createMessage(`Welcome back! You can now study ${consonantCountOptions[unlockedIndex]} consonants. 🎉`, false);
+                    } else {
+                        currentConsonantCountIndex = 0;
+                        if (consonantCountIcon) consonantCountIcon.innerText = consonantCountEmojis[0];
+                    }
+                    persistCurrentGroupSize();
+                }).catch((e) => console.error('Error loading consonant practice progress:', e));
+            })();
         }
 
         // --- Tutorial State ---

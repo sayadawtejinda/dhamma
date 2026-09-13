@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { doc, setDoc, updateDoc, serverTimestamp, getDoc, arrayUnion } from 'firebase/firestore';
 import { db } from './firebase';
+import { rosterDocRefByUid, migrateNameKeyedRosterDoc } from './studentRosterIdentity';
 import OnlineStatusWidget from './OnlineStatusWidget';
 
 // ── Ported from the standalone "Myanmar Sound Practice" HTML app ──
@@ -448,10 +449,11 @@ export default function MyanmarSoundPracticeApp({ entryRequest, onExit, hideOwnO
   const containerRef = useRef(null);
   const initializedRef = useRef(false);
   const studentName = entryRequest?.studentName || null;
+  const studentUid = entryRequest?.studentUid || null;
 
   useEffect(() => {
-    if (!studentName) return;
-    const rosterRef = doc(db, SP_ROSTER_PATH, sanitizeSpKey(studentName));
+    if (!studentName || !studentUid) return;
+    const rosterRef = rosterDocRefByUid(db, SP_ROSTER_PATH, studentUid);
     const ping = () => setDoc(rosterRef, { studentName, isOnline: true, lastSeen: serverTimestamp() }, { merge: true }).catch(() => {});
     ping();
     const interval = setInterval(ping, 30000);
@@ -462,7 +464,7 @@ export default function MyanmarSoundPracticeApp({ entryRequest, onExit, hideOwnO
       window.removeEventListener('beforeunload', goOffline);
       goOffline();
     };
-  }, [studentName]);
+  }, [studentName, studentUid]);
 
   useEffect(() => {
     if (initializedRef.current) return;
@@ -563,7 +565,7 @@ export default function MyanmarSoundPracticeApp({ entryRequest, onExit, hideOwnO
         // "completed" count from passedLevels.length (2 trophies/level is
         // then just the Lesson Bank's normal unitCount/trophyLimit ratio,
         // same as every other app).
-        const progressRosterRef = studentName ? doc(db, SP_ROSTER_PATH, sanitizeSpKey(studentName)) : null;
+        const progressRosterRef = studentUid ? rosterDocRefByUid(db, SP_ROSTER_PATH, studentUid) : null;
         let passedLevels = [];
         function markLevelButtonPassed(level) {
             const btn = byId(`level-${level}-btn`);
@@ -588,11 +590,19 @@ export default function MyanmarSoundPracticeApp({ entryRequest, onExit, hideOwnO
             }
         }
         if (progressRosterRef) {
-            getDoc(progressRosterRef).then(snap => {
-                const data = snap.exists() ? snap.data() : {};
-                passedLevels = Array.isArray(data.passedLevels) ? data.passedLevels : [];
-                passedLevels.forEach(markLevelButtonPassed);
-            }).catch(e => console.error('Error loading Sound Practice progress:', e));
+            (async () => {
+                // One-time carry-forward from this student's old name-keyed
+                // roster doc -- safe/idempotent, see studentRosterIdentity.js.
+                try {
+                    const carried = await migrateNameKeyedRosterDoc(db, SP_ROSTER_PATH, studentUid, studentName, sanitizeSpKey);
+                    if (carried) await setDoc(progressRosterRef, carried, { merge: true });
+                } catch (e) { console.error('Roster migration error:', e); }
+                getDoc(progressRosterRef).then(snap => {
+                    const data = snap.exists() ? snap.data() : {};
+                    passedLevels = Array.isArray(data.passedLevels) ? data.passedLevels : [];
+                    passedLevels.forEach(markLevelButtonPassed);
+                }).catch(e => console.error('Error loading Sound Practice progress:', e));
+            })();
             persistCurrentLevel(currentLevel);
         }
 

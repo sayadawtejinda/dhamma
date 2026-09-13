@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { doc, setDoc, updateDoc, serverTimestamp, getDoc, increment } from 'firebase/firestore';
 import { db } from './firebase';
+import { rosterDocRefByUid, migrateNameKeyedRosterDoc } from './studentRosterIdentity';
 import OnlineStatusWidget from './OnlineStatusWidget';
 
 // ── Ported from the standalone "Interactive Learning Quiz for Kids" HTML app ──
@@ -225,6 +226,7 @@ export default function InteractiveLearningQuizApp({ entryRequest, onExit, hideO
   const containerRef = useRef(null);
   const initializedRef = useRef(false);
   const studentName = entryRequest?.studentName || null;
+  const studentUid = entryRequest?.studentUid || null;
   // Mirrors the vanilla-JS coinBalance variable into React state for the
   // online-status pill (same split as ConsonantPracticeApp).
   const [myCoinBalance, setMyCoinBalance] = useState(0);
@@ -232,8 +234,8 @@ export default function InteractiveLearningQuizApp({ entryRequest, onExit, hideO
   // Roster heartbeat — only pings when opened for a student (entryRequest
   // carries their name); a teacher just observes.
   useEffect(() => {
-    if (!studentName) return;
-    const rosterRef = doc(db, ILQ_ROSTER_PATH, sanitizeIlqKey(studentName));
+    if (!studentName || !studentUid) return;
+    const rosterRef = rosterDocRefByUid(db, ILQ_ROSTER_PATH, studentUid);
     const ping = () => setDoc(rosterRef, { studentName, isOnline: true, lastSeen: serverTimestamp() }, { merge: true }).catch(() => {});
     ping();
     const interval = setInterval(ping, 30000);
@@ -244,7 +246,7 @@ export default function InteractiveLearningQuizApp({ entryRequest, onExit, hideO
       window.removeEventListener('beforeunload', goOffline);
       goOffline();
     };
-  }, [studentName]);
+  }, [studentName, studentUid]);
 
   useEffect(() => {
     // Dev-mode double-invoke / re-mount guard — this whole script wires up
@@ -284,7 +286,7 @@ export default function InteractiveLearningQuizApp({ entryRequest, onExit, hideO
         // mirrored into React state, completedPhases drives the 5-trophy cap
         // and lets a returning student resume at their first unfinished phase). ---
         const MAX_PHASE_TROPHIES = 5;
-        const progressRosterRef = studentName ? doc(db, ILQ_ROSTER_PATH, sanitizeIlqKey(studentName)) : null;
+        const progressRosterRef = studentUid ? rosterDocRefByUid(db, ILQ_ROSTER_PATH, studentUid) : null;
         let completedPhases = [];
         let coinBalance = 0;
 
@@ -888,19 +890,27 @@ export default function InteractiveLearningQuizApp({ entryRequest, onExit, hideO
         };
 
         if (progressRosterRef) {
-            getDoc(progressRosterRef).then(snap => {
-                if (snap.exists()) {
-                    const data = snap.data();
-                    completedPhases = Array.isArray(data.completedPhases) ? data.completedPhases : [];
-                    coinBalance = data.coinBalance || 0;
-                    setMyCoinBalance(coinBalance);
-                }
-                initializeState(firstUnfinishedPhase());
-                displayLearningMode();
-            }).catch(() => {
-                initializeState(1);
-                displayLearningMode();
-            });
+            (async () => {
+                // One-time carry-forward from this student's old name-keyed
+                // roster doc -- safe/idempotent, see studentRosterIdentity.js.
+                try {
+                    const carried = await migrateNameKeyedRosterDoc(db, ILQ_ROSTER_PATH, studentUid, studentName, sanitizeIlqKey);
+                    if (carried) await setDoc(progressRosterRef, carried, { merge: true });
+                } catch (e) { console.error('Roster migration error:', e); }
+                getDoc(progressRosterRef).then(snap => {
+                    if (snap.exists()) {
+                        const data = snap.data();
+                        completedPhases = Array.isArray(data.completedPhases) ? data.completedPhases : [];
+                        coinBalance = data.coinBalance || 0;
+                        setMyCoinBalance(coinBalance);
+                    }
+                    initializeState(firstUnfinishedPhase());
+                    displayLearningMode();
+                }).catch(() => {
+                    initializeState(1);
+                    displayLearningMode();
+                });
+            })();
         } else {
             initializeState(1);
             displayLearningMode();

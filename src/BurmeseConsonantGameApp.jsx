@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { doc, setDoc, updateDoc, serverTimestamp, getDoc, arrayUnion, increment } from 'firebase/firestore';
 import { db } from './firebase';
+import { rosterDocRefByUid, migrateNameKeyedRosterDoc } from './studentRosterIdentity';
 import OnlineStatusWidget from './OnlineStatusWidget';
 
 // Live "who's online" roster — same simple heartbeat pattern as
@@ -518,6 +519,7 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
   const containerRef = useRef(null);
   const initializedRef = useRef(false);
   const studentName = entryRequest?.studentName || null;
+  const studentUid = entryRequest?.studentUid || null;
   // coinBalanceRef is the source of truth the vanilla-JS game code reads and
   // writes synchronously on every answer; myCoinBalance is just its React
   // mirror for the online-status pill (same split as ConsonantPracticeApp).
@@ -544,8 +546,8 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
   // Roster heartbeat — only pings when opened for a student (entryRequest
   // carries their name); a teacher just observes.
   useEffect(() => {
-    if (!studentName) return;
-    const rosterRef = doc(db, BCG_ROSTER_PATH, sanitizeBcgKey(studentName));
+    if (!studentName || !studentUid) return;
+    const rosterRef = rosterDocRefByUid(db, BCG_ROSTER_PATH, studentUid);
     const ping = () => setDoc(rosterRef, { studentName, isOnline: true, lastSeen: serverTimestamp() }, { merge: true }).catch(() => {});
     ping();
     const interval = setInterval(ping, 30000);
@@ -556,7 +558,7 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
       window.removeEventListener('beforeunload', goOffline);
       goOffline();
     };
-  }, [studentName]);
+  }, [studentName, studentUid]);
 
   useEffect(() => {
     if (initializedRef.current) return;
@@ -776,7 +778,7 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
         // instead of restarting at Level 1, (2) group N+1 stay locked until
         // group N's BOTH games (Pick + Click) are done, (3) TutoringApp's
         // Report auto-fill "completed" from completedGameIds.size.
-        const progressRosterRef = studentName ? doc(db, BCG_ROSTER_PATH, sanitizeBcgKey(studentName)) : null;
+        const progressRosterRef = studentUid ? rosterDocRefByUid(db, BCG_ROSTER_PATH, studentUid) : null;
         let completedGameIds = new Set();
         function recordGameCompleted(gameId) {
             if (completedGameIds.has(gameId)) return;
@@ -838,23 +840,31 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
         }
 
         if (progressRosterRef) {
-            getDoc(progressRosterRef).then(snap => {
-                const data = snap.exists() ? snap.data() : {};
-                completedGameIds = new Set(Array.isArray(data.completedGames) ? data.completedGames : []);
-                coinBalanceRef.current = data.coinBalance || 0;
-                setMyCoinBalance(coinBalanceRef.current);
-                // Resume Picture Game at the right stage instead of restarting at Level 1.
-                if (completedGameIds.has('picture-2')) imageGameStage = 'middle';
-                else if (completedGameIds.has('picture-1')) imageGameStage = 'last';
-                // Same idea for the consonant group -- jump straight to the
-                // next unlocked group instead of always reopening at Group 1.
-                const resumeGroupNumber = maxUnlockedGroupNumber();
-                if (resumeGroupNumber > 1 && resumeGroupNumber <= allSoundGroupsForReading.length) {
-                    currentSelectedGroupIndex = resumeGroupNumber - 1;
-                    if (elements.groupSelectorDisplay) elements.groupSelectorDisplay.innerText = resumeGroupNumber;
-                    persistCurrentGroup(currentSelectedGroupIndex);
-                }
-            }).catch(e => console.error('Error loading Burmese Consonant Game progress:', e));
+            (async () => {
+                // One-time carry-forward from this student's old name-keyed
+                // roster doc -- safe/idempotent, see studentRosterIdentity.js.
+                try {
+                    const carried = await migrateNameKeyedRosterDoc(db, BCG_ROSTER_PATH, studentUid, studentName, sanitizeBcgKey);
+                    if (carried) await setDoc(progressRosterRef, carried, { merge: true });
+                } catch (e) { console.error('Roster migration error:', e); }
+                getDoc(progressRosterRef).then(snap => {
+                    const data = snap.exists() ? snap.data() : {};
+                    completedGameIds = new Set(Array.isArray(data.completedGames) ? data.completedGames : []);
+                    coinBalanceRef.current = data.coinBalance || 0;
+                    setMyCoinBalance(coinBalanceRef.current);
+                    // Resume Picture Game at the right stage instead of restarting at Level 1.
+                    if (completedGameIds.has('picture-2')) imageGameStage = 'middle';
+                    else if (completedGameIds.has('picture-1')) imageGameStage = 'last';
+                    // Same idea for the consonant group -- jump straight to the
+                    // next unlocked group instead of always reopening at Group 1.
+                    const resumeGroupNumber = maxUnlockedGroupNumber();
+                    if (resumeGroupNumber > 1 && resumeGroupNumber <= allSoundGroupsForReading.length) {
+                        currentSelectedGroupIndex = resumeGroupNumber - 1;
+                        if (elements.groupSelectorDisplay) elements.groupSelectorDisplay.innerText = resumeGroupNumber;
+                        persistCurrentGroup(currentSelectedGroupIndex);
+                    }
+                }).catch(e => console.error('Error loading Burmese Consonant Game progress:', e));
+            })();
         }
 
         const scoreWidget = rootEl.querySelector('#floating-score-widget');

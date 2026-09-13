@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { doc, setDoc, updateDoc, serverTimestamp, getDoc, getDocFromServer, arrayUnion, increment } from 'firebase/firestore';
 import { db } from './firebase';
+import { rosterDocRefByUid, migrateNameKeyedRosterDoc } from './studentRosterIdentity';
 import OnlineStatusWidget from './OnlineStatusWidget';
 
 // ── Ported from the standalone "Myanmar Vowels Learning" HTML app ──
@@ -605,6 +606,7 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
   const containerRef = useRef(null);
   const initializedRef = useRef(false);
   const studentName = entryRequest?.studentName || null;
+  const studentUid = entryRequest?.studentUid || null;
   // coinBalanceRef is the source of truth the vanilla-JS game code reads and
   // writes synchronously on every answer; myCoinBalance is just its React
   // mirror for the online-status pill (same split as ConsonantPracticeApp).
@@ -614,8 +616,8 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
   // Roster heartbeat — only pings when opened for a student (entryRequest
   // carries their name); a teacher just observes.
   useEffect(() => {
-    if (!studentName) return;
-    const rosterRef = doc(db, MVL_ROSTER_PATH, sanitizeMvlKey(studentName));
+    if (!studentName || !studentUid) return;
+    const rosterRef = rosterDocRefByUid(db, MVL_ROSTER_PATH, studentUid);
     const ping = () => setDoc(rosterRef, { studentName, isOnline: true, lastSeen: serverTimestamp() }, { merge: true }).catch(() => {});
     ping();
     const interval = setInterval(ping, 30000);
@@ -626,7 +628,7 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
       window.removeEventListener('beforeunload', goOffline);
       goOffline();
     };
-  }, [studentName]);
+  }, [studentName, studentUid]);
 
   useEffect(() => {
     // Dev-mode double-invoke / re-mount guard — this whole script wires up
@@ -715,7 +717,7 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
         // a Listen & Match or Click Sequence level (Basic or Pro mode).
         // Typing Practice is intentionally not tracked here (not taught yet).
         // Lets TutoringApp's Report auto-fill "completed" from the count.
-        const progressRosterRef = studentName ? doc(db, MVL_ROSTER_PATH, sanitizeMvlKey(studentName)) : null;
+        const progressRosterRef = studentUid ? rosterDocRefByUid(db, MVL_ROSTER_PATH, studentUid) : null;
         let completedGameIds = new Set();
         function recordGameCompleted(gameId) {
             if (completedGameIds.has(gameId)) return;
@@ -774,12 +776,22 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
         // instead of the actual server document. Same root cause as the
         // fix in ShrineRoomApp.jsx's roster-load effect.
         if (progressRosterRef) {
-            getDocFromServer(progressRosterRef).then(snap => {
-                const data = snap.exists() ? snap.data() : {};
-                completedGameIds = new Set(Array.isArray(data.completedGames) ? data.completedGames : []);
-                coinBalanceRef.current = data.coinBalance || 0;
-                setMyCoinBalance(coinBalanceRef.current);
-            }).catch(e => console.error('Error loading Myanmar Vowels Learning progress:', e));
+            (async () => {
+                // One-time carry-forward from this student's old name-keyed
+                // roster doc (from before roster docs were keyed by uid) --
+                // safe/idempotent, marks the old doc migrated instead of
+                // deleting it. See studentRosterIdentity.js.
+                try {
+                    const carried = await migrateNameKeyedRosterDoc(db, MVL_ROSTER_PATH, studentUid, studentName, sanitizeMvlKey);
+                    if (carried) await setDoc(progressRosterRef, carried, { merge: true });
+                } catch (e) { console.error('Roster migration error:', e); }
+                getDocFromServer(progressRosterRef).then(snap => {
+                    const data = snap.exists() ? snap.data() : {};
+                    completedGameIds = new Set(Array.isArray(data.completedGames) ? data.completedGames : []);
+                    coinBalanceRef.current = data.coinBalance || 0;
+                    setMyCoinBalance(coinBalanceRef.current);
+                }).catch(e => console.error('Error loading Myanmar Vowels Learning progress:', e));
+            })();
         }
 
         // Loop controls

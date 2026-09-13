@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { doc, setDoc, updateDoc, serverTimestamp, getDoc, arrayUnion, increment } from 'firebase/firestore';
 import { db } from './firebase';
+import { rosterDocRefByUid, migrateNameKeyedRosterDoc } from './studentRosterIdentity';
 import OnlineStatusWidget from './OnlineStatusWidget';
 
 // ── Ported from the standalone "မြန်မာကဗျာ သင်ကြားရေး" (Myanmar Poems) HTML app ──
@@ -254,6 +255,7 @@ export default function MyanmarPoemsApp({ entryRequest, onExit, hideOwnOnlineBad
   const containerRef = useRef(null);
   const initializedRef = useRef(false);
   const studentName = entryRequest?.studentName || null;
+  const studentUid = entryRequest?.studentUid || null;
   // coinBalanceRef is the source of truth the vanilla-JS game code reads and
   // writes synchronously on every answer; myCoinBalance is just its React
   // mirror for the online-status pill (same split as ConsonantPracticeApp).
@@ -268,10 +270,10 @@ export default function MyanmarPoemsApp({ entryRequest, onExit, hideOwnOnlineBad
   // tracking how much has been "claimed" elsewhere.
   const handleDepositCoinsToShrineRoom = async () => {
     const depositable = coinBalanceRef.current;
-    if (!studentName || depositable <= 0) return;
+    if (!studentName || !studentUid || depositable <= 0) return;
     const confirmed = window.confirm(`Deposit ${depositable} gold coin(s) into your Shrine Room wallet?`);
     if (!confirmed) return;
-    const myRosterRef = doc(db, MPOEMS_ROSTER_PATH, sanitizeMpoemsKey(studentName));
+    const myRosterRef = rosterDocRefByUid(db, MPOEMS_ROSTER_PATH, studentUid);
     const shrineRef = doc(db, 'artifacts/shrine-room-app/public/data/roster', sanitizeMpoemsKey(studentName));
     try {
       const shrineSnap = await getDoc(shrineRef);
@@ -296,8 +298,8 @@ export default function MyanmarPoemsApp({ entryRequest, onExit, hideOwnOnlineBad
   // Roster heartbeat — only pings when opened for a student (entryRequest
   // carries their name); a teacher just observes.
   useEffect(() => {
-    if (!studentName) return;
-    const rosterRef = doc(db, MPOEMS_ROSTER_PATH, sanitizeMpoemsKey(studentName));
+    if (!studentName || !studentUid) return;
+    const rosterRef = rosterDocRefByUid(db, MPOEMS_ROSTER_PATH, studentUid);
     const ping = () => setDoc(rosterRef, { studentName, isOnline: true, lastSeen: serverTimestamp() }, { merge: true }).catch(() => {});
     ping();
     const interval = setInterval(ping, 30000);
@@ -308,7 +310,7 @@ export default function MyanmarPoemsApp({ entryRequest, onExit, hideOwnOnlineBad
       window.removeEventListener('beforeunload', goOffline);
       goOffline();
     };
-  }, [studentName]);
+  }, [studentName, studentUid]);
 
   useEffect(() => {
     // Dev-mode double-invoke / re-mount guard — this whole script wires up
@@ -2003,7 +2005,7 @@ export default function MyanmarPoemsApp({ entryRequest, onExit, hideOwnOnlineBad
         // MAX_NEW_POEMS_PER_SESSION new ones per visit -- so "every 2 new
         // poems = 1 trophy" can never bank more than one trophy's worth in
         // a single sitting, no matter how many poems get recited today.
-        const progressRosterRef = studentName ? doc(db, MPOEMS_ROSTER_PATH, sanitizeMpoemsKey(studentName)) : null;
+        const progressRosterRef = studentUid ? rosterDocRefByUid(db, MPOEMS_ROSTER_PATH, studentUid) : null;
         let completedPoemIds = [];
         // recitedDates[poemIndex] = 'YYYY-MM-DD' of the last day this poem's
         // sing-along was confirmed -- once set for today, navigatePoem skips
@@ -2057,8 +2059,14 @@ export default function MyanmarPoemsApp({ entryRequest, onExit, hideOwnOnlineBad
         // currentPoemIndex has been moved to the first not-yet-done poem --
         // runMasterInit (which calls renderPoem for the first time) waits
         // on this so the student lands on the right poem from the start.
-        function loadPoemProgress() {
-            if (!progressRosterRef) return Promise.resolve();
+        async function loadPoemProgress() {
+            if (!progressRosterRef) return;
+            // One-time carry-forward from this student's old name-keyed
+            // roster doc -- safe/idempotent, see studentRosterIdentity.js.
+            try {
+                const carried = await migrateNameKeyedRosterDoc(db, MPOEMS_ROSTER_PATH, studentUid, studentName, sanitizeMpoemsKey);
+                if (carried) await setDoc(progressRosterRef, carried, { merge: true });
+            } catch (e) { console.error('Roster migration error:', e); }
             return getDoc(progressRosterRef).then(snap => {
                 const data = snap.exists() ? snap.data() : {};
                 completedPoemIds = Array.isArray(data.completedPoemIds) ? data.completedPoemIds : [];

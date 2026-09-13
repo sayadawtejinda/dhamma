@@ -2,6 +2,7 @@ import React, { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { doc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase';
 import OnlineStatusWidget from './OnlineStatusWidget';
+import { rosterDocRefByUid, migrateNameKeyedRosterDoc } from './studentRosterIdentity';
 
 // "Speaking Myanmar" — the second combined group, same pattern as
 // ReadingMyanmarApp.jsx: bundles 6 previously-separate apps behind one
@@ -46,12 +47,16 @@ function SpeakingMyanmarLoading() {
 export default function SpeakingMyanmarApp({ entryRequest, onExit }) {
   const [activePart, setActivePart] = useState(() => entryRequest?.initialPart || null);
   const studentName = entryRequest?.studentName || null;
+  const studentUid = entryRequest?.studentUid || null;
   const activePartRef = useRef(activePart);
   activePartRef.current = activePart;
 
   useEffect(() => {
-    if (!studentName) return;
-    const rosterRef = doc(db, SPEAKING_MYANMAR_ROSTER_PATH, sanitizeSpeakingKey(studentName));
+    if (!studentName || !studentUid) return;
+    const rosterRef = rosterDocRefByUid(db, SPEAKING_MYANMAR_ROSTER_PATH, studentUid);
+    migrateNameKeyedRosterDoc(db, SPEAKING_MYANMAR_ROSTER_PATH, studentUid, studentName, sanitizeSpeakingKey)
+      .then(carried => { if (carried) return setDoc(rosterRef, carried, { merge: true }); })
+      .catch(e => console.error('Roster migration error:', e));
     const ping = () => setDoc(rosterRef, { studentName, isOnline: true, currentPart: activePartRef.current, lastSeen: serverTimestamp() }, { merge: true }).catch(() => {});
     ping();
     const interval = setInterval(ping, 30000);
@@ -62,13 +67,13 @@ export default function SpeakingMyanmarApp({ entryRequest, onExit }) {
       window.removeEventListener('beforeunload', goOffline);
       goOffline();
     };
-  }, [studentName]);
+  }, [studentName, studentUid]);
 
   useEffect(() => {
-    if (!studentName) return;
-    const rosterRef = doc(db, SPEAKING_MYANMAR_ROSTER_PATH, sanitizeSpeakingKey(studentName));
+    if (!studentName || !studentUid) return;
+    const rosterRef = rosterDocRefByUid(db, SPEAKING_MYANMAR_ROSTER_PATH, studentUid);
     setDoc(rosterRef, { studentName, isOnline: true, currentPart: activePart, lastSeen: serverTimestamp() }, { merge: true }).catch(() => {});
-  }, [activePart, studentName]);
+  }, [activePart, studentName, studentUid]);
 
   const activePartData = SPEAKING_PARTS.find(p => p.key === activePart);
 

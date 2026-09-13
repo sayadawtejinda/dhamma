@@ -14,6 +14,7 @@ import {
     ArrowBigRight, Square, Lock, KeyRound, UserCircle, Book, Heart
 } from 'lucide-react';
 import { app } from './firebase';
+import { rosterDocRefByUid, migrateNameKeyedRosterDoc } from './studentRosterIdentity';
 import OnlineStatusWidget from './OnlineStatusWidget';
 
 // --- Firebase Auth/DB Setup ---
@@ -5061,12 +5062,18 @@ export default function MyanmarSpeakingApp({ entryRequest, onExit, isActive }) {
     // continuous open (no idle, never left) from silently racking up hours
     // of "minutes studied" that would otherwise all land in one Report.
     useEffect(() => {
-        if (activeRole !== 'student' || !studentName || !isActive) return;
+        if (activeRole !== 'student' || !studentName || !userId || !isActive) return;
         const IDLE_MS = 3 * 60 * 1000; // 3 minutes with no touch/click/key
         const SESSION_CAP_MS = 30 * 60 * 1000; // max minutes counted per continuous visit
         const TICK_MS = 15000;
-        const rosterRef = doc(db, ROSTER_PATH, sanitizeSpeakingKey(studentName));
+        const rosterRef = rosterDocRefByUid(db, ROSTER_PATH, userId);
         let isIdle = false;
+
+        // One-time carry-forward from this student's old name-keyed roster
+        // doc -- safe/idempotent, see studentRosterIdentity.js.
+        migrateNameKeyedRosterDoc(db, ROSTER_PATH, userId, studentName, sanitizeSpeakingKey)
+            .then(carried => { if (carried) return setDoc(rosterRef, carried, { merge: true }); })
+            .catch(e => console.error('Roster migration error:', e));
 
         const markActivity = () => { lastActivityRef.current = Date.now(); };
         const activityEvents = ['touchstart', 'mousedown', 'keydown', 'scroll'];
@@ -5078,7 +5085,7 @@ export default function MyanmarSpeakingApp({ entryRequest, onExit, isActive }) {
             if (delta <= 0) return;
             minutesWrittenRef.current = activeMinutes;
             const todayKey = new Date().toISOString().split('T')[0];
-            const minutesRef = doc(db, DAILY_MINUTES_PATH, `${sanitizeSpeakingKey(studentName)}_${todayKey}`);
+            const minutesRef = doc(db, DAILY_MINUTES_PATH, `${userId}_${todayKey}`);
             setDoc(minutesRef, { studentName, date: todayKey, minutes: increment(delta) }, { merge: true }).catch(e => console.error('Minutes flush error:', e));
         };
 
@@ -5111,7 +5118,7 @@ export default function MyanmarSpeakingApp({ entryRequest, onExit, isActive }) {
             activeMsRef.current = 0;
             minutesWrittenRef.current = 0;
         };
-    }, [studentName, activeRole, isActive]);
+    }, [studentName, userId, activeRole, isActive]);
 
     const handleSelectTeacher = async () => {
         setIsAuthReady(false);

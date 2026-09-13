@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { doc, setDoc, updateDoc, serverTimestamp, getDoc, increment } from 'firebase/firestore';
 import { db } from './firebase';
+import { rosterDocRefByUid, migrateNameKeyedRosterDoc } from './studentRosterIdentity';
 import OnlineStatusWidget from './OnlineStatusWidget';
 
 // ── Ported from the standalone "Animal Sound Quiz" HTML app ──
@@ -236,6 +237,7 @@ export default function AnimalSoundApp({ entryRequest, onExit, hideOwnOnlineBadg
   const containerRef = useRef(null);
   const initializedRef = useRef(false);
   const studentName = entryRequest?.studentName || null;
+  const studentUid = entryRequest?.studentUid || null;
   // Mirrors the vanilla-JS coinBalance variable into React state for the
   // online-status pill (same split as ConsonantPracticeApp).
   const [myCoinBalance, setMyCoinBalance] = useState(0);
@@ -243,8 +245,8 @@ export default function AnimalSoundApp({ entryRequest, onExit, hideOwnOnlineBadg
   // Roster heartbeat — only pings when opened for a student (entryRequest
   // carries their name); a teacher just observes.
   useEffect(() => {
-    if (!studentName) return;
-    const rosterRef = doc(db, AS_ROSTER_PATH, sanitizeAsKey(studentName));
+    if (!studentName || !studentUid) return;
+    const rosterRef = rosterDocRefByUid(db, AS_ROSTER_PATH, studentUid);
     const ping = () => setDoc(rosterRef, { studentName, isOnline: true, lastSeen: serverTimestamp() }, { merge: true }).catch(() => {});
     ping();
     const interval = setInterval(ping, 30000);
@@ -255,7 +257,7 @@ export default function AnimalSoundApp({ entryRequest, onExit, hideOwnOnlineBadg
       window.removeEventListener('beforeunload', goOffline);
       goOffline();
     };
-  }, [studentName]);
+  }, [studentName, studentUid]);
 
   useEffect(() => {
     // Dev-mode double-invoke / re-mount guard — this whole script wires up
@@ -375,7 +377,7 @@ export default function AnimalSoundApp({ entryRequest, onExit, hideOwnOnlineBadg
         // trophies (1 trophy per win, capped at 5 total) -- coins keep
         // coming after that, but a student who already reached 5 just
         // earns coins from further play, no more trophy credit.
-        const progressRosterRef = studentName ? doc(db, AS_ROSTER_PATH, sanitizeAsKey(studentName)) : null;
+        const progressRosterRef = studentUid ? rosterDocRefByUid(db, AS_ROSTER_PATH, studentUid) : null;
         const MAX_TROPHY_WINS = 5;
         let trophyWins = 0;
         let coinBalance = 0;
@@ -426,12 +428,20 @@ export default function AnimalSoundApp({ entryRequest, onExit, hideOwnOnlineBadg
         }
 
         if (progressRosterRef) {
-            getDoc(progressRosterRef).then(snap => {
-                const data = snap.exists() ? snap.data() : {};
-                trophyWins = Math.min(MAX_TROPHY_WINS, data.trophyWins || 0);
-                coinBalance = data.coinBalance || 0;
-                setMyCoinBalance(coinBalance);
-            }).catch(e => console.error('Error loading Animal Sound Quiz progress:', e));
+            (async () => {
+                // One-time carry-forward from this student's old name-keyed
+                // roster doc -- safe/idempotent, see studentRosterIdentity.js.
+                try {
+                    const carried = await migrateNameKeyedRosterDoc(db, AS_ROSTER_PATH, studentUid, studentName, sanitizeAsKey);
+                    if (carried) await setDoc(progressRosterRef, carried, { merge: true });
+                } catch (e) { console.error('Roster migration error:', e); }
+                getDoc(progressRosterRef).then(snap => {
+                    const data = snap.exists() ? snap.data() : {};
+                    trophyWins = Math.min(MAX_TROPHY_WINS, data.trophyWins || 0);
+                    coinBalance = data.coinBalance || 0;
+                    setMyCoinBalance(coinBalance);
+                }).catch(e => console.error('Error loading Animal Sound Quiz progress:', e));
+            })();
         }
 
         const statusElement = byId('status-message');

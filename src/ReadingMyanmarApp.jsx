@@ -2,6 +2,7 @@ import React, { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { doc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase';
 import OnlineStatusWidget from './OnlineStatusWidget';
+import { rosterDocRefByUid, migrateNameKeyedRosterDoc } from './studentRosterIdentity';
 
 // "Reading Myanmar" bundles 6 previously-separate apps behind one shared
 // entry point in the Lesson Bank, so a teacher assigns ONE lesson instead
@@ -53,6 +54,7 @@ function ReadingMyanmarLoading() {
 export default function ReadingMyanmarApp({ entryRequest, onExit }) {
   const [activePart, setActivePart] = useState(() => entryRequest?.initialPart || null);
   const studentName = entryRequest?.studentName || null;
+  const studentUid = entryRequest?.studentUid || null;
   const activePartRef = useRef(activePart);
   activePartRef.current = activePart;
 
@@ -60,8 +62,11 @@ export default function ReadingMyanmarApp({ entryRequest, onExit }) {
   // the 6 parts pinging its own separate roster. Records which part the
   // student is currently on so the chooser screen can show it.
   useEffect(() => {
-    if (!studentName) return;
-    const rosterRef = doc(db, READING_MYANMAR_ROSTER_PATH, sanitizeReadingKey(studentName));
+    if (!studentName || !studentUid) return;
+    const rosterRef = rosterDocRefByUid(db, READING_MYANMAR_ROSTER_PATH, studentUid);
+    migrateNameKeyedRosterDoc(db, READING_MYANMAR_ROSTER_PATH, studentUid, studentName, sanitizeReadingKey)
+      .then(carried => { if (carried) return setDoc(rosterRef, carried, { merge: true }); })
+      .catch(e => console.error('Roster migration error:', e));
     const ping = () => setDoc(rosterRef, { studentName, isOnline: true, currentPart: activePartRef.current, lastSeen: serverTimestamp() }, { merge: true }).catch(() => {});
     ping();
     const interval = setInterval(ping, 30000);
@@ -72,16 +77,16 @@ export default function ReadingMyanmarApp({ entryRequest, onExit }) {
       window.removeEventListener('beforeunload', goOffline);
       goOffline();
     };
-  }, [studentName]);
+  }, [studentName, studentUid]);
 
   // Re-ping immediately whenever the student switches parts, so the
   // roster's "currently on" field updates without waiting for the next
   // 30s heartbeat.
   useEffect(() => {
-    if (!studentName) return;
-    const rosterRef = doc(db, READING_MYANMAR_ROSTER_PATH, sanitizeReadingKey(studentName));
+    if (!studentName || !studentUid) return;
+    const rosterRef = rosterDocRefByUid(db, READING_MYANMAR_ROSTER_PATH, studentUid);
     setDoc(rosterRef, { studentName, isOnline: true, currentPart: activePart, lastSeen: serverTimestamp() }, { merge: true }).catch(() => {});
-  }, [activePart, studentName]);
+  }, [activePart, studentName, studentUid]);
 
   const activePartData = READING_PARTS.find(p => p.key === activePart);
 

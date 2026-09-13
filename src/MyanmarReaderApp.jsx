@@ -3,6 +3,7 @@ import { Play, Volume2, Delete, RotateCcw, BookOpen, DownloadCloud, FileText, Li
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { collection, doc, getDoc, getDocs, setDoc, updateDoc, onSnapshot, query, where, serverTimestamp, increment } from 'firebase/firestore';
 import { auth, db } from './firebase';
+import { rosterDocRefByUid, migrateNameKeyedRosterDoc } from './studentRosterIdentity';
 
 const MYANMAR_READER_APP_ID = 'myanmar-reader-app';
 
@@ -691,7 +692,25 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
     if (userId && !studentName) setShowNameModal(true);
   }, [userId, studentName, isTeacherMode, deepLinkStudentName]);
 
-  const readerRosterDocRef = (name) => doc(db, READER_ROSTER_PATH, sanitizeReaderKey(name));
+  // Prefers this device's stable Firebase auth uid over the (renameable)
+  // display name once it's known -- the `name` param becomes vestigial at
+  // that point, kept only so none of this file's many existing call sites
+  // need to change. Falls back to the old name-keyed doc only in the brief
+  // window before `userId` resolves. See studentRosterIdentity.js for the
+  // migration helper (called once below, right after both are known) that
+  // carries an old name-keyed doc's fields forward the first time a
+  // returning student is seen under their uid.
+  const readerRosterDocRef = (name) => userId ? rosterDocRefByUid(db, READER_ROSTER_PATH, userId) : doc(db, READER_ROSTER_PATH, sanitizeReaderKey(name));
+
+  useEffect(() => {
+    if (!userId || !studentName) return;
+    (async () => {
+      try {
+        const carried = await migrateNameKeyedRosterDoc(db, READER_ROSTER_PATH, userId, studentName, sanitizeReaderKey);
+        if (carried) await setDoc(rosterDocRefByUid(db, READER_ROSTER_PATH, userId), carried, { merge: true });
+      } catch (e) { console.error('Roster migration error:', e); }
+    })();
+  }, [userId, studentName]);
   const chapterSheetKey = (chapterNum, sheetName) => `${chapterNum}_${sheetName}`;
 
   // Every point of score earned bumps both the current chapter/sheet's
@@ -872,8 +891,8 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
   // "the chapter is done" yet, it's worth 0 trophies until Sheet B follows,
   // at which point both sheets become worth 1 trophy each (2 total) at once.
   useEffect(() => {
-    if (!studentName) return;
-    const unsub = onSnapshot(query(collection(db, READER_SCORES_PATH), where('studentName', '==', studentName)), (snap) => {
+    if (!studentName || !userId) return;
+    const unsub = onSnapshot(query(collection(db, READER_SCORES_PATH), where('userId', '==', userId)), (snap) => {
       const sheetDone = new Set();       // "chapterNum_sheetName" reaching 700+
       const byChapter = {};              // chapterNum -> { A: bool, B: bool }
       snap.docs.forEach(d => {
@@ -891,7 +910,7 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
       setTrophyCount(fullChapters.size * 2); // 2 trophies per fully-finished chapter (1 per sheet)
     }, e => console.error('Scores listen error:', e));
     return () => unsub();
-  }, [studentName]);
+  }, [studentName, userId]);
 
   // Where this student should pick up next time — furthest (chapter, sheet)
   // reached so far, following the fixed order: Ch1/A, Ch1/B, Ch2/A, Ch2/B, ...
@@ -988,8 +1007,8 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
   // crosses 700 (this app's existing 0–1000 read-aloud scoring, unchanged;
   // only the persistence + completion threshold are new).
   const persistChapterScore = async (chapterNum, sheetName, currentScore) => {
-    if (!studentName || chapterNum == null || !sheetName) return;
-    const scoreId = `${sanitizeReaderKey(studentName)}_ch${chapterNum}_${sheetName}`;
+    if (!studentName || !userId || chapterNum == null || !sheetName) return;
+    const scoreId = `${userId}_ch${chapterNum}_${sheetName}`;
     const scoreRef = doc(db, READER_SCORES_PATH, scoreId);
 
     // Once a sheet has reached 700 and earned isComplete:true, a later
@@ -1025,7 +1044,7 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
     if (isComplete) {
       const siblingSheet = sheetName === 'A' ? 'B' : 'A';
       try {
-        const siblingId = `${sanitizeReaderKey(studentName)}_ch${chapterNum}_${siblingSheet}`;
+        const siblingId = `${userId}_ch${chapterNum}_${siblingSheet}`;
         const siblingSnap = await getDoc(doc(db, READER_SCORES_PATH, siblingId));
         if (siblingSnap.exists() && siblingSnap.data().isComplete) {
           chapterComplete = true;
@@ -2105,21 +2124,21 @@ setShowTranslation(true);
   // fetchSheetData's state updates land, so a manual loop would silently
   // fast-forward against the wrong data), then restores their live score.
   useEffect(() => {
-    if (!studentName || !lastActivePosition || hasAutoResumedOnce || sheetData.length > 0) return;
+    if (!studentName || !userId || !lastActivePosition || hasAutoResumedOnce || sheetData.length > 0) return;
     setHasAutoResumedOnce(true);
     if (lastActivePosition.chapterNum == null || !lastActivePosition.sheetName) return;
     (async () => {
       try {
         const column = getColumnName(lastActivePosition.chapterNum - 1);
         await fetchSheetData(lastActivePosition.sheetName, column, lastActivePosition.index || 0);
-        const scoreId = `${sanitizeReaderKey(studentName)}_ch${lastActivePosition.chapterNum}_${lastActivePosition.sheetName}`;
+        const scoreId = `${userId}_ch${lastActivePosition.chapterNum}_${lastActivePosition.sheetName}`;
         const scoreSnap = await getDoc(doc(db, READER_SCORES_PATH, scoreId));
         if (scoreSnap.exists() && typeof scoreSnap.data().score === 'number') {
           setScore(scoreSnap.data().score);
         }
       } catch (e) { console.error('Auto-resume error:', e); }
     })();
-  }, [studentName, lastActivePosition, hasAutoResumedOnce, sheetData.length]);
+  }, [studentName, userId, lastActivePosition, hasAutoResumedOnce, sheetData.length]);
 
   const [showQAPanel, setShowQAPanel] = useState(false);
 const [qaPairsForParagraph, setQaPairsForParagraph] = useState([]);

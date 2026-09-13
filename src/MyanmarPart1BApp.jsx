@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { doc, setDoc, updateDoc, onSnapshot, collection, serverTimestamp } from 'firebase/firestore';
 import { X } from 'lucide-react';
 import { db } from './firebase';
+import { rosterDocRefByUid, migrateNameKeyedRosterDoc } from './studentRosterIdentity';
 
 // ── Ported from the standalone "သူငယ်တန်း စာသင်ခန်း" (Myanmar Part 1B)
 // HTML app ──
@@ -253,13 +254,17 @@ export default function MyanmarPart1BApp({ entryRequest, onExit, hideOwnOnlineBa
   const containerRef = useRef(null);
   const initializedRef = useRef(false);
   const studentName = entryRequest?.studentName || null;
+  const studentUid = entryRequest?.studentUid || null;
   const [onlineStudents, setOnlineStudents] = useState([]);
   const [showOnlinePanel, setShowOnlinePanel] = useState(false);
   const [nowForOnlineCheck, setNowForOnlineCheck] = useState(Date.now());
 
   useEffect(() => {
-    if (!studentName) return;
-    const rosterRef = doc(db, P1B_ROSTER_PATH, sanitizeP1bKey(studentName));
+    if (!studentName || !studentUid) return;
+    const rosterRef = rosterDocRefByUid(db, P1B_ROSTER_PATH, studentUid);
+    migrateNameKeyedRosterDoc(db, P1B_ROSTER_PATH, studentUid, studentName, sanitizeP1bKey)
+      .then(carried => { if (carried) return setDoc(rosterRef, carried, { merge: true }); })
+      .catch(e => console.error('Roster migration error:', e));
     const ping = () => setDoc(rosterRef, { studentName, isOnline: true, lastSeen: serverTimestamp() }, { merge: true }).catch(() => {});
     ping();
     const interval = setInterval(ping, 30000);
@@ -270,7 +275,7 @@ export default function MyanmarPart1BApp({ entryRequest, onExit, hideOwnOnlineBa
       window.removeEventListener('beforeunload', goOffline);
       goOffline();
     };
-  }, [studentName]);
+  }, [studentName, studentUid]);
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, P1B_ROSTER_PATH), (snap) => {

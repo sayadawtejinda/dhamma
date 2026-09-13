@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { doc, setDoc, updateDoc, serverTimestamp, getDoc, increment } from 'firebase/firestore';
 import { db } from './firebase';
+import { rosterDocRefByUid, migrateNameKeyedRosterDoc } from './studentRosterIdentity';
 import OnlineStatusWidget from './OnlineStatusWidget';
 
 // ── Ported from the standalone "Myanmar Consonant Endings" HTML app ──
@@ -258,6 +259,7 @@ export default function MyanmarConsonantEndingsApp({ entryRequest, onExit, hideO
   const containerRef = useRef(null);
   const initializedRef = useRef(false);
   const studentName = entryRequest?.studentName || null;
+  const studentUid = entryRequest?.studentUid || null;
   // coinBalanceRef is the source of truth the vanilla-JS game code reads and
   // writes synchronously on every answer; myCoinBalance is just its React
   // mirror for the online-status pill (same split as ConsonantPracticeApp).
@@ -267,8 +269,8 @@ export default function MyanmarConsonantEndingsApp({ entryRequest, onExit, hideO
   // Roster heartbeat — only pings when opened for a student (entryRequest
   // carries their name); a teacher just observes.
   useEffect(() => {
-    if (!studentName) return;
-    const rosterRef = doc(db, MCE_ROSTER_PATH, sanitizeMceKey(studentName));
+    if (!studentName || !studentUid) return;
+    const rosterRef = rosterDocRefByUid(db, MCE_ROSTER_PATH, studentUid);
     const ping = () => setDoc(rosterRef, { studentName, isOnline: true, lastSeen: serverTimestamp() }, { merge: true }).catch(() => {});
     ping();
     const interval = setInterval(ping, 30000);
@@ -279,7 +281,7 @@ export default function MyanmarConsonantEndingsApp({ entryRequest, onExit, hideO
       window.removeEventListener('beforeunload', goOffline);
       goOffline();
     };
-  }, [studentName]);
+  }, [studentName, studentUid]);
 
   useEffect(() => {
     // Dev-mode double-invoke / re-mount guard — this whole script wires up
@@ -431,7 +433,7 @@ export default function MyanmarConsonantEndingsApp({ entryRequest, onExit, hideO
         // --- Gold coins (roster doc, keyed by studentName): +10 per
         // consonant picked, +10 per correct Play Game answer, -1 per wrong
         // -- clamped at 0, same convention as ConsonantPracticeApp. ---
-        const progressRosterRef = studentName ? doc(db, MCE_ROSTER_PATH, sanitizeMceKey(studentName)) : null;
+        const progressRosterRef = studentUid ? rosterDocRefByUid(db, MCE_ROSTER_PATH, studentUid) : null;
         function awardCoins(delta) {
             if (!progressRosterRef) return;
             const newBalance = Math.max(0, coinBalanceRef.current + delta);
@@ -471,10 +473,18 @@ export default function MyanmarConsonantEndingsApp({ entryRequest, onExit, hideO
         }
 
         if (progressRosterRef) {
-            getDoc(progressRosterRef).then(snap => {
-                coinBalanceRef.current = snap.exists() ? (snap.data().coinBalance || 0) : 0;
-                setMyCoinBalance(coinBalanceRef.current);
-            }).catch(e => console.error('Error loading Myanmar Consonant Endings coin balance:', e));
+            (async () => {
+                // One-time carry-forward from this student's old name-keyed
+                // roster doc -- safe/idempotent, see studentRosterIdentity.js.
+                try {
+                    const carried = await migrateNameKeyedRosterDoc(db, MCE_ROSTER_PATH, studentUid, studentName, sanitizeMceKey);
+                    if (carried) await setDoc(progressRosterRef, carried, { merge: true });
+                } catch (e) { console.error('Roster migration error:', e); }
+                getDoc(progressRosterRef).then(snap => {
+                    coinBalanceRef.current = snap.exists() ? (snap.data().coinBalance || 0) : 0;
+                    setMyCoinBalance(coinBalanceRef.current);
+                }).catch(e => console.error('Error loading Myanmar Consonant Endings coin balance:', e));
+            })();
         }
 
         // UI Elements
