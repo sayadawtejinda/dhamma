@@ -43,10 +43,22 @@ const MVL_APP_CSS = `
             display: flex;
             justify-content: center;
             align-items: center;
+            flex-wrap: wrap;
             min-height: 100vh;
             padding: 1rem;
             position: relative;
             padding-bottom: 6rem;
+        }
+        /* B / P / consonant-modal buttons -- a normal-flow column beside the
+           vowel grid, not viewport-fixed corners (those used to collide with
+           the Home button and the OnlineStatusWidget, which live in the
+           actual screen corners). Wraps below the grid on narrow screens
+           instead of squeezing it, since .mvl-app-root has flex-wrap: wrap. */
+        .mvl-side-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            align-items: center;
         }
         .main-container {
             max-width: 900px;
@@ -419,10 +431,15 @@ const MVL_APP_BODY_HTML = `
         </div>
     </div>
 
-    <!-- Fixed UI Corners -->
-    <button id="btn-mode-b" onclick="window.__mvlApp.switchMode('B')" class="fixed top-6 left-6 w-14 h-14 rounded-full font-bold text-2xl shadow-lg z-50 flex items-center justify-center transition-all bg-indigo-600 text-white border-4 border-indigo-300 transform hover:scale-110">B</button>
-    <button id="btn-mode-p" onclick="window.__mvlApp.switchMode('P')" class="fixed bottom-6 left-6 w-14 h-14 rounded-full font-bold text-2xl shadow-lg z-50 flex items-center justify-center transition-all bg-white text-gray-600 border-4 border-gray-300 hover:bg-gray-100 transform hover:scale-110">P</button>
-    <button id="btn-consonant" onclick="window.__mvlApp.openConsonantModal()" class="fixed top-6 right-6 w-14 h-14 rounded-full font-bold text-2xl shadow-lg z-50 flex items-center justify-center transition-all bg-yellow-400 text-yellow-900 border-4 border-yellow-200 hover:bg-yellow-300 transform hover:scale-110">အ</button>
+    <!-- Mode/consonant buttons -- sit beside the vowel grid as a normal-flow
+         column (not viewport-fixed corners) so they never overlap the
+         Home button / OnlineStatusWidget, which both live in the actual
+         screen corners. -->
+    <div class="mvl-side-buttons">
+        <button id="btn-mode-b" onclick="window.__mvlApp.switchMode('B')" class="w-14 h-14 rounded-full font-bold text-2xl shadow-lg z-50 flex items-center justify-center transition-all bg-indigo-600 text-white border-4 border-indigo-300 transform hover:scale-110">B</button>
+        <button id="btn-mode-p" onclick="window.__mvlApp.switchMode('P')" class="w-14 h-14 rounded-full font-bold text-2xl shadow-lg z-50 flex items-center justify-center transition-all bg-white text-gray-600 border-4 border-gray-300 hover:bg-gray-100 transform hover:scale-110">P</button>
+        <button id="btn-consonant" onclick="window.__mvlApp.openConsonantModal()" class="w-14 h-14 rounded-full font-bold text-2xl shadow-lg z-50 flex items-center justify-center transition-all bg-yellow-400 text-yellow-900 border-4 border-yellow-200 hover:bg-yellow-300 transform hover:scale-110">အ</button>
+    </div>
 
     <!-- Game Toolbar Fixed Bottom Center -->
     <div id="game-toolbar" class="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-white/90 backdrop-blur border border-gray-200 rounded-full px-6 py-3 shadow-xl z-50 flex items-center gap-4 transition-all duration-300">
@@ -1576,14 +1593,14 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
                 currentVowelList = basicVowelsList;
                 basicGrid.classList.remove('hidden');
                 proGrid.classList.add('hidden');
-                btnB.className = "fixed top-6 left-6 w-14 h-14 rounded-full font-bold text-2xl shadow-lg z-50 flex items-center justify-center transition-all bg-indigo-600 text-white border-4 border-indigo-300 transform hover:scale-110";
-                btnP.className = "fixed bottom-6 left-6 w-14 h-14 rounded-full font-bold text-2xl shadow-lg z-50 flex items-center justify-center transition-all bg-white text-gray-600 border-4 border-gray-300 hover:bg-gray-100 transform hover:scale-110";
-            } else { 
+                btnB.className = "w-14 h-14 rounded-full font-bold text-2xl shadow-lg z-50 flex items-center justify-center transition-all bg-indigo-600 text-white border-4 border-indigo-300 transform hover:scale-110";
+                btnP.className = "w-14 h-14 rounded-full font-bold text-2xl shadow-lg z-50 flex items-center justify-center transition-all bg-white text-gray-600 border-4 border-gray-300 hover:bg-gray-100 transform hover:scale-110";
+            } else {
                 currentVowelList = proVowelsList;
                 basicGrid.classList.add('hidden');
                 proGrid.classList.remove('hidden');
-                btnP.className = "fixed bottom-6 left-6 w-14 h-14 rounded-full font-bold text-2xl shadow-lg z-50 flex items-center justify-center transition-all bg-green-500 text-white border-4 border-green-300 transform hover:scale-110";
-                btnB.className = "fixed top-6 left-6 w-14 h-14 rounded-full font-bold text-2xl shadow-lg z-50 flex items-center justify-center transition-all bg-white text-gray-600 border-4 border-gray-300 hover:bg-gray-100 transform hover:scale-110";
+                btnP.className = "w-14 h-14 rounded-full font-bold text-2xl shadow-lg z-50 flex items-center justify-center transition-all bg-green-500 text-white border-4 border-green-300 transform hover:scale-110";
+                btnB.className = "w-14 h-14 rounded-full font-bold text-2xl shadow-lg z-50 flex items-center justify-center transition-all bg-white text-gray-600 border-4 border-gray-300 hover:bg-gray-100 transform hover:scale-110";
             }
             updateGridsWithConsonant();
         }

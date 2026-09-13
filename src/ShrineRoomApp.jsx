@@ -1275,11 +1275,6 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
       />
 
       <div className="fixed top-16 right-3 z-50 flex flex-col items-end gap-2">
-        {meditatingMinutes != null && (
-          <div className="flex items-center gap-2 bg-indigo-50 px-3 py-1.5 rounded-full shadow border border-indigo-200 text-xs font-semibold text-indigo-700">
-            🧘 {String(Math.floor(meditationRemainingSeconds / 60)).padStart(2, '0')}:{String(meditationRemainingSeconds % 60).padStart(2, '0')} left
-          </div>
-        )}
         {(() => {
           const chantingBtn = (
             <button
@@ -1456,6 +1451,17 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
                 canvas backdrop tree drew at the wrong scale as a result). */}
             <div className="relative w-[360px] max-w-full h-96">
               <BodhiBackdropCanvas />
+
+              {/* Pinned to the treetop (not off in the corner with the
+                  Chanting/Meditation/Merit Shop buttons) -- the teacher
+                  pointed out that spot goes unnoticed while actually
+                  meditating, since attention is on the tree, not the
+                  corner of the screen. */}
+              {meditatingMinutes != null && (
+                <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1 bg-indigo-50 px-3 py-1.5 rounded-full shadow-lg border border-indigo-200 text-xs font-semibold text-indigo-700 whitespace-nowrap">
+                  🧘 {String(Math.floor(meditationRemainingSeconds / 60)).padStart(2, '0')}:{String(meditationRemainingSeconds % 60).padStart(2, '0')} left
+                </div>
+              )}
 
               {meditatingMinutes != null && buddha && <PetalRain />}
 
