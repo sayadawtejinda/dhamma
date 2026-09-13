@@ -157,6 +157,15 @@ export default function AvatarApp({ entryRequest, onExit }) {
   const [activeCategory, setActiveCategory] = useState('hair');
   const [toast, setToast] = useState(null);
 
+  // Lotus flowers (🪷) are Shrine Room's chanting/meditation currency, kept
+  // on the same roster doc as coinBalance -- read alongside it below. The
+  // Rename card only checks this number against a threshold; it's never
+  // spent (see handleSubmitRename).
+  const [lotusCount, setLotusCount] = useState(0);
+  const [studentInfo, setStudentInfo] = useState({ name: '', pendingName: null, nameChangeCount: 0 });
+  const [isEditingRename, setIsEditingRename] = useState(false);
+  const [renameInput, setRenameInput] = useState('');
+
   const rosterRef = studentUid ? doc(db, SHRINE_ROSTER_PATH, sanitizeShrineKey(studentName)) : null;
 
   const showToast = (text) => { setToast(text); setTimeout(() => setToast(null), 2200); };
@@ -166,13 +175,17 @@ export default function AvatarApp({ entryRequest, onExit }) {
     let isMounted = true;
     (async () => {
       try {
-        const snap = rosterRef ? await getDoc(rosterRef) : null;
+        const [snap, studentSnap] = await Promise.all([
+          rosterRef ? getDoc(rosterRef) : Promise.resolve(null),
+          getDoc(doc(db, STUDENTS_COLLECTION_PATH, studentUid)),
+        ]);
         if (snap && snap.exists()) {
           const data = snap.data();
           if (isMounted) {
             const avatarData = readNestedWithLegacyFallback(data, 'avatar');
             const avatarOwnedData = readNestedWithLegacyFallback(data, 'avatarOwned');
             setCoinBalance(data.coinBalance ?? 0);
+            setLotusCount(data.lotusCount ?? 0);
             setConfig({ ...DEFAULT_CONFIG, ...avatarData });
             setOwned({
               hair: ['short-black', ...(avatarOwnedData.hair || [])],
@@ -182,6 +195,14 @@ export default function AvatarApp({ entryRequest, onExit }) {
               homeBackground: ['default', ...(avatarOwnedData.homeBackground || [])],
             });
           }
+        }
+        if (studentSnap.exists() && isMounted) {
+          const sdata = studentSnap.data();
+          setStudentInfo({
+            name: sdata.name || studentName,
+            pendingName: sdata.pendingName || null,
+            nameChangeCount: sdata.nameChangeCount || 0,
+          });
         }
       } catch (e) {
         console.error('Error loading avatar data:', e);
@@ -203,6 +224,35 @@ export default function AvatarApp({ entryRequest, onExit }) {
   const mirrorHomeBackgroundToProfile = (id) => {
     if (!studentUid) return;
     setDoc(doc(db, STUDENTS_COLLECTION_PATH, studentUid), { homeBackground: id }, { merge: true }).catch(() => {});
+  };
+
+  // Renaming stays a threshold to UNLOCK the request, not a purchase -- the
+  // lotus count itself is never touched here (see handleSubmitRename). The
+  // request still goes through the same teacher-approval flow as before
+  // (pendingName), just triggered from here instead of the Tutoring
+  // dashboard; nameChangeCount only rises once the teacher actually
+  // approves it (see handleApproveNameChange in TutoringApp.jsx), so a
+  // denied or cancelled request doesn't raise the bar for next time.
+  const nameChangeThreshold = studentInfo.nameChangeCount > 0 ? 500 : 50;
+  const canRequestNameChange = lotusCount >= nameChangeThreshold;
+
+  const handleSubmitRename = () => {
+    const trimmed = renameInput.trim();
+    if (!trimmed || !studentUid) return;
+    setIsEditingRename(false);
+    if (trimmed === studentInfo.name) {
+      setDoc(doc(db, STUDENTS_COLLECTION_PATH, studentUid), { pendingName: null }, { merge: true }).catch(() => {});
+      setStudentInfo(prev => ({ ...prev, pendingName: null }));
+      return;
+    }
+    setDoc(doc(db, STUDENTS_COLLECTION_PATH, studentUid), { pendingName: trimmed }, { merge: true }).catch(() => {});
+    setStudentInfo(prev => ({ ...prev, pendingName: trimmed }));
+  };
+
+  const handleCancelRename = () => {
+    if (!studentUid) return;
+    setDoc(doc(db, STUDENTS_COLLECTION_PATH, studentUid), { pendingName: null }, { merge: true }).catch(() => {});
+    setStudentInfo(prev => ({ ...prev, pendingName: null }));
   };
 
   const isOwned = (categoryKey, id) => owned[categoryKey]?.includes(id);
@@ -268,6 +318,73 @@ export default function AvatarApp({ entryRequest, onExit }) {
 
       <h1 className="text-2xl font-bold text-indigo-800 mb-1">{studentName}'s Avatar</h1>
       <p className="text-sm text-gray-500 mb-6">Your own little reflection -- dress it up with coins you've earned.</p>
+
+      {!isTeacherPreview && (
+        <div className="w-full max-w-sm mb-6">
+          <style>{`
+            @keyframes renameCardGlow {
+              0%, 100% { box-shadow: 0 0 0 0 rgba(236,64,122,0.35); }
+              50% { box-shadow: 0 0 0 10px rgba(236,64,122,0); }
+            }
+            @keyframes renameLotusFloat {
+              0%, 100% { transform: translateY(0) rotate(-4deg); }
+              50% { transform: translateY(-6px) rotate(4deg); }
+            }
+            .rename-card-unlocked { animation: renameCardGlow 2.2s ease-in-out infinite; }
+            .rename-lotus-float { display: inline-block; animation: renameLotusFloat 1.8s ease-in-out infinite; }
+          `}</style>
+
+          {studentInfo.pendingName ? (
+            <div className="rounded-2xl border-2 border-yellow-300 bg-yellow-50 p-5 text-center">
+              <p className="text-3xl mb-2">⏳</p>
+              <p className="text-yellow-900 font-bold text-sm">
+                Name change to "{studentInfo.pendingName}" is waiting for your teacher's approval.
+              </p>
+              <button onClick={handleCancelRename} className="mt-3 text-xs text-red-600 hover:text-red-800 font-semibold underline">
+                Cancel request
+              </button>
+            </div>
+          ) : isEditingRename ? (
+            <div className="rounded-2xl border-2 border-pink-300 bg-white p-5">
+              <p className="font-bold text-pink-700 mb-3 flex items-center gap-2">
+                <span className="rename-lotus-float">🪷</span> Change My Name
+              </p>
+              <input
+                type="text"
+                value={renameInput}
+                onChange={(e) => setRenameInput(e.target.value)}
+                placeholder="New name"
+                className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-400 mb-3"
+              />
+              <div className="flex gap-3 justify-end">
+                <button onClick={() => setIsEditingRename(false)} className="px-4 py-2 rounded-lg bg-gray-200 text-gray-800 font-semibold hover:bg-gray-300">
+                  Cancel
+                </button>
+                <button onClick={handleSubmitRename} className="px-4 py-2 rounded-lg bg-pink-500 text-white font-semibold hover:bg-pink-600 shadow-md">
+                  Send Request
+                </button>
+              </div>
+            </div>
+          ) : canRequestNameChange ? (
+            <button
+              onClick={() => { setRenameInput(studentInfo.name || studentName); setIsEditingRename(true); }}
+              className="rename-card-unlocked w-full rounded-2xl border-2 border-pink-300 bg-gradient-to-br from-pink-50 to-rose-100 p-5 text-center hover:from-pink-100 hover:to-rose-200 transition-colors"
+            >
+              <p className="text-4xl mb-2"><span className="rename-lotus-float">🪷</span></p>
+              <p className="font-bold text-pink-700">Change My Name</p>
+              <p className="text-xs text-pink-500 mt-1">Unlocked! Tap to pick a new name.</p>
+            </button>
+          ) : (
+            <div className="w-full rounded-2xl border-2 border-gray-200 bg-gray-50 p-5 text-center opacity-80">
+              <p className="text-4xl mb-2">🔒</p>
+              <p className="font-bold text-gray-500">Change My Name</p>
+              <p className="text-xs text-gray-500 mt-1">
+                🪷 {lotusCount} / {nameChangeThreshold} lotus flowers from Shrine Room needed to unlock
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Big preview */}
       <div

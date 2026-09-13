@@ -2367,7 +2367,11 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
     try {
       await updateDoc(doc(db, `${publicDataPath}/students`, studentId), {
         name: newName.trim(),
-        pendingName: null
+        pendingName: null,
+        // Only an actually-approved change raises the lotus-flower bar for
+        // next time (see the Rename card in AvatarApp.jsx) -- a denied or
+        // cancelled request costs the student nothing.
+        nameChangeCount: increment(1)
       });
     } catch (error) {
       console.error("Error approving name change:", error);
@@ -6761,9 +6765,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     handleCompletedUnitChange(String(newUnit), true);
   };
   
-  const [isEditingName, setIsEditingName] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const [editingNameText, setEditingNameText] = useState('');
 
   const [visibleAnnouncements, setVisibleAnnouncements] = useState([]);
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
@@ -6774,8 +6776,6 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
 
   useEffect(() => {
     if (studentProfile) {
-      setEditingNameText(studentProfile.name || '');
-      
       if (studentProfile.justEarnedTrophy) {
         playSound(0);
         // Fires the ALWAYS-ON-TOP celebration owned by App.jsx (see
@@ -8098,35 +8098,6 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     }
   };
 
-  const handleUpdateStudentName = async () => {
-    const trimmed = editingNameText.trim();
-    if (!trimmed || !studentUid) return;
-    
-    try {
-      const studentDocRef = doc(db, `${publicDataPath}/students`, studentUid);
-      if (trimmed === studentProfile?.name) {
-        // No actual change — just clear any stale pending request
-        await updateDoc(studentDocRef, { pendingName: null });
-      } else {
-        // Name changes require teacher approval — store as pendingName,
-        // the displayed name stays the same until the teacher approves it.
-        await updateDoc(studentDocRef, { pendingName: trimmed });
-      }
-      setIsEditingName(false);
-    } catch (error) {
-      console.error("Error updating student profile:", error);
-    }
-  };
-
-  const handleCancelPendingNameRequest = async () => {
-    if (!studentUid) return;
-    try {
-      await updateDoc(doc(db, `${publicDataPath}/students`, studentUid), { pendingName: null });
-    } catch (error) {
-      console.error("Error cancelling pending name request:", error);
-    }
-  };
-
   const dismissAnnouncement = async (id) => {
     try {
       const studentRef = doc(db, `${publicDataPath}/students`, studentUid);
@@ -8519,25 +8490,6 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       </h2>
 
       <div className="py-6 mb-8 relative flex flex-col md:flex-row justify-between items-start md:items-center">
-        {isEditingName ? (
-          <div className="space-y-3 w-full md:w-auto flex-1">
-            <h3 className="text-lg font-semibold text-emerald-800 mb-4">Edit Profile</h3>
-            <p className="text-gray-600">Your ID: <span className="font-mono bg-gray-100 px-2 py-0.5 rounded-md font-bold text-gray-800">{studentProfile?.displayId}</span></p>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-              <input type="text" value={editingNameText} onChange={(e) => setEditingNameText(e.target.value)} className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-            </div>
-            <div className="flex space-x-3 pt-4 justify-end">
-              <button onClick={() => { setIsEditingName(false); setEditingNameText(studentProfile.pendingName || studentProfile.name); }} className="px-5 py-2 rounded-lg bg-gray-200 text-gray-800 hover:bg-gray-300">
-                Cancel
-              </button>
-              <button onClick={handleUpdateStudentName} className="px-5 py-2 rounded-lg bg-emerald-500 text-white font-semibold hover:bg-emerald-600 shadow-md">
-                Save Changes
-              </button>
-            </div>
-          </div>
-        ) : (
-          <>
             <div className="w-full">
                 <div className="flex items-center flex-wrap gap-3 mb-2">
                   {onOpenBodhiTree && (
@@ -8596,14 +8548,6 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                     🏆
                   </button>
                 </div>
-                {studentProfile?.pendingName && (
-                  <div className="mb-2 inline-flex items-center gap-2 bg-yellow-50 border border-yellow-300 rounded-lg px-3 py-1.5">
-                    <span className="text-yellow-800 text-sm font-semibold">
-                      ⏳ Name change to "<strong>{studentProfile.pendingName}</strong>" is pending teacher approval.
-                    </span>
-                    <button onClick={handleCancelPendingNameRequest} className="text-xs text-red-600 hover:text-red-800 font-semibold underline">Cancel</button>
-                  </div>
-                )}
                 {!studentProfile?.hideFromGroupRoster && (
                   // Same background-independent pill as the name badge above --
                   // plain text here was just as unreadable over a busy/bright
@@ -8625,8 +8569,6 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                   </button>
                 )}
             </div>
-          </>
-        )}
       </div>
 
       {/* Experimental: moved out to the "in between the reading room and
@@ -8642,16 +8584,6 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
             <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 001 1h6a1 1 0 100-2H4V5h5a1 1 0 000-2H3zm10.293 4.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L14.586 11H7a1 1 0 110-2h7.586l-1.293-1.293a1 1 0 010-1.414z" clipRule="evenodd" />
-          </svg>
-        </button>
-        <button
-          onClick={() => { setEditingNameText(studentProfile?.pendingName || studentProfile?.name || ''); setIsEditingName(true); }}
-          className="w-10 h-10 flex items-center justify-center text-emerald-600 hover:text-emerald-800 bg-white/90 hover:bg-emerald-50 rounded-full shadow-lg transition-colors border border-emerald-200"
-          title="Edit Profile"
-          aria-label="Edit Profile"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-            <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
           </svg>
         </button>
       </div>
