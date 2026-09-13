@@ -7986,16 +7986,35 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         // One trophy per completed sheet (Sheet A and Sheet B each count
         // separately) that hasn't already been turned into a request —
         // myanmarReaderPendingScoreDocs was computed when the modal opened.
-        if (myanmarReaderPendingScoreDocs.length > 0) {
+        //
+        // This count comes from Myanmar Reader's OWN "scores" Firestore
+        // (a completely separate data store), which only knows whether ITS
+        // own trophyRequested flag was ever set on a sheet -- it has no idea
+        // how many trophies this lesson has actually already paid out via
+        // earnedTrophies. Sheets completed before this per-sheet tracking
+        // existed (or awarded through some other historical path) never got
+        // that flag set, so a student who's genuinely already fully paid up
+        // could still have old "pending" sheets that resurface as a bogus
+        // new request the next time they study anything in this lesson.
+        // Capping at remainingTrophies (the same maxAvailable/previouslyEarned
+        // math every other lesson type already uses) makes this path agree
+        // with what the teacher's own trophy accounting says is actually
+        // still owed.
+        const cappedAmount = Math.min(myanmarReaderPendingScoreDocs.length, remainingTrophies);
+        if (cappedAmount > 0) {
           studentUpdateData.trophyRequested = true;
-          studentUpdateData.requestedTrophyAmount = myanmarReaderPendingScoreDocs.length;
+          studentUpdateData.requestedTrophyAmount = cappedAmount;
           studentUpdateData.requestedTrophyLessonId = targetSession.lessonId;
           studentUpdateData.requestedTrophyLessonTitle = targetSession.lessonTitle;
           studentUpdateData.requestedTrophyLessonLink = targetSession.lessonLink || null;
           studentUpdateData.requestedTrophySessionId = targetSession.id;
-          // Mark each completed sheet as requested on Myanmar Reader's own
-          // Firestore, so the same completion never gets counted into a
-          // second request in a future session.
+        }
+        if (myanmarReaderPendingScoreDocs.length > 0) {
+          // Mark EVERY pending sheet as requested (not just the ones inside
+          // the cap) so sheets beyond what's still owed -- which, given the
+          // lesson's fixed trophy ceiling, can only mean they were already
+          // paid out some other way -- stop resurfacing as "new" on the next
+          // session instead of re-triggering this same bogus request forever.
           try {
             const batch = writeBatch(db);
             myanmarReaderPendingScoreDocs.forEach(d => {
