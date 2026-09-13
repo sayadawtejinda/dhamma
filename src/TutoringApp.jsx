@@ -22,6 +22,7 @@ import {
   deleteField
 } from 'firebase/firestore';
 import { appId } from './firebaseConfig';
+import { getHomeBackground } from './homeBackgrounds';
 import { auth, db } from './firebase';
 
 // --- Firebase Configuration ---
@@ -8136,7 +8137,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     <div
       className={`p-6 relative ${isPortraitPhone ? '' : 'min-h-screen'}`}
       style={{
-        backgroundImage: 'url(images/0003.jpg)', backgroundSize: 'cover', backgroundPosition: 'center top',
+        backgroundImage: `url(${getHomeBackground(studentProfile?.homeBackground).image})`, backgroundSize: 'cover', backgroundPosition: 'center top',
         backgroundAttachment: isPortraitPhone ? 'scroll' : 'fixed',
         ...rotateLandscapeStyle,
       }}
@@ -8444,7 +8445,11 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       </div>
 
       <h2 className="text-3xl font-bold mb-6 text-emerald-700 flex items-end flex-wrap gap-3">
-        <span>{studentProfile?.name}'s 🏡</span>
+        {/* Background-independent pill (not just a text color) -- the home
+            background image is swappable now (see Avatar Shop), so this
+            can't rely on any particular image being dark/light enough
+            behind it to stay readable. */}
+        <span className="bg-white/85 backdrop-blur-sm px-3 py-1 rounded-xl shadow-sm">{studentProfile?.name}'s 🏡</span>
         {(attendanceSummary.yearAttended > 0 || attendanceSummary.yearAbsent > 0) && (
           <span className="flex flex-col items-start gap-1">
             <span className="flex items-center gap-2 text-lg" title="Days attended / absent this year">

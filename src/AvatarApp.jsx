@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { doc, getDoc, setDoc, increment } from 'firebase/firestore';
 import { db } from './firebase';
+import { appId } from './firebaseConfig';
+import { HOME_BACKGROUNDS } from './homeBackgrounds';
 import OnlineStatusWidget from './OnlineStatusWidget';
 
 // Avatar deliberately has no wallet of its own -- it spends directly out of
@@ -10,6 +12,17 @@ import OnlineStatusWidget from './OnlineStatusWidget';
 // its own `avatar` field added alongside coinBalance/lotusCount/etc.
 const SHRINE_ROSTER_PATH = 'artifacts/shrine-room-app/public/data/roster';
 const sanitizeShrineKey = (key) => (key || 'unknown').trim().replace(/[.$#/\[\]]/g, '_');
+
+// Home backgrounds are the one shop category that isn't purely cosmetic to
+// the avatar itself -- the Tutoring home page (see StudentDashboard in
+// TutoringApp.jsx) needs to know which one is equipped, and that component
+// reads the student's own profile doc (by studentUid), not this roster doc
+// (keyed by name). So equipping one still spends from/records into the same
+// roster doc as every other category (one coin balance, one place avatar
+// ownership lives), but ALSO mirrors the selected id onto the student's
+// profile doc purely so the home page can pick it up without its own extra
+// Firestore listener. See handleEquip's homeBackground special-case below.
+const STUDENTS_COLLECTION_PATH = `artifacts/${appId}/public/data/students`;
 
 // --- Catalog -----------------------------------------------------------
 // One free ("cost: 0") default per category so a brand-new avatar already
@@ -49,6 +62,27 @@ const BG_OPTIONS = [
   { id: 'night', name: 'Night', color: '#5C6BC0', cost: 25 },
 ];
 const find = (list, id) => list.find(o => o.id === id) || list[0];
+
+// setDoc(ref, {'avatar.hair': 'x'}, {merge: true}) does NOT nest -- unlike
+// updateDoc, a plain setDoc merge treats a dotted string key as a LITERAL
+// field name (one containing a literal "." character), not a nested path.
+// Every equip/purchase before this fix was written that way, so real
+// students' choices and purchases never actually survived a reload -- the
+// shop always fell back to the free defaults, and re-clicking an already-
+// owned item would silently charge coins for it again. Read those old
+// flat-named fields here as a one-time fallback (new writes go through
+// persist()'s real nested objects below, which self-heals the document the
+// next time that student equips or buys anything).
+const CATEGORY_KEYS = ['skin', 'hair', 'outfit', 'accessory', 'bg', 'homeBackground'];
+function readNestedWithLegacyFallback(data, prefix) {
+  const result = { ...(data[prefix] || {}) };
+  for (const key of CATEGORY_KEYS) {
+    if (result[key] === undefined && data[`${prefix}.${key}`] !== undefined) {
+      result[key] = data[`${prefix}.${key}`];
+    }
+  }
+  return result;
+}
 
 // --- Hand-drawn layered character (same recolor-by-parameter approach as
 // ShrineRoomApp's buddhaSvg) instead of stacking emoji on top of each
@@ -103,12 +137,13 @@ function CharacterSvg({ skinColor, hair, outfitColor, accessory, className }) {
   );
 }
 
-const DEFAULT_CONFIG = { skin: 'light', hair: 'short-black', outfit: 'blue', accessory: 'none', bg: 'sky' };
+const DEFAULT_CONFIG = { skin: 'light', hair: 'short-black', outfit: 'blue', accessory: 'none', bg: 'sky', homeBackground: 'default' };
 const CATEGORIES = [
   { key: 'hair', label: '💇 Hair', options: HAIR_OPTIONS },
   { key: 'outfit', label: '👘 Outfit', options: OUTFIT_OPTIONS },
   { key: 'accessory', label: '✨ Accessory', options: ACCESSORY_OPTIONS },
   { key: 'bg', label: '🎨 Background', options: BG_OPTIONS },
+  { key: 'homeBackground', label: '🏠 Home Wallpaper', options: HOME_BACKGROUNDS },
 ];
 
 export default function AvatarApp({ entryRequest, onExit }) {
@@ -118,7 +153,7 @@ export default function AvatarApp({ entryRequest, onExit }) {
   const [loading, setLoading] = useState(true);
   const [coinBalance, setCoinBalance] = useState(isTeacherPreview ? 500 : 0);
   const [config, setConfig] = useState(DEFAULT_CONFIG);
-  const [owned, setOwned] = useState({ hair: ['short-black'], outfit: ['blue'], accessory: ['none'], bg: ['sky'] });
+  const [owned, setOwned] = useState({ hair: ['short-black'], outfit: ['blue'], accessory: ['none'], bg: ['sky'], homeBackground: ['default'] });
   const [activeCategory, setActiveCategory] = useState('hair');
   const [toast, setToast] = useState(null);
 
@@ -135,13 +170,16 @@ export default function AvatarApp({ entryRequest, onExit }) {
         if (snap && snap.exists()) {
           const data = snap.data();
           if (isMounted) {
+            const avatarData = readNestedWithLegacyFallback(data, 'avatar');
+            const avatarOwnedData = readNestedWithLegacyFallback(data, 'avatarOwned');
             setCoinBalance(data.coinBalance ?? 0);
-            setConfig({ ...DEFAULT_CONFIG, ...(data.avatar || {}) });
+            setConfig({ ...DEFAULT_CONFIG, ...avatarData });
             setOwned({
-              hair: ['short-black', ...(data.avatarOwned?.hair || [])],
-              outfit: ['blue', ...(data.avatarOwned?.outfit || [])],
-              accessory: ['none', ...(data.avatarOwned?.accessory || [])],
-              bg: ['sky', ...(data.avatarOwned?.bg || [])],
+              hair: ['short-black', ...(avatarOwnedData.hair || [])],
+              outfit: ['blue', ...(avatarOwnedData.outfit || [])],
+              accessory: ['none', ...(avatarOwnedData.accessory || [])],
+              bg: ['sky', ...(avatarOwnedData.bg || [])],
+              homeBackground: ['default', ...(avatarOwnedData.homeBackground || [])],
             });
           }
         }
@@ -158,6 +196,15 @@ export default function AvatarApp({ entryRequest, onExit }) {
     setDoc(rosterRef, { studentName, ...patch }, { merge: true }).catch(() => {});
   };
 
+  // Home Wallpaper is the one category the Tutoring home page itself needs
+  // to know about -- mirror the equipped id onto the student's own profile
+  // doc (see STUDENTS_COLLECTION_PATH above) whenever it changes, alongside
+  // the normal roster-doc persist every other category uses.
+  const mirrorHomeBackgroundToProfile = (id) => {
+    if (!studentUid) return;
+    setDoc(doc(db, STUDENTS_COLLECTION_PATH, studentUid), { homeBackground: id }, { merge: true }).catch(() => {});
+  };
+
   const isOwned = (categoryKey, id) => owned[categoryKey]?.includes(id);
 
   const handleEquip = (categoryKey, option) => {
@@ -165,24 +212,26 @@ export default function AvatarApp({ entryRequest, onExit }) {
     const owns = isTeacherPreview || isOwned(categoryKey, option.id);
     if (owns) {
       setConfig(prev => ({ ...prev, [categoryKey]: option.id }));
-      persist({ [`avatar.${categoryKey}`]: option.id });
+      persist({ avatar: { [categoryKey]: option.id } });
+      if (categoryKey === 'homeBackground') mirrorHomeBackgroundToProfile(option.id);
       return;
     }
     if (coinBalance < option.cost) { showToast('Not enough coins.'); return; }
     setCoinBalance(prev => prev - option.cost);
     setOwned(prev => ({ ...prev, [categoryKey]: [...prev[categoryKey], option.id] }));
     setConfig(prev => ({ ...prev, [categoryKey]: option.id }));
+    if (categoryKey === 'homeBackground') mirrorHomeBackgroundToProfile(option.id);
     persist({
       coinBalance: increment(-option.cost),
-      [`avatar.${categoryKey}`]: option.id,
-      [`avatarOwned.${categoryKey}`]: [...(owned[categoryKey] || []), option.id],
+      avatar: { [categoryKey]: option.id },
+      avatarOwned: { [categoryKey]: [...(owned[categoryKey] || []), option.id] },
     });
     showToast(`${option.name} equipped!`);
   };
 
   const handleSkinChange = (skinId) => {
     setConfig(prev => ({ ...prev, skin: skinId }));
-    persist({ 'avatar.skin': skinId });
+    persist({ avatar: { skin: skinId } });
   };
 
   if (loading) {
@@ -242,6 +291,8 @@ export default function AvatarApp({ entryRequest, onExit }) {
         ))}
       </div>
 
+      <h2 className="text-lg font-bold text-indigo-700 mb-3">🏪 Avatar Shop</h2>
+
       {/* Category tabs */}
       <div className="flex flex-wrap justify-center gap-2 mb-4">
         {CATEGORIES.map(cat => (
@@ -273,7 +324,11 @@ export default function AvatarApp({ entryRequest, onExit }) {
                 equipped ? 'border-indigo-600 bg-indigo-50' : 'border-gray-200 bg-white hover:border-indigo-300'
               }`}
             >
-              <span className="w-10 h-10 rounded-full border border-black/10" style={{ background: swatchColor }} />
+              {option.image ? (
+                <img src={option.image} alt="" className="w-full h-16 object-cover rounded-lg border border-black/10" />
+              ) : (
+                <span className="w-10 h-10 rounded-full border border-black/10" style={{ background: swatchColor }} />
+              )}
               <span className="text-sm font-semibold text-gray-700 text-center">{option.name}</span>
               {equipped ? (
                 <span className="text-xs font-bold text-indigo-600">✅ Equipped</span>
