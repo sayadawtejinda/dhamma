@@ -76,6 +76,24 @@ const getReflectionsCollectionRef = () => collection(db, 'artifacts', appId, 'pu
 const getRosterCollectionRef = () => collection(db, 'artifacts', appId, 'public', 'data', 'classRoster');
 const getRosterDocRef = (classId, studentName) => doc(db, 'artifacts', appId, 'public', 'data', 'classRoster', `${classId}_${encodeURIComponent(studentName)}`);
 
+// A student only ever belongs to one class at a time. If they previously
+// joined a different class (e.g. by mistake) before landing in `keepClassId`,
+// a leftover classRoster doc for that other class can still exist -- and
+// since the "Students" online-status panel reads the WHOLE classRoster
+// collection (not filtered by class), that leftover shows up as a second,
+// stale entry for the same name. Clean those up right after a fresh,
+// successful join so only the current class's roster doc remains.
+const cleanupStrayClassRosterEntries = async (studentName, keepClassId) => {
+  try {
+    const strayDocs = await getDocs(query(getRosterCollectionRef(), where('studentName', '==', studentName)));
+    await Promise.all(
+      strayDocs.docs
+        .filter(d => d.data().classId !== keepClassId)
+        .map(d => deleteDoc(d.ref).catch(() => {}))
+    );
+  } catch (e) { /* non-critical background cleanup */ }
+};
+
 // 50 points = 1 gold coin (same currency/rate as MyanmarReaderApp's 🪙,
 // unrelated to the ❤️ reactions / "announce score" points economy below --
 // every point a student ever earns counts here, spent or not).
@@ -2846,6 +2864,7 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
         setClassId(actualTargetId); setUserName(enteredName); setView('studentLesson');
       } else {
         await setDoc(rosterDocRef, { classId: actualTargetId, studentName: enteredName, studentAgeLevel: studentAgeLevel, status: 'approved', linkedToTutoring: true, joinedAt: Date.now(), lastSeen: Date.now() });
+        cleanupStrayClassRosterEntries(enteredName, actualTargetId);
         setClassId(actualTargetId); setUserName(enteredName); setView('studentLesson');
       }
     } catch (error) {
@@ -2881,6 +2900,7 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
         }
       } else {
         await setDoc(rosterDocRef, { classId: enteredClassId, studentName: enteredName, studentAgeLevel: studentAgeLevel, status: isAutoApprove ? 'approved' : 'pending', joinedAt: Date.now(), lastSeen: Date.now() });
+        cleanupStrayClassRosterEntries(enteredName, enteredClassId);
         setClassId(enteredClassId); setUserName(enteredName); setView(isAutoApprove ? 'studentLesson' : 'studentWaiting');
       }
     } catch (error) { console.error("Login Roster Error:", error); setModal({ message: 'Network error. Please try again.', type: 'error', visible: true }); }
@@ -2985,6 +3005,7 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
         else { nextView = 'studentWaiting'; }
       } else {
         await setDoc(rosterDocRef, { classId: newId, studentName: userName, studentAgeLevel, status: isAutoApprove ? 'approved' : 'pending', joinedAt: Date.now(), lastSeen: Date.now() });
+        cleanupStrayClassRosterEntries(userName, newId);
         nextView = isAutoApprove ? 'studentLesson' : 'studentWaiting';
       }
       localStorage.setItem('lastClassId', newId);

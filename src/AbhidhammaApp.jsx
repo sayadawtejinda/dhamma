@@ -47,6 +47,24 @@ const abhiLessonsRef     = (cId)         => collection(db, P(`classes/${cId}/les
 const abhiLessonDocRef   = (cId, lId)    => doc(db, P(`classes/${cId}/lessons/${lId}`));
 const abhiRosterDocRef   = (cId, name)   => doc(db, P(`classRoster/${cId}_${encodeURIComponent(name)}`));
 const abhiRosterRef      = ()            => collection(db, P('classRoster'));
+
+// A student only ever belongs to one class at a time. If they previously
+// joined a different class (e.g. by mistake) before landing in `keepClassId`,
+// a leftover classRoster doc for that other class can still exist -- and
+// since the "Students" online-status panel reads the WHOLE classRoster
+// collection (not filtered by class), that leftover shows up as a second,
+// stale entry for the same name. Clean those up right after a fresh,
+// successful join so only the current class's roster doc remains.
+const cleanupStrayAbhiRosterEntries = async (studentName, keepClassId) => {
+  try {
+    const strayDocs = await getDocs(query(abhiRosterRef(), where('studentName', '==', studentName)));
+    await Promise.all(
+      strayDocs.docs
+        .filter(d => d.data().classId !== keepClassId)
+        .map(d => deleteDoc(d.ref).catch(() => {}))
+    );
+  } catch (e) { /* non-critical background cleanup */ }
+};
 const abhiScoresRef      = ()            =>
     // Use original global_scores collection that security rules allow
     collection(db, 'artifacts', ABHIDHAMMA_APP_ID, 'public', 'data', 'global_scores');
@@ -1570,6 +1588,7 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
       // a rename-redirect pointer.
       try{
         await setDoc(rRef,{classId,studentName:name,name,group:studentProfile.group||'explorers',status:'approved',isOnline:true,lastPing:serverTimestamp(),lastSeen:serverTimestamp(),joinedAt:Date.now()},{merge:true});
+        cleanupStrayAbhiRosterEntries(name, classId);
       }catch(e2){console.error('Ping create error:',e2);}
     };
     ping();
