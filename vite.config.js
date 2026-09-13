@@ -14,11 +14,13 @@ export default defineConfig({
       // build it as its own bundle, deployed alongside index.html by the
       // same GitHub Actions workflow, reachable at /dhamma/paramattha.html.
       // vithicitta.html is the same pattern, a third independent page,
-      // reachable at /dhamma/vithicitta.html.
+      // reachable at /dhamma/vithicitta.html. rupa.html is a fourth,
+      // reachable at /dhamma/rupa.html.
       input: {
         main: resolve(__dirname, 'index.html'),
         paramattha: resolve(__dirname, 'paramattha.html'),
         vithicitta: resolve(__dirname, 'vithicitta.html'),
+        rupa: resolve(__dirname, 'rupa.html'),
       },
     },
   },
