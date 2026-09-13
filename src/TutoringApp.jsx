@@ -2362,11 +2362,12 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
     }
   };
 
-  const handleApproveNameChange = async (studentId, newName) => {
+  const handleApproveNameChange = async (studentId, newName, oldName) => {
     if (!newName || !newName.trim()) return;
+    const trimmedNew = newName.trim();
     try {
       await updateDoc(doc(db, `${publicDataPath}/students`, studentId), {
-        name: newName.trim(),
+        name: trimmedNew,
         pendingName: null,
         // Only an actually-approved change raises the lotus-flower bar for
         // next time (see the Rename card in AvatarApp.jsx) -- a denied or
@@ -2375,6 +2376,31 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
       });
     } catch (error) {
       console.error("Error approving name change:", error);
+      return;
+    }
+
+    // Shrine Room / Avatar Shop's roster doc (coins, lotus flowers, avatar
+    // purchases, altar items) is keyed by the student's NAME (see
+    // SHRINE_ROSTER_PATH + sanitizeShrineKey in AvatarApp.jsx and
+    // ShrineRoomApp.jsx), not by studentUid -- a rename doesn't move it on
+    // its own, so without this it silently orphans everything under the old
+    // name. Same class of bug already fixed for Smart Study/Abhidhamma
+    // rosters (see renameStudentEverywhere in SmartStudy.jsx, the precedent
+    // this mirrors): copy the old doc's fields onto a doc keyed by the new
+    // name, then remove the old one.
+    if (oldName && oldName.trim() && oldName.trim() !== trimmedNew) {
+      try {
+        const sanitizeShrineKey = (key) => (key || 'unknown').trim().replace(/[.$#/\[\]]/g, '_');
+        const oldRosterRef = doc(db, 'artifacts/shrine-room-app/public/data/roster', sanitizeShrineKey(oldName));
+        const newRosterRef = doc(db, 'artifacts/shrine-room-app/public/data/roster', sanitizeShrineKey(trimmedNew));
+        const oldSnap = await getDoc(oldRosterRef);
+        if (oldSnap.exists()) {
+          await setDoc(newRosterRef, { ...oldSnap.data(), studentName: trimmedNew }, { merge: true });
+          await deleteDoc(oldRosterRef);
+        }
+      } catch (error) {
+        console.error("Error migrating Shrine Room roster to new name:", error);
+      }
     }
   };
 
@@ -6123,7 +6149,7 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                       <span className="text-yellow-800 text-sm font-semibold">
                         Wants to rename to "<strong>{student.pendingName}</strong>"
                       </span>
-                      <button onClick={(e) => { e.stopPropagation(); handleApproveNameChange(student.id, student.pendingName); }} className="px-3 py-1 rounded-lg text-xs font-bold text-white bg-emerald-500 hover:bg-emerald-600">Approve</button>
+                      <button onClick={(e) => { e.stopPropagation(); handleApproveNameChange(student.id, student.pendingName, student.name); }} className="px-3 py-1 rounded-lg text-xs font-bold text-white bg-emerald-500 hover:bg-emerald-600">Approve</button>
                       <button onClick={(e) => { e.stopPropagation(); handleRejectNameChange(student.id); }} className="px-3 py-1 rounded-lg text-xs font-bold text-white bg-red-500 hover:bg-red-600">Reject</button>
                     </div>
                   )}
