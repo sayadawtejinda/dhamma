@@ -45,26 +45,12 @@ const abhiClassDocRef    = (cId)         => doc(db, P(`classes/${cId}`));
 const abhiClassesRef     = ()            => collection(db, P('classes'));
 const abhiLessonsRef     = (cId)         => collection(db, P(`classes/${cId}/lessons`));
 const abhiLessonDocRef   = (cId, lId)    => doc(db, P(`classes/${cId}/lessons/${lId}`));
-const abhiRosterDocRef   = (cId, name)   => doc(db, P(`classRoster/${cId}_${encodeURIComponent(name)}`));
+// Keyed by studentUid (the shared anonymous-auth uid every part of this app
+// already uses), not by name -- a rename just changes the studentName field
+// on the SAME doc, so none of the old name-matching/redirect machinery this
+// file used to need is necessary anymore.
+const abhiRosterDocRef   = (cId, uid)    => doc(db, P(`classRoster/${cId}_${uid}`));
 const abhiRosterRef      = ()            => collection(db, P('classRoster'));
-
-// A student only ever belongs to one class at a time. If they previously
-// joined a different class (e.g. by mistake) before landing in `keepClassId`,
-// a leftover classRoster doc for that other class can still exist -- and
-// since the "Students" online-status panel reads the WHOLE classRoster
-// collection (not filtered by class), that leftover shows up as a second,
-// stale entry for the same name. Clean those up right after a fresh,
-// successful join so only the current class's roster doc remains.
-const cleanupStrayAbhiRosterEntries = async (studentName, keepClassId) => {
-  try {
-    const strayDocs = await getDocs(query(abhiRosterRef(), where('studentName', '==', studentName)));
-    await Promise.all(
-      strayDocs.docs
-        .filter(d => d.data().classId !== keepClassId)
-        .map(d => deleteDoc(d.ref).catch(() => {}))
-    );
-  } catch (e) { /* non-critical background cleanup */ }
-};
 const abhiScoresRef      = ()            =>
     // Use original global_scores collection that security rules allow
     collection(db, 'artifacts', ABHIDHAMMA_APP_ID, 'public', 'data', 'global_scores');
@@ -75,185 +61,29 @@ const abhiResultsRef     = (cId,lId,g)   =>
 const abhiQRef           = (cId, lId)    =>
     collection(db, 'artifacts', ABHIDHAMMA_APP_ID, 'public', 'data', 'classes', cId, 'questions', lId, 'items');
 
-// Rename a student's score / quiz-result records from one name to another. Used when a student's
-// Abhidhamma display name doesn't match the name their records were written under — e.g. the
-// student was renamed in the roster, or TutoringApp/Abhidhamma use slightly different names for
-// the same person. Safe no-op if oldName/newName are missing or identical.
-const renameStudentRecords = async (classId, oldName, newName) => {
-  if (!classId || !oldName || !newName || oldName === newName) return;
+// One-time, automatic migration for a student who joined before roster docs
+// were keyed by uid: look for their OLD name-keyed doc -- preferring an
+// exact tutoringStudentUid match left by the old Link-to-Tutoring system,
+// else falling back to their current display name -- and carry its fields
+// onto the new uid-keyed doc the first time they're seen under their uid.
+// The old doc is marked {migratedTo: uid}, not deleted, as cheap insurance.
+// Runs inline the first time a student's roster doc is written (see the
+// ping effect below) -- nothing the teacher has to trigger.
+const migrateOldAbhiRosterDoc = async (classId, uid, name) => {
   try {
-    const allScores = await getDocs(abhiScoresRef());
-    // Match on (studentName || name) rather than studentName alone — legacy/imported score docs
-    // were sometimes written with only a `name` field and no `studentName` at all (same root cause
-    // that broke the per-lesson "Done" badge — see diagnoseClassCompletions/backfillStudentNameField
-    // above). Filtering on studentName alone silently skipped those docs during rename: the roster
-    // and redirect pointer moved to the new name, but these older scores stayed invisible under the
-    // old name forever, which is exactly the "some places rename, some don't / old scores vanish"
-    // symptom. Matching on either field, and always writing BOTH on the way out, fixes it either way.
-    const toRename = allScores.docs.filter(d=>{const dt=d.data();return (dt.studentName||dt.name)===oldName&&(!dt.classId||dt.classId===classId);});
-    if (toRename.length > 0) {
-      const batch = writeBatch(db);
-      // Also backfill classId — some imported/legacy score docs are missing it, which silently
-      // hides them from the roster's "done" count and class stats (both query by classId).
-      toRename.forEach(d => batch.update(d.ref,{studentName:newName,name:newName,classId}));
-      await batch.commit();
+    const byUidSnap = await getDocs(query(abhiRosterRef(), where('classId','==',classId), where('tutoringStudentUid','==',uid)));
+    let oldDoc = byUidSnap.docs.find(d => d.id !== `${classId}_${uid}` && !d.data().migratedTo);
+    if (!oldDoc && name) {
+      const byNameSnap = await getDocs(query(abhiRosterRef(), where('classId','==',classId), where('studentName','==',name)));
+      oldDoc = byNameSnap.docs.find(d => d.id !== `${classId}_${uid}` && !d.data().migratedTo);
     }
-  } catch(e) { console.error('Scores rename:', e); }
-  try {
-    const lessonsSnap = await getDocs(abhiLessonsRef(classId));
-    for (const lDoc of lessonsSnap.docs) {
-      for (const g of Object.keys(AGE_GROUPS)) {
-        const rSnap = await getDocs(query(abhiResultsRef(classId,lDoc.id,g),where('name','==',oldName)));
-        if (!rSnap.empty) {
-          const batch = writeBatch(db);
-          rSnap.docs.forEach(d => batch.update(d.ref,{name:newName}));
-          await batch.commit();
-        }
-      }
-    }
-  } catch(e) { console.error('Quiz results rename:', e); }
-  // Activity feed (the "🔔 finished Lesson X" notification log) is otherwise never touched by a
-  // rename, so past notifications kept showing the old name even after everything else moved to the
-  // new one — folded in here so every place in the app is consistent, not just scores/roster.
-  try {
-    const feedSnap = await getDocs(query(abhiActivityRef(), where('classId','==',classId), where('studentName','==',oldName)));
-    if (!feedSnap.empty) {
-      const batch = writeBatch(db);
-      feedSnap.docs.forEach(d => batch.update(d.ref,{studentName:newName}));
-      await batch.commit();
-    }
-  } catch(e) { console.error('Activity feed rename:', e); }
-};
-
-// THE ACTUAL FIX for the missing "Done" tags — confirmed via diagnoseClassCompletions: legacy
-// global_scores docs were written with only a `name` field (no `studentName`), plus an older 3-part
-// doc id `${userId}_${lessonId}_${group}` instead of today's 2-part `${userId}_${lessonId}`. The
-// class-picker's "all completed" badge tolerates either field (`studentName||name`), but the
-// per-lesson "Done" badge's live check queries strictly on `studentName` (see AbhiLessonItem's
-// isCompleted effect), so it silently misses every legacy record even though classId/lessonId line
-// up perfectly. This just copies `name` into `studentName` wherever the latter is missing — nothing
-// else (doc id, lessonId, score, timestamp) is touched — which is enough for the existing Done-check
-// to start matching them. Pass a classId to scope it, or omit to fix every class in one pass. Safe to
-// re-run; docs that already have studentName are left alone.
-const backfillStudentNameField = async (classId) => {
-  const snap = classId
-    ? await getDocs(query(abhiScoresRef(), where('classId', '==', classId)))
-    : await getDocs(abhiScoresRef());
-  const toFix = snap.docs.filter(d => { const dt = d.data(); return !dt.studentName && dt.name; });
-  let batch = writeBatch(db); let ops = 0;
-  for (const d of toFix) {
-    batch.update(d.ref, { studentName: d.data().name });
-    ops++;
-    if (ops >= 400) { await batch.commit(); batch = writeBatch(db); ops = 0; }
-  }
-  if (ops > 0) await batch.commit();
-  const report = { scanned: snap.size, fixed: toFix.length };
-  console.log('studentName backfill:', report);
-  return report;
-};
-
-// Read-only diagnostic — inspects the RAW data for a class so we can figure out exactly why
-// completion records aren't matching, instead of guessing. Prints a report (and returns it) showing:
-//  - how many lessons currently exist in the class
-//  - how many global_scores docs exist for the class, and how many of their lessonId values do/don't
-//    match a CURRENT lesson id (this is the real orphan check — independent of activity_feed)
-//  - a few sample orphaned score docs, raw, so we can see exactly what fields they carry
-//  - a few sample activity_feed docs, raw, so we can see whether lessonId is actually present there
-const diagnoseClassCompletions = async (classId, studentName) => {
-  if (!classId) return { error: 'No classId' };
-  const lessonsSnap = await getDocs(abhiLessonsRef(classId));
-  const currentLessons = lessonsSnap.docs.map(d => ({ id: d.id, title: d.data().title || '' }));
-  const currentIds = new Set(currentLessons.map(l => l.id));
-
-  const scoresSnap = await getDocs(query(abhiScoresRef(), where('classId', '==', classId)));
-  const scoreDocs = scoresSnap.docs.map(d => ({ docId: d.id, ...d.data() }));
-  const filtered = studentName ? scoreDocs.filter(s => (s.studentName || s.name) === studentName) : scoreDocs;
-  const matched = filtered.filter(s => currentIds.has(s.lessonId));
-  const orphaned = filtered.filter(s => !currentIds.has(s.lessonId));
-
-  // Reproduce the LIVE per-lesson check exactly: it queries where('studentName','==',studentName) —
-  // a strict field match, unlike the loose (studentName||name) fallback used above and in classStats.
-  // If this count is lower than `matched`, some docs only have a `name` field (no `studentName`),
-  // which would make the class-picker's "all completed" badge count them while the per-lesson
-  // "Done" badge's stricter query misses them entirely.
-  let strictMatchCount = null, distinctStudentNameValues = [];
-  if (studentName) {
-    const strictSnap = await getDocs(query(abhiScoresRef(), where('studentName', '==', studentName)));
-    strictMatchCount = strictSnap.docs.filter(d => { const dt = d.data(); return dt.classId === classId && currentIds.has(dt.lessonId); }).length;
-    // Show the raw studentName/name field values on this class's docs so case/whitespace/nickname
-    // mismatches (e.g. "kevin" vs "Kevin", trailing space) are visible even if not an exact filter match.
-    distinctStudentNameValues = Array.from(new Set(scoreDocs.map(s => JSON.stringify({ studentName: s.studentName, name: s.name }))));
-  }
-
-  const feedSnap = await getDocs(query(abhiActivityRef(), where('classId', '==', classId)));
-  const feedSample = feedSnap.docs.slice(0, 5).map(d => ({ docId: d.id, ...d.data() }));
-
-  const report = {
-    classId, studentNameFilter: studentName || '(all students)',
-    totalCurrentLessons: currentLessons.length,
-    totalScoreDocs: scoreDocs.length, totalScoreDocsForStudent: filtered.length,
-    matchedCount: matched.length, orphanedCount: orphaned.length,
-    strictStudentNameFieldMatchCount: strictMatchCount,
-    distinctStudentNameValues,
-    matchedSample: matched.slice(0, 3),
-    orphanedSample: orphaned.slice(0, 10),
-    currentLessonsSample: currentLessons.slice(0, 5),
-    activityFeedTotal: feedSnap.size, activityFeedSample: feedSample,
-  };
-  console.log('Completion diagnosis:', report);
-  return report;
-};
-
-// Move a roster doc from oldName to newName. Crucially, this does NOT delete the old doc — a
-// student's own device caches its profile name in localStorage and keeps pinging/writing scores
-// under that cached name until it's told otherwise, so simply deleting the old roster doc caused
-// the ping effect to silently recreate it every 60s, splitting the student back into two
-// identities and orphaning every score submitted after the rename. Instead the old doc is
-// replaced with a small {renamedTo} redirect pointer; the student's own client (see the ping
-// effect below) follows that pointer and updates its cached name the next time it checks in.
-const moveRosterDoc = async (classId, oldName, newName, extra={}) => {
-  const oldRef=abhiRosterDocRef(classId,oldName);
-  const newRef=abhiRosterDocRef(classId,newName);
-  // Safety net: if newName's own doc is ALREADY a redirect pointing back to
-  // oldName, this rename would silently undo a rename that already happened
-  // correctly in the other direction — e.g. a stale/cached caller trying to
-  // "rename" B back to A right after A was already correctly renamed to B.
-  // Whatever is calling this with the direction reversed is a bug elsewhere,
-  // but skipping here (rather than flip-flopping the student's name back and
-  // forth every time it runs) keeps things stable regardless of the cause.
-  try {
-    const newSnapCheck = await getDoc(newRef);
-    if (newSnapCheck.exists() && newSnapCheck.data().renamedTo === oldName) {
-      console.warn(`moveRosterDoc: refusing to rename "${oldName}" -> "${newName}" in class ${classId} — "${newName}" already redirects to "${oldName}", this would create a rename loop. Check what called this.`);
-      return;
-    }
-  } catch(e) {}
-    const oldSnap=await getDoc(oldRef);
-  const newData=oldSnap.exists()?{...oldSnap.data(),studentName:newName,name:newName,...extra}:{...extra};
-  const batch=writeBatch(db);
-  batch.set(newRef,newData,{merge:true});
-  batch.set(oldRef,{renamedTo:newName,classId},{merge:false});
-  await batch.commit();
-};
-
-// Hide a leftover roster doc still sitting under a student's old Abhidhamma name after a bulk
-// Find-Matching-Names link. Does NOT touch the (already-correct) new-name roster doc — it just
-// turns the old-name doc into a {renamedTo} redirect pointer, same pattern as moveRosterDoc,
-// so it stops showing up as a second, duplicate student in the roster/score lists.
-const hideOldRosterDoc = async (classId, oldName, newName) => {
-  if (!classId || !oldName || !newName || oldName === newName) return;
-  const oldRef = abhiRosterDocRef(classId, oldName);
-  const oldSnap = await getDoc(oldRef);
-  if (!oldSnap.exists()) return;
-  // Same safety net as moveRosterDoc — never redirect A -> B if B already redirects to A.
-  try {
-    const newSnapCheck = await getDoc(abhiRosterDocRef(classId, newName));
-    if (newSnapCheck.exists() && newSnapCheck.data().renamedTo === oldName) {
-      console.warn(`hideOldRosterDoc: refusing to redirect "${oldName}" -> "${newName}" in class ${classId} — would create a rename loop.`);
-      return;
-    }
-  } catch(e) {}
-  await setDoc(oldRef, { renamedTo: newName, classId }, { merge: false });
+    if (!oldDoc) return null;
+    await setDoc(oldDoc.ref, { migratedTo: uid }, { merge: true });
+    const data = { ...oldDoc.data() };
+    delete data.renamedTo; delete data.migratedTo; delete data.tutoringStudentUid; delete data.linkedToTutoring;
+    delete data.studentName; delete data.name;
+    return data;
+  } catch (e) { console.error('Roster migration lookup error:', e); return null; }
 };
 
 // ─── AI generation ────────────────────────────────────────────────────────────
@@ -321,7 +151,7 @@ const QuizModule = ({ classId,lessonId,lessonTitle,userId,userName,ageGroup,quiz
           if(!prev.exists()||prev.data().score<fs){
             await setDoc(sRef,{classId,lessonId,studentName:userName,name:userName,score:fs,group:ageGroup,userId,timestamp:serverTimestamp()});
           }
-          await addDoc(abhiActivityRef(),{type:'quiz_completed',studentName:userName,lessonTitle,classId,lessonId,group:ageGroup,timestamp:serverTimestamp()});
+          await addDoc(abhiActivityRef(),{type:'quiz_completed',studentName:userName,userId,lessonTitle,classId,lessonId,group:ageGroup,timestamp:serverTimestamp()});
         }catch(e){console.error(e);}
       }
     },1500);
@@ -356,38 +186,28 @@ const NotificationBell = ({ userId, classId }) => {
 };
 
 // ─── AbhiClassRoster (now also includes Link-to-Tutoring, merged into one list) ─
-const AbhiClassRoster = ({ userId, classId, onLink }) => {
+const AbhiClassRoster = ({ userId, classId }) => {
   const [students,setStudents]=useState([]);
   const [aa,setAa]=useState(false);
   const [open,setOpen]=useState(true);
-  const [studentStats,setStudentStats]=useState({}); // studentName → {rank, completed}
-  // ── Link-to-Tutoring state (merged in from the old separate section) ──
-  const [tutoringStudents,setTutoringStudents]=useState(null);
-  const [pickerFor,setPickerFor]=useState(null);
-  const [search,setSearch]=useState('');
-  const [altNames,setAltNames]=useState(''); // comma-separated extra old names to merge in alongside pickerFor
-  const [linking,setLinking]=useState(false);
-  const [syncing,setSyncing]=useState(false);
-  const [syncMsg,setSyncMsg]=useState('');
-  const [finding,setFinding]=useState(false);
-  const [matchPreview,setMatchPreview]=useState(null); // null=not previewed yet; [] or [...] once "Find" has run
-  const [unlinking,setUnlinking]=useState(null); // studentName currently being unlinked
-  const [repairingMissedScores,setRepairingMissedScores]=useState(false);
+  const [studentStats,setStudentStats]=useState({}); // uid → {rank, completed}
 
-  // Per-student rank + completed-lesson count for this class, shown as a floating badge on each row
+  // Per-student rank + completed-lesson count for this class, shown as a floating badge on each row.
+  // Grouped by userId (every score doc already carries one -- see QuizModule's handleAnswer), not by
+  // name, so a mid-class rename can't split one student's progress across two leaderboard rows.
   useEffect(()=>{
     if(!classId)return;
     return onSnapshot(query(abhiScoresRef(),where('classId','==',classId)),snap=>{
       const byStudent={};
       snap.docs.forEach(d=>{
-        const dt=d.data();const sn=dt.studentName||dt.name;
-        if(!sn||!dt.lessonId)return;
-        if(!byStudent[sn])byStudent[sn]=new Set();
-        byStudent[sn].add(dt.lessonId);
+        const dt=d.data();const uid=dt.userId;
+        if(!uid||!dt.lessonId)return;
+        if(!byStudent[uid])byStudent[uid]=new Set();
+        byStudent[uid].add(dt.lessonId);
       });
       const ranked=Object.entries(byStudent).sort((a,b)=>b[1].size-a[1].size);
       const stats={};
-      ranked.forEach(([sn,set],idx)=>{stats[sn]={rank:idx+1,completed:set.size};});
+      ranked.forEach(([uid,set],idx)=>{stats[uid]={rank:idx+1,completed:set.size};});
       setStudentStats(stats);
     },err=>console.error('Roster stats:',err.code));
   },[classId]);
@@ -397,7 +217,10 @@ const AbhiClassRoster = ({ userId, classId, onLink }) => {
     const q=query(abhiRosterRef(),where('classId','==',classId));
     return onSnapshot(q,snap=>{
       const nowMs=Date.now();
-      setStudents(snap.docs.filter(d=>!d.data().renamedTo).map(d=>{
+      // migratedTo marks an old name-keyed doc that's already been carried
+      // forward onto a uid-keyed one (see migrateOldAbhiRosterDoc) -- it's
+      // vestigial, not a second student, so it's excluded here.
+      setStudents(snap.docs.filter(d=>!d.data().migratedTo).map(d=>{
         const dt=d.data();const lp=dt.lastPing;
         if(dt.isOnline&&lp){const ms=lp.toMillis?lp.toMillis():(lp.seconds*1000);if((nowMs-ms)/60000>2)return{id:d.id,...dt,isOnline:false};}
         return{id:d.id,...dt};
@@ -435,245 +258,6 @@ const AbhiClassRoster = ({ userId, classId, onLink }) => {
 
   const approved=students.filter(s=>s.status==='approved').sort((a,b)=>(a.studentNumber||0)-(b.studentNumber||0));
   const pending=students.filter(s=>s.status==='pending');
-  const unlinked=approved.filter(s=>!s.linkedToTutoring);
-
-  // Load the TutoringApp student list once, on demand (picker or bulk-link)
-  const loadTutoringStudents=async()=>{
-    if(tutoringStudents!==null)return tutoringStudents;
-    try{
-      const snap=await getDocs(collection(db,'artifacts','dhamma-tutoring-app','public','data','students'));
-      const list=snap.docs.map(d=>({id:d.id,...d.data()})).filter(s=>s.isActive!==false).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
-      setTutoringStudents(list);
-      return list;
-    }catch(e){setTutoringStudents([]);return[];}
-  };
-
-  // Step 1 — Find Matching Names: match TutoringApp names against students already in THIS
-  // class's Roster only. Never proposes adding a Tutoring student who hasn't joined the
-  // Abhidhamma app yet — that's a preview for the teacher to review, not an action.
-  const findMatchingNames=async()=>{
-    setFinding(true);
-    try{
-      const list=await loadTutoringStudents();
-      const rosterByLower={};
-      approved.forEach(s=>{ if(s.studentName) rosterByLower[s.studentName.trim().toLowerCase()]=s; });
-      const matches=[];
-      list.forEach(t=>{
-        if(!t.name)return;
-        const match=rosterByLower[t.name.trim().toLowerCase()];
-        if(!match||match.linkedToTutoring)return;
-        // If this student was previously linked under a different Abhidhamma name (recorded on
-        // the TutoringApp profile by the individual-link flow), carry that along so Step 2 can
-        // sweep up any of their scores/quiz results still sitting under the old name.
-        const recordedOldName=t.abhidhammaNames?.[classId];
-        const oldName=(recordedOldName&&recordedOldName!==match.studentName)?recordedOldName:null;
-        matches.push({tutoringId:t.id,tutoringName:t.name,rosterName:match.studentName,oldName});
-      });
-      setMatchPreview(matches);
-      if(matches.length===0){ setSyncMsg('No matching names found.'); setTimeout(()=>setSyncMsg(''),3000); }
-    }catch(e){console.error('Find matching:',e);setSyncMsg('❌ Error — see console.');setTimeout(()=>setSyncMsg(''),4000);}
-    finally{setFinding(false);}
-  };
-
-  // Step 2 — Link All Matching Names: only runs after the teacher has reviewed the preview from
-  // Step 1 and confirmed it. Links each matched (already-in-app) student, and renames any
-  // leftover records found under a previously-used Abhidhamma name.
-  const confirmLinkMatches=async()=>{
-    if(!matchPreview||matchPreview.length===0)return;
-    setSyncing(true);
-    try{
-      const batch=writeBatch(db);
-      matchPreview.forEach(m=>batch.set(abhiRosterDocRef(classId,m.rosterName),{linkedToTutoring:true,tutoringStudentUid:m.tutoringId},{merge:true}));
-      await batch.commit();
-      const renames=matchPreview.filter(m=>m.oldName);
-      for(const m of renames){
-        await renameStudentRecords(classId,m.oldName,m.rosterName);
-        await hideOldRosterDoc(classId,m.oldName,m.rosterName);
-      }
-      setSyncMsg(`✅ Linked ${matchPreview.length} student(s).${renames.length?` (${renames.length} old-name record(s) merged.)`:''}`);
-      setMatchPreview(null);
-      setTimeout(()=>setSyncMsg(''),4000);
-    }catch(e){console.error('Confirm link:',e);setSyncMsg('❌ Error — see console.');setTimeout(()=>setSyncMsg(''),4000);}
-    finally{setSyncing(false);}
-  };
-
-  // ── Automatic background linking & renaming ──────────────────────────────
-  // Previously the teacher had to manually click "Find Matching Names" → "Link
-  // All" for new students, and "Check Renamed" → "Sync All" whenever a linked
-  // student's TutoringApp name changed. Both now run silently in the
-  // background instead, reusing the exact same rename/link logic above
-  // (renameStudentRecords, moveRosterDoc, hideOldRosterDoc) — so a new student
-  // whose name exactly matches a TutoringApp student gets linked the moment
-  // they show up in the roster, and an existing link's name stays in sync
-  // automatically, without the teacher needing to remember either step.
-  const [autoSyncTick, setAutoSyncTick] = useState(0);
-const syncRunning = useRef(false);
-  useEffect(() => {
-    if (!classId) return;
-    // Refresh the TutoringApp student list periodically (bypassing the
-    // load-once cache) so renames/new students on that side are noticed here
-    // without the teacher having to open the link picker to force a reload.
-    const refreshTutoringStudents = async () => {
-      try {
-        const snap = await getDocs(collection(db, 'artifacts', 'dhamma-tutoring-app', 'public', 'data', 'students'));
-        const list = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(s => s.isActive !== false).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-        setTutoringStudents(list);
-      } catch (e) { console.error('Auto-refresh Tutoring students:', e); }
-    };
-    refreshTutoringStudents();
-    const interval = setInterval(() => { refreshTutoringStudents(); setAutoSyncTick(t => t + 1); }, 60000);
-    return () => clearInterval(interval);
-  }, [classId]);
-
-    useEffect(() => {
-    if (!classId || !onLink || tutoringStudents === null) return;
-    if (syncRunning.current) return; // အရင် run တစ်ခု မပြီးသေးရင် ကျော်ပါ
-    (async () => {
-      syncRunning.current = true;
-      try {
-      // Auto-link: any approved-but-unlinked roster student whose name exactly
-      // matches an unlinked TutoringApp student gets linked immediately.
-      const rosterByLower = {};
-      approved.forEach(s => { if (s.studentName) rosterByLower[s.studentName.trim().toLowerCase()] = s; });
-      for (const t of tutoringStudents) {
-        if (!t.name) continue;
-        const match = rosterByLower[t.name.trim().toLowerCase()];
-        if (!match || match.linkedToTutoring) continue;
-        const recordedOldName = t.abhidhammaNames?.[classId];
-        const oldName = (recordedOldName && recordedOldName !== match.studentName) ? recordedOldName : null;
-        try {
-          await setDoc(abhiRosterDocRef(classId, match.studentName), { linkedToTutoring: true, tutoringStudentUid: t.id }, { merge: true });
-          if (oldName) {
-            await renameStudentRecords(classId, oldName, match.studentName);
-            await hideOldRosterDoc(classId, oldName, match.studentName);
-          }
-        } catch (e) { console.error('Auto-link error:', e); }
-      }
-
-      // Auto-resync: any already-linked student whose TutoringApp name has
-      // since changed gets renamed here too, keeping the link current.
-      const byId = {}; tutoringStudents.forEach(t => { byId[t.id] = t; });
-      for (const s of approved) {
-        if (!s.linkedToTutoring || !s.tutoringStudentUid) continue;
-        const t = byId[s.tutoringStudentUid];
-        if (t && t.name && t.name !== s.studentName) {
-          try {
-            await renameStudentRecords(classId, s.studentName, t.name);
-            await moveRosterDoc(classId, s.studentName, t.name, { linkedToTutoring: true, tutoringStudentUid: s.tutoringStudentUid });
-          } catch (e) { console.error('Auto-resync error:', e); }
-        }
-      }
-      // Also repair any already-reversed redirect loops from before the
-      // moveRosterDoc/hideOldRosterDoc safety guard existed — silent so it
-      // doesn't pop up a message every 60 seconds when there's nothing to fix.
-          await repairReversedLoops();
-      } finally {
-        syncRunning.current = false;
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [classId, onLink, tutoringStudents, students, autoSyncTick]);
-
-
-  // stored TutoringApp id on THIS roster doc; never touches Abhidhamma's own scores/quiz results,
-  // so nothing is lost and the teacher can re-link (to the same or a different student) any time.
-  const handleUnlink=async(name)=>{
-    if(!window.confirm(`Unlink "${name}" from TutoringApp? Their Abhidhamma records are kept — this only removes the connection so you can re-link if needed.`))return;
-    setUnlinking(name);
-    try{ await updateDoc(abhiRosterDocRef(classId,name),{linkedToTutoring:false,tutoringStudentUid:null}); }
-    catch(e){ console.error('Unlink:',e); setSyncMsg('❌ Unlink failed — see console.'); setTimeout(()=>setSyncMsg(''),4000); }
-    finally{ setUnlinking(null); }
-  };
-
-  // One-off cleanup for a specific bug: a rename redirect that got created
-  // backwards (e.g. "Mabel N" pointing to "Mabel Naing" instead of the other
-  // way around), leaving the OLD name as the active roster doc and the
-  // CURRENT TutoringApp name as a dead-end redirect. moveRosterDoc/
-  // hideOldRosterDoc now refuse to create new loops like this, but this
-  // repairs any that already exist from before that guard was added.
-  // Runs silently from the background auto-sync only — no manual button/UI.
-  const repairReversedLoops = async () => {
-    let fixedCount = 0;
-    try {
-      const rosterSnap = await getDocs(query(abhiRosterRef(), where('classId','==',classId)));
-      const allDocs = rosterSnap.docs.map(d => ({ id: d.id, ref: d.ref, ...d.data() }));
-      const redirects = allDocs.filter(d => d.renamedTo);
-      const byNameKey = {};
-      allDocs.forEach(d => {
-        const nameFromId = decodeURIComponent(d.id.slice(classId.length + 1));
-        byNameKey[nameFromId] = d;
-      });
-
-      // For every existing redirect A -> B, check whether TutoringApp's
-      // CURRENT canonical name is actually A, not B — meaning the redirect
-      // itself was created backwards. This does NOT require B to also redirect
-      // back to A (a true circular loop); the reported bug was a plain one-way
-      // reversed redirect — "Mabel N" (correct) silently pointing at "Mabel
-      // Naing" (stale), while "Mabel Naing" sat there as an ordinary active
-      // doc with no redirect of its own. Checking every redirect against
-      // TutoringApp's ground truth, regardless of what the target doc looks
-      // like, catches that case too.
-      for (const r of redirects) {
-        const aName = decodeURIComponent(r.id.slice(classId.length + 1)); // the redirect's own name
-        const bName = r.renamedTo; // where it currently points
-        const bDoc = byNameKey[bName];
-        if (!bDoc) continue; // target doesn't exist — nothing to compare against
-
-        const tutoringUid = bDoc.tutoringStudentUid || r.tutoringStudentUid;
-        if (!tutoringUid) continue; // not a linked student — can't verify direction, skip
-
-        let correctName = null;
-        try {
-          const tSnap = await getDoc(doc(db,'artifacts','dhamma-tutoring-app','public','data','students',tutoringUid));
-          if (tSnap.exists() && tSnap.data().name) correctName = tSnap.data().name;
-        } catch(e) {}
-        if (!correctName || correctName !== aName) continue; // redirect already points the right way (or unverifiable) — leave it alone
-
-        // TutoringApp says aName is correct, but aName's own doc is the one
-        // redirecting AWAY to bName — backwards. Swap: aName becomes the
-        // active doc (carrying over bDoc's real data), bName becomes the
-        // redirect pointing at aName.
-        const { id, ref, renamedTo, ...cleanData } = bDoc;
-        await setDoc(abhiRosterDocRef(classId, aName), { ...cleanData, studentName: aName, name: aName }, { merge: false });
-        await setDoc(abhiRosterDocRef(classId, bName), { renamedTo: aName, classId }, { merge: false });
-        fixedCount++;
-      }
-    } catch(e) {
-      console.error('Repair reversed loops:', e);
-    }
-    return fixedCount;
-  };
-
-  // One-off repair for renames that already happened while renameStudentRecords had the
-  // strict-studentName-field bug: legacy score docs with only a `name` field (no `studentName`)
-  // were silently skipped, so their scores are still stuck under the OLD name even though the
-  // roster/redirect already moved to the new one. This walks every existing {renamedTo} redirect
-  // in this class and re-runs the (now-fixed) rename — safe/idempotent, does nothing if a student's
-  // records were already fully renamed.
-  const repairMissedScoreRenames = async () => {
-    setRepairingMissedScores(true);
-    try {
-      const rosterSnap = await getDocs(query(abhiRosterRef(), where('classId','==',classId)));
-      const redirects = rosterSnap.docs
-        .map(d => ({ id: d.id, ...d.data() }))
-        .filter(d => d.renamedTo)
-        .map(d => ({ oldName: decodeURIComponent(d.id.slice(classId.length + 1)), newName: d.renamedTo }))
-        .filter(r => r.oldName && r.newName && r.oldName !== r.newName);
-      for (const r of redirects) {
-        await renameStudentRecords(classId, r.oldName, r.newName);
-      }
-      setSyncMsg(redirects.length > 0 ? `✅ Re-checked ${redirects.length} renamed student(s) for leftover records.` : 'No renamed students found in this class.');
-      setTimeout(()=>setSyncMsg(''),4000);
-    } catch(e) {
-      console.error('Repair missed score renames:', e);
-      setSyncMsg('❌ Error — see console.');
-      setTimeout(()=>setSyncMsg(''),4000);
-    } finally {
-      setRepairingMissedScores(false);
-    }
-  };
-
-  const filtered=(tutoringStudents||[]).filter(t=>!search||t.name.toLowerCase().includes(search.toLowerCase()));
 
   if(!classId)return null;
   return(
@@ -684,51 +268,13 @@ const syncRunning = useRef(false);
           <button onClick={toggleAA} className={`flex items-center gap-1 text-xs px-3 py-1 rounded-full font-bold ${aa?'bg-green-500/20 text-green-400 border border-green-500/50':'bg-gray-800 text-gray-400 border border-gray-600'}`} title="Auto-approve new students & make this the one 'open' class — turning this on turns it off for every other class, and every student is steered into this class regardless of which one they tap">
             {aa?<ToggleRight className="w-4 h-4"/>:<ToggleLeft className="w-4 h-4"/>}Auto-Approve
           </button>
-          {onLink&&matchPreview===null&&(
-            <button onClick={e=>{e.stopPropagation();findMatchingNames();}} disabled={finding}
-              className="flex items-center gap-1 text-xs px-3 py-1 rounded-full font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/50 disabled:opacity-50" title="Preview which students already in this Roster match a TutoringApp student, before linking anything">
-              {finding?'Finding…':'🔍 Find Matching Names'}
-            </button>
-          )}
-          {onLink&&matchPreview!==null&&matchPreview.length>0&&(
-            <>
-              <button onClick={e=>{e.stopPropagation();confirmLinkMatches();}} disabled={syncing}
-                className="flex items-center gap-1 text-xs px-3 py-1 rounded-full font-bold bg-indigo-600 text-white border border-indigo-500 disabled:opacity-50" title="Link these matched students (already in the app) to TutoringApp">
-                {syncing?'Linking…':`🔗 Link All Matching Names (${matchPreview.length})`}
-              </button>
-              <button onClick={e=>{e.stopPropagation();setMatchPreview(null);}} disabled={syncing}
-                className="text-xs px-2 py-1 rounded-full font-bold text-gray-400 hover:text-white border border-gray-600 disabled:opacity-50">
-                Cancel
-              </button>
-            </>
-          )}
-          {onLink&&(
-            <button onClick={e=>{e.stopPropagation();repairMissedScoreRenames();}} disabled={repairingMissedScores}
-              className="flex items-center gap-1 text-xs px-3 py-1 rounded-full font-bold bg-amber-500/20 text-amber-300 border border-amber-500/50 disabled:opacity-50" title="Re-checks every already-renamed student in this class for old scores that got left behind under their previous name. Safe to click any time.">
-              {repairingMissedScores?'Repairing…':'🩹 Repair Missed Score Renames'}
-            </button>
-          )}
-          {syncMsg&&<span className="text-xs text-indigo-300 font-semibold">{syncMsg}</span>}
         </div>
         <div className="flex items-center gap-3 text-sm font-semibold">
           {pending.length>0&&<span className="text-yellow-400 animate-pulse">{pending.length} Pending</span>}
-          {onLink&&unlinked.length>0&&<span className="text-orange-300 text-xs bg-orange-500/20 px-2 py-0.5 rounded-full border border-orange-500/30">{unlinked.length} unlinked</span>}
           <span className="text-gray-400">{approved.length} Total</span>
           {open?<ChevronDown className="w-5 h-5 text-gray-400"/>:<ChevronRight className="w-5 h-5 text-gray-400"/>}
         </div>
       </div>
-      {open&&matchPreview!==null&&matchPreview.length>0&&(
-        <div className="mx-4 mt-4 p-3 bg-indigo-900/20 border border-indigo-500/40 rounded-lg space-y-1.5">
-          <p className="text-xs font-bold text-indigo-300 mb-2">🔍 {matchPreview.length} match{matchPreview.length===1?'':'es'} found — review, then click "Link All Matching Names" to confirm:</p>
-          {matchPreview.map(m=>(
-            <div key={m.tutoringId} className="text-xs text-gray-300 flex items-center gap-2 flex-wrap">
-              <UserCheck className="w-3.5 h-3.5 text-indigo-400 shrink-0"/>
-              <span className="font-semibold text-white">{m.rosterName}</span>
-              {m.oldName&&<span className="text-amber-300">(old name "{m.oldName}" — scores will be merged)</span>}
-            </div>
-          ))}
-        </div>
-      )}
       {open&&<div className="p-4 space-y-2">
         {/* Pending row */}
         {pending.map(s=>(
@@ -740,12 +286,11 @@ const syncRunning = useRef(false);
             <button onClick={e=>removeStu(e,s.id)} className="p-1 bg-red-900/50 rounded text-red-400 hover:bg-red-700 hover:text-white" title="Remove"><Trash2 className="w-3.5 h-3.5"/></button>
           </div>
         ))}
-        {/* Approved students — rank + Link-to-Tutoring, all in one row.
-            Online/inactive status now lives only in the shared
-            OnlineStatusWidget (see AbhiTeacherClassPicker/roster header),
-            not duplicated here. */}
+        {/* Approved students — rank shown as a floating badge. Online/inactive
+            status lives only in the shared OnlineStatusWidget (see
+            AbhiTeacherClassPicker/roster header), not duplicated here. */}
         {approved.map(s=>{
-          const stat=studentStats[s.studentName];
+          const stat=studentStats[s.userId];
           return(
             <div key={s.id} className="relative mt-3 first:mt-0 flex items-center gap-2 p-2.5 rounded-lg border bg-gray-700/30 border-gray-600/30">
               {stat&&(
@@ -755,54 +300,12 @@ const syncRunning = useRef(false);
               )}
               <span className="font-bold text-gray-300 text-xs w-5 shrink-0">#{s.studentNumber||'?'}</span>
               <span className="flex-1 text-white text-sm font-semibold min-w-0 truncate">{s.studentName}</span>
-              {/* Link to Tutoring — merged in here instead of a separate list below */}
-              {onLink&&(s.linkedToTutoring
-                ? <button onClick={()=>handleUnlink(s.studentName)} disabled={unlinking===s.studentName}
-                    className="text-xs text-indigo-400 hover:text-red-400 font-bold whitespace-nowrap disabled:opacity-50 transition-colors"
-                    title="Linked to TutoringApp — click to unlink">
-                    {unlinking===s.studentName?'Unlinking…':'🔗 Linked'}
-                  </button>
-                : <button onClick={()=>{setPickerFor(s.studentName);loadTutoringStudents();}} className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-2 py-1 rounded-lg whitespace-nowrap flex-shrink-0">🔗 Link</button>
-              )}
               <button onClick={e=>removeStu(e,s.id)} className="p-1 text-gray-600 hover:text-red-400 shrink-0"><Trash2 className="w-3 h-3"/></button>
             </div>
           );
         })}
         {approved.length===0&&pending.length===0&&<p className="text-gray-500 text-sm italic text-center py-4">No students yet. Students will appear here when they join.</p>}
       </div>}
-      {/* Individual link picker modal (opened from the 🔗 Link button on a row) */}
-      {pickerFor&&(
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-gray-800 rounded-2xl shadow-2xl p-6 w-full max-w-md border border-gray-600">
-            <div className="flex justify-between items-center mb-4">
-              <p className="font-bold text-white text-sm">Link "<span className="text-indigo-300">{pickerFor}</span>" to TutoringApp student:</p>
-              <button onClick={()=>{setPickerFor(null);setSearch('');setAltNames('');}} className="text-gray-400 hover:text-white"><X className="w-5 h-5"/></button>
-            </div>
-            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search TutoringApp student name…"
-              autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck="false"
-              className="w-full p-2 mb-3 bg-gray-900 border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-indigo-400" autoFocus/>
-            <input value={altNames} onChange={e=>setAltNames(e.target.value)}
-              placeholder="Also merge these old name(s), comma-separated — e.g. from an old import"
-              className="w-full p-2 mb-3 bg-gray-900 border border-gray-600 rounded text-white text-xs focus:outline-none focus:border-indigo-400"/>
-            {tutoringStudents===null?<p className="text-gray-400 text-sm text-center py-4 animate-pulse">Loading…</p>
-            :filtered.length===0?<p className="text-gray-500 text-sm text-center py-4">No matches.</p>
-            :<div className="space-y-1 max-h-56 overflow-y-auto">
-              {filtered.map(t=>(
-                <button key={t.id} disabled={linking}
-                  onClick={async()=>{
-                    setLinking(true);
-                    const extras=altNames.split(',').map(n=>n.trim()).filter(n=>n&&n!==pickerFor&&n!==t.name);
-                    await onLink(pickerFor,t.name,t.id,extras);
-                    setLinking(false);setPickerFor(null);setSearch('');setAltNames('');
-                  }}
-                  className={`w-full text-left p-2.5 rounded-lg text-sm font-semibold transition ${t.name===pickerFor?'bg-green-700 text-white border border-green-500':'bg-gray-700 hover:bg-indigo-700 text-gray-200'}`}>
-                  {t.name}{t.name===pickerFor&&<span className="text-xs text-green-300 ml-2">← same name</span>}
-                </button>
-              ))}
-            </div>}
-          </div>
-        </div>
-      )}
     </div>
   );
 };
@@ -1161,28 +664,13 @@ const AbhiLessonItem = ({ lesson, classId, isTeacher, studentAgeGroup, studentNa
   
   useEffect(()=>{if(isOpen&&ref.current){setTimeout(()=>{const y=ref.current.getBoundingClientRect().top+window.scrollY-80;window.scrollTo({top:y,behavior:'smooth'});},100);}},[isOpen]);
   
-  // Track quiz completion by studentName (primary) AND userId (fallback). Name
-  // is the primary signal because it survives a device change — but if a
-  // student was recently renamed in TutoringApp and the roster hasn't caught
-  // up to the new name yet (a few seconds, or longer if the background
-  // auto-resync effect hasn't run), a name-only check would show "Done" as
-  // missing even though the same device's own quiz submission is sitting
-  // right there under its userId. Checking both means a rename in progress
-  // never makes a real completion disappear from view.
+  // Track quiz completion by userId -- global_scores docs are keyed
+  // `${userId}_${lessonId}` (see QuizModule's handleAnswer), so this is a
+  // direct doc subscription, stable across any rename.
   useEffect(()=>{
-    if(!classId||!lesson.id||!studentAgeGroup||!studentName)return;
-    let fromResultsByName=false,fromScoresByName=false,fromScoresByUserId=false;
-    const recompute=()=>setIsCompleted(fromResultsByName||fromScoresByName||fromScoresByUserId);
-    const subs=[
-      onSnapshot(query(abhiResultsRef(classId,lesson.id,studentAgeGroup),where('name','==',studentName)),snap=>{fromResultsByName=!snap.empty;recompute();},err=>console.error('Name completion track:',err.code)),
-      onSnapshot(query(abhiScoresRef(),where('studentName','==',studentName)),snap=>{
-        fromScoresByName=snap.docs.some(d=>{const dt=d.data();return dt.classId===classId&&dt.lessonId===lesson.id;});
-        recompute();
-      },err=>console.error('Name score completion track:',err.code)),
-      ...(userId?[onSnapshot(doc(abhiScoresRef(),`${userId}_${lesson.id}`),snap=>{fromScoresByUserId=snap.exists();recompute();},err=>console.error('UserId completion track:',err.code))]:[])
-    ];
-    return()=>{subs.forEach(u=>u());};
-  },[classId,lesson.id,studentAgeGroup,studentName,userId]);
+    if(!classId||!lesson.id||!userId)return;
+    return onSnapshot(doc(abhiScoresRef(),`${userId}_${lesson.id}`),snap=>{setIsCompleted(snap.exists());},err=>console.error('Completion track:',err.code));
+  },[classId,lesson.id,userId]);
   
   // Track Q&A participation for quiz unlock (ask + reply)
   useEffect(()=>{
@@ -1356,13 +844,13 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
   const [abhiCoinsTransferredOut,setAbhiCoinsTransferredOut]=useState(0);
   const abhiCoinBalance=Math.max(0,Math.floor(myAbhiTotalScore/ABHI_POINTS_PER_COIN)-abhiCoinsTransferredOut);
   useEffect(()=>{
-    if(role!=='Student'||!studentProfile?.name)return;
-    const unsub=onSnapshot(query(abhiScoresRef(),where('studentName','==',studentProfile.name)),snap=>{
+    if(role!=='Student'||!userId)return;
+    const unsub=onSnapshot(query(abhiScoresRef(),where('userId','==',userId)),snap=>{
       let total=0;snap.forEach(d=>{total+=d.data().score||0;});
       setMyAbhiTotalScore(total);
     });
     return unsub;
-  },[role,studentProfile?.name]);
+  },[role,userId]);
   useEffect(()=>{
     if(role!=='Student'||!studentProfile?.name)return;
     const sanitize=k=>(k||'unknown').trim().replace(/[.$#/\[\]]/g,'_');
@@ -1510,93 +998,45 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
     setEditingLesson(null);
   };
 
-  // ── Link to Tutoring (same pattern as SmartStudy) ────────────────────────
-  const handleLinkStudentToTutoring = async (oldName, newName, tutoringStudentUid, extraOldNames=[]) => {
-    if (!classId || !oldName || !newName) return;
-    setLoading(true);
-    // 1. Store abhidhammaNames in TutoringApp student profile. Always write this back (not just on
-    // rename) so TutoringApp's record of "which Abhidhamma name this student is linked under" never
-    // goes stale — this is what lets a later rename on either side be detected and re-synced by id.
-    if (tutoringStudentUid) {
-      try {
-        await updateDoc(doc(db,'artifacts','dhamma-tutoring-app','public','data','students',tutoringStudentUid),
-          { [`abhidhammaNames.${classId}`]: oldName });
-      } catch(e) { console.error('TutoringApp profile update:', e); }
-    }
-    // 1b. Merge in any extra old-name aliases the teacher typed in (e.g. a name used only in an
-    // old import) — their scores/results get folded into newName the same way oldName's do below.
-    for (const alt of extraOldNames) {
-      if (!alt || alt === newName) continue;
-      await renameStudentRecords(classId, alt, newName);
-      try { await hideOldRosterDoc(classId, alt, newName); }
-      catch(e) { console.error('Alt-name roster hide:', e); }
-    }
-    // 2. If same name — just mark as linked. tutoringStudentUid is stored as a stable id so that if
-    // this TutoringApp student is later renamed there, "🔄 Check Renamed" in the roster can still
-    // find them by id and offer to sync the new name in — the link itself never silently breaks.
-    if (oldName === newName) {
-      await setDoc(abhiRosterDocRef(classId,newName),{linkedToTutoring:true,tutoringStudentUid},{merge:true});
-      setLoading(false);
-      showMsg(`✅ Linked "${newName}" to Tutoring.`);
-      return;
-    }
-    // 3. Rename scores + quiz results (shared helper — same logic bulk-linking reuses)
-    await renameStudentRecords(classId, oldName, newName);
-    // 5. Move roster doc (leaves a redirect pointer at the old name — see moveRosterDoc)
-    try { await moveRosterDoc(classId, oldName, newName, {linkedToTutoring:true,tutoringStudentUid}); }
-    catch(e) { console.error('Roster rename:', e); }
-    setLoading(false);
-    showMsg(`✅ Linked "${oldName}" → "${newName}". Records renamed.`);
-  };
-
-  // Ping roster every 60s — skip if teacher mode
+  // Ping roster every 60s — skip if teacher mode. Keyed by userId now, so a
+  // rename is just a changed `name`/`studentName` field on the same doc —
+  // no redirect-pointer following needed.
   useEffect(()=>{
-    if(!studentProfile||!classId||studentProfile.status!=='approved'||isTeacher) return;
+    if(!studentProfile||!classId||!userId||studentProfile.status!=='approved'||isTeacher) return;
     const name=studentProfile.name;
+    const rRef=abhiRosterDocRef(classId,userId);
     const ping=async()=>{
-      const rRef=abhiRosterDocRef(classId,name);
       let snap;
       try{ snap=await getDoc(rRef); }
       catch(e){ console.error('Ping read error:',e); return; } // can't even read — try again next cycle
 
-      if(snap.exists()&&snap.data().renamedTo){
-        // Teacher renamed/linked us server-side since our last check-in — follow the redirect
-        // instead of recreating the old roster doc, so future scores land on the right name.
-        const newName=snap.data().renamedTo;
-        const updated={...studentProfile,name:newName};
-        setStudentProfile(updated);
-        if(userId) localStorage.setItem(`abhidhamma_profile_${userId}`, JSON.stringify(updated));
-        try{
-          // setDoc+merge (not updateDoc) so this can't throw just because the new-name
-          // doc happens not to exist yet — a failed updateDoc here used to fall through
-          // to the catch-all below, which recreated the OLD name doc from scratch and
-          // silently undid the rename every ~60s (the "name keeps reverting" bug).
-          await setDoc(abhiRosterDocRef(classId,newName),{isOnline:true,lastPing:serverTimestamp(),lastSeen:serverTimestamp()},{merge:true});
-        }catch(e){ console.error('Ping redirect-target update error:',e); }
-        return;
-      }
-
       if(snap.exists()){
-        try{ await updateDoc(rRef,{isOnline:true,lastPing:serverTimestamp(),lastSeen:serverTimestamp()}); }
+        try{ await updateDoc(rRef,{studentName:name,name,isOnline:true,lastPing:serverTimestamp(),lastSeen:serverTimestamp()}); }
         catch(e){ console.error('Ping heartbeat error:',e); }
         return;
       }
 
-      // Doc genuinely doesn't exist yet (first-time student, WelcomeModal hasn't run) — create it.
-      // Only reached when the OLD-name doc truly doesn't exist — never as a fallback after some
-      // other step failed, so it can no longer resurrect a doc that was intentionally turned into
-      // a rename-redirect pointer.
+      // Doc genuinely doesn't exist yet under this uid -- either a first-time
+      // student, or one who joined before roster docs were keyed by uid.
+      // Check for an old name-keyed doc to carry forward before creating a
+      // fresh one (see migrateOldAbhiRosterDoc).
       try{
-        await setDoc(rRef,{classId,studentName:name,name,group:studentProfile.group||'explorers',status:'approved',isOnline:true,lastPing:serverTimestamp(),lastSeen:serverTimestamp(),joinedAt:Date.now()},{merge:true});
-        cleanupStrayAbhiRosterEntries(name, classId);
+        const migrated=await migrateOldAbhiRosterDoc(classId,userId,name);
+        await setDoc(rRef,{
+          ...(migrated||{}),
+          classId,userId,studentName:name,name,
+          group:(migrated&&migrated.group)||studentProfile.group||'explorers',
+          status:'approved',isOnline:true,lastPing:serverTimestamp(),lastSeen:serverTimestamp(),
+          joinedAt:(migrated&&migrated.joinedAt)||Date.now(),
+        },{merge:true});
       }catch(e2){console.error('Ping create error:',e2);}
     };
     ping();
     const interval=setInterval(ping,60000);
-    const handleOffline=()=>{ try{ updateDoc(abhiRosterDocRef(classId,name),{isOnline:false,lastSeen:serverTimestamp()}); }catch(e){} };
+    const handleOffline=()=>{ try{ updateDoc(rRef,{isOnline:false,lastSeen:serverTimestamp()}); }catch(e){} };
     window.addEventListener('beforeunload',handleOffline);
     return()=>{ clearInterval(interval); handleOffline(); window.removeEventListener('beforeunload',handleOffline); };
-  },[studentProfile,classId]);
+  },[studentProfile,classId,userId]);
   const createClass = async () => {
     if(!newClassId.trim())return;
     await setDoc(abhiClassDocRef(newClassId.trim()),{classId:newClassId.trim(),autoApprove:false,createdAt:serverTimestamp()},{merge:true});
@@ -1808,7 +1248,7 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
           <div className="space-y-6">
 
             {!classId&&<AbhiTeacherClassPicker onSelectClass={enterClass} onCreateClass={enterClass}/>}
-            {classId&&<AbhiClassRoster key={classId} userId={userId} classId={classId} onLink={handleLinkStudentToTutoring}/>}
+            {classId&&<AbhiClassRoster key={classId} userId={userId} classId={classId}/>}
             {classId&&(
               <div className="bg-gray-800 p-6 rounded-xl shadow-xl border border-gray-700">
                 {/* Import/Export bar — Import target class shown prominently */}
@@ -1842,40 +1282,6 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
                     <button onClick={handleExportFull} disabled={loading}
                       className="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1">
                       <Download className="w-3 h-3"/>📦 Full Backup
-                    </button>
-                    <span className="text-gray-600 self-center">|</span>
-                    <button onClick={async()=>{
-                        const scope=window.confirm('OK = fix ALL classes at once (recommended, one click).\nCancel = fix only the currently open class.');
-                        const target=scope?null:classId;
-                        if(!scope&&!classId){showMsg('Open a class first, or choose "fix ALL classes".');return;}
-                        if(!window.confirm(`Backfill the missing "studentName" field on legacy score records${target?` in "${target}"`:' across ALL classes'}?\n\nThis only ADDS a field where it's missing (copied from the existing "name" field) — nothing is deleted or overwritten.`))return;
-                        setLoading(true);showMsg('Backfilling studentName field…');
-                        try{
-                          const r=await backfillStudentNameField(target);
-                          showMsg(`✅ Scanned ${r.scanned} score record(s), fixed ${r.fixed}. "Done" tags should now appear.`);
-                        }catch(e){console.error(e);showMsg('Error: '+e.message);}
-                        finally{setLoading(false);}
-                      }} disabled={loading}
-                      className="bg-amber-700 hover:bg-amber-600 disabled:opacity-40 text-white px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1"
-                      title="Fix the actual bug: add the missing studentName field to legacy score records so Done tags reappear">
-                      🩹 Backfill studentName
-                    </button>
-                    <span className="text-gray-600 self-center">|</span>
-                    <button onClick={async()=>{
-                        if(!classId)return;
-                        const sName=window.prompt('Student name to check (leave blank to check all students):','Kevin');
-                        if(sName===null)return;
-                        setLoading(true);showMsg('Diagnosing…');
-                        try{
-                          const r=await diagnoseClassCompletions(classId, sName.trim()||null);
-                          window.prompt('Copy this and paste it back to Claude (Ctrl/Cmd+C, then Enter):', JSON.stringify(r,null,2));
-                          showMsg(`Checked ${r.totalScoreDocsForStudent} score doc(s): ${r.matchedCount} matched, ${r.orphanedCount} orphaned.`);
-                        }catch(e){console.error(e);showMsg('Error: '+e.message);}
-                        finally{setLoading(false);}
-                      }} disabled={loading||!classId}
-                      className="bg-sky-700 hover:bg-sky-600 disabled:opacity-40 text-white px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1"
-                      title="Inspect raw completion data for this class to figure out why Done tags are missing">
-                      🔍 Diagnose
                     </button>
                     <span className="text-gray-600 self-center">|</span>
                     <button onClick={async()=>{
