@@ -14,7 +14,7 @@
 export const HOME_BACKGROUNDS = [
   { id: 'default', name: 'Traditional Wooden House', image: 'images/0003.jpg', cost: 0 },
   { id: 'condo', name: 'Modern City Condo', image: 'images/0004.jpg', cost: 10000 },
-  { id: 'cozy-house', name: 'Cozy Family House', image: 'images/0005.jpg', cost: 10000 },
+  { id: 'glass-house', name: 'Modern Glass House', image: 'images/0006.jpg', cost: 10000 },
 ];
 
 export const getHomeBackground = (id) => HOME_BACKGROUNDS.find(b => b.id === id) || HOME_BACKGROUNDS[0];

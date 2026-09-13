@@ -8548,13 +8548,19 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                   </div>
                 )}
                 {!studentProfile?.hideFromGroupRoster && (
+                  // Same background-independent pill as the name badge above --
+                  // plain text here was just as unreadable over a busy/bright
+                  // home background. This whole block (pill included) is
+                  // already conditional on hideFromGroupRoster, so tapping it
+                  // removes the pill along with the button -- nothing is left
+                  // behind in this spot once hidden.
                   <button
                     onClick={() => {
                       if (window.confirm("🙈 Stop showing your name/ID on the teacher's group screen? Make sure you remember your own Student ID first — you won't see it listed there anymore.")) {
                         updateDoc(doc(db, `${publicDataPath}/students`, studentUid), { hideFromGroupRoster: true }).catch(() => {});
                       }
                     }}
-                    className="mt-3 flex items-center gap-1 text-sm text-gray-500 hover:text-amber-700 font-semibold"
+                    className="mt-3 inline-flex items-center gap-1.5 text-sm text-gray-700 hover:text-amber-700 font-semibold bg-white/85 backdrop-blur-sm px-3 py-1.5 rounded-full shadow-sm border border-gray-200"
                     title="Stop showing my ID on the teacher's group screen"
                   >
                     <span>🙈</span>
