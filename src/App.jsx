@@ -204,6 +204,73 @@ function LoadingFallback() {
   );
 }
 
+// A trophy from the teacher, shown ABOVE whichever app the student
+// currently has open (see the `trophyCelebration` state in App() below --
+// this component itself is stateless/presentational). Deliberately no
+// card/box around the trophy itself (just the emoji + plain text floating
+// over a dim backdrop), per the teacher's request -- only the dark backdrop
+// and a few firework bursts frame it.
+function TrophyCelebration({ totalTrophies, onClose }) {
+  useEffect(() => {
+    const timer = setTimeout(onClose, 6000);
+    return () => clearTimeout(timer);
+  }, [onClose]);
+
+  // Fixed, randomized-once (not re-rolled every render) burst origins/colors/
+  // delays so the fireworks feel scattered across the screen instead of all
+  // going off from one spot at once.
+  const [bursts] = useState(() => {
+    const colors = ['#fbbf24', '#f472b6', '#60a5fa', '#4ade80', '#f87171', '#c084fc'];
+    return Array.from({ length: 6 }, (_, i) => ({
+      id: i,
+      left: 15 + Math.random() * 70,
+      top: 10 + Math.random() * 55,
+      delay: Math.random() * 1.2,
+      colors: [colors[i % colors.length], colors[(i + 2) % colors.length], colors[(i + 4) % colors.length]],
+    }));
+  });
+
+  return (
+    <div
+      className="fixed inset-0 z-[99999] bg-black/75 flex flex-col items-center justify-center overflow-hidden cursor-pointer"
+      onClick={onClose}
+    >
+      <style>{`
+        @keyframes trophyFireworkFly {
+          0% { transform: rotate(var(--angle)) translateX(0) scale(1); opacity: 1; }
+          100% { transform: rotate(var(--angle)) translateX(90px) scale(0.2); opacity: 0; }
+        }
+        .trophy-firework-particle {
+          position: absolute; top: 0; left: 0; width: 8px; height: 8px; border-radius: 9999px;
+          animation: trophyFireworkFly 1.1s ease-out infinite;
+        }
+      `}</style>
+      {bursts.map((b) => (
+        <div key={b.id} className="absolute" style={{ left: `${b.left}%`, top: `${b.top}%` }}>
+          {b.colors.flatMap((color, ci) =>
+            Array.from({ length: 8 }, (_, i) => {
+              const angle = (i / 8) * 360 + ci * 15;
+              return (
+                <span
+                  key={`${ci}-${i}`}
+                  className="trophy-firework-particle"
+                  style={{ background: color, '--angle': `${angle}deg`, animationDelay: `${b.delay + ci * 0.35}s` }}
+                />
+              );
+            })
+          )}
+        </div>
+      ))}
+      <div className="text-[180px] leading-none animate-bounce drop-shadow-2xl select-none">🏆</div>
+      <p className="mt-4 text-3xl font-black text-white drop-shadow-lg text-center px-6">Congratulations!</p>
+      <p className="mt-2 text-xl font-semibold text-yellow-300 drop-shadow-lg text-center px-6">
+        You now have {totalTrophies} {totalTrophies === 1 ? 'trophy' : 'trophies'}!
+      </p>
+      <p className="mt-6 text-sm text-white/70">Tap anywhere to close</p>
+    </div>
+  );
+}
+
 // These five are large, complex apps with substantial internal state and
 // initialization logic (role/login screens, class pickers, live listeners)
 // that's expensive -- and in Smart Study/Abhidhamma's case, apparently not
@@ -215,6 +282,13 @@ const KEEP_ALIVE_APPS = new Set(['smartstudy', 'abhidhamma', 'myanmarreader', 'd
 
 export default function App() {
   const [activeApp, setActiveApp] = useState('tutoring');
+  // Owned here (not inside TutoringApp) so the celebration shows up on top
+  // of WHICHEVER app a student currently has open -- TutoringApp is only
+  // ever CSS-hidden (never unmounted) while another app is active, so a
+  // trophy modal that lived inside it used to render invisibly and
+  // auto-close itself before the student ever saw it, if the teacher
+  // awarded it while they were off in, say, Myanmar Reader.
+  const [trophyCelebration, setTrophyCelebration] = useState(null);
   const [openedKeepAliveApps, setOpenedKeepAliveApps] = useState(() => new Set());
   const [showUpdateToast, setShowUpdateToast] = useState(false);
   // A fresh mount only happens via an actual page load, so getting here at
@@ -515,6 +589,7 @@ export default function App() {
           onOpenShrineRoom={openShrineRoom}
           onOpenAvatar={openAvatar}
           onOpenWatchAndLearn={openWatchAndLearn}
+          onTrophyEarned={(totalTrophies) => setTrophyCelebration({ totalTrophies })}
         />
       </div>
 
@@ -853,6 +928,12 @@ export default function App() {
       </Suspense>
       </AppErrorBoundary>
       <InstallAppBanner />
+      {trophyCelebration && (
+        <TrophyCelebration
+          totalTrophies={trophyCelebration.totalTrophies}
+          onClose={() => setTrophyCelebration(null)}
+        />
+      )}
     </div>
   );
 }

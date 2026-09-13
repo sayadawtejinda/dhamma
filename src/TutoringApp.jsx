@@ -6545,7 +6545,7 @@ function SmartStudyProgressBadge({ classId, studentName, smartStudyNames, compac
   return null;
 }
 
-function StudentDashboard({ user, studentProfile, studentUid, announcements, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenMyanmarSpeaking, onOpenConsonantPractice, onOpenBurmeseGame, onOpenNumberLearning, onOpenVowelsLearning, onOpenAnimalSound, onOpenBurmeseLearningGames, onOpenInteractiveQuiz, onOpenMyanmarPoems, onOpenConsonantEndings, onOpenTimeAndCalendar, onOpenMyanmarSpelling, onOpenMyanmarSoundPractice, onOpenReadingMyanmar, onOpenSpeakingMyanmar, onOpenMyanmarPart1And2, onOpenBodhiTree, onOpenShrineRoom, onOpenAvatar, onOpenWatchAndLearn, onLogout, onNavigate }) {
+function StudentDashboard({ user, studentProfile, studentUid, announcements, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenMyanmarSpeaking, onOpenConsonantPractice, onOpenBurmeseGame, onOpenNumberLearning, onOpenVowelsLearning, onOpenAnimalSound, onOpenBurmeseLearningGames, onOpenInteractiveQuiz, onOpenMyanmarPoems, onOpenConsonantEndings, onOpenTimeAndCalendar, onOpenMyanmarSpelling, onOpenMyanmarSoundPractice, onOpenReadingMyanmar, onOpenSpeakingMyanmar, onOpenMyanmarPart1And2, onOpenBodhiTree, onOpenShrineRoom, onOpenAvatar, onOpenWatchAndLearn, onLogout, onNavigate, onTrophyEarned }) {
   const [myLessons, setMyLessons] = useState([]);
   const [ssCompletionCounts, setSsCompletionCounts] = useState({}); // classId → SmartStudy completedCount
   const [mySessions, setMySessions] = useState([]);
@@ -6726,7 +6726,6 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [editingNameText, setEditingNameText] = useState('');
 
-  const [praiseModalInfo, setPraiseModalInfo] = useState({ isOpen: false, newTrophy: false, totalTrophies: 0, message: '', emoji: '' });
   const [visibleAnnouncements, setVisibleAnnouncements] = useState([]);
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
   
@@ -6740,14 +6739,14 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       
       if (studentProfile.justEarnedTrophy) {
         playSound(0);
-        setPraiseModalInfo({ 
-          isOpen: true, 
-          newTrophy: true, 
-          totalTrophies: studentProfile.trophyCount, 
-          message: "Congratulations!", 
-          emoji: '🏆' 
-        });
-        
+        // Fires the ALWAYS-ON-TOP celebration owned by App.jsx (see
+        // onTrophyEarned there) instead of a modal local to this component --
+        // this dashboard gets CSS-hidden (not unmounted) whenever a
+        // different app is open, which used to mean a trophy awarded while
+        // a student was, say, deep in Myanmar Reader would pop an invisible
+        // modal that silently auto-closed itself before they ever saw it.
+        onTrophyEarned?.(studentProfile.trophyCount);
+
         const resetTrophyFlag = async () => {
           try {
             await updateDoc(doc(db, `${publicDataPath}/students`, studentUid), {
@@ -8205,12 +8204,6 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           )}
         </div>
       )}
-      <PraiseModal 
-        isOpen={praiseModalInfo.isOpen}
-        onClose={() => setPraiseModalInfo({ isOpen: false, newTrophy: false, totalTrophies: 0, message: '', emoji: '' })}
-        newTrophy={praiseModalInfo.newTrophy} totalTrophies={praiseModalInfo.totalTrophies} message={praiseModalInfo.message} emoji={praiseModalInfo.emoji}
-      />
-      
       {showFeedbackModal && (
         // z-[9950] -- above the Lessons & History panel's z-[9900] (see
         // showLessonsPanel below). Clicking Report from the Active Session
@@ -8945,38 +8938,6 @@ const getRandomPraise = () => ({
   message: praiseMessages[Math.floor(Math.random() * praiseMessages.length)],
   emoji: praiseEmojis[Math.floor(Math.random() * praiseEmojis.length)]
 });
-
-function PraiseModal({ isOpen, onClose, newTrophy, totalTrophies, message, emoji }) {
-  useEffect(() => {
-    if (!isOpen) return;
-    const timer = setTimeout(() => {
-      onClose();
-    }, 5000);
-    return () => clearTimeout(timer);
-  }, [isOpen]);
-
-  if (!isOpen) return null;
-  const title = newTrophy ? "Congratulations!" : message;
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-80 flex justify-center items-center z-[110]">
-      <div className="bg-transparent p-6 w-full max-w-sm mx-4 text-center flex flex-col items-center">
-        <div className="text-[150px] leading-none mb-4 animate-bounce drop-shadow-2xl">{newTrophy ? '🏆' : emoji}</div>
-        <div className="bg-white p-6 rounded-2xl shadow-2xl w-full">
-          <h3 className="text-3xl font-black mb-4 text-emerald-700">{title}</h3>
-          {newTrophy ? (
-            <p className="text-xl text-gray-800 mb-6 font-medium">You earned a new trophy!<br />You now have <span className="font-bold text-yellow-600">{totalTrophies}</span> trophies.</p>
-          ) : (
-            <p className="text-lg text-gray-700 mb-6 font-medium">Session complete!<br />Keep up the good work!</p>
-          )}
-          <div className="flex justify-center">
-            <button onClick={onClose} className="px-8 py-3 rounded-xl bg-emerald-500 text-white font-bold text-lg hover:bg-emerald-600 shadow-lg w-full">Awesome!</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function TodaySchedule() {
   const [schedule, setSchedule] = useState([]);
@@ -10009,7 +9970,7 @@ function DeactivatedScreen() {
   );
 }
 
-export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenConsonantPractice, onOpenBurmeseGame, onOpenMyanmarSpeaking, onOpenNumberLearning, onOpenVowelsLearning, onOpenAnimalSound, onOpenBurmeseLearningGames, onOpenInteractiveQuiz, onOpenMyanmarPoems, onOpenConsonantEndings, onOpenTimeAndCalendar, onOpenMyanmarSpelling, onOpenMyanmarSoundPractice, onOpenReadingMyanmar, onOpenSpeakingMyanmar, onOpenMyanmarPart1And2, onOpenBodhiTree, onOpenShrineRoom, onOpenAvatar, onOpenWatchAndLearn }) {
+export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenConsonantPractice, onOpenBurmeseGame, onOpenMyanmarSpeaking, onOpenNumberLearning, onOpenVowelsLearning, onOpenAnimalSound, onOpenBurmeseLearningGames, onOpenInteractiveQuiz, onOpenMyanmarPoems, onOpenConsonantEndings, onOpenTimeAndCalendar, onOpenMyanmarSpelling, onOpenMyanmarSoundPractice, onOpenReadingMyanmar, onOpenSpeakingMyanmar, onOpenMyanmarPart1And2, onOpenBodhiTree, onOpenShrineRoom, onOpenAvatar, onOpenWatchAndLearn, onTrophyEarned }) {
   const [user, setUser] = useState(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [role, setRole] = useState(null); 
@@ -10452,7 +10413,7 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpen
             </div>
           );
         }
-        return <StudentDashboard user={user} studentProfile={studentProfile} studentUid={targetStudentUid} announcements={announcements} onOpenSmartStudy={onOpenSmartStudy} onOpenAbhidhamma={onOpenAbhidhamma} onOpenMyanmarReader={onOpenMyanmarReader} onOpenDhammaschool={onOpenDhammaschool} onOpenMyanmarSpeaking={onOpenMyanmarSpeaking} onOpenConsonantPractice={onOpenConsonantPractice} onOpenBurmeseGame={onOpenBurmeseGame} onOpenNumberLearning={onOpenNumberLearning} onOpenVowelsLearning={onOpenVowelsLearning} onOpenAnimalSound={onOpenAnimalSound} onOpenBurmeseLearningGames={onOpenBurmeseLearningGames} onOpenInteractiveQuiz={onOpenInteractiveQuiz} onOpenMyanmarPoems={onOpenMyanmarPoems} onOpenConsonantEndings={onOpenConsonantEndings} onOpenTimeAndCalendar={onOpenTimeAndCalendar} onOpenMyanmarSpelling={onOpenMyanmarSpelling} onOpenMyanmarSoundPractice={onOpenMyanmarSoundPractice} onOpenReadingMyanmar={onOpenReadingMyanmar} onOpenSpeakingMyanmar={onOpenSpeakingMyanmar} onOpenMyanmarPart1And2={onOpenMyanmarPart1And2} onOpenBodhiTree={onOpenBodhiTree} onOpenShrineRoom={onOpenShrineRoom} onOpenAvatar={onOpenAvatar} onOpenWatchAndLearn={onOpenWatchAndLearn} onLogout={handleStudentLogout} onNavigate={setView} />;
+        return <StudentDashboard user={user} studentProfile={studentProfile} studentUid={targetStudentUid} announcements={announcements} onOpenSmartStudy={onOpenSmartStudy} onOpenAbhidhamma={onOpenAbhidhamma} onOpenMyanmarReader={onOpenMyanmarReader} onOpenDhammaschool={onOpenDhammaschool} onOpenMyanmarSpeaking={onOpenMyanmarSpeaking} onOpenConsonantPractice={onOpenConsonantPractice} onOpenBurmeseGame={onOpenBurmeseGame} onOpenNumberLearning={onOpenNumberLearning} onOpenVowelsLearning={onOpenVowelsLearning} onOpenAnimalSound={onOpenAnimalSound} onOpenBurmeseLearningGames={onOpenBurmeseLearningGames} onOpenInteractiveQuiz={onOpenInteractiveQuiz} onOpenMyanmarPoems={onOpenMyanmarPoems} onOpenConsonantEndings={onOpenConsonantEndings} onOpenTimeAndCalendar={onOpenTimeAndCalendar} onOpenMyanmarSpelling={onOpenMyanmarSpelling} onOpenMyanmarSoundPractice={onOpenMyanmarSoundPractice} onOpenReadingMyanmar={onOpenReadingMyanmar} onOpenSpeakingMyanmar={onOpenSpeakingMyanmar} onOpenMyanmarPart1And2={onOpenMyanmarPart1And2} onOpenBodhiTree={onOpenBodhiTree} onOpenShrineRoom={onOpenShrineRoom} onOpenAvatar={onOpenAvatar} onOpenWatchAndLearn={onOpenWatchAndLearn} onLogout={handleStudentLogout} onNavigate={setView} onTrophyEarned={onTrophyEarned} />;
       case 'weekly': 
         return <WeeklySchedule role={role} targetStudentUid={targetStudentUid} />;
       case 'attendance':
