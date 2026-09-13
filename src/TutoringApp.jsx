@@ -18,6 +18,7 @@ import {
   orderBy,
   limit,
   arrayUnion,
+  arrayRemove,
   increment,
   deleteField
 } from 'firebase/firestore';
@@ -2778,23 +2779,17 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
     }
   };
   
+  // Uses Firestore's atomic arrayUnion/arrayRemove rather than a manual
+  // read-modify-write -- two approvals (or a checkbox double-click) landing
+  // close together used to both read the same stale studentUids array, and
+  // whichever write finished last silently clobbered the other's addition,
+  // leaving that student missing from the group despite "Add" having run.
   const handleToggleStudentInGroup = async (groupId, studentId, isChecked) => {
     try {
       const groupDocRef = doc(db, `${publicDataPath}/studentGroups`, groupId);
-      const groupDocSnap = await getDoc(groupDocRef);
-      if (!groupDocSnap.exists()) return;
-      
-      const currentUids = groupDocSnap.data().studentUids || [];
-      let updatedUids = [];
-      
-      if (isChecked) {
-        if (!currentUids.includes(studentId)) updatedUids = [...currentUids, studentId];
-        else updatedUids = currentUids; 
-      } else {
-        updatedUids = currentUids.filter(uid => uid !== studentId);
-      }
-      
-      await updateDoc(groupDocRef, { studentUids: updatedUids });
+      await updateDoc(groupDocRef, {
+        studentUids: isChecked ? arrayUnion(studentId) : arrayRemove(studentId)
+      });
     } catch (error) {
       console.error("Error updating group members:", error);
     }
@@ -9256,6 +9251,21 @@ function WeeklySchedule({ role, targetStudentUid }) {
     }
   };
 
+  // Deletes every entry created by one "Group" schedule occurrence at once,
+  // batched by groupBatchKey -- until now the cluster view had no delete
+  // control at all, so a group session added twice by mistake couldn't be
+  // removed here (only one member entry at a time, elsewhere in the app).
+  const handleDeleteScheduleGroup = async (entries, groupName) => {
+    if (!window.confirm(`Delete this entire "${groupName}" group session (${entries.length} student${entries.length === 1 ? '' : 's'})? This cannot be undone.`)) return;
+    try {
+      const batch = writeBatch(db);
+      entries.forEach(entry => batch.delete(doc(db, `${publicDataPath}/teacherSchedule`, entry.id)));
+      await batch.commit();
+    } catch (error) {
+      console.error("Error deleting schedule group:", error);
+    }
+  };
+
   return (
     <div className="p-6">
       <AttendanceCountModal isOpen={showCountModal} onClose={() => setShowCountModal(false)} data={modalData} />
@@ -9330,22 +9340,33 @@ function WeeklySchedule({ role, targetStudentUid }) {
 
                       return (
                         <div key={item.groupBatchKey} ref={containsMine ? myEntryRef : null} className={`rounded-lg ${absentCount > 0 ? 'bg-orange-50' : 'bg-violet-50'} ${containsMine ? 'ring-2 ring-indigo-500' : ''}`}>
-                          <button
-                            onClick={() => setExpandedGroupBatchKey(isExpanded ? null : item.groupBatchKey)}
-                            className="w-full text-left p-3"
-                          >
-                            <p className="font-semibold text-violet-900">
-                              <span className="mr-1">{isExpanded ? '▾' : '▸'}</span>
-                              {groupName}
-                            </p>
-                            <p className="text-sm text-gray-700">
-                              {formatTime(first.startTime)} - {formatTime(first.endTime)}
-                              {first.isRecurring && <span className="ml-2 text-xs font-medium bg-violet-200 text-violet-800 px-2 py-0.5 rounded-full">Recurring</span>}
-                              <span className="ml-2 text-xs font-bold text-emerald-700">{attendedCount} attended</span>
-                              <span className="ml-2 text-xs font-bold text-red-700">{absentCount} absent</span>
-                              <span className="ml-2 text-xs text-gray-500">/ {item.entries.length} total</span>
-                            </p>
-                          </button>
+                          <div className="flex items-start">
+                            <button
+                              onClick={() => setExpandedGroupBatchKey(isExpanded ? null : item.groupBatchKey)}
+                              className="flex-1 min-w-0 text-left p-3"
+                            >
+                              <p className="font-semibold text-violet-900">
+                                <span className="mr-1">{isExpanded ? '▾' : '▸'}</span>
+                                {groupName}
+                              </p>
+                              <p className="text-sm text-gray-700">
+                                {formatTime(first.startTime)} - {formatTime(first.endTime)}
+                                {first.isRecurring && <span className="ml-2 text-xs font-medium bg-violet-200 text-violet-800 px-2 py-0.5 rounded-full">Recurring</span>}
+                                <span className="ml-2 text-xs font-bold text-emerald-700">{attendedCount} attended</span>
+                                <span className="ml-2 text-xs font-bold text-red-700">{absentCount} absent</span>
+                                <span className="ml-2 text-xs text-gray-500">/ {item.entries.length} total</span>
+                              </p>
+                            </button>
+                            {role === 'teacher' && (
+                              <button
+                                onClick={() => handleDeleteScheduleGroup(item.entries, groupName)}
+                                title="Delete this entire group session"
+                                className="p-1 m-2 rounded-full text-gray-500 hover:bg-gray-200 hover:text-red-700 flex-shrink-0"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
+                              </button>
+                            )}
+                          </div>
 
                           {isExpanded && (
                             <div className="px-3 pb-3 space-y-1">
