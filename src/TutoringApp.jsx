@@ -2459,42 +2459,80 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
   const handleApproveTrophy = async (studentId, studentName, amount = 1, lessonTitle = null, sessionId = null, lessonLink = null) => {
     try {
       const studentDocRef = doc(db, `${publicDataPath}/students`, studentId);
-      
+      const lessonKey = lessonTitle ? computeLessonKey(lessonTitle, lessonLink) : null;
+
+      // Hard safety cap, regardless of which app/lesson type generated this
+      // request or how — a request amount can be wrong for reasons that have
+      // nothing to do with this function (Myanmar Reader's own request logic
+      // was found over-requesting because its progress tracking lived in a
+      // separate app with no memory of trophies already paid out through
+      // some earlier mechanism; the same shape of bug could exist in any
+      // other app's own progress data too). This is the one place every
+      // trophy request from every lesson type funnels through before it's
+      // actually credited, so capping here catches all of them: a lesson has
+      // a fixed trophy ceiling, and a trophy already given means that much
+      // of the lesson is already done -- never award past that ceiling, no
+      // matter what the request asked for. Reads both values fresh (not
+      // whatever the caller had in memory) since either could be stale by
+      // the time the teacher clicks Approve.
+      let cappedAmount = amount;
+      if (sessionId && lessonKey) {
+        try {
+          const [sessionSnap, studentSnap] = await Promise.all([
+            getDoc(doc(db, `${publicDataPath}/studySessions`, sessionId)),
+            getDoc(studentDocRef),
+          ]);
+          if (sessionSnap.exists()) {
+            const sessionData = sessionSnap.data();
+            const maxAvailable = (sessionData.lessonLink?.startsWith('smartstudy://') && sessionData.lessonUnitCount > 0)
+              ? computeClassTrophyMax(sessionData.lessonUnitCount)
+              : (sessionData.lessonTrophyLimit || 0);
+            if (maxAvailable > 0) {
+              const alreadyEarned = studentSnap.exists() ? (studentSnap.data().earnedTrophies?.[lessonKey] || 0) : 0;
+              cappedAmount = Math.max(0, Math.min(amount, maxAvailable - alreadyEarned));
+            }
+          }
+        } catch (e) {
+          console.error('Error checking trophy cap before approving:', e);
+        }
+      }
+
       const updateData = {
         trophyRequested: false,
-        trophyCount: increment(amount),
-        justEarnedTrophy: true,
         requestedTrophyAmount: 0,
         requestedTrophyLessonId: null,
         requestedTrophyLessonTitle: null,
         requestedTrophyLessonLink: null,
         requestedTrophySessionId: null
       };
-      
-      if (lessonTitle) {
-        updateData[`earnedTrophies.${computeLessonKey(lessonTitle, lessonLink)}`] = increment(amount);
+      if (cappedAmount > 0) {
+        updateData.trophyCount = increment(cappedAmount);
+        updateData.justEarnedTrophy = true;
+        if (lessonKey) updateData[`earnedTrophies.${lessonKey}`] = increment(cappedAmount);
       }
-      
+
       await updateDoc(studentDocRef, updateData);
-      
-      if (sessionId) {
+
+      if (sessionId && cappedAmount > 0) {
         const sessionRef = doc(db, `${publicDataPath}/studySessions`, sessionId);
         try {
-          await updateDoc(sessionRef, { awardedTrophies: increment(amount) });
+          await updateDoc(sessionRef, { awardedTrophies: increment(cappedAmount) });
         } catch(e) {
           console.error("Error updating session trophies:", e);
         }
       }
 
-      const expires = new Date();
-      expires.setDate(expires.getDate() + 1); 
-      const studentDoc = await getDoc(studentDocRef);
-      const newTotal = studentDoc.data().trophyCount || 1;
-      
-      await addDoc(announcementsCollection, { 
-        studentName: studentName, trophyCount: newTotal, createdAt: serverTimestamp(), expiresAt: Timestamp.fromDate(expires), id: getUUID() 
-      });
-      
+      if (cappedAmount > 0) {
+        const expires = new Date();
+        expires.setDate(expires.getDate() + 1);
+        const studentDoc = await getDoc(studentDocRef);
+        const newTotal = studentDoc.data().trophyCount || 1;
+
+        await addDoc(announcementsCollection, {
+          studentName: studentName, trophyCount: newTotal, createdAt: serverTimestamp(), expiresAt: Timestamp.fromDate(expires), id: getUUID()
+        });
+      }
+
     } catch (error) {
       console.error("Error approving trophy:", error);
     }
