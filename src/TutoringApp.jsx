@@ -8341,7 +8341,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       {showLogoutConfirm && (
         <div className="fixed inset-0 bg-black/40 z-[9700] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl p-3 max-w-sm w-full text-center overflow-hidden">
-            <img src="images/0002.png" alt="" className="w-full rounded-xl mb-3" />
+            <img src="images/0002.png" alt="" className="w-1/2 mx-auto rounded-xl mb-3" />
             <p className="text-sm text-gray-500 mb-3">Use this if you're on a borrowed or shared device. You can log back in anytime with your Student ID.</p>
             <div className="flex gap-3">
               <button onClick={() => setShowLogoutConfirm(false)} className="flex-1 py-3 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold rounded-xl shadow-md">
