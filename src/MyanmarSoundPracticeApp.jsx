@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { doc, setDoc, updateDoc, serverTimestamp, getDoc, arrayUnion } from 'firebase/firestore';
+import { doc, setDoc, updateDoc, serverTimestamp, getDoc, arrayUnion, onSnapshot } from 'firebase/firestore';
 import { db } from './firebase';
 import { rosterDocRefByUid, migrateNameKeyedRosterDoc } from './studentRosterIdentity';
 import OnlineStatusWidget from './OnlineStatusWidget';
@@ -30,6 +30,18 @@ import OnlineStatusWidget from './OnlineStatusWidget';
 
 const SP_ROSTER_PATH = 'artifacts/myanmar-sound-practice-app/public/data/roster';
 const sanitizeSpKey = (key) => (key || 'unknown').replace(/[.$#/\[\]]/g, '_');
+
+// TutoringApp.jsx's students/{uid}.completedUnits derives a "how many Quiz
+// Mode levels done" count from teacher-approved trophies for the "Reading
+// Myanmar" Lesson Bank entry's Part 6 (see GROUP_APP_PART_UNIT_COUNT there,
+// 2 trophies per level). Read live so an approved trophy immediately
+// unlocks the next level, the same signal MyanmarReaderApp/DhammaschoolApp
+// already use. Checks both title spellings this Lesson Bank entry has been
+// seen under (an emoji was added to the title after some students were
+// already assigned it, which changes the derived key).
+const TUTORING_STUDENTS_PATH = 'artifacts/dhamma-tutoring-app/public/data/students';
+const READING_MYANMAR_TITLES = ['📚 Reading Myanmar', 'Reading Myanmar'];
+const SOUND_PRACTICE_UNIT_KEYS = READING_MYANMAR_TITLES.map(t => sanitizeSpKey(`${t}_soundpractice`));
 
 const SP_APP_CSS = `
         .sp-app-root {
@@ -193,6 +205,14 @@ const SP_APP_CSS = `
         }
         .level-button:hover {
              background: #DBEAFE; /* blue-100 */
+        }
+        .level-button.level-locked {
+            opacity: 0.45;
+            cursor: not-allowed;
+            filter: grayscale(60%);
+        }
+        .level-button.level-locked:hover {
+            background: #E0F2FE;
         }
         .level-button.active {
             @apply shadow-none transform translate-y-0.5;
@@ -567,6 +587,27 @@ export default function MyanmarSoundPracticeApp({ entryRequest, onExit, hideOwnO
         // same as every other app).
         const progressRosterRef = studentUid ? rosterDocRefByUid(db, SP_ROSTER_PATH, studentUid) : null;
         let passedLevels = [];
+        let teacherConfirmedDone = 0;
+        const unsubTeacherProgress = studentUid
+            ? onSnapshot(doc(db, TUTORING_STUDENTS_PATH, studentUid), (snap) => {
+                const units = snap.exists() ? (snap.data().completedUnits || {}) : {};
+                teacherConfirmedDone = Math.max(0, ...SOUND_PRACTICE_UNIT_KEYS.map(k => units[k] || 0));
+                applyLevelLocks();
+              }, (e) => console.error('Tutoring completed-units listen error:', e))
+            : null;
+        // Level 1 is always open; level N+1 unlocks once level N is either
+        // self-passed (WIN_SCORE hit) or teacher-confirmed done via trophy
+        // approval -- whichever signal says "done" first wins, same
+        // dual-signal idea used elsewhere in this project.
+        function applyLevelLocks() {
+            for (let level = 2; level <= 8; level++) {
+                const btn = byId(`level-${level}-btn`);
+                if (!btn) continue;
+                const prevDone = passedLevels.includes(level - 1) || teacherConfirmedDone >= (level - 1);
+                btn.disabled = !prevDone;
+                btn.classList.toggle('level-locked', !prevDone);
+            }
+        }
         function markLevelButtonPassed(level) {
             const btn = byId(`level-${level}-btn`);
             if (!btn || btn.querySelector('.level-passed-badge')) return;
@@ -580,6 +621,7 @@ export default function MyanmarSoundPracticeApp({ entryRequest, onExit, hideOwnO
             if (passedLevels.includes(level)) return;
             passedLevels.push(level);
             markLevelButtonPassed(level);
+            applyLevelLocks();
             if (progressRosterRef) {
                 setDoc(progressRosterRef, { passedLevels: arrayUnion(level) }, { merge: true }).catch(() => {});
             }
@@ -601,9 +643,11 @@ export default function MyanmarSoundPracticeApp({ entryRequest, onExit, hideOwnO
                     const data = snap.exists() ? snap.data() : {};
                     passedLevels = Array.isArray(data.passedLevels) ? data.passedLevels : [];
                     passedLevels.forEach(markLevelButtonPassed);
+                    applyLevelLocks();
                 }).catch(e => console.error('Error loading Sound Practice progress:', e));
             })();
             persistCurrentLevel(currentLevel);
+            applyLevelLocks();
         }
 
         // Learning Mode State
@@ -1859,6 +1903,7 @@ export default function MyanmarSoundPracticeApp({ entryRequest, onExit, hideOwnO
     // series) can keep going after this component unmounts, since Audio
     // objects and setTimeout aren't tied to React's lifecycle.
     return () => {
+      if (unsubTeacherProgress) unsubTeacherProgress();
       isPlayingSeries = false;
       if (soundTimeout) clearTimeout(soundTimeout);
       if (!audioPlayer.paused) audioPlayer.pause();

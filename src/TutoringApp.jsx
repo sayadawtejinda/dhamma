@@ -260,6 +260,22 @@ const GROUP_APP_PART_MAX = {
     timeandcalendar: 3,
   },
 };
+// Parallel to GROUP_APP_PART_MAX above, but for the "how many units does
+// this part have" side of the trophy->completedUnits derivation (see
+// getClassSpecificTrophyInfo below) -- without this, unitCount silently
+// stayed 0 for every group part and completedUnits was never derived for
+// them at all (confirmed by the teacher for Consonant Practice's 7 group
+// sizes, 1 trophy per size, and Sound Practice's 8 Quiz Mode levels, 2
+// trophies per level). Only apps whose own progress maps cleanly onto a
+// single "unit N of M" count belong here -- the others (Burmese Consonant
+// Game, Vowels Learning, ...) track composite/non-linear progress that
+// this simple ratio can't represent, so they're left out on purpose.
+const GROUP_APP_PART_UNIT_COUNT = {
+  'readingmyanmar://': {
+    consonantpractice: 7,
+    soundpractice: 8,
+  },
+};
 const extractGroupPartKey = (link) => {
   if (!link) return null;
   for (const scheme of Object.keys(GROUP_PARTS_BY_SCHEME)) {
@@ -2025,7 +2041,12 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
       : groupPartMax != null
         ? groupPartMax
         : (isLinkedApp && wholeAppMaxAvailable != null ? wholeAppMaxAvailable : (lesson.trophyLimit || 0));
-    const unitCount = lessonCount != null ? lessonCount : (lesson.unitCount || 0);
+    const groupPartUnitCount = GROUP_APP_PART_UNIT_COUNT[lesson.link]?.[classId];
+    const unitCount = lessonCount != null
+      ? lessonCount
+      : groupPartUnitCount != null
+        ? groupPartUnitCount
+        : (lesson.unitCount || 0);
     const lessonKey = computeLessonKey(lesson.title, effectiveLink);
     return { maxAvailable, unitCount, lessonKey, classId };
   };

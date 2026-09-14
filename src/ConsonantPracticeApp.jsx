@@ -14,6 +14,18 @@ import OnlineStatusWidget from './OnlineStatusWidget';
 const CONSONANT_ROSTER_PATH = 'artifacts/consonant-practice-app/public/data/roster';
 const sanitizeConsonantKey = (key) => (key || 'unknown').replace(/[.$#/\[\]]/g, '_');
 
+// TutoringApp.jsx's students/{uid}.completedUnits derives a "how many group
+// sizes done" count from teacher-approved trophies for the "Reading Myanmar"
+// Lesson Bank entry's Part 1 (see GROUP_APP_PART_UNIT_COUNT there) -- read
+// live here so an approved trophy immediately widens which group sizes this
+// app unlocks, the same signal MyanmarReaderApp/DhammaschoolApp already use.
+// Checks both title spellings this Lesson Bank entry has been seen under
+// (an emoji was added to the title after some students were already
+// assigned it, which changes the derived key).
+const TUTORING_STUDENTS_PATH = 'artifacts/dhamma-tutoring-app/public/data/students';
+const READING_MYANMAR_TITLES = ['📚 Reading Myanmar', 'Reading Myanmar'];
+const CONSONANT_PRACTICE_UNIT_KEYS = READING_MYANMAR_TITLES.map(t => sanitizeConsonantKey(`${t}_consonantpractice`));
+
 // ── Ported from the standalone "Myanmar Consonant Practice" HTML app ──
 // Same hybrid approach as DhammaschoolApp: the original vanilla JS (DOM
 // manipulation, Web Audio API, onclick= handlers in the markup) is kept
@@ -1044,6 +1056,20 @@ export default function ConsonantPracticeApp({ entryRequest, onExit, hideOwnOnli
         // this student already pings every 30s for the online panel) ---
         const consonantRosterRef = studentUid ? rosterDocRefByUid(db, CONSONANT_ROSTER_PATH, studentUid) : null;
 
+        // See CONSONANT_PRACTICE_UNIT_KEYS above -- widens the unlocked
+        // group-size ceiling live whenever the teacher approves a trophy.
+        let teacherConfirmedDone = 0;
+        const unsubTeacherProgress = studentUid
+            ? onSnapshot(doc(db, TUTORING_STUDENTS_PATH, studentUid), (snap) => {
+                const units = snap.exists() ? (snap.data().completedUnits || {}) : {};
+                teacherConfirmedDone = Math.max(0, ...CONSONANT_PRACTICE_UNIT_KEYS.map(k => units[k] || 0));
+              }, (e) => console.error('Tutoring completed-units listen error:', e))
+            : null;
+        function getUnlockedCeilingIndex() {
+            const effectiveDone = Math.max(completedGroupSizes.length, teacherConfirmedDone);
+            return Math.min(consonantCountOptions.length - 1, effectiveDone);
+        }
+
         // +5 per correct answer, -1 per wrong, in Waga (Bubble), Matching,
         // and Puzzle only -- called from handleCorrectAnswer() and each of
         // those three games' own wrong-answer branches below. Clamped at 0
@@ -1126,9 +1152,8 @@ export default function ConsonantPracticeApp({ entryRequest, onExit, hideOwnOnli
                     coinBalanceRef.current = data.coinBalance || 0;
                     setMyCoinBalance(coinBalanceRef.current);
                     completedGroupSizes = Array.isArray(data.completedGroups) ? data.completedGroups : [];
-                    if (completedGroupSizes.length > 0) {
-                        const highestDoneIndex = Math.max(...completedGroupSizes.map(s => consonantCountOptions.indexOf(s)).filter(i => i >= 0));
-                        const unlockedIndex = Math.min(consonantCountOptions.length - 1, highestDoneIndex + 1);
+                    const unlockedIndex = getUnlockedCeilingIndex();
+                    if (unlockedIndex > 0) {
                         currentConsonantCountIndex = unlockedIndex;
                         if (consonantCountIcon) consonantCountIcon.innerText = consonantCountEmojis[unlockedIndex];
                         createMessage(`Welcome back! You can now study ${consonantCountOptions[unlockedIndex]} consonants. 🎉`, false);
@@ -1785,7 +1810,8 @@ export default function ConsonantPracticeApp({ entryRequest, onExit, hideOwnOnli
         async function changeConsonantCount() {
             await handleTutorialClick('consonant-count-icon');
             stopAllGames(); // Reset everything including AutoFlow
-            currentConsonantCountIndex = (currentConsonantCountIndex + 1) % consonantCountOptions.length;
+            const ceiling = getUnlockedCeilingIndex();
+            currentConsonantCountIndex = (currentConsonantCountIndex + 1) % (ceiling + 1);
             consonantCountIcon.innerText = consonantCountEmojis[currentConsonantCountIndex];
             persistCurrentGroupSize();
 
@@ -2372,6 +2398,7 @@ export default function ConsonantPracticeApp({ entryRequest, onExit, hideOwnOnli
 
 
   return () => {
+      if (unsubTeacherProgress) unsubTeacherProgress();
       // Stop any repeating audio/game state -- otherwise audioTimer (which
       // replays a question's sound every few seconds) keeps firing after
       // this component unmounts, since it's a plain JS timer with no React

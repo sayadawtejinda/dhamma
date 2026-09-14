@@ -722,7 +722,31 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
         function recordGameCompleted(gameId) {
             if (completedGameIds.has(gameId)) return;
             completedGameIds.add(gameId);
+            updateModeButtonLockUI();
             if (progressRosterRef) setDoc(progressRosterRef, { completedGames: arrayUnion(gameId) }, { merge: true }).catch(() => {});
+        }
+
+        // Games must be played in order (teacher's explicit requirement):
+        // within Basic mode, Listen & Match Level 2 needs Level 1 first and
+        // Click Sequence Level 2/3 need the one before; Pro mode itself stays
+        // locked until every Basic Listen/Click level above is done. Typing
+        // Practice is exempt from all of this -- it's optional and isn't
+        // taught yet (see recordGameCompleted's comment above).
+        const BASIC_REQUIRED_GAME_IDS = ['B-listen-1', 'B-listen-2', 'B-click-1', 'B-click-2', 'B-click-3'];
+        function isBasicFullyDone() {
+            return BASIC_REQUIRED_GAME_IDS.every(id => completedGameIds.has(id));
+        }
+        function isLevelUnlocked(mode, type, level) {
+            if (type === 'type') return true; // Typing Practice is always open
+            if (level <= 1) return true;
+            return completedGameIds.has(`${mode}-${type}-${level - 1}`);
+        }
+        function updateModeButtonLockUI() {
+            const btnP = byId('btn-mode-p');
+            if (!btnP) return;
+            const locked = !isBasicFullyDone();
+            btnP.title = locked ? 'Finish Basic mode first to unlock Pro mode' : 'Pro Mode';
+            btnP.style.opacity = locked ? '0.5' : '';
         }
         // Gold coins: +10 per correct Listen/Click answer, -1 per wrong
         // (Typing Practice excluded), +20 per consonant picked in "Choose
@@ -790,6 +814,7 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
                     completedGameIds = new Set(Array.isArray(data.completedGames) ? data.completedGames : []);
                     coinBalanceRef.current = data.coinBalance || 0;
                     setMyCoinBalance(coinBalanceRef.current);
+                    updateModeButtonLockUI();
                 }).catch(e => console.error('Error loading Myanmar Vowels Learning progress:', e));
             })();
         }
@@ -830,26 +855,33 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
             const clickContainer = byId('click-menu-options');
             const typeContainer = byId('type-menu-options');
 
+            // A locked level button keeps its onclick (so a stray click is a
+            // no-op inside startGameSession's own guard below, never a JS
+            // error from a missing handler) but shows a lock icon and is
+            // visually dimmed instead of just being invisible.
+            const levelBtn = (mode, type, level, label, colorClasses) => {
+                const unlocked = isLevelUnlocked(mode, type, level);
+                const lockedClasses = unlocked ? '' : ' opacity-40 grayscale cursor-not-allowed';
+                return `<button class="level-btn ${colorClasses}${lockedClasses}" onclick="window.__mvlApp.startGameSession('${type}', ${level})">${unlocked ? label : `🔒 ${label}`}</button>`;
+            };
+
             if (currentMode === 'B') {
-                listenContainer.innerHTML = `
-                    <button class="level-btn border-indigo-500 text-indigo-600 hover:bg-indigo-500" onclick="window.__mvlApp.startGameSession('listen', 1)">Level 1</button>
-                    <button class="level-btn border-indigo-500 text-indigo-600 hover:bg-indigo-500" onclick="window.__mvlApp.startGameSession('listen', 2)">Level 2</button>
-                `;
-                clickContainer.innerHTML = `
-                    <button class="level-btn border-green-500 text-green-600 hover:bg-green-500" onclick="window.__mvlApp.startGameSession('click', 1)">Level 1</button>
-                    <button class="level-btn border-green-500 text-green-600 hover:bg-green-500" onclick="window.__mvlApp.startGameSession('click', 2)">Level 2</button>
-                    <button class="level-btn border-green-500 text-green-600 hover:bg-green-500" onclick="window.__mvlApp.startGameSession('click', 3)">Level 3</button>
-                `;
+                listenContainer.innerHTML =
+                    levelBtn('B', 'listen', 1, 'Level 1', 'border-indigo-500 text-indigo-600 hover:bg-indigo-500') +
+                    levelBtn('B', 'listen', 2, 'Level 2', 'border-indigo-500 text-indigo-600 hover:bg-indigo-500');
+                clickContainer.innerHTML =
+                    levelBtn('B', 'click', 1, 'Level 1', 'border-green-500 text-green-600 hover:bg-green-500') +
+                    levelBtn('B', 'click', 2, 'Level 2', 'border-green-500 text-green-600 hover:bg-green-500') +
+                    levelBtn('B', 'click', 3, 'Level 3', 'border-green-500 text-green-600 hover:bg-green-500');
                 typeContainer.innerHTML = `
                     <button class="level-btn border-pink-500 text-pink-600 hover:bg-pink-500" onclick="window.__mvlApp.startGameSession('type', 1)">Level 1</button>
                     <button class="level-btn border-pink-500 text-pink-600 hover:bg-pink-500" onclick="window.__mvlApp.startGameSession('type', 2)">Level 2</button>
                     <button class="level-btn border-pink-500 text-pink-600 hover:bg-pink-500" onclick="window.__mvlApp.startGameSession('type', 3)">Level 3</button>
                 `;
             } else {
-                listenContainer.innerHTML = `
-                    <button class="level-btn border-indigo-500 text-indigo-600 hover:bg-indigo-500" onclick="window.__mvlApp.startGameSession('listen', 1)">Level 1</button>
-                    <button class="level-btn border-indigo-500 text-indigo-600 hover:bg-indigo-500" onclick="window.__mvlApp.startGameSession('listen', 2)">Level 2</button>
-                `;
+                listenContainer.innerHTML =
+                    levelBtn('P', 'listen', 1, 'Level 1', 'border-indigo-500 text-indigo-600 hover:bg-indigo-500') +
+                    levelBtn('P', 'listen', 2, 'Level 2', 'border-indigo-500 text-indigo-600 hover:bg-indigo-500');
                 clickContainer.innerHTML = `
                     <button class="level-btn border-green-500 text-green-600 hover:bg-green-500" onclick="window.__mvlApp.startGameSession('click', 1)">Play</button>
                 `;
@@ -857,7 +889,7 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
                     <button class="level-btn border-pink-500 text-pink-600 hover:bg-pink-500" onclick="window.__mvlApp.startGameSession('type', 1)">Play</button>
                 `;
             }
-            
+
             gameMenuModal.classList.remove('hidden');
         }
 
@@ -867,6 +899,10 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
 
         // --- Core Game Progress Logic ---
         const startGameSession = function(type, level) {
+            if (!isLevelUnlocked(currentMode, type, level)) {
+                createMessage("🔒 Finish the level before this one first.", false);
+                return;
+            }
             closeGameMenu();
             currentGameType = type;
             currentGameLevel = level;
@@ -1603,6 +1639,11 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
             }
 
             if (currentMode === mode) return;
+
+            if (mode === 'P' && !isBasicFullyDone()) {
+                createMessage("🔒 Finish all Basic mode Listen & Match and Click Sequence levels first, then Pro mode opens up.", false);
+                return;
+            }
 
             currentMode = mode;
             currentC = 'အ'; 
