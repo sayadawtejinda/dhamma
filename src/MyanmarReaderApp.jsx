@@ -682,6 +682,22 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
     return () => unsub();
   }, []);
 
+  // TutoringApp always knows a student's real, current account id -- when
+  // it's supplied (via entryRequest.studentUid, exactly like
+  // deepLinkStudentName above), that's a far more reliable link to their
+  // real trophy/progress record than the manual "enter your Student ID"
+  // panel below, which most students never go through. Adopted immediately
+  // and persisted onto the roster doc the same way a manual link is, so a
+  // student who's never once typed their ID still gets the teacher's
+  // confirmed-chapters safety net (teacherCompletedChapters below) and a
+  // correctly-targeted Shrine Room deposit, automatically.
+  useEffect(() => {
+    const deepLinkTutoringStudentUid = entryRequest?.studentUid || null;
+    if (!deepLinkTutoringStudentUid || !userId) return;
+    setTutoringStudentUid(deepLinkTutoringStudentUid);
+    setDoc(rosterDocRefByUid(db, READER_ROSTER_PATH, userId), { tutoringStudentUid: deepLinkTutoringStudentUid, linkedToTutoring: true }, { merge: true }).catch(e => console.error('Auto-link error:', e));
+  }, [entryRequest?.studentUid, userId]);
+
   useEffect(() => {
     // Teacher, or a name already supplied by the link — never prompt. This also
     // covers the case where MyanmarReaderApp was mounted (entryRequest=null,
