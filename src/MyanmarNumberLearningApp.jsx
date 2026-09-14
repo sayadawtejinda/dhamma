@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { doc, setDoc, updateDoc, serverTimestamp, getDoc, arrayUnion, increment } from 'firebase/firestore';
+import { doc, setDoc, updateDoc, serverTimestamp, getDoc, arrayUnion, increment, onSnapshot } from 'firebase/firestore';
 import { db } from './firebase';
 import { rosterDocRefByUid, migrateNameKeyedRosterDoc } from './studentRosterIdentity';
 import OnlineStatusWidget from './OnlineStatusWidget';
+import { spawnFlyingCoins, trackLastClickPoint } from './flyingCoins';
 
 // ── Ported from the standalone "Myanmar Number Learning" HTML app ──
 // Same hybrid approach as ConsonantPracticeApp/BurmeseConsonantGameApp: the
@@ -28,6 +29,18 @@ import OnlineStatusWidget from './OnlineStatusWidget';
 
 const MNL_ROSTER_PATH = 'artifacts/myanmar-number-learning-app/public/data/roster';
 const sanitizeMnlKey = (key) => (key || 'unknown').replace(/[.$#/\[\]]/g, '_');
+
+// TutoringApp.jsx's students/{uid}.completedUnits derives a "how many
+// levels done" count from teacher-approved trophies for the "Speaking
+// Myanmar" Lesson Bank entry's Part 2 (see GROUP_APP_PART_UNIT_COUNT
+// there). Read live so an approved trophy immediately unlocks the next
+// level too, the same signal ConsonantPracticeApp/MyanmarSoundPracticeApp
+// already use. Checks both title spellings this Lesson Bank entry has
+// been seen under (an emoji prefix was added at some point, same as
+// Reading Myanmar's entry).
+const TUTORING_STUDENTS_PATH = 'artifacts/dhamma-tutoring-app/public/data/students';
+const SPEAKING_MYANMAR_TITLES = ['🗣️ Speaking Myanmar', 'Speaking Myanmar'];
+const NUMBER_LEARNING_UNIT_KEYS = SPEAKING_MYANMAR_TITLES.map(t => sanitizeMnlKey(`${t}_numberlearning`));
 
 const MNL_APP_CSS = `
         @import url('https://fonts.googleapis.com/css2?family=Padauk:wght@400;700;800&family=Inter:wght@400;600;800;900&display=swap');
@@ -360,6 +373,7 @@ export default function MyanmarNumberLearningApp({ entryRequest, onExit, hideOwn
     initializedRef.current = true;
     const rootEl = containerRef.current;
     const byId = (id) => rootEl.querySelector('#' + id);
+    const clickTracker = trackLastClickPoint(rootEl);
 
         // --- App Toggling Logic ---
         const app1Container = byId('app1');
@@ -416,6 +430,22 @@ export default function MyanmarNumberLearningApp({ entryRequest, onExit, hideOwn
         let completedLevels = [];
         let coinBalance = 0;
 
+        // See NUMBER_LEARNING_UNIT_KEYS above -- widens the unlocked level
+        // ceiling live whenever the teacher approves a trophy.
+        let teacherConfirmedDone = 0;
+        const unsubTeacherProgress = studentUid
+            ? onSnapshot(doc(db, TUTORING_STUDENTS_PATH, studentUid), (snap) => {
+                const units = snap.exists() ? (snap.data().completedUnits || {}) : {};
+                teacherConfirmedDone = Math.max(0, ...NUMBER_LEARNING_UNIT_KEYS.map(k => units[k] || 0));
+                refreshLevelButtonLabels();
+              }, (e) => console.error('Tutoring completed-units listen error:', e))
+            : null;
+        function isLevelDoneEffective(level) {
+            if (completedLevels.includes(level)) return true;
+            const idx = gameLevels.indexOf(level);
+            return idx >= 0 && idx < teacherConfirmedDone;
+        }
+
         // Gold coins: +20 per correct quiz answer, -1 per wrong, clamped at
         // 0 (same convention as ConsonantPracticeApp).
         function awardCoins(delta) {
@@ -423,6 +453,7 @@ export default function MyanmarNumberLearningApp({ entryRequest, onExit, hideOwn
             coinBalance = Math.max(0, coinBalance + delta);
             setMyCoinBalance(coinBalance);
             setDoc(progressRosterRef, { coinBalance }, { merge: true }).catch(() => {});
+            if (delta > 0) spawnFlyingCoins(clickTracker.get(), delta);
         }
 
         // Deposits this student's entire local coin balance into their
@@ -470,7 +501,7 @@ export default function MyanmarNumberLearningApp({ entryRequest, onExit, hideOwn
         function refreshLevelButtonLabels() {
             gameLevels.forEach(key => {
                 const btn = rootEl.querySelector(`.place-value-button[data-section="${key}"]`);
-                if (btn) btn.textContent = countingData[key].label + (completedLevels.includes(key) ? ' ✅' : '');
+                if (btn) btn.textContent = countingData[key].label + (isLevelDoneEffective(key) ? ' ✅' : '');
             });
         }
 
@@ -478,7 +509,7 @@ export default function MyanmarNumberLearningApp({ entryRequest, onExit, hideOwn
         // Quiz Mode is only playable for this one (or an already-completed
         // one, to let a student replay); finalLevels are never gated.
         function firstUnlockedLevel() {
-            return gameLevels.find(l => !completedLevels.includes(l)) || gameLevels[gameLevels.length - 1];
+            return gameLevels.find(l => !isLevelDoneEffective(l)) || gameLevels[gameLevels.length - 1];
         }
         let isFinalSequencePlaying = false;
         // ------------------------------------------
@@ -1013,7 +1044,7 @@ export default function MyanmarNumberLearningApp({ entryRequest, onExit, hideOwn
             }
             // Sequential unlock: can't start a later level's quiz before
             // finishing the earlier ones.
-            if (!isGameMode && currentSection !== firstUnlockedLevel() && !completedLevels.includes(currentSection)) {
+            if (!isGameMode && currentSection !== firstUnlockedLevel() && !isLevelDoneEffective(currentSection)) {
                 alert(`${countingData[firstUnlockedLevel()].label} ကို အရင်ပြီးအောင် ကစားပါ။`);
                 return;
             }
@@ -1333,6 +1364,8 @@ export default function MyanmarNumberLearningApp({ entryRequest, onExit, hideOwn
         }
 
     return () => {
+      if (unsubTeacherProgress) unsubTeacherProgress();
+      clickTracker.stop();
       delete window.__mnlApp;
       // Stop any playing audio -- otherwise it keeps going after this
       // component unmounts, since Audio objects aren't tied to React's

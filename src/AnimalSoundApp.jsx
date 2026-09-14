@@ -3,6 +3,7 @@ import { doc, setDoc, updateDoc, serverTimestamp, getDoc, increment } from 'fire
 import { db } from './firebase';
 import { rosterDocRefByUid, migrateNameKeyedRosterDoc } from './studentRosterIdentity';
 import OnlineStatusWidget from './OnlineStatusWidget';
+import { spawnFlyingCoins, trackLastClickPoint } from './flyingCoins';
 
 // ── Ported from the standalone "Animal Sound Quiz" HTML app ──
 // Same hybrid approach as ConsonantPracticeApp/BurmeseConsonantGameApp/
@@ -267,6 +268,7 @@ export default function AnimalSoundApp({ entryRequest, onExit, hideOwnOnlineBadg
     initializedRef.current = true;
     const rootEl = containerRef.current;
     const byId = (id) => rootEl.querySelector('#' + id);
+    const clickTracker = trackLastClickPoint(rootEl);
 
         // Updated Animal Data (Burmese & Romanized Names)
         const ANIMAL_DATA = [
@@ -387,6 +389,7 @@ export default function AnimalSoundApp({ entryRequest, onExit, hideOwnOnlineBadg
             coinBalance = Math.max(0, coinBalance + delta);
             setMyCoinBalance(coinBalance);
             setDoc(progressRosterRef, { coinBalance }, { merge: true }).catch(() => {});
+            if (delta > 0) spawnFlyingCoins(clickTracker.get(), delta);
         }
 
         // Deposits this student's entire local coin balance into their
@@ -1121,6 +1124,7 @@ export default function AnimalSoundApp({ entryRequest, onExit, hideOwnOnlineBadg
 
 
     return () => {
+      clickTracker.stop();
       delete window.__asApp;
       // Stop any playing sound and free the AudioContext -- otherwise
       // audio can keep going after this component unmounts, and browsers

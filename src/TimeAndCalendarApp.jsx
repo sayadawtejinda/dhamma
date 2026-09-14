@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { doc, setDoc, updateDoc, onSnapshot, collection, serverTimestamp } from 'firebase/firestore';
-import { X } from 'lucide-react';
+import { doc, setDoc, updateDoc, getDoc, serverTimestamp, increment } from 'firebase/firestore';
 import { db } from './firebase';
 import { rosterDocRefByUid, migrateNameKeyedRosterDoc } from './studentRosterIdentity';
+import OnlineStatusWidget from './OnlineStatusWidget';
 
 // ── Ported from the standalone "အချိန် နှင့် ပြက္ခဒိန် လေ့ကျင့်ခန်း"
 // (Time and Calendar Practice) HTML app ──
@@ -275,18 +275,27 @@ export default function TimeAndCalendarApp({ entryRequest, onExit, hideOwnOnline
   const initializedRef = useRef(false);
   const studentName = entryRequest?.studentName || null;
   const studentUid = entryRequest?.studentUid || null;
-  const [onlineStudents, setOnlineStudents] = useState([]);
-  const [showOnlinePanel, setShowOnlinePanel] = useState(false);
-  const [nowForOnlineCheck, setNowForOnlineCheck] = useState(Date.now());
+  // This app has no game/scoring moment of its own to earn coins from (it's
+  // a free-browse clock/calendar practice tool) -- coinBalance is read-only
+  // display for now (0 unless something else ever credits this roster doc),
+  // just so the header is consistent with every other app in the suite.
+  const [myCoinBalance, setMyCoinBalance] = useState(0);
+  const coinBalanceRef = useRef(0);
 
   // Roster heartbeat — only pings when opened for a student (entryRequest
-  // carries their name); a teacher just observes.
+  // carries their name); a teacher just observes. Also loads this
+  // student's coinBalance (0 unless something else has ever credited it)
+  // for the header's coin badge.
   useEffect(() => {
     if (!studentName || !studentUid) return;
     const rosterRef = rosterDocRefByUid(db, TC_ROSTER_PATH, studentUid);
     migrateNameKeyedRosterDoc(db, TC_ROSTER_PATH, studentUid, studentName, sanitizeTcKey)
       .then(carried => { if (carried) return setDoc(rosterRef, carried, { merge: true }); })
       .catch(e => console.error('Roster migration error:', e));
+    getDoc(rosterRef).then(snap => {
+      coinBalanceRef.current = snap.exists() ? (snap.data().coinBalance || 0) : 0;
+      setMyCoinBalance(coinBalanceRef.current);
+    }).catch(e => console.error('Error loading Time and Calendar coin balance:', e));
     const ping = () => setDoc(rosterRef, { studentName, isOnline: true, lastSeen: serverTimestamp() }, { merge: true }).catch(() => {});
     ping();
     const interval = setInterval(ping, 30000);
@@ -299,35 +308,31 @@ export default function TimeAndCalendarApp({ entryRequest, onExit, hideOwnOnline
     };
   }, [studentName, studentUid]);
 
-  useEffect(() => {
-    const unsub = onSnapshot(collection(db, TC_ROSTER_PATH), (snap) => {
-      setOnlineStudents(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, e => console.error('Time and Calendar roster listen error:', e));
-    return () => unsub();
-  }, []);
-
-  useEffect(() => {
-    const interval = setInterval(() => setNowForOnlineCheck(Date.now()), 30000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const isRosterEntryOnline = (s) => {
-    const lastSeenMs = s.lastSeen?.toMillis ? s.lastSeen.toMillis() : (s.lastSeen?.seconds ? s.lastSeen.seconds * 1000 : 0);
-    return lastSeenMs > 0 && (nowForOnlineCheck - lastSeenMs) < 5 * 60 * 1000;
-  };
-  const weeklyRosterList = onlineStudents
-    .filter(s => {
-      const lastSeenMs = s.lastSeen?.toMillis ? s.lastSeen.toMillis() : (s.lastSeen?.seconds ? s.lastSeen.seconds * 1000 : 0);
-      return lastSeenMs > 0 && (nowForOnlineCheck - lastSeenMs) < 7 * 24 * 60 * 60 * 1000;
-    })
-    .map(s => ({ ...s, _isOnlineNow: isRosterEntryOnline(s) }))
-    .sort((a, b) => {
-      if (a._isOnlineNow !== b._isOnlineNow) return b._isOnlineNow ? 1 : -1;
-      const aMs = a.lastSeen?.toMillis ? a.lastSeen.toMillis() : 0;
-      const bMs = b.lastSeen?.toMillis ? b.lastSeen.toMillis() : 0;
-      return bMs - aMs;
-    });
-  const onlineCount = onlineStudents.filter(isRosterEntryOnline).length;
+  // Deposits this student's entire local coin balance into their Shrine
+  // Room wallet, same pattern as every other app that has a coin badge.
+  async function depositCoinsToShrineRoom() {
+    const depositable = coinBalanceRef.current;
+    if (!studentName || depositable <= 0) return;
+    const confirmed = window.confirm(`Deposit ${depositable} coin(s) into your Shrine Room wallet?`);
+    if (!confirmed) return;
+    try {
+      const sanitizedName = (studentName || 'unknown').trim().replace(/[.$#/\[\]]/g, '_');
+      const shrineRef = doc(db, 'artifacts/shrine-room-app/public/data/roster', sanitizedName);
+      const shrineSnap = await getDoc(shrineRef);
+      const SHRINE_STARTER_COINS = 20;
+      await setDoc(shrineRef, {
+        studentName,
+        coinBalance: shrineSnap.exists() ? increment(depositable) : SHRINE_STARTER_COINS + depositable,
+      }, { merge: true });
+      coinBalanceRef.current = 0;
+      setMyCoinBalance(0);
+      setDoc(rosterDocRefByUid(db, TC_ROSTER_PATH, studentUid), { coinBalance: 0 }, { merge: true }).catch(() => {});
+      alert(`🪙 Deposited ${depositable} coin(s) into your Shrine Room wallet!`);
+    } catch (e) {
+      console.error('Error depositing coins to Shrine Room:', e);
+      alert('⚠️ Something went wrong depositing your coins. Please try again.');
+    }
+  }
 
   useEffect(() => {
     // Dev-mode double-invoke / re-mount guard — this whole script wires up
@@ -705,37 +710,17 @@ export default function TimeAndCalendarApp({ entryRequest, onExit, hideOwnOnline
         dangerouslySetInnerHTML={{ __html: TC_APP_BODY_HTML }}
       />
       {!hideOwnOnlineBadge && (
-      <>
-      <button
-        onClick={() => setShowOnlinePanel(true)}
-        className="fixed top-3 left-3 z-[9990] flex items-center gap-1 text-sm font-bold bg-white/90 backdrop-blur-sm px-3 py-2 rounded-2xl shadow-lg border border-gray-200 text-emerald-600 hover:underline"
-      >
-        <span className="w-2 h-2 bg-emerald-500 rounded-full inline-block"></span>{onlineCount} online
-      </button>
-      {showOnlinePanel && (
-        <div className="fixed inset-0 z-[9995] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowOnlinePanel(false)}>
-          <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full max-h-[80vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-gray-800">🕐 Students {onlineCount > 0 && <span className="text-emerald-600">({onlineCount} online)</span>}</h2>
-              <button onClick={() => setShowOnlinePanel(false)} className="text-gray-400 hover:text-gray-700"><X size={22}/></button>
-            </div>
-            <p className="text-xs text-gray-400 mb-3">Showing everyone active in the last 7 days.</p>
-            <div className="space-y-2">
-              {weeklyRosterList.map(s => (
-                <div key={s.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
-                  <div className="flex items-center gap-2">
-                    <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${s._isOnlineNow ? 'bg-emerald-500' : 'bg-gray-300'}`}></span>
-                    <span className="font-bold text-gray-800">{s.studentName}</span>
-                  </div>
-                  <span className="text-xs text-gray-400">{s._isOnlineNow ? 'Online now' : 'Active this week'}</span>
-                </div>
-              ))}
-              {weeklyRosterList.length === 0 && <p className="text-center text-gray-400 py-6">No students active this week yet.</p>}
-            </div>
-          </div>
-        </div>
-      )}
-      </>
+        <OnlineStatusWidget
+          rosterPath={TC_ROSTER_PATH}
+          studentName={studentName}
+          isTeacherMode={!studentName}
+          panelTitle="🕐 Students"
+          coinBalance={studentName ? myCoinBalance : null}
+          onCoinClick={studentName ? depositCoinsToShrineRoom : undefined}
+          renderActivity={s => s.coinBalance != null && (
+            <span className="font-bold text-amber-600">🪙{s.coinBalance}</span>
+          )}
+        />
       )}
     </>
   );

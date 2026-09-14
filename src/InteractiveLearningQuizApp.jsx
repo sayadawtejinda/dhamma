@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { doc, setDoc, updateDoc, serverTimestamp, getDoc, increment } from 'firebase/firestore';
+import { doc, setDoc, updateDoc, serverTimestamp, getDoc, increment, onSnapshot } from 'firebase/firestore';
 import { db } from './firebase';
 import { rosterDocRefByUid, migrateNameKeyedRosterDoc } from './studentRosterIdentity';
 import OnlineStatusWidget from './OnlineStatusWidget';
+import { spawnFlyingCoins, trackLastClickPoint } from './flyingCoins';
 
 // ── Ported from the standalone "Interactive Learning Quiz for Kids" HTML app ──
 // Same hybrid approach as the other ported apps in this project: the
@@ -29,6 +30,16 @@ import OnlineStatusWidget from './OnlineStatusWidget';
 
 const ILQ_ROSTER_PATH = 'artifacts/interactive-learning-quiz-app/public/data/roster';
 const sanitizeIlqKey = (key) => (key || 'unknown').replace(/[.$#/\[\]]/g, '_');
+
+// TutoringApp.jsx's students/{uid}.completedUnits derives a "how many
+// phases done" count from teacher-approved trophies for the "Speaking
+// Myanmar" Lesson Bank entry's Part 5 (see GROUP_APP_PART_UNIT_COUNT
+// there). Read live so an approved trophy immediately unlocks the next
+// phase too, the same signal ConsonantPracticeApp/MyanmarSoundPracticeApp
+// already use.
+const TUTORING_STUDENTS_PATH = 'artifacts/dhamma-tutoring-app/public/data/students';
+const SPEAKING_MYANMAR_TITLES = ['🗣️ Speaking Myanmar', 'Speaking Myanmar'];
+const INTERACTIVE_QUIZ_UNIT_KEYS = SPEAKING_MYANMAR_TITLES.map(t => sanitizeIlqKey(`${t}_interactivequiz`));
 
 const ILQ_APP_CSS = `
         /* Using a cheerful, soft palette */
@@ -256,6 +267,7 @@ export default function InteractiveLearningQuizApp({ entryRequest, onExit, hideO
     initializedRef.current = true;
     const rootEl = containerRef.current;
     const byId = (id) => rootEl.querySelector('#' + id);
+    const clickTracker = trackLastClickPoint(rootEl);
 
 // The original page's Firebase init (anonymous auth only) relied on
 // injected globals (__app_id / __firebase_config / __initial_auth_token)
@@ -295,6 +307,25 @@ export default function InteractiveLearningQuizApp({ entryRequest, onExit, hideO
             coinBalance = Math.max(0, coinBalance + delta);
             setMyCoinBalance(coinBalance);
             setDoc(progressRosterRef, { coinBalance }, { merge: true }).catch(() => {});
+            if (delta > 0) spawnFlyingCoins(clickTracker.get(), delta);
+        }
+
+        // See INTERACTIVE_QUIZ_UNIT_KEYS above -- widens the unlocked phase
+        // ceiling live whenever the teacher approves a trophy.
+        let teacherConfirmedDone = 0;
+        const unsubTeacherProgress = studentUid
+            ? onSnapshot(doc(db, TUTORING_STUDENTS_PATH, studentUid), (snap) => {
+                const units = snap.exists() ? (snap.data().completedUnits || {}) : {};
+                teacherConfirmedDone = Math.max(0, ...INTERACTIVE_QUIZ_UNIT_KEYS.map(k => units[k] || 0));
+                updateProgress();
+              }, (e) => console.error('Tutoring completed-units listen error:', e))
+            : null;
+        function isPhaseDoneEffective(phase) {
+            if (completedPhases.includes(phase)) return true;
+            return phase <= teacherConfirmedDone;
+        }
+        function unlockedPhaseCeiling() {
+            return Math.min(5, Math.max(completedPhases.length, teacherConfirmedDone) + 1);
         }
 
         // Deposits this student's entire local coin balance into their
@@ -621,7 +652,8 @@ export default function InteractiveLearningQuizApp({ entryRequest, onExit, hideO
         }
 
         function togglePhase() {
-            initializeState((currentPhase % 5) + 1); // Phase 1-5 လည်ပတ်ရန် ပြင်ဆင်
+            const ceiling = unlockedPhaseCeiling();
+            initializeState((currentPhase % ceiling) + 1); // Phase 1-5 လည်ပတ်ရန် ပြင်ဆင် (unlocked ones only)
             displayLearningMode();
         }
         window.togglePhase = togglePhase;
@@ -631,7 +663,7 @@ export default function InteractiveLearningQuizApp({ entryRequest, onExit, hideO
             const partsMastered = partsInSet.filter(p => (partStats[p.id] || 0) >= 2).length;
             const currentScore = partsInSet.reduce((sum, part) => sum + Math.min(partStats[part.id] || 0, 2), 0);
             progressText.textContent = `Phase ${currentPhase}, Level ${currentLevelIndex + 1} (${currentSetSize} Parts) | Mastered: ${partsMastered}/${currentSetSize} | Score: ${currentScore}/${currentSetSize * 2}`;
-            phaseToggleButton.textContent = `Phase ${currentPhase}: ${phaseNames[currentPhase - 1]}`; // Phase နာမည်ကို ပြသရန်
+            phaseToggleButton.textContent = `Phase ${currentPhase}: ${phaseNames[currentPhase - 1]}${isPhaseDoneEffective(currentPhase) ? ' ✅' : ''}`; // Phase နာမည်ကို ပြသရန်
             if (isLearningMode) {
                 startButton.textContent = "Start Quiz!"; startButton.className = startButton.className.replace(/bg-yellow-500|hover:bg-yellow-600/g, 'bg-green-500 hover:bg-green-600');
                 startButton.setAttribute('onclick', 'window.__ilqApp.startQuizMode()'); startButton.disabled = false; phaseToggleButton.disabled = false;
@@ -917,6 +949,8 @@ export default function InteractiveLearningQuizApp({ entryRequest, onExit, hideO
         }
 
     return () => {
+      if (unsubTeacherProgress) unsubTeacherProgress();
+      clickTracker.stop();
       delete window.__ilqApp;
       phase1_2_Audio.pause();
       itemsAudio.pause();

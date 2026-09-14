@@ -3,6 +3,7 @@ import { doc, setDoc, updateDoc, serverTimestamp, getDoc, arrayUnion, increment 
 import { db } from './firebase';
 import { rosterDocRefByUid, migrateNameKeyedRosterDoc } from './studentRosterIdentity';
 import OnlineStatusWidget from './OnlineStatusWidget';
+import { spawnFlyingCoins, trackLastClickPoint } from './flyingCoins';
 
 // ── Ported from the standalone "မြန်မာကဗျာ သင်ကြားရေး" (Myanmar Poems) HTML app ──
 // Same hybrid approach as the other ported apps in this project: the
@@ -320,6 +321,7 @@ export default function MyanmarPoemsApp({ entryRequest, onExit, hideOwnOnlineBad
     initializedRef.current = true;
     const rootEl = containerRef.current;
     const byId = (id) => rootEl.querySelector('#' + id);
+    const clickTracker = trackLastClickPoint(rootEl);
 
         // ----------------------------------------------------
         // I. DATA STRUCTURE (ကဗျာများ၏ အချက်အလက်များ)
@@ -2053,6 +2055,7 @@ export default function MyanmarPoemsApp({ entryRequest, onExit, hideOwnOnlineBad
             coinBalanceRef.current = newBalance;
             setMyCoinBalance(newBalance);
             setDoc(progressRosterRef, { coinBalance: newBalance }, { merge: true }).catch(() => {});
+            if (delta > 0) spawnFlyingCoins(clickTracker.get(), delta);
         }
 
         // Resolves once completedPoemIds/coinBalance are loaded and
@@ -2512,6 +2515,7 @@ export default function MyanmarPoemsApp({ entryRequest, onExit, hideOwnOnlineBad
     // component unmounts, since the Audio object isn't tied to React's
     // lifecycle.
     return () => {
+      clickTracker.stop();
       if (currentAudio) {
         currentAudio.pause();
         currentAudio.currentTime = 0;

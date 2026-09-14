@@ -275,6 +275,10 @@ const GROUP_APP_PART_UNIT_COUNT = {
     consonantpractice: 7,
     soundpractice: 8,
   },
+  'speakingmyanmar://': {
+    numberlearning: 4,
+    interactivequiz: 5,
+  },
 };
 const extractGroupPartKey = (link) => {
   if (!link) return null;

@@ -3,6 +3,7 @@ import { doc, setDoc, updateDoc, serverTimestamp, getDoc, increment } from 'fire
 import { db } from './firebase';
 import { rosterDocRefByUid, migrateNameKeyedRosterDoc } from './studentRosterIdentity';
 import OnlineStatusWidget from './OnlineStatusWidget';
+import { spawnFlyingCoins, trackLastClickPoint } from './flyingCoins';
 
 // ── Ported from the standalone "Burmese Learning Games Collection" HTML app ──
 // Same hybrid approach as the other ported apps in this project: the
@@ -303,6 +304,7 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
     initializedRef.current = true;
     const rootEl = containerRef.current;
     const byId = (id) => rootEl.querySelector('#' + id);
+    const clickTracker = trackLastClickPoint(rootEl);
 
         // Extends the page's shared Tailwind Play-CDN config with this app's
         // custom colors (primary-green/secondary-lime) instead of overwriting
@@ -889,6 +891,7 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
             coinBalance = Math.max(0, coinBalance + delta);
             setMyCoinBalance(coinBalance);
             setDoc(progressRosterRef, { coinBalance }, { merge: true }).catch(() => {});
+            if (delta > 0) spawnFlyingCoins(clickTracker.get(), delta);
         }
 
         // Deposits this student's entire local coin balance into their
@@ -1652,6 +1655,7 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
         runMasterInit();
 
     return () => {
+      clickTracker.stop();
       delete window.__blgApp;
       // Stop any playing sound and free the AudioContext -- otherwise
       // audio can keep going after this component unmounts, and browsers
