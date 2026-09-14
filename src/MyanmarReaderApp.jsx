@@ -616,6 +616,30 @@ const TITLE_TO_GROUP_INDEX = {
 };
 const VOWEL_COLOR = 'bg-orange-100 hover:bg-orange-200 text-orange-900 border-orange-300';
 
+// A single coin that animates from `from` to `to` (both {x,y} viewport
+// coordinates) via a CSS transition triggered by flipping position on the
+// next tick, then calls onDone so the caller can drop it from state.
+function FlyingCoin({ from, to, delay = 0, onDone }) {
+  const [arrived, setArrived] = useState(false);
+  useEffect(() => {
+    const startT = setTimeout(() => setArrived(true), 20 + delay);
+    const doneT = setTimeout(onDone, 820 + delay);
+    return () => { clearTimeout(startT); clearTimeout(doneT); };
+  }, []);
+  const pos = arrived ? to : from;
+  return (
+    <span
+      style={{
+        position: 'fixed', left: pos.x, top: pos.y, zIndex: 10000,
+        fontSize: 20, pointerEvents: 'none', marginLeft: -10, marginTop: -10,
+        transition: 'left 0.75s cubic-bezier(.34,1.15,.64,1), top 0.75s cubic-bezier(.34,1.15,.64,1), transform 0.75s ease, opacity 0.75s ease 0.2s',
+        transform: arrived ? 'scale(0.5) rotate(360deg)' : 'scale(1.3) rotate(0deg)',
+        opacity: arrived ? 0 : 1,
+      }}
+    >🪙</span>
+  );
+}
+
 export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
   // ── Teacher mode — opened via TutoringApp's "Other Apps" panel. When
   // mounted inline (this component, inside TutoringApp's own project), that
@@ -1157,6 +1181,28 @@ const longPressTimerRef = useRef(null);
   const [scorePos, setScorePos] = useState({ x: 0, y: 20 });
   const [isScoreDragging, setIsScoreDragging] = useState(false);
   const [scoreDragOffset, setScoreDragOffset] = useState({ x: 0, y: 0 });
+
+  // Coins that visibly fly from the Floating Score Box (where a sentence
+  // was just scored) to the header coin total, whenever a sentence is
+  // freshly completed -- purely cosmetic, the actual balance write already
+  // happens in awardScore().
+  const coinIconRef = useRef(null);
+  const [flyingCoins, setFlyingCoins] = useState([]);
+  const spawnFlyingCoins = (fromX, fromY, count = 1) => {
+    const target = coinIconRef.current;
+    if (!target) return;
+    const rect = target.getBoundingClientRect();
+    const toX = rect.left + rect.width / 2;
+    const toY = rect.top + rect.height / 2;
+    const newCoins = Array.from({ length: count }, (_, i) => ({
+      id: `${Date.now()}_${i}_${Math.random()}`,
+      from: { x: fromX, y: fromY },
+      to: { x: toX, y: toY },
+      delay: i * 70,
+    }));
+    setFlyingCoins(prev => [...prev, ...newCoins]);
+  };
+  const removeFlyingCoin = (id) => setFlyingCoins(prev => prev.filter(c => c.id !== id));
 
   // Multi-Sheet toggling
   const [currentSheetName, setCurrentSheetName] = useState(AVAILABLE_SHEETS[0]);
@@ -2040,6 +2086,9 @@ setTimeout(() => {
       // Submit Score for current
       if (appMode === 'sheet' && currentSheetIndex > 0) {
           if ((hasReadAloudCurrent || justRead) && !completedSentences.has(currentSheetIndex)) {
+              if (currentSentenceScore > 0) {
+                  spawnFlyingCoins(scorePos.x + 40, scorePos.y + 40, Math.min(5, Math.max(1, Math.round(currentSentenceScore / 50))));
+              }
               awardScore(currentSentenceScore);
               setCompletedSentences(prev => {
                   const newSet = new Set(prev);
@@ -2093,6 +2142,9 @@ setShowTranslation(true);
       // Submit Score if read
       if (appMode === 'sheet' && currentSheetIndex > 0) {
           if (hasReadAloudCurrent && !completedSentences.has(currentSheetIndex)) {
+              if (currentSentenceScore > 0) {
+                  spawnFlyingCoins(scorePos.x + 40, scorePos.y + 40, Math.min(5, Math.max(1, Math.round(currentSentenceScore / 50))));
+              }
               awardScore(currentSentenceScore);
               setCompletedSentences(prev => {
                   const newSet = new Set(prev);
@@ -3133,7 +3185,7 @@ useEffect(() => {
       ) : studentName && (
         <div className="fixed top-2 right-2 z-[9800] flex items-center gap-2 bg-white/90 backdrop-blur-sm px-3 py-2 rounded-2xl shadow-lg border border-gray-200 text-sm">
           <span className="font-bold text-gray-700">{studentName}</span>
-          <button onClick={handleDepositCoinsToShrineRoom} className="flex items-center gap-1 text-amber-600 font-bold hover:underline" title="Click to deposit into your Shrine Room wallet"><span>🪙</span>{coinBalance}</button>
+          <button ref={coinIconRef} onClick={handleDepositCoinsToShrineRoom} className="flex items-center gap-1 text-amber-600 font-bold hover:underline" title="Click to deposit into your Shrine Room wallet"><span>🪙</span>{coinBalance}</button>
           <button onClick={() => setShowOnlinePanel(true)} className="flex items-center gap-1 text-emerald-600 font-bold hover:underline">
             <span className="w-2 h-2 bg-emerald-500 rounded-full inline-block"></span>{onlineCount} online
           </button>
@@ -3164,6 +3216,10 @@ useEffect(() => {
               <span className="text-3xl font-extrabold text-amber-950 drop-shadow-sm">{Math.round(score)}</span>
           </div>
       )}
+
+      {flyingCoins.map(c => (
+          <FlyingCoin key={c.id} from={c.from} to={c.to} delay={c.delay} onDone={() => removeFlyingCoin(c.id)} />
+      ))}
 
       {/* Toggle Spell Mode Confirm Modal */}
       {showSpellModeConfirm && (
