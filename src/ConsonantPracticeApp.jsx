@@ -4,6 +4,7 @@ import { X } from 'lucide-react';
 import { db } from './firebase';
 import { rosterDocRefByUid, migrateNameKeyedRosterDoc } from './studentRosterIdentity';
 import OnlineStatusWidget from './OnlineStatusWidget';
+import { spawnFlyingCoins, trackLastClickPoint } from './flyingCoins';
 
 // Live "who's online" roster — same simple heartbeat pattern as
 // MyanmarReaderApp.jsx's READER_ROSTER_PATH (30s ping, 5-minute online
@@ -794,6 +795,7 @@ export default function ConsonantPracticeApp({ entryRequest, onExit, hideOwnOnli
     if (initializedRef.current) return;
     initializedRef.current = true;
     const rootEl = containerRef.current;
+    const clickTracker = trackLastClickPoint(rootEl);
 
         // --- CONSONANT AUDIO ---
         let audioContext;
@@ -1063,6 +1065,7 @@ export default function ConsonantPracticeApp({ entryRequest, onExit, hideOwnOnli
             ? onSnapshot(doc(db, TUTORING_STUDENTS_PATH, studentUid), (snap) => {
                 const units = snap.exists() ? (snap.data().completedUnits || {}) : {};
                 teacherConfirmedDone = Math.max(0, ...CONSONANT_PRACTICE_UNIT_KEYS.map(k => units[k] || 0));
+                updateGroupIconBadge();
               }, (e) => console.error('Tutoring completed-units listen error:', e))
             : null;
         function getUnlockedCeilingIndex() {
@@ -1081,6 +1084,7 @@ export default function ConsonantPracticeApp({ entryRequest, onExit, hideOwnOnli
             coinBalanceRef.current = newBalance;
             setMyCoinBalance(newBalance);
             setDoc(consonantRosterRef, { coinBalance: newBalance }, { merge: true }).catch(() => {});
+            if (delta > 0) spawnFlyingCoins(clickTracker.get(), delta);
         }
 
         // Deposits this student's entire local coin balance into their
@@ -1133,6 +1137,23 @@ export default function ConsonantPracticeApp({ entryRequest, onExit, hideOwnOnli
             if (completedGroupSizes.includes(size)) return;
             completedGroupSizes.push(size);
             setDoc(consonantRosterRef, { completedGroups: arrayUnion(size) }, { merge: true }).catch(() => {});
+            updateGroupIconBadge();
+        }
+
+        // A student's own completedGroupSizes is sparse (which exact sizes
+        // they've finished); teacherConfirmedDone is just a count -- treat
+        // the first that-many sizes in order as done too for the checkmark,
+        // same "whichever signal says done wins" idea used elsewhere.
+        function isGroupSizeDone(size) {
+            if (completedGroupSizes.includes(size)) return true;
+            const idx = consonantCountOptions.indexOf(size);
+            return idx >= 0 && idx < teacherConfirmedDone;
+        }
+        function updateGroupIconBadge() {
+            if (!consonantCountIcon) return;
+            const size = consonantCountOptions[currentConsonantCountIndex];
+            const emoji = consonantCountEmojis[currentConsonantCountIndex];
+            consonantCountIcon.innerText = isGroupSizeDone(size) ? `${emoji} ✅` : emoji;
         }
 
         // Loads this student's saved progress once at startup -- coin
@@ -1155,12 +1176,11 @@ export default function ConsonantPracticeApp({ entryRequest, onExit, hideOwnOnli
                     const unlockedIndex = getUnlockedCeilingIndex();
                     if (unlockedIndex > 0) {
                         currentConsonantCountIndex = unlockedIndex;
-                        if (consonantCountIcon) consonantCountIcon.innerText = consonantCountEmojis[unlockedIndex];
                         createMessage(`Welcome back! You can now study ${consonantCountOptions[unlockedIndex]} consonants. 🎉`, false);
                     } else {
                         currentConsonantCountIndex = 0;
-                        if (consonantCountIcon) consonantCountIcon.innerText = consonantCountEmojis[0];
                     }
+                    updateGroupIconBadge();
                     persistCurrentGroupSize();
                 }).catch((e) => console.error('Error loading consonant practice progress:', e));
             })();
@@ -1812,7 +1832,7 @@ export default function ConsonantPracticeApp({ entryRequest, onExit, hideOwnOnli
             stopAllGames(); // Reset everything including AutoFlow
             const ceiling = getUnlockedCeilingIndex();
             currentConsonantCountIndex = (currentConsonantCountIndex + 1) % (ceiling + 1);
-            consonantCountIcon.innerText = consonantCountEmojis[currentConsonantCountIndex];
+            updateGroupIconBadge();
             persistCurrentGroupSize();
 
             const currentCount = consonantCountOptions[currentConsonantCountIndex];
@@ -2399,6 +2419,7 @@ export default function ConsonantPracticeApp({ entryRequest, onExit, hideOwnOnli
 
   return () => {
       if (unsubTeacherProgress) unsubTeacherProgress();
+      clickTracker.stop();
       // Stop any repeating audio/game state -- otherwise audioTimer (which
       // replays a question's sound every few seconds) keeps firing after
       // this component unmounts, since it's a plain JS timer with no React

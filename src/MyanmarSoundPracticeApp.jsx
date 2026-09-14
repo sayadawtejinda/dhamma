@@ -1,8 +1,9 @@
-import React, { useEffect, useRef } from 'react';
-import { doc, setDoc, updateDoc, serverTimestamp, getDoc, arrayUnion, onSnapshot } from 'firebase/firestore';
+import React, { useEffect, useRef, useState } from 'react';
+import { doc, setDoc, updateDoc, serverTimestamp, getDoc, arrayUnion, onSnapshot, increment } from 'firebase/firestore';
 import { db } from './firebase';
 import { rosterDocRefByUid, migrateNameKeyedRosterDoc } from './studentRosterIdentity';
 import OnlineStatusWidget from './OnlineStatusWidget';
+import { spawnFlyingCoins, trackLastClickPoint } from './flyingCoins';
 
 // ── Ported from the standalone "Myanmar Sound Practice" HTML app ──
 // Same hybrid approach as the other ported apps in this project: the
@@ -470,6 +471,16 @@ export default function MyanmarSoundPracticeApp({ entryRequest, onExit, hideOwnO
   const initializedRef = useRef(false);
   const studentName = entryRequest?.studentName || null;
   const studentUid = entryRequest?.studentUid || null;
+  // coinBalanceRef is the source of truth the vanilla-JS game code reads and
+  // writes synchronously on every answer; myCoinBalance is just its React
+  // mirror for the online-status pill (same split as ConsonantPracticeApp).
+  const coinBalanceRef = useRef(0);
+  const [myCoinBalance, setMyCoinBalance] = useState(0);
+  // depositCoinsToShrineRoom is declared inside the vanilla-JS effect below
+  // (needs the same closure as awardCoins/coinBalanceRef); this app doesn't
+  // use the window.__xxApp bridge its siblings do (see the file header
+  // comment), so a ref is how the JSX below reaches it instead.
+  const depositFnRef = useRef(() => {});
 
   useEffect(() => {
     if (!studentName || !studentUid) return;
@@ -491,6 +502,7 @@ export default function MyanmarSoundPracticeApp({ entryRequest, onExit, hideOwnO
     initializedRef.current = true;
     const rootEl = containerRef.current;
     const byId = (id) => rootEl.querySelector('#' + id);
+    const clickTracker = trackLastClickPoint(rootEl);
 
         // --- GAME CONFIGURATION ---
         const WIN_SCORE = 50; // Change this to 5 for quick testing
@@ -587,6 +599,47 @@ export default function MyanmarSoundPracticeApp({ entryRequest, onExit, hideOwnO
         // same as every other app).
         const progressRosterRef = studentUid ? rosterDocRefByUid(db, SP_ROSTER_PATH, studentUid) : null;
         let passedLevels = [];
+
+        // Gold coins: +10 per correct quiz answer, -1 per wrong, clamped at
+        // 0 -- same convention already used by ConsonantPracticeApp/
+        // BurmeseConsonantGameApp/MyanmarVowelsLearningApp (this app never
+        // had a coin economy of its own before).
+        function awardCoins(delta) {
+            if (!progressRosterRef) return;
+            const newBalance = Math.max(0, coinBalanceRef.current + delta);
+            coinBalanceRef.current = newBalance;
+            setMyCoinBalance(newBalance);
+            setDoc(progressRosterRef, { coinBalance: newBalance }, { merge: true }).catch(() => {});
+            if (delta > 0) spawnFlyingCoins(clickTracker.get(), delta);
+        }
+
+        // Deposits this student's entire local coin balance into their
+        // Shrine Room wallet, same pattern as the sibling apps.
+        async function depositCoinsToShrineRoom() {
+            const depositable = coinBalanceRef.current;
+            if (!studentName || depositable <= 0) return;
+            const confirmed = window.confirm(`Deposit ${depositable} coin(s) into your Shrine Room wallet?`);
+            if (!confirmed) return;
+            try {
+                const sanitizedName = (studentName || 'unknown').trim().replace(/[.$#/\[\]]/g, '_');
+                const shrineRef = doc(db, 'artifacts/shrine-room-app/public/data/roster', sanitizedName);
+                const shrineSnap = await getDoc(shrineRef);
+                const SHRINE_STARTER_COINS = 20;
+                await setDoc(shrineRef, {
+                    studentName,
+                    coinBalance: shrineSnap.exists() ? increment(depositable) : SHRINE_STARTER_COINS + depositable,
+                }, { merge: true });
+                coinBalanceRef.current = 0;
+                setMyCoinBalance(0);
+                if (progressRosterRef) setDoc(progressRosterRef, { coinBalance: 0 }, { merge: true }).catch(() => {});
+                alert(`🪙 Deposited ${depositable} coin(s) into your Shrine Room wallet!`);
+            } catch (e) {
+                console.error('Error depositing coins to Shrine Room:', e);
+                alert('⚠️ Something went wrong depositing your coins. Please try again.');
+            }
+        }
+        depositFnRef.current = depositCoinsToShrineRoom;
+
         let teacherConfirmedDone = 0;
         const unsubTeacherProgress = studentUid
             ? onSnapshot(doc(db, TUTORING_STUDENTS_PATH, studentUid), (snap) => {
@@ -644,6 +697,8 @@ export default function MyanmarSoundPracticeApp({ entryRequest, onExit, hideOwnO
                     passedLevels = Array.isArray(data.passedLevels) ? data.passedLevels : [];
                     passedLevels.forEach(markLevelButtonPassed);
                     applyLevelLocks();
+                    coinBalanceRef.current = data.coinBalance || 0;
+                    setMyCoinBalance(coinBalanceRef.current);
                 }).catch(e => console.error('Error loading Sound Practice progress:', e));
             })();
             persistCurrentLevel(currentLevel);
@@ -1427,8 +1482,9 @@ export default function MyanmarSoundPracticeApp({ entryRequest, onExit, hideOwnO
             statusIconContainer.innerHTML = `<i class="fas ${isCorrect ? 'fa-check-circle text-green-500' : 'fa-times-circle text-red-500'} text-xl"></i>`;
             
             if (isCorrect) {
-                score++; 
-                scoreElement.textContent = score; 
+                score++;
+                awardCoins(10);
+                scoreElement.textContent = score;
                 messageElement.textContent = 'Correct!'; 
                 messageElement.className = 'text-lg text-green-500'; 
                 button.classList.add('btn-correct'); 
@@ -1464,7 +1520,8 @@ export default function MyanmarSoundPracticeApp({ entryRequest, onExit, hideOwnO
                     }
                 });
             } else {
-                wrongScore++; 
+                wrongScore++;
+                awardCoins(-1);
                 wrongScoreElement.textContent = wrongScore;
                 button.classList.add('btn-incorrect'); 
                 button.disabled = true; 
@@ -1904,6 +1961,7 @@ export default function MyanmarSoundPracticeApp({ entryRequest, onExit, hideOwnO
     // objects and setTimeout aren't tied to React's lifecycle.
     return () => {
       if (unsubTeacherProgress) unsubTeacherProgress();
+      clickTracker.stop();
       isPlayingSeries = false;
       if (soundTimeout) clearTimeout(soundTimeout);
       if (!audioPlayer.paused) audioPlayer.pause();
@@ -1925,8 +1983,13 @@ export default function MyanmarSoundPracticeApp({ entryRequest, onExit, hideOwnO
           studentName={studentName}
           isTeacherMode={!studentName}
           panelTitle="🔊 Students"
+          coinBalance={studentName ? myCoinBalance : null}
+          onCoinClick={studentName ? () => depositFnRef.current?.() : undefined}
           renderActivity={s => (
-            <span className="text-gray-600">{s.currentLevel ? `Level ${s.currentLevel}` : 'Not practicing'}</span>
+            <span className="text-gray-600">
+              {s.currentLevel ? `Level ${s.currentLevel}` : 'Not practicing'}
+              {s.coinBalance != null && <> · <span className="font-bold text-amber-600">🪙{s.coinBalance}</span></>}
+            </span>
           )}
         />
       )}

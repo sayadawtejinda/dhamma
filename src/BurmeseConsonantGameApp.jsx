@@ -3,6 +3,7 @@ import { doc, setDoc, updateDoc, serverTimestamp, getDoc, arrayUnion, increment 
 import { db } from './firebase';
 import { rosterDocRefByUid, migrateNameKeyedRosterDoc } from './studentRosterIdentity';
 import OnlineStatusWidget from './OnlineStatusWidget';
+import { spawnFlyingCoins, trackLastClickPoint } from './flyingCoins';
 
 // Live "who's online" roster — same simple heartbeat pattern as
 // MyanmarReaderApp.jsx's READER_ROSTER_PATH (30s ping, 5-minute online
@@ -564,6 +565,7 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
     if (initializedRef.current) return;
     initializedRef.current = true;
     const rootEl = containerRef.current;
+    const clickTracker = trackLastClickPoint(rootEl);
 
     // The original page loaded the canvas-confetti library via a <script>
     // tag in <head>, which is not carried over by this hybrid port -- load
@@ -783,6 +785,7 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
         function recordGameCompleted(gameId) {
             if (completedGameIds.has(gameId)) return;
             completedGameIds.add(gameId);
+            updateGroupSelectorBadge();
             if (progressRosterRef) setDoc(progressRosterRef, { completedGames: arrayUnion(gameId) }, { merge: true }).catch(() => {});
         }
         function persistCurrentGroup(groupIndex) {
@@ -807,6 +810,12 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
             coinBalanceRef.current = newBalance;
             setMyCoinBalance(newBalance);
             setDoc(progressRosterRef, { coinBalance: newBalance }, { merge: true }).catch(() => {});
+            if (delta > 0) spawnFlyingCoins(clickTracker.get(), delta);
+        }
+        function updateGroupSelectorBadge() {
+            if (!elements.groupSelectorDisplay) return;
+            const groupNumber = currentSelectedGroupIndex + 1;
+            elements.groupSelectorDisplay.innerText = isGroupFullyDone(groupNumber) ? `${groupNumber} ✅` : `${groupNumber}`;
         }
 
         // Deposits this student's entire local coin balance into their
@@ -860,9 +869,9 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
                     const resumeGroupNumber = maxUnlockedGroupNumber();
                     if (resumeGroupNumber > 1 && resumeGroupNumber <= allSoundGroupsForReading.length) {
                         currentSelectedGroupIndex = resumeGroupNumber - 1;
-                        if (elements.groupSelectorDisplay) elements.groupSelectorDisplay.innerText = resumeGroupNumber;
                         persistCurrentGroup(currentSelectedGroupIndex);
                     }
+                    updateGroupSelectorBadge();
                 }).catch(e => console.error('Error loading Burmese Consonant Game progress:', e));
             })();
         }
@@ -1174,7 +1183,7 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
             currentSelectedGroupIndex = candidateIndex;
             const newIndex = currentSelectedGroupIndex;
             persistCurrentGroup(newIndex);
-            elements.groupSelectorDisplay.innerText = newIndex + 1;
+            updateGroupSelectorBadge();
             showGameStatus(`Group ${newIndex + 1} Selected.`, 'info');
             let targetElement;
             if (newIndex === 0) { targetElement = rootEl.querySelector('#original-consonant-group-wrapper'); }
@@ -1611,6 +1620,7 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
     // unmounts, since it's a plain JS timer with no React lifecycle of
     // its own.
     return () => {
+      clickTracker.stop();
       stopGame();
       delete window.__bcgApp;
     };

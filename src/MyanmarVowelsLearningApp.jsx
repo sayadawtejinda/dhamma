@@ -3,6 +3,7 @@ import { doc, setDoc, updateDoc, serverTimestamp, getDoc, getDocFromServer, arra
 import { db } from './firebase';
 import { rosterDocRefByUid, migrateNameKeyedRosterDoc } from './studentRosterIdentity';
 import OnlineStatusWidget from './OnlineStatusWidget';
+import { spawnFlyingCoins, trackLastClickPoint } from './flyingCoins';
 
 // ── Ported from the standalone "Myanmar Vowels Learning" HTML app ──
 // Same hybrid approach as ConsonantPracticeApp/BurmeseConsonantGameApp/
@@ -638,6 +639,7 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
     initializedRef.current = true;
     const rootEl = containerRef.current;
     const byId = (id) => rootEl.querySelector('#' + id);
+    const clickTracker = trackLastClickPoint(rootEl);
 
         // Audio mappings as before
         const singleAudioFile = 'https://raw.githubusercontent.com/nathantun93/bell/main/သရသံ_1s.mp3';
@@ -757,6 +759,7 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
             coinBalanceRef.current = newBalance;
             setMyCoinBalance(newBalance);
             setDoc(progressRosterRef, { coinBalance: newBalance }, { merge: true }).catch(() => {});
+            if (delta > 0) spawnFlyingCoins(clickTracker.get(), delta);
         }
 
         // Deposits this student's entire local coin balance into their
@@ -858,11 +861,14 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
             // A locked level button keeps its onclick (so a stray click is a
             // no-op inside startGameSession's own guard below, never a JS
             // error from a missing handler) but shows a lock icon and is
-            // visually dimmed instead of just being invisible.
+            // visually dimmed instead of just being invisible. A won level
+            // gets a green checkmark instead.
             const levelBtn = (mode, type, level, label, colorClasses) => {
                 const unlocked = isLevelUnlocked(mode, type, level);
+                const won = completedGameIds.has(`${mode}-${type}-${level}`);
                 const lockedClasses = unlocked ? '' : ' opacity-40 grayscale cursor-not-allowed';
-                return `<button class="level-btn ${colorClasses}${lockedClasses}" onclick="window.__mvlApp.startGameSession('${type}', ${level})">${unlocked ? label : `🔒 ${label}`}</button>`;
+                const displayLabel = !unlocked ? `🔒 ${label}` : won ? `${label} ✅` : label;
+                return `<button class="level-btn ${colorClasses}${lockedClasses}" onclick="window.__mvlApp.startGameSession('${type}', ${level})">${displayLabel}</button>`;
             };
 
             if (currentMode === 'B') {
@@ -882,9 +888,7 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
                 listenContainer.innerHTML =
                     levelBtn('P', 'listen', 1, 'Level 1', 'border-indigo-500 text-indigo-600 hover:bg-indigo-500') +
                     levelBtn('P', 'listen', 2, 'Level 2', 'border-indigo-500 text-indigo-600 hover:bg-indigo-500');
-                clickContainer.innerHTML = `
-                    <button class="level-btn border-green-500 text-green-600 hover:bg-green-500" onclick="window.__mvlApp.startGameSession('click', 1)">Play</button>
-                `;
+                clickContainer.innerHTML = levelBtn('P', 'click', 1, 'Play', 'border-green-500 text-green-600 hover:bg-green-500');
                 typeContainer.innerHTML = `
                     <button class="level-btn border-pink-500 text-pink-600 hover:bg-pink-500" onclick="window.__mvlApp.startGameSession('type', 1)">Play</button>
                 `;
@@ -1693,6 +1697,7 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
     // component unmounts, since it's plain JS state with no React lifecycle
     // of its own.
     return () => {
+      clickTracker.stop();
       stopGame();
       delete window.__mvlApp;
     };
