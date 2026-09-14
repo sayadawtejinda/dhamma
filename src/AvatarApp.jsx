@@ -165,6 +165,7 @@ export default function AvatarApp({ entryRequest, onExit }) {
   const [studentInfo, setStudentInfo] = useState({ name: '', pendingName: null, nameChangeCount: 0 });
   const [isEditingRename, setIsEditingRename] = useState(false);
   const [renameInput, setRenameInput] = useState('');
+  const [showLockInfo, setShowLockInfo] = useState(false);
 
   const rosterRef = studentUid ? doc(db, SHRINE_ROSTER_PATH, sanitizeShrineKey(studentName)) : null;
 
@@ -316,10 +317,31 @@ export default function AvatarApp({ entryRequest, onExit }) {
         showInactiveWarning={false}
       />
 
-      <h1 className="text-2xl font-bold text-indigo-800 mb-1">{studentName}'s Avatar</h1>
+      <h1 className="text-2xl font-bold text-indigo-800 mb-1 flex items-center justify-center gap-2">
+        {studentName}'s Avatar
+        {!isTeacherPreview && !studentInfo.pendingName && !isEditingRename && !canRequestNameChange && (
+          <span className="relative">
+            <button
+              onClick={() => setShowLockInfo(v => !v)}
+              className="text-lg opacity-70 hover:opacity-100 transition-opacity"
+              title="Change My Name -- locked"
+            >
+              🔒
+            </button>
+            {showLockInfo && (
+              <div className="absolute z-10 top-full mt-2 left-1/2 -translate-x-1/2 w-56 rounded-xl border-2 border-gray-200 bg-white p-3 text-center shadow-xl">
+                <p className="font-bold text-gray-600 text-sm">Change My Name</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  🪷 {lotusCount} / {nameChangeThreshold} lotus flowers from Shrine Room needed to unlock
+                </p>
+              </div>
+            )}
+          </span>
+        )}
+      </h1>
       <p className="text-sm text-gray-500 mb-6">Your own little reflection -- dress it up with coins you've earned.</p>
 
-      {!isTeacherPreview && (
+      {!isTeacherPreview && (studentInfo.pendingName || isEditingRename || canRequestNameChange) && (
         <div className="w-full max-w-sm mb-6">
           <style>{`
             @keyframes renameCardGlow {
@@ -374,15 +396,7 @@ export default function AvatarApp({ entryRequest, onExit }) {
               <p className="font-bold text-pink-700">Change My Name</p>
               <p className="text-xs text-pink-500 mt-1">Unlocked! Tap to pick a new name.</p>
             </button>
-          ) : (
-            <div className="w-full rounded-2xl border-2 border-gray-200 bg-gray-50 p-5 text-center opacity-80">
-              <p className="text-4xl mb-2">🔒</p>
-              <p className="font-bold text-gray-500">Change My Name</p>
-              <p className="text-xs text-gray-500 mt-1">
-                🪷 {lotusCount} / {nameChangeThreshold} lotus flowers from Shrine Room needed to unlock
-              </p>
-            </div>
-          )}
+          ) : null}
         </div>
       )}
 
