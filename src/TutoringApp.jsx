@@ -278,6 +278,20 @@ const GROUP_APP_PART_UNIT_COUNT = {
   'speakingmyanmar://': {
     numberlearning: 4,
     interactivequiz: 5,
+    myanmarpoems: 48,
+  },
+};
+// What to call one "unit" for each part above, for the Available Lessons
+// card's "You completed up to <label> N / M" text.
+const GROUP_APP_PART_UNIT_LABEL = {
+  'readingmyanmar://': {
+    consonantpractice: 'Group',
+    soundpractice: 'Level',
+  },
+  'speakingmyanmar://': {
+    numberlearning: 'Level',
+    interactivequiz: 'Phase',
+    myanmarpoems: 'Poem',
   },
 };
 const extractGroupPartKey = (link) => {
@@ -1889,12 +1903,28 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
       if (lessonToSend?.link === 'dhammaschool://' && sendDhammaschoolClassId && dhammaschoolStudentProgress?.totalLessons != null) return dhammaschoolStudentProgress.totalLessons;
       return null;
     })();
-    const effectiveLessonUnitCount = classLessonCountForSend != null ? classLessonCountForSend : (lessonToSend?.unitCount || 0);
+    // readingmyanmar:// / speakingmyanmar:// group parts (Consonant Practice,
+    // Sound Practice, Number Learning, Interactive Quiz, Myanmar Poems) carry
+    // no per-part unitCount/trophyLimit on the bare bank entry -- the real
+    // numbers live in GROUP_APP_PART_UNIT_COUNT/GROUP_APP_PART_MAX, keyed by
+    // the part chosen here in Assign Lesson, same idea as Smart Study/
+    // Abhidhamma/Dhammaschool's own class-specific override above. Without
+    // this, Available Lessons showed no progress text at all for these.
+    const groupPartUnitCountForSend = GROUP_APP_PART_UNIT_COUNT[lessonToSend?.link]?.[sendGroupPartKey];
+    const groupPartMaxForSend = GROUP_APP_PART_MAX[lessonToSend?.link]?.[sendGroupPartKey];
+    const effectiveLessonUnitCount = classLessonCountForSend != null
+      ? classLessonCountForSend
+      : groupPartUnitCountForSend != null
+        ? groupPartUnitCountForSend
+        : (lessonToSend?.unitCount || 0);
     // Dhammaschool's real trophy rate is 2 per lesson (confirmed by the
     // teacher), not the round(lessons/5) formula Smart Study/Abhidhamma use.
     const effectiveLessonTrophyLimit = classLessonCountForSend != null
       ? (lessonToSend?.link === 'dhammaschool://' ? classLessonCountForSend * 2 : computeClassTrophyMax(classLessonCountForSend))
-      : (lessonToSend?.trophyLimit || 0);
+      : groupPartMaxForSend != null
+        ? groupPartMaxForSend
+        : (lessonToSend?.trophyLimit || 0);
+    const effectiveLessonUnitLabel = GROUP_APP_PART_UNIT_LABEL[lessonToSend?.link]?.[sendGroupPartKey] || lessonToSend?.unitLabel || 'Chapter';
     // For lessons stored without a classId, substitute the one chosen here in
     // the Send Action class picker.
     const effectiveLessonLink = (() => {
@@ -1941,7 +1971,7 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
               link: effectiveLessonLink,
               details: lessonToSend.details,
               trophyLimit: effectiveLessonTrophyLimit,
-              unitLabel: lessonToSend.unitLabel || 'Chapter',
+              unitLabel: effectiveLessonUnitLabel,
               unitCount: effectiveLessonUnitCount,
               status: 'pending',
               sentAt: serverTimestamp()
@@ -1979,7 +2009,7 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
             link: effectiveLessonLink,
             details: lessonToSend.details,
             trophyLimit: effectiveLessonTrophyLimit,
-            unitLabel: lessonToSend.unitLabel || 'Chapter',
+            unitLabel: effectiveLessonUnitLabel,
             unitCount: effectiveLessonUnitCount,
             status: 'pending',
             sentAt: serverTimestamp()
