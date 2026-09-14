@@ -274,11 +274,26 @@ const GROUP_APP_PART_UNIT_COUNT = {
   'readingmyanmar://': {
     consonantpractice: 7,
     soundpractice: 8,
+    // 1 trophy per game, confirmed by the teacher: 7 groups x 2 game types
+    // (Pick + Click) = 14, +2 for the first group's extra pair, +3 for the
+    // Picture game's levels = 19 total, matching GROUP_APP_PART_MAX exactly
+    // (1:1 ratio, same as consonantpractice).
+    burmesegame: 19,
+    // 1 trophy per game, confirmed by the teacher: Basic mode has 8 games,
+    // Pro mode has 3, totalling 11 -- matches GROUP_APP_PART_MAX (1:1).
+    vowelslearning: 11,
   },
   'speakingmyanmar://': {
     numberlearning: 4,
     interactivequiz: 5,
     myanmarpoems: 48,
+    // 1 trophy per game win, confirmed by the teacher (capped at 5) --
+    // matches GROUP_APP_PART_MAX (1:1).
+    animalsound: 5,
+    // 1 trophy per 30 in-game round-wins (already the app's own trophyUnits
+    // math), capped at 20, confirmed by the teacher -- matches
+    // GROUP_APP_PART_MAX (1:1).
+    burmeselearninggames: 20,
   },
 };
 // What to call one "unit" for each part above, for the Available Lessons
@@ -287,11 +302,15 @@ const GROUP_APP_PART_UNIT_LABEL = {
   'readingmyanmar://': {
     consonantpractice: 'Group',
     soundpractice: 'Level',
+    burmesegame: 'Game',
+    vowelslearning: 'Game',
   },
   'speakingmyanmar://': {
     numberlearning: 'Level',
     interactivequiz: 'Phase',
     myanmarpoems: 'Poem',
+    animalsound: 'Win',
+    burmeselearninggames: 'Round',
   },
 };
 const extractGroupPartKey = (link) => {
