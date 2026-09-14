@@ -721,7 +721,7 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
   const awardScore = (amount) => {
     if (!amount) return;
     setScore(prev => prev + amount);
-    if (studentName) {
+    if (studentName && userId) {
       setDoc(readerRosterDocRef(studentName), { coinBalance: increment(Math.round(amount)) }, { merge: true }).catch(() => {});
     }
   };
@@ -734,7 +734,7 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
   // class of bug already fixed elsewhere for trophy-derived progress. Coins
   // only, no score.
   const awardPracticeModeCoins = (amount) => {
-    if (!amount || !studentName) return;
+    if (!amount || !studentName || !userId) return;
     setCoinBalance(prev => prev + amount);
     setDoc(readerRosterDocRef(studentName), { coinBalance: increment(amount) }, { merge: true }).catch(() => {});
   };
@@ -914,8 +914,18 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
 
   // Where this student should pick up next time — furthest (chapter, sheet)
   // reached so far, following the fixed order: Ch1/A, Ch1/B, Ch2/A, Ch2/B, ...
+  //
+  // Waits on userId (not just studentName) before subscribing, same as the
+  // trophy-tracking effect above -- studentName is already known from
+  // localStorage on the very first render, well before the async auth
+  // listener resolves userId, so without this guard readerRosterDocRef(name)
+  // would resolve to the OLD name-keyed doc for that first subscription and
+  // (since userId isn't in the deps either) never re-subscribe once userId
+  // became available -- silently pinning coinBalance/resumePosition to a
+  // stale doc for the rest of the session even though every actual coin
+  // award is correctly written to the uid-keyed doc.
   useEffect(() => {
-    if (!studentName) return;
+    if (!studentName || !userId) return;
     const unsub = onSnapshot(readerRosterDocRef(studentName), (snap) => {
       if (snap.exists()) {
         const dt = snap.data();
@@ -933,7 +943,7 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
       }
     }, e => console.error('Resume position listen error:', e));
     return () => unsub();
-  }, [studentName]);
+  }, [studentName, userId]);
 
   // Listen to the linked Tutoring student doc for "Fix Completed Chapter".
   useEffect(() => {
