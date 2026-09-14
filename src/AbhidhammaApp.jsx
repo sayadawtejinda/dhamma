@@ -817,6 +817,20 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
   // Read localStorage immediately so first render already has correct role (no flash/conflict)
   const [isTeacher,setIsTeacher]=useState(()=>localStorage.getItem('abhidhamma_isTeacher')==='true');
   const [role,setRole]=useState(()=>localStorage.getItem('abhidhamma_isTeacher')==='true'?'Teacher':'Student');
+  // `userId` above is this DEVICE's own live anonymous-auth uid -- shared by
+  // every app in the suite, but NOT the same thing as which student is
+  // currently signed into TutoringApp on that device. On a shared/family
+  // device, a second child creating their own Tutoring account resets the
+  // device's live auth session to THEIR uid, while a student who was
+  // already mid-session in Abhidhamma keeps seeing their own correct name
+  // (from entryRequest/studentProfile) -- but every write/read keyed by the
+  // raw `userId` silently lands under the new sibling's uid instead of
+  // their own, orphaning their real progress. entryRequest.studentUid is
+  // TutoringApp's own verified identity for whoever is actually using it,
+  // so it's the one that should anchor all of this student's Abhidhamma
+  // data -- falling back to the raw auth uid only for teachers (who have no
+  // entryRequest.studentUid) or when no entryRequest was supplied at all.
+  const effectiveUserId = (!isTeacher && entryRequest?.studentUid) ? entryRequest.studentUid : userId;
   const [classId,setClassId]=useState('');const [classData,setClassData]=useState(null);const [lessons,setLessons]=useState([]);const [allClasses,setAllClasses]=useState([]);
   // When a teacher has exactly one class "open" (Auto-Approve on), every student is steered into
   // that class regardless of which class button they tap — see the Choose Your Class screen below.
@@ -844,13 +858,13 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
   const [abhiCoinsTransferredOut,setAbhiCoinsTransferredOut]=useState(0);
   const abhiCoinBalance=Math.max(0,Math.floor(myAbhiTotalScore/ABHI_POINTS_PER_COIN)-abhiCoinsTransferredOut);
   useEffect(()=>{
-    if(role!=='Student'||!userId)return;
-    const unsub=onSnapshot(query(abhiScoresRef(),where('userId','==',userId)),snap=>{
+    if(role!=='Student'||!effectiveUserId)return;
+    const unsub=onSnapshot(query(abhiScoresRef(),where('userId','==',effectiveUserId)),snap=>{
       let total=0;snap.forEach(d=>{total+=d.data().score||0;});
       setMyAbhiTotalScore(total);
     });
     return unsub;
-  },[role,userId]);
+  },[role,effectiveUserId]);
   useEffect(()=>{
     if(role!=='Student'||!studentProfile?.name)return;
     const sanitize=k=>(k||'unknown').trim().replace(/[.$#/\[\]]/g,'_');
@@ -998,13 +1012,15 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
     setEditingLesson(null);
   };
 
-  // Ping roster every 60s — skip if teacher mode. Keyed by userId now, so a
-  // rename is just a changed `name`/`studentName` field on the same doc —
-  // no redirect-pointer following needed.
+  // Ping roster every 60s — skip if teacher mode. Keyed by effectiveUserId
+  // (TutoringApp's verified identity, not the device's raw auth uid — see
+  // the comment where effectiveUserId is defined), so a rename is just a
+  // changed `name`/`studentName` field on the same doc — no redirect-pointer
+  // following needed.
   useEffect(()=>{
-    if(!studentProfile||!classId||!userId||studentProfile.status!=='approved'||isTeacher) return;
+    if(!studentProfile||!classId||!effectiveUserId||studentProfile.status!=='approved'||isTeacher) return;
     const name=studentProfile.name;
-    const rRef=abhiRosterDocRef(classId,userId);
+    const rRef=abhiRosterDocRef(classId,effectiveUserId);
     const ping=async()=>{
       let snap;
       try{ snap=await getDoc(rRef); }
@@ -1021,10 +1037,10 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
       // Check for an old name-keyed doc to carry forward before creating a
       // fresh one (see migrateOldAbhiRosterDoc).
       try{
-        const migrated=await migrateOldAbhiRosterDoc(classId,userId,name);
+        const migrated=await migrateOldAbhiRosterDoc(classId,effectiveUserId,name);
         await setDoc(rRef,{
           ...(migrated||{}),
-          classId,userId,studentName:name,name,
+          classId,userId:effectiveUserId,studentName:name,name,
           group:(migrated&&migrated.group)||studentProfile.group||'explorers',
           status:'approved',isOnline:true,lastPing:serverTimestamp(),lastSeen:serverTimestamp(),
           joinedAt:(migrated&&migrated.joinedAt)||Date.now(),
@@ -1036,7 +1052,7 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
     const handleOffline=()=>{ try{ updateDoc(rRef,{isOnline:false,lastSeen:serverTimestamp()}); }catch(e){} };
     window.addEventListener('beforeunload',handleOffline);
     return()=>{ clearInterval(interval); handleOffline(); window.removeEventListener('beforeunload',handleOffline); };
-  },[studentProfile,classId,userId]);
+  },[studentProfile,classId,effectiveUserId]);
   const createClass = async () => {
     if(!newClassId.trim())return;
     await setDoc(abhiClassDocRef(newClassId.trim()),{classId:newClassId.trim(),autoApprove:false,createdAt:serverTimestamp()},{merge:true});
@@ -1197,12 +1213,12 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
       <input type="file" ref={fileRef}        onChange={handleImportFull}         accept=".json" className="hidden"/>
       {/* Teacher login modal (opens via header "Teacher Login" button) */}
       {showWelcome&&<AbhiTeacherLogin onComplete={()=>{setIsTeacher(true);setRole('Teacher');localStorage.setItem('abhidhamma_isTeacher','true');setShowWelcome(false);}} onClose={()=>setShowWelcome(false)}/>}
-      {showLeaderboard&&<AbhiLeaderboardModal classId={classId} studentName={studentProfile?.name} userId={userId} onClose={()=>setShowLeaderboard(false)}/>}
+      {showLeaderboard&&<AbhiLeaderboardModal classId={classId} studentName={studentProfile?.name} userId={effectiveUserId} onClose={()=>setShowLeaderboard(false)}/>}
       {/* Floating stats bar — visible to students, shows rank + completed lessons for the open class */}
       {role==='Student'&&studentProfile&&classId&&((classStats[classId]?.completedCount>0)||(classStats[classId]?.rank>0))&&(
         <AbhiFloatingStats rank={classStats[classId]?.rank||0} totalLessons={classStats[classId]?.completedCount||0}/>
       )}
-      {activeQuizId&&activeQuizData&&<QuizModule classId={classId} lessonId={activeQuizId} lessonTitle={lessons.find(l=>l.id===activeQuizId)?.title||''} userId={userId} userName={studentProfile?.name||'Student'} ageGroup={studentProfile?.group} quizData={activeQuizData} onClose={()=>{setActiveQuizId(null);setActiveQuizData(null);}}/>}
+      {activeQuizId&&activeQuizData&&<QuizModule classId={classId} lessonId={activeQuizId} lessonTitle={lessons.find(l=>l.id===activeQuizId)?.title||''} userId={effectiveUserId} userName={studentProfile?.name||'Student'} ageGroup={studentProfile?.group} quizData={activeQuizData} onClose={()=>{setActiveQuizId(null);setActiveQuizData(null);}}/>}
       {msg&&<div className="fixed top-4 left-1/2 -translate-x-1/2 bg-blue-600 text-white px-6 py-2 rounded-full shadow-xl z-50 font-bold">{msg}</div>}
       <div className="max-w-4xl mx-auto">
         {/* Header */}
@@ -1225,7 +1241,7 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
                 <Trophy className="w-5 h-5"/>
               </button>
             )}
-            {classId&&<NotificationBell userId={userId} classId={classId}/>}
+            {classId&&<NotificationBell userId={effectiveUserId} classId={classId}/>}
           </div>
         </header>
 
@@ -1362,12 +1378,12 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
             {!isTeacher && !studentProfile&&(
               <AbhiAgeGroupPicker initialGroup={pendingEntry?.group} onComplete={grp => {
                 let cachedName=null;
-                if(userId){try{cachedName=JSON.parse(localStorage.getItem(`abhidhamma_profile_${userId}`)||'null')?.name||null;}catch(e){}}
+                if(effectiveUserId){try{cachedName=JSON.parse(localStorage.getItem(`abhidhamma_profile_${effectiveUserId}`)||'null')?.name||null;}catch(e){}}
                 const label = AGE_GROUPS[grp]?.label?.split(' ')[0] || 'Student';
                 const name = pendingEntry?.name || cachedName || label;
                 const p = { group: grp, status: 'approved', name };
                 setStudentProfile(p);
-                if (userId) localStorage.setItem(`abhidhamma_profile_${userId}`, JSON.stringify(p));
+                if (effectiveUserId) localStorage.setItem(`abhidhamma_profile_${effectiveUserId}`, JSON.stringify(p));
               }}/>
             )}
 
@@ -1429,7 +1445,7 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
                                 {lessons.length===0&&<p className="text-center text-gray-500 py-6">No lessons yet.</p>}
                 {lessons.map(l=>(
                   <AbhiLessonItem key={l.id} lesson={l} classId={classId}
-                    isTeacher={false} userId={userId}
+                    isTeacher={false} userId={effectiveUserId}
                     studentAgeGroup={isTeacher ? teacherPreviewGroup : studentProfile.group}
                     studentName={isTeacher ? (AGE_GROUPS[teacherPreviewGroup]?.label||'Preview') : studentProfile.name}
                     classImageBase={classImageBase} onGenerateVariants={()=>{}} onEdit={()=>{}}
