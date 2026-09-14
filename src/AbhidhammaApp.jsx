@@ -203,24 +203,27 @@ const AbhiClassRoster = ({ userId, classId }) => {
   const [students,setStudents]=useState([]);
   const [aa,setAa]=useState(false);
   const [open,setOpen]=useState(true);
-  const [studentStats,setStudentStats]=useState({}); // uid → {rank, completed}
+  const [studentStats,setStudentStats]=useState({}); // studentName → {rank, completed}
 
   // Per-student rank + completed-lesson count for this class, shown as a floating badge on each row.
-  // Grouped by userId (every score doc already carries one -- see QuizModule's handleAnswer), not by
-  // name, so a mid-class rename can't split one student's progress across two leaderboard rows.
+  // Grouped by studentName, not userId -- a device whose anonymous-auth session keeps churning
+  // (private browsing, a tablet that clears site data between uses) can briefly report a fresh
+  // uid with every reload, which would otherwise split one student's progress across several
+  // leaderboard rows (or drop the badge entirely) even though their name stayed the same the
+  // whole time. Name is the far more stable signal for THIS display purpose.
   useEffect(()=>{
     if(!classId)return;
     return onSnapshot(query(abhiScoresRef(),where('classId','==',classId)),snap=>{
       const byStudent={};
       snap.docs.forEach(d=>{
-        const dt=d.data();const uid=dt.userId;
-        if(!uid||!dt.lessonId)return;
-        if(!byStudent[uid])byStudent[uid]=new Set();
-        byStudent[uid].add(dt.lessonId);
+        const dt=d.data();const sn=dt.studentName||dt.name;
+        if(!sn||!dt.lessonId)return;
+        if(!byStudent[sn])byStudent[sn]=new Set();
+        byStudent[sn].add(dt.lessonId);
       });
       const ranked=Object.entries(byStudent).sort((a,b)=>b[1].size-a[1].size);
       const stats={};
-      ranked.forEach(([uid,set],idx)=>{stats[uid]={rank:idx+1,completed:set.size};});
+      ranked.forEach(([sn,set],idx)=>{stats[sn]={rank:idx+1,completed:set.size};});
       setStudentStats(stats);
     },err=>console.error('Roster stats:',err.code));
   },[classId]);
@@ -303,7 +306,7 @@ const AbhiClassRoster = ({ userId, classId }) => {
             status lives only in the shared OnlineStatusWidget (see
             AbhiTeacherClassPicker/roster header), not duplicated here. */}
         {approved.map(s=>{
-          const stat=studentStats[s.userId];
+          const stat=studentStats[s.studentName];
           return(
             <div key={s.id} className="relative mt-3 first:mt-0 flex items-center gap-2 p-2.5 rounded-lg border bg-gray-700/30 border-gray-600/30">
               {stat&&(
@@ -677,13 +680,27 @@ const AbhiLessonItem = ({ lesson, classId, isTeacher, studentAgeGroup, studentNa
   
   useEffect(()=>{if(isOpen&&ref.current){setTimeout(()=>{const y=ref.current.getBoundingClientRect().top+window.scrollY-80;window.scrollTo({top:y,behavior:'smooth'});},100);}},[isOpen]);
   
-  // Track quiz completion by userId -- global_scores docs are keyed
-  // `${userId}_${lessonId}` (see QuizModule's handleAnswer), so this is a
-  // direct doc subscription, stable across any rename.
+  // Track quiz completion by studentName (primary) AND userId (fallback). Name
+  // is the primary signal because it survives a device whose anonymous-auth
+  // session keeps churning (private browsing, a tablet that clears site data
+  // between uses) -- entryRequest.studentUid mostly protects against that
+  // (see effectiveUserId in the main component), but a name-based check as
+  // well means a stray auth reset can never make a real completion vanish
+  // from view, even for the one visit before things settle back down.
   useEffect(()=>{
-    if(!classId||!lesson.id||!userId)return;
-    return onSnapshot(doc(abhiScoresRef(),`${userId}_${lesson.id}`),snap=>{setIsCompleted(snap.exists());},err=>console.error('Completion track:',err.code));
-  },[classId,lesson.id,userId]);
+    if(!classId||!lesson.id||!studentAgeGroup||!studentName)return;
+    let fromResultsByName=false,fromScoresByName=false,fromScoresByUserId=false;
+    const recompute=()=>setIsCompleted(fromResultsByName||fromScoresByName||fromScoresByUserId);
+    const subs=[
+      onSnapshot(query(abhiResultsRef(classId,lesson.id,studentAgeGroup),where('name','==',studentName)),snap=>{fromResultsByName=!snap.empty;recompute();},err=>console.error('Name completion track:',err.code)),
+      onSnapshot(query(abhiScoresRef(),where('studentName','==',studentName)),snap=>{
+        fromScoresByName=snap.docs.some(d=>{const dt=d.data();return dt.classId===classId&&dt.lessonId===lesson.id;});
+        recompute();
+      },err=>console.error('Name score completion track:',err.code)),
+      ...(userId?[onSnapshot(doc(abhiScoresRef(),`${userId}_${lesson.id}`),snap=>{fromScoresByUserId=snap.exists();recompute();},err=>console.error('UserId completion track:',err.code))]:[])
+    ];
+    return()=>{subs.forEach(u=>u());};
+  },[classId,lesson.id,studentAgeGroup,studentName,userId]);
   
   // Track Q&A participation for quiz unlock (ask + reply)
   useEffect(()=>{
