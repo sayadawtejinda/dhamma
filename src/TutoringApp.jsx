@@ -4134,13 +4134,43 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
   // new amount instead of double-crediting.
   const [isConvertingChantingLotus, setIsConvertingChantingLotus] = useState(false);
   const LOTUS_PER_CHANTING_TROPHY = 30;
+  // Quietly top up a student's Shrine Room lotus count -- no trophy, no
+  // announcement, nothing else touched. For cases like a student who
+  // deserved more lotus at some point in the past (e.g. before the Chanting
+  // conversion above existed) without drawing attention from classmates.
+  const [lotusGrantStudentUid, setLotusGrantStudentUid] = useState('');
+  const [lotusGrantAmount, setLotusGrantAmount] = useState(30);
+  const [isGrantingLotus, setIsGrantingLotus] = useState(false);
+  const handleGrantLotusQuietly = async () => {
+    const student = students.find(s => s.id === lotusGrantStudentUid);
+    const amount = parseInt(lotusGrantAmount, 10);
+    if (!student || isNaN(amount) || amount <= 0) {
+      alert('Pick a student and enter a positive lotus amount.');
+      return;
+    }
+    if (!window.confirm(`Quietly add ${amount} lotus flowers to ${student.name}'s Shrine Room wallet? No announcement is sent and no trophy is affected.`)) {
+      return;
+    }
+    setIsGrantingLotus(true);
+    try {
+      const shrineRef = doc(db, SHRINE_ROSTER_PATH_LOCAL, sanitizeShrineKeyLocal(student.name));
+      await setDoc(shrineRef, { studentName: student.name, lotusCount: increment(amount) }, { merge: true });
+      alert(`Added ${amount} lotus to ${student.name}.`);
+      setLotusGrantStudentUid('');
+      setLotusGrantAmount(30);
+    } catch (err) {
+      console.error('Error granting lotus:', err);
+      alert(`Failed: ${err.message || err}`);
+    }
+    setIsGrantingLotus(false);
+  };
   const handleConvertChantingTrophiesToLotus = async () => {
     const chantingLesson = lessonBank.find(l => l.title.trim().toLowerCase() === 'chanting');
     if (!chantingLesson) {
       alert('No Lesson Bank entry titled "Chanting" was found.');
       return;
     }
-    if (!window.confirm(`This finds every student with trophies earned from the "Chanting" lesson and adds ${LOTUS_PER_CHANTING_TROPHY} lotus flowers per trophy to their Shrine Room wallet. Safe to run more than once (only tops up trophies not already converted). Continue?`)) {
+    if (!window.confirm(`This finds every student with trophies earned from the "Chanting" lesson, adds ${LOTUS_PER_CHANTING_TROPHY} lotus flowers per trophy to their Shrine Room wallet, and lowers their overall trophy count by that same number of trophies (no announcement is sent either way). Safe to run more than once (only tops up trophies not already converted). Continue?`)) {
       return;
     }
     setIsConvertingChantingLotus(true);
@@ -4156,10 +4186,16 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
         const lotusToAdd = newTrophies * LOTUS_PER_CHANTING_TROPHY;
         const shrineRef = doc(db, SHRINE_ROSTER_PATH_LOCAL, sanitizeShrineKeyLocal(student.name));
         await setDoc(shrineRef, { studentName: student.name, lotusCount: increment(lotusToAdd) }, { merge: true });
+        // Only the simple overall trophyCount badge goes down by the
+        // converted amount -- earnedTrophies.<lessonKey> is left untouched
+        // since Chanting's own Available Lessons progress bar/completedUnits
+        // are derived from it, and those should keep reflecting real study
+        // progress, not shrink just because the trophy currency converted.
         await updateDoc(doc(db, `${publicDataPath}/students`, student.id), {
           [`chantingLotusConverted.${lessonKey}`]: trophies,
+          trophyCount: increment(-newTrophies),
         });
-        results.push(`${student.name}: +${lotusToAdd} lotus (${newTrophies} new trophy${newTrophies === 1 ? '' : 'ies'})`);
+        results.push(`${student.name}: +${lotusToAdd} lotus, -${newTrophies} trophy${newTrophies === 1 ? '' : 'ies'}`);
       }
       alert(results.length > 0
         ? `Converted for ${results.length} student(s):\n${results.join('\n')}`
@@ -5454,6 +5490,40 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
             >
               {isConvertingChantingLotus ? 'Converting...' : `Convert Chanting Trophies → Lotus (×${LOTUS_PER_CHANTING_TROPHY})`}
             </button>
+          </div>
+
+          <div className="mt-8 pt-6 border-t border-violet-200">
+            <h4 className="text-lg font-semibold mb-3 text-gray-700">🪷 Quietly Add Lotus</h4>
+            <p className="text-sm text-gray-600 mb-4">
+              Adds lotus flowers directly to a student's Shrine Room wallet -- no trophy, no announcement, nothing else changes. Useful for topping up a student who deserved more lotus at some point in the past.
+            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              <select
+                value={lotusGrantStudentUid}
+                onChange={(e) => setLotusGrantStudentUid(e.target.value)}
+                className="p-2 border rounded-lg"
+              >
+                <option value="">Select a student...</option>
+                {[...students].sort((a, b) => a.name.localeCompare(b.name)).map(s => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+              <input
+                type="number"
+                min="1"
+                value={lotusGrantAmount}
+                onChange={(e) => setLotusGrantAmount(e.target.value)}
+                className="w-24 p-2 border rounded-lg"
+              />
+              <span className="text-sm text-gray-500">🪷 lotus</span>
+              <button
+                onClick={handleGrantLotusQuietly}
+                disabled={isGrantingLotus || !lotusGrantStudentUid}
+                className="bg-pink-500 text-white px-4 py-2 rounded-lg font-semibold hover:bg-pink-600 disabled:opacity-50"
+              >
+                {isGrantingLotus ? 'Adding...' : 'Add Lotus'}
+              </button>
+            </div>
           </div>
 
           <div className="mt-8 pt-6 border-t border-violet-200">
