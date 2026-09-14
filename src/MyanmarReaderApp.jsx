@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Play, Volume2, Delete, RotateCcw, BookOpen, DownloadCloud, FileText, Library, Settings, X, Plus, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Play, Volume2, Lock, Delete, RotateCcw, BookOpen, DownloadCloud, FileText, Library, Settings, X, Plus, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { collection, doc, getDoc, getDocs, setDoc, updateDoc, onSnapshot, query, where, serverTimestamp, increment } from 'firebase/firestore';
 import { auth, db } from './firebase';
@@ -3764,7 +3764,7 @@ useEffect(() => {
       setIsSpeakerHeld(false);
   }}
   disabled={isLocked || (!syllables.length && !currentKeys.length)}
-  title="Tap: Read Aloud | Hold: Auto-Read Mode"
+  title={autoReadMode ? "🔒 Auto-Read Mode is ON — Hold to turn off" : "Tap: Read Aloud | Hold: Auto-Read Mode"}
   className={`relative flex-shrink-0 flex items-center justify-center gap-2 text-white px-6 py-4 rounded-xl font-bold text-lg shadow-lg transition-all border-b-4 h-[60px] overflow-hidden
     ${isSpeakerHeld
         ? 'bg-red-500 border-emerald-700 ring-4 ring-emerald-300 scale-95 cursor-wait'
@@ -3774,7 +3774,9 @@ useEffect(() => {
     disabled:bg-emerald-300 disabled:cursor-not-allowed`}
 >
   {autoReadMode && !isSpeakerHeld && <span className="absolute inset-0 bg-emerald-400 opacity-40 animate-ping rounded-xl"></span>}
-  <Volume2 size={24} className="relative z-10" />
+  {autoReadMode && !isSpeakerHeld
+    ? <Lock size={24} className="relative z-10" />
+    : <Volume2 size={24} className="relative z-10" />}
 </button>
 
             {appMode === 'sheet' && sheetData.length > 0 && currentSheetIndex > 0 && sheetData[currentSheetIndex]?.en && (

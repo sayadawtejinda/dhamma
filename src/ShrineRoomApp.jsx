@@ -563,11 +563,12 @@ const MEDITATION_LOTUS_SESSION_CAP = 30;
 // Small merit bonus paid on top of an offering's cost -- the act of
 // donating is itself rewarded, per the teacher's direction.
 const MERIT_OFFERING_BONUS = 2;
-// Re-opened for real trial use per the teacher's direction: students can
-// spend coins now to help find what still needs adjusting, understanding
-// coin balances will get reset once the app is finalized (not implemented
-// yet -- add a reset step here when that day comes). Flip back to true if
-// spending needs to be paused again before then.
+// Shopping stays open for good -- prices are cheap enough that coin
+// balances aren't worth worrying over, so the earlier "trial period, coins
+// get reset once finalized" plan is off; no reset is coming. Prices may
+// still go up later once students have gotten used to the shop, but that's
+// a separate, later decision. Flip back to true only if spending needs to
+// be paused for some other reason.
 const SHOP_LOCKED = false;
 
 // Small floating-emoji burst overlaid on a button while it's "active"
