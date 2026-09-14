@@ -69,13 +69,26 @@ const abhiQRef           = (cId, lId)    =>
 // The old doc is marked {migratedTo: uid}, not deleted, as cheap insurance.
 // Runs inline the first time a student's roster doc is written (see the
 // ping effect below) -- nothing the teacher has to trigger.
+//
+// isCanonicalDoc guards against a real failure mode on a device whose
+// anonymous-auth session keeps getting reset (private browsing, a tablet
+// that clears site data between uses, etc): each reset briefly hands out a
+// brand-new uid before entryRequest.studentUid is available, which used to
+// let this function find a PROPERLY uid-keyed doc (created by an earlier,
+// correct visit) and treat it as if it were an old orphaned doc -- copying
+// a student's real progress onto yet another throwaway uid and marking
+// their real doc migratedTo, over and over, cascading a little further
+// with every reset. A doc whose own id already matches
+// `${classId}_${itsOwnUserIdField}` is already canonical and must never be
+// used as a migration source, no matter what name it carries.
+const isCanonicalAbhiRosterDoc = (classId, docSnap) => docSnap.id === `${classId}_${docSnap.data().userId}`;
 const migrateOldAbhiRosterDoc = async (classId, uid, name) => {
   try {
     const byUidSnap = await getDocs(query(abhiRosterRef(), where('classId','==',classId), where('tutoringStudentUid','==',uid)));
-    let oldDoc = byUidSnap.docs.find(d => d.id !== `${classId}_${uid}` && !d.data().migratedTo);
+    let oldDoc = byUidSnap.docs.find(d => d.id !== `${classId}_${uid}` && !d.data().migratedTo && !isCanonicalAbhiRosterDoc(classId,d));
     if (!oldDoc && name) {
       const byNameSnap = await getDocs(query(abhiRosterRef(), where('classId','==',classId), where('studentName','==',name)));
-      oldDoc = byNameSnap.docs.find(d => d.id !== `${classId}_${uid}` && !d.data().migratedTo);
+      oldDoc = byNameSnap.docs.find(d => d.id !== `${classId}_${uid}` && !d.data().migratedTo && !isCanonicalAbhiRosterDoc(classId,d));
     }
     if (!oldDoc) return null;
     await setDoc(oldDoc.ref, { migratedTo: uid }, { merge: true });
