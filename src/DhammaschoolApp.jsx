@@ -1036,6 +1036,39 @@ export default function DhammaschoolApp({ entryRequest, onExit }) {
         let allCompletions = [];
         let allCompletionsUnsub;
 
+        // Teacher-confirmed lesson count, derived from trophies -- same idea
+        // as Myanmar Reader's "teacherCompletedChapters" safety net. Every
+        // time a teacher approves a trophy for this student's Dhammaschool
+        // lesson, TutoringApp.jsx (handleApproveTrophy) auto-computes
+        // completedUnits[lessonKey] at a fixed 2-trophies-per-lesson ratio
+        // and writes it onto the student's own students/{uid} doc -- this
+        // just reads that back and merges it into the completed-lesson set
+        // below, so a student with trophies the teacher already gave (e.g.
+        // for reading outside the app, or a stale local record) still sees
+        // the correct lessons unlocked/marked done, not just whatever this
+        // app's own lesson_completions collection happens to have recorded.
+        // tutoringStudentUid is set for free by the existing auto-link block
+        // a bit further down (originally added only to resolve the
+        // canonical name for Shrine Room deposits) -- no separate linking
+        // step needed.
+        let tutoringStudentUid = null;
+        let tutoringCompletedUnitsMap = {};
+        let tutoringCompletedUnsub = null;
+        const sanitizeDsKey = (key) => (key || 'unknown').replace(/[.$#/\[\]]/g, '_');
+        function getTeacherConfirmedDoneForClass(classId) {
+            const key = sanitizeDsKey(`Dhammaschool Lesson_${classId}`);
+            return tutoringCompletedUnitsMap[key] || 0;
+        }
+        function subscribeTutoringCompletedUnits(uid) {
+            if (tutoringCompletedUnsub) { tutoringCompletedUnsub(); tutoringCompletedUnsub = null; }
+            tutoringStudentUid = uid;
+            if (!uid) { tutoringCompletedUnitsMap = {}; return; }
+            tutoringCompletedUnsub = onSnapshot(doc(db, TUTORING_STUDENTS_PATH, uid), (snap) => {
+                tutoringCompletedUnitsMap = snap.exists() ? (snap.data().completedUnits || {}) : {};
+                if (!isTeacher) renderStudentLibrary();
+            }, e => console.error('Tutoring completed-units listen error:', e));
+        }
+
         // --- ONLINE PRESENCE (who's online, from which class, on which lesson) ---
         let allPresenceRecords = []; // raw docs from PATHS.presence, refreshed live
         let presenceUnsub;
@@ -1192,6 +1225,7 @@ let bilingualMode = false;
                                                     linkedToTutoring: true,
                                                     tutoringStudentUid: tSnap.docs[0].id
                                                 }, { merge: true });
+                                                subscribeTutoringCompletedUnits(tSnap.docs[0].id);
                                             }
                                         } catch (e) { console.error('Auto-link on deep-link entry error:', e); }
                                     })();
@@ -2165,7 +2199,8 @@ document.getElementById('toggle-audio-btn').onclick = async () => {
                 .filter(l => (l.classId && l.classId.trim() ? l.classId.trim() : 'GENERAL') === classId)
                 .sort((a, b) => (a.createdAt || "9999").localeCompare(b.createdAt || "9999"));
             const idx = classLessons.findIndex(l => l.id === lid);
-            return idx > 0 && !myCompletedLessonIds.has(classLessons[idx - 1].id);
+            const teacherDone = getTeacherConfirmedDoneForClass(classId);
+            return idx > 0 && !(myCompletedLessonIds.has(classLessons[idx - 1].id) || (idx - 1) < teacherDone);
         }
         window.lockedLessonClick = () => {
             alertMessage('Finish the previous lesson first!', 'error');
@@ -2300,17 +2335,21 @@ document.getElementById('toggle-audio-btn').onclick = async () => {
             if(filtered.length === 0) { container.innerHTML = '<div class="text-center col-span-full py-10 text-slate-400 font-bold">No lessons in this class yet.</div>'; return; }
             filtered.sort((a, b) => (a.createdAt || "9999").localeCompare(b.createdAt || "9999"));
             container.innerHTML = '';
+            const teacherDoneForClass = getTeacherConfirmedDoneForClass(selectedClassId);
             filtered.forEach((lesson, index) => {
                 const count = lesson.steps ? lesson.steps.length : 0;
                 // Use English Title if mode is English
                 const title = (lesson.languageMode === 'en' && lesson.name_en) ? lesson.name_en : lesson.name;
 
-                const isDone = myCompletedLessonIds.has(lesson.id);
+                // Done either by this app's own completion record, or by the
+                // teacher's confirmed trophy-derived count (see
+                // getTeacherConfirmedDoneForClass) -- whichever says done first.
+                const isDone = myCompletedLessonIds.has(lesson.id) || index < teacherDoneForClass;
                 // Lessons within a class have to be studied in order: locked
                 // until the previous one (by creation order -- there's no
                 // separate chapter-number field) is completed. `filtered` is
                 // already this class's own list, so index 0 is always open.
-                const isLocked = index > 0 && !myCompletedLessonIds.has(filtered[index - 1].id);
+                const isLocked = index > 0 && !(myCompletedLessonIds.has(filtered[index - 1].id) || (index - 1) < teacherDoneForClass);
                 const clickHandler = isLocked ? `lockedLessonClick()` : `enterLesson('${lesson.id}')`;
                 container.innerHTML += `
                     <div onclick="${clickHandler}" class="lesson-card bg-white p-6 rounded-3xl shadow-md border-2 ${isDone ? 'border-green-200' : isLocked ? 'border-slate-200' : 'border-white'} ${isLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'} relative overflow-hidden group">
