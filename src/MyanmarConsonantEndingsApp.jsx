@@ -3,6 +3,7 @@ import { doc, setDoc, updateDoc, serverTimestamp, getDoc, increment } from 'fire
 import { db } from './firebase';
 import { rosterDocRefByUid, migrateNameKeyedRosterDoc } from './studentRosterIdentity';
 import OnlineStatusWidget from './OnlineStatusWidget';
+import { spawnFlyingCoins, trackLastClickPoint } from './flyingCoins';
 
 // ── Ported from the standalone "Myanmar Consonant Endings" HTML app ──
 // Same hybrid approach as the other ported apps in this project: the
@@ -291,6 +292,7 @@ export default function MyanmarConsonantEndingsApp({ entryRequest, onExit, hideO
     initializedRef.current = true;
     const rootEl = containerRef.current;
     const byId = (id) => rootEl.querySelector('#' + id);
+    const clickTracker = trackLastClickPoint(rootEl);
 
         // ==========================================
         // Audio Data Configuration
@@ -440,6 +442,7 @@ export default function MyanmarConsonantEndingsApp({ entryRequest, onExit, hideO
             coinBalanceRef.current = newBalance;
             setMyCoinBalance(newBalance);
             setDoc(progressRosterRef, { coinBalance: newBalance }, { merge: true }).catch(() => {});
+            if (delta > 0) spawnFlyingCoins(clickTracker.get(), delta);
         }
 
         // Deposits this student's entire local coin balance into their
@@ -978,6 +981,7 @@ export default function MyanmarConsonantEndingsApp({ entryRequest, onExit, hideO
     // this component unmounts, since it's a plain JS timer with no React
     // lifecycle of its own.
     return () => {
+      clickTracker.stop();
       stopAllModes();
       delete window.__mceApp;
     };
