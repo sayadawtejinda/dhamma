@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { collection, query, where, getDocs, doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { appId } from './firebaseConfig';
+import birdsChirpingSound from '../audio/birds-chirping.mp3';
+import chirpingBirdsSound from '../audio/chirping-birds.mp3';
 
 // A fully independent app (deliberately NOT part of TutoringApp.jsx) --
 // first piece of the "gamified student home" idea: a Bodhi tree that grows
@@ -623,6 +625,31 @@ function TreeCanvas({ days }) {
 // anchor was set; the displayed age is always baselineDays plus however
 // many calendar days have passed since, so editing the count just moves
 // the anchor forward (or back) without losing the "grows every day" feel.
+// A watering can tipped over the tree with a few droplets falling in a
+// staggered loop -- shown briefly between clicking "Water the Tree" and
+// the "Thank you" message, per the teacher's direction (previously the
+// click just swapped straight to the thank-you text with no animation).
+function WateringAnimation() {
+  return (
+    <div className="relative w-40 h-20 flex items-start justify-center">
+      <style>{`
+        @keyframes bodhiWaterDrop { 0% { transform: translateY(0); opacity: 0; } 15% { opacity: 1; } 90% { opacity: 1; } 100% { transform: translateY(56px); opacity: 0; } }
+        @keyframes bodhiCanTilt { 0%, 100% { transform: rotate(-10deg); } 50% { transform: rotate(-28deg); } }
+      `}</style>
+      <span className="text-5xl inline-block" style={{ animation: 'bodhiCanTilt 1.3s ease-in-out infinite' }}>🫗</span>
+      {[0, 1, 2, 3, 4].map(i => (
+        <span
+          key={i}
+          className="absolute text-lg"
+          style={{ left: `${46 + i * 5}%`, top: '26px', animation: `bodhiWaterDrop 0.85s ease-in ${i * 0.16}s infinite` }}
+        >
+          💧
+        </span>
+      ))}
+    </div>
+  );
+}
+
 const teacherTreeDocRef = () => doc(db, `${publicDataPath}/teacherBodhiTree`, 'main');
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -633,6 +660,7 @@ export default function BodhiTreeApp({ entryRequest, onExit }) {
   const [loading, setLoading] = useState(true);
   const [treeAgeDays, setTreeAgeDays] = useState(0);
   const [showWater, setShowWater] = useState(false);
+  const [watering, setWatering] = useState(false);
   const [watered, setWatered] = useState(false);
   const [teacherBaseline, setTeacherBaseline] = useState({ baselineDays: 0, baselineSetAt: Date.now() });
   const [isEditingDays, setIsEditingDays] = useState(false);
@@ -710,6 +738,26 @@ export default function BodhiTreeApp({ entryRequest, onExit }) {
     return () => clearTimeout(timer);
   }, []);
 
+  // Ambient bird chirping while looking at the tree -- alternates between
+  // the two clips the teacher sent, one per visit (this device's last pick
+  // remembered in localStorage), rather than layering both at once.
+  useEffect(() => {
+    let lastPick = null;
+    try { lastPick = localStorage.getItem('bodhiTreeLastBirdSound'); } catch (e) { /* ignore */ }
+    const pick = lastPick === 'a' ? 'b' : 'a';
+    try { localStorage.setItem('bodhiTreeLastBirdSound', pick); } catch (e) { /* ignore */ }
+    const audio = new Audio(pick === 'a' ? birdsChirpingSound : chirpingBirdsSound);
+    audio.loop = true;
+    audio.volume = 0.35;
+    audio.play().catch(() => {});
+    return () => { audio.pause(); };
+  }, []);
+
+  const handleWaterClick = () => {
+    setWatering(true);
+    setTimeout(() => { setWatering(false); setWatered(true); }, 1600);
+  };
+
   const stageName = getStageName(treeAgeDays);
   const nextMilestone = getNextMilestone(treeAgeDays);
   const daysToNext = nextMilestone != null ? nextMilestone - treeAgeDays : null;
@@ -785,14 +833,15 @@ export default function BodhiTreeApp({ entryRequest, onExit }) {
           )}
 
           <div className="mt-4 min-h-[64px] flex items-center">
-            {showWater && !watered && (
+            {showWater && !watered && !watering && (
               <button
-                onClick={() => setWatered(true)}
+                onClick={handleWaterClick}
                 className="bg-sky-500 hover:bg-sky-600 text-white text-lg font-bold px-8 py-4 rounded-full shadow-lg animate-bounce"
               >
                 💧 Water the Tree
               </button>
             )}
+            {watering && <WateringAnimation />}
             {watered && (
               <p className="text-sky-700 font-semibold text-lg text-center">
                 💦 Thank you for watering!<br />{isTeacherMode ? 'See you tomorrow 🙏' : 'See you next class 🙏'}
