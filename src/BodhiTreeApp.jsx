@@ -1,9 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { collection, query, where, getDocs, doc, getDoc, setDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase';
 import { appId } from './firebaseConfig';
 import birdsChirpingSound from '../audio/birds-chirping.mp3';
 import chirpingBirdsSound from '../audio/chirping-birds.mp3';
+import OnlineStatusWidget from './OnlineStatusWidget';
+import { rosterDocRefByUid, migrateNameKeyedRosterDoc } from './studentRosterIdentity';
 
 // A fully independent app (deliberately NOT part of TutoringApp.jsx) --
 // first piece of the "gamified student home" idea: a Bodhi tree that grows
@@ -653,6 +655,11 @@ function WateringAnimation() {
 const teacherTreeDocRef = () => doc(db, `${publicDataPath}/teacherBodhiTree`, 'main');
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
+// Live "who's online" roster (same pattern most apps in this suite use) so
+// students can see each other and visit -- this app never had one before.
+const BODHI_ROSTER_PATH = 'artifacts/bodhi-tree-app/public/data/roster';
+const sanitizeBodhiKey = (key) => (key || 'unknown').replace(/[.$#/\[\]]/g, '_');
+
 export default function BodhiTreeApp({ entryRequest, onExit }) {
   const isTeacherMode = entryRequest?.mode === 'teacher';
   const studentUid = entryRequest?.studentUid;
@@ -666,6 +673,83 @@ export default function BodhiTreeApp({ entryRequest, onExit }) {
   const [isEditingDays, setIsEditingDays] = useState(false);
   const [editDaysInput, setEditDaysInput] = useState('');
   const [isSavingDays, setIsSavingDays] = useState(false);
+  // Visiting other students' trees + who's visited mine -- same idea as
+  // Shrine Room/Avatar. treeAgeDaysRef mirrors the state so the 30s
+  // heartbeat can report the CURRENT age without a stale closure.
+  const [recentVisitors, setRecentVisitors] = useState([]);
+  const [showVisitorsPanel, setShowVisitorsPanel] = useState(false);
+  const [visitingStudentName, setVisitingStudentName] = useState(null);
+  const [visitingAgeDays, setVisitingAgeDays] = useState(null);
+  const [visitLoading, setVisitLoading] = useState(false);
+  const treeAgeDaysRef = useRef(0);
+  useEffect(() => { treeAgeDaysRef.current = treeAgeDays; }, [treeAgeDays]);
+
+  // Roster heartbeat -- only for a real student (not teacher preview).
+  useEffect(() => {
+    if (isTeacherMode || !studentName || !studentUid) return;
+    const rosterRef = rosterDocRefByUid(db, BODHI_ROSTER_PATH, studentUid);
+    migrateNameKeyedRosterDoc(db, BODHI_ROSTER_PATH, studentUid, studentName, sanitizeBodhiKey)
+      .then(carried => { if (carried) return setDoc(rosterRef, carried, { merge: true }); })
+      .catch(e => console.error('Roster migration error:', e));
+    getDoc(rosterRef).then(snap => {
+      if (snap.exists()) setRecentVisitors(snap.data().recentVisitors || []);
+    }).catch(e => console.error('Error loading Bodhi Tree visitors:', e));
+    const ping = () => setDoc(rosterRef, {
+      studentName, isOnline: true, lastSeen: serverTimestamp(), treeAgeDays: treeAgeDaysRef.current,
+    }, { merge: true }).catch(() => {});
+    ping();
+    const interval = setInterval(ping, 30000);
+    const goOffline = () => { updateDoc(rosterRef, { isOnline: false, lastSeen: serverTimestamp() }).catch(() => {}); };
+    window.addEventListener('beforeunload', goOffline);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('beforeunload', goOffline);
+      goOffline();
+    };
+  }, [isTeacherMode, studentName, studentUid]);
+
+  // Fetches another student's real tree age the same way the load effect
+  // above computes my own (their attendance, not a stored number), and
+  // records the visit on their roster doc.
+  const handleVisitStudent = async (targetName, targetUid) => {
+    if (!targetName || targetName === studentName || !targetUid) return;
+    setVisitingStudentName(targetName);
+    setVisitingAgeDays(null);
+    setVisitLoading(true);
+    try {
+      const [scheduleSnap, sessionsSnap] = await Promise.all([
+        getDocs(query(collection(db, `${publicDataPath}/teacherSchedule`), where('studentUid', '==', targetUid))),
+        getDocs(query(collection(db, `${publicDataPath}/studySessions`), where('studentUid', '==', targetUid))),
+      ]);
+      const schedule = scheduleSnap.docs.map(d => d.data());
+      const sessions = sessionsSnap.docs.map(d => d.data());
+      const now = new Date();
+      const attendedWeeks = new Set(
+        schedule
+          .filter(e => e.endTime?.toDate?.() < now && getAttendanceStatus(e, sessions) === 'attended')
+          .map(e => getWeekKey(e.startTime.toDate()))
+      );
+      setVisitingAgeDays(attendedWeeks.size * 7);
+      if (studentName) {
+        const targetRef = rosterDocRefByUid(db, BODHI_ROSTER_PATH, targetUid);
+        const targetSnap = await getDoc(targetRef);
+        const existing = targetSnap.exists() ? (targetSnap.data().recentVisitors || []) : [];
+        const others = existing.filter(v => v.name !== studentName);
+        const nextVisitors = [{ name: studentName, visitedAt: Date.now() }, ...others].slice(0, 10);
+        setDoc(targetRef, { recentVisitors: nextVisitors }, { merge: true }).catch(() => {});
+      }
+    } catch (e) {
+      console.error('Error visiting Bodhi Tree:', e);
+      showToastFallback();
+      setVisitingStudentName(null);
+    }
+    setVisitLoading(false);
+  };
+  // No toast system exists in this app yet -- visiting failures are rare
+  // (a deleted account), so just closing the modal is enough; nothing
+  // else in this component needs a toast.
+  const showToastFallback = () => {};
+  const closeVisit = () => { setVisitingStudentName(null); setVisitingAgeDays(null); };
 
   useEffect(() => {
     if (isTeacherMode) {
@@ -772,6 +856,37 @@ export default function BodhiTreeApp({ entryRequest, onExit }) {
         🏡
       </button>
 
+      {!isTeacherMode && (
+        <>
+          <OnlineStatusWidget
+            rosterPath={BODHI_ROSTER_PATH}
+            studentName={studentName}
+            isTeacherMode={false}
+            panelTitle="🌳 Students"
+            showInactiveWarning={false}
+            renderActivity={(s) => (
+              <span className="flex items-center gap-2 justify-end">
+                <span className="text-emerald-600 font-semibold">{s.treeAgeDays || 0}d</span>
+                {s.studentName !== studentName && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleVisitStudent(s.studentName, s.id); }}
+                    className="text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-full px-2 py-0.5"
+                  >
+                    👣 Visit
+                  </button>
+                )}
+              </span>
+            )}
+          />
+          <button
+            onClick={() => setShowVisitorsPanel(true)}
+            className="fixed top-16 right-3 z-50 flex items-center gap-1 bg-white hover:bg-emerald-50 text-emerald-700 text-sm font-semibold px-3 py-2 rounded-full shadow-lg border-2 border-emerald-300"
+          >
+            👣 Visitors{recentVisitors.length > 0 ? ` (${recentVisitors.length})` : ''}
+          </button>
+        </>
+      )}
+
       <h1 className="text-2xl font-bold text-emerald-800 mt-16 mb-1 text-center">
         {isTeacherMode ? "Teacher's Bodhi Tree" : `${studentName}'s Bodhi Tree`}
       </h1>
@@ -849,6 +964,57 @@ export default function BodhiTreeApp({ entryRequest, onExit }) {
             )}
           </div>
         </>
+      )}
+
+      {/* Visitors -- who has come to see MY tree recently. */}
+      {showVisitorsPanel && (
+        <div className="fixed inset-0 z-[10001] bg-black/50 flex items-center justify-center p-4" onClick={() => setShowVisitorsPanel(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-xs w-full p-6 text-center" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-bold text-emerald-800 mb-4">👣 Recent Visitors</h2>
+            {recentVisitors.length === 0 ? (
+              <p className="text-sm text-gray-400 mb-4">No one has visited your tree yet.</p>
+            ) : (
+              <div className="space-y-2 mb-4 max-h-64 overflow-y-auto text-left">
+                {recentVisitors.map((v, i) => (
+                  <div key={i} className="flex items-center justify-between bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2">
+                    <span className="font-semibold text-gray-800">{v.name}</span>
+                    <span className="text-xs text-gray-400">{new Date(v.visitedAt).toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <button onClick={() => setShowVisitorsPanel(false)} className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2.5 rounded-xl">
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Visit -- a read-only peek at another student's tree, same
+          TreeCanvas the real page uses but driven by their fetched real
+          age instead of mine. */}
+      {visitingStudentName && (
+        <div className="fixed inset-0 z-[10001] bg-black/60 flex items-center justify-center p-4" onClick={closeVisit}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-bold text-emerald-800 mb-4">🌳 {visitingStudentName}'s Bodhi Tree</h2>
+            {visitLoading ? (
+              <p className="text-sm text-gray-400 py-8">Opening...</p>
+            ) : visitingAgeDays == null ? (
+              <p className="text-sm text-gray-400 py-8">Couldn't load their tree.</p>
+            ) : (
+              <div>
+                <div className="w-full h-56 relative">
+                  <TreeCanvas days={visitingAgeDays} />
+                </div>
+                <p className="text-lg font-bold text-emerald-800 mt-2">{getStageName(visitingAgeDays)}</p>
+                <p className="text-emerald-600 text-sm">{visitingAgeDays} day{visitingAgeDays === 1 ? '' : 's'} old</p>
+              </div>
+            )}
+            <button onClick={closeVisit} className="mt-5 w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2.5 rounded-xl">
+              Close
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
