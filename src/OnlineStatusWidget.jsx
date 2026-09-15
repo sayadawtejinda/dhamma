@@ -125,6 +125,7 @@ export default function OnlineStatusWidget({
         {!isTeacherMode && coinBalance != null && (
           onCoinClick ? (
             <button
+              id="online-status-coin-badge"
               onClick={onCoinClick}
               className="flex items-center gap-1 text-amber-600 font-bold hover:underline"
               title="Click to deposit into your Shrine Room wallet"
@@ -132,7 +133,7 @@ export default function OnlineStatusWidget({
               <span>{coinIcon}</span>{coinBalance}
             </button>
           ) : (
-            <span className="flex items-center gap-1 text-amber-600 font-bold" title="Gold coins earned">
+            <span id="online-status-coin-badge" className="flex items-center gap-1 text-amber-600 font-bold" title="Gold coins earned">
               <span>{coinIcon}</span>{coinBalance}
             </span>
           )

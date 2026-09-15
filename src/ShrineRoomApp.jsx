@@ -3,6 +3,8 @@ import { collection, query, where, getDocs, doc, getDoc, getDocFromServer, setDo
 import { db } from './firebase';
 import { appId } from './firebaseConfig';
 import OnlineStatusWidget from './OnlineStatusWidget';
+import { spawnFlyingCoins, trackLastClickPoint } from './flyingCoins';
+import coinDropSound from '../audio/coin-drop.mp3';
 
 // A student's personal shrine room -- decorate an altar with offerings
 // bought using coins, earned mainly by lighting the lamp once a day.
@@ -734,6 +736,22 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   // so it starts with enough coins to freely try every shop item instead of
   // being stuck at 0.
   const [coinBalance, setCoinBalance] = useState(isTeacherPreview ? 200 : 0);
+  // Tracks the student's last click/tap anywhere on the page, so a lotus
+  // celebration burst can fly from wherever they were interacting instead
+  // of a fixed spot -- same helper the coin-earning apps use.
+  const lotusClickTrackerRef = useRef(null);
+  useEffect(() => {
+    const tracker = trackLastClickPoint(document);
+    lotusClickTrackerRef.current = tracker;
+    return () => tracker.stop();
+  }, []);
+  // A little celebration whenever lotus flowers are earned -- a scattering
+  // burst of 🪷 flying to the header's lotus count, plus a short sound.
+  const celebrateLotusGain = (count = 1) => {
+    const point = lotusClickTrackerRef.current?.get?.() || { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+    spawnFlyingCoins(point, Math.max(6, count), '🪷');
+    new Audio(coinDropSound).play().catch(() => {});
+  };
   const [placedItems, setPlacedItems] = useState({}); // { slotIndex: offeringId }
   const [buddhaId, setBuddhaId] = useState(null);
   const [lastLampLitDate, setLastLampLitDate] = useState(null);
@@ -941,6 +959,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
       }
       setLotusCount(prev => prev + 1);
       persist({ lotusCount: increment(1) });
+      celebrateLotusGain(1);
     }, 60000);
     return () => clearInterval(interval);
   }, [studentUid, chantingOpen, chantingIdle, meditatingMinutes != null]);
@@ -953,6 +972,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     setFullAltarBonusAwarded(true);
     setLotusCount(prev => prev + 10);
     persist({ lotusCount: increment(10), fullAltarBonusAwarded: true });
+    celebrateLotusGain(10);
     showToast('🪷 Full altar bonus! +10 lotus flowers');
   }, [placedItems, fullAltarBonusAwarded, studentUid]);
   const [dragOverSlot, setDragOverSlot] = useState(null);
@@ -1160,6 +1180,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
         setQuickChantLotusDates(prev => ({ ...prev, [key]: today }));
         setLotusCount(prev => prev + 1);
         persist({ lotusCount: increment(1), quickChantLotusDates: { [key]: today } });
+        celebrateLotusGain(1);
         showToast('🪷 +1 lotus flower!');
       }
     };

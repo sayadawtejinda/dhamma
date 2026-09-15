@@ -8,12 +8,26 @@
 // MyanmarReaderApp.jsx's FlyingCoin, which this mirrors for React apps).
 //
 // The landing target is found by DOM query rather than passed in, since
-// every app's coin badge is the same OnlineStatusWidget "deposit into your
-// Shrine Room wallet" button -- one shared lookup means every caller stays
-// a one-line `spawnFlyingCoins(fromEl)`.
-export function spawnFlyingCoins(from, count = 8) {
+// every app's coin badge is the same OnlineStatusWidget coin badge (marked
+// with id="online-status-coin-badge") -- one shared lookup means every
+// caller stays a one-line `spawnFlyingCoins(fromEl)`. Every app in this
+// suite stays mounted simultaneously (just hidden via CSS, see App.jsx),
+// so there can be several matching badges in the DOM at once -- this picks
+// the first one that's actually laid out/visible (offsetParent !== null)
+// rather than whichever happens to be first in document order, which could
+// silently be a hidden app's badge sitting at a zero-size rect.
+function findVisibleCoinTarget() {
+  const candidates = document.querySelectorAll(
+    '#online-status-coin-badge, [title="Click to deposit into your Shrine Room wallet"]'
+  );
+  for (const el of candidates) {
+    if (el.offsetParent !== null) return el;
+  }
+  return candidates[0] || null;
+}
+export function spawnFlyingCoins(from, count = 8, emoji = '🪙') {
   if (!from) return;
-  const coinTarget = document.querySelector('[title="Click to deposit into your Shrine Room wallet"]');
+  const coinTarget = findVisibleCoinTarget();
   if (!coinTarget) return;
   // `from` is either a DOM element (fly from its center) or a plain
   // {x,y} point (e.g. the student's last click position).
@@ -27,7 +41,7 @@ export function spawnFlyingCoins(from, count = 8) {
 
   for (let i = 0; i < n; i++) {
     const span = document.createElement('span');
-    span.textContent = '🪙';
+    span.textContent = emoji;
     span.style.cssText = 'position:fixed;z-index:10000;font-size:20px;pointer-events:none;margin-left:-10px;margin-top:-10px;';
     const fx = fromCenter.x + (Math.random() - 0.5) * 50;
     const fy = fromCenter.y + (Math.random() - 0.5) * 50;
