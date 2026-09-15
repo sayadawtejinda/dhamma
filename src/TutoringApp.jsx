@@ -6759,7 +6759,7 @@ function SmartStudyProgressBadge({ classId, studentName, smartStudyNames, compac
   return null;
 }
 
-function StudentDashboard({ user, studentProfile, studentUid, announcements, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenMyanmarSpeaking, onOpenConsonantPractice, onOpenBurmeseGame, onOpenNumberLearning, onOpenVowelsLearning, onOpenAnimalSound, onOpenBurmeseLearningGames, onOpenInteractiveQuiz, onOpenMyanmarPoems, onOpenConsonantEndings, onOpenTimeAndCalendar, onOpenMyanmarSpelling, onOpenMyanmarSoundPractice, onOpenReadingMyanmar, onOpenSpeakingMyanmar, onOpenMyanmarPart1And2, onOpenBodhiTree, onOpenShrineRoom, onOpenAvatar, onOpenWatchAndLearn, onLogout, onNavigate, onTrophyEarned }) {
+function StudentDashboard({ user, studentProfile, studentUid, announcements, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenMyanmarSpeaking, onOpenConsonantPractice, onOpenBurmeseGame, onOpenNumberLearning, onOpenVowelsLearning, onOpenAnimalSound, onOpenBurmeseLearningGames, onOpenInteractiveQuiz, onOpenMyanmarPoems, onOpenConsonantEndings, onOpenTimeAndCalendar, onOpenMyanmarSpelling, onOpenMyanmarSoundPractice, onOpenReadingMyanmar, onOpenSpeakingMyanmar, onOpenMyanmarPart1And2, onOpenBodhiTree, onOpenShrineRoom, onOpenAvatar, onOpenNatureWorld, onOpenWatchAndLearn, onLogout, onNavigate, onTrophyEarned }) {
   const [myLessons, setMyLessons] = useState([]);
   const [ssCompletionCounts, setSsCompletionCounts] = useState({}); // classId → SmartStudy completedCount
   const [mySessions, setMySessions] = useState([]);
@@ -8684,6 +8684,15 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                       🧑‍🎨
                     </button>
                   )}
+                  {onOpenNatureWorld && (
+                    <button
+                      onClick={() => onOpenNatureWorld({ studentUid, studentName: studentProfile?.name || '' })}
+                      className="flex items-center justify-center text-2xl bg-lime-50 hover:bg-lime-100 w-11 h-11 rounded-lg transition-colors border border-lime-200 flex-shrink-0"
+                      title="My Nature World"
+                    >
+                      🌿
+                    </button>
+                  )}
                   <button
                     onClick={() => onNavigate && onNavigate('today')}
                     className="flex items-center justify-center text-2xl bg-violet-50 hover:bg-violet-100 w-11 h-11 rounded-lg transition-colors border border-violet-200 flex-shrink-0"
@@ -10154,7 +10163,7 @@ function DeactivatedScreen() {
   );
 }
 
-export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenConsonantPractice, onOpenBurmeseGame, onOpenMyanmarSpeaking, onOpenNumberLearning, onOpenVowelsLearning, onOpenAnimalSound, onOpenBurmeseLearningGames, onOpenInteractiveQuiz, onOpenMyanmarPoems, onOpenConsonantEndings, onOpenTimeAndCalendar, onOpenMyanmarSpelling, onOpenMyanmarSoundPractice, onOpenReadingMyanmar, onOpenSpeakingMyanmar, onOpenMyanmarPart1And2, onOpenBodhiTree, onOpenShrineRoom, onOpenAvatar, onOpenWatchAndLearn, onTrophyEarned }) {
+export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenConsonantPractice, onOpenBurmeseGame, onOpenMyanmarSpeaking, onOpenNumberLearning, onOpenVowelsLearning, onOpenAnimalSound, onOpenBurmeseLearningGames, onOpenInteractiveQuiz, onOpenMyanmarPoems, onOpenConsonantEndings, onOpenTimeAndCalendar, onOpenMyanmarSpelling, onOpenMyanmarSoundPractice, onOpenReadingMyanmar, onOpenSpeakingMyanmar, onOpenMyanmarPart1And2, onOpenBodhiTree, onOpenShrineRoom, onOpenAvatar, onOpenNatureWorld, onOpenWatchAndLearn, onTrophyEarned }) {
   const [user, setUser] = useState(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [role, setRole] = useState(null); 
@@ -10597,7 +10606,7 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpen
             </div>
           );
         }
-        return <StudentDashboard user={user} studentProfile={studentProfile} studentUid={targetStudentUid} announcements={announcements} onOpenSmartStudy={onOpenSmartStudy} onOpenAbhidhamma={onOpenAbhidhamma} onOpenMyanmarReader={onOpenMyanmarReader} onOpenDhammaschool={onOpenDhammaschool} onOpenMyanmarSpeaking={onOpenMyanmarSpeaking} onOpenConsonantPractice={onOpenConsonantPractice} onOpenBurmeseGame={onOpenBurmeseGame} onOpenNumberLearning={onOpenNumberLearning} onOpenVowelsLearning={onOpenVowelsLearning} onOpenAnimalSound={onOpenAnimalSound} onOpenBurmeseLearningGames={onOpenBurmeseLearningGames} onOpenInteractiveQuiz={onOpenInteractiveQuiz} onOpenMyanmarPoems={onOpenMyanmarPoems} onOpenConsonantEndings={onOpenConsonantEndings} onOpenTimeAndCalendar={onOpenTimeAndCalendar} onOpenMyanmarSpelling={onOpenMyanmarSpelling} onOpenMyanmarSoundPractice={onOpenMyanmarSoundPractice} onOpenReadingMyanmar={onOpenReadingMyanmar} onOpenSpeakingMyanmar={onOpenSpeakingMyanmar} onOpenMyanmarPart1And2={onOpenMyanmarPart1And2} onOpenBodhiTree={onOpenBodhiTree} onOpenShrineRoom={onOpenShrineRoom} onOpenAvatar={onOpenAvatar} onOpenWatchAndLearn={onOpenWatchAndLearn} onLogout={handleStudentLogout} onNavigate={setView} onTrophyEarned={onTrophyEarned} />;
+        return <StudentDashboard user={user} studentProfile={studentProfile} studentUid={targetStudentUid} announcements={announcements} onOpenSmartStudy={onOpenSmartStudy} onOpenAbhidhamma={onOpenAbhidhamma} onOpenMyanmarReader={onOpenMyanmarReader} onOpenDhammaschool={onOpenDhammaschool} onOpenMyanmarSpeaking={onOpenMyanmarSpeaking} onOpenConsonantPractice={onOpenConsonantPractice} onOpenBurmeseGame={onOpenBurmeseGame} onOpenNumberLearning={onOpenNumberLearning} onOpenVowelsLearning={onOpenVowelsLearning} onOpenAnimalSound={onOpenAnimalSound} onOpenBurmeseLearningGames={onOpenBurmeseLearningGames} onOpenInteractiveQuiz={onOpenInteractiveQuiz} onOpenMyanmarPoems={onOpenMyanmarPoems} onOpenConsonantEndings={onOpenConsonantEndings} onOpenTimeAndCalendar={onOpenTimeAndCalendar} onOpenMyanmarSpelling={onOpenMyanmarSpelling} onOpenMyanmarSoundPractice={onOpenMyanmarSoundPractice} onOpenReadingMyanmar={onOpenReadingMyanmar} onOpenSpeakingMyanmar={onOpenSpeakingMyanmar} onOpenMyanmarPart1And2={onOpenMyanmarPart1And2} onOpenBodhiTree={onOpenBodhiTree} onOpenShrineRoom={onOpenShrineRoom} onOpenAvatar={onOpenAvatar} onOpenNatureWorld={onOpenNatureWorld} onOpenWatchAndLearn={onOpenWatchAndLearn} onLogout={handleStudentLogout} onNavigate={setView} onTrophyEarned={onTrophyEarned} />;
       case 'weekly': 
         return <WeeklySchedule role={role} targetStudentUid={targetStudentUid} />;
       case 'attendance':

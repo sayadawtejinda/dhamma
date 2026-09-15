@@ -93,6 +93,12 @@ const ShrineRoomApp = lazyLoad(() => import('./ShrineRoomApp'));
 // wallet (not a separate currency of its own). Same standalone-app pattern
 // as BodhiTreeApp.jsx/ShrineRoomApp.jsx.
 const AvatarApp = lazyLoad(() => import('./AvatarApp'));
+// Nature World -- a fourth piece of the gamified "Home" idea: a student's
+// own growing plot of land they unlock and plant trees on with coins, same
+// shared wallet as Avatar/Shrine Room. First pass (land + trees only,
+// plain 2D emoji); the teacher wants to layer on wandering animals/a fish
+// pond in later passes.
+const NatureWorldApp = lazyLoad(() => import('./NatureWorldApp'));
 // Watch & Learn — consolidates 5 previously-separate bare-link Lesson Bank
 // entries (each just a YouTube link, no content of its own) into one
 // assignable lesson with a list screen, extensible via its own "Add a
@@ -334,6 +340,7 @@ export default function App() {
   const [bodhiTreeRequest, setBodhiTreeRequest] = useState(null);
   const [shrineRoomRequest, setShrineRoomRequest] = useState(null);
   const [avatarRequest, setAvatarRequest] = useState(null);
+  const [natureWorldRequest, setNatureWorldRequest] = useState(null);
   const [watchAndLearnRequest, setWatchAndLearnRequest] = useState(null);
 
   const openMyanmarSpelling = (request) => {
@@ -379,6 +386,15 @@ export default function App() {
   const closeAvatar = () => {
     setActiveApp('tutoring');
     setAvatarRequest(null);
+  };
+
+  const openNatureWorld = (request) => {
+    setNatureWorldRequest(request || {});
+    setActiveApp('natureworld');
+  };
+  const closeNatureWorld = () => {
+    setActiveApp('tutoring');
+    setNatureWorldRequest(null);
   };
 
   const openWatchAndLearn = (request) => {
@@ -588,6 +604,7 @@ export default function App() {
           onOpenBodhiTree={openBodhiTree}
           onOpenShrineRoom={openShrineRoom}
           onOpenAvatar={openAvatar}
+          onOpenNatureWorld={openNatureWorld}
           onOpenWatchAndLearn={openWatchAndLearn}
           onTrophyEarned={(totalTrophies) => setTrophyCelebration({ totalTrophies })}
         />
@@ -917,6 +934,12 @@ export default function App() {
         {activeApp === 'avatar' && (
           <div>
             <AvatarApp entryRequest={avatarRequest} onExit={closeAvatar} />
+          </div>
+        )}
+
+        {activeApp === 'natureworld' && (
+          <div>
+            <NatureWorldApp entryRequest={natureWorldRequest} onExit={closeNatureWorld} />
           </div>
         )}
 
