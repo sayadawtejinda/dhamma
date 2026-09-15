@@ -553,7 +553,7 @@ const OFFERING_OPTIONS = [
   { id: 'water', name: 'Water Offering', emoji: '🥛', durationHours: 2, cost: durationCost(2) },
   { id: 'fruit', name: 'Fruit Offering', emoji: '🍊', durationHours: 3, cost: durationCost(3) },
   { id: 'flower', name: 'Lotus Flower', emoji: '🪷', durationHours: 5, cost: durationCost(5) },
-  { id: 'umbrella', name: 'Golden Umbrella', svg: umbrellaSvg('#FFD54F', '#5D4037', '#B8860B'), durationHours: 24, cost: durationCost(24) },
+  { id: 'umbrella', name: 'Golden Umbrella', svg: umbrellaSvg('#FFD54F', '#5D4037', '#B8860B'), durationHours: 20, cost: durationCost(20) },
   { id: 'lamp', name: 'Oil Lamp', emoji: '🪔', durationHours: 5, cost: durationCost(5) },
   { id: 'bell', name: 'Bell', emoji: '🔔', durationHours: 10, cost: durationCost(10) },
 ];
@@ -1128,7 +1128,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
       return;
     }
     if (buddhaId === option.id) return;
-    if (coinBalance < option.cost) { showToast('Not enough coins.'); return; }
+    if (!isTeacherPreview && coinBalance < option.cost) { showToast('Not enough coins.'); return; }
     awardCoins(-option.cost);
     const placedAt = option.durationDays != null ? Date.now() : null;
     setBuddhaId(option.id);
@@ -1153,7 +1153,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     // slots to the next real empty one every time.
     const emptySlot = Array.from({ length: SLOT_COUNT }).findIndex((_, i) => !placedItems[i] || !findOffering(placedItems[i].id));
     if (emptySlot === -1) { showToast('Your altar is full -- remove something first.'); return; }
-    if (coinBalance < option.cost) { showToast('Not enough coins.'); return; }
+    if (!isTeacherPreview && coinBalance < option.cost) { showToast('Not enough coins.'); return; }
     awardCoins(-option.cost);
     setPlacedItems(prev => {
       const next = { ...prev, [emptySlot]: { id: option.id, placedAt: Date.now() } };
@@ -1181,7 +1181,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     if (SHOP_LOCKED) { showToast('🚧 Shopping opens soon -- still being built!'); return; }
     const targetSide = side || (!placedUmbrellas.left ? 'left' : !placedUmbrellas.right ? 'right' : null);
     if (!targetSide || placedUmbrellas[targetSide]) { showToast('Both hands already hold a Golden Umbrella.'); return; }
-    if (coinBalance < UMBRELLA_OPTION.cost) { showToast('Not enough coins.'); return; }
+    if (!isTeacherPreview && coinBalance < UMBRELLA_OPTION.cost) { showToast('Not enough coins.'); return; }
     awardCoins(-UMBRELLA_OPTION.cost);
     setPlacedUmbrellas(prev => {
       const next = { ...prev, [targetSide]: { placedAt: Date.now() } };
@@ -1207,7 +1207,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   const handleBuyBell = () => {
     if (SHOP_LOCKED) { showToast('🚧 Shopping opens soon -- still being built!'); return; }
     if (placedBell) { showToast('A Bell is already placed.'); return; }
-    if (coinBalance < BELL_OPTION.cost) { showToast('Not enough coins.'); return; }
+    if (!isTeacherPreview && coinBalance < BELL_OPTION.cost) { showToast('Not enough coins.'); return; }
     awardCoins(-BELL_OPTION.cost);
     const next = { placedAt: Date.now() };
     setPlacedBell(next);
@@ -1246,7 +1246,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
       showToast(`Grow your Bodhi Tree further to unlock this.`);
       return;
     }
-    if (coinBalance < option.cost) { showToast('Not enough coins.'); return; }
+    if (!isTeacherPreview && coinBalance < option.cost) { showToast('Not enough coins.'); return; }
     awardCoins(-option.cost);
     setPlacedItems(prev => {
       const next = { ...prev, [slotIndex]: { id: offeringId, placedAt: Date.now() } };
@@ -1643,18 +1643,23 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
             <div className="relative w-[360px] max-w-full h-96">
               <BodhiBackdropCanvas />
 
-              {/* Bell -- its own single big fixture to the left of the whole
-                  altar (Buddha, Bodhi tree, and every offering slot), not a
-                  regular altar slot (see placedBell above). Escapes the
-                  360px-wide column via a negative left offset so it reads
-                  as standing beside the whole scene, not squeezed into it. */}
-              <button
-                onClick={() => placedBell ? handleRingBell() : handleBuyBell()}
-                title={placedBell ? 'Ring the Bell' : `Offer a Bell (🪙 ${BELL_OPTION.cost})`}
-                className={`absolute left-[-58px] top-1/2 -translate-y-1/2 w-20 h-20 flex items-center justify-center rounded-full transition-transform hover:scale-110 ${ringing ? 'animate-pulse' : ''} ${placedBell ? 'drop-shadow-lg' : 'opacity-50 hover:opacity-80'}`}
-              >
-                <OfferingIcon offering={BELL_OPTION} className="text-6xl leading-none" />
-              </button>
+              {/* Bell -- its own single big fixture beside the Buddha, in
+                  Myanmar tradition placed level with the pagoda's own image
+                  (not floating separately) and a bit further out to the
+                  side. Escapes the 360px-wide column via a negative left
+                  offset. Bought from the Offerings shop list like any other
+                  offering (see BELL_OPTION/handleBuyBell) -- this spot only
+                  ever shows it once actually placed, per the teacher; it's
+                  not a "+" invitation to buy the way the umbrellas are. */}
+              {placedBell && (
+                <button
+                  onClick={handleRingBell}
+                  title="Ring the Bell"
+                  className={`absolute left-[-72px] bottom-[52px] w-20 h-20 flex items-center justify-center rounded-full transition-transform hover:scale-110 drop-shadow-lg ${ringing ? 'animate-pulse' : ''}`}
+                >
+                  <OfferingIcon offering={BELL_OPTION} className="text-6xl leading-none" />
+                </button>
+              )}
 
               {/* Pinned to the treetop itself (not off in the corner with
                   the Chanting/Meditation/Merit Shop buttons, and not
