@@ -30,7 +30,7 @@ function findVisibleCoinTarget() {
   }
   return candidates[0] || null;
 }
-export function spawnFlyingCoins(from, count = 8, emoji = '🪙') {
+export function spawnFlyingCoins(from, count = 8, emoji = '🪙', playSound = true) {
   if (!from) return;
   const coinTarget = findVisibleCoinTarget();
   if (!coinTarget) return;
@@ -43,7 +43,7 @@ export function spawnFlyingCoins(from, count = 8, emoji = '🪙') {
   const toX = toRect.left + toRect.width / 2;
   const toY = toRect.top + toRect.height / 2;
   const n = Math.min(14, Math.max(6, count));
-  new Audio(coinDropSound).play().catch(() => {});
+  if (playSound) new Audio(coinDropSound).play().catch(() => {});
 
   for (let i = 0; i < n; i++) {
     const span = document.createElement('span');

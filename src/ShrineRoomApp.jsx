@@ -4,6 +4,7 @@ import { db } from './firebase';
 import { appId } from './firebaseConfig';
 import OnlineStatusWidget from './OnlineStatusWidget';
 import { spawnFlyingCoins, trackLastClickPoint } from './flyingCoins';
+import bellSound from '../audio/bell-Sound.mp3';
 
 // A student's personal shrine room -- decorate an altar with offerings
 // bought using coins, earned mainly by lighting the lamp once a day.
@@ -629,22 +630,18 @@ function EmojiParticles({ emoji }) {
   );
 }
 
+// Real recorded bell (audio/bell-Sound.mp3) instead of the old synthesized
+// oscillator tone -- capped at ~2 seconds (the file itself is longer) since
+// that's the length that reads as "one bell strike" rather than a drone.
 function playBellSound() {
   try {
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    const audioCtx = new AudioCtx();
-    const oscillator = audioCtx.createOscillator();
-    const gainNode = audioCtx.createGain();
-    oscillator.type = 'sine';
-    oscillator.frequency.setValueAtTime(800, audioCtx.currentTime);
-    oscillator.frequency.exponentialRampToValueAtTime(300, audioCtx.currentTime + 2);
-    gainNode.gain.setValueAtTime(0.8, audioCtx.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 2);
-    oscillator.connect(gainNode);
-    gainNode.connect(audioCtx.destination);
-    oscillator.start();
-    oscillator.stop(audioCtx.currentTime + 2);
-  } catch (e) { /* ignore -- e.g. no AudioContext support */ }
+    const audio = new Audio(bellSound);
+    audio.play().catch(() => {});
+    setTimeout(() => {
+      audio.pause();
+      audio.currentTime = 0;
+    }, 2000);
+  } catch (e) { /* ignore -- e.g. no Audio support */ }
 }
 
 // Fractal Bodhi tree drawn once as a static backdrop (purely decorative --
@@ -745,11 +742,13 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     return () => tracker.stop();
   }, []);
   // A little celebration whenever lotus flowers are earned -- a scattering
-  // burst of 🪷 flying to the header's lotus count (spawnFlyingCoins plays
-  // its own sound already, no need to duplicate it here).
+  // burst of 🪷 flying to the header's lotus count. No sound here on
+  // purpose (unlike the coin-earning apps) -- lotus is earned during quiet
+  // moments like sitting in meditation, where a sudden coin-drop sound
+  // wouldn't fit.
   const celebrateLotusGain = (count = 1) => {
     const point = lotusClickTrackerRef.current?.get?.() || { x: window.innerWidth / 2, y: window.innerHeight / 2 };
-    spawnFlyingCoins(point, Math.max(6, count), '🪷');
+    spawnFlyingCoins(point, Math.max(6, count), '🪷', false);
   };
   const [placedItems, setPlacedItems] = useState({}); // { slotIndex: offeringId }
   const [buddhaId, setBuddhaId] = useState(null);
