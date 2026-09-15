@@ -7,6 +7,11 @@
 // handful of coins rather than one coin duplicated in a straight line (see
 // MyanmarReaderApp.jsx's FlyingCoin, which this mirrors for React apps).
 //
+// Bundled by Vite as a hashed static asset (see audio/coin-drop.mp3 at the
+// project root) -- a fresh Audio() per burst rather than one shared/reused
+// instance, since bursts can overlap and each needs to play independently.
+import coinDropSound from '../audio/coin-drop.mp3';
+
 // The landing target is found by DOM query rather than passed in, since
 // every app's coin badge is the same OnlineStatusWidget coin badge (marked
 // with id="online-status-coin-badge") -- one shared lookup means every
@@ -38,6 +43,7 @@ export function spawnFlyingCoins(from, count = 8, emoji = '🪙') {
   const toX = toRect.left + toRect.width / 2;
   const toY = toRect.top + toRect.height / 2;
   const n = Math.min(14, Math.max(6, count));
+  new Audio(coinDropSound).play().catch(() => {});
 
   for (let i = 0; i < n; i++) {
     const span = document.createElement('span');

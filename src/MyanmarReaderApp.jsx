@@ -4,6 +4,7 @@ import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { collection, doc, getDoc, getDocs, setDoc, updateDoc, onSnapshot, query, where, serverTimestamp, increment } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { rosterDocRefByUid, migrateNameKeyedRosterDoc } from './studentRosterIdentity';
+import coinDropSound from '../audio/coin-drop.mp3';
 
 const MYANMAR_READER_APP_ID = 'myanmar-reader-app';
 
@@ -1206,6 +1207,7 @@ const longPressTimerRef = useRef(null);
       duration: 650 + Math.random() * 300,
     }));
     setFlyingCoins(prev => [...prev, ...newCoins]);
+    new Audio(coinDropSound).play().catch(() => {});
   };
   const removeFlyingCoin = (id) => setFlyingCoins(prev => prev.filter(c => c.id !== id));
 

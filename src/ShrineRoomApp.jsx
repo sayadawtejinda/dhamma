@@ -4,7 +4,6 @@ import { db } from './firebase';
 import { appId } from './firebaseConfig';
 import OnlineStatusWidget from './OnlineStatusWidget';
 import { spawnFlyingCoins, trackLastClickPoint } from './flyingCoins';
-import coinDropSound from '../audio/coin-drop.mp3';
 
 // A student's personal shrine room -- decorate an altar with offerings
 // bought using coins, earned mainly by lighting the lamp once a day.
@@ -746,11 +745,11 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     return () => tracker.stop();
   }, []);
   // A little celebration whenever lotus flowers are earned -- a scattering
-  // burst of 🪷 flying to the header's lotus count, plus a short sound.
+  // burst of 🪷 flying to the header's lotus count (spawnFlyingCoins plays
+  // its own sound already, no need to duplicate it here).
   const celebrateLotusGain = (count = 1) => {
     const point = lotusClickTrackerRef.current?.get?.() || { x: window.innerWidth / 2, y: window.innerHeight / 2 };
     spawnFlyingCoins(point, Math.max(6, count), '🪷');
-    new Audio(coinDropSound).play().catch(() => {});
   };
   const [placedItems, setPlacedItems] = useState({}); // { slotIndex: offeringId }
   const [buddhaId, setBuddhaId] = useState(null);

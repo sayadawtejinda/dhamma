@@ -8180,10 +8180,26 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         // could still have old "pending" sheets that resurface as a bogus
         // new request the next time they study anything in this lesson.
         // Capping at remainingTrophies (the same maxAvailable/previouslyEarned
-        // math every other lesson type already uses) makes this path agree
-        // with what the teacher's own trophy accounting says is actually
-        // still owed.
-        const cappedAmount = Math.min(myanmarReaderPendingScoreDocs.length, remainingTrophies);
+        // math every other lesson type already uses) isn't enough on its
+        // own -- remainingTrophies only reflects distance from the lesson's
+        // OVERALL 58-trophy ceiling across all 29 chapters, so a student who
+        // has only reached chapter 15 still has plenty of ceiling room left
+        // even though every trophy they actually deserve so far (2 per
+        // chapter) has already been paid. Old pre-per-sheet-tracking score
+        // docs for chapters at or below their current highest then look
+        // like legitimate "new" work and resurface a bogus request. Also
+        // capping at deservedShortfall -- the same
+        // floor(chapter*maxAvailable/unitCount) - previouslyEarned math the
+        // non-Reader branch below already uses -- closes that gap: once a
+        // student is paid up to what their current chapter actually earns,
+        // no further request fires no matter how many old unflagged sheets
+        // still exist.
+        const readerUnitCount = targetSession.lessonUnitCount || 0;
+        const readerDeservedSoFar = readerUnitCount > 0 && maxAvailable > 0
+          ? Math.min(maxAvailable, Math.floor((newHighestUnit * maxAvailable) / readerUnitCount))
+          : remainingTrophies;
+        const deservedShortfall = Math.max(0, readerDeservedSoFar - previouslyEarned);
+        const cappedAmount = Math.min(myanmarReaderPendingScoreDocs.length, remainingTrophies, deservedShortfall);
         if (cappedAmount > 0) {
           studentUpdateData.trophyRequested = true;
           studentUpdateData.requestedTrophyAmount = cappedAmount;
