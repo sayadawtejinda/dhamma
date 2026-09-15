@@ -166,10 +166,48 @@ export default function AvatarApp({ entryRequest, onExit }) {
   const [isEditingRename, setIsEditingRename] = useState(false);
   const [renameInput, setRenameInput] = useState('');
   const [showLockInfo, setShowLockInfo] = useState(false);
+  // Same "visit someone else's page, see who's visited mine" idea just
+  // added to Shrine Room -- kept in a separate `avatarRecentVisitors` field
+  // (not Shrine's own `recentVisitors`) even though both apps share this
+  // same roster doc, so "visited my Shrine" and "visited my Avatar" don't
+  // get merged into one confusing list.
+  const [recentVisitors, setRecentVisitors] = useState([]);
+  const [showVisitorsPanel, setShowVisitorsPanel] = useState(false);
+  const [visitingStudentName, setVisitingStudentName] = useState(null);
+  const [visitingConfig, setVisitingConfig] = useState(null);
+  const [visitLoading, setVisitLoading] = useState(false);
 
   const rosterRef = studentUid ? doc(db, SHRINE_ROSTER_PATH, sanitizeShrineKey(studentName)) : null;
 
   const showToast = (text) => { setToast(text); setTimeout(() => setToast(null), 2200); };
+
+  // Fetches another student's avatar read-only and records the visit on
+  // their own roster doc (a plain getDoc + setDoc, not a transaction --
+  // same low-stakes tradeoff Shrine Room's version makes).
+  const handleVisitStudent = async (targetName) => {
+    if (!targetName || targetName === studentName) return;
+    setVisitingStudentName(targetName);
+    setVisitingConfig(null);
+    setVisitLoading(true);
+    try {
+      const targetRef = doc(db, SHRINE_ROSTER_PATH, sanitizeShrineKey(targetName));
+      const snap = await getDoc(targetRef);
+      const data = snap.exists() ? snap.data() : {};
+      const avatarData = readNestedWithLegacyFallback(data, 'avatar');
+      setVisitingConfig(snap.exists() ? { ...DEFAULT_CONFIG, ...avatarData } : null);
+      if (studentName) {
+        const others = (data.avatarRecentVisitors || []).filter(v => v.name !== studentName);
+        const nextVisitors = [{ name: studentName, visitedAt: Date.now() }, ...others].slice(0, 10);
+        setDoc(targetRef, { avatarRecentVisitors: nextVisitors }, { merge: true }).catch(() => {});
+      }
+    } catch (e) {
+      console.error('Error visiting Avatar:', e);
+      showToast('Could not open their Avatar.');
+      setVisitingStudentName(null);
+    }
+    setVisitLoading(false);
+  };
+  const closeVisit = () => { setVisitingStudentName(null); setVisitingConfig(null); };
 
   useEffect(() => {
     if (!studentUid) { setLoading(false); return; }
@@ -188,6 +226,7 @@ export default function AvatarApp({ entryRequest, onExit }) {
             setCoinBalance(data.coinBalance ?? 0);
             setLotusCount(data.lotusCount ?? 0);
             setConfig({ ...DEFAULT_CONFIG, ...avatarData });
+            setRecentVisitors(data.avatarRecentVisitors || []);
             setOwned({
               hair: ['short-black', ...(avatarOwnedData.hair || [])],
               outfit: ['blue', ...(avatarOwnedData.outfit || [])],
@@ -315,7 +354,80 @@ export default function AvatarApp({ entryRequest, onExit }) {
         panelTitle="🧑‍🎨 Students"
         teacherLabel="🧑‍🏫 Teacher"
         showInactiveWarning={false}
+        renderActivity={(s) => !isTeacherPreview && s.studentName !== studentName && (
+          <button
+            onClick={(e) => { e.stopPropagation(); handleVisitStudent(s.studentName); }}
+            className="text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-full px-2 py-0.5"
+          >
+            👣 Visit
+          </button>
+        )}
       />
+
+      {!isTeacherPreview && (
+        <button
+          onClick={() => setShowVisitorsPanel(true)}
+          className="fixed top-16 right-3 z-50 flex items-center gap-1 bg-white hover:bg-indigo-50 text-indigo-700 text-sm font-semibold px-3 py-2 rounded-full shadow-lg border-2 border-indigo-300"
+        >
+          👣 Visitors{recentVisitors.length > 0 ? ` (${recentVisitors.length})` : ''}
+        </button>
+      )}
+
+      {/* Visitors -- who has come to see MY avatar recently. */}
+      {showVisitorsPanel && (
+        <div className="fixed inset-0 z-[10001] bg-black/50 flex items-center justify-center p-4" onClick={() => setShowVisitorsPanel(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-xs w-full p-6 text-center" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-bold text-indigo-800 mb-4">👣 Recent Visitors</h2>
+            {recentVisitors.length === 0 ? (
+              <p className="text-sm text-gray-400 mb-4">No one has visited your Avatar yet.</p>
+            ) : (
+              <div className="space-y-2 mb-4 max-h-64 overflow-y-auto text-left">
+                {recentVisitors.map((v, i) => (
+                  <div key={i} className="flex items-center justify-between bg-indigo-50 border border-indigo-100 rounded-xl px-3 py-2">
+                    <span className="font-semibold text-gray-800">{v.name}</span>
+                    <span className="text-xs text-gray-400">{new Date(v.visitedAt).toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <button onClick={() => setShowVisitorsPanel(false)} className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2.5 rounded-xl">
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Visit -- a read-only peek at another student's avatar. No shop,
+          no renaming -- just a look, same CharacterSvg the real preview
+          below uses, driven by fetched config instead of my own. */}
+      {visitingStudentName && (
+        <div className="fixed inset-0 z-[10001] bg-black/60 flex items-center justify-center p-4" onClick={closeVisit}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-bold text-indigo-800 mb-4">🧑‍🎨 {visitingStudentName}'s Avatar</h2>
+            {visitLoading ? (
+              <p className="text-sm text-gray-400 py-8">Opening...</p>
+            ) : !visitingConfig ? (
+              <p className="text-sm text-gray-400 py-8">They haven't set up an Avatar yet.</p>
+            ) : (
+              <div
+                className="w-40 h-40 mx-auto rounded-3xl shadow-xl border-4 border-white flex items-center justify-center"
+                style={{ background: find(BG_OPTIONS, visitingConfig.bg).color }}
+              >
+                <CharacterSvg
+                  skinColor={find(SKIN_OPTIONS, visitingConfig.skin).color}
+                  hair={find(HAIR_OPTIONS, visitingConfig.hair)}
+                  outfitColor={find(OUTFIT_OPTIONS, visitingConfig.outfit).color}
+                  accessory={find(ACCESSORY_OPTIONS, visitingConfig.accessory)}
+                  className="w-32 h-32"
+                />
+              </div>
+            )}
+            <button onClick={closeVisit} className="mt-5 w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2.5 rounded-xl">
+              Close
+            </button>
+          </div>
+        </div>
+      )}
 
       <h1 className="text-2xl font-bold text-indigo-800 mb-1 flex items-center justify-center gap-2">
         {studentName}'s Avatar
