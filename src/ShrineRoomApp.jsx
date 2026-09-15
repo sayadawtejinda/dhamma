@@ -1029,6 +1029,17 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   const [dragOverSlot, setDragOverSlot] = useState(null);
   const [ringing, setRinging] = useState(false);
   const [toast, setToast] = useState(null);
+  // Who has come to see MY altar recently -- [{ name, visitedAt }], newest
+  // first, capped to the last 10. Loaded from my own roster doc alongside
+  // everything else (see the load effect below).
+  const [recentVisitors, setRecentVisitors] = useState([]);
+  const [showVisitorsPanel, setShowVisitorsPanel] = useState(false);
+  // A read-only peek at someone ELSE's altar -- fetched on demand from
+  // their own roster doc, never subscribed to live, closed by just
+  // clearing this back to null.
+  const [visitingStudentName, setVisitingStudentName] = useState(null);
+  const [visitingData, setVisitingData] = useState(null);
+  const [visitLoading, setVisitLoading] = useState(false);
 
   const rosterRef = studentUid ? doc(db, SHRINE_ROSTER_PATH, sanitizeShrineKey(studentName)) : null;
 
@@ -1036,6 +1047,35 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     setToast(text);
     setTimeout(() => setToast(null), 2200);
   };
+
+  // Fetches another student's altar read-only and records the visit on
+  // their own roster doc (so their "Visitors" panel picks it up) -- not
+  // atomic (a plain getDoc + setDoc, not a transaction), same risk level
+  // as every other roster field in this app; visits are low-frequency and
+  // not worth a transaction just to avoid a rare lost entry.
+  const handleVisitStudent = async (targetName) => {
+    if (!targetName || targetName === studentName) return;
+    setVisitingStudentName(targetName);
+    setVisitingData(null);
+    setVisitLoading(true);
+    try {
+      const targetRef = doc(db, SHRINE_ROSTER_PATH, sanitizeShrineKey(targetName));
+      const snap = await getDoc(targetRef);
+      const data = snap.exists() ? snap.data() : {};
+      setVisitingData(data);
+      if (studentName) {
+        const others = (data.recentVisitors || []).filter(v => v.name !== studentName);
+        const nextVisitors = [{ name: studentName, visitedAt: Date.now() }, ...others].slice(0, 10);
+        setDoc(targetRef, { recentVisitors: nextVisitors }, { merge: true }).catch(() => {});
+      }
+    } catch (e) {
+      console.error('Error visiting Shrine Room:', e);
+      showToast('Could not open their Shrine Room.');
+      setVisitingStudentName(null);
+    }
+    setVisitLoading(false);
+  };
+  const closeVisit = () => { setVisitingStudentName(null); setVisitingData(null); };
 
   const persist = (patch) => {
     if (!rosterRef) return;
@@ -1085,6 +1125,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
             setQuickChantLotusDates(data.quickChantLotusDates || {});
             setLotusDailyDate(data.lotusDailyDate || null);
             setLotusDailyCount(data.lotusDailyCount || 0);
+            setRecentVisitors(data.recentVisitors || []);
           }
           if (data.coinBalance == null) persist({ coinBalance: STARTER_COINS });
         } else {
@@ -1462,7 +1503,19 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
         panelTitle="🛕 Students"
         teacherLabel="🧑‍🏫 Teacher"
         showInactiveWarning={false}
-        renderActivity={(s) => <span className="text-amber-600 font-semibold">🪷 {s.lotusCount || 0}</span>}
+        renderActivity={(s) => (
+          <span className="flex items-center gap-2 justify-end">
+            <span className="text-amber-600 font-semibold">🪷 {s.lotusCount || 0}</span>
+            {!isTeacherPreview && s.studentName !== studentName && (
+              <button
+                onClick={(e) => { e.stopPropagation(); handleVisitStudent(s.studentName); }}
+                className="text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-full px-2 py-0.5"
+              >
+                👣 Visit
+              </button>
+            )}
+          </span>
+        )}
       />
 
       <div className="fixed top-16 right-3 z-50 flex flex-col items-end gap-2">
@@ -1497,10 +1550,19 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
               {shopOpen ? '✕ Close Shop' : '🛒 Merit Shop'}
             </button>
           );
+          const visitorsBtn = !isTeacherPreview && (
+            <button
+              key="visitors"
+              onClick={() => setShowVisitorsPanel(true)}
+              className="flex items-center gap-1 bg-white hover:bg-amber-50 text-amber-700 text-sm font-semibold px-3 py-2 rounded-full shadow-lg border-2 border-amber-300"
+            >
+              👣 Visitors{recentVisitors.length > 0 ? ` (${recentVisitors.length})` : ''}
+            </button>
+          );
           // While the shop is open, Chanting/Meditation move below it
           // instead of above -- keeps the shop button anchored right under
           // the coin badge, closest to where the shop panel itself opens.
-          return shopOpen ? [shopBtn, chantingBtn, meditationBtn] : [chantingBtn, meditationBtn, shopBtn];
+          return shopOpen ? [shopBtn, chantingBtn, meditationBtn, visitorsBtn] : [chantingBtn, meditationBtn, shopBtn, visitorsBtn];
         })()}
       </div>
 
@@ -1534,6 +1596,84 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
               className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 rounded-xl"
             >
               Begin
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Visitors -- who has come to see MY altar recently. */}
+      {showVisitorsPanel && (
+        <div className="fixed inset-0 z-[10001] bg-black/50 flex items-center justify-center p-4" onClick={() => setShowVisitorsPanel(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-xs w-full p-6 text-center" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-bold text-emerald-800 mb-4">👣 Recent Visitors</h2>
+            {recentVisitors.length === 0 ? (
+              <p className="text-sm text-gray-400 mb-4">No one has visited your Shrine Room yet.</p>
+            ) : (
+              <div className="space-y-2 mb-4 max-h-64 overflow-y-auto text-left">
+                {recentVisitors.map((v, i) => (
+                  <div key={i} className="flex items-center justify-between bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2">
+                    <span className="font-semibold text-gray-800">{v.name}</span>
+                    <span className="text-xs text-gray-400">{new Date(v.visitedAt).toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <button onClick={() => setShowVisitorsPanel(false)} className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2.5 rounded-xl">
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Visit -- a read-only peek at another student's altar (see
+          handleVisitStudent). No purchasing, no chanting/meditation --
+          just a look, same shapes (Buddha/offerings/umbrellas/bell) as the
+          real altar below but driven by fetched data instead of my own
+          state. */}
+      {visitingStudentName && (
+        <div className="fixed inset-0 z-[10001] bg-black/60 flex items-center justify-center p-4" onClick={closeVisit}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-bold text-emerald-800 mb-4">🛕 {visitingStudentName}'s Shrine Room</h2>
+            {visitLoading ? (
+              <p className="text-sm text-gray-400 py-8">Opening...</p>
+            ) : !visitingData ? (
+              <p className="text-sm text-gray-400 py-8">They haven't set up a Shrine Room yet.</p>
+            ) : (
+              <div className="flex flex-col items-center">
+                <div className="relative w-40 h-24 rounded-t-2xl border-4 border-amber-700 shadow-xl flex items-end justify-center pb-2 mb-3"
+                  style={{ background: 'linear-gradient(to bottom, #fde68a, #d4af37)' }}
+                >
+                  {findBuddha(visitingData.buddhaId) ? (
+                    <div className="w-14 h-16 -mt-10 drop-shadow-lg" dangerouslySetInnerHTML={{ __html: findBuddha(visitingData.buddhaId).svg }} />
+                  ) : (
+                    <span className="text-xs text-amber-800 mb-2">No Buddha image yet</span>
+                  )}
+                  {visitingData.placedBell && (
+                    <span className="absolute left-[-28px] bottom-4 text-3xl">🔔</span>
+                  )}
+                  {['left', 'right'].map(side => visitingData.placedUmbrellas?.[side] && (
+                    <span key={side} className={`absolute bottom-2 w-10 h-10 ${side === 'left' ? 'left-2' : 'right-2'}`} dangerouslySetInnerHTML={{ __html: umbrellaSvg('#FFD54F', '#5D4037', '#B8860B') }} />
+                  ))}
+                </div>
+                {Object.keys(visitingData.placedItems || {}).length > 0 ? (
+                  <div className="flex flex-wrap justify-center gap-2">
+                    {Object.entries(visitingData.placedItems).map(([i, item]) => {
+                      const offering = findOffering(item.id);
+                      if (!offering) return null;
+                      return (
+                        <div key={i} className="w-10 h-10 rounded-lg flex items-center justify-center text-xl bg-amber-50 border border-amber-100">
+                          <OfferingIcon offering={offering} className="w-6 h-6 flex items-center justify-center text-xl" />
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-400">No offerings on the altar yet.</p>
+                )}
+              </div>
+            )}
+            <button onClick={closeVisit} className="mt-5 w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2.5 rounded-xl">
+              Close
             </button>
           </div>
         </div>
@@ -1818,13 +1958,16 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
               </div>
             </div>
 
-            {hasLampPlaced && (
+            {/* Only shown while there's actually something to do -- once
+                lit for the day this disappears entirely instead of sitting
+                around as a disabled "come back tomorrow" button all day
+                (the toast on click already confirms it briefly). */}
+            {hasLampPlaced && canLightLampToday && (
               <button
                 onClick={handleLightLamp}
-                disabled={!canLightLampToday}
-                className={`mt-6 px-5 py-2.5 rounded-xl font-semibold shadow-md ${canLightLampToday ? 'bg-amber-500 hover:bg-amber-600 text-white' : 'bg-gray-200 text-gray-500 cursor-not-allowed'}`}
+                className="mt-6 px-5 py-2.5 rounded-xl font-semibold shadow-md bg-amber-500 hover:bg-amber-600 text-white"
               >
-                {canLightLampToday ? `🪔 Light the Lamp (+${DAILY_LAMP_REWARD} coins)` : '🪔 Lamp lit for today -- come back tomorrow'}
+                🪔 Light the Lamp (+{DAILY_LAMP_REWARD} coins)
               </button>
             )}
           </div>
