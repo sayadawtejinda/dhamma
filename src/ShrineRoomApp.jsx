@@ -528,19 +528,22 @@ const umbrellaSvg = (canopyColor, poleColor, accentColor) => `
 `;
 
 // durationHours: how long the offering stays on the altar before it
-// "runs out" (candle burns down, water/fruit spoil, flowers wilt, an
-// umbrella lasts a full day) and needs to be re-offered -- per the
-// teacher's direction. Cost scales with durationHours (roughly 3 + 1.5
-// coins/hour, adjustable). Items with no durationHours (lamp/bell/canopy)
-// are permanent fixtures, not consumable offerings.
+// "runs out" (candle burns down, water/fruit spoil, flowers wilt, an oil
+// lamp burns dry, a bell's blessing fades) and needs to be re-offered --
+// per the teacher's direction, so a slot frees up for someone to offer
+// something new instead of staying occupied forever. Cost scales with
+// durationHours (roughly 3 + 1.5 coins/hour, adjustable). Only canopy has
+// no durationHours (a permanent fixture, not a consumable offering).
+// Golden Umbrella is handled entirely separately (see placedUmbrellas) --
+// it's excluded from the normal SLOT_COUNT altar grid on purpose.
 const OFFERING_OPTIONS = [
   { id: 'candle', name: 'Candle', emoji: '🕯️', durationHours: 1, cost: 5 },
   { id: 'water', name: 'Water Offering', emoji: '🥛', durationHours: 2, cost: 6 },
   { id: 'fruit', name: 'Fruit Offering', emoji: '🍊', durationHours: 3, cost: 8 },
-  { id: 'flower', name: 'Lotus Flower', emoji: '🪷', durationHours: 10, cost: 18 },
+  { id: 'flower', name: 'Lotus Flower', emoji: '🪷', durationHours: 5, cost: 18 },
   { id: 'umbrella', name: 'Golden Umbrella', svg: umbrellaSvg('#FFD54F', '#5D4037', '#B8860B'), durationHours: 24, cost: 39 },
-  { id: 'lamp', name: 'Oil Lamp', emoji: '🪔', cost: 15 },
-  { id: 'bell', name: 'Bell', emoji: '🔔', cost: 20 },
+  { id: 'lamp', name: 'Oil Lamp', emoji: '🪔', durationHours: 5, cost: 15 },
+  { id: 'bell', name: 'Bell', emoji: '🔔', durationHours: 10, cost: 20 },
   { id: 'canopy', name: 'Golden Canopy', emoji: '🎐', cost: 25, requiresBodhiStage: 9 },
 ];
 // Renders an offering's icon whether it's a plain emoji or custom SVG
@@ -751,6 +754,11 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     spawnFlyingCoins(point, Math.max(6, count), '🪷', false);
   };
   const [placedItems, setPlacedItems] = useState({}); // { slotIndex: offeringId }
+  // Golden Umbrella is deliberately NOT one of the SLOT_COUNT altar
+  // offerings -- it's big, valuable, and (per the teacher) belongs held up
+  // beside the Buddha's own hands instead of taking up a regular offering
+  // slot for its whole duration. { left: {placedAt}, right: {placedAt} }.
+  const [placedUmbrellas, setPlacedUmbrellas] = useState({});
   const [buddhaId, setBuddhaId] = useState(null);
   const [lastLampLitDate, setLastLampLitDate] = useState(null);
   // Teacher preview also gets full access to the two Bodhi-tree-gated items
@@ -1021,6 +1029,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
           if (isMounted) {
             setCoinBalance(data.coinBalance ?? STARTER_COINS);
             setPlacedItems(data.placedItems || {});
+            setPlacedUmbrellas(data.placedUmbrellas || {});
             setBuddhaId(data.buddhaId || null);
             setLastLampLitDate(data.lastLampLitDate || null);
             setTotalMeditationMinutes(data.totalMeditationMinutes || 0);
@@ -1075,6 +1084,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
 
   const handleBuyOffering = (option) => {
     if (SHOP_LOCKED) { showToast('🚧 Shopping opens soon -- still being built!'); return; }
+    if (option.id === 'umbrella') { handleBuyUmbrella(); return; }
     if (option.requiresBodhiStage != null && option.requiresBodhiStage > bodhiStageIndex) {
       showToast(`Grow your Bodhi Tree further to unlock this.`);
       return;
@@ -1106,6 +1116,32 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     });
   };
 
+  // Golden Umbrella lives in its own left/right pair beside the Buddha's
+  // hands, not the regular SLOT_COUNT altar grid -- same cost/merit-bonus
+  // math as handleBuyOffering, just keyed by side instead of a slot index.
+  const UMBRELLA_OPTION = findOffering('umbrella');
+  const handleBuyUmbrella = (side) => {
+    if (SHOP_LOCKED) { showToast('🚧 Shopping opens soon -- still being built!'); return; }
+    const targetSide = side || (!placedUmbrellas.left ? 'left' : !placedUmbrellas.right ? 'right' : null);
+    if (!targetSide || placedUmbrellas[targetSide]) { showToast('Both hands already hold a Golden Umbrella.'); return; }
+    if (coinBalance < UMBRELLA_OPTION.cost) { showToast('Not enough coins.'); return; }
+    awardCoins(MERIT_OFFERING_BONUS - UMBRELLA_OPTION.cost);
+    setPlacedUmbrellas(prev => {
+      const next = { ...prev, [targetSide]: { placedAt: Date.now() } };
+      persist({ placedUmbrellas: next });
+      return next;
+    });
+    showToast(`Golden Umbrella placed. +${MERIT_OFFERING_BONUS} merit coins!`);
+  };
+  const handleRemoveUmbrella = (side) => {
+    setPlacedUmbrellas(prev => {
+      const next = { ...prev };
+      delete next[side];
+      persist({ placedUmbrellas: next });
+      return next;
+    });
+  };
+
   const handleDragStart = (e, offeringId) => {
     e.dataTransfer.setData('text/plain', offeringId);
   };
@@ -1118,6 +1154,9 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     if (SHOP_LOCKED) { showToast('🚧 Shopping opens soon -- still being built!'); return; }
     const offeringId = e.dataTransfer.getData('text/plain');
     const option = findOffering(offeringId);
+    // Golden Umbrella isn't a slot item -- dragging it here is a no-op,
+    // same as it not being draggable in the shop list below.
+    if (offeringId === 'umbrella') return;
     // Same stale-entry handling as handleBuyOffering's emptySlot search.
     if (!option || (placedItems[slotIndex] && findOffering(placedItems[slotIndex].id))) return;
     if (option.requiresBodhiStage != null && option.requiresBodhiStage > bodhiStageIndex) {
@@ -1187,15 +1226,27 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     setQuickChantPlaying(key);
   };
 
-  // Consumable offerings (candle/water/fruit/flower/umbrella) "run out" once
-  // their durationHours has passed and quietly leave the altar -- per the
-  // teacher's direction that each offering only stays in front of the
-  // Buddha for a set amount of time. Checked once a minute; lamp/bell/
-  // canopy have no durationHours so they're never touched here.
+  // Consumable offerings (candle/water/fruit/flower/lamp/bell) "run out"
+  // once their durationHours has passed and quietly leave the altar --
+  // per the teacher's direction that each offering only stays in front of
+  // the Buddha for a set amount of time, then disappears completely (not
+  // shown as "expired", just gone) so the slot is free for a new offering.
+  // Checked once a minute; canopy has no durationHours so it's never
+  // touched here. Golden Umbrella (placedUmbrellas) uses the same
+  // expiry idea but isn't part of this dictionary -- handled below.
+  //
+  // Deliberately gated on `!loading` (not just `[]`) -- this effect used to
+  // fire its first check immediately on mount, before the async Firestore
+  // load above had populated placedItems, so that very first check ran
+  // against an empty object and did nothing. The real data only arrived
+  // later, and the NEXT check wasn't due for a full 60s (the interval),
+  // so an already-expired offering could sit visible for up to a minute
+  // after a student opened the app instead of vanishing right away.
   useEffect(() => {
+    if (loading) return;
     const checkExpiry = () => {
+      const now = Date.now();
       setPlacedItems(prev => {
-        const now = Date.now();
         let changed = false;
         const next = {};
         Object.entries(prev).forEach(([slot, item]) => {
@@ -1207,11 +1258,33 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
         if (changed) persist({ placedItems: next });
         return changed ? next : prev;
       });
+      setPlacedUmbrellas(prev => {
+        let changed = false;
+        const next = {};
+        Object.entries(prev).forEach(([side, item]) => {
+          const expired = (now - item.placedAt) >= UMBRELLA_OPTION.durationHours * 60 * 60 * 1000;
+          if (expired) { changed = true; return; }
+          next[side] = item;
+        });
+        if (changed) persist({ placedUmbrellas: next });
+        return changed ? next : prev;
+      });
     };
     checkExpiry();
     const interval = setInterval(checkExpiry, 60000);
     return () => clearInterval(interval);
-  }, []);
+  }, [loading]);
+
+  // A little welcome-back chime: if a Bell offering is still active (within
+  // its durationHours) from an earlier visit, ring it once when the student
+  // re-enters the Shrine Room -- per the teacher's direction.
+  useEffect(() => {
+    if (loading) return;
+    if (Object.values(placedItems).some(item => item.id === 'bell')) playBellSound();
+    // Only on the transition out of loading (i.e. once per visit) -- not
+    // meant to re-fire every time placedItems changes during the session.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
 
   const handleToggleChantAudio = () => {
     const audio = chantAudioRef.current;
@@ -1521,6 +1594,29 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
                     🛒 Open the shop to pick a Buddha image
                   </button>
                 )}
+
+                {/* Golden Umbrella pair -- one held up beside each of the
+                    Buddha's hands, not a regular altar slot (see
+                    placedUmbrellas above). Positioned relative to this
+                    340px-wide throne, roughly at hand height on the 96px-
+                    wide Buddha figure centered within it. */}
+                {buddha && ['left', 'right'].map(side => {
+                  const item = placedUmbrellas[side];
+                  return (
+                    <button
+                      key={side}
+                      onClick={() => item ? handleRemoveUmbrella(side) : handleBuyUmbrella(side)}
+                      title={item ? 'Remove Golden Umbrella' : `Offer a Golden Umbrella at the Buddha's ${side} hand (🪙 ${UMBRELLA_OPTION.cost})`}
+                      className={`absolute bottom-9 w-11 h-11 flex items-center justify-center rounded-full transition-transform hover:scale-110 ${side === 'left' ? 'left-[64px]' : 'right-[64px]'} ${item ? 'drop-shadow-lg' : 'opacity-50 hover:opacity-80'}`}
+                    >
+                      {item ? (
+                        <span className="w-full h-full" dangerouslySetInnerHTML={{ __html: UMBRELLA_OPTION.svg }} />
+                      ) : (
+                        <span className="text-2xl">➕</span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -1678,10 +1774,10 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
                 return (
                   <button
                     key={option.id}
-                    draggable={!locked && !SHOP_LOCKED}
+                    draggable={!locked && !SHOP_LOCKED && option.id !== 'umbrella'}
                     onDragStart={(e) => handleDragStart(e, option.id)}
                     onClick={() => handleBuyOffering(option)}
-                    disabled={locked}
+                    disabled={locked || (option.id === 'umbrella' && placedUmbrellas.left && placedUmbrellas.right)}
                     className={`w-full flex items-center justify-between p-3 rounded-xl border ${locked ? 'bg-gray-50 border-gray-200 opacity-60' : 'bg-amber-50 border-amber-200 hover:bg-amber-100 cursor-grab'}`}
                   >
                     <span className="font-semibold text-gray-800 flex items-center gap-2">
@@ -1691,6 +1787,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
                         {option.durationHours != null && (
                           <span className="block text-xs font-normal text-gray-500">
                             lasts {option.durationHours < 24 ? `${option.durationHours}h` : `${option.durationHours / 24}d`}
+                            {option.id === 'umbrella' && ' -- held at the Buddha’s hand, not a slot'}
                           </span>
                         )}
                       </span>
