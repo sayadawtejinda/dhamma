@@ -8693,6 +8693,8 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                       🌿
                     </button>
                   )}
+                </div>
+                <div className="flex items-center flex-wrap gap-3 mb-2">
                   <button
                     onClick={() => onNavigate && onNavigate('today')}
                     className="flex items-center justify-center text-2xl bg-violet-50 hover:bg-violet-100 w-11 h-11 rounded-lg transition-colors border border-violet-200 flex-shrink-0"

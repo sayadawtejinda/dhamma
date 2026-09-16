@@ -32,13 +32,29 @@ const plotCost = (alreadyUnlocked) => 15 + Math.floor(alreadyUnlocked / 2) * 5;
 
 const TREE_OPTIONS = [
   { id: 'pine', name: 'Pine Tree', emoji: '🌲', cost: 10 },
-  { id: 'maple', name: 'Maple Tree', emoji: '🍁', cost: 12 },
   { id: 'oak', name: 'Oak Tree', emoji: '🌳', cost: 15 },
   { id: 'palm', name: 'Palm Tree', emoji: '🌴', cost: 15 },
-  { id: 'blossom', name: 'Cherry Blossom', emoji: '🌸', cost: 20 },
-  { id: 'coconut', name: 'Coconut Tree', emoji: '🥥', cost: 18 },
 ];
 const findTree = (id) => TREE_OPTIONS.find(t => t.id === id);
+
+// Same 3 tree shapes, recolored with a CSS filter so a whole plot of land
+// doesn't end up looking like a single shade of green -- no extra art
+// assets needed.
+const COLOR_OPTIONS = [
+  { id: 'green', name: 'Green', filter: 'none' },
+  { id: 'gold', name: 'Golden', filter: 'hue-rotate(60deg) saturate(1.4)' },
+  { id: 'red', name: 'Red', filter: 'hue-rotate(300deg) saturate(1.6)' },
+  { id: 'blue', name: 'Blue', filter: 'hue-rotate(170deg) saturate(1.6)' },
+  { id: 'purple', name: 'Purple', filter: 'hue-rotate(250deg) saturate(1.5)' },
+];
+const findColor = (id) => COLOR_OPTIONS.find(c => c.id === id) || COLOR_OPTIONS[0];
+
+// Trees grow week by week, reaching full size after 10 weeks.
+const TREE_MAX_GROWTH_WEEKS = 10;
+const treeGrowthScale = (plantedAt) => {
+  const weeks = Math.min(TREE_MAX_GROWTH_WEEKS, Math.floor((Date.now() - (plantedAt || Date.now())) / (7 * 24 * 60 * 60 * 1000)));
+  return 0.55 + (weeks / TREE_MAX_GROWTH_WEEKS) * 0.95;
+};
 
 const DEFAULT_WORLD = { landUnlocked: FREE_PLOTS, placedTrees: {} };
 
@@ -51,6 +67,7 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
   const [world, setWorld] = useState(DEFAULT_WORLD);
   const [toast, setToast] = useState(null);
   const [shopSlot, setShopSlot] = useState(null); // plot index currently choosing a tree, or null
+  const [shopPickedTree, setShopPickedTree] = useState(null); // tree option chosen, now picking a color
 
   const [recentVisitors, setRecentVisitors] = useState([]);
   const [showVisitorsPanel, setShowVisitorsPanel] = useState(false);
@@ -103,21 +120,24 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
     showToast('🟫 New land unlocked!');
   };
 
-  const handlePlantTree = (option) => {
+  const handlePlantTree = (option, color) => {
     if (shopSlot == null) return;
     if (!isTeacherPreview && coinBalance < option.cost) { showToast('Not enough coins.'); return; }
     if (!isTeacherPreview) {
       setCoinBalance(prev => Math.max(0, prev - option.cost));
       persist({ coinBalance: increment(-option.cost) });
     }
-    const nextTrees = { ...world.placedTrees, [shopSlot]: { id: option.id, plantedAt: Date.now() } };
+    const treeData = { id: option.id, colorId: color.id, plantedAt: Date.now() };
+    const nextTrees = { ...world.placedTrees, [shopSlot]: treeData };
     setWorld(prev => ({ ...prev, placedTrees: nextTrees }));
-    persist({ [`natureWorld.placedTrees.${shopSlot}`]: { id: option.id, plantedAt: Date.now() } });
+    persist({ [`natureWorld.placedTrees.${shopSlot}`]: treeData });
     showToast(`${option.name} planted!`);
     setShopSlot(null);
+    setShopPickedTree(null);
   };
 
   const handleRemoveTree = (slotIndex) => {
+    if (!window.confirm('Are you sure you want to remove this tree? The coins you spent on it will not be refunded.')) return;
     const nextTrees = { ...world.placedTrees };
     delete nextTrees[slotIndex];
     setWorld(prev => ({ ...prev, placedTrees: nextTrees }));
@@ -152,12 +172,14 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
 
   const renderGrid = (w, { interactive }) => (
     <div
-      className="grid gap-2 w-full"
+      className="grid gap-0 w-full"
       style={{ gridTemplateColumns: `repeat(${GRID_COLS}, minmax(0, 1fr))` }}
     >
       {Array.from({ length: MAX_PLOTS }).map((_, i) => {
         const unlocked = i < w.landUnlocked;
-        const tree = unlocked && w.placedTrees[i] ? findTree(w.placedTrees[i].id) : null;
+        const placed = unlocked ? w.placedTrees[i] : null;
+        const tree = placed ? findTree(placed.id) : null;
+        const color = placed ? findColor(placed.colorId) : null;
         return (
           <div
             key={i}
@@ -167,14 +189,16 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
               setShopSlot(i);
             }}
             title={!interactive ? undefined : !unlocked ? 'Locked land' : tree ? `${tree.name} -- tap to remove` : 'Tap to plant a tree'}
-            className={`aspect-square rounded-lg flex items-center justify-center text-2xl sm:text-3xl transition-transform ${
+            className={`aspect-square flex items-center justify-center text-2xl sm:text-3xl transition-transform border ${
               unlocked
-                ? 'bg-gradient-to-b from-lime-200 to-green-300 border border-green-400' + (interactive ? ' hover:scale-105 cursor-pointer' : '')
-                : 'bg-gray-100 border border-dashed border-gray-300'
+                ? 'bg-gradient-to-b from-lime-200 to-green-300 border-green-400' + (interactive ? ' hover:scale-105 cursor-pointer' : '')
+                : 'bg-gray-100 border-dashed border-gray-300'
             }`}
           >
             {tree ? (
-              <span className="inline-block" style={{ animation: 'natureTreeSway 3.2s ease-in-out infinite' }}>{tree.emoji}</span>
+              <span className="inline-block" style={{ transform: `scale(${treeGrowthScale(placed.plantedAt)})` }}>
+                <span className="inline-block" style={{ animation: 'natureTreeSway 3.2s ease-in-out infinite', filter: color.filter }}>{tree.emoji}</span>
+              </span>
             ) : unlocked ? (
               interactive ? <span className="text-gray-400 text-lg">+</span> : null
             ) : (
@@ -262,29 +286,53 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
         </>
       )}
 
-      {/* Tree shop -- opens when an empty unlocked plot is tapped. */}
+      {/* Tree shop -- opens when an empty unlocked plot is tapped. Two steps:
+          pick the tree shape, then pick a color for it. */}
       {shopSlot != null && (
-        <div className="fixed inset-0 z-[10001] bg-black/50 flex items-center justify-center p-4" onClick={() => setShopSlot(null)}>
+        <div className="fixed inset-0 z-[10001] bg-black/50 flex items-center justify-center p-4" onClick={() => { setShopSlot(null); setShopPickedTree(null); }}>
           <div className="bg-white rounded-2xl shadow-2xl max-w-xs w-full p-6" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-bold text-emerald-800 mb-4 text-center">🌱 Plant a Tree</h2>
-            <div className="space-y-2 mb-2">
-              {TREE_OPTIONS.map(option => (
-                <button
-                  key={option.id}
-                  onClick={() => handlePlantTree(option)}
-                  className="w-full flex items-center justify-between p-3 rounded-xl border bg-emerald-50 border-emerald-200 hover:bg-emerald-100"
-                >
-                  <span className="font-semibold text-gray-800 flex items-center gap-2">
-                    <span className="text-xl">{option.emoji}</span>
-                    {option.name}
-                  </span>
-                  <span className="text-sm font-bold text-emerald-700">🪙 {option.cost}</span>
+            {!shopPickedTree ? (
+              <>
+                <h2 className="text-lg font-bold text-emerald-800 mb-4 text-center">🌱 Plant a Tree</h2>
+                <div className="space-y-2 mb-2">
+                  {TREE_OPTIONS.map(option => (
+                    <button
+                      key={option.id}
+                      onClick={() => setShopPickedTree(option)}
+                      className="w-full flex items-center justify-between p-3 rounded-xl border bg-emerald-50 border-emerald-200 hover:bg-emerald-100"
+                    >
+                      <span className="font-semibold text-gray-800 flex items-center gap-2">
+                        <span className="text-xl">{option.emoji}</span>
+                        {option.name}
+                      </span>
+                      <span className="text-sm font-bold text-emerald-700">🪙 {option.cost}</span>
+                    </button>
+                  ))}
+                </div>
+                <button onClick={() => setShopSlot(null)} className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2.5 rounded-xl mt-2">
+                  Cancel
                 </button>
-              ))}
-            </div>
-            <button onClick={() => setShopSlot(null)} className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2.5 rounded-xl mt-2">
-              Cancel
-            </button>
+              </>
+            ) : (
+              <>
+                <h2 className="text-lg font-bold text-emerald-800 mb-4 text-center">{shopPickedTree.emoji} Pick a Color</h2>
+                <div className="grid grid-cols-3 gap-2 mb-2">
+                  {COLOR_OPTIONS.map(color => (
+                    <button
+                      key={color.id}
+                      onClick={() => handlePlantTree(shopPickedTree, color)}
+                      className="flex flex-col items-center justify-center gap-1 p-3 rounded-xl border bg-emerald-50 border-emerald-200 hover:bg-emerald-100"
+                    >
+                      <span className="text-2xl" style={{ filter: color.filter }}>{shopPickedTree.emoji}</span>
+                      <span className="text-xs font-semibold text-gray-700">{color.name}</span>
+                    </button>
+                  ))}
+                </div>
+                <button onClick={() => setShopPickedTree(null)} className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2.5 rounded-xl mt-2">
+                  Back
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}

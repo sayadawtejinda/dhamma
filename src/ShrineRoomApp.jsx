@@ -551,7 +551,11 @@ const durationCost = (hours) => Math.round(hours * OFFERING_RATE_PER_HOUR * OFFE
 const OFFERING_OPTIONS = [
   { id: 'candle', name: 'Candle', emoji: '🕯️', durationHours: 1, cost: durationCost(1) },
   { id: 'water', name: 'Water Offering', emoji: '🥛', durationHours: 2, cost: durationCost(2) },
-  { id: 'fruit', name: 'Fruit Offering', emoji: '🍊', durationHours: 3, cost: durationCost(3) },
+  { id: 'fruit_orange', name: 'Orange', emoji: '🍊', durationHours: 3, cost: durationCost(3) },
+  { id: 'fruit_banana', name: 'Banana', emoji: '🍌', durationHours: 3, cost: durationCost(3) },
+  { id: 'fruit_apple', name: 'Apple', emoji: '🍎', durationHours: 3, cost: durationCost(3) },
+  { id: 'fruit_grapes', name: 'Grapes', emoji: '🍇', durationHours: 3, cost: durationCost(3) },
+  { id: 'fruit_mango', name: 'Mango', emoji: '🥭', durationHours: 3, cost: durationCost(3) },
   { id: 'flower', name: 'Lotus Flower', emoji: '🪷', durationHours: 5, cost: durationCost(5) },
   { id: 'umbrella', name: 'Golden Umbrella', svg: umbrellaSvg('#FFD54F', '#5D4037', '#B8860B'), durationHours: 20, cost: durationCost(20) },
   { id: 'lamp', name: 'Oil Lamp', emoji: '🪔', durationHours: 5, cost: durationCost(5) },
@@ -1205,6 +1209,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   };
 
   const handleRemoveItem = (slotIndex) => {
+    if (!window.confirm('Are you sure you want to remove this offering? The coins you spent on it will not be refunded.')) return;
     setPlacedItems(prev => {
       const next = { ...prev };
       delete next[slotIndex];
@@ -1233,6 +1238,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     showToast('Golden Umbrella placed.');
   };
   const handleRemoveUmbrella = (side) => {
+    if (!window.confirm('Are you sure you want to remove this Golden Umbrella? The coins you spent on it will not be refunded.')) return;
     setPlacedUmbrellas(prev => {
       const next = { ...prev };
       delete next[side];
@@ -1256,6 +1262,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     showToast('Bell placed.');
   };
   const handleRemoveBell = () => {
+    if (!window.confirm('Are you sure you want to remove this Bell? The coins you spent on it will not be refunded.')) return;
     setPlacedBell(null);
     persist({ placedBell: null });
   };
