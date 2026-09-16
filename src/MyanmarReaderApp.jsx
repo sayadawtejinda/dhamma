@@ -721,8 +721,20 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
     const deepLinkTutoringStudentUid = entryRequest?.studentUid || null;
     if (!deepLinkTutoringStudentUid || !userId) return;
     setTutoringStudentUid(deepLinkTutoringStudentUid);
-    setDoc(rosterDocRefByUid(db, READER_ROSTER_PATH, userId), { tutoringStudentUid: deepLinkTutoringStudentUid, linkedToTutoring: true }, { merge: true }).catch(e => console.error('Auto-link error:', e));
-  }, [entryRequest?.studentUid, userId]);
+    // This writes a SEPARATE uid-keyed doc from the name-keyed one the
+    // presence-ping effect below maintains (readerRosterDocRef(studentName))
+    // -- two docs per student isn't ideal, but merging them is a bigger job.
+    // What broke the "who's online" panel specifically: this one used to
+    // omit studentName/name entirely, so it showed up as a blank-named row
+    // once it existed (which is every session that opens via a TutoringApp
+    // deep link, i.e. nearly always) -- always include whatever name is
+    // already known now, same as the ping effect does.
+    const name = deepLinkStudentName || studentName || null;
+    setDoc(rosterDocRefByUid(db, READER_ROSTER_PATH, userId), {
+      tutoringStudentUid: deepLinkTutoringStudentUid, linkedToTutoring: true,
+      ...(name ? { studentName: name, name } : {}),
+    }, { merge: true }).catch(e => console.error('Auto-link error:', e));
+  }, [entryRequest?.studentUid, userId, deepLinkStudentName, studentName]);
 
   useEffect(() => {
     // Teacher, or a name already supplied by the link — never prompt. This also
@@ -914,6 +926,7 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
   // teacher can see who's been around recently even if not online right
   // now), sorted online-first, then most-recently-seen.
   const weeklyRosterList = onlineStudents
+    .filter(s => s.studentName || s.name) // skip a roster doc that never got a name written to it (see the auto-link effect above)
     .filter(s => {
       const lastSeenMs = s.lastSeen?.toMillis ? s.lastSeen.toMillis() : (s.lastSeen?.seconds ? s.lastSeen.seconds * 1000 : 0);
       return lastSeenMs > 0 && (nowForOnlineCheck - lastSeenMs) < ONE_WEEK_MS;
@@ -925,7 +938,7 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
       const bMs = b.lastSeen?.toMillis ? b.lastSeen.toMillis() : 0;
       return bMs - aMs;
     });
-  const onlineCount = onlineStudents.filter(isRosterEntryOnline).length;
+  const onlineCount = onlineStudents.filter(s => s.studentName || s.name).filter(isRosterEntryOnline).length;
 
   // Load this student's own trophy/completed totals so the counter and
   // "already awarded" checks survive a page reload. A chapter only really

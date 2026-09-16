@@ -7339,27 +7339,47 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           if (dt.isComplete) sheetStatus[dt.chapterNum][dt.sheetName] = true;
         });
 
-        if (latest) {
-          setScore(`${latest.score ?? 0}/1000`);
-          setFeedbackNotes(`Chapter ${latest.chapterNum} (Sheet ${latest.sheetName})`);
-          const latestStatus = sheetStatus[latest.chapterNum] || {};
-          const bothSheetsDone = !!(latestStatus.A && latestStatus.B);
-          // Chapter N with only Sheet A done reports as N itself; once Sheet B
-          // is also done it becomes N.5 (chapter N fully finished) -- matches
-          // getNextChapterNumber's reading of this same value everywhere else
-          // (a whole number means "continue this chapter's Sheet B", a .5
-          // means "start the next chapter's Sheet A").
-          const lessonCompletedValue = latest.chapterNum + (bothSheetsDone ? 0.5 : 0);
-          handleCompletedUnitChange(String(lessonCompletedValue), true);
-          setTodayCompletedInput(bothSheetsDone ? '1' : '0.5');
-        }
-
         // Every completed (score 700+) sheet not yet turned into a trophy
         // request is its own pending trophy -- 1 for Sheet A, 1 more for
         // Sheet B, so a full chapter is worth 2 total, same as before, but
         // each sheet is requested as soon as it's done rather than waiting
         // for its sibling sheet to also finish.
         const pending = allDocs.filter(d => d.isComplete && !d.trophyRequested);
+
+        // Score/"What did you study?" report on whichever PENDING (trophy-
+        // earning) sheet was completed most recently, not simply whichever
+        // sheet was touched last overall -- a student who finishes a
+        // chapter and then pokes at the next one (without finishing it)
+        // before reporting would otherwise show that unrelated, still-
+        // incomplete chapter's low score as if it were what the trophy
+        // request was for (e.g. "needs 700, only got 167"), when the
+        // trophy itself is correctly for the earlier chapter that actually
+        // crossed 700. Falls back to the overall latest-touched sheet only
+        // when nothing is pending.
+        const latestPending = pending.reduce((best, d) => {
+          const ts = d.completedAt?.toMillis ? d.completedAt.toMillis() : (d.timestamp?.toMillis ? d.timestamp.toMillis() : 0);
+          return (!best || ts > best._ts) ? { ...d, _ts: ts } : best;
+        }, null);
+        const reportOn = latestPending || latest;
+        if (reportOn) {
+          setScore(`${reportOn.score ?? 0}/1000`);
+          setFeedbackNotes(`Chapter ${reportOn.chapterNum} (Sheet ${reportOn.sheetName})`);
+        }
+        if (latest) {
+          const latestStatus = sheetStatus[latest.chapterNum] || {};
+          const bothSheetsDone = !!(latestStatus.A && latestStatus.B);
+          // Chapter N with only Sheet A done reports as N itself; once Sheet B
+          // is also done it becomes N.5 (chapter N fully finished) -- matches
+          // getNextChapterNumber's reading of this same value everywhere else
+          // (a whole number means "continue this chapter's Sheet B", a .5
+          // means "start the next chapter's Sheet A"). This still tracks the
+          // student's overall furthest reading progress, independent of
+          // which sheet the Score/notes above are reporting on.
+          const lessonCompletedValue = latest.chapterNum + (bothSheetsDone ? 0.5 : 0);
+          handleCompletedUnitChange(String(lessonCompletedValue), true);
+          setTodayCompletedInput(bothSheetsDone ? '1' : '0.5');
+        }
+
         setMyanmarReaderPendingScoreDocs(pending);
         setRequestTrophyAmount(pending.length > 0 ? pending.length : 1);
         setRequestTrophyChecked(pending.length > 0);
