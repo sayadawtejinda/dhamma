@@ -683,6 +683,16 @@ export default function BodhiTreeApp({ entryRequest, onExit }) {
   const [visitLoading, setVisitLoading] = useState(false);
   const treeAgeDaysRef = useRef(0);
   useEffect(() => { treeAgeDaysRef.current = treeAgeDays; }, [treeAgeDays]);
+  // Tracks whether the real attendance-derived age (below) has actually
+  // finished loading yet -- the ping effect fires its first ping
+  // immediately on mount, which used to race the async schedule/session
+  // fetch and win, persisting treeAgeDays:0 (the still-default state) to
+  // Firestore before the real number was ever computed. That 0 then stuck
+  // permanently for any student who didn't stay open past the next 30s
+  // heartbeat, which is exactly why some students' age showed correctly
+  // (visible to themselves, computed fresh every load) while others showed
+  // 0 in the online/visit panels (reading this stale stored value).
+  const ageComputedRef = useRef(false);
 
   // Roster heartbeat -- only for a real student (not teacher preview).
   useEffect(() => {
@@ -695,7 +705,11 @@ export default function BodhiTreeApp({ entryRequest, onExit }) {
       if (snap.exists()) setRecentVisitors(snap.data().recentVisitors || []);
     }).catch(e => console.error('Error loading Bodhi Tree visitors:', e));
     const ping = () => setDoc(rosterRef, {
-      studentName, isOnline: true, lastSeen: serverTimestamp(), treeAgeDays: treeAgeDaysRef.current,
+      studentName, isOnline: true, lastSeen: serverTimestamp(),
+      // Omit treeAgeDays entirely (rather than writing a not-yet-computed
+      // 0) until the real value has loaded -- merge:true then leaves
+      // whatever was already stored untouched instead of overwriting it.
+      ...(ageComputedRef.current ? { treeAgeDays: treeAgeDaysRef.current } : {}),
     }, { merge: true }).catch(() => {});
     ping();
     const interval = setInterval(ping, 30000);
@@ -786,7 +800,7 @@ export default function BodhiTreeApp({ entryRequest, onExit }) {
             .filter(e => e.endTime?.toDate?.() < now && getAttendanceStatus(e, sessions) === 'attended')
             .map(e => getWeekKey(e.startTime.toDate()))
         );
-        if (isMounted) setTreeAgeDays(attendedWeeks.size * 7);
+        if (isMounted) { setTreeAgeDays(attendedWeeks.size * 7); ageComputedRef.current = true; }
       } catch (e) {
         console.error('Error loading Bodhi tree data:', e);
       }

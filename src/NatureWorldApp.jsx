@@ -98,7 +98,7 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
         const duration = isButterfly ? 14 + Math.random() * 6 : 9 + Math.random() * 5;
         const top = 4 + Math.random() * 22; // stays within the sky band
         const rtl = Math.random() < 0.5;
-        return { id, emoji: isButterfly ? '🦋' : '🐦', duration, top: top + i * 3, delay: i * 0.4, rtl };
+        return { id, emoji: isButterfly ? '🦋' : '🕊️', duration, top: top + i * 3, delay: i * 0.4, rtl };
       });
       setFlyers(prev => [...prev, ...newFlyers]);
       const maxDuration = Math.max(...newFlyers.map(f => f.duration + f.delay));
@@ -267,8 +267,8 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
     <div className="min-h-screen flex flex-col items-center px-4 pt-20 pb-16 bg-gradient-to-b from-sky-100 via-emerald-50 to-emerald-100">
       <style>{`
         @keyframes natureTreeSway { 0%, 100% { transform: rotate(-4deg); } 50% { transform: rotate(4deg); } }
-        @keyframes natureFlyLTR { 0% { transform: translateX(-10vw) translateY(0); } 25% { transform: translateX(30vw) translateY(-10px); } 50% { transform: translateX(60vw) translateY(6px); } 75% { transform: translateX(90vw) translateY(-6px); } 100% { transform: translateX(120vw) translateY(0); } }
-        @keyframes natureFlyRTL { 0% { transform: translateX(120vw) scaleX(-1) translateY(0); } 25% { transform: translateX(80vw) scaleX(-1) translateY(-10px); } 50% { transform: translateX(50vw) scaleX(-1) translateY(6px); } 75% { transform: translateX(20vw) scaleX(-1) translateY(-6px); } 100% { transform: translateX(-10vw) scaleX(-1) translateY(0); } }
+        @keyframes natureFlyLTR { 0% { transform: translateX(-10vw) scaleX(-1) translateY(0); } 25% { transform: translateX(30vw) scaleX(-1) translateY(-10px); } 50% { transform: translateX(60vw) scaleX(-1) translateY(6px); } 75% { transform: translateX(90vw) scaleX(-1) translateY(-6px); } 100% { transform: translateX(120vw) scaleX(-1) translateY(0); } }
+        @keyframes natureFlyRTL { 0% { transform: translateX(120vw) translateY(0); } 25% { transform: translateX(80vw) translateY(-10px); } 50% { transform: translateX(50vw) translateY(6px); } 75% { transform: translateX(20vw) translateY(-6px); } 100% { transform: translateX(-10vw) translateY(0); } }
         @keyframes natureFlap { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
       `}</style>
       {/* Ambient sky life -- birds (solo or in a small flock) and the
