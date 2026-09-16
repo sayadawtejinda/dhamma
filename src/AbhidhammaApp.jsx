@@ -923,35 +923,6 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
       setAbhiCoinsTransferredOut(newTransferredOut);
     }catch(e){console.error('Error depositing coins to Shrine Room:',e);}
   };
-  // Sequential image numbering across the whole class -- scans every
-  // lesson already in this class (plus whatever's typed in the content
-  // box right now) for "NNN.jpg"-style filenames and returns one past the
-  // highest number found, so lesson 2 naturally continues from wherever
-  // lesson 1 left off (001-005 -> 006-010 -> ...) instead of the teacher
-  // having to track/type the next number by hand.
-  const contentTextareaRef=useRef(null);
-  const getNextImageNumber=()=>{
-    // Exactly 3 digits (with a word boundary before them) -- matches the
-    // "001.jpg" convention only, so an unrelated longer number elsewhere
-    // in a lesson's content (a photo's own filename, a date, etc.) never
-    // gets picked up as if it were part of this numbering scheme.
-    const nums=[];
-    lessons.forEach(l=>{for(const m of String(l.burmeseContent||'').matchAll(/\b(\d{3})\.(?:jpg|jpeg|png)\b/gi))nums.push(parseInt(m[1],10));});
-    for(const m of String(newContent||'').matchAll(/\b(\d{3})\.(?:jpg|jpeg|png)\b/gi))nums.push(parseInt(m[1],10));
-    return String((nums.length?Math.max(...nums):0)+1).padStart(3,'0');
-  };
-  const insertNextImage=()=>{
-    const token=`${getNextImageNumber()}.jpg`;
-    const ta=contentTextareaRef.current;
-    if(ta && document.activeElement===ta){
-      const start=ta.selectionStart,end=ta.selectionEnd;
-      const next=newContent.slice(0,start)+token+newContent.slice(end);
-      setNewContent(next);
-      requestAnimationFrame(()=>{ta.focus();ta.selectionStart=ta.selectionEnd=start+token.length;});
-    }else{
-      setNewContent(prev=>prev+(prev&&!prev.endsWith('\n')?'\n':'')+token);
-    }
-  };
   // Bulk-fill every lesson in the current class up to 5 sequential images
   // each (NNNNNN.png) -- the teacher types the first number to use (or a
   // whole filename like "000901.png", digits get pulled out either way)
@@ -1417,10 +1388,7 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
                 <h3 className="text-xl font-bold text-teal-300 mb-4">{editingLesson?'Edit Lesson':'Add Lesson'} — <span className="text-amber-400">{classId}</span></h3>
                 <form onSubmit={handleSaveLesson} className="space-y-4">
                   <input value={newTitle} onChange={e=>setNewTitle(e.target.value)} placeholder="Lesson Title" className="w-full p-3 bg-gray-900 border border-gray-600 rounded text-white focus:border-teal-500 focus:outline-none" disabled={loading}/>
-                  <textarea ref={contentTextareaRef} value={newContent} onChange={e=>setNewContent(e.target.value)} placeholder="Lesson Content (Burmese)" rows="6" className="w-full p-3 bg-gray-900 border border-gray-600 rounded text-white focus:border-teal-500 focus:outline-none" disabled={loading}/>
-                  <button type="button" onClick={insertNextImage} disabled={loading} className="text-sm bg-gray-700 hover:bg-gray-600 text-teal-300 px-3 py-2 rounded flex items-center gap-1">
-                    <ImageIcon className="w-4 h-4"/> Insert Next Image ({getNextImageNumber()}.jpg)
-                  </button>
+                  <textarea value={newContent} onChange={e=>setNewContent(e.target.value)} placeholder="Lesson Content (Burmese)" rows="6" className="w-full p-3 bg-gray-900 border border-gray-600 rounded text-white focus:border-teal-500 focus:outline-none" disabled={loading}/>
                   <div className="p-3 bg-gray-900/60 border border-teal-800 rounded flex flex-wrap items-center gap-2">
                     <ImageIcon className="w-4 h-4 text-teal-300 shrink-0"/>
                     <input type="text" value={autoFillStartInput} onChange={e=>setAutoFillStartInput(e.target.value)}
