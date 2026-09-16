@@ -953,20 +953,30 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
     }
   };
   // Bulk-fill every lesson in the current class up to 5 sequential images
-  // each (NNNNNN.png), continuing the numbering from the highest already
-  // used anywhere in the class -- the teacher was typing these in one at a
-  // time (000901.png, 000902.png, ...) and wants 5 per lesson without
-  // having to track/type the next number by hand across 30+ lessons.
+  // each (NNNNNN.png) -- the teacher types the first number to use (or a
+  // whole filename like "000901.png", digits get pulled out either way)
+  // right next to "Insert Next Image" and presses this once; it tops up
+  // every lesson in class order, continuing the numbering automatically,
+  // instead of typing 000901.png, 000902.png, ... by hand across 30+ lessons.
+  // Leaving the box blank falls back to auto-detecting the next number from
+  // the highest already used anywhere in the class.
+  const [autoFillStartInput,setAutoFillStartInput]=useState('');
   const handleAutoFillSequentialImages = async () => {
     if(!classId)return;
-    if(!window.confirm(`For every lesson in "${classId}" (in the order shown below), add sequential image filenames until it has 5, continuing the numbering from the highest already used in this class. Continue?`))return;
+    const typed=(autoFillStartInput.match(/\d+/)||[])[0];
+    const startNum=typed?parseInt(typed,10):null;
+    if(!window.confirm(`For every lesson in "${classId}" (in the order shown below), add sequential image filenames until it has 5${startNum?`, starting from ${String(startNum).padStart(6,'0')}.png`:', continuing the numbering from the highest already used in this class'}. Continue?`))return;
     setLoading(true);showMsg('Adding images…');
     try{
       const snap=await getDocs(abhiLessonsRef(classId));
       const docs=snap.docs.map(d=>({ref:d.ref,...d.data()})).sort((a,b)=>(a.createdAt?.seconds||0)-(b.createdAt?.seconds||0));
       const IMG_RE=/\b(\d{6})\.(?:png|jpg|jpeg)\b/gi;
       let maxNum=0;
-      docs.forEach(l=>{for(const m of String(l.burmeseContent||'').matchAll(IMG_RE))maxNum=Math.max(maxNum,parseInt(m[1],10));});
+      if(startNum!=null){
+        maxNum=startNum-1;
+      }else{
+        docs.forEach(l=>{for(const m of String(l.burmeseContent||'').matchAll(IMG_RE))maxNum=Math.max(maxNum,parseInt(m[1],10));});
+      }
       const batch=writeBatch(db);
       let changed=0;
       for(const l of docs){
@@ -983,6 +993,7 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
       }
       if(changed===0){showMsg('Every lesson already has 5 images.');setLoading(false);return;}
       await batch.commit();
+      setAutoFillStartInput('');
       showMsg(`✅ Added images to ${changed} lesson(s), up to ${String(maxNum).padStart(6,'0')}.png.`);
     }catch(e){console.error(e);showMsg('Error: '+e.message);}
     finally{setLoading(false);}
@@ -1365,12 +1376,6 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
                       <Download className="w-3 h-3"/>📦 Full Backup
                     </button>
                     <span className="text-gray-600 self-center">|</span>
-                    <button onClick={handleAutoFillSequentialImages} disabled={loading}
-                      className="bg-teal-700 hover:bg-teal-600 disabled:opacity-40 text-white px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1"
-                      title="Add sequential image filenames (NNNNNN.png) to every lesson in this class until each has 5, continuing the numbering">
-                      <ImageIcon className="w-3 h-3"/>🖼 Auto-Fill 5 Images/Lesson
-                    </button>
-                    <span className="text-gray-600 self-center">|</span>
                     <button onClick={async()=>{
                         if(!classId)return;
                         if(!window.confirm(`⚠️ Delete class "${classId}" and everything in it?\n\nThis deletes its lessons, roster, scores, quiz results, and notifications for THIS class only — other classes are untouched.\n\nThis CANNOT be undone!`))return;
@@ -1416,6 +1421,18 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
                   <button type="button" onClick={insertNextImage} disabled={loading} className="text-sm bg-gray-700 hover:bg-gray-600 text-teal-300 px-3 py-2 rounded flex items-center gap-1">
                     <ImageIcon className="w-4 h-4"/> Insert Next Image ({getNextImageNumber()}.jpg)
                   </button>
+                  <div className="p-3 bg-gray-900/60 border border-teal-800 rounded flex flex-wrap items-center gap-2">
+                    <ImageIcon className="w-4 h-4 text-teal-300 shrink-0"/>
+                    <input type="text" value={autoFillStartInput} onChange={e=>setAutoFillStartInput(e.target.value)}
+                      placeholder="e.g. 000902.png or 902 (blank = auto)"
+                      className="flex-1 min-w-[160px] bg-gray-900 border border-gray-600 rounded px-2 py-1.5 text-sm text-white focus:border-teal-500 focus:outline-none"
+                      disabled={loading}/>
+                    <button type="button" onClick={handleAutoFillSequentialImages} disabled={loading}
+                      className="text-sm bg-teal-700 hover:bg-teal-600 disabled:opacity-40 text-white px-3 py-2 rounded font-semibold whitespace-nowrap">
+                      Auto-Fill All Lessons (5 each)
+                    </button>
+                    <p className="w-full text-xs text-gray-400">Fills every lesson in this class up to 5 images each, in the order shown below, continuing from the number typed above.</p>
+                  </div>
                   <div className="flex gap-2">
                     <button type="submit" disabled={loading} className="flex-1 bg-teal-600 p-3 rounded hover:bg-teal-700 flex justify-center items-center font-bold">{loading?<RotateCw className="animate-spin w-5 h-5 mr-2"/>:<BookOpen className="w-5 h-5 mr-2"/>}{editingLesson?'Update':'Save Lesson'}</button>
                     {editingLesson&&<button type="button" onClick={()=>{setEditingLesson(null);setNewTitle('');setNewContent('');setNewImgBase(DEFAULT_IMG_BASE);}} className="bg-gray-600 p-3 rounded hover:bg-gray-500">Cancel</button>}
