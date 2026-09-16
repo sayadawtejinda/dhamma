@@ -272,7 +272,24 @@ const AbhiClassRoster = ({ userId, classId }) => {
     await batch.commit();
   };
 
-  const approved=students.filter(s=>s.status==='approved').sort((a,b)=>(a.studentNumber||0)-(b.studentNumber||0));
+  // A student whose device/session resets (private browsing, a tablet that
+  // clears site data) can briefly lose their real studentUid and get
+  // re-created under a fresh one -- same one name, two roster rows. Since
+  // that shows up as a visible duplicate before anyone notices and merges
+  // it by hand, collapse to one row per name here: keep whichever has a
+  // studentNumber (the real, properly-joined one) and otherwise the
+  // earliest joiner, which is where actual progress/scores tend to live.
+  const approvedRaw=students.filter(s=>s.status==='approved');
+  const bestByName={};
+  approvedRaw.forEach(s=>{
+    const key=s.studentName||s.name;
+    const cur=bestByName[key];
+    if(!cur){bestByName[key]=s;return;}
+    const sHasNum=!!s.studentNumber,curHasNum=!!cur.studentNumber;
+    if(sHasNum!==curHasNum){ if(sHasNum) bestByName[key]=s; return; }
+    if((s.joinedAt||Infinity)<(cur.joinedAt||Infinity)) bestByName[key]=s;
+  });
+  const approved=Object.values(bestByName).sort((a,b)=>(a.studentNumber||0)-(b.studentNumber||0));
   const pending=students.filter(s=>s.status==='pending');
 
   if(!classId)return null;
@@ -1127,9 +1144,19 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
       // fresh one (see migrateOldAbhiRosterDoc).
       try{
         const migrated=await migrateOldAbhiRosterDoc(classId,effectiveUserId,name);
+        // studentNumber used to only ever get set by the (unused/dead)
+        // pending-approval flow, so every student who joined this way ended
+        // up showing "#?" forever -- assign the next number here instead,
+        // same "current max + 1" approach approveStu already used.
+        let studentNumber=migrated&&migrated.studentNumber;
+        if(!studentNumber){
+          const existingSnap=await getDocs(query(abhiRosterRef(),where('classId','==',classId)));
+          const max=existingSnap.docs.reduce((m,d)=>Math.max(m,d.data().studentNumber||0),0);
+          studentNumber=max+1;
+        }
         await setDoc(rRef,{
           ...(migrated||{}),
-          classId,userId:effectiveUserId,studentName:name,name,
+          classId,userId:effectiveUserId,studentName:name,name,studentNumber,
           group:(migrated&&migrated.group)||studentProfile.group||'explorers',
           status:'approved',isOnline:true,lastPing:serverTimestamp(),lastSeen:serverTimestamp(),
           joinedAt:(migrated&&migrated.joinedAt)||Date.now(),
@@ -1540,8 +1567,13 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
               </div>
             )}
 
-            {/* Step 3: Has profile + class → show lessons */}
-            {studentProfile&&classId&&(
+            {/* Step 3: Has profile + class → show lessons. Also lets a
+                teacher already inside a class see the lesson list when they
+                flip to Student View -- previously only the "no class chosen
+                yet" bypass above worked for a teacher, so nothing rendered
+                at all if they toggled Student View while a class was
+                already open. */}
+            {(studentProfile||isTeacher)&&classId&&(
               <div key={classId} className="space-y-4">
                 <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                   <h2 className="text-2xl font-bold text-white">Class: <span className="text-amber-400">{classId}</span></h2>
