@@ -892,7 +892,7 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
   const [assignedClassId,setAssignedClassId]=useState(()=>localStorage.getItem('abhidhamma_assigned_classId')||'');
   const [classStats,setClassStats]=useState({}); // classId → {completedCount, totalLessons, rank}
   const [showLeaderboard,setShowLeaderboard]=useState(false);
-  const [activeQuizId,setActiveQuizId]=useState(null);const [activeQuizData,setActiveQuizData]=useState(null);
+  const [activeQuizId,setActiveQuizId]=useState(null);const [activeQuizData,setActiveQuizData]=useState(null);const [activeQuizTitle,setActiveQuizTitle]=useState('');
   const [openLessonId,setOpenLessonId]=useState(null);const [editingLesson,setEditingLesson]=useState(null);
   const [newTitle,setNewTitle]=useState('');const [newContent,setNewContent]=useState('');const [newImgBase,setNewImgBase]=useState(DEFAULT_IMG_BASE);
   // Gold coins for the wallet system -- same derived-score pattern as
@@ -998,12 +998,29 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
   // written story itself is untouched).
   const handleSyncImagesToVariants = async () => {
     if(!classId)return;
-    if(!window.confirm(`Add each lesson's current image filenames to every age-group's student-facing text in "${classId}", wherever they're missing? This does not regenerate or reword any variant text.`))return;
+    if(!window.confirm(`Spread each lesson's current image filenames one per paragraph through every age-group's student-facing text in "${classId}"? This does not regenerate or reword any variant text -- only where the images sit within it.`))return;
     setLoading(true);showMsg('Syncing images to student view…');
     try{
       const snap=await getDocs(abhiLessonsRef(classId));
       const docs=snap.docs.map(d=>({ref:d.ref,...d.data()}));
       const IMG_RE=/\b(\d{6})\.(?:png|jpg|jpeg)\b/gi;
+      // Pulls any of this lesson's own image filenames back out as bare
+      // lines (from a previous plain-append sync, or a stray duplicate)
+      // before redistributing them, so re-running this is safe/idempotent
+      // instead of piling up repeats.
+      const stripKnownImages=(text,tokens)=>text.split('\n').filter(line=>!tokens.includes(line.trim())).join('\n');
+      // One image after each paragraph (paragraphs = text separated by a
+      // blank line), same placement the AI prompt already uses when
+      // generating a variant from scratch -- leftover images (more images
+      // than paragraphs) land after the last paragraph.
+      const distributeImages=(text,tokens)=>{
+        const paragraphs=text.split(/\n\s*\n/).map(p=>p.trim()).filter(Boolean);
+        if(paragraphs.length===0)return [text.trim(),...tokens].filter(Boolean).join('\n\n');
+        const out=[];let ti=0;
+        paragraphs.forEach(p=>{ out.push(p); if(ti<tokens.length){out.push(tokens[ti]);ti++;} });
+        while(ti<tokens.length){out.push(tokens[ti]);ti++;}
+        return out.join('\n\n');
+      };
       const batch=writeBatch(db);
       let changed=0;
       for(const l of docs){
@@ -1014,15 +1031,14 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
         for(const group of Object.keys(variants)){
           const v=variants[group]||{};
           const existing=String(v.english||'');
-          const missing=tokens.filter(t=>!existing.includes(t));
-          if(missing.length===0)continue;
-          const nextEnglish=existing+(existing&&!existing.endsWith('\n')?'\n':'')+missing.join('\n');
+          const nextEnglish=distributeImages(stripKnownImages(existing,tokens),tokens);
+          if(nextEnglish===existing)continue;
           updates[`variants.${group}.english`]=nextEnglish;
           changed++;
         }
         if(Object.keys(updates).length>0)batch.update(l.ref,updates);
       }
-      if(changed===0){showMsg('Every variant already has its lesson\'s images.');setLoading(false);return;}
+      if(changed===0){showMsg('Every variant\'s images are already placed.');setLoading(false);return;}
       await batch.commit();
       showMsg(`✅ Synced images into ${changed} age-group variant(s).`);
     }catch(e){console.error(e);showMsg('Error: '+e.message);}
@@ -1334,7 +1350,7 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
       {role==='Student'&&studentProfile&&classId&&((classStats[classId]?.completedCount>0)||(classStats[classId]?.rank>0))&&(
         <AbhiFloatingStats rank={classStats[classId]?.rank||0} totalLessons={classStats[classId]?.completedCount||0}/>
       )}
-      {activeQuizId&&activeQuizData&&<QuizModule classId={classId} lessonId={activeQuizId} lessonTitle={lessons.find(l=>l.id===activeQuizId)?.title||''} userId={effectiveUserId} userName={studentProfile?.name||'Student'} ageGroup={studentProfile?.group} quizData={activeQuizData} onClose={()=>{setActiveQuizId(null);setActiveQuizData(null);}}/>}
+      {activeQuizId&&activeQuizData&&<QuizModule classId={classId} lessonId={activeQuizId} lessonTitle={activeQuizTitle||lessons.find(l=>l.id===activeQuizId)?.title||''} userId={effectiveUserId} userName={studentProfile?.name||'Student'} ageGroup={studentProfile?.group} quizData={activeQuizData} onClose={()=>{setActiveQuizId(null);setActiveQuizData(null);setActiveQuizTitle('');}}/>}
       {msg&&<div className="fixed top-4 left-1/2 -translate-x-1/2 bg-blue-600 text-white px-6 py-2 rounded-full shadow-xl z-50 font-bold">{msg}</div>}
       <div className="max-w-4xl mx-auto">
         {/* Header */}
@@ -1476,7 +1492,7 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
                       className="text-sm bg-amber-700 hover:bg-amber-600 disabled:opacity-40 text-white px-3 py-2 rounded font-semibold whitespace-nowrap">
                       Sync Images to Student View
                     </button>
-                    <p className="flex-1 min-w-[200px] text-xs text-gray-400">Students see their own age-group's generated text, not this box directly — run this whenever images are added/changed so students actually see them too.</p>
+                    <p className="flex-1 min-w-[200px] text-xs text-gray-400">Students see their own age-group's generated text, not this box directly — run this whenever images are added/changed so students see them too, spread one per paragraph.</p>
                   </div>
                   <div className="flex gap-2">
                     <button type="submit" disabled={loading} className="flex-1 bg-teal-600 p-3 rounded hover:bg-teal-700 flex justify-center items-center font-bold">{loading?<RotateCw className="animate-spin w-5 h-5 mr-2"/>:<BookOpen className="w-5 h-5 mr-2"/>}{editingLesson?'Update':'Save Lesson'}</button>
@@ -1587,7 +1603,7 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
                     studentAgeGroup={isTeacher ? teacherPreviewGroup : studentProfile.group}
                     studentName={isTeacher ? (AGE_GROUPS[teacherPreviewGroup]?.label||'Preview') : studentProfile.name}
                     classImageBase={classImageBase} onGenerateVariants={()=>{}} onEdit={()=>{}}
-                    onTakeQuiz={(id,title,data)=>{setActiveQuizId(id);setActiveQuizData(data);}}
+                    onTakeQuiz={(id,title,data)=>{setActiveQuizId(id);setActiveQuizData(data);setActiveQuizTitle(title||'');}}
                     isGenerating={false} isOpen={openLessonId===l.id}
                     onToggle={()=>setOpenLessonId(openLessonId===l.id?null:l.id)}/>
                 ))}
