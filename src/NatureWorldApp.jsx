@@ -21,21 +21,31 @@ const sanitizeShrineKey = (key) => (key || 'unknown').trim().replace(/[.$#/\[\]]
 // teacher specifically wants a phone held sideways to see the whole world
 // at once. GRID_COLS/GRID_ROWS is the maximum a world can ever grow to;
 // FREE_PLOTS start already unlocked so a brand-new world isn't empty.
-const GRID_COLS = 6;
-const GRID_ROWS = 4;
+// Sized up (from 6x4) once scenery items (rocks/pond/path) joined trees in
+// the shop, so there's room for a garden that isn't wall-to-wall trees.
+const GRID_COLS = 8;
+const GRID_ROWS = 5;
 const MAX_PLOTS = GRID_COLS * GRID_ROWS;
-const FREE_PLOTS = 8;
+const FREE_PLOTS = 10;
 // Cost to unlock the NEXT plot rises slowly with how much land is already
 // owned, so early expansion is cheap and a fully-grown world is a real
 // long-term goal.
 const plotCost = (alreadyUnlocked) => 15 + Math.floor(alreadyUnlocked / 2) * 5;
 
 const TREE_OPTIONS = [
-  { id: 'pine', name: 'Pine Tree', emoji: '🌲', cost: 10 },
-  { id: 'oak', name: 'Oak Tree', emoji: '🌳', cost: 15 },
-  { id: 'palm', name: 'Palm Tree', emoji: '🌴', cost: 15 },
+  { id: 'pine', name: 'Pine Tree', emoji: '🌲', cost: 10, kind: 'tree' },
+  { id: 'oak', name: 'Oak Tree', emoji: '🌳', cost: 15, kind: 'tree' },
+  { id: 'palm', name: 'Palm Tree', emoji: '🌴', cost: 15, kind: 'tree' },
 ];
-const findTree = (id) => TREE_OPTIONS.find(t => t.id === id);
+// Non-growing scenery -- placed instantly at full size, no color choice,
+// so a garden isn't only ever trees.
+const DECOR_OPTIONS = [
+  { id: 'rock', name: 'Rock', emoji: '🪨', cost: 6, kind: 'decor' },
+  { id: 'pond', name: 'Pond', emoji: '🌊', cost: 18, kind: 'decor' },
+  { id: 'path', name: 'Path Stone', emoji: '🟫', cost: 4, kind: 'decor' },
+];
+const ITEM_OPTIONS = [...TREE_OPTIONS, ...DECOR_OPTIONS];
+const findTree = (id) => ITEM_OPTIONS.find(t => t.id === id);
 
 // Same 3 tree shapes, recolored with a CSS filter so a whole plot of land
 // doesn't end up looking like a single shade of green -- no extra art
@@ -66,7 +76,8 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
   const [coinBalance, setCoinBalance] = useState(isTeacherPreview ? 500 : 0);
   const [world, setWorld] = useState(DEFAULT_WORLD);
   const [toast, setToast] = useState(null);
-  const [shopSlot, setShopSlot] = useState(null); // plot index currently choosing a tree, or null
+  const [shopSlot, setShopSlot] = useState(null); // plot index currently shopping, or null
+  const [shopCategory, setShopCategory] = useState(null); // 'tree' | 'decor' | null (category picker)
   const [shopPickedTree, setShopPickedTree] = useState(null); // tree option chosen, now picking a color
 
   const [recentVisitors, setRecentVisitors] = useState([]);
@@ -127,17 +138,18 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
       setCoinBalance(prev => Math.max(0, prev - option.cost));
       persist({ coinBalance: increment(-option.cost) });
     }
-    const treeData = { id: option.id, colorId: color.id, plantedAt: Date.now() };
+    const treeData = color ? { id: option.id, colorId: color.id, plantedAt: Date.now() } : { id: option.id, plantedAt: Date.now() };
     const nextTrees = { ...world.placedTrees, [shopSlot]: treeData };
     setWorld(prev => ({ ...prev, placedTrees: nextTrees }));
     persist({ [`natureWorld.placedTrees.${shopSlot}`]: treeData });
-    showToast(`${option.name} planted!`);
+    showToast(`${option.name} placed!`);
     setShopSlot(null);
+    setShopCategory(null);
     setShopPickedTree(null);
   };
 
   const handleRemoveTree = (slotIndex) => {
-    if (!window.confirm('Are you sure you want to remove this tree? The coins you spent on it will not be refunded.')) return;
+    if (!window.confirm('Are you sure you want to remove this item? The coins you spent on it will not be refunded.')) return;
     const nextTrees = { ...world.placedTrees };
     delete nextTrees[slotIndex];
     setWorld(prev => ({ ...prev, placedTrees: nextTrees }));
@@ -188,17 +200,19 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
               if (tree) { handleRemoveTree(i); return; }
               setShopSlot(i);
             }}
-            title={!interactive ? undefined : !unlocked ? 'Locked land' : tree ? `${tree.name} -- tap to remove` : 'Tap to plant a tree'}
+            title={!interactive ? undefined : !unlocked ? 'Locked land' : tree ? `${tree.name} -- tap to remove` : 'Tap to plant or place something'}
             className={`aspect-square flex items-center justify-center text-2xl sm:text-3xl transition-transform border ${
               unlocked
                 ? 'bg-gradient-to-b from-lime-200 to-green-300 border-green-400' + (interactive ? ' hover:scale-105 cursor-pointer' : '')
                 : 'bg-gray-100 border-dashed border-gray-300'
             }`}
           >
-            {tree ? (
+            {tree && tree.kind === 'tree' ? (
               <span className="inline-block" style={{ transform: `scale(${treeGrowthScale(placed.plantedAt)})` }}>
                 <span className="inline-block" style={{ animation: 'natureTreeSway 3.2s ease-in-out infinite', filter: color.filter }}>{tree.emoji}</span>
               </span>
+            ) : tree ? (
+              <span className="inline-block">{tree.emoji}</span>
             ) : unlocked ? (
               interactive ? <span className="text-gray-400 text-lg">+</span> : null
             ) : (
@@ -255,7 +269,7 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
         {studentName}'s Nature World
       </h1>
       <p className="text-emerald-600 text-sm mb-2 text-center">
-        🌱 Buy land, then plant a tree at a time with coins you've earned
+        🌱 Buy land, then plant trees and place scenery with coins you've earned
       </p>
       {/* Landscape hint -- true orientation-lock isn't reliable across
           browsers without a user gesture + Fullscreen API (and doesn't
@@ -265,6 +279,16 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
       <p className="sm:hidden text-xs text-amber-600 font-semibold mb-4 flex items-center gap-1">
         📱 Turn your phone sideways for the widest view!
       </p>
+
+      {/* Scenery backdrop -- layered hills/mountains behind the plot grid so
+          it doesn't float on plain white; purely decorative, no interaction. */}
+      <div className="w-full max-w-3xl -mb-2" aria-hidden="true">
+        <svg viewBox="0 0 600 90" className="w-full h-auto block" preserveAspectRatio="none">
+          <path d="M0,90 L0,55 L60,20 L130,55 L200,15 L280,55 L340,30 L420,60 L480,25 L560,55 L600,40 L600,90 Z" fill="#a7c4d9" />
+          <path d="M0,90 L0,70 L80,45 L150,70 L230,40 L310,68 L390,48 L470,72 L540,50 L600,68 L600,90 Z" fill="#8fb896" />
+          <path d="M0,90 L0,80 L100,66 L220,82 L320,64 L440,82 L520,68 L600,80 L600,90 Z" fill="#6fa476" />
+        </svg>
+      </div>
 
       {loading ? (
         <p className="text-emerald-700">Loading your world...</p>
@@ -286,12 +310,29 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
         </>
       )}
 
-      {/* Tree shop -- opens when an empty unlocked plot is tapped. Two steps:
-          pick the tree shape, then pick a color for it. */}
+      {/* Shop -- opens when an empty unlocked plot is tapped. Category first
+          (Trees vs Scenery), then the item, then (trees only) a color. */}
       {shopSlot != null && (
-        <div className="fixed inset-0 z-[10001] bg-black/50 flex items-center justify-center p-4" onClick={() => { setShopSlot(null); setShopPickedTree(null); }}>
+        <div className="fixed inset-0 z-[10001] bg-black/50 flex items-center justify-center p-4" onClick={() => { setShopSlot(null); setShopCategory(null); setShopPickedTree(null); }}>
           <div className="bg-white rounded-2xl shadow-2xl max-w-xs w-full p-6" onClick={(e) => e.stopPropagation()}>
-            {!shopPickedTree ? (
+            {!shopCategory ? (
+              <>
+                <h2 className="text-lg font-bold text-emerald-800 mb-4 text-center">🌿 What would you like to place?</h2>
+                <div className="grid grid-cols-2 gap-2 mb-2">
+                  <button onClick={() => setShopCategory('tree')} className="flex flex-col items-center justify-center gap-1 p-4 rounded-xl border bg-emerald-50 border-emerald-200 hover:bg-emerald-100">
+                    <span className="text-2xl">🌳</span>
+                    <span className="text-sm font-semibold text-gray-800">Trees</span>
+                  </button>
+                  <button onClick={() => setShopCategory('decor')} className="flex flex-col items-center justify-center gap-1 p-4 rounded-xl border bg-sky-50 border-sky-200 hover:bg-sky-100">
+                    <span className="text-2xl">🪨</span>
+                    <span className="text-sm font-semibold text-gray-800">Scenery</span>
+                  </button>
+                </div>
+                <button onClick={() => setShopSlot(null)} className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2.5 rounded-xl mt-2">
+                  Cancel
+                </button>
+              </>
+            ) : shopCategory === 'tree' && !shopPickedTree ? (
               <>
                 <h2 className="text-lg font-bold text-emerald-800 mb-4 text-center">🌱 Plant a Tree</h2>
                 <div className="space-y-2 mb-2">
@@ -309,11 +350,11 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
                     </button>
                   ))}
                 </div>
-                <button onClick={() => setShopSlot(null)} className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2.5 rounded-xl mt-2">
-                  Cancel
+                <button onClick={() => setShopCategory(null)} className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2.5 rounded-xl mt-2">
+                  Back
                 </button>
               </>
-            ) : (
+            ) : shopCategory === 'tree' && shopPickedTree ? (
               <>
                 <h2 className="text-lg font-bold text-emerald-800 mb-4 text-center">{shopPickedTree.emoji} Pick a Color</h2>
                 <div className="grid grid-cols-3 gap-2 mb-2">
@@ -329,6 +370,28 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
                   ))}
                 </div>
                 <button onClick={() => setShopPickedTree(null)} className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2.5 rounded-xl mt-2">
+                  Back
+                </button>
+              </>
+            ) : (
+              <>
+                <h2 className="text-lg font-bold text-sky-800 mb-4 text-center">🪨 Add Scenery</h2>
+                <div className="space-y-2 mb-2">
+                  {DECOR_OPTIONS.map(option => (
+                    <button
+                      key={option.id}
+                      onClick={() => handlePlantTree(option, null)}
+                      className="w-full flex items-center justify-between p-3 rounded-xl border bg-sky-50 border-sky-200 hover:bg-sky-100"
+                    >
+                      <span className="font-semibold text-gray-800 flex items-center gap-2">
+                        <span className="text-xl">{option.emoji}</span>
+                        {option.name}
+                      </span>
+                      <span className="text-sm font-bold text-sky-700">🪙 {option.cost}</span>
+                    </button>
+                  ))}
+                </div>
+                <button onClick={() => setShopCategory(null)} className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2.5 rounded-xl mt-2">
                   Back
                 </button>
               </>

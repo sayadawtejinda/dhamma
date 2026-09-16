@@ -952,6 +952,41 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
       setNewContent(prev=>prev+(prev&&!prev.endsWith('\n')?'\n':'')+token);
     }
   };
+  // Bulk-fill every lesson in the current class up to 5 sequential images
+  // each (NNNNNN.png), continuing the numbering from the highest already
+  // used anywhere in the class -- the teacher was typing these in one at a
+  // time (000901.png, 000902.png, ...) and wants 5 per lesson without
+  // having to track/type the next number by hand across 30+ lessons.
+  const handleAutoFillSequentialImages = async () => {
+    if(!classId)return;
+    if(!window.confirm(`For every lesson in "${classId}" (in the order shown below), add sequential image filenames until it has 5, continuing the numbering from the highest already used in this class. Continue?`))return;
+    setLoading(true);showMsg('Adding images…');
+    try{
+      const snap=await getDocs(abhiLessonsRef(classId));
+      const docs=snap.docs.map(d=>({ref:d.ref,...d.data()})).sort((a,b)=>(a.createdAt?.seconds||0)-(b.createdAt?.seconds||0));
+      const IMG_RE=/\b(\d{6})\.(?:png|jpg|jpeg)\b/gi;
+      let maxNum=0;
+      docs.forEach(l=>{for(const m of String(l.burmeseContent||'').matchAll(IMG_RE))maxNum=Math.max(maxNum,parseInt(m[1],10));});
+      const batch=writeBatch(db);
+      let changed=0;
+      for(const l of docs){
+        const existingCount=[...String(l.burmeseContent||'').matchAll(IMG_RE)].length;
+        const need=Math.max(0,5-existingCount);
+        if(need===0)continue;
+        let content=l.burmeseContent||'';
+        for(let i=0;i<need;i++){
+          maxNum+=1;
+          content+=(content&&!content.endsWith('\n')?'\n':'')+`${String(maxNum).padStart(6,'0')}.png`;
+        }
+        batch.update(l.ref,{burmeseContent:content});
+        changed++;
+      }
+      if(changed===0){showMsg('Every lesson already has 5 images.');setLoading(false);return;}
+      await batch.commit();
+      showMsg(`✅ Added images to ${changed} lesson(s), up to ${String(maxNum).padStart(6,'0')}.png.`);
+    }catch(e){console.error(e);showMsg('Error: '+e.message);}
+    finally{setLoading(false);}
+  };
   const [importClassId,setImportClassId]=useState('');const [newClassId,setNewClassId]=useState('');
   const [classImageBase,setClassImageBase]=useState(DEFAULT_IMG_BASE);
   const [teacherPreviewGroup,setTeacherPreviewGroup]=useState('storytellers'); // teacher preview mode age group // per-class default image URL
@@ -1328,6 +1363,12 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
                     <button onClick={handleExportFull} disabled={loading}
                       className="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1">
                       <Download className="w-3 h-3"/>📦 Full Backup
+                    </button>
+                    <span className="text-gray-600 self-center">|</span>
+                    <button onClick={handleAutoFillSequentialImages} disabled={loading}
+                      className="bg-teal-700 hover:bg-teal-600 disabled:opacity-40 text-white px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1"
+                      title="Add sequential image filenames (NNNNNN.png) to every lesson in this class until each has 5, continuing the numbering">
+                      <ImageIcon className="w-3 h-3"/>🖼 Auto-Fill 5 Images/Lesson
                     </button>
                     <span className="text-gray-600 self-center">|</span>
                     <button onClick={async()=>{
