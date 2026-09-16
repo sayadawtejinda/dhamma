@@ -8426,8 +8426,9 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
               <div>
                 <label className="block text-gray-700 mb-2 text-sm">Score</label>
                 <input
-                  type="text" value={score} onChange={(e) => setScore(e.target.value)}
-                  className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="10/10"
+                  type="text" value={score} readOnly
+                  title="Filled in automatically from the app -- not editable by hand"
+                  className="w-full p-3 border rounded-lg bg-gray-100 text-gray-600 cursor-not-allowed focus:outline-none" placeholder="10/10"
                 />
               </div>
 
@@ -8436,9 +8437,10 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                 <input
                   type="number" min="0" step="0.5"
                   value={todayCompletedInput}
-                  onChange={(e) => handleTodayCountChange(e.target.value)}
+                  readOnly
+                  title="Filled in automatically from the app -- not editable by hand"
                   placeholder="e.g., 3"
-                  className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="w-full p-3 border rounded-lg bg-gray-100 text-gray-600 cursor-not-allowed focus:outline-none"
                 />
               </div>
 
@@ -8453,15 +8455,11 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                   <input
                     type="number" min="0" max={feedbackSession?.lessonUnitCount || undefined}
                     value={completedUnitInput}
-                    onChange={(e) => {
-                      const cap = feedbackSession?.lessonUnitCount || 0;
-                      let v = e.target.value;
-                      if (cap > 0 && parseFloat(v) > cap) v = String(cap);
-                      handleCompletedUnitChange(v);
-                    }}
+                    readOnly
+                    title="Filled in automatically from the app -- not editable by hand. Use the trophy button to bump it up instead."
                     step="0.5"
                     placeholder="e.g., 5"
-                    className="flex-1 p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="flex-1 p-3 border rounded-lg bg-gray-100 text-gray-600 cursor-not-allowed focus:outline-none"
                   />
                   {maxAvailableForModal > 0 && (feedbackSession?.lessonUnitCount || 0) > 0 && remainingTrophiesForModal > 0 && (
                     <button
