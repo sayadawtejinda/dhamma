@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { doc, getDoc, setDoc, increment } from 'firebase/firestore';
+import { doc, getDoc, setDoc, increment, deleteField } from 'firebase/firestore';
 import { db } from './firebase';
 import OnlineStatusWidget from './OnlineStatusWidget';
 
@@ -21,9 +21,10 @@ const sanitizeShrineKey = (key) => (key || 'unknown').trim().replace(/[.$#/\[\]]
 // teacher specifically wants a phone held sideways to see the whole world
 // at once. GRID_COLS/GRID_ROWS is the maximum a world can ever grow to;
 // FREE_PLOTS start already unlocked so a brand-new world isn't empty.
-// Sized up (from 6x4) once scenery items (rocks/pond/path) joined trees in
-// the shop, so there's room for a garden that isn't wall-to-wall trees.
-const GRID_COLS = 8;
+// Sized up (from 6x4, then 8x5) once scenery items (rocks/pond/path) joined
+// trees in the shop, so there's room for a garden that isn't wall-to-wall
+// trees, and to match the wide landscape view the teacher wants.
+const GRID_COLS = 12;
 const GRID_ROWS = 5;
 const MAX_PLOTS = GRID_COLS * GRID_ROWS;
 const FREE_PLOTS = 10;
@@ -80,6 +81,37 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
   const [shopCategory, setShopCategory] = useState(null); // 'tree' | 'decor' | null (category picker)
   const [shopPickedTree, setShopPickedTree] = useState(null); // tree option chosen, now picking a color
 
+  // Ambient sky life -- purely decorative, no coins/interaction. Spawns a
+  // "wave" every so often: usually a solo bird, sometimes a small flock,
+  // occasionally a butterfly instead. Each flyer removes itself once its
+  // flight animation finishes.
+  const [flyers, setFlyers] = useState([]);
+  useEffect(() => {
+    let cancelled = false;
+    const spawnWave = () => {
+      if (cancelled) return;
+      const isButterfly = Math.random() < 0.25;
+      const count = isButterfly ? 1 : (Math.random() < 0.5 ? 1 : 2 + Math.floor(Math.random() * 3)); // solo or a flock of 2-4
+      const wave = Date.now();
+      const newFlyers = Array.from({ length: count }).map((_, i) => {
+        const id = `${wave}-${i}`;
+        const duration = isButterfly ? 14 + Math.random() * 6 : 9 + Math.random() * 5;
+        const top = 4 + Math.random() * 22; // stays within the sky band
+        const rtl = Math.random() < 0.5;
+        return { id, emoji: isButterfly ? '🦋' : '🐦', duration, top: top + i * 3, delay: i * 0.4, rtl };
+      });
+      setFlyers(prev => [...prev, ...newFlyers]);
+      const maxDuration = Math.max(...newFlyers.map(f => f.duration + f.delay));
+      setTimeout(() => {
+        if (cancelled) return;
+        setFlyers(prev => prev.filter(f => !newFlyers.some(nf => nf.id === f.id)));
+      }, (maxDuration + 0.5) * 1000);
+      setTimeout(spawnWave, 7000 + Math.random() * 9000);
+    };
+    const initialTimer = setTimeout(spawnWave, 2000);
+    return () => { cancelled = true; clearTimeout(initialTimer); };
+  }, []);
+
   const [recentVisitors, setRecentVisitors] = useState([]);
   const [showVisitorsPanel, setShowVisitorsPanel] = useState(false);
   const [visitingStudentName, setVisitingStudentName] = useState(null);
@@ -112,6 +144,13 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
     return () => { isMounted = false; };
   }, [studentUid]);
 
+  // setDoc(ref, {'natureWorld.x': v}, {merge:true}) does NOT nest -- unlike
+  // updateDoc, a plain setDoc merge treats a dotted string key as a LITERAL
+  // field name (one containing a literal "."), not a nested path (same
+  // gotcha AvatarApp.jsx hit and documented). Every persist() call below
+  // must pass a genuinely nested object -- setDoc's recursive merge then
+  // only touches the exact path given, leaving sibling fields (other
+  // plots, other roster fields) alone.
   const persist = (patch) => {
     if (!rosterRef) return;
     setDoc(rosterRef, { studentName, ...patch }, { merge: true }).catch(() => {});
@@ -127,7 +166,7 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
     }
     const nextWorld = { ...world, landUnlocked: world.landUnlocked + 1 };
     setWorld(nextWorld);
-    persist({ 'natureWorld.landUnlocked': nextWorld.landUnlocked });
+    persist({ natureWorld: { landUnlocked: nextWorld.landUnlocked } });
     showToast('🟫 New land unlocked!');
   };
 
@@ -141,7 +180,7 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
     const treeData = color ? { id: option.id, colorId: color.id, plantedAt: Date.now() } : { id: option.id, plantedAt: Date.now() };
     const nextTrees = { ...world.placedTrees, [shopSlot]: treeData };
     setWorld(prev => ({ ...prev, placedTrees: nextTrees }));
-    persist({ [`natureWorld.placedTrees.${shopSlot}`]: treeData });
+    persist({ natureWorld: { placedTrees: { [shopSlot]: treeData } } });
     showToast(`${option.name} placed!`);
     setShopSlot(null);
     setShopCategory(null);
@@ -153,7 +192,7 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
     const nextTrees = { ...world.placedTrees };
     delete nextTrees[slotIndex];
     setWorld(prev => ({ ...prev, placedTrees: nextTrees }));
-    persist({ 'natureWorld.placedTrees': nextTrees });
+    persist({ natureWorld: { placedTrees: { [slotIndex]: deleteField() } } });
   };
 
   // Fetches another student's world read-only and records the visit on
@@ -228,7 +267,29 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
     <div className="min-h-screen flex flex-col items-center px-4 pt-20 pb-16 bg-gradient-to-b from-sky-100 via-emerald-50 to-emerald-100">
       <style>{`
         @keyframes natureTreeSway { 0%, 100% { transform: rotate(-4deg); } 50% { transform: rotate(4deg); } }
+        @keyframes natureFlyLTR { 0% { transform: translateX(-10vw) translateY(0); } 25% { transform: translateX(30vw) translateY(-10px); } 50% { transform: translateX(60vw) translateY(6px); } 75% { transform: translateX(90vw) translateY(-6px); } 100% { transform: translateX(120vw) translateY(0); } }
+        @keyframes natureFlyRTL { 0% { transform: translateX(120vw) scaleX(-1) translateY(0); } 25% { transform: translateX(80vw) scaleX(-1) translateY(-10px); } 50% { transform: translateX(50vw) scaleX(-1) translateY(6px); } 75% { transform: translateX(20vw) scaleX(-1) translateY(-6px); } 100% { transform: translateX(-10vw) scaleX(-1) translateY(0); } }
+        @keyframes natureFlap { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
       `}</style>
+      {/* Ambient sky life -- birds (solo or in a small flock) and the
+          occasional butterfly drift across the top of the screen. Purely
+          decorative: no coins, no click target, sits above everything but
+          never blocks taps (pointer-events none). */}
+      <div className="fixed inset-x-0 top-0 h-40 z-30 pointer-events-none overflow-hidden">
+        {flyers.map(f => (
+          <div
+            key={f.id}
+            className="absolute text-2xl"
+            style={{
+              top: `${f.top}%`,
+              left: 0,
+              animation: `${f.rtl ? 'natureFlyRTL' : 'natureFlyLTR'} ${f.duration}s linear ${f.delay}s forwards`,
+            }}
+          >
+            <span className="inline-block" style={{ animation: 'natureFlap 0.5s ease-in-out infinite' }}>{f.emoji}</span>
+          </div>
+        ))}
+      </div>
       <button
         onClick={onExit}
         className="fixed top-3 left-3 z-50 w-12 h-12 flex items-center justify-center bg-gray-800 text-white rounded-full shadow-lg text-2xl hover:bg-gray-900"

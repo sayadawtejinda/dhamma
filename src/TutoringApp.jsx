@@ -7365,19 +7365,30 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           setScore(`${reportOn.score ?? 0}/1000`);
           setFeedbackNotes(`Chapter ${reportOn.chapterNum} (Sheet ${reportOn.sheetName})`);
         }
-        if (latest) {
-          const latestStatus = sheetStatus[latest.chapterNum] || {};
-          const bothSheetsDone = !!(latestStatus.A && latestStatus.B);
-          // Chapter N with only Sheet A done reports as N itself; once Sheet B
-          // is also done it becomes N.5 (chapter N fully finished) -- matches
-          // getNextChapterNumber's reading of this same value everywhere else
-          // (a whole number means "continue this chapter's Sheet B", a .5
-          // means "start the next chapter's Sheet A"). This still tracks the
-          // student's overall furthest reading progress, independent of
-          // which sheet the Score/notes above are reporting on.
-          const lessonCompletedValue = latest.chapterNum + (bothSheetsDone ? 0.5 : 0);
-          handleCompletedUnitChange(String(lessonCompletedValue), true);
-          setTodayCompletedInput(bothSheetsDone ? '1' : '0.5');
+        // "Lesson completed" reports the furthest chapter actually PASSED
+        // (isComplete, i.e. score reached 700+) -- not whichever chapter was
+        // merely last touched. That used to read latest.chapterNum directly,
+        // so barely starting the next chapter (any score, even far below
+        // 700) immediately displayed as "completed up to Chapter N+1"
+        // ("Sandra Lin completed up to Chapter 3... Now finished Chapter 3"
+        // off a 167/1000 attempt on Chapter 3 Sheet A -- she hadn't finished
+        // it at all). Reports as the chapter number once Sheet A is
+        // genuinely done, N.5 once Sheet B is also done, matching
+        // getNextChapterNumber's reading of this value everywhere else.
+        let furthestCompleteChapter = 0;
+        let furthestCompleteBothSheets = false;
+        Object.keys(sheetStatus).forEach(chNumStr => {
+          const st = sheetStatus[chNumStr];
+          if (!st.A) return;
+          const chNum = Number(chNumStr);
+          if (chNum > furthestCompleteChapter) {
+            furthestCompleteChapter = chNum;
+            furthestCompleteBothSheets = !!st.B;
+          }
+        });
+        if (furthestCompleteChapter > 0) {
+          const lessonCompletedValue = furthestCompleteChapter + (furthestCompleteBothSheets ? 0.5 : 0);
+          handleCompletedUnitChange(String(lessonCompletedValue));
         }
 
         setMyanmarReaderPendingScoreDocs(pending);
