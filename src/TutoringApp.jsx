@@ -599,8 +599,8 @@ const PRIOR_WRONG_SMARTSTUDY_TITLE = ' Heavenly World or Golden cage';
 // classes exist and have lesson content, but have no real per-student
 // completion data recorded yet, so a live lookup would wrongly compute 0
 // and erase the trophies these students already earned. "Basic Abhiddhamma"
-// (the original bare lesson) is deliberately NOT included -- not yet
-// assigned to any class, to be migrated separately later.
+// (the original bare lesson) now maps to BASIC-ABHIDHAMMA-1, the class the
+// teacher assigned it to -- same forceFallback reasoning applies.
 const ABHIDHAMMA_MIGRATION_MAP = {
   'Basic Abhiddhamma-2': [{ classId: 'BASIC-ABHIDHAMMA-2' }],
   'Basic Abhiddhamma-3': [{ classId: 'BASIC-ABHIDHAMMA-2' }],
@@ -613,6 +613,13 @@ const ABHIDHAMMA_MIGRATION_MAP = {
   'The Great Buddhist Lady': [{ classId: 'THE GREAT BUDDHISTS', forceFallback: true }],
   'The Great Buddhist Layman': [{ classId: 'THE GREAT BUDDHISTS', forceFallback: true }],
   'Dhammapada Chapter-1': [{ classId: 'DHAMMAPADA-1', forceFallback: true }],
+  // "Basic Abhiddhamma" (the original bare lesson) has now been assigned to
+  // its own class -- confirmed by the teacher. Same forceFallback reasoning
+  // as "THE GREAT BUDDHISTS"/"DHAMMAPADA-1" above: BASIC-ABHIDHAMMA-1 has
+  // real lesson content but no per-student completion history carried over
+  // from the old Gemini-link lesson, so a live lookup would wrongly compute
+  // 0 done lessons and erase trophies students already earned there.
+  'Basic Abhiddhamma': [{ classId: 'BASIC-ABHIDHAMMA-1', forceFallback: true }],
 };
 // The Lesson Bank entry actually used to send Abhidhamma lessons -- the
 // teacher just rebuilt this from scratch (the old one was lost to a data
@@ -5640,7 +5647,7 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
           <div className="mt-8 pt-6 border-t border-violet-200">
             <h4 className="text-lg font-semibold mb-3 text-gray-700">🔄 Migrate Old Lessons into Abhidhamma</h4>
             <p className="text-sm text-gray-600 mb-4">
-              Same one-time move as Smart Study above, for the old Gemini-link Abhidhamma lessons ("Basic Abhiddhamma-2" through "-5", "Being Good and Being Kind", "The Great Buddhist Lady"/"Layman", "Dhammapada Chapter-1") into the real per-class Abhidhamma tracking under the "Abhidhamma Lesson" entry. "Basic Abhiddhamma" (the original bare lesson) isn't included yet — not assigned to a class.
+              Same one-time move as Smart Study above, for the old Gemini-link Abhidhamma lessons ("Basic Abhiddhamma", "Basic Abhiddhamma-2" through "-5", "Being Good and Being Kind", "The Great Buddhist Lady"/"Layman", "Dhammapada Chapter-1") into the real per-class Abhidhamma tracking under the "Abhidhamma Lesson" entry. "Basic Abhiddhamma" now maps to class BASIC-ABHIDHAMMA-1.
             </p>
 
             <div className="mb-5 p-4 bg-amber-50 rounded-lg border border-amber-300">
@@ -5742,7 +5749,7 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
 
             <div className="p-4 bg-white rounded-lg border border-violet-200">
               <p className="font-semibold text-gray-800 mb-1">2. Delete the old lessons from the Lesson Bank</p>
-              <p className="text-sm text-gray-500 mb-3">Only do this after Step 1's Apply has been run. Removes them from the Lesson Bank / Assign Lesson list only — does not touch any student's data. "Basic Abhiddhamma" is not included (not migrated yet).</p>
+              <p className="text-sm text-gray-500 mb-3">Only do this after Step 1's Apply has been run. Removes them from the Lesson Bank / Assign Lesson list only — does not touch any student's data.</p>
               <button
                 onClick={handleDeleteOldAbhidhammaLessons}
                 className="bg-red-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-700"
