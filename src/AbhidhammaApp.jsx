@@ -969,6 +969,48 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
     }catch(e){console.error(e);showMsg('Error: '+e.message);}
     finally{setLoading(false);}
   };
+  // Students never see lesson.burmeseContent directly -- they see their age
+  // group's AI-generated `variants[group].english` text instead (see the
+  // `dc=v.english` branch below). Images typed/auto-filled into
+  // burmeseContent only ever reach the *teacher's* own view, which reads
+  // burmeseContent straight -- this is why the teacher could see the images
+  // but students couldn't: every age-group variant for this class was
+  // generated before any image filenames existed, so none of them contain
+  // any. Appends whichever of the lesson's current image filenames are
+  // missing from each variant's text (not a full AI regeneration, so the
+  // written story itself is untouched).
+  const handleSyncImagesToVariants = async () => {
+    if(!classId)return;
+    if(!window.confirm(`Add each lesson's current image filenames to every age-group's student-facing text in "${classId}", wherever they're missing? This does not regenerate or reword any variant text.`))return;
+    setLoading(true);showMsg('Syncing images to student view…');
+    try{
+      const snap=await getDocs(abhiLessonsRef(classId));
+      const docs=snap.docs.map(d=>({ref:d.ref,...d.data()}));
+      const IMG_RE=/\b(\d{6})\.(?:png|jpg|jpeg)\b/gi;
+      const batch=writeBatch(db);
+      let changed=0;
+      for(const l of docs){
+        const tokens=[...new Set([...String(l.burmeseContent||'').matchAll(IMG_RE)].map(m=>m[0]))];
+        if(tokens.length===0)continue;
+        const variants=l.variants||{};
+        const updates={};
+        for(const group of Object.keys(variants)){
+          const v=variants[group]||{};
+          const existing=String(v.english||'');
+          const missing=tokens.filter(t=>!existing.includes(t));
+          if(missing.length===0)continue;
+          const nextEnglish=existing+(existing&&!existing.endsWith('\n')?'\n':'')+missing.join('\n');
+          updates[`variants.${group}.english`]=nextEnglish;
+          changed++;
+        }
+        if(Object.keys(updates).length>0)batch.update(l.ref,updates);
+      }
+      if(changed===0){showMsg('Every variant already has its lesson\'s images.');setLoading(false);return;}
+      await batch.commit();
+      showMsg(`✅ Synced images into ${changed} age-group variant(s).`);
+    }catch(e){console.error(e);showMsg('Error: '+e.message);}
+    finally{setLoading(false);}
+  };
   const [importClassId,setImportClassId]=useState('');const [newClassId,setNewClassId]=useState('');
   const [classImageBase,setClassImageBase]=useState(DEFAULT_IMG_BASE);
   const [teacherPreviewGroup,setTeacherPreviewGroup]=useState('storytellers'); // teacher preview mode age group // per-class default image URL
@@ -1400,6 +1442,14 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
                       Auto-Fill All Lessons (5 each)
                     </button>
                     <p className="w-full text-xs text-gray-400">Fills every lesson in this class up to 5 images each, in the order shown below, continuing from the number typed above.</p>
+                  </div>
+                  <div className="p-3 bg-gray-900/60 border border-amber-800 rounded flex flex-wrap items-center gap-2">
+                    <ImageIcon className="w-4 h-4 text-amber-300 shrink-0"/>
+                    <button type="button" onClick={handleSyncImagesToVariants} disabled={loading}
+                      className="text-sm bg-amber-700 hover:bg-amber-600 disabled:opacity-40 text-white px-3 py-2 rounded font-semibold whitespace-nowrap">
+                      Sync Images to Student View
+                    </button>
+                    <p className="flex-1 min-w-[200px] text-xs text-gray-400">Students see their own age-group's generated text, not this box directly — run this whenever images are added/changed so students actually see them too.</p>
                   </div>
                   <div className="flex gap-2">
                     <button type="submit" disabled={loading} className="flex-1 bg-teal-600 p-3 rounded hover:bg-teal-700 flex justify-center items-center font-bold">{loading?<RotateCw className="animate-spin w-5 h-5 mr-2"/>:<BookOpen className="w-5 h-5 mr-2"/>}{editingLesson?'Update':'Save Lesson'}</button>
