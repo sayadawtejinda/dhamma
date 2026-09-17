@@ -768,15 +768,21 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
   const chapterSheetKey = (chapterNum, sheetName) => `${chapterNum}_${sheetName}`;
 
   // Every point of score earned bumps both the current chapter/sheet's
-  // "SCORE" box (resets on the next chapter) AND this student's lifetime
-  // coin total (never resets, persisted on their roster doc) -- 1 score
-  // point = 1 coin, whether or not this reading ever earns an official
-  // trophy.
+  // "SCORE" box (resets on the next chapter, unaffected by the coin halving
+  // below -- score still needs to reach 700 the same way whether or not the
+  // chapter's trophy is already earned) AND this student's lifetime coin
+  // total (never resets, persisted on their roster doc) -- 1 score point =
+  // 1 coin normally, but only half a coin per point once the CHAPTER (both
+  // sheets) has already earned its trophy, so re-reading/practicing an
+  // already-rewarded chapter can't be used to farm coins at the same rate
+  // as fresh, not-yet-trophied reading.
   const awardScore = (amount) => {
     if (!amount) return;
     setScore(prev => prev + amount);
     if (studentName && userId) {
-      setDoc(readerRosterDocRef(studentName), { coinBalance: increment(Math.round(amount)) }, { merge: true }).catch(() => {});
+      const alreadyHasTrophy = completedFullChapters.has(getColumnIndex(selectedColumn));
+      const coinAmount = alreadyHasTrophy ? amount / 2 : amount;
+      setDoc(readerRosterDocRef(studentName), { coinBalance: increment(Math.round(coinAmount)) }, { merge: true }).catch(() => {});
     }
   };
 
