@@ -921,6 +921,8 @@ export default function DhammaschoolApp({ entryRequest, onExit, isActive }) {
         let cachedTutoringStudents = null; // cache of TutoringApp students list, loaded once per session
         let rosterLinkStatus = {}; // { studentName: true } — from roster docs, refreshed per class
         let allClassRegistry = {}; // { classId: {classId, createdAt} } — lets empty classes (no lessons yet) still show in the picker
+        let lessonsUnsub = null;
+        let lessonsListenerScope = undefined; // undefined = not set up yet; null = "all classes" (class-picker screen); a classId = scoped
         let lessonSteps = [];
         let activeLessonId = null; 
         let currentStepIndex = parseInt(localStorage.getItem('currentStepIndex') || '0');
@@ -1220,6 +1222,10 @@ let bilingualMode = false;
                                 if (paramClassId) {
                                     selectedClassId = paramClassId;
                                     localStorage.setItem('dhammaschool_classId', paramClassId);
+                                    // Re-scope right away -- setupListeners() above ran with
+                                    // whatever class was cached from the previous visit (or
+                                    // none), which may not be this one.
+                                    setupLessonsListener(paramClassId);
                                 }
                                 // A student arriving via entryRequest.studentName came straight
                                 // from TutoringApp's "Assign Lesson" — that name IS already the
@@ -1458,8 +1464,18 @@ let bilingualMode = false;
             }
         }
 
-        function setupListeners() {
-            onSnapshot(collection(db, PATHS.lessons), (snap) => {
+        // 'GENERAL' is a client-side label for lessons with no classId field
+        // at all -- there's no cheap server-side "field missing" query for
+        // that, so it (and the "no class chosen yet" class-picker screen,
+        // scope=null) fall back to reading every lesson, same as before this
+        // function existed. Any real classId gets a proper scoped query.
+        function setupLessonsListener(scope) {
+            if (lessonsListenerScope === scope) return;
+            lessonsListenerScope = scope;
+            if (lessonsUnsub) { lessonsUnsub(); lessonsUnsub = null; }
+            const needsFullScan = !scope || scope === 'GENERAL';
+            const lessonsQuery = needsFullScan ? collection(db, PATHS.lessons) : query(collection(db, PATHS.lessons), where('classId', '==', scope));
+            lessonsUnsub = onSnapshot(lessonsQuery, (snap) => {
                 allLessons = {}; studentLibraryLessons = [];
                 snap.docs.forEach(d => {
                     const data = d.data(); const lessonObj = { id: d.id, ...data }; allLessons[d.id] = lessonObj;
@@ -1472,6 +1488,15 @@ let bilingualMode = false;
                     renderStudentLibrary();
                 }
             });
+        }
+
+        function setupListeners() {
+            // Scoped to the class already chosen (from localStorage / entryRequest)
+            // when known, instead of always loading every class's full lesson
+            // content (every step, quiz question and image ref, for every
+            // class) on every single open -- that used to be the single
+            // biggest thing this app read from Firestore.
+            setupLessonsListener(isTeacher ? selectedTeacherClassId : selectedClassId);
 
             // Class registry — lets a teacher "create" a class before any lesson
             // is tagged with it, so it still shows up in the picker.
@@ -2364,6 +2389,7 @@ document.getElementById('toggle-audio-btn').onclick = async () => {
         window.selectClass = (classId) => {
             selectedClassId = classId;
             localStorage.setItem('dhammaschool_classId', classId);
+            setupLessonsListener(classId);
             els.studentClassPicker.classList.add('hidden');
             els.studentLibrary.classList.remove('hidden');
             safeSetText('current-class-label', classId);
@@ -2375,6 +2401,7 @@ document.getElementById('toggle-audio-btn').onclick = async () => {
         window.changeClass = () => {
             selectedClassId = null;
             localStorage.removeItem('dhammaschool_classId');
+            setupLessonsListener(null); // back to the picker -- needs every class's lessons to list them
             els.studentLibrary.classList.add('hidden');
             els.studentClassPicker.classList.remove('hidden');
             renderClassPicker();
@@ -4055,6 +4082,7 @@ function renderClickableWords(text) {
         window.selectTeacherClass = (classId) => {
             selectedTeacherClassId = classId;
             localStorage.setItem('dhammaschool_teacher_classId', classId);
+            setupLessonsListener(classId);
             els.teacherClassPicker.classList.add('hidden');
             els.teacherView.classList.remove('hidden');
             safeSetText('teacher-current-class-label', classId);
@@ -4068,6 +4096,7 @@ function renderClickableWords(text) {
         window.backToClassPicker = () => {
             selectedTeacherClassId = null;
             localStorage.removeItem('dhammaschool_teacher_classId');
+            setupLessonsListener(null); // back to the picker -- needs every class's lessons to count them
             els.teacherView.classList.add('hidden');
             els.teacherClassPicker.classList.remove('hidden');
             renderTeacherClassPicker();
