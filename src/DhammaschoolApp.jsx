@@ -935,10 +935,10 @@ export default function DhammaschoolApp({ entryRequest, onExit, isActive }) {
         let completedMatchSteps = {};
 
         // --- START FIX for Shared View (Teacher+Student) ---
-        let allStudentAnswers = []; // Holds all answers
-        let allScores = []; // Holds all scores
-        let sharedAnswersUnsub; // Renamed
-        let sharedScoresUnsub; // Renamed
+        let allStudentAnswers = []; // Holds this LESSON's answers (see setupAnswersAndScoresListener)
+        let allScores = []; // Holds this LESSON's scores (see setupAnswersAndScoresListener)
+        let answersScoresLessonId = null; // which lesson the two listeners below are currently scoped to
+        let answersScoresUnsubs = []; // [unsubAnswers, unsubScores] for that lesson
         // --- END FIX ---
         
         let answersUnsub; // For student's own answers
@@ -1618,20 +1618,40 @@ let bilingualMode = false;
         }
 
         // --- START FIX for Shared Listeners (Teacher + Student) ---
-        function setupSharedListeners() {
-            // Listen for Answers
-            if (sharedAnswersUnsub) sharedAnswersUnsub();
-            sharedAnswersUnsub = onSnapshot(collection(db, PATHS.answers), (snap) => {
-                allStudentAnswers = [];
-                snap.forEach(doc => allStudentAnswers.push({ id: doc.id, ...doc.data() }));
-                
-                // If teacher is viewing a lesson, update the view
-                if (isTeacher && currentLessonId) {
-                    renderTeacherAnswers(currentLessonId); 
+        // Answers/scores used to be TWO listeners on the ENTIRE answers/
+        // scores collections (every class, every lesson, every student),
+        // set up once and never torn down for the rest of the page's life
+        // (this app never unmounts -- see App.jsx's KEEP_ALIVE_APPS). Every
+        // usage of allStudentAnswers/allScores anywhere in this file
+        // immediately filters by a single lessonId, so the wider scope
+        // bought nothing -- it just meant every teacher/student session
+        // read (and kept re-reading, on every answer/score written by
+        // ANYONE, in ANY class) the whole growing collection for as long as
+        // the tab stayed open. Confirmed live via the Firestore Usage tab
+        // (647k reads in 24h, with hour-long spikes matching many students
+        // opening the app around the same time) -- this was almost
+        // certainly the dominant driver behind the Firebase billing alert.
+        // Now scoped to just the lesson currently open, re-subscribed
+        // whenever that changes (see setupLessonListener for the teacher
+        // side, window.enterLesson for the student side).
+        function setupAnswersAndScoresListener(lid) {
+            if (answersScoresLessonId === lid) return;
+            answersScoresLessonId = lid;
+            answersScoresUnsubs.forEach(u => u());
+            answersScoresUnsubs = [];
+            allStudentAnswers = [];
+            allScores = [];
+            if (!lid) return;
+            const unsubAnswers = onSnapshot(query(collection(db, PATHS.answers), where('lessonId', '==', lid)), (snap) => {
+                allStudentAnswers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+                // If teacher is viewing this lesson, update the view
+                if (isTeacher && currentLessonId === lid) {
+                    renderTeacherAnswers(lid);
                 }
-                
-                // If student is in a lesson, update ONLY THE DISCUSSION PART, not the whole render
-                if ((!isTeacher || isPreviewMode) && studentCurrentLessonId) {
+
+                // If student is in this lesson, update ONLY THE DISCUSSION PART, not the whole render
+                if ((!isTeacher || isPreviewMode) && studentCurrentLessonId === lid) {
                     // Safety check: ensure lessonSteps is populated before trying to render
                     if (lessonSteps && lessonSteps.length > 0) {
                         const currentStep = lessonSteps[currentStepIndex];
@@ -1641,16 +1661,19 @@ let bilingualMode = false;
                     }
                 }
             });
-
-            // Listen for Scores (Keep listener but don't use UI)
-            if (sharedScoresUnsub) sharedScoresUnsub();
-            sharedScoresUnsub = onSnapshot(collection(db, PATHS.scores), (snap) => {
-                allScores = [];
-                snap.forEach(doc => allScores.push({ id: doc.id, ...doc.data() }));
-                if (isTeacher && currentLessonId) renderTeacherScores(currentLessonId);
+            const unsubScores = onSnapshot(query(collection(db, PATHS.scores), where('lessonId', '==', lid)), (snap) => {
+                allScores = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                if (isTeacher && currentLessonId === lid) renderTeacherScores(lid);
             });
+            answersScoresUnsubs = [unsubAnswers, unsubScores];
+        }
 
-            // Listen for ALL completions (for notification bell)
+        function setupSharedListeners() {
+            // Listen for ALL completions (for notification bell) -- these
+            // docs don't carry a classId to filter by server-side (see
+            // getActiveClassIdForNotifications' client-side filtering
+            // below), so this one is left as a whole-collection listener
+            // for now; typically far fewer docs than answers/scores.
             if (allCompletionsUnsub) allCompletionsUnsub();
             allCompletionsUnsub = onSnapshot(collection(db, PATHS.completions), (snap) => {
                 allCompletions = [];
@@ -1848,6 +1871,7 @@ window.renderTeacherScores = function(lessonId) {
         // --- END FIX ---
 
         function setupLessonListener(lid) {
+            setupAnswersAndScoresListener(lid);
             if (lessonUnsub) lessonUnsub();
             if (!lid) { lessonSteps = []; render(); return; }
             lessonUnsub = onSnapshot(doc(db, PATHS.lessons, lid), (snap) => {
@@ -2202,7 +2226,7 @@ document.getElementById('toggle-audio-btn').onclick = async () => {
             els.studentLibrary.classList.remove('hidden'); els.studentActiveLesson.classList.add('hidden'); studentCurrentLessonId = null;
             // Clear persistence when leaving lesson
             localStorage.removeItem('studentCurrentLessonId');
-            if(answersUnsub) answersUnsub(); if(lessonUnsub) lessonUnsub(); renderStudentLibrary();
+            if(answersUnsub) answersUnsub(); if(lessonUnsub) lessonUnsub(); setupAnswersAndScoresListener(null); renderStudentLibrary();
             updatePresence();
         };
 
