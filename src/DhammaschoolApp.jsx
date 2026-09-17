@@ -1012,7 +1012,10 @@ export default function DhammaschoolApp({ entryRequest, onExit }) {
         // amount back out here", no extra bookkeeping field needed.
         window.depositDhammaschoolCoinsToShrineRoom = async function() {
             const depositable = coinBalance;
-            if (depositable <= 0) return;
+            // Used to return silently here -- tapping the coin badge with a
+            // 0 balance (or before the balance listener has attached yet)
+            // looked exactly like "deposit doesn't work" with zero feedback.
+            if (depositable <= 0) { alertMessage('You have no coins to deposit right now.', 'error'); return; }
             const confirmed = window.confirm(`Deposit ${depositable} coin(s) into your Shrine Room wallet?`);
             if (!confirmed) return;
             try {

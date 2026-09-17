@@ -1923,10 +1923,29 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
     const ssSelectedClass = (sendSmartStudyClassId && smartStudyClasses)
       ? (smartStudyClasses || []).find(c => c.classId === sendSmartStudyClassId)
       : null;
-    const classLessonCountForSend = (() => {
+    const classLessonCountForSend = await (async () => {
       if (lessonToSend?.link === 'smartstudy://' && ssSelectedClass) return ssSelectedClass.lessonCount || 0;
       if (lessonToSend?.link === 'abhidhamma://' && sendAbhidhammaClassId && abhiTotalCount != null) return abhiTotalCount;
-      if (lessonToSend?.link === 'dhammaschool://' && sendDhammaschoolClassId && dhammaschoolStudentProgress?.totalLessons != null) return dhammaschoolStudentProgress.totalLessons;
+      if (lessonToSend?.link === 'dhammaschool://' && sendDhammaschoolClassId) {
+        if (dhammaschoolStudentProgress?.totalLessons != null) return dhammaschoolStudentProgress.totalLessons;
+        // dhammaschoolStudentProgress is fetched by a separate effect keyed
+        // off the class picker and can still be loading (or never resolved)
+        // if the teacher hits Send right after picking a class -- that race
+        // used to silently fall through to the bare bank entry's stale
+        // unitCount (e.g. 200 instead of the class's real 40 lessons, as
+        // happened for Amara Lin/GRADE-2). Fetch the real count directly
+        // here instead of trusting state that might not have caught up.
+        try {
+          const liveSnap = await getDocs(query(
+            collection(db, 'artifacts', DHAMMASCHOOL_APP_ID, 'public', 'data', 'lessons'),
+            where('classId', '==', sendDhammaschoolClassId)
+          ));
+          return liveSnap.size;
+        } catch (e) {
+          console.error('Dhammaschool live lesson-count fetch:', e);
+          return null;
+        }
+      }
       return null;
     })();
     // readingmyanmar:// / speakingmyanmar:// group parts (Consonant Practice,
@@ -7848,7 +7867,20 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
             } catch (e) {}
           }
           if (totalScore > 0) setScore(`${totalScore.toLocaleString()} pts`);
-          if (completedLessonIds.size > 0) handleCompletedUnitChange(String(completedLessonIds.size));
+          if (completedLessonIds.size > 0) {
+            // lesson_completions only captures completions recorded through
+            // Dhammaschool's own per-lesson tracking -- a student whose
+            // "completed up to Lesson N" baseline instead (or also) comes
+            // from teacher-approved trophies (see completedUnits in
+            // TutoringApp.jsx's handleApproveTrophy) can have a real count
+            // far above what this collection alone shows (e.g. genuinely on
+            // Lesson 19 with only 5 lesson_completions docs to its name).
+            // Clamped to never regress that baseline back down -- this used
+            // to overwrite it outright.
+            const dhammaschoolLessonKey = computeLessonKey(activeSession.lessonTitle, activeSession.lessonLink);
+            const dhammaschoolPreviousUnit = getEffectivePreviousUnit(dhammaschoolLessonKey, activeSession);
+            handleCompletedUnitChange(String(Math.max(dhammaschoolPreviousUnit, completedLessonIds.size)));
+          }
         } catch (e) { console.error('Dhammaschool score fetch:', e); }
       }
     }
