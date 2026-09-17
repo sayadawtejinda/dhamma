@@ -59,18 +59,6 @@ const MS_APP_CSS = `
             box-shadow: 0 0 15px var(--highlight-color), 0 4px 10px rgba(0, 0, 0, 0.5);
             transform: scale(1.02);
         }
-        .loading-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: rgba(0, 0, 0, 0.9);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 100;
-        }
         .consonant-group-btn {
             padding: 0.5rem;
             border-radius: 0.5rem;
@@ -137,26 +125,6 @@ const MS_APP_CSS = `
             font-family: 'Padauk', sans-serif;
         }
         
-        #loading-content {
-            background-color: #4f46e5;
-            color: white;
-            border-radius: 12px;
-            padding: 1.5rem 3rem;
-            font-weight: bold;
-            text-shadow: 0 1px 1px rgba(0,0,0,0.3);
-            box-shadow: 0 6px 0 #3730a3, 0 8px 15px rgba(0,0,0,0.4);
-            transition: transform 0.1s ease-out, box-shadow 0.1s ease-out;
-            transform: translateY(-4px);
-        }
-        #loading-content:hover {
-            transform: translateY(-6px);
-            box-shadow: 0 8px 0 #3730a3, 0 10px 20px rgba(0,0,0,0.3);
-        }
-        #loading-content:active {
-            transform: translateY(0px);
-            box-shadow: 0 2px 0 #3730a3, 0 4px 8px rgba(0,0,0,0.3);
-        }
-
         /* Prevent text selection on draggable icon */
         .no-select {
             -webkit-user-select: none;
@@ -194,16 +162,6 @@ const MS_APP_CSS = `
 
 const MS_APP_BODY_HTML = `
 
-    <div id="loading-overlay" class="loading-overlay cursor-pointer hidden">
-        <div id="loading-content" class="text-center">
-            <svg id="loading-spinner" class="animate-spin h-8 w-8 text-white mx-auto mb-3 hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"></circle>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            <p id="loading-message" class="text-xl font-bold"></p>
-        </div>
-    </div>
-    
     <!-- Floating Practice Score -->
     <div id="practice-score" class="fixed top-4 right-4 text-2xl sm:text-3xl font-bold bg-gray-800/90 backdrop-blur px-5 py-3 rounded-full shadow-lg z-50 border-2 border-yellow-500 text-white transition-transform hidden">
         🏆 <span id="score-val" class="ml-2 text-yellow-400">0</span>
