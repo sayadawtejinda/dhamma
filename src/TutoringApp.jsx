@@ -1748,8 +1748,11 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
         ));
         const completedLessonIds = new Set(completionsSnap.docs.map(d => d.data().lessonId).filter(lid => classLessonIds.includes(lid)));
 
-        let totalScore = 0;
-        for (const lid of classLessonIds) {
+        // One query per lesson (up to 40 for a full class) run in parallel
+        // instead of sequentially -- awaiting each one in turn before
+        // starting the next was the actual reason "Assign Lesson" felt slow
+        // for Dhammaschool (40 round trips back to back instead of at once).
+        const perLessonScores = await Promise.all(classLessonIds.map(async lid => {
           try {
             const scoresSnap = await getDocs(query(
               collection(db, 'artifacts', DHAMMASCHOOL_APP_ID, 'public', 'data', 'game_scores'),
@@ -1758,9 +1761,10 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
             ));
             let best = 0;
             scoresSnap.docs.forEach(d => { best = Math.max(best, Number(d.data().score) || 0); });
-            totalScore += best;
-          } catch (e) {}
-        }
+            return best;
+          } catch (e) { return 0; }
+        }));
+        const totalScore = perLessonScores.reduce((sum, s) => sum + s, 0);
         setDhammaschoolStudentProgress({ completedCount: completedLessonIds.size, totalLessons, score: totalScore });
       } catch (e) {
         console.error('Dhammaschool progress fetch:', e);
