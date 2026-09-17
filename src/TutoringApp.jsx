@@ -7845,7 +7845,6 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
             where('classId', '==', dhammaschoolClassId)
           ));
           const classLessonIds = lessonsSnap.docs.map(d => d.id);
-          let totalScore = 0;
           // Dhammaschool app uses its own anonymous Firebase session per device/browser
           // (separate from TutoringApp's studentUid), so completions/scores must be
           // matched by studentName, not by UID.
@@ -7853,8 +7852,15 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
             collection(db, 'artifacts', DHAMMASCHOOL_APP_ID, 'public', 'data', 'lesson_completions'),
             where('studentName', '==', stuName)
           ));
-          const completedLessonIds = new Set(completionsSnap.docs.map(d => d.data().lessonId).filter(lid => classLessonIds.includes(lid)));
-          for (const lid of classLessonIds) {
+          const classCompletions = completionsSnap.docs
+            .map(d => d.data())
+            .filter(dt => classLessonIds.includes(dt.lessonId));
+          // One query per lesson (up to 40+) run in parallel instead of
+          // sequentially -- this loop used to await each one in turn, which
+          // is most of why opening the report modal for a Dhammaschool
+          // lesson visibly took longer than every other app.
+          let totalScore = 0;
+          await Promise.all(classLessonIds.map(async lid => {
             try {
               const scoresSnap = await getDocs(query(
                 collection(db, 'artifacts', DHAMMASCHOOL_APP_ID, 'public', 'data', 'game_scores'),
@@ -7865,21 +7871,38 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
               scoresSnap.docs.forEach(d => { best = Math.max(best, Number(d.data().score) || 0); });
               totalScore += best;
             } catch (e) {}
-          }
+          }));
           if (totalScore > 0) setScore(`${totalScore.toLocaleString()} pts`);
-          if (completedLessonIds.size > 0) {
+          if (classCompletions.length > 0) {
             // lesson_completions only captures completions recorded through
             // Dhammaschool's own per-lesson tracking -- a student whose
             // "completed up to Lesson N" baseline instead (or also) comes
             // from teacher-approved trophies (see completedUnits in
-            // TutoringApp.jsx's handleApproveTrophy) can have a real count
-            // far above what this collection alone shows (e.g. genuinely on
-            // Lesson 19 with only 5 lesson_completions docs to its name).
-            // Clamped to never regress that baseline back down -- this used
-            // to overwrite it outright.
+            // TutoringApp.jsx's handleApproveTrophy) can run well ahead of
+            // it (Amara Lin is genuinely on Lesson 19 with only a handful of
+            // lesson_completions docs to her name), so this collection's
+            // raw total is never a safe stand-in for her real progress --
+            // using it directly either regressed her count or, clamped, sat
+            // frozen forever no matter how many new lessons she finished.
+            // Instead, count only RECENT completions (a 3-hour lookback
+            // before this session started, not just its exact start time --
+            // a student who finishes a lesson and then retries the report a
+            // few times, each spawning a fresh session, would otherwise see
+            // that completion fall just before every one of those retries'
+            // own start time and never count) and ADD that on top of her
+            // existing baseline.
             const dhammaschoolLessonKey = computeLessonKey(activeSession.lessonTitle, activeSession.lessonLink);
             const dhammaschoolPreviousUnit = getEffectivePreviousUnit(dhammaschoolLessonKey, activeSession);
-            handleCompletedUnitChange(String(Math.max(dhammaschoolPreviousUnit, completedLessonIds.size)));
+            const sessionStartMs = activeSession.startTime?.toDate?.()?.getTime?.() || Date.now();
+            const RECENT_LOOKBACK_MS = 3 * 60 * 60 * 1000;
+            const cutoffMs = Math.min(sessionStartMs, Date.now()) - RECENT_LOOKBACK_MS;
+            const newCompletionsCount = classCompletions.filter(dt => {
+              const completedMs = dt.completedAt ? new Date(dt.completedAt).getTime() : 0;
+              return completedMs >= cutoffMs;
+            }).length;
+            if (newCompletionsCount > 0) {
+              handleCompletedUnitChange(String(dhammaschoolPreviousUnit + newCompletionsCount));
+            }
           }
         } catch (e) { console.error('Dhammaschool score fetch:', e); }
       }
