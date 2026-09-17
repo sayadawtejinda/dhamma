@@ -4,7 +4,8 @@ import {
 } from 'firebase/auth';
 import {
   doc, setDoc, getDoc, updateDoc, onSnapshot, collection, query,
-  addDoc, where, getDocs, deleteDoc, arrayUnion, arrayRemove, writeBatch, increment
+  addDoc, where, getDocs, deleteDoc, arrayUnion, arrayRemove, writeBatch, increment,
+  getCountFromServer
 } from 'firebase/firestore';
 import { auth as sharedAuth, db as sharedDb } from './firebase';
 import OnlineStatusWidget from './OnlineStatusWidget';
@@ -1473,7 +1474,20 @@ let bilingualMode = false;
             if (lessonsListenerScope === scope) return;
             lessonsListenerScope = scope;
             if (lessonsUnsub) { lessonsUnsub(); lessonsUnsub = null; }
-            const needsFullScan = !scope || scope === 'GENERAL';
+            if (!scope) {
+                // No class chosen yet (the "choose a class" picker screen) --
+                // that screen gets its class list from the lightweight class
+                // registry + a cheap count aggregation now (see
+                // renderClassPicker/renderTeacherClassPicker), so it no
+                // longer needs any lesson content loaded at all.
+                allLessons = {}; studentLibraryLessons = [];
+                if (isTeacher) { renderTeacherClassPicker(); renderLessonSelector(); } else { renderStudentLibrary(); }
+                return;
+            }
+            // 'GENERAL' (lessons with no classId field) has no cheap
+            // server-side query, so browsing into it still means scanning
+            // everything -- an accepted, rare/legacy exception.
+            const needsFullScan = scope === 'GENERAL';
             const lessonsQuery = needsFullScan ? collection(db, PATHS.lessons) : query(collection(db, PATHS.lessons), where('classId', '==', scope));
             lessonsUnsub = onSnapshot(lessonsQuery, (snap) => {
                 allLessons = {}; studentLibraryLessons = [];
@@ -1498,15 +1512,18 @@ let bilingualMode = false;
             // biggest thing this app read from Firestore.
             setupLessonsListener(isTeacher ? selectedTeacherClassId : selectedClassId);
 
-            // Class registry — lets a teacher "create" a class before any lesson
-            // is tagged with it, so it still shows up in the picker.
-            if (isTeacher) {
-                onSnapshot(collection(db, PATHS.classes), (snap) => {
-                    allClassRegistry = {};
-                    snap.docs.forEach(d => { allClassRegistry[d.id] = { id: d.id, ...d.data() }; });
-                    renderTeacherClassPicker();
-                });
-            }
+            // Class registry — a small collection of just {classId} docs, cheap
+            // to keep live for everyone. Lets both the teacher's and student's
+            // class picker list every class (even an empty one) without
+            // reading any actual lesson content to find out which classes
+            // exist -- that used to mean scanning the whole lessons
+            // collection just to render this "choose a class" screen.
+            onSnapshot(collection(db, PATHS.classes), (snap) => {
+                allClassRegistry = {};
+                snap.docs.forEach(d => { allClassRegistry[d.id] = { id: d.id, ...d.data() }; });
+                if (isTeacher) renderTeacherClassPicker();
+                else renderClassPicker();
+            });
             
             // --- START FIX: Run shared listeners for everyone ---
             setupSharedListeners(); 
@@ -2357,16 +2374,26 @@ document.getElementById('toggle-audio-btn').onclick = async () => {
         };
         // --- END FIX for Student Navigation Click ---
 
-        // Distinct class IDs found among public lessons (lessons with no classId are grouped under "General")
+        // Distinct class IDs from the lightweight class registry -- doesn't
+        // need any lesson content loaded. 'GENERAL' (untagged lessons, no
+        // registry doc of its own) is checked for separately since there's
+        // no cheap way to know it has content without asking.
         function getDistinctClassIds() {
-            const ids = new Set();
-            studentLibraryLessons.forEach(l => ids.add(l.classId && l.classId.trim() ? l.classId.trim() : 'GENERAL'));
-            return [...ids].sort();
+            return [...new Set(Object.keys(allClassRegistry))].sort();
         }
 
-        function renderClassPicker() {
+        async function renderClassPicker() {
+            // Only touch this while it's actually the visible screen -- a
+            // class registry update (e.g. the teacher creating a new class)
+            // must never re-render or auto-select out from under a student
+            // who already has a class chosen and is mid-lesson.
+            if (selectedClassId || !els.studentClassPicker || els.studentClassPicker.classList.contains('hidden')) return;
             const container = document.getElementById('class-picker-grid');
-            const classIds = getDistinctClassIds();
+            let classIds = getDistinctClassIds();
+            try {
+                const generalCount = (await getCountFromServer(query(collection(db, PATHS.lessons), where('classId', '==', '')))).data().count;
+                if (generalCount > 0) classIds = [...classIds, 'GENERAL'];
+            } catch (e) { /* rare/legacy case -- fine to skip if this fails */ }
             if (classIds.length === 0) {
                 container.innerHTML = '<div class="text-center py-10 text-slate-400 font-bold">No lessons available yet.</div>';
                 return;
@@ -2376,14 +2403,22 @@ document.getElementById('toggle-audio-btn').onclick = async () => {
                 window.selectClass(classIds[0]);
                 return;
             }
-            container.innerHTML = classIds.map(cid => {
-                const count = studentLibraryLessons.filter(l => (l.classId && l.classId.trim() ? l.classId.trim() : 'GENERAL') === cid).length;
-                return `
+            container.innerHTML = classIds.map(cid => `
                     <button onclick="window.selectClass('${cid}')" class="w-full p-5 rounded-2xl border-2 border-white bg-white shadow-md hover:border-orange-300 transition text-left flex justify-between items-center">
                         <span class="text-xl font-black text-slate-800"><i class="fas fa-layer-group text-orange-500 mr-2"></i>${cid}</span>
-                        <span class="text-sm font-bold text-orange-600 bg-orange-50 px-3 py-1 rounded-full">${count} lesson${count !== 1 ? 's' : ''}</span>
-                    </button>`;
-            }).join('');
+                        <span id="class-picker-count-${cid}" class="text-sm font-bold text-orange-600 bg-orange-50 px-3 py-1 rounded-full">...</span>
+                    </button>`).join('');
+            // Lesson counts are a cheap server-side aggregation (no lesson
+            // content is actually read) -- filled in after the buttons
+            // render so picking a class isn't blocked on them.
+            classIds.forEach(async cid => {
+                try {
+                    const q = cid === 'GENERAL' ? query(collection(db, PATHS.lessons), where('classId', '==', '')) : query(collection(db, PATHS.lessons), where('classId', '==', cid));
+                    const count = (await getCountFromServer(q)).data().count;
+                    const el = document.getElementById(`class-picker-count-${cid}`);
+                    if (el) el.textContent = `${count} lesson${count !== 1 ? 's' : ''}`;
+                } catch (e) {}
+            });
         }
 
         window.selectClass = (classId) => {
@@ -4048,35 +4083,47 @@ function renderClickableWords(text) {
 
         // ── Teacher Class Picker ──────────────────────────────────────────────
         function getDistinctTeacherClassIds() {
-            const ids = new Set();
-            Object.values(allLessons).forEach(l => ids.add(l.classId && l.classId.trim() ? l.classId.trim() : 'GENERAL'));
-            // Include classes created via "Create New Class" even before any lesson is tagged.
-            Object.keys(allClassRegistry).forEach(cid => ids.add(cid));
-            return [...ids].sort();
+            // Classes created via "Create New Class" (registry docs) --
+            // 'GENERAL' (untagged lessons) is checked for separately in
+            // renderTeacherClassPicker since it has no registry doc.
+            return [...new Set(Object.keys(allClassRegistry))].sort();
         }
 
-        function renderTeacherClassPicker() {
+        async function renderTeacherClassPicker() {
             if (!isTeacher || els.teacherClassPicker.classList.contains('hidden')) return; // only render while visible
             const container = document.getElementById('teacher-class-picker-grid');
-            const classIds = getDistinctTeacherClassIds();
+            let classIds = getDistinctTeacherClassIds();
+            try {
+                const generalCount = (await getCountFromServer(query(collection(db, PATHS.lessons), where('classId', '==', '')))).data().count;
+                if (generalCount > 0) classIds = [...classIds, 'GENERAL'];
+            } catch (e) { /* rare/legacy case -- fine to skip if this fails */ }
             if (classIds.length === 0) {
                 container.innerHTML = '<p class="text-slate-400 font-bold text-center py-10">No classes yet — create one above.</p>';
                 return;
             }
             container.innerHTML = classIds.map(cid => {
-                const count = Object.values(allLessons).filter(l => (l.classId && l.classId.trim() ? l.classId.trim() : 'GENERAL') === cid).length;
                 const safeCid = cid.replace(/'/g, "\\'");
                 return `
                     <div class="w-full p-5 rounded-2xl border-2 border-white bg-white shadow-md hover:border-orange-300 transition flex justify-between items-center gap-3">
                         <button onclick="window.selectTeacherClass('${safeCid}')" class="flex-grow text-left flex justify-between items-center">
                             <span class="text-xl font-black text-slate-800"><i class="fas fa-layer-group text-orange-500 mr-2"></i>${cid}</span>
-                            <span class="text-sm font-bold text-orange-600 bg-orange-50 px-3 py-1 rounded-full mr-3">${count} lesson${count !== 1 ? 's' : ''}</span>
+                            <span id="teacher-class-picker-count-${cid}" class="text-sm font-bold text-orange-600 bg-orange-50 px-3 py-1 rounded-full mr-3">...</span>
                         </button>
                         <button onclick="window.deleteClassCompletely('${safeCid}')" title="Delete this class and everything in it" class="flex-shrink-0 w-9 h-9 rounded-full bg-red-50 text-red-500 hover:bg-red-100 flex items-center justify-center">
                             <i class="fas fa-trash"></i>
                         </button>
                     </div>`;
             }).join('');
+            // Lesson counts are a cheap server-side aggregation (no lesson
+            // content is actually read) -- filled in after the buttons render.
+            classIds.forEach(async cid => {
+                try {
+                    const q = cid === 'GENERAL' ? query(collection(db, PATHS.lessons), where('classId', '==', '')) : query(collection(db, PATHS.lessons), where('classId', '==', cid));
+                    const count = (await getCountFromServer(q)).data().count;
+                    const el = document.getElementById(`teacher-class-picker-count-${cid}`);
+                    if (el) el.textContent = `${count} lesson${count !== 1 ? 's' : ''}`;
+                } catch (e) {}
+            });
         }
 
         window.selectTeacherClass = (classId) => {
