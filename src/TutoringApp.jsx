@@ -8563,7 +8563,12 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
               </div>
 
               <div className="relative">
-                <label className="block text-gray-700 mb-2 text-sm">Lesson completed</label>
+                <label className="block text-gray-700 mb-2 text-sm">
+                  Lesson completed
+                  {feedbackSession?.lessonUnitCount > 0 && (
+                    <span className="text-gray-400 font-normal"> (out of {feedbackSession.lessonUnitCount})</span>
+                  )}
+                </label>
                 {requestTrophyChecked && (
                   <div className="absolute -top-14 left-1/2 -translate-x-1/2 bg-yellow-100 border border-yellow-300 text-yellow-900 text-sm font-bold px-4 py-2 rounded-xl shadow-lg whitespace-nowrap z-20 animate-bounce">
                     🏆 +{requestTrophyAmount} {requestTrophyAmount > 1 ? 'Trophies' : 'Trophy'}!

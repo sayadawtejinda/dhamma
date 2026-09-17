@@ -2378,9 +2378,24 @@ document.getElementById('toggle-audio-btn').onclick = async () => {
             const filtered = studentLibraryLessons.filter(l => (l.classId && l.classId.trim() ? l.classId.trim() : 'GENERAL') === selectedClassId);
             if(filtered.length === 0) { container.innerHTML = '<div class="text-center col-span-full py-10 text-slate-400 font-bold">No lessons in this class yet.</div>'; return; }
             filtered.sort((a, b) => (a.createdAt || "9999").localeCompare(b.createdAt || "9999"));
-            container.innerHTML = '';
             const teacherDoneForClass = getTeacherConfirmedDoneForClass(selectedClassId);
+
+            // Find the student's current boundary (first not-yet-done lesson),
+            // then only show a small window around it -- with 40 lessons in a
+            // class, rendering every card at once was slow to load. Teacher
+            // asked to keep it to ~3 before / 3 after where the student is.
+            let currentIndex = filtered.findIndex((lesson, index) => !(myCompletedLessonIds.has(lesson.id) || index < teacherDoneForClass));
+            if (currentIndex === -1) currentIndex = filtered.length - 1; // everything done
+            const LESSON_WINDOW = 3;
+            const windowStart = Math.max(0, currentIndex - LESSON_WINDOW);
+            const windowEnd = Math.min(filtered.length - 1, currentIndex + LESSON_WINDOW);
+
+            container.innerHTML = `<div class="col-span-full flex flex-wrap items-center justify-between gap-2 mb-1">
+                <span class="text-sm font-black text-slate-500">Showing lesson ${windowStart + 1}–${windowEnd + 1} of ${filtered.length}</span>
+                ${windowStart > 0 ? `<button onclick="window.showEarlierLessons()" class="text-sm font-bold text-orange-600 bg-orange-50 hover:bg-orange-100 px-3 py-1 rounded-full"><i class="fas fa-arrow-up mr-1"></i>See earlier lessons</button>` : ''}
+            </div>`;
             filtered.forEach((lesson, index) => {
+                if (index < windowStart || index > windowEnd) return;
                 const count = lesson.steps ? lesson.steps.length : 0;
                 // Use English Title if mode is English
                 const title = (lesson.languageMode === 'en' && lesson.name_en) ? lesson.name_en : lesson.name;
@@ -2400,6 +2415,48 @@ document.getElementById('toggle-audio-btn').onclick = async () => {
                         <div class="absolute top-0 left-0 w-2 h-full bg-gradient-to-b ${isDone ? 'from-green-300 to-green-500' : isLocked ? 'from-slate-300 to-slate-400' : 'from-orange-300 to-orange-500'}"></div>
                         ${isDone ? `<div class="absolute top-3 right-3 bg-green-100 text-green-700 text-xs font-black px-3 py-1 rounded-full border border-green-300"><i class="fas fa-check-circle"></i> Completed</div>` : isLocked ? `<div class="absolute top-3 right-3 bg-slate-100 text-slate-500 text-xs font-black px-3 py-1 rounded-full border border-slate-300"><i class="fas fa-lock"></i> Locked</div>` : ''}
                         <div class="ml-4">
+                            <div class="text-xs font-black text-slate-400 mb-1">Lesson ${index + 1} of ${filtered.length}</div>
+                            <h3 class="text-xl font-black text-slate-800 mb-2 ${isLocked ? '' : 'group-hover:text-orange-600'} transition">${title}</h3>
+                            <div class="flex items-center gap-2 text-sm text-slate-500 font-bold"><span class="bg-orange-50 text-orange-600 px-2 py-1 rounded-lg"><i class="fas fa-layer-group"></i> ${count} Steps</span></div>
+                            <div class="mt-4 flex justify-end">${isLocked
+                                ? `<span class="text-slate-400 font-bold"><i class="fas fa-lock mr-1"></i> Finish the previous lesson first</span>`
+                                : `<span class="text-blue-500 font-bold group-hover:translate-x-1 transition-transform">${isDone ? 'Review Again' : 'Start Learning'} <i class="fas fa-arrow-right ml-1"></i></span>`
+                            }</div>
+                        </div>
+                    </div>`;
+            });
+            if (windowEnd < filtered.length - 1) {
+                container.innerHTML += `<div class="col-span-full flex justify-center mt-2">
+                    <button onclick="window.showLaterLessons()" class="text-sm font-bold text-orange-600 bg-orange-50 hover:bg-orange-100 px-4 py-2 rounded-full"><i class="fas fa-arrow-down mr-1"></i>See later lessons</button>
+                </div>`;
+            }
+        }
+        // "See earlier/later lessons" lets a student browse outside the
+        // default window (e.g. to review an old lesson) without showing all
+        // 40 cards by default.
+        window.showEarlierLessons = () => { renderStudentLibraryFullList(); };
+        window.showLaterLessons = () => { renderStudentLibraryFullList(); };
+        function renderStudentLibraryFullList() {
+            // Simplest reliable way to "show more": just render everything.
+            // Classes only run to ~40 lessons, so this is still light once
+            // the student has actually asked to see the rest.
+            const container = els.studentLessonGrid;
+            const filtered = studentLibraryLessons.filter(l => (l.classId && l.classId.trim() ? l.classId.trim() : 'GENERAL') === selectedClassId)
+                .sort((a, b) => (a.createdAt || "9999").localeCompare(b.createdAt || "9999"));
+            const teacherDoneForClass = getTeacherConfirmedDoneForClass(selectedClassId);
+            container.innerHTML = `<div class="col-span-full mb-1"><span class="text-sm font-black text-slate-500">Showing all ${filtered.length} lessons</span></div>`;
+            filtered.forEach((lesson, index) => {
+                const count = lesson.steps ? lesson.steps.length : 0;
+                const title = (lesson.languageMode === 'en' && lesson.name_en) ? lesson.name_en : lesson.name;
+                const isDone = myCompletedLessonIds.has(lesson.id) || index < teacherDoneForClass;
+                const isLocked = index > 0 && !(myCompletedLessonIds.has(filtered[index - 1].id) || (index - 1) < teacherDoneForClass);
+                const clickHandler = isLocked ? `lockedLessonClick()` : `enterLesson('${lesson.id}')`;
+                container.innerHTML += `
+                    <div onclick="${clickHandler}" class="lesson-card bg-white p-6 rounded-3xl shadow-md border-2 ${isDone ? 'border-green-200' : isLocked ? 'border-slate-200' : 'border-white'} ${isLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'} relative overflow-hidden group">
+                        <div class="absolute top-0 left-0 w-2 h-full bg-gradient-to-b ${isDone ? 'from-green-300 to-green-500' : isLocked ? 'from-slate-300 to-slate-400' : 'from-orange-300 to-orange-500'}"></div>
+                        ${isDone ? `<div class="absolute top-3 right-3 bg-green-100 text-green-700 text-xs font-black px-3 py-1 rounded-full border border-green-300"><i class="fas fa-check-circle"></i> Completed</div>` : isLocked ? `<div class="absolute top-3 right-3 bg-slate-100 text-slate-500 text-xs font-black px-3 py-1 rounded-full border border-slate-300"><i class="fas fa-lock"></i> Locked</div>` : ''}
+                        <div class="ml-4">
+                            <div class="text-xs font-black text-slate-400 mb-1">Lesson ${index + 1} of ${filtered.length}</div>
                             <h3 class="text-xl font-black text-slate-800 mb-2 ${isLocked ? '' : 'group-hover:text-orange-600'} transition">${title}</h3>
                             <div class="flex items-center gap-2 text-sm text-slate-500 font-bold"><span class="bg-orange-50 text-orange-600 px-2 py-1 rounded-lg"><i class="fas fa-layer-group"></i> ${count} Steps</span></div>
                             <div class="mt-4 flex justify-end">${isLocked
