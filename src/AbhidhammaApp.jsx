@@ -859,7 +859,7 @@ const AbhiLessonItem = ({ lesson, classId, isTeacher, studentAgeGroup, studentNa
 };
 
 // ─── Main AbhidhammaApp ───────────────────────────────────────────────────────
-export default function AbhidhammaApp({ entryRequest, onExit }) {
+export default function AbhidhammaApp({ entryRequest, onExit, isActive }) {
   const [authReady,setAuthReady]=useState(false);const [userId,setUserId]=useState(null);
   // Read localStorage immediately so first render already has correct role (no flash/conflict)
   const [isTeacher,setIsTeacher]=useState(()=>localStorage.getItem('abhidhamma_isTeacher')==='true');
@@ -1143,6 +1143,16 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
     if(!studentProfile||!classId||!effectiveUserId||studentProfile.status!=='approved'||isTeacher) return;
     const name=studentProfile.name;
     const rRef=abhiRosterDocRef(classId,effectiveUserId);
+    // This app never unmounts once opened (App.jsx's KEEP_ALIVE_APPS --
+    // it just gets hidden behind the dashboard), so without checking
+    // isActive this heartbeat would keep pinging Firestore every 60s
+    // forever after the student leaves, for as long as the tab stays
+    // open. Same fix already applied to MyanmarReaderApp/
+    // MyanmarSpeakingApp for the same reason.
+    if(!isActive){
+      updateDoc(rRef,{isOnline:false,lastSeen:serverTimestamp()}).catch(()=>{});
+      return;
+    }
     const ping=async()=>{
       let snap;
       try{ snap=await getDoc(rRef); }
@@ -1184,7 +1194,7 @@ export default function AbhidhammaApp({ entryRequest, onExit }) {
     const handleOffline=()=>{ try{ updateDoc(rRef,{isOnline:false,lastSeen:serverTimestamp()}); }catch(e){} };
     window.addEventListener('beforeunload',handleOffline);
     return()=>{ clearInterval(interval); handleOffline(); window.removeEventListener('beforeunload',handleOffline); };
-  },[studentProfile,classId,effectiveUserId]);
+  },[studentProfile,classId,effectiveUserId,isActive]);
   const createClass = async () => {
     if(!newClassId.trim())return;
     await setDoc(abhiClassDocRef(newClassId.trim()),{classId:newClassId.trim(),autoApprove:false,createdAt:serverTimestamp()},{merge:true});

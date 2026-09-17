@@ -625,7 +625,7 @@ export default function App() {
                 </button>
               </div>
             )}
-            <SmartStudyApp entryRequest={smartStudyRequest} onExit={closeSmartStudy} />
+            <SmartStudyApp entryRequest={smartStudyRequest} onExit={closeSmartStudy} isActive={activeApp === 'smartstudy'} />
           </div>
         )}
 
@@ -642,7 +642,7 @@ export default function App() {
                 </button>
               </div>
             )}
-            <AbhidhammaApp entryRequest={abhidhammaRequest} onExit={closeAbhidhamma} />
+            <AbhidhammaApp entryRequest={abhidhammaRequest} onExit={closeAbhidhamma} isActive={activeApp === 'abhidhamma'} />
           </div>
         )}
 
@@ -676,7 +676,7 @@ export default function App() {
                 </button>
               </div>
             )}
-            <DhammaschoolApp entryRequest={dhammaschoolRequest} onExit={closeDhammaschool} />
+            <DhammaschoolApp entryRequest={dhammaschoolRequest} onExit={closeDhammaschool} isActive={activeApp === 'dhammaschool'} />
           </div>
         )}
 

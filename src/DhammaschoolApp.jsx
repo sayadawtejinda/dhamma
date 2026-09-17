@@ -783,7 +783,16 @@ const DHAMMASCHOOL_CSS = `
 
 `;
 
-export default function DhammaschoolApp({ entryRequest, onExit }) {
+export default function DhammaschoolApp({ entryRequest, onExit, isActive }) {
+  // This app never unmounts once opened (App.jsx's KEEP_ALIVE_APPS -- it
+  // just gets hidden behind the dashboard), and its one-time init() effect
+  // below sets up updatePresence() on a fixed setInterval that isn't itself
+  // re-run when props change -- so a plain ref (checked inside that
+  // interval's callback) is how it learns isActive has changed, same
+  // "keep it running forever in the background" cost problem already fixed
+  // for MyanmarReaderApp/MyanmarSpeaking/SmartStudy/Abhidhamma.
+  const isActiveRef = useRef(isActive);
+  useEffect(() => { isActiveRef.current = isActive; }, [isActive]);
   const containerRef = useRef(null);
   const initializedRef = useRef(false);
   // Mirrors the closure's isTeacher/studentName (plain `let`s, not React
@@ -1506,7 +1515,7 @@ let bilingualMode = false;
         // Called on a timer plus right after any class/lesson change so the
         // widget feels responsive instead of waiting for the next heartbeat.
         async function updatePresence() {
-            if (!userId) return;
+            if (!userId || !isActiveRef.current) return;
             try {
                 const activeLessonIdForPresence = isTeacher ? currentLessonId : studentCurrentLessonId;
                 const lesson = activeLessonIdForPresence ? allLessons[activeLessonIdForPresence] : null;

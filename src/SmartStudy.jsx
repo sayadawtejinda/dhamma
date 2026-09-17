@@ -1733,7 +1733,7 @@ const QuizView = React.memo(({ quiz, questionNumber, totalQuestions, timerValue,
 
 // --- Core App Component ---
 
-const SmartStudyApp = ({ entryRequest, onExit }) => {
+const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
   const [currentUserId, setCurrentUserId] = useState(null);
   const [userName, setUserName] = useState(() => localStorage.getItem('lastUserName') || '');
   const [studentAgeLevel, setStudentAgeLevel] = useState(''); 
@@ -1974,7 +1974,7 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
   }, [heartCounts, userName]); 
 
   useEffect(() => {
-    if ((view === 'studentLesson' || view === 'studentWaiting' || view === 'studentReadLesson' || view === 'quiz') && classId && userName) {
+    if (isActive && (view === 'studentLesson' || view === 'studentWaiting' || view === 'studentReadLesson' || view === 'quiz') && classId && userName) {
       const updateOnlineStatus = () => {
         let currentLesson = null;
         if (view === 'studentReadLesson' || view === 'quiz') { currentLesson = activeLessonId; }
@@ -1984,7 +1984,14 @@ const SmartStudyApp = ({ entryRequest, onExit }) => {
       const interval = setInterval(updateOnlineStatus, 60000);
       return () => clearInterval(interval);
     }
-  }, [view, classId, userName, activeLessonId]);
+    // This app never unmounts once opened (App.jsx's KEEP_ALIVE_APPS --
+    // it just gets hidden behind the dashboard), so `view` staying on a
+    // student-content screen used to keep this heartbeat pinging Firestore
+    // every 60s forever after the student left, for as long as the tab
+    // stayed open -- isActive (App.jsx's activeApp === 'smartstudy') stops
+    // it the moment they're not actually looking at this app, same fix
+    // already applied to MyanmarReaderApp/MyanmarSpeakingApp.
+  }, [view, classId, userName, activeLessonId, isActive]);
 
   useEffect(() => {
     if (view === 'studentWaiting' && classId && userName) {
