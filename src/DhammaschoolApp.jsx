@@ -950,7 +950,7 @@ export default function DhammaschoolApp({ entryRequest, onExit }) {
         const DISCUSSION_COIN_WORD_THRESHOLD = 15;
         const DISCUSSION_COIN_SHORT = 20;
         const DISCUSSION_COIN_THOUGHTFUL = 50;
-        const QUIZ_POINTS_PER_COIN = 50;
+        const QUIZ_POINTS_PER_COIN = 10; // teacher-confirmed rate: 10 quiz points = 1 coin
         let coinBalance = 0;
         let coinBalanceUnsub;
         // Assigned inside init() (where syncRosterCtx is actually created) --

@@ -7884,21 +7884,27 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
             // raw total is never a safe stand-in for her real progress --
             // using it directly either regressed her count or, clamped, sat
             // frozen forever no matter how many new lessons she finished.
-            // Instead, count only RECENT completions (a 3-hour lookback
-            // before this session started, not just its exact start time --
-            // a student who finishes a lesson and then retries the report a
-            // few times, each spawning a fresh session, would otherwise see
-            // that completion fall just before every one of those retries'
-            // own start time and never count) and ADD that on top of her
-            // existing baseline.
+            // Instead, count only completions since the last time she
+            // actually SUBMITTED a report for this lesson (the most recent
+            // prior ended session's endTime, not a blind time window) and
+            // ADD that on top of her existing baseline -- a fixed lookback
+            // window used to recount the same already-reported completion
+            // every time the report modal was reopened within that window,
+            // which is exactly why "Today, completed" always showed 1 and a
+            // trophy got requested again on every single open. Falls back
+            // to a 3-hour lookback only when there's no prior submitted
+            // session at all for this lesson yet (a genuine first report).
             const dhammaschoolLessonKey = computeLessonKey(activeSession.lessonTitle, activeSession.lessonLink);
             const dhammaschoolPreviousUnit = getEffectivePreviousUnit(dhammaschoolLessonKey, activeSession);
-            const sessionStartMs = activeSession.startTime?.toDate?.()?.getTime?.() || Date.now();
-            const RECENT_LOOKBACK_MS = 3 * 60 * 60 * 1000;
-            const cutoffMs = Math.min(sessionStartMs, Date.now()) - RECENT_LOOKBACK_MS;
+            const priorSubmittedEndTimes = (mySessions || [])
+              .filter(s => s.id !== activeSession.id && s.lessonLink === activeSession.lessonLink && s.endTime?.toDate)
+              .map(s => s.endTime.toDate().getTime());
+            const cutoffMs = priorSubmittedEndTimes.length > 0
+              ? Math.max(...priorSubmittedEndTimes)
+              : (Math.min(activeSession.startTime?.toDate?.()?.getTime?.() || Date.now(), Date.now()) - 3 * 60 * 60 * 1000);
             const newCompletionsCount = classCompletions.filter(dt => {
               const completedMs = dt.completedAt ? new Date(dt.completedAt).getTime() : 0;
-              return completedMs >= cutoffMs;
+              return completedMs > cutoffMs;
             }).length;
             if (newCompletionsCount > 0) {
               handleCompletedUnitChange(String(dhammaschoolPreviousUnit + newCompletionsCount));
