@@ -527,12 +527,12 @@ const AbhiLeaderboardModal = ({ classId, studentName, userId, onClose }) => {
 
   useEffect(()=>{
     if(!classId||classData!==null)return;
-    // Load all scores and filter client-side (no Firestore index needed)
-    getDocs(abhiScoresRef()).then(snap=>{
+    // Scoped to this class server-side — used to read the WHOLE scores
+    // collection (every class) just to show one class's leaderboard.
+    getDocs(query(abhiScoresRef(),where('classId','==',classId))).then(snap=>{
       const byStudent={};
       snap.docs.forEach(d=>{
         const dt=d.data();
-        if(dt.classId!==classId)return; // strict filter — must match exact class
         const sn=dt.studentName||dt.name||'?';
         if(!byStudent[sn])byStudent[sn]={name:sn,lessons:new Set(),totalScore:0,userId:dt.userId};
         byStudent[sn].lessons.add(dt.lessonId);
@@ -736,12 +736,11 @@ const AbhiLessonItem = ({ lesson, classId, isTeacher, studentAgeGroup, studentNa
   // Leaderboard
   useEffect(()=>{
     if(!showLb||!classId||!lesson.id)return;
-    getDocs(abhiScoresRef())
+    getDocs(query(abhiScoresRef(),where('classId','==',classId),where('lessonId','==',lesson.id)))
       .then(snap=>{
         const s={};
         snap.docs.forEach(d=>{
           const dt=d.data();
-          if(dt.classId!==classId||dt.lessonId!==lesson.id)return;
           if(!s[dt.userId]||dt.score>s[dt.userId].score)s[dt.userId]=dt;
         });
         setLb(Object.values(s).sort((a,b)=>b.score-a.score));

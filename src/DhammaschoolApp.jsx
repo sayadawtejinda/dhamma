@@ -1267,7 +1267,27 @@ let bilingualMode = false;
                                     setTimeout(() => clearInterval(tryEnter), 10000);
                                 }
                                 // --- END: jump straight to the requested lesson ---
-                                
+
+                                // --- START: when only a class (not a specific lesson) was sent,
+                                // jump straight to the student's current lesson in that class
+                                // instead of making them open the library and pick it themselves --
+                                // teacher asked for this to save a step (and the loading it costs). ---
+                                if (paramClassId && !paramLesson) {
+                                    const tryAutoEnter = setInterval(() => {
+                                        const classLessons = studentLibraryLessons
+                                            .filter(l => (l.classId && l.classId.trim() ? l.classId.trim() : 'GENERAL') === paramClassId)
+                                            .sort((a, b) => (a.createdAt || "9999").localeCompare(b.createdAt || "9999"));
+                                        if (classLessons.length === 0) return; // still loading
+                                        clearInterval(tryAutoEnter);
+                                        const teacherDone = getTeacherConfirmedDoneForClass(paramClassId);
+                                        let idx = classLessons.findIndex((lesson, index) => !(myCompletedLessonIds.has(lesson.id) || index < teacherDone));
+                                        if (idx === -1) idx = classLessons.length - 1; // everything done -- land on the last one
+                                        window.enterLesson(classLessons[idx].id);
+                                    }, 300);
+                                    setTimeout(() => clearInterval(tryAutoEnter), 10000);
+                                }
+                                // --- END: auto-jump to current lesson ---
+
                                 // --- START FIX for Join Class button ---
                                 document.getElementById('set-name-btn').onclick = () => {
                                     const nameInput = document.getElementById('student-name-input');
