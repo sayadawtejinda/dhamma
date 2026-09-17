@@ -2153,7 +2153,15 @@ document.getElementById('toggle-audio-btn').onclick = async () => {
         function setupMyAnswersListener() {
             if (answersUnsub) answersUnsub();
             if (!studentCurrentLessonId || !userId || isTeacher) return;
-            const q = query(collection(db, PATHS.answers), where("lessonId", "==", studentCurrentLessonId), where("userId", "==", userId));
+            // Matched by studentName, not userId -- same reasoning as
+            // setupCompletionsListener above: this anonymous session's
+            // Firebase auth uid can churn (private browsing, a device that
+            // clears storage, a fresh install), which used to make every
+            // previously-answered question look unanswered again on
+            // reopening the lesson, forcing the student to re-answer every
+            // step (via the canProceed=!!answersMap[step.index] gate below)
+            // even though they'd genuinely already completed it.
+            const q = query(collection(db, PATHS.answers), where("lessonId", "==", studentCurrentLessonId), where("studentName", "==", studentName));
             answersUnsub = onSnapshot(q, (snap) => {
                 let didUpdate = false;
                 snap.forEach(doc => {
