@@ -8258,6 +8258,31 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       const studentDocRef = doc(db, `${publicDataPath}/students`, studentUid);
       const studentUpdateData = {};
 
+      // Watch & Learn no longer earns trophies at all -- coins only, at a
+      // flat rate for time spent (from opening the video list to
+      // submitting this report), capped so an accidentally-long-open tab
+      // can't farm an unlimited amount. Paid into Watch & Learn's own
+      // wallet (its own roster doc, uid-keyed), same shape as every other
+      // simple app's coin-to-Shrine-Room setup -- entirely separate from
+      // the completedUnits/trophy bookkeeping below, which this app has no
+      // more use for.
+      const isWatchAndLearnSession = targetSession.lessonLink === 'watchandlearn://' || targetSession.lessonLink?.startsWith('watchandlearn://');
+      if (isWatchAndLearnSession) {
+        const startMs = targetSession.startTime?.toDate?.()?.getTime?.();
+        const minutesWatched = startMs ? Math.max(0, (Date.now() - startMs) / 60000) : 0;
+        const WATCH_LEARN_COINS_PER_MINUTE = 20;
+        const WATCH_LEARN_COIN_CAP = 1000;
+        const coinsEarned = Math.min(WATCH_LEARN_COIN_CAP, Math.floor(minutesWatched * WATCH_LEARN_COINS_PER_MINUTE));
+        if (coinsEarned > 0 && studentUid) {
+          try {
+            await setDoc(doc(db, 'artifacts/watch-and-learn-app/public/data/roster', studentUid), {
+              studentName: studentProfile?.name || '',
+              coinBalance: increment(coinsEarned),
+            }, { merge: true });
+          } catch (e) { console.error('Error awarding Watch & Learn coins:', e); }
+        }
+      } else {
+
       if (enteredUnit > 0) {
         studentUpdateData[`completedUnits.${lessonKey}`] = newHighestUnit;
       }
@@ -8335,6 +8360,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
             studentUpdateData.requestedTrophySessionId = targetSession.id;
           }
         }
+      }
       }
 
       if (Object.keys(studentUpdateData).length > 0) {

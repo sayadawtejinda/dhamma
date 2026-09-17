@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { collection, doc, addDoc, deleteDoc, onSnapshot, orderBy, query, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, addDoc, deleteDoc, getDoc, increment, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { appId } from './firebaseConfig';
+import OnlineStatusWidget from './OnlineStatusWidget';
 
 // A tiny "menu of external video links" app -- these aren't real lessons
 // with any content or progress tracking of their own, just a link to a
@@ -18,13 +19,26 @@ import { appId } from './firebaseConfig';
 const publicDataPath = `/artifacts/${appId}/public/data`;
 const videosCollection = collection(db, `${publicDataPath}/watchAndLearnVideos`);
 
+// Coins (no more trophies -- see TutoringApp.jsx's handleSubmitFeedback,
+// which computes them from time-open-to-report and pays them into this
+// roster) are earned here but spent in Shrine Room, same wallet-then-
+// deposit shape as every other simple app's coin economy. Roster is
+// uid-keyed from the start (TutoringApp already knows studentUid, so
+// there's no pre-existing name-keyed data to migrate from).
+const WATCH_LEARN_ROSTER_PATH = 'artifacts/watch-and-learn-app/public/data/roster';
+const SHRINE_ROSTER_PATH = 'artifacts/shrine-room-app/public/data/roster';
+const sanitizeShrineKey = (key) => (key || 'unknown').trim().replace(/[.$#/\[\]]/g, '_');
+
 export default function WatchAndLearnApp({ entryRequest, onExit }) {
   const isTeacherMode = entryRequest?.mode === 'teacher';
+  const studentUid = entryRequest?.studentUid;
+  const studentName = entryRequest?.studentName || 'Friend';
   const [videos, setVideos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [newTitle, setNewTitle] = useState('');
   const [newLink, setNewLink] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [coinBalance, setCoinBalance] = useState(0);
 
   useEffect(() => {
     const q = query(videosCollection, orderBy('order', 'asc'));
@@ -34,6 +48,46 @@ export default function WatchAndLearnApp({ entryRequest, onExit }) {
     }, (e) => { console.error('Error loading videos:', e); setLoading(false); });
     return () => unsub();
   }, []);
+
+  // Presence + coin balance -- mirrors every other simple app's roster
+  // ping (isOnline/lastSeen every 60s, offline on unload), just also
+  // listening live for this student's own coin total.
+  useEffect(() => {
+    if (isTeacherMode || !studentUid || !studentName) return;
+    const rosterRef = doc(db, WATCH_LEARN_ROSTER_PATH, studentUid);
+    const unsubBalance = onSnapshot(rosterRef, (snap) => {
+      setCoinBalance(snap.exists() ? (snap.data().coinBalance || 0) : 0);
+    }, () => {});
+    const ping = () => setDoc(rosterRef, {
+      studentName, isOnline: true, lastSeen: serverTimestamp(),
+    }, { merge: true }).catch(() => {});
+    ping();
+    const interval = setInterval(ping, 60000);
+    const goOffline = () => { updateDoc(rosterRef, { isOnline: false, lastSeen: serverTimestamp() }).catch(() => {}); };
+    window.addEventListener('beforeunload', goOffline);
+    return () => { clearInterval(interval); goOffline(); window.removeEventListener('beforeunload', goOffline); };
+  }, [isTeacherMode, studentUid, studentName]);
+
+  const handleDepositToShrineRoom = async () => {
+    const depositable = coinBalance;
+    if (depositable <= 0) { window.alert('You have no coins to deposit right now.'); return; }
+    const confirmed = window.confirm(`Deposit ${depositable} coin(s) into your Shrine Room wallet?`);
+    if (!confirmed) return;
+    try {
+      const shrineRef = doc(db, SHRINE_ROSTER_PATH, sanitizeShrineKey(studentName));
+      const shrineSnap = await getDoc(shrineRef);
+      const SHRINE_STARTER_COINS = 20;
+      await setDoc(shrineRef, {
+        studentName,
+        coinBalance: shrineSnap.exists() ? increment(depositable) : SHRINE_STARTER_COINS + depositable,
+      }, { merge: true });
+      await setDoc(doc(db, WATCH_LEARN_ROSTER_PATH, studentUid), { coinBalance: increment(-depositable) }, { merge: true });
+      window.alert(`🪙 Deposited ${depositable} coin(s) into your Shrine Room wallet!`);
+    } catch (e) {
+      console.error('Error depositing coins to Shrine Room:', e);
+      window.alert('⚠️ Something went wrong depositing your coins. Please try again.');
+    }
+  };
 
   const handleAddVideo = async (e) => {
     e.preventDefault();
@@ -71,6 +125,17 @@ export default function WatchAndLearnApp({ entryRequest, onExit }) {
       >
         🏡
       </button>
+
+      <OnlineStatusWidget
+        rosterPath={WATCH_LEARN_ROSTER_PATH}
+        studentName={isTeacherMode ? null : studentName}
+        isTeacherMode={isTeacherMode}
+        coinBalance={isTeacherMode ? null : coinBalance}
+        coinIcon="🪙"
+        onCoinClick={isTeacherMode ? null : handleDepositToShrineRoom}
+        panelTitle="🎥 Students"
+        teacherLabel="🧑‍🏫 Teacher"
+      />
 
       <div className="max-w-xl mx-auto">
         <h1 className="text-2xl font-bold text-orange-800 text-center mb-1">🎥 Watch &amp; Learn</h1>
