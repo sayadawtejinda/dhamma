@@ -5100,8 +5100,15 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                 : 0;
               const completedUnit = Math.max(trackedCompletedUnit, derivedCompletedUnit);
 
+              // Matching on title alone let two different classes that reuse
+              // the same generic bank title (e.g. every Smart Study send is
+              // titled "Smart Study Lesson") pull in each other's sessions --
+              // a student's session in one class overriding the completed
+              // count shown for a totally different class. lessonLink
+              // encodes the specific class (e.g. "smartstudy://METTA" vs
+              // "smartstudy://MINGALA"), so requiring both keeps them apart.
               const latestSessionForLesson = completedSessions.find(
-                s => s.studentUid === student.id && s.lessonTitle === lesson.title && typeof s.completedUnit === 'number' && s.completedUnit > 0
+                s => s.studentUid === student.id && s.lessonTitle === lesson.title && s.lessonLink === lesson.link && typeof s.completedUnit === 'number' && s.completedUnit > 0
               );
               const showNowFinished = latestSessionForLesson && latestSessionForLesson.completedUnit < completedUnit;
 
@@ -8900,7 +8907,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         // complete via Fix Previously Earned.
         const activeUnitCount = activeSession.lessonUnitCount || 0;
         const pseudoLesson = { title: activeSession.lessonTitle, link: activeSession.lessonLink, unitCount: activeUnitCount, trophyLimit: activeSession.lessonTrophyLimit || 0 };
-        const sessionsForActive = completedSessions.filter(s => s.lessonTitle === activeSession.lessonTitle);
+        const sessionsForActive = completedSessions.filter(s => s.lessonTitle === activeSession.lessonTitle && s.lessonLink === activeSession.lessonLink);
         const activeEffectiveCompleted = getEffectiveCompletedUnit(pseudoLesson, studentProfile, sessionsForActive, ssCompletionCounts);
         const isActiveFullyComplete = activeUnitCount > 0 && activeEffectiveCompleted >= activeUnitCount;
         const isMyanmarReaderActive = !!(MYANMAR_READER_APP_URL && activeSession.lessonLink === MYANMAR_READER_APP_URL);
@@ -8982,12 +8989,17 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
               const previouslyEarnedList = earnedTrophiesMapList[lessonKeyList] || 0;
               const maxAvailableList = lesson.trophyLimit || 0;
               const remainingList = Math.max(0, maxAvailableList - previouslyEarnedList);
-              const sessionsForLessonList = completedSessions.filter(s => s.lessonTitle === lesson.title);
+              // lessonLink required alongside title -- see the matching
+              // comment near the other completedSessions.find(...) above:
+              // otherwise two different classes sent under the same generic
+              // bank title (e.g. every Smart Study send is titled "Smart
+              // Study Lesson") pull in each other's sessions.
+              const sessionsForLessonList = completedSessions.filter(s => s.lessonTitle === lesson.title && s.lessonLink === lesson.link);
               const completedUnitList = getEffectiveCompletedUnit(lesson, studentProfile, sessionsForLessonList, ssCompletionCounts);
               const isMyanmarReaderLessonList = !!(MYANMAR_READER_APP_URL && lesson.link === MYANMAR_READER_APP_URL);
               const nextUnitNumberRaw = getNextChapterNumber(completedUnitList, isMyanmarReaderLessonList);
               const nextUnitNumber = lesson.unitCount > 0 ? Math.min(lesson.unitCount, nextUnitNumberRaw) : nextUnitNumberRaw;
-              const latestSessionForLesson = completedSessions.find(s => s.lessonTitle === lesson.title && typeof s.completedUnit === 'number' && s.completedUnit > 0);
+              const latestSessionForLesson = completedSessions.find(s => s.lessonTitle === lesson.title && s.lessonLink === lesson.link && typeof s.completedUnit === 'number' && s.completedUnit > 0);
               const showNowFinished = !!latestSessionForLesson;
               const isSmartStudyLesson = !!(lesson.link && lesson.link.startsWith('smartstudy://'));
               const ssClassIdForBtn = isSmartStudyLesson ? extractSmartStudyClassId(lesson.link) : null;
@@ -8996,7 +9008,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                 : (lesson.unitCount > 0 ? `Continue ${lesson.unitLabel || 'Chapter'} ${nextUnitNumber}` : 'Continue Lesson');
 
               const recentCompletedSession = mySessions
-                .filter(s => s.lessonTitle === lesson.title && s.endTime && s.startTime)
+                .filter(s => s.lessonTitle === lesson.title && s.lessonLink === lesson.link && s.endTime && s.startTime)
                 .sort((a, b) => {
                   const bT = b.endTime?.toDate?.()?.getTime?.() ?? 0;
                   const aT = a.endTime?.toDate?.()?.getTime?.() ?? 0;
