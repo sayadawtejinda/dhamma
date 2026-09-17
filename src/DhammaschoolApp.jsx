@@ -946,6 +946,7 @@ export default function DhammaschoolApp({ entryRequest, onExit, isActive }) {
         
         let answersUnsub; // For student's own answers
         let lessonUnsub;
+        let lessonContentUnsub;
         let completionsUnsub;
         // --- COINS: earned by answering discussion questions and finishing
         // quizzes, spendable via the shared OnlineStatusWidget's deposit-into-
@@ -1384,8 +1385,9 @@ let bilingualMode = false;
                                             createdAt: new Date().toISOString(),
                                             isPublic: false,
                                             languageMode: 'mm', // Default language
-                                            steps: []
+                                            stepsCount: 0
                                         });
+                                        await setDoc(lessonContentRef(ref.id), { steps: [] });
                                         currentLessonId = ref.id; // Automatically select the new lesson
                                         localStorage.setItem('currentLessonId', currentLessonId);
                                         
@@ -1932,26 +1934,53 @@ window.renderTeacherScores = function(lessonId) {
 
         // --- END FIX ---
 
+        // The lesson's heavy content (narrative/quiz/discussion steps --
+        // every image ref and block of text) lives in a separate subdocument
+        // from its lightweight metadata doc (name/classId/isPublic/
+        // stepsCount/...). Browsing a class's library only ever reads the
+        // metadata; the content subdoc is only fetched once a specific
+        // lesson is actually opened (see setupLessonListener below) or
+        // edited (see replaceLessonSteps/appendLessonSteps) -- this used to
+        // all be one document, so opening the library for a 40-lesson class
+        // meant downloading every lesson's full content just to list them.
+        function lessonContentRef(lessonId) {
+            return doc(db, PATHS.lessons, lessonId, 'content', 'data');
+        }
+        async function replaceLessonSteps(lessonId, newSteps) {
+            await setDoc(lessonContentRef(lessonId), { steps: newSteps });
+            await updateDoc(doc(db, PATHS.lessons, lessonId), { stepsCount: newSteps.length });
+        }
+        async function appendLessonSteps(lessonId, stepsToAdd) {
+            await setDoc(lessonContentRef(lessonId), { steps: arrayUnion(...stepsToAdd) }, { merge: true });
+            await updateDoc(doc(db, PATHS.lessons, lessonId), { stepsCount: increment(stepsToAdd.length) });
+        }
+
         function setupLessonListener(lid) {
             setupAnswersAndScoresListener(lid);
             if (lessonUnsub) lessonUnsub();
+            if (lessonContentUnsub) lessonContentUnsub();
             if (!lid) { lessonSteps = []; render(); return; }
+
+            lessonContentUnsub = onSnapshot(lessonContentRef(lid), (snap) => {
+                lessonSteps = (snap.exists() && snap.data().steps) || [];
+                quizQuestions = lessonSteps.filter(s => s.type === 'quiz');
+                lessonImages = [];
+                lessonSteps.forEach(s => {
+                    if(s.type === 'narrative' || s.type === 'question') {
+                        if(s.images && s.images.length > 0) lessonImages.push(...s.images);
+                        else if(s.imageUrl) lessonImages.push(s.imageUrl);
+                    }
+                });
+                render();
+            });
+
             lessonUnsub = onSnapshot(doc(db, PATHS.lessons, lid), (snap) => {
                 if (snap.exists()) {
-                    const data = snap.data(); 
-                    lessonSteps = data.steps || [];
+                    const data = snap.data();
                     currentLanguageMode = data.languageMode || 'mm'; // Update global language
                     lessonAudioEnabled = data.audioEnabled || false;
                     lessonBilingualEnabled = data.bilingualEnabled || false;
-                    
-                    quizQuestions = lessonSteps.filter(s => s.type === 'quiz');
-                    lessonImages = [];
-                    lessonSteps.forEach(s => {
-                        if(s.type === 'narrative' || s.type === 'question') {
-                            if(s.images && s.images.length > 0) lessonImages.push(...s.images);
-                            else if(s.imageUrl) lessonImages.push(s.imageUrl);
-                        }
-                    });
+
                     if(isTeacher) {
                          updateStatusToggle(data.isPublic);
                          updateAudioToggle(lessonAudioEnabled);
@@ -1960,10 +1989,10 @@ window.renderTeacherScores = function(lessonId) {
                          document.getElementById('lesson-actions').classList.remove('hidden'); // Show Edit/Delete
                          const imgUrlInput = document.getElementById('lesson-image-url-input');
                          if (imgUrlInput) imgUrlInput.value = data.imageBaseUrl || '';
-                         
+
                          // --- Load Teacher Note (Wiki Suffix) ---
                          document.getElementById('teacher-wiki-input').value = data.wikiSuffix || '';
-                         
+
                          renderTeacherAnswers(lid); // Re-render answers on lesson change
                         renderTeacherScores(lid);
                     }
@@ -2213,8 +2242,8 @@ window.renderTeacherScores = function(lessonId) {
                 const newSteps = JSON.parse(translatedText);
 
                 // Update Firestore
-                await updateDoc(doc(db, PATHS.lessons, currentLessonId), { 
-                    steps: newSteps,
+                await replaceLessonSteps(currentLessonId, newSteps);
+                await updateDoc(doc(db, PATHS.lessons, currentLessonId), {
                     name_en: allLessons[currentLessonId].name + " (English)", // Simple title append
                     languageMode: 'en' // Switch to English immediately to show result
                 });
@@ -2478,7 +2507,7 @@ document.getElementById('toggle-audio-btn').onclick = async () => {
             </div>`;
             filtered.forEach((lesson, index) => {
                 if (index < windowStart || index > windowEnd) return;
-                const count = lesson.steps ? lesson.steps.length : 0;
+                const count = lesson.stepsCount || 0;
                 // Use English Title if mode is English
                 const title = (lesson.languageMode === 'en' && lesson.name_en) ? lesson.name_en : lesson.name;
 
@@ -2528,7 +2557,7 @@ document.getElementById('toggle-audio-btn').onclick = async () => {
             const teacherDoneForClass = getTeacherConfirmedDoneForClass(selectedClassId);
             container.innerHTML = `<div class="col-span-full mb-1"><span class="text-sm font-black text-slate-500">Showing all ${filtered.length} lessons</span></div>`;
             filtered.forEach((lesson, index) => {
-                const count = lesson.steps ? lesson.steps.length : 0;
+                const count = lesson.stepsCount || 0;
                 const title = (lesson.languageMode === 'en' && lesson.name_en) ? lesson.name_en : lesson.name;
                 const isDone = myCompletedLessonIds.has(lesson.id) || index < teacherDoneForClass;
                 const isLocked = index > 0 && !(myCompletedLessonIds.has(filtered[index - 1].id) || (index - 1) < teacherDoneForClass);
@@ -2632,8 +2661,7 @@ document.getElementById('toggle-audio-btn').onclick = async () => {
             };
             
             try {
-                const ref = doc(db, PATHS.lessons, currentLessonId);
-                await updateDoc(ref, { steps: arrayUnion(newStep) });
+                await appendLessonSteps(currentLessonId, [newStep]);
                 alertMessage(`Added Match Game: ${title}`, 'success');
                 bulkMatchModal.classList.add('hidden');
             } catch(e) { alertMessage('Error saving match step', 'error'); }
@@ -2668,7 +2696,7 @@ document.getElementById('toggle-audio-btn').onclick = async () => {
                 } else errorCount++;
             }
             if (newSteps.length === 0) return alertMessage(`Import failed.`, 'error');
-            try { await updateDoc(doc(db, PATHS.lessons, currentLessonId), { steps: arrayUnion(...newSteps) }); alertMessage(`Added ${newSteps.length} questions!`, 'success'); bulkQuizModal.classList.add('hidden'); } catch (e) { alertMessage('Error saving', 'error'); }
+            try { await appendLessonSteps(currentLessonId, newSteps); alertMessage(`Added ${newSteps.length} questions!`, 'success'); bulkQuizModal.classList.add('hidden'); } catch (e) { alertMessage('Error saving', 'error'); }
         };
 
         // --- START FIX for Bulk Discuss Modal ---
@@ -2705,7 +2733,7 @@ document.getElementById('toggle-audio-btn').onclick = async () => {
             if (newSteps.length === 0) return alertMessage(`Import failed.`, 'error');
 
             try {
-                await updateDoc(doc(db, PATHS.lessons, currentLessonId), { steps: arrayUnion(...newSteps) });
+                await appendLessonSteps(currentLessonId, newSteps);
                 alertMessage(`Added ${newSteps.length} discussion questions!`, 'success');
                 bulkDiscussModal.classList.add('hidden');
             } catch (e) {
@@ -3260,12 +3288,11 @@ function renderClickableWords(text) {
                     if(newStep.pairs.length < 2) throw new Error("At least 2 pairs required");
                 }
 
-                const ref = doc(db, PATHS.lessons, currentLessonId);
                 if (editingIndex !== null) {
                     const newSteps = [...lessonSteps]; newSteps[editingIndex] = newStep;
-                    await updateDoc(ref, { steps: newSteps }); alertMessage('✨ Updated!', 'success'); window.resetEditMode();
+                    await replaceLessonSteps(currentLessonId, newSteps); alertMessage('✨ Updated!', 'success'); window.resetEditMode();
                 } else {
-                    await updateDoc(ref, { steps: arrayUnion(newStep) }); alertMessage('✨ Added!', 'success');
+                    await appendLessonSteps(currentLessonId, [newStep]); alertMessage('✨ Added!', 'success');
                 }
                 clearContentInputs();
             } catch (e) { alertMessage(e.message, 'error'); }
@@ -3279,7 +3306,7 @@ function renderClickableWords(text) {
             const newSteps = [...lessonSteps];
             [newSteps[idx], newSteps[newIdx]] = [newSteps[newIdx], newSteps[idx]];
             try {
-                await updateDoc(doc(db, PATHS.lessons, currentLessonId), { steps: newSteps });
+                await replaceLessonSteps(currentLessonId, newSteps);
             } catch(e) {
                 alertMessage('Error reordering steps', 'error');
             }
@@ -3303,10 +3330,9 @@ function renderClickableWords(text) {
              // Check if it's a step delete or lesson delete
              if (stepToDeleteIndex !== null) {
                 try {
-                    const ref = doc(db, PATHS.lessons, currentLessonId); 
-                    const newSteps = [...lessonSteps]; 
+                    const newSteps = [...lessonSteps];
                     newSteps.splice(stepToDeleteIndex, 1);
-                    await updateDoc(ref, { steps: newSteps }); 
+                    await replaceLessonSteps(currentLessonId, newSteps);
                     alertMessage('Step deleted', 'success');
                 } catch(e) {
                     alertMessage('Error deleting step', 'error');
@@ -3315,6 +3341,7 @@ function renderClickableWords(text) {
              } else if (window.isDeletingLesson) {
                  // Deleting entire lesson
                  try {
+                     await deleteDoc(lessonContentRef(currentLessonId)).catch(() => {}); // content subdoc isn't auto-deleted with its parent
                      await deleteDoc(doc(db, PATHS.lessons, currentLessonId));
                      alertMessage('Lesson Deleted', 'success');
                      window.isDeletingLesson = false;
@@ -4171,7 +4198,14 @@ function renderClickableWords(text) {
         // with this classId, and all of that class's scores/completions/answers/
         // roster data. Irreversible — double-confirms with the exact Class ID.
         window.deleteClassCompletely = async (classId) => {
-            const count = Object.values(allLessons).filter(l => (l.classId && l.classId.trim() ? l.classId.trim() : 'GENERAL') === classId).length;
+            // Fetched fresh rather than read from allLessons -- this is called
+            // from the class-picker screen, which (since it only needs class
+            // names/counts, not lesson content) no longer keeps every class's
+            // lessons loaded there.
+            const classLessonsSnap = await getDocs(classId === 'GENERAL'
+                ? query(collection(db, PATHS.lessons), where('classId', '==', ''))
+                : query(collection(db, PATHS.lessons), where('classId', '==', classId)));
+            const count = classLessonsSnap.size;
             const warning = `⚠️ This will PERMANENTLY delete class "${classId}" — all ${count} lesson(s), student scores, completions, and roster links for this class. This cannot be undone.\n\nType the Class ID to confirm:`;
             const typed = prompt(warning);
             if (typed === null) return; // cancelled
@@ -4180,9 +4214,7 @@ function renderClickableWords(text) {
                 return;
             }
             try {
-                const classLessonIds = Object.values(allLessons)
-                    .filter(l => (l.classId && l.classId.trim() ? l.classId.trim() : 'GENERAL') === classId)
-                    .map(l => l.id);
+                const classLessonIds = classLessonsSnap.docs.map(d => d.id);
 
                 const deleteMatchingDocs = async (path, field) => {
                     if (classLessonIds.length === 0) return;
@@ -4200,10 +4232,12 @@ function renderClickableWords(text) {
                 await deleteMatchingDocs(PATHS.completions, 'lessonId');
                 await deleteMatchingDocs(PATHS.answers, 'lessonId');
 
-                // Delete the lessons themselves.
+                // Delete the lessons themselves (their content subdocs first --
+                // those aren't deleted automatically along with the parent doc).
                 if (classLessonIds.length > 0) {
                     for (let i = 0; i < classLessonIds.length; i += 400) {
                         const chunk = classLessonIds.slice(i, i + 400);
+                        await Promise.all(chunk.map(lid => deleteDoc(lessonContentRef(lid)).catch(() => {})));
                         const batch = writeBatch(db);
                         chunk.forEach(lid => batch.delete(doc(db, PATHS.lessons, lid)));
                         await batch.commit();
@@ -4464,7 +4498,22 @@ function renderClickableWords(text) {
 
         // --- Export & Import ---
         document.getElementById('export-lesson-btn').onclick = async () => {
-            if (Object.keys(allLessons).length === 0) return alertMessage("No lessons to export", 'error');
+            // A deliberate, explicit, one-off action (not something that runs
+            // automatically) -- fine to read every lesson's metadata AND
+            // content here, unlike everyday browsing which now only reads
+            // metadata (see lessonContentRef).
+            els.loader.classList.remove('hidden');
+            els.loadingText.textContent = "Preparing export...";
+            let lessonsExport = {};
+            try {
+                const lessonsSnap = await getDocs(collection(db, PATHS.lessons));
+                if (lessonsSnap.empty) { alertMessage("No lessons to export", 'error'); return; }
+                const contentSnaps = await Promise.all(lessonsSnap.docs.map(d => getDoc(lessonContentRef(d.id))));
+                lessonsSnap.docs.forEach((d, i) => {
+                    lessonsExport[d.id] = { id: d.id, ...d.data(), steps: (contentSnaps[i].exists() && contentSnaps[i].data().steps) || [] };
+                });
+            } catch (e) { alertMessage("Error preparing export: " + e.message, 'error'); return; }
+            finally { els.loader.classList.add('hidden'); }
             let answersExport = [];
             try {
                 const snap = await getDocs(collection(db, PATHS.answers));
@@ -4482,7 +4531,7 @@ function renderClickableWords(text) {
             } catch (e) { console.warn("Could not export completions", e); }
 
             const exportData = {
-                lessons: allLessons,
+                lessons: lessonsExport,
                 answers: answersExport,
                 completions: completionsExport,
                 exportDate: new Date().toISOString()
@@ -4544,10 +4593,13 @@ function renderClickableWords(text) {
                             const q = query(collection(db, PATHS.lessons), ...matchConstraints);
                             const querySnapshot = await getDocs(q);
 
+                            // Metadata and content (steps) are separate docs now
+                            // (see lessonContentRef) -- imported the same way,
+                            // just as two writes instead of one.
                             const lessonFields = {
                                 name: lesson.name,
                                 classId: targetClassId || lesson.classId || '',
-                                steps: lesson.steps,
+                                stepsCount: lesson.steps.length,
                                 isPublic: lesson.isPublic || false,
                                 languageMode: lesson.languageMode || 'mm',
                                 audioEnabled: lesson.audioEnabled || false,
@@ -4561,7 +4613,7 @@ function renderClickableWords(text) {
                                 targetLessonId = querySnapshot.docs[0].id;
                                 await updateDoc(doc(db, PATHS.lessons, targetLessonId), lessonFields);
                             } else {
-                                const ref = await addDoc(collection(db, PATHS.lessons), { 
+                                const ref = await addDoc(collection(db, PATHS.lessons), {
                                     ...lessonFields,
                                     teacherId: userId,
                                     createdAt: lesson.createdAt || new Date().toISOString()
@@ -4569,6 +4621,7 @@ function renderClickableWords(text) {
                                 targetLessonId = ref.id;
                                 lessonCount++;
                             }
+                            await setDoc(lessonContentRef(targetLessonId), { steps: lesson.steps });
                             if (lesson.id) lessonIdMap[lesson.id] = targetLessonId;
                         }
                     }
