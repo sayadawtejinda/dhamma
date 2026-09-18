@@ -3512,10 +3512,12 @@ function renderClickableWords(text) {
                          html = `<div class="bg-white p-8 rounded-3xl shadow-lg border-b-8 border-orange-100">
                                 ${imageHtml}
                                 <h3 class="text-2xl font-black text-slate-800 mb-2">Let's Discuss!</h3>
-                                
+
                                 ${contextHtml} <!-- Added Context Here -->
 
+                                <div class="highlight-text">
                                 <p class="text-xl mb-4 text-slate-900 font-black">${getTxt(step, 'prompt')}</p>
+                                </div>
                                 ${storyRefHtml}
                                 <textarea id="ans-input" class="input-style mb-4" placeholder="Your answer...">${myAnswerText}</textarea>
                                 <button id="submit-ans-btn" onclick="submitDiscussion(${step.index})" class="${buttonClass} w-full py-3 font-bold btn-3d">${buttonText}</button>
@@ -3641,7 +3643,24 @@ function renderClickableWords(text) {
                             container.querySelector('.highlight-text').appendChild(biBtn);
                         }
                     }
-                    
+                    // Read Aloud for the discussion prompt too -- previously only
+                    // the narrative (story) steps had it, so a student answering
+                    // a question got no audio support at all.
+                    if (step.type === 'question' && lessonAudioEnabled && currentLanguageMode === 'mm') {
+                        const readBtn = document.createElement('button');
+                        readBtn.id = 'read-aloud-question';
+                        readBtn.className = 'read-aloud-btn mb-4 py-2 px-4 btn-teal font-bold btn-3d text-sm';
+                        readBtn.innerHTML = '<i class="fas fa-volume-up"></i> Read Aloud';
+                        // readAloudText plays its first argument immediately, then
+                        // waits 5s before the second -- meant for narrative's
+                        // title-then-story pause. Passing the real text as the
+                        // first argument (and leaving the second empty) avoids a
+                        // dead 5-second silence before a student hears anything.
+                        readBtn.onclick = () => window.readAloudText(getTxt(step, 'prompt'), '', 'read-aloud-question');
+                        const highlightEl = container.querySelector('.highlight-text');
+                        if (highlightEl) highlightEl.appendChild(readBtn);
+                    }
+
                     // --- START FIX: Call renderer for student answers ---
                     if (step.type === 'question') {
                         renderStudentDiscussion(step.index);
