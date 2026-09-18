@@ -1016,20 +1016,20 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     }, 60000);
     return () => clearInterval(interval);
   }, [studentUid, chantingOpen, chantingIdle, meditatingMinutes != null]);
-  // One-time +10 lotus bonus once EVERY offering is placed -- all 6 altar
-  // slots, both Golden Umbrellas, and the Bell. Fires as soon as this
+  // One-time +10 lotus bonus once all 6 altar slots and both Golden
+  // Umbrellas are placed (the Bell is not required). Fires as soon as this
   // becomes true (even if it was already true before this feature existed)
   // and never again.
   useEffect(() => {
     if (!studentUid || fullAltarBonusAwarded) return;
     const altarFull = Object.keys(placedItems).length >= SLOT_COUNT
-      && !!placedUmbrellas.left && !!placedUmbrellas.right && !!placedBell;
+      && !!placedUmbrellas.left && !!placedUmbrellas.right;
     if (!altarFull) return;
     setFullAltarBonusAwarded(true);
     persist({ fullAltarBonusAwarded: true });
     const granted = awardLotus(10);
     if (granted > 0) showToast(`🪷 Full altar bonus! +${granted} lotus flowers`);
-  }, [placedItems, placedUmbrellas, placedBell, fullAltarBonusAwarded, studentUid]);
+  }, [placedItems, placedUmbrellas, fullAltarBonusAwarded, studentUid]);
   const [dragOverSlot, setDragOverSlot] = useState(null);
   const [ringing, setRinging] = useState(false);
   const [toast, setToast] = useState(null);
