@@ -2317,7 +2317,7 @@ document.getElementById('toggle-audio-btn').onclick = async () => {
             els.studentLibrary.classList.remove('hidden'); els.studentActiveLesson.classList.add('hidden'); studentCurrentLessonId = null;
             // Clear persistence when leaving lesson
             localStorage.removeItem('studentCurrentLessonId');
-            if(answersUnsub) answersUnsub(); if(lessonUnsub) lessonUnsub(); setupAnswersAndScoresListener(null); renderStudentLibrary();
+            if(answersUnsub) answersUnsub(); if(lessonUnsub) lessonUnsub(); if(lessonContentUnsub) lessonContentUnsub(); setupAnswersAndScoresListener(null); renderStudentLibrary();
             updatePresence();
         };
 
