@@ -782,11 +782,21 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
         // Report auto-fill "completed" from completedGameIds.size.
         const progressRosterRef = studentUid ? rosterDocRefByUid(db, BCG_ROSTER_PATH, studentUid) : null;
         let completedGameIds = new Set();
+        // True once the roster's past completedGames has actually been read
+        // (see the getDoc below) -- a student who opens the Picture Game
+        // before that finishes would resume at Level 1's stage instead of
+        // wherever they really left off, and finishing that "Level 1"
+        // silently re-records 'picture-1' (already present, arrayUnion is a
+        // no-op) instead of the level they actually just played.
+        let progressLoaded = !progressRosterRef;
         function recordGameCompleted(gameId) {
             if (completedGameIds.has(gameId)) return;
             completedGameIds.add(gameId);
             updateGroupSelectorBadge();
-            if (progressRosterRef) setDoc(progressRosterRef, { completedGames: arrayUnion(gameId) }, { merge: true }).catch(() => {});
+            if (progressRosterRef) {
+                setDoc(progressRosterRef, { completedGames: arrayUnion(gameId) }, { merge: true })
+                    .catch(e => console.error('Error saving game completion:', gameId, e));
+            }
         }
         function persistCurrentGroup(groupIndex) {
             if (progressRosterRef) setDoc(progressRosterRef, { currentGroupNumber: groupIndex + 1 }, { merge: true }).catch(() => {});
@@ -872,7 +882,8 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
                         persistCurrentGroup(currentSelectedGroupIndex);
                     }
                     updateGroupSelectorBadge();
-                }).catch(e => console.error('Error loading Burmese Consonant Game progress:', e));
+                    progressLoaded = true;
+                }).catch(e => { console.error('Error loading Burmese Consonant Game progress:', e); progressLoaded = true; });
             })();
         }
 
@@ -1423,7 +1434,11 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
                 setTimeout(askPickQuestion, 3000); 
             }
         }
-        function toggleImageGame() { if (currentGameMode === 'image') stopGame(); else startImageGame(); }
+        function toggleImageGame() {
+            if (currentGameMode === 'image') { stopGame(); return; }
+            if (!progressLoaded) { showGameStatus('Still loading your progress -- one moment!', 'info'); return; }
+            startImageGame();
+        }
         function startImageGame() {
             stopGame();
             currentGameMode = 'image';
