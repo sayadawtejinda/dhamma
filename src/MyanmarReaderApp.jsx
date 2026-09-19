@@ -1906,15 +1906,18 @@ if (appMode === 'sheet' && sheetData.length > 0) {
 
 
       try {
-          // Firebase first (one tiny document, fast and reliable); the
-          // Google Sheet script is only a fallback for a chapter that hasn't
-          // been copied over -- it's slow (several seconds) and can fail
-          // outright under load.
+          // Chapter text ships as a small static file per chapter
+          // (public/reader-chapters/) -- no database read, no quota. The
+          // Google Sheet script is only a fallback if a file is missing;
+          // it's slow (several seconds) and can fail outright under load.
           let namesArray = null;
           try {
-              const snap = await getDoc(doc(db, `artifacts/${MYANMAR_READER_APP_ID}/public/data/chapters`, `${sheetNameParam}_${column}`));
-              if (snap.exists() && Array.isArray(snap.data().rows) && snap.data().rows.length > 0) namesArray = snap.data().rows;
-          } catch (e) { console.error('Chapter load from Firebase failed, falling back to sheet:', e); }
+              const res = await fetch(`${import.meta.env.BASE_URL}reader-chapters/${sheetNameParam}_${column}.json`);
+              if (res.ok) {
+                  const rows = await res.json();
+                  if (Array.isArray(rows) && rows.length > 0) namesArray = rows;
+              }
+          } catch (e) { console.error('Static chapter load failed, falling back to sheet:', e); }
           if (!namesArray) {
               const url = `${webAppUrl}?sheetName=${sheetNameParam}&range=${column}:${column}`;
               const response = await fetch(url);
