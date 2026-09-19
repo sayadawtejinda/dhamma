@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection } from 'firebase/firestore';
+import { listenLiveOrOnce, isOnlineStatusDay } from './presenceDay';
 import { X } from 'lucide-react';
 import { db } from './firebase';
 
@@ -43,7 +44,7 @@ export function useOnlineRoster(rosterPath, filterDocs, lastSeenField = 'lastSee
 
   useEffect(() => {
     if (!rosterPath) return;
-    const unsub = onSnapshot(collection(db, rosterPath), (snap) => {
+    const unsub = listenLiveOrOnce(collection(db, rosterPath), (snap) => {
       setRosterDocs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     }, (e) => console.error('Online roster listen error:', e));
     return () => unsub();
@@ -144,7 +145,9 @@ export default function OnlineStatusWidget({
           </span>
         )}
         <button onClick={() => setShowPanel(true)} className="flex items-center gap-1 text-emerald-600 font-bold hover:underline">
-          <span className="w-2 h-2 bg-emerald-500 rounded-full inline-block"></span>{onlineCount} online
+          {isOnlineStatusDay()
+            ? <><span className="w-2 h-2 bg-emerald-500 rounded-full inline-block"></span>{onlineCount} online</>
+            : <>👥 {weeklyRosterList.length} this week</>}
           {warningCount > 0 && (
             <span className="text-xs font-bold text-red-600 bg-red-100 border border-red-300 px-1.5 py-0.5 rounded-full ml-1">{warningCount} inactive</span>
           )}

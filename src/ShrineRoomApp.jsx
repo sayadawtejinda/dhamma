@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { collection, query, where, getDocs, doc, getDoc, getDocFromServer, setDoc, updateDoc, serverTimestamp, increment } from 'firebase/firestore';
 import { db } from './firebase';
+import { presenceIntervalMs } from './presenceDay';
 import { appId } from './firebaseConfig';
 import OnlineStatusWidget from './OnlineStatusWidget';
 import { spawnFlyingCoins, trackLastClickPoint } from './flyingCoins';
@@ -895,7 +896,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     const heartbeatRef = doc(db, SHRINE_ROSTER_PATH, sanitizeShrineKey(studentName));
     const ping = () => setDoc(heartbeatRef, { studentName, isOnline: true, lastSeen: serverTimestamp() }, { merge: true }).catch(() => {});
     ping();
-    const interval = setInterval(ping, 30000);
+    const interval = presenceIntervalMs(30000) ? setInterval(ping, 30000) : null;
     const goOffline = () => { updateDoc(heartbeatRef, { isOnline: false, lastSeen: serverTimestamp() }).catch(() => {}); };
     window.addEventListener('beforeunload', goOffline);
     return () => {

@@ -1,6 +1,7 @@
 import React, { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { doc, setDoc, updateDoc, onSnapshot, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase';
+import { presenceIntervalMs, listenLiveOrOnce } from './presenceDay';
 import { rosterDocRefByUid, migrateNameKeyedRosterDoc } from './studentRosterIdentity';
 
 // "Myanmar Part 1 & 2" — third combined group, same pattern as
@@ -57,7 +58,7 @@ export default function MyanmarPart1And2App({ entryRequest, onExit }) {
       .catch(e => console.error('Roster migration error:', e));
     const ping = () => setDoc(rosterRef, { studentName, isOnline: true, currentPart: activePartRef.current, lastSeen: serverTimestamp() }, { merge: true }).catch(() => {});
     ping();
-    const interval = setInterval(ping, 30000);
+    const interval = presenceIntervalMs(30000) ? setInterval(ping, 30000) : null;
     const goOffline = () => { updateDoc(rosterRef, { isOnline: false, currentPart: null, lastSeen: serverTimestamp() }).catch(() => {}); };
     window.addEventListener('beforeunload', goOffline);
     return () => {
@@ -74,7 +75,7 @@ export default function MyanmarPart1And2App({ entryRequest, onExit }) {
   }, [activePart, studentName, studentUid]);
 
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, P1AND2_ROSTER_PATH), (snap) => {
+    const unsub = listenLiveOrOnce(collection(db, P1AND2_ROSTER_PATH), (snap) => {
       setOnlineStudents(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     }, e => console.error('Myanmar Part 1&2 roster listen error:', e));
     return () => unsub();

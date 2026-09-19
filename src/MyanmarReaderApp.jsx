@@ -3,6 +3,7 @@ import { Play, Volume2, Lock, Delete, RotateCcw, BookOpen, DownloadCloud, FileTe
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { collection, doc, getDoc, getDocs, setDoc, updateDoc, onSnapshot, query, where, serverTimestamp, increment } from 'firebase/firestore';
 import { auth, db } from './firebase';
+import { presenceIntervalMs, listenLiveOrOnce } from './presenceDay';
 import { rosterDocRefByUid, migrateNameKeyedRosterDoc } from './studentRosterIdentity';
 import coinDropSound from '../audio/coin-drop.mp3';
 
@@ -897,7 +898,7 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
       lastPing: serverTimestamp(), lastSeen: serverTimestamp(), joinedAt: Date.now()
     }, { merge: true }).catch(e => console.error('Ping create error:', e)));
     ping();
-    const interval = setInterval(ping, 60000);
+    const interval = presenceIntervalMs(60000) ? setInterval(ping, 60000) : null;
     const goOffline = () => { updateDoc(readerRosterDocRef(studentName), { isOnline: false, lastSeen: serverTimestamp() }).catch(() => {}); };
     window.addEventListener('beforeunload', goOffline);
     return () => { clearInterval(interval); goOffline(); window.removeEventListener('beforeunload', goOffline); };
@@ -906,7 +907,7 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
   // Full live roster — same data feeds both the teacher's view and every
   // student's own "who else is online" panel, so they see identical info.
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, READER_ROSTER_PATH), (snap) => {
+    const unsub = listenLiveOrOnce(collection(db, READER_ROSTER_PATH), (snap) => {
       setOnlineStudents(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     }, e => console.error('Roster listen error:', e));
     return () => unsub();

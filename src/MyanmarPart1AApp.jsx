@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { doc, setDoc, updateDoc, onSnapshot, collection, serverTimestamp } from 'firebase/firestore';
 import { X } from 'lucide-react';
 import { db } from './firebase';
+import { presenceIntervalMs, listenLiveOrOnce } from './presenceDay';
 import { rosterDocRefByUid, migrateNameKeyedRosterDoc } from './studentRosterIdentity';
 
 // ── Ported from the standalone "မြန်မာစာ သင်ယူမှုနှင့် ဂိမ်း" (Myanmar
@@ -354,7 +355,7 @@ export default function MyanmarPart1AApp({ entryRequest, onExit, hideOwnOnlineBa
       .catch(e => console.error('Roster migration error:', e));
     const ping = () => setDoc(rosterRef, { studentName, isOnline: true, lastSeen: serverTimestamp() }, { merge: true }).catch(() => {});
     ping();
-    const interval = setInterval(ping, 30000);
+    const interval = presenceIntervalMs(30000) ? setInterval(ping, 30000) : null;
     const goOffline = () => { updateDoc(rosterRef, { isOnline: false, lastSeen: serverTimestamp() }).catch(() => {}); };
     window.addEventListener('beforeunload', goOffline);
     return () => {
@@ -365,7 +366,7 @@ export default function MyanmarPart1AApp({ entryRequest, onExit, hideOwnOnlineBa
   }, [studentName, studentUid]);
 
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, P1A_ROSTER_PATH), (snap) => {
+    const unsub = listenLiveOrOnce(collection(db, P1A_ROSTER_PATH), (snap) => {
       setOnlineStudents(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     }, e => console.error('Myanmar Part 1A roster listen error:', e));
     return () => unsub();

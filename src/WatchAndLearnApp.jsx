@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { collection, doc, addDoc, deleteDoc, getDoc, increment, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from './firebase';
+import { presenceIntervalMs } from './presenceDay';
 import { appId } from './firebaseConfig';
 import OnlineStatusWidget from './OnlineStatusWidget';
 
@@ -62,7 +63,7 @@ export default function WatchAndLearnApp({ entryRequest, onExit }) {
       studentName, isOnline: true, lastSeen: serverTimestamp(),
     }, { merge: true }).catch(() => {});
     ping();
-    const interval = setInterval(ping, 60000);
+    const interval = presenceIntervalMs(60000) ? setInterval(ping, 60000) : null;
     const goOffline = () => { updateDoc(rosterRef, { isOnline: false, lastSeen: serverTimestamp() }).catch(() => {}); };
     window.addEventListener('beforeunload', goOffline);
     return () => { clearInterval(interval); goOffline(); window.removeEventListener('beforeunload', goOffline); };

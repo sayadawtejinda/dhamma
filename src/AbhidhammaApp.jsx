@@ -9,6 +9,7 @@ import {
   ToggleLeft, ToggleRight, Plus, FolderOpen, ImageIcon, FileText, RefreshCw
 } from 'lucide-react';
 import { auth, db } from './firebase';
+import { presenceIntervalMs } from './presenceDay';
 import OnlineStatusWidget from './OnlineStatusWidget';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -1189,7 +1190,7 @@ export default function AbhidhammaApp({ entryRequest, onExit, isActive }) {
       }catch(e2){console.error('Ping create error:',e2);}
     };
     ping();
-    const interval=setInterval(ping,60000);
+    const interval=presenceIntervalMs(60000) ? setInterval(ping, 60000) : null;
     const handleOffline=()=>{ try{ updateDoc(rRef,{isOnline:false,lastSeen:serverTimestamp()}); }catch(e){} };
     window.addEventListener('beforeunload',handleOffline);
     return()=>{ clearInterval(interval); handleOffline(); window.removeEventListener('beforeunload',handleOffline); };

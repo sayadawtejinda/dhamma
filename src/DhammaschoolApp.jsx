@@ -9,6 +9,7 @@ import {
 } from 'firebase/firestore';
 import { auth as sharedAuth, db as sharedDb } from './firebase';
 import OnlineStatusWidget from './OnlineStatusWidget';
+import { presenceIntervalMs, listenLiveOrOnce } from './presenceDay';
 
 // The vanilla script below tracks role/name/class as plain closure `let`s,
 // not React state, so this collection path is the only piece the shared
@@ -1544,8 +1545,10 @@ let bilingualMode = false;
             // "offline" even without a fresh snapshot event.
             setupPresenceListener();
             updatePresence();
-            setInterval(updatePresence, 20000);
-            setInterval(renderOnlineWidget, 20000);
+            if (presenceIntervalMs(20000)) {
+                setInterval(updatePresence, 20000);
+                setInterval(renderOnlineWidget, 20000);
+            }
 
             if (!isTeacher) ensureCoinBalanceListener();
 
@@ -1568,7 +1571,7 @@ let bilingualMode = false;
 
         function setupPresenceListener() {
             if (presenceUnsub) presenceUnsub();
-            presenceUnsub = onSnapshot(collection(db, PATHS.presence), (snap) => {
+            presenceUnsub = listenLiveOrOnce(collection(db, PATHS.presence), (snap) => {
                 allPresenceRecords = [];
                 snap.forEach(d => allPresenceRecords.push({ id: d.id, ...d.data() }));
                 renderOnlineWidget();

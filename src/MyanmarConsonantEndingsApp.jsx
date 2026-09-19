@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { doc, setDoc, updateDoc, serverTimestamp, getDoc, increment } from 'firebase/firestore';
 import { db } from './firebase';
+import { presenceIntervalMs } from './presenceDay';
 import { rosterDocRefByUid, migrateNameKeyedRosterDoc } from './studentRosterIdentity';
 import OnlineStatusWidget from './OnlineStatusWidget';
 import { spawnFlyingCoins, trackLastClickPoint } from './flyingCoins';
@@ -274,7 +275,7 @@ export default function MyanmarConsonantEndingsApp({ entryRequest, onExit, hideO
     const rosterRef = rosterDocRefByUid(db, MCE_ROSTER_PATH, studentUid);
     const ping = () => setDoc(rosterRef, { studentName, isOnline: true, lastSeen: serverTimestamp() }, { merge: true }).catch(() => {});
     ping();
-    const interval = setInterval(ping, 30000);
+    const interval = presenceIntervalMs(30000) ? setInterval(ping, 30000) : null;
     const goOffline = () => { updateDoc(rosterRef, { isOnline: false, lastSeen: serverTimestamp() }).catch(() => {}); };
     window.addEventListener('beforeunload', goOffline);
     return () => {

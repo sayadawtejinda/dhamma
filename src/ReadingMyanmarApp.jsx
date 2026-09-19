@@ -1,6 +1,7 @@
 import React, { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { doc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase';
+import { presenceIntervalMs } from './presenceDay';
 import OnlineStatusWidget from './OnlineStatusWidget';
 import { rosterDocRefByUid, migrateNameKeyedRosterDoc } from './studentRosterIdentity';
 
@@ -69,7 +70,7 @@ export default function ReadingMyanmarApp({ entryRequest, onExit }) {
       .catch(e => console.error('Roster migration error:', e));
     const ping = () => setDoc(rosterRef, { studentName, isOnline: true, currentPart: activePartRef.current, lastSeen: serverTimestamp() }, { merge: true }).catch(() => {});
     ping();
-    const interval = setInterval(ping, 30000);
+    const interval = presenceIntervalMs(30000) ? setInterval(ping, 30000) : null;
     const goOffline = () => { updateDoc(rosterRef, { isOnline: false, currentPart: null, lastSeen: serverTimestamp() }).catch(() => {}); };
     window.addEventListener('beforeunload', goOffline);
     return () => {

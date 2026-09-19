@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { doc, getDoc, setDoc, updateDoc, onSnapshot, collection, serverTimestamp, arrayUnion, increment } from 'firebase/firestore';
 import { X } from 'lucide-react';
 import { db } from './firebase';
+import { presenceIntervalMs } from './presenceDay';
 import { rosterDocRefByUid, migrateNameKeyedRosterDoc } from './studentRosterIdentity';
 import OnlineStatusWidget from './OnlineStatusWidget';
 import { spawnFlyingCoins, trackLastClickPoint } from './flyingCoins';
@@ -778,7 +779,7 @@ export default function ConsonantPracticeApp({ entryRequest, onExit, hideOwnOnli
     const rosterRef = rosterDocRefByUid(db, CONSONANT_ROSTER_PATH, studentUid);
     const ping = () => setDoc(rosterRef, { studentName, isOnline: true, lastSeen: serverTimestamp() }, { merge: true }).catch(() => {});
     ping();
-    const interval = setInterval(ping, 30000);
+    const interval = presenceIntervalMs(30000) ? setInterval(ping, 30000) : null;
     const goOffline = () => { updateDoc(rosterRef, { isOnline: false, lastSeen: serverTimestamp() }).catch(() => {}); };
     window.addEventListener('beforeunload', goOffline);
     return () => {

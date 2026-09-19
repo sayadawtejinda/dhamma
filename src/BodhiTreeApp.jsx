@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { collection, query, where, getDocs, doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase';
+import { presenceIntervalMs } from './presenceDay';
 import { appId } from './firebaseConfig';
 import birdsChirpingSound from '../audio/birds-chirping.mp3';
 import chirpingBirdsSound from '../audio/chirping-birds.mp3';
@@ -712,7 +713,7 @@ export default function BodhiTreeApp({ entryRequest, onExit }) {
       ...(ageComputedRef.current ? { treeAgeDays: treeAgeDaysRef.current } : {}),
     }, { merge: true }).catch(() => {});
     ping();
-    const interval = setInterval(ping, 30000);
+    const interval = presenceIntervalMs(30000) ? setInterval(ping, 30000) : null;
     const goOffline = () => { updateDoc(rosterRef, { isOnline: false, lastSeen: serverTimestamp() }).catch(() => {}); };
     window.addEventListener('beforeunload', goOffline);
     return () => {
