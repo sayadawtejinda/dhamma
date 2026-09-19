@@ -1903,13 +1903,24 @@ if (appMode === 'sheet' && sheetData.length > 0) {
       setQaIndex(0);
       setQaAnswerShown(false);
       const webAppUrl = 'https://script.google.com/macros/s/AKfycbza8zaxRpAWwo2iTBJ4pppZ7swkpWuhHJARN6f88afeiQuYPc1hLYfa4JXHuS8TZKI/exec';
-      
-      
+
+
       try {
-          const url = `${webAppUrl}?sheetName=${sheetNameParam}&range=${column}:${column}`;
-          const response = await fetch(url);
-          if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
-          const namesArray = await response.json();
+          // Firebase first (one tiny document, fast and reliable); the
+          // Google Sheet script is only a fallback for a chapter that hasn't
+          // been copied over -- it's slow (several seconds) and can fail
+          // outright under load.
+          let namesArray = null;
+          try {
+              const snap = await getDoc(doc(db, `artifacts/${MYANMAR_READER_APP_ID}/public/data/chapters`, `${sheetNameParam}_${column}`));
+              if (snap.exists() && Array.isArray(snap.data().rows) && snap.data().rows.length > 0) namesArray = snap.data().rows;
+          } catch (e) { console.error('Chapter load from Firebase failed, falling back to sheet:', e); }
+          if (!namesArray) {
+              const url = `${webAppUrl}?sheetName=${sheetNameParam}&range=${column}:${column}`;
+              const response = await fetch(url);
+              if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+              namesArray = await response.json();
+          }
           
           let separatorIdx = -1;
 for (let i = 1; i < namesArray.length; i++) {
