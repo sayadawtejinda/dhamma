@@ -38,7 +38,7 @@ function toMillis(ts) {
 // not-yet-approved students, which shouldn't count as "online" at all.
 // `lastSeenField` lets a roster that names its heartbeat field something
 // other than `lastSeen` (e.g. Dhammaschool's `lastActive`) plug in unchanged.
-export function useOnlineRoster(rosterPath, filterDocs, lastSeenField = 'lastSeen') {
+export function useOnlineRoster(rosterPath, filterDocs, lastSeenField = 'lastSeen', isTeacherMode = false) {
   const [rosterDocs, setRosterDocs] = useState([]);
   const [nowTick, setNowTick] = useState(Date.now());
 
@@ -46,9 +46,9 @@ export function useOnlineRoster(rosterPath, filterDocs, lastSeenField = 'lastSee
     if (!rosterPath) return;
     const unsub = listenLiveOrOnce(collection(db, rosterPath), (snap) => {
       setRosterDocs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (e) => console.error('Online roster listen error:', e));
+    }, (e) => console.error('Online roster listen error:', e), isTeacherMode);
     return () => unsub();
-  }, [rosterPath]);
+  }, [rosterPath, isTeacherMode]);
 
   useEffect(() => {
     const interval = setInterval(() => setNowTick(Date.now()), 30000);
@@ -109,7 +109,7 @@ export default function OnlineStatusWidget({
   secondaryBalance,
   secondaryIcon = '🪙',
 }) {
-  const { weeklyRosterList, onlineCount, warningCount: rawWarningCount } = useOnlineRoster(rosterPath, filterDocs, lastSeenField);
+  const { weeklyRosterList, onlineCount, warningCount: rawWarningCount } = useOnlineRoster(rosterPath, filterDocs, lastSeenField, isTeacherMode);
   const warningCount = showInactiveWarning ? rawWarningCount : 0;
   const [showPanel, setShowPanel] = useState(false);
 
@@ -145,7 +145,7 @@ export default function OnlineStatusWidget({
           </span>
         )}
         <button onClick={() => setShowPanel(true)} className="flex items-center gap-1 text-emerald-600 font-bold hover:underline">
-          {isOnlineStatusDay()
+          {(isTeacherMode && isOnlineStatusDay())
             ? <><span className="w-2 h-2 bg-emerald-500 rounded-full inline-block"></span>{onlineCount} online</>
             : <>👥 {weeklyRosterList.length} this week</>}
           {warningCount > 0 && (

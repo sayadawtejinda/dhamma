@@ -909,9 +909,9 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
   useEffect(() => {
     const unsub = listenLiveOrOnce(collection(db, READER_ROSTER_PATH), (snap) => {
       setOnlineStudents(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, e => console.error('Roster listen error:', e));
+    }, e => console.error('Roster listen error:', e), isTeacherMode);
     return () => unsub();
-  }, []);
+  }, [isTeacherMode]);
 
   // Ticks every 30s so "online" (last seen within 5 min) and the weekly
   // roster view both stay current without needing a page reload — a closed

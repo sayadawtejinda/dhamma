@@ -28,11 +28,13 @@ export const isOnlineStatusDay = () => {
 // once on open, so "active this week" still gets recorded).
 export const presenceIntervalMs = (normalMs) => (isOnlineStatusDay() ? normalMs : 0);
 
-// Drop-in for onSnapshot(collectionRef, onNext, onError): live on an
-// online-status day, otherwise ONE read when opened (still shows the weekly
-// picture, without keeping a listener open). Returns an unsubscribe fn.
-export function listenLiveOrOnce(ref, onNext, onError) {
-  if (isOnlineStatusDay()) return onSnapshot(ref, onNext, onError);
+// Drop-in for onSnapshot(collectionRef, onNext, onError): a live listener
+// only for the teacher during class time (`isTeacher` true); everyone else --
+// students, and everyone outside class time -- gets ONE read when opened
+// (still shows the weekly picture, without keeping a listener open). Returns
+// an unsubscribe fn.
+export function listenLiveOrOnce(ref, onNext, onError, isTeacher = false) {
+  if (isTeacher && isOnlineStatusDay()) return onSnapshot(ref, onNext, onError);
   let cancelled = false;
   getDocs(ref)
     .then(snap => { if (!cancelled) onNext(snap); })

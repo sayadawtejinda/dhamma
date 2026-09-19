@@ -1575,7 +1575,7 @@ let bilingualMode = false;
                 allPresenceRecords = [];
                 snap.forEach(d => allPresenceRecords.push({ id: d.id, ...d.data() }));
                 renderOnlineWidget();
-            });
+            }, undefined, isTeacher);
         }
 
         // Writes this device's current status (who, which class, which lesson).
