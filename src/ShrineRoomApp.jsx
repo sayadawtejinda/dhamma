@@ -1560,6 +1560,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
         aria-label="Back to Tutoring Dashboard"
       >
         🏡
+        {guideActive && guideStage === 'nocoin' && <GuideHand dir="up" className="left-1/2 -translate-x-1/2 top-full mt-1" />}
       </button>
 
       {/* Same online-status widget every other app has -- shows a lotus
@@ -2133,34 +2134,6 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
                 );
               })}
             </div>
-        </div>
-      )}
-
-      {guideActive && (showBuyGuide || showRingGuide || guideStage === 'nocoin' || worshipHand || refugeHand) && (
-        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[9990] w-[92%] max-w-md bg-white/95 backdrop-blur-sm border-2 border-emerald-400 rounded-2xl shadow-2xl px-4 py-3 text-center">
-          {guideStage === 'buddha' && showBuyGuide && (<>
-            <p className="text-sm font-bold text-gray-800">Tap 🛒 Merit Shop, then pick a Buddha image.</p>
-            <p className="text-xs text-gray-600 mt-0.5">🛒 Merit Shop ကိုနှိပ်ပြီး ဘုရားရုပ်ပွား ရွေးပါ။</p>
-          </>)}
-          {guideStage === 'offer' && showBuyGuide && (<>
-            <p className="text-sm font-bold text-gray-800">Offer 6 items and 2 Golden Umbrellas — {filledSlotCount}/{SLOT_COUNT} items · {umbrellaCount}/2 umbrellas. Complete it for 🪷 +10 lotus!</p>
-            <p className="text-xs text-gray-600 mt-0.5">လှူဖွယ် ၆ ခုနဲ့ ရွှေထီး ၂ လက် လှူပါ။ ပြည့်ရင် 🪷 ၁၀ ပွင့် ရပါမယ်။</p>
-          </>)}
-          {guideStage === 'bell' && showBuyGuide && (<>
-            <p className="text-sm font-bold text-gray-800">Now offer the 🔔 Bell.</p>
-            <p className="text-xs text-gray-600 mt-0.5">ခေါင်းလောင်း လှူပါ။</p>
-          </>)}
-          {showRingGuide && (<>
-            <p className="text-sm font-bold text-gray-800">Tap the 🔔 Bell to ring it!</p>
-            <p className="text-xs text-gray-600 mt-0.5">ခေါင်းလောင်းကို နှိပ်ပြီး ထိုးပါ။</p>
-          </>)}
-          {guideStage === 'nocoin' && (<>
-            <p className="text-sm font-bold text-gray-800">Not enough coins yet. Go back (🏡) and do your lessons to earn coins!</p>
-            <p className="text-xs text-gray-600 mt-0.5">coin မလုံလောက်သေးပါ။ 🏡 ကိုနှိပ်ပြီး သင်ခန်းစာတွေ သွားလုပ်ပါ။</p>
-          </>)}
-          {(worshipHand || refugeHand) && (
-            <p className="text-sm font-bold text-gray-800 mt-1">Tap 🙏 Worship and 🕊️ The Three Refuges to chant. / နှိပ်ပြီး ရှိခိုးပါ။</p>
-          )}
         </div>
       )}
 
