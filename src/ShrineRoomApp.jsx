@@ -1060,6 +1060,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     const complete = filledSlots >= SLOT_COUNT && !!placedUmbrellas.left && !!placedUmbrellas.right;
     if (altarWasCompleteRef.current === null) { altarWasCompleteRef.current = complete; return; }
     if (complete && !altarWasCompleteRef.current) {
+      setShopOpen(false); // done shopping -- get the panel out of the way
       const granted = awardLotus(10);
       if (granted > 0) showToast(`🪷 Full altar bonus! +${granted} lotus flowers`);
     }
@@ -1543,6 +1544,19 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   const showWorshipGuide = guideActive && (guideStage === 'done' || guideStage === 'nocoin');
   const worshipHand = showWorshipGuide && !guideSeen.worship;
   const refugeHand = showWorshipGuide && !guideSeen.refuge;
+  // A finger pointing at something below the fold is no help -- scroll the
+  // page (or the shop list) so whatever is being pointed at is on screen.
+  useEffect(() => {
+    if (!guideActive) return;
+    const timer = setTimeout(() => {
+      const el = document.querySelector('[data-guide-target]');
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const fullyVisible = r.top >= 60 && r.bottom <= window.innerHeight - 60 && r.left >= 0 && r.right <= window.innerWidth;
+      if (!fullyVisible) el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [guideActive, guideStage, guideTargetId, shopOpen, worshipHand, refugeHand, filledSlotCount, umbrellaCount, !!placedBell]);
   const dimmed = hasLampPlaced && lastLampLitDate === todayKey();
 
   return (
@@ -1619,7 +1633,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
             </div>
           );
           const shopBtn = (
-            <div key="shop" className="relative">
+            <div key="shop" className="relative" {...(showBuyGuide && !shopOpen ? { 'data-guide-target': '1' } : {})}>
               <button
                 onClick={() => setShopOpen(prev => !prev)}
                 className={`flex items-center gap-1 bg-white hover:bg-amber-50 text-amber-700 text-sm font-semibold px-3 py-2 rounded-full shadow-lg border-2 ${showBuyGuide && !shopOpen ? 'border-emerald-500 ring-4 ring-emerald-300 animate-pulse' : 'border-amber-300'}`}
@@ -1649,7 +1663,8 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
       {/* Meditation duration picker -- a typed number (1-60), not presets. */}
       {meditationPickerOpen && (
         <div className="fixed inset-0 z-[10001] bg-black/50 flex items-center justify-center p-4" onClick={() => setMeditationPickerOpen(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-xs w-full p-6 text-center" onClick={(e) => e.stopPropagation()}>
+          <button onClick={() => setMeditationPickerOpen(false)} className="fixed top-3 right-3 z-[10002] w-11 h-11 rounded-full bg-red-600 hover:bg-red-700 text-white text-2xl font-bold shadow-lg flex items-center justify-center" aria-label="Close">×</button>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-xs w-full p-6 text-center max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-center gap-2 mb-1">
               <h2 className="text-lg font-bold text-emerald-800">🧘 Meditation</h2>
               <button
@@ -1683,7 +1698,8 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
       {/* Visitors -- who has come to see MY altar recently. */}
       {showVisitorsPanel && (
         <div className="fixed inset-0 z-[10001] bg-black/50 flex items-center justify-center p-4" onClick={() => setShowVisitorsPanel(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-xs w-full p-6 text-center" onClick={(e) => e.stopPropagation()}>
+          <button onClick={() => setShowVisitorsPanel(false)} className="fixed top-3 right-3 z-[10002] w-11 h-11 rounded-full bg-red-600 hover:bg-red-700 text-white text-2xl font-bold shadow-lg flex items-center justify-center" aria-label="Close">×</button>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-xs w-full p-6 text-center max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-bold text-emerald-800 mb-4">👣 Recent Visitors</h2>
             {recentVisitors.length === 0 ? (
               <p className="text-sm text-gray-400 mb-4">No one has visited your Shrine Room yet.</p>
@@ -1711,7 +1727,8 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
           state. */}
       {visitingStudentName && (
         <div className="fixed inset-0 z-[10001] bg-black/60 flex items-center justify-center p-4" onClick={closeVisit}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center" onClick={(e) => e.stopPropagation()}>
+          <button onClick={closeVisit} className="fixed top-3 right-3 z-[10002] w-11 h-11 rounded-full bg-red-600 hover:bg-red-700 text-white text-2xl font-bold shadow-lg flex items-center justify-center" aria-label="Close">×</button>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-bold text-emerald-800 mb-4">🛕 {visitingStudentName}'s Shrine Room</h2>
             {visitLoading ? (
               <p className="text-sm text-gray-400 py-8">Opening...</p>
@@ -1874,6 +1891,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
                 <button
                   onClick={handleRingBell}
                   title="Ring the Bell"
+                  {...(showRingGuide ? { 'data-guide-target': '1' } : {})}
                   className={`absolute left-[-72px] bottom-[52px] w-20 h-20 flex items-center justify-center rounded-full transition-transform hover:scale-110 drop-shadow-lg ${ringing ? 'animate-pulse' : ''}`}
                 >
                   <OfferingIcon offering={BELL_OPTION} className="text-6xl leading-none" />
@@ -2018,7 +2036,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
                 offerings (not tucked inside the Merit Shop) -- one tap to
                 play, no need to open anything first. */}
             <div className={`flex gap-3 mt-4 ${worshipHand || refugeHand ? 'mb-14' : ''}`}>
-              <div className="relative">
+              <div className="relative" {...(worshipHand ? { 'data-guide-target': '1' } : {})}>
                 <button
                   onClick={() => playQuickChant('worship', 'Worship')}
                   className={`${BUTTON_3D} ${worshipHand ? 'ring-4 ring-emerald-300' : ''}`}
@@ -2028,7 +2046,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
                 {quickChantPlaying === 'worship' && <EmojiParticles emoji="🙏" />}
                 {worshipHand && <GuideHand dir="up" className="left-1/2 -translate-x-1/2 top-full" />}
               </div>
-              <div className="relative">
+              <div className="relative" {...(refugeHand && !worshipHand ? { 'data-guide-target': '1' } : {})}>
                 <button
                   onClick={() => playQuickChant('refuge', 'Taking Refuge')}
                   className={`${BUTTON_3D} ${refugeHand ? 'ring-4 ring-emerald-300' : ''}`}
@@ -2091,6 +2109,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
                 return (
                   <button
                     key={option.id}
+                    {...(guideActive && guideStage === 'buddha' && guideTargetId === option.id ? { 'data-guide-target': '1' } : {})}
                     onClick={() => handleBuyBuddha(option)}
                     disabled={owned}
                     className={`w-full flex items-center justify-between p-3 rounded-xl border ${owned ? 'bg-emerald-50 border-emerald-300' : locked ? 'bg-gray-50 border-gray-200 opacity-60' : 'bg-amber-50 border-amber-200 hover:bg-amber-100'} ${guideActive && guideStage === 'buddha' && guideTargetId === option.id ? 'ring-4 ring-emerald-400 animate-pulse' : ''}`}
@@ -2118,6 +2137,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
                 return (
                   <button
                     key={option.id}
+                    {...(showBuyGuide && guideStage !== 'buddha' && guideTargetId === option.id ? { 'data-guide-target': '1' } : {})}
                     draggable={!locked && !SHOP_LOCKED && !notDraggable}
                     onDragStart={(e) => handleDragStart(e, option.id)}
                     onClick={() => handleBuyOffering(option)}

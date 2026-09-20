@@ -984,7 +984,8 @@ export default function BodhiTreeApp({ entryRequest, onExit }) {
       {/* Visitors -- who has come to see MY tree recently. */}
       {showVisitorsPanel && (
         <div className="fixed inset-0 z-[10001] bg-black/50 flex items-center justify-center p-4" onClick={() => setShowVisitorsPanel(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-xs w-full p-6 text-center" onClick={(e) => e.stopPropagation()}>
+          <button onClick={() => setShowVisitorsPanel(false)} className="fixed top-3 right-3 z-[10002] w-11 h-11 rounded-full bg-red-600 hover:bg-red-700 text-white text-2xl font-bold shadow-lg flex items-center justify-center" aria-label="Close">×</button>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-xs w-full p-6 text-center max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-bold text-emerald-800 mb-4">👣 Recent Visitors</h2>
             {recentVisitors.length === 0 ? (
               <p className="text-sm text-gray-400 mb-4">No one has visited your tree yet.</p>
@@ -1010,7 +1011,8 @@ export default function BodhiTreeApp({ entryRequest, onExit }) {
           age instead of mine. */}
       {visitingStudentName && (
         <div className="fixed inset-0 z-[10001] bg-black/60 flex items-center justify-center p-4" onClick={closeVisit}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center" onClick={(e) => e.stopPropagation()}>
+          <button onClick={closeVisit} className="fixed top-3 right-3 z-[10002] w-11 h-11 rounded-full bg-red-600 hover:bg-red-700 text-white text-2xl font-bold shadow-lg flex items-center justify-center" aria-label="Close">×</button>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-bold text-emerald-800 mb-4">🌳 {visitingStudentName}'s Bodhi Tree</h2>
             {visitLoading ? (
               <p className="text-sm text-gray-400 py-8">Opening...</p>

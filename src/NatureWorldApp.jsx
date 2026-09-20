@@ -28,10 +28,12 @@ const GRID_COLS = 12;
 const GRID_ROWS = 5;
 const MAX_PLOTS = GRID_COLS * GRID_ROWS;
 const FREE_PLOTS = 10;
-// Cost to unlock the NEXT plot rises slowly with how much land is already
-// owned, so early expansion is cheap and a fully-grown world is a real
-// long-term goal.
-const plotCost = (alreadyUnlocked) => 15 + Math.floor(alreadyUnlocked / 2) * 5;
+// Cost to unlock the NEXT plot grows by 50% with every plot already bought
+// (see PLOT_COST_GROWTH), so the first few are cheap and a big world takes
+// a long time.
+const FIRST_PLOT_COST = 40;
+const PLOT_COST_GROWTH = 1.5; // each plot bought makes the next one cost 150% of the last
+const plotCost = (alreadyUnlocked) => Math.round(FIRST_PLOT_COST * Math.pow(PLOT_COST_GROWTH, Math.max(0, alreadyUnlocked - FREE_PLOTS)));
 
 const TREE_OPTIONS = [
   { id: 'pine', name: 'Pine Tree', emoji: '🌲', cost: 10, kind: 'tree' },
@@ -68,9 +70,8 @@ const treeGrowthScale = (plantedAt) => {
 };
 
 // A little rabbit that hops from plot to plot across the land the student
-// owns -- purely decorative, no coins, never blocks a tap. Picks a random
-// unlocked plot every few seconds and glides there. (Uses the front-facing
-// 🐰 so it looks right whichever way it's heading.)
+// owns -- purely decorative, no coins. Picks a random unlocked plot every few
+// seconds and glides there, facing the way it's heading.
 function Bunny({ unlockedCount, startDelayMs = 0 }) {
   const cellOf = (i) => ({
     left: ((i % GRID_COLS) + 0.5) / GRID_COLS * 100,
@@ -78,20 +79,35 @@ function Bunny({ unlockedCount, startDelayMs = 0 }) {
   });
   const randomCell = () => Math.floor(Math.random() * Math.max(1, unlockedCount));
   const [pos, setPos] = useState(() => cellOf(randomCell()));
+  // 🐇 (side view) faces left by default, so it's mirrored when heading right.
+  const [facingRight, setFacingRight] = useState(false);
+  // Touching it shows the front-facing 🐰 for a moment.
+  const [surprised, setSurprised] = useState(false);
   useEffect(() => {
     let cancelled = false;
     let timer;
     const hop = () => {
       if (cancelled) return;
-      setPos(cellOf(randomCell()));
+      setPos(prev => {
+        const next = cellOf(randomCell());
+        if (next.left > prev.left + 0.5) setFacingRight(true);
+        else if (next.left < prev.left - 0.5) setFacingRight(false);
+        return next;
+      });
       timer = setTimeout(hop, 2200 + Math.random() * 2800);
     };
     timer = setTimeout(hop, startDelayMs + 800);
     return () => { cancelled = true; clearTimeout(timer); };
   }, [unlockedCount]);
+  useEffect(() => {
+    if (!surprised) return;
+    const t = setTimeout(() => setSurprised(false), 1400);
+    return () => clearTimeout(t);
+  }, [surprised]);
   return (
     <div
-      className="absolute pointer-events-none z-10"
+      className="absolute z-10 cursor-pointer"
+      onClick={(e) => { e.stopPropagation(); setSurprised(true); }}
       style={{
         left: `${pos.left}%`,
         top: `${pos.top}%`,
@@ -99,7 +115,9 @@ function Bunny({ unlockedCount, startDelayMs = 0 }) {
         transition: 'left 2.2s ease-in-out, top 2.2s ease-in-out',
       }}
     >
-      <span className="inline-block text-2xl sm:text-3xl drop-shadow" style={{ animation: 'natureBunnyHop 0.45s ease-in-out infinite' }}>🐰</span>
+      <span className="inline-block text-2xl sm:text-3xl drop-shadow" style={{ animation: 'natureBunnyHop 0.45s ease-in-out infinite' }}>
+        <span className="inline-block" style={{ transform: surprised || !facingRight ? 'none' : 'scaleX(-1)' }}>{surprised ? '🐰' : '🐇'}</span>
+      </span>
     </div>
   );
 }
@@ -506,7 +524,8 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
       {/* Visitors -- who has come to see MY world recently. */}
       {showVisitorsPanel && (
         <div className="fixed inset-0 z-[10001] bg-black/50 flex items-center justify-center p-4" onClick={() => setShowVisitorsPanel(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-xs w-full p-6 text-center" onClick={(e) => e.stopPropagation()}>
+          <button onClick={() => setShowVisitorsPanel(false)} className="fixed top-3 right-3 z-[10002] w-11 h-11 rounded-full bg-red-600 hover:bg-red-700 text-white text-2xl font-bold shadow-lg flex items-center justify-center" aria-label="Close">×</button>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-xs w-full p-6 text-center max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-bold text-emerald-800 mb-4">👣 Recent Visitors</h2>
             {recentVisitors.length === 0 ? (
               <p className="text-sm text-gray-400 mb-4">No one has visited your world yet.</p>
@@ -530,7 +549,8 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
       {/* Visit -- a read-only peek at another student's world. */}
       {visitingStudentName && (
         <div className="fixed inset-0 z-[10001] bg-black/60 flex items-center justify-center p-4" onClick={closeVisit}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 text-center" onClick={(e) => e.stopPropagation()}>
+          <button onClick={closeVisit} className="fixed top-3 right-3 z-[10002] w-11 h-11 rounded-full bg-red-600 hover:bg-red-700 text-white text-2xl font-bold shadow-lg flex items-center justify-center" aria-label="Close">×</button>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 text-center max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-bold text-emerald-800 mb-4">🌿 {visitingStudentName}'s Nature World</h2>
             {visitLoading ? (
               <p className="text-sm text-gray-400 py-8">Opening...</p>

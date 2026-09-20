@@ -181,6 +181,7 @@ export default function AvatarApp({ entryRequest, onExit }) {
   const [renameInput, setRenameInput] = useState('');
   const [showLockInfo, setShowLockInfo] = useState(false);
   const [lastStarWeek, setLastStarWeek] = useState(null);
+  const [showAnnounce, setShowAnnounce] = useState(false);
   const [starText, setStarText] = useState('');
   const [starSending, setStarSending] = useState(false);
   // Same "visit someone else's page, see who's visited mine" idea just
@@ -443,7 +444,8 @@ export default function AvatarApp({ entryRequest, onExit }) {
       {/* Visitors -- who has come to see MY avatar recently. */}
       {showVisitorsPanel && (
         <div className="fixed inset-0 z-[10001] bg-black/50 flex items-center justify-center p-4" onClick={() => setShowVisitorsPanel(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-xs w-full p-6 text-center" onClick={(e) => e.stopPropagation()}>
+          <button onClick={() => setShowVisitorsPanel(false)} className="fixed top-3 right-3 z-[10002] w-11 h-11 rounded-full bg-red-600 hover:bg-red-700 text-white text-2xl font-bold shadow-lg flex items-center justify-center" aria-label="Close">×</button>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-xs w-full p-6 text-center max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-bold text-indigo-800 mb-4">👣 Recent Visitors</h2>
             {recentVisitors.length === 0 ? (
               <p className="text-sm text-gray-400 mb-4">No one has visited your Avatar yet.</p>
@@ -469,7 +471,8 @@ export default function AvatarApp({ entryRequest, onExit }) {
           below uses, driven by fetched config instead of my own. */}
       {visitingStudentName && (
         <div className="fixed inset-0 z-[10001] bg-black/60 flex items-center justify-center p-4" onClick={closeVisit}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center" onClick={(e) => e.stopPropagation()}>
+          <button onClick={closeVisit} className="fixed top-3 right-3 z-[10002] w-11 h-11 rounded-full bg-red-600 hover:bg-red-700 text-white text-2xl font-bold shadow-lg flex items-center justify-center" aria-label="Close">×</button>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-bold text-indigo-800 mb-4">🧑‍🎨 {visitingStudentName}'s Avatar</h2>
             {visitLoading ? (
               <p className="text-sm text-gray-400 py-8">Opening...</p>
@@ -529,6 +532,14 @@ export default function AvatarApp({ entryRequest, onExit }) {
             )}
           </span>
         )}
+        {!isTeacherPreview && !showAnnounce && (
+          <button
+            onClick={() => setShowAnnounce(true)}
+            className="text-xs font-bold text-amber-700 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded-full px-2.5 py-1"
+          >
+            ⭐ Announce
+          </button>
+        )}
       </h1>
       <p className="text-sm text-gray-500 mb-6">Your own little reflection -- dress it up with coins you've earned.</p>
 
@@ -582,9 +593,12 @@ export default function AvatarApp({ entryRequest, onExit }) {
         </div>
       )}
 
-      {!isTeacherPreview && (
+      {!isTeacherPreview && showAnnounce && (
         <div className="w-full max-w-sm mb-6 rounded-2xl border-2 border-amber-300 bg-amber-50 p-4">
-          <p className="font-bold text-amber-800 mb-2">⭐ Announce</p>
+          <div className="flex items-center justify-between mb-2">
+            <p className="font-bold text-amber-800">⭐ Announce</p>
+            <button onClick={() => setShowAnnounce(false)} className="text-amber-700 hover:text-amber-900 text-xl leading-none font-bold" aria-label="Close">×</button>
+          </div>
           {announcedThisWeek ? (
             <p className="text-sm text-amber-700">✅ Done for this week.</p>
           ) : (

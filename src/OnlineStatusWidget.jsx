@@ -156,9 +156,9 @@ export default function OnlineStatusWidget({
       {showPanel && (
         <div className="fixed inset-0 z-[9950] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowPanel(false)}>
           <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full max-h-[80vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4">
+            <div className="sticky top-0 z-10 bg-white -mx-6 -mt-6 px-6 pt-6 pb-3 mb-1 flex justify-between items-center">
               <h2 className="text-xl font-bold text-gray-800">{panelTitle} {onlineCount > 0 && <span className="text-emerald-600">({onlineCount} online)</span>}</h2>
-              <button onClick={() => setShowPanel(false)} className="text-gray-400 hover:text-gray-700"><X size={22} /></button>
+              <button onClick={() => setShowPanel(false)} className="w-9 h-9 flex-shrink-0 flex items-center justify-center rounded-full bg-red-600 hover:bg-red-700 text-white" aria-label="Close"><X size={20} /></button>
             </div>
             <p className="text-xs text-gray-400 mb-3">Showing everyone active in the last 7 days.</p>
             <div className="space-y-2">
