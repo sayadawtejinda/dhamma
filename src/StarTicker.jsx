@@ -25,8 +25,8 @@ const todayKey = () => {
 const loadState = () => {
   try {
     const s = JSON.parse(localStorage.getItem(STORE_KEY) || '{}');
-    return { date: s.date || '', count: s.count || 0, lastShownAt: s.lastShownAt || 0, idx: s.idx || 0 };
-  } catch (e) { return { date: '', count: 0, lastShownAt: 0, idx: 0 }; }
+    return { date: s.date || '', count: s.count || 0, lastShownAt: s.lastShownAt || 0, shownToday: s.shownToday || [] };
+  } catch (e) { return { date: '', count: 0, lastShownAt: 0, shownToday: [] }; }
 };
 const saveState = (s) => { try { localStorage.setItem(STORE_KEY, JSON.stringify(s)); } catch (e) { /* private mode -- just shows a bit more often */ } };
 
@@ -46,12 +46,14 @@ export default function StarTicker() {
     if (!authReady) return;
     let cancelled = false;
     const fetchList = async () => {
+      const st = loadState();
+      if (st.date === todayKey() && st.count >= MAX_PER_DAY) return; // nothing more to show today
       try {
         const snap = await getDocs(query(
           collection(db, STAR_PATH),
           where('expiresAt', '>', Timestamp.now()),
           orderBy('expiresAt', 'desc'),
-          limit(20)
+          limit(10)
         ));
         if (cancelled) return;
         // Student-written ones only count once the teacher approved them.
@@ -73,11 +75,14 @@ export default function StarTicker() {
       if (!list.length) return;
       const now = Date.now();
       const state = loadState();
-      if (state.date !== todayKey()) { state.date = todayKey(); state.count = 0; }
+      if (state.date !== todayKey()) { state.date = todayKey(); state.count = 0; state.shownToday = []; }
       if (state.count >= MAX_PER_DAY) return;
       if (state.lastShownAt ? now - state.lastShownAt < GAP_MS : now - startedAt < FIRST_DELAY_MS) return;
-      const next = list[state.idx % list.length];
-      saveState({ date: state.date, count: state.count + 1, lastShownAt: now, idx: state.idx + 1 });
+      // Each announcement at most once a day on this device -- never the
+      // same one again and again.
+      const next = list.find(a => !state.shownToday.includes(a.id));
+      if (!next) return;
+      saveState({ date: state.date, count: state.count + 1, lastShownAt: now, shownToday: [...state.shownToday, next.id] });
       setCurrent(next);
     };
     const interval = setInterval(tick, CHECK_EVERY_MS);
