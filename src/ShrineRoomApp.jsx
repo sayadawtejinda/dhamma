@@ -573,6 +573,25 @@ const findOffering = (id) => OFFERING_OPTIONS.find(o => o.id === id);
 const findBuddha = (id) => BUDDHA_OPTIONS.find(o => o.id === id);
 
 const SLOT_COUNT = 6;
+
+// --- Beginner guide: a bouncing finger showing a student what to do next.
+// Each one-time pointer (ring the bell, tap Worship, tap Three Refuges)
+// disappears for good once the student has done it themselves -- remembered
+// per student on this device.
+const guideFlagKey = (name, k) => `shrineGuide_${(name || 'unknown').trim().replace(/[.$#/\[\]]/g, '_')}_${k}`;
+const readGuideFlag = (name, k) => { try { return localStorage.getItem(guideFlagKey(name, k)) === '1'; } catch (e) { return false; } };
+const writeGuideFlag = (name, k) => { try { localStorage.setItem(guideFlagKey(name, k), '1'); } catch (e) { /* private mode -- the pointer just shows again */ } };
+const GuideHand = ({ dir = 'up', className = '' }) => (
+  <span
+    aria-hidden="true"
+    className={`pointer-events-none absolute z-[9999] text-4xl leading-none drop-shadow-lg ${className}`}
+    style={{ animation: `${dir === 'up' ? 'shrineHandUp' : 'shrineHandRight'} 0.9s ease-in-out infinite` }}
+  >
+    {dir === 'up' ? '👆' : '👉'}
+  </span>
+);
+// Raised, pressable-looking button so it's obvious these are meant to be tapped.
+const BUTTON_3D = 'flex items-center justify-center gap-1 text-sm font-bold text-amber-900 bg-gradient-to-b from-amber-200 to-amber-400 hover:from-amber-100 hover:to-amber-300 border-2 border-amber-500 border-b-[6px] rounded-2xl px-4 py-2 shadow-lg transition-all active:border-b-2 active:translate-y-1 active:shadow-sm';
 const STARTER_COINS = 20;
 const DAILY_LAMP_REWARD = 5;
 // Per-session caps on the 1-lotus-per-minute chanting/meditation reward --
@@ -985,6 +1004,16 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   // replaying the same one over and over doesn't farm lotus flowers).
   const [quickChantPlaying, setQuickChantPlaying] = useState(null); // null | 'worship' | 'refuge'
   const [quickChantLotusDates, setQuickChantLotusDates] = useState({});
+  const [guideSeen, setGuideSeen] = useState(() => ({
+    bell: readGuideFlag(studentName, 'bell'),
+    worship: readGuideFlag(studentName, 'worship'),
+    refuge: readGuideFlag(studentName, 'refuge'),
+  }));
+  const markGuideSeen = (k) => {
+    if (guideSeen[k]) return;
+    writeGuideFlag(studentName, k);
+    setGuideSeen(prev => ({ ...prev, [k]: true }));
+  };
   const quickChantAudioRef = useRef(null);
   // One lotus flower per minute spent actually chanting (panel open, even
   // just reading along -- not gated on clicking anything, but paused once
@@ -1017,20 +1046,25 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     }, 60000);
     return () => clearInterval(interval);
   }, [studentUid, chantingOpen, chantingIdle, meditatingMinutes != null]);
-  // One-time +10 lotus bonus once all 6 altar slots and both Golden
-  // Umbrellas are placed (the Bell is not required). Fires as soon as this
-  // becomes true (even if it was already true before this feature existed)
-  // and never again.
+  // +10 lotus EVERY time the altar becomes complete -- all 6 slots and both
+  // Golden Umbrellas offered (the Bell is not required). Offerings run out
+  // over time (see the expiry check below), so completing it again later
+  // earns it again. Judged on the transition from "not complete" to
+  // "complete", with the state at load time as the baseline -- opening the
+  // room with an altar that was already full doesn't pay out again, and the
+  // daily lotus cap in awardLotus still applies.
+  const altarWasCompleteRef = useRef(null);
   useEffect(() => {
-    if (!studentUid || fullAltarBonusAwarded) return;
-    const altarFull = Object.keys(placedItems).length >= SLOT_COUNT
-      && !!placedUmbrellas.left && !!placedUmbrellas.right;
-    if (!altarFull) return;
-    setFullAltarBonusAwarded(true);
-    persist({ fullAltarBonusAwarded: true });
-    const granted = awardLotus(10);
-    if (granted > 0) showToast(`🪷 Full altar bonus! +${granted} lotus flowers`);
-  }, [placedItems, placedUmbrellas, fullAltarBonusAwarded, studentUid]);
+    if (!studentUid || loading) return;
+    const filledSlots = Array.from({ length: SLOT_COUNT }).filter((_, i) => placedItems[i] && findOffering(placedItems[i].id)).length;
+    const complete = filledSlots >= SLOT_COUNT && !!placedUmbrellas.left && !!placedUmbrellas.right;
+    if (altarWasCompleteRef.current === null) { altarWasCompleteRef.current = complete; return; }
+    if (complete && !altarWasCompleteRef.current) {
+      const granted = awardLotus(10);
+      if (granted > 0) showToast(`🪷 Full altar bonus! +${granted} lotus flowers`);
+    }
+    altarWasCompleteRef.current = complete;
+  }, [placedItems, placedUmbrellas, loading, studentUid]);
   const [dragOverSlot, setDragOverSlot] = useState(null);
   const [ringing, setRinging] = useState(false);
   const [toast, setToast] = useState(null);
@@ -1269,6 +1303,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   };
   const handleRingBell = () => {
     if (!placedBell) return;
+    markGuideSeen('bell');
     playBellSound();
     setRinging(true);
     setTimeout(() => setRinging(false), 1200);
@@ -1331,6 +1366,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   // audio's own 'ended' event, not just clicking) awards a lotus, capped
   // at once per calendar day per button so replaying doesn't farm it.
   const playQuickChant = (key, filename) => {
+    markGuideSeen(key);
     if (quickChantPlaying === key) { stopQuickChant(); return; }
     stopQuickChant();
     const audio = new Audio(chantAudioUrl(filename));
@@ -1477,6 +1513,36 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   }, [meditatingMinutes, meditationRemainingSeconds]);
 
   const buddha = findBuddha(buddhaId);
+
+  // --- Beginner guide: what should a student do next? ---
+  // Buddha image -> 6 altar slots and both Golden Umbrellas (that completes
+  // the +10 lotus altar) -> Bell -> ring the Bell -> then the Worship /
+  // Three Refuges buttons. If they can't afford the next step, tell them to
+  // earn coins from lessons instead. Not shown to a teacher previewing.
+  const guideActive = !loading && !isTeacherPreview && !chantingOpen && meditatingMinutes == null
+    && !meditationPickerOpen && !showVisitorsPanel && !visitingStudentName;
+  const filledSlotCount = Array.from({ length: SLOT_COUNT }).filter((_, i) => placedItems[i] && findOffering(placedItems[i].id)).length;
+  const umbrellaCount = (placedUmbrellas.left ? 1 : 0) + (placedUmbrellas.right ? 1 : 0);
+  const cheapestSlotOffering = OFFERING_OPTIONS
+    .filter(o => o.id !== 'umbrella' && o.id !== 'bell' && !(o.requiresBodhiStage != null && o.requiresBodhiStage > bodhiStageIndex))
+    .reduce((best, o) => (!best || o.cost < best.cost ? o : best), null);
+  const cheapestBuddha = BUDDHA_OPTIONS
+    .filter(o => !(o.requiresBodhiStage != null && o.requiresBodhiStage > bodhiStageIndex))
+    .reduce((best, o) => (!best || o.cost < best.cost ? o : best), null);
+  let guideStage = 'done';
+  let guideTargetId = null;
+  let guideNeedCost = 0;
+  if (!buddha) { guideStage = 'buddha'; guideTargetId = cheapestBuddha?.id || null; guideNeedCost = cheapestBuddha?.cost || 0; }
+  else if (filledSlotCount < SLOT_COUNT) { guideStage = 'offer'; guideTargetId = cheapestSlotOffering?.id || null; guideNeedCost = cheapestSlotOffering?.cost || 0; }
+  else if (umbrellaCount < 2) { guideStage = 'offer'; guideTargetId = 'umbrella'; guideNeedCost = UMBRELLA_OPTION.cost; }
+  else if (!placedBell) { guideStage = 'bell'; guideTargetId = 'bell'; guideNeedCost = BELL_OPTION.cost; }
+  else if (!guideSeen.bell) { guideStage = 'ring'; }
+  if (['buddha', 'offer', 'bell'].includes(guideStage) && coinBalance < guideNeedCost) guideStage = 'nocoin';
+  const showBuyGuide = guideActive && ['buddha', 'offer', 'bell'].includes(guideStage);
+  const showRingGuide = guideActive && guideStage === 'ring';
+  const showWorshipGuide = guideActive && (guideStage === 'done' || guideStage === 'nocoin');
+  const worshipHand = showWorshipGuide && !guideSeen.worship;
+  const refugeHand = showWorshipGuide && !guideSeen.refuge;
   const dimmed = hasLampPlaced && lastLampLitDate === todayKey();
 
   return (
@@ -1484,6 +1550,8 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
       <style>{`
         @keyframes shrinePetalFall { 0% { transform: translate(0, 0) rotate(0deg); opacity: 0; } 8% { opacity: 0.9; } 92% { opacity: 0.9; } 100% { transform: translate(var(--petal-drift), 110vh) rotate(360deg); opacity: 0; } }
         @keyframes shrineGuideLineFade { 0% { opacity: 0; transform: translateY(6px); } 15% { opacity: 1; transform: translateY(0); } 85% { opacity: 1; } 100% { opacity: 0; } }
+        @keyframes shrineHandUp { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-9px); } }
+        @keyframes shrineHandRight { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(9px); } }
         @keyframes buttonSparkleRise { 0% { opacity: 0; transform: translateY(0) scale(0.5); } 25% { opacity: 1; } 100% { opacity: 0; transform: translateY(-32px) scale(1); } }
       `}</style>
       <button
@@ -1550,13 +1618,15 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
             </div>
           );
           const shopBtn = (
-            <button
-              key="shop"
-              onClick={() => setShopOpen(prev => !prev)}
-              className="flex items-center gap-1 bg-white hover:bg-amber-50 text-amber-700 text-sm font-semibold px-3 py-2 rounded-full shadow-lg border-2 border-amber-300"
-            >
-              {shopOpen ? '✕ Close Shop' : '🛒 Merit Shop'}
-            </button>
+            <div key="shop" className="relative">
+              <button
+                onClick={() => setShopOpen(prev => !prev)}
+                className={`flex items-center gap-1 bg-white hover:bg-amber-50 text-amber-700 text-sm font-semibold px-3 py-2 rounded-full shadow-lg border-2 ${showBuyGuide && !shopOpen ? 'border-emerald-500 ring-4 ring-emerald-300 animate-pulse' : 'border-amber-300'}`}
+              >
+                {shopOpen ? '✕ Close Shop' : '🛒 Merit Shop'}
+              </button>
+              {showBuyGuide && !shopOpen && <GuideHand dir="right" className="right-full mr-1 top-1/2 -translate-y-1/2" />}
+            </div>
           );
           const visitorsBtn = !isTeacherPreview && (
             <button
@@ -1806,6 +1876,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
                   className={`absolute left-[-72px] bottom-[52px] w-20 h-20 flex items-center justify-center rounded-full transition-transform hover:scale-110 drop-shadow-lg ${ringing ? 'animate-pulse' : ''}`}
                 >
                   <OfferingIcon offering={BELL_OPTION} className="text-6xl leading-none" />
+                  {showRingGuide && <GuideHand dir="up" className="left-1/2 -translate-x-1/2 top-full -mt-2" />}
                 </button>
               )}
 
@@ -1945,24 +2016,26 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
             {/* Quick chants, always visible right under the altar's
                 offerings (not tucked inside the Merit Shop) -- one tap to
                 play, no need to open anything first. */}
-            <div className="flex gap-2 mt-4">
+            <div className={`flex gap-3 mt-4 ${worshipHand || refugeHand ? 'mb-14' : ''}`}>
               <div className="relative">
                 <button
                   onClick={() => playQuickChant('worship', 'Worship')}
-                  className="flex items-center justify-center gap-1 text-sm font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl px-4 py-2"
+                  className={`${BUTTON_3D} ${worshipHand ? 'ring-4 ring-emerald-300' : ''}`}
                 >
                   🙏 Worship
                 </button>
                 {quickChantPlaying === 'worship' && <EmojiParticles emoji="🙏" />}
+                {worshipHand && <GuideHand dir="up" className="left-1/2 -translate-x-1/2 top-full" />}
               </div>
               <div className="relative">
                 <button
                   onClick={() => playQuickChant('refuge', 'Taking Refuge')}
-                  className="flex items-center justify-center gap-1 text-sm font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl px-4 py-2"
+                  className={`${BUTTON_3D} ${refugeHand ? 'ring-4 ring-emerald-300' : ''}`}
                 >
                   🕊️ The Three Refuges
                 </button>
                 {quickChantPlaying === 'refuge' && <EmojiParticles emoji="🕊️" />}
+                {refugeHand && <GuideHand dir="up" className="left-1/2 -translate-x-1/2 top-full" />}
               </div>
             </div>
 
@@ -2019,9 +2092,10 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
                     key={option.id}
                     onClick={() => handleBuyBuddha(option)}
                     disabled={owned}
-                    className={`w-full flex items-center justify-between p-3 rounded-xl border ${owned ? 'bg-emerald-50 border-emerald-300' : locked ? 'bg-gray-50 border-gray-200 opacity-60' : 'bg-amber-50 border-amber-200 hover:bg-amber-100'}`}
+                    className={`w-full flex items-center justify-between p-3 rounded-xl border ${owned ? 'bg-emerald-50 border-emerald-300' : locked ? 'bg-gray-50 border-gray-200 opacity-60' : 'bg-amber-50 border-amber-200 hover:bg-amber-100'} ${guideActive && guideStage === 'buddha' && guideTargetId === option.id ? 'ring-4 ring-emerald-400 animate-pulse' : ''}`}
                   >
                     <div className="flex items-center gap-3">
+                      {guideActive && guideStage === 'buddha' && guideTargetId === option.id && <span className="text-2xl animate-bounce">👉</span>}
                       <div className="w-8 h-9" dangerouslySetInnerHTML={{ __html: option.svg }} />
                       <span className="font-semibold text-gray-800">{option.name}</span>
                     </div>
@@ -2047,9 +2121,10 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
                     onDragStart={(e) => handleDragStart(e, option.id)}
                     onClick={() => handleBuyOffering(option)}
                     disabled={locked || soldOut}
-                    className={`w-full flex items-center justify-between p-3 rounded-xl border ${locked ? 'bg-gray-50 border-gray-200 opacity-60' : 'bg-amber-50 border-amber-200 hover:bg-amber-100 cursor-grab'}`}
+                    className={`w-full flex items-center justify-between p-3 rounded-xl border ${locked ? 'bg-gray-50 border-gray-200 opacity-60' : 'bg-amber-50 border-amber-200 hover:bg-amber-100 cursor-grab'} ${showBuyGuide && guideStage !== 'buddha' && guideTargetId === option.id ? 'ring-4 ring-emerald-400 animate-pulse' : ''}`}
                   >
                     <span className="font-semibold text-gray-800 flex items-center gap-2">
+                      {showBuyGuide && guideStage !== 'buddha' && guideTargetId === option.id && <span className="text-2xl animate-bounce">👉</span>}
                       <OfferingIcon offering={option} className="w-5 h-5 inline-flex items-center justify-center flex-shrink-0" />
                       <span>{option.name}</span>
                     </span>
@@ -2058,6 +2133,34 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
                 );
               })}
             </div>
+        </div>
+      )}
+
+      {guideActive && (showBuyGuide || showRingGuide || guideStage === 'nocoin' || worshipHand || refugeHand) && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[9990] w-[92%] max-w-md bg-white/95 backdrop-blur-sm border-2 border-emerald-400 rounded-2xl shadow-2xl px-4 py-3 text-center">
+          {guideStage === 'buddha' && showBuyGuide && (<>
+            <p className="text-sm font-bold text-gray-800">Tap 🛒 Merit Shop, then pick a Buddha image.</p>
+            <p className="text-xs text-gray-600 mt-0.5">🛒 Merit Shop ကိုနှိပ်ပြီး ဘုရားရုပ်ပွား ရွေးပါ။</p>
+          </>)}
+          {guideStage === 'offer' && showBuyGuide && (<>
+            <p className="text-sm font-bold text-gray-800">Offer 6 items and 2 Golden Umbrellas — {filledSlotCount}/{SLOT_COUNT} items · {umbrellaCount}/2 umbrellas. Complete it for 🪷 +10 lotus!</p>
+            <p className="text-xs text-gray-600 mt-0.5">လှူဖွယ် ၆ ခုနဲ့ ရွှေထီး ၂ လက် လှူပါ။ ပြည့်ရင် 🪷 ၁၀ ပွင့် ရပါမယ်။</p>
+          </>)}
+          {guideStage === 'bell' && showBuyGuide && (<>
+            <p className="text-sm font-bold text-gray-800">Now offer the 🔔 Bell.</p>
+            <p className="text-xs text-gray-600 mt-0.5">ခေါင်းလောင်း လှူပါ။</p>
+          </>)}
+          {showRingGuide && (<>
+            <p className="text-sm font-bold text-gray-800">Tap the 🔔 Bell to ring it!</p>
+            <p className="text-xs text-gray-600 mt-0.5">ခေါင်းလောင်းကို နှိပ်ပြီး ထိုးပါ။</p>
+          </>)}
+          {guideStage === 'nocoin' && (<>
+            <p className="text-sm font-bold text-gray-800">Not enough coins yet. Go back (🏡) and do your lessons to earn coins!</p>
+            <p className="text-xs text-gray-600 mt-0.5">coin မလုံလောက်သေးပါ။ 🏡 ကိုနှိပ်ပြီး သင်ခန်းစာတွေ သွားလုပ်ပါ။</p>
+          </>)}
+          {(worshipHand || refugeHand) && (
+            <p className="text-sm font-bold text-gray-800 mt-1">Tap 🙏 Worship and 🕊️ The Three Refuges to chant. / နှိပ်ပြီး ရှိခိုးပါ။</p>
+          )}
         </div>
       )}
 
