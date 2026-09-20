@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useLayoutEffect } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, doc, setDoc, updateDoc, arrayUnion, onSnapshot, query, orderBy, serverTimestamp, addDoc, getDoc, where, getDocs, limit, deleteDoc, writeBatch, increment } from 'firebase/firestore';
+import { collection, doc, setDoc, updateDoc, arrayUnion, onSnapshot, query, orderBy, serverTimestamp, addDoc, getDoc, where, getDocs, limit, deleteDoc, writeBatch, increment, runTransaction } from 'firebase/firestore';
 import {
   BookOpen, Edit2, Zap, RotateCw, Upload, Download, CheckCircle, MessageCircle, Send, Heart,
   Trophy, Timer, Pause, ChevronDown, ChevronRight, Gamepad2, X, ExternalLink, Youtube, Music,
@@ -903,7 +903,11 @@ export default function AbhidhammaApp({ entryRequest, onExit, isActive }) {
   const ABHI_POINTS_PER_COIN=50;
   const [myAbhiTotalScore,setMyAbhiTotalScore]=useState(0);
   const [abhiCoinsTransferredOut,setAbhiCoinsTransferredOut]=useState(0);
-  const abhiCoinBalance=Math.max(0,Math.floor(myAbhiTotalScore/ABHI_POINTS_PER_COIN)-abhiCoinsTransferredOut);
+  // Stays false until the already-deposited total has really been read --
+  // before that it reads as 0, which made every earned coin look
+  // depositable again (on reopening, or if the read was slow/failed).
+  const [abhiLedgerLoaded,setAbhiLedgerLoaded]=useState(false);
+  const abhiCoinBalance=abhiLedgerLoaded?Math.max(0,Math.floor(myAbhiTotalScore/ABHI_POINTS_PER_COIN)-abhiCoinsTransferredOut):0;
   useEffect(()=>{
     if(role!=='Student'||!effectiveUserId)return;
     const unsub=onSnapshot(query(abhiScoresRef(),where('userId','==',effectiveUserId)),snap=>{
@@ -915,29 +919,37 @@ export default function AbhidhammaApp({ entryRequest, onExit, isActive }) {
   useEffect(()=>{
     if(role!=='Student'||!studentProfile?.name)return;
     const sanitize=k=>(k||'unknown').trim().replace(/[.$#/\[\]]/g,'_');
+    setAbhiLedgerLoaded(false);
     getDoc(doc(db,'artifacts/shrine-room-app/public/data/roster',sanitize(studentProfile.name)))
-      .then(snap=>setAbhiCoinsTransferredOut(snap.exists()?(snap.data().abhidhammaCoinsTransferred||0):0))
-      .catch(()=>{});
+      .then(snap=>{setAbhiCoinsTransferredOut(snap.exists()?(snap.data().abhidhammaCoinsTransferred||0):0);setAbhiLedgerLoaded(true);})
+      .catch(e=>console.error('Could not read Abhidhamma deposit total:',e));
   },[role,studentProfile?.name]);
   const handleDepositAbhiCoinsToShrineRoom=async()=>{
-    const depositable=abhiCoinBalance;
-    if(depositable<=0)return;
-    const confirmed=window.confirm(`Deposit ${depositable} gold coin(s) into your Shrine Room wallet?`);
+    if(!abhiLedgerLoaded)return; // total not read yet -- don't guess it's 0
+    const earned=Math.floor(myAbhiTotalScore/ABHI_POINTS_PER_COIN);
+    const preview=abhiCoinBalance;
+    if(preview<=0)return;
+    const confirmed=window.confirm(`Deposit ${preview} gold coin(s) into your Shrine Room wallet?`);
     if(!confirmed)return;
     const sanitize=k=>(k||'unknown').trim().replace(/[.$#/\[\]]/g,'_');
     const shrineRef=doc(db,'artifacts/shrine-room-app/public/data/roster',sanitize(studentProfile.name));
     try{
-      // increment() (not "current balance + depositable") -- coinBalance
-      // is also written concurrently from Shrine Room's own purchases and
-      // from SmartStudy/Myanmar Poems' identical deposit buttons, so
-      // reading the balance and writing back a computed absolute number
-      // is a lost-update race: whichever write commits last would
-      // silently discard the others.
-      const shrineSnap=await getDoc(shrineRef);
+      // Decided inside one transaction from the stored total (not React
+      // state) so repeat taps / two tabs can't deposit the same coins, and
+      // the recorded total only ever goes up. increment() for the balance
+      // because Shrine Room's own purchases and other apps' deposits write it
+      // concurrently.
       const SHRINE_STARTER_COINS=20;
-      const newTransferredOut=abhiCoinsTransferredOut+depositable;
-      await setDoc(shrineRef,{studentName:studentProfile.name,coinBalance:shrineSnap.exists()?increment(depositable):SHRINE_STARTER_COINS+depositable,abhidhammaCoinsTransferred:newTransferredOut},{merge:true});
-      setAbhiCoinsTransferredOut(newTransferredOut);
+      const result=await runTransaction(db,async tx=>{
+        const snap=await tx.get(shrineRef);
+        const stored=snap.exists()?(snap.data().abhidhammaCoinsTransferred||0):0;
+        const depositable=Math.max(0,earned-stored);
+        if(depositable<=0)return{depositable:0,total:stored};
+        const total=stored+depositable;
+        tx.set(shrineRef,{studentName:studentProfile.name,coinBalance:snap.exists()?increment(depositable):SHRINE_STARTER_COINS+depositable,abhidhammaCoinsTransferred:total},{merge:true});
+        return{depositable,total};
+      });
+      setAbhiCoinsTransferredOut(result.total);
     }catch(e){console.error('Error depositing coins to Shrine Room:',e);}
   };
   // Bulk-fill every lesson in the current class up to 5 sequential images
