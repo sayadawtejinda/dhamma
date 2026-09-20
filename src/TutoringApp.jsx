@@ -2454,6 +2454,7 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
         studentUid: studentUid,
         studentName: student.name,
         message: message,
+        status: 'approved',
         createdAt: serverTimestamp(),
         expiresAt: Timestamp.fromDate(expires)
       });
@@ -4270,6 +4271,42 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
 
   const pendingStudents = useMemo(() => students.filter(s => s.isActive === 'pending'), [students]);
   const pendingNameChanges = useMemo(() => students.filter(s => s.pendingName), [students]);
+
+  // Outstanding-student announcements a student wrote themselves (paid for
+  // with 3000 Shrine coins in Avatar) wait here for the teacher's OK before
+  // they scroll across anyone's screen. A tiny query -- normally zero docs.
+  const [pendingStarAnnouncements, setPendingStarAnnouncements] = useState([]);
+  useEffect(() => {
+    const unsub = onSnapshot(
+      query(starAnnouncementsCollection, where('status', '==', 'pending')),
+      (snap) => setPendingStarAnnouncements(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+      (e) => console.error('Error loading pending announcements:', e)
+    );
+    return () => unsub();
+  }, []);
+  const handleApproveStarAnnouncement = async (ann) => {
+    const expires = new Date();
+    expires.setDate(expires.getDate() + 7);
+    try {
+      await updateDoc(doc(db, `${publicDataPath}/starAnnouncements`, ann.id), {
+        status: 'approved',
+        approvedAt: serverTimestamp(),
+        expiresAt: Timestamp.fromDate(expires),
+      });
+    } catch (e) { console.error('Error approving announcement:', e); }
+  };
+  // Rejecting gives the student their coins back and frees their weekly slot.
+  const handleRejectStarAnnouncement = async (ann) => {
+    if (!window.confirm(`Reject ${ann.studentName}'s announcement? Their ${ann.cost || 0} coins will be refunded.`)) return;
+    try {
+      const annRef = doc(db, `${publicDataPath}/starAnnouncements`, ann.id);
+      const shrineRef = doc(db, SHRINE_ROSTER_PATH_LOCAL, sanitizeShrineKeyLocal(ann.studentName));
+      const batch = writeBatch(db);
+      batch.update(annRef, { status: 'rejected', expiresAt: Timestamp.fromDate(new Date()) });
+      if (ann.cost) batch.set(shrineRef, { coinBalance: increment(ann.cost), lastStarAnnounceWeek: deleteField() }, { merge: true });
+      await batch.commit();
+    } catch (e) { console.error('Error rejecting announcement:', e); }
+  };
   const currentStudents = useMemo(() => students.filter(s => s.isActive === true || s.isActive === false), [students]);
   const trophyRequests = useMemo(() => students.filter(s => s.trophyRequested === true), [students]);
   
@@ -4642,6 +4679,12 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
               <span
                 className="absolute top-0.5 right-0.5 w-3 h-3 bg-indigo-500 rounded-full border-2 border-white animate-pulse"
                 title={`${pendingNameChanges.length} student(s) requesting a name change`}
+              ></span>
+            )}
+            {pendingStarAnnouncements.length > 0 && (
+              <span
+                className="absolute top-0.5 right-5 w-3 h-3 bg-blue-500 rounded-full border-2 border-white animate-pulse"
+                title={`${pendingStarAnnouncements.length} announcement(s) waiting for approval`}
               ></span>
             )}
           </button>
@@ -6252,6 +6295,28 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
       {viewMode === 'students' && (
         <div className="bg-rose-50/70 backdrop-blur-sm p-6 rounded-xl shadow-lg border border-rose-200">
           
+          {pendingStarAnnouncements.length > 0 && (
+            <div className="mb-8">
+              <h3 className="text-xl font-semibold mb-4 text-blue-800">
+                ⭐ Announcements waiting <span className="ml-3 text-base font-normal">({pendingStarAnnouncements.length})</span>
+              </h3>
+              <div className="space-y-3">
+                {pendingStarAnnouncements.map(ann => (
+                  <div key={ann.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 rounded-lg bg-blue-50 border border-blue-200">
+                    <div className="mb-3 sm:mb-0 sm:mr-4">
+                      <p className="font-bold text-blue-900">{ann.studentName}</p>
+                      <p className="text-blue-800 break-words">{ann.message}</p>
+                    </div>
+                    <div className="flex space-x-3 flex-shrink-0">
+                      <button onClick={() => handleApproveStarAnnouncement(ann)} className="px-5 py-2 rounded-lg text-sm font-bold text-white shadow-md bg-blue-500 hover:bg-blue-600">Approve</button>
+                      <button onClick={() => handleRejectStarAnnouncement(ann)} className="px-5 py-2 rounded-lg text-sm font-bold text-white shadow-md bg-gray-400 hover:bg-gray-500">Reject</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {trophyRequests.length > 0 && (
             <div className="mb-8">
               <h3 className="text-xl font-semibold mb-4 text-yellow-800">
@@ -9500,6 +9565,7 @@ function WeeklySchedule({ role, targetStudentUid }) {
         const starSnap = await getDocs(starQuery);
         starMessages = starSnap.docs
           .map(d => d.data())
+          .filter(d => d.status !== 'pending' && d.status !== 'rejected')
           .sort((a, b) => (b.createdAt?.toDate?.() || 0) - (a.createdAt?.toDate?.() || 0));
       } catch (e) {
         console.error("Error fetching star messages:", e);
@@ -10318,16 +10384,6 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpen
   const [targetStudentUid, setTargetStudentUid] = useState(null); 
   const [view, setView] = useState('login'); 
   const [announcements, setAnnouncements] = useState([]); 
-  const [starAnnouncements, setStarAnnouncements] = useState([]);
-  const [dismissedStars, setDismissedStars] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem('dismissedStarAnnouncements') || '[]');
-    } catch (e) { return []; }
-  });
-  
-  const [displayedStar, setDisplayedStar] = useState(null);
-  const handledStarIdsRef = useRef(new Set());
-  const hasShownStarThisSessionRef = useRef(false);
   const [roleCheckDone, setRoleCheckDone] = useState(false);
   const handleLoginButtonClick = () => {
     if (role === 'teacher') {
@@ -10447,64 +10503,6 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpen
     
     return () => unsubscribe();
   }, [isAuthReady]); 
-
-  useEffect(() => {
-    if (!db || !isAuthReady) return;
-    
-    const q = query(
-      starAnnouncementsCollection,
-      where("expiresAt", ">", Timestamp.now()),
-      orderBy("expiresAt", "desc"),
-      limit(10)
-    );
-    
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setStarAnnouncements(list);
-    }, (error) => {
-      console.error("Error fetching star announcements:", error);
-    });
-    
-    return () => unsubscribe();
-  }, [isAuthReady]);
-
-  const dismissStarAnnouncement = async (id) => {
-    setDismissedStars(prev => [...prev, id]);
-    if (role === 'student' && targetStudentUid) {
-      try {
-        await updateDoc(doc(db, `${publicDataPath}/students`, targetStudentUid), {
-          seenStarAnnouncements: arrayUnion(id)
-        });
-      } catch (e) {
-        console.error("Error saving seen star announcement:", e);
-      }
-    } else {
-      try {
-        const updated = [...dismissedStars, id];
-        localStorage.setItem('dismissedStarAnnouncements', JSON.stringify(updated));
-      } catch (e) {}
-    }
-  };
-  const seenStarIds = role === 'student'
-    ? [...dismissedStars, ...(studentProfile?.seenStarAnnouncements || [])]
-    : dismissedStars;
-  const starDataReady = roleCheckDone && (role !== 'student' || !!studentProfile);
-
-  useEffect(() => {
-    if (!starDataReady || displayedStar || hasShownStarThisSessionRef.current) return;
-    const next = starAnnouncements.find(a => !seenStarIds.includes(a.id) && !handledStarIdsRef.current.has(a.id));
-    if (!next) return;
-    handledStarIdsRef.current.add(next.id);
-    hasShownStarThisSessionRef.current = true;
-    setDisplayedStar(next);
-    dismissStarAnnouncement(next.id);
-  }, [starAnnouncements, seenStarIds, starDataReady, displayedStar]);
-
-  useEffect(() => {
-    if (!displayedStar) return;
-    const timer = setTimeout(() => setDisplayedStar(null), 10000);
-    return () => clearTimeout(timer);
-  }, [displayedStar?.id]);
 
   const checkUserRole = async (uid) => {
     console.log('[DIAG] checkUserRole called. uid:', uid, 'current targetStudentUid:', targetStudentUid, 'current view:', view);
@@ -10770,21 +10768,6 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpen
   return (
     <div className="min-h-screen bg-indigo-50 font-sans">
       <audio id="notification-sound" src="https://raw.githubusercontent.com/nathantun93/bell/main/message.mp3" preload="auto"></audio>
-      {displayedStar && (
-        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 max-w-md w-[90%]">
-          <div className="bg-gradient-to-r from-yellow-100 to-orange-100 border-2 border-yellow-400 rounded-2xl shadow-2xl p-5">
-            <p className="text-xs font-bold text-yellow-600 uppercase tracking-widest mb-1">⭐ Outstanding Student</p>
-            <p className="text-lg font-bold text-yellow-900 mb-1">{displayedStar.studentName}</p>
-            <p className="text-yellow-800 mb-3">{displayedStar.message}</p>
-            <div className="flex justify-center">
-              <button onClick={() => setDisplayedStar(null)} className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold px-6 py-2 rounded-lg shadow-md">
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {isAuthReady && user && (
         <>
           {(role === 'teacher' || role === 'student') && view !== role && (

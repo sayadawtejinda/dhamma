@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { doc, getDoc, setDoc, increment } from 'firebase/firestore';
+import { doc, getDoc, setDoc, increment, collection, runTransaction, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { db } from './firebase';
 import { appId } from './firebaseConfig';
 import { HOME_BACKGROUNDS } from './homeBackgrounds';
@@ -23,6 +23,20 @@ const sanitizeShrineKey = (key) => (key || 'unknown').trim().replace(/[.$#/\[\]]
 // profile doc purely so the home page can pick it up without its own extra
 // Firestore listener. See handleEquip's homeBackground special-case below.
 const STUDENTS_COLLECTION_PATH = `artifacts/${appId}/public/data/students`;
+
+// Students can announce themselves as "outstanding" (the strip that scrolls
+// across the top of every app -- see StarTicker.jsx). Costs Shrine coins, one
+// per week, and only shows once the teacher approves it.
+const STAR_ANNOUNCEMENTS_PATH = `artifacts/${appId}/public/data/starAnnouncements`;
+const STAR_ANNOUNCE_COST = 3000;
+const STAR_MAX_LENGTH = 120;
+// Monday-based week id, so "once a week" resets the same day for everyone.
+const currentWeekKey = () => {
+  const d = new Date();
+  const day = (d.getDay() + 6) % 7;
+  d.setDate(d.getDate() - day);
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+};
 
 // --- Catalog -----------------------------------------------------------
 // One free ("cost: 0") default per category so a brand-new avatar already
@@ -166,6 +180,9 @@ export default function AvatarApp({ entryRequest, onExit }) {
   const [isEditingRename, setIsEditingRename] = useState(false);
   const [renameInput, setRenameInput] = useState('');
   const [showLockInfo, setShowLockInfo] = useState(false);
+  const [lastStarWeek, setLastStarWeek] = useState(null);
+  const [starText, setStarText] = useState('');
+  const [starSending, setStarSending] = useState(false);
   // Same "visit someone else's page, see who's visited mine" idea just
   // added to Shrine Room -- kept in a separate `avatarRecentVisitors` field
   // (not Shrine's own `recentVisitors`) even though both apps share this
@@ -225,6 +242,7 @@ export default function AvatarApp({ entryRequest, onExit }) {
             const avatarOwnedData = readNestedWithLegacyFallback(data, 'avatarOwned');
             setCoinBalance(data.coinBalance ?? 0);
             setLotusCount(data.lotusCount ?? 0);
+            setLastStarWeek(data.lastStarAnnounceWeek || null);
             setConfig({ ...DEFAULT_CONFIG, ...avatarData });
             setRecentVisitors(data.avatarRecentVisitors || []);
             setOwned({
@@ -293,6 +311,55 @@ export default function AvatarApp({ entryRequest, onExit }) {
     if (!studentUid) return;
     setDoc(doc(db, STUDENTS_COLLECTION_PATH, studentUid), { pendingName: null }, { merge: true }).catch(() => {});
     setStudentInfo(prev => ({ ...prev, pendingName: null }));
+  };
+
+  const announcedThisWeek = lastStarWeek === currentWeekKey();
+  const handleSendStar = async () => {
+    const message = starText.trim();
+    if (!message || !rosterRef || starSending) return;
+    setStarSending(true);
+    try {
+      const weekKey = currentWeekKey();
+      const annRef = doc(collection(db, STAR_ANNOUNCEMENTS_PATH));
+      const expires = new Date();
+      expires.setDate(expires.getDate() + 14);
+      // One transaction from the stored numbers (not this screen's copy), so a
+      // double tap or a second tab can't spend twice or announce twice.
+      const result = await runTransaction(db, async (tx) => {
+        const snap = await tx.get(rosterRef);
+        const data = snap.exists() ? snap.data() : {};
+        if (data.lastStarAnnounceWeek === weekKey) return { ok: false, reason: 'week' };
+        if ((data.coinBalance ?? 0) < STAR_ANNOUNCE_COST) return { ok: false, reason: 'coins', balance: data.coinBalance ?? 0 };
+        tx.set(rosterRef, { studentName, coinBalance: increment(-STAR_ANNOUNCE_COST), lastStarAnnounceWeek: weekKey }, { merge: true });
+        tx.set(annRef, {
+          studentUid,
+          studentName,
+          message,
+          status: 'pending',
+          source: 'student',
+          cost: STAR_ANNOUNCE_COST,
+          createdAt: serverTimestamp(),
+          expiresAt: Timestamp.fromDate(expires),
+        });
+        return { ok: true };
+      });
+      if (result.ok) {
+        setCoinBalance(b => b - STAR_ANNOUNCE_COST);
+        setLastStarWeek(weekKey);
+        setStarText('');
+        showToast('Sent! Your teacher will approve it.');
+      } else if (result.reason === 'week') {
+        setLastStarWeek(weekKey);
+        showToast('You already announced this week.');
+      } else {
+        setCoinBalance(result.balance);
+        showToast('Not enough coins.');
+      }
+    } catch (e) {
+      console.error('Error sending announcement:', e);
+      showToast('Something went wrong. Please try again.');
+    }
+    setStarSending(false);
   };
 
   const isOwned = (categoryKey, id) => owned[categoryKey]?.includes(id);
@@ -431,21 +498,33 @@ export default function AvatarApp({ entryRequest, onExit }) {
 
       <h1 className="text-2xl font-bold text-indigo-800 mb-1 flex items-center justify-center gap-2">
         {studentName}'s Avatar
-        {!isTeacherPreview && !studentInfo.pendingName && !isEditingRename && !canRequestNameChange && (
+        {!isTeacherPreview && !studentInfo.pendingName && !isEditingRename && (
           <span className="relative">
             <button
               onClick={() => setShowLockInfo(v => !v)}
-              className="text-lg opacity-70 hover:opacity-100 transition-opacity"
-              title="Change My Name -- locked"
+              className={`text-lg transition-opacity ${canRequestNameChange ? 'opacity-100' : 'opacity-70 hover:opacity-100'}`}
+              title={canRequestNameChange ? 'Change My Name -- unlocked' : 'Change My Name -- locked'}
             >
-              🔒
+              {canRequestNameChange ? '🔓' : '🔒'}
             </button>
             {showLockInfo && (
               <div className="absolute z-10 top-full mt-2 left-1/2 -translate-x-1/2 w-56 rounded-xl border-2 border-gray-200 bg-white p-3 text-center shadow-xl">
                 <p className="font-bold text-gray-600 text-sm">Change My Name</p>
-                <p className="text-xs text-gray-500 mt-1">
-                  🪷 {lotusCount} / {nameChangeThreshold} lotus flowers from Shrine Room needed to unlock
-                </p>
+                {canRequestNameChange ? (
+                  <>
+                    <p className="text-xs text-gray-500 mt-1">🔓 It's open! You can change your name any time you want.</p>
+                    <button
+                      onClick={() => { setShowLockInfo(false); setRenameInput(studentInfo.name || studentName); setIsEditingRename(true); }}
+                      className="mt-2 w-full rounded-lg bg-pink-500 hover:bg-pink-600 text-white text-sm font-semibold py-1.5"
+                    >
+                      Change My Name
+                    </button>
+                  </>
+                ) : (
+                  <p className="text-xs text-gray-500 mt-1">
+                    🪷 {lotusCount} / {nameChangeThreshold} lotus flowers from Shrine Room needed to unlock
+                  </p>
+                )}
               </div>
             )}
           </span>
@@ -453,7 +532,7 @@ export default function AvatarApp({ entryRequest, onExit }) {
       </h1>
       <p className="text-sm text-gray-500 mb-6">Your own little reflection -- dress it up with coins you've earned.</p>
 
-      {!isTeacherPreview && (studentInfo.pendingName || isEditingRename || canRequestNameChange) && (
+      {!isTeacherPreview && (studentInfo.pendingName || isEditingRename) && (
         <div className="w-full max-w-sm mb-6">
           <style>{`
             @keyframes renameCardGlow {
@@ -499,16 +578,32 @@ export default function AvatarApp({ entryRequest, onExit }) {
                 </button>
               </div>
             </div>
-          ) : canRequestNameChange ? (
-            <button
-              onClick={() => { setRenameInput(studentInfo.name || studentName); setIsEditingRename(true); }}
-              className="rename-card-unlocked w-full rounded-2xl border-2 border-pink-300 bg-gradient-to-br from-pink-50 to-rose-100 p-5 text-center hover:from-pink-100 hover:to-rose-200 transition-colors"
-            >
-              <p className="text-4xl mb-2"><span className="rename-lotus-float">🪷</span></p>
-              <p className="font-bold text-pink-700">Change My Name</p>
-              <p className="text-xs text-pink-500 mt-1">Unlocked! Tap to pick a new name.</p>
-            </button>
           ) : null}
+        </div>
+      )}
+
+      {!isTeacherPreview && (
+        <div className="w-full max-w-sm mb-6 rounded-2xl border-2 border-amber-300 bg-amber-50 p-4">
+          <p className="font-bold text-amber-800 mb-2">⭐ Announce</p>
+          {announcedThisWeek ? (
+            <p className="text-sm text-amber-700">✅ Done for this week.</p>
+          ) : (
+            <>
+              <textarea
+                value={starText}
+                onChange={(e) => setStarText(e.target.value.slice(0, STAR_MAX_LENGTH))}
+                rows={2}
+                className="w-full p-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 mb-2"
+              />
+              <button
+                onClick={handleSendStar}
+                disabled={!starText.trim() || starSending || coinBalance < STAR_ANNOUNCE_COST}
+                className="w-full rounded-lg bg-amber-500 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold py-2"
+              >
+                ⭐ 🪙 {STAR_ANNOUNCE_COST}
+              </button>
+            </>
+          )}
         </div>
       )}
 
