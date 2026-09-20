@@ -31,6 +31,13 @@ const FREE_PLOTS = 10;
 // Cost to unlock the NEXT plot grows by 50% with every plot already bought
 // (see PLOT_COST_GROWTH), so the first few are cheap and a big world takes
 // a long time.
+// At most this many plots can be bought per week (Monday-based week).
+const LAND_PLOTS_PER_WEEK = 5;
+const currentWeekKey = () => {
+  const d = new Date();
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+};
 const FIRST_PLOT_COST = 40;
 const PLOT_COST_GROWTH = 1.5; // each plot bought makes the next one cost 150% of the last
 const plotCost = (alreadyUnlocked) => Math.round(FIRST_PLOT_COST * Math.pow(PLOT_COST_GROWTH, Math.max(0, alreadyUnlocked - FREE_PLOTS)));
@@ -141,6 +148,13 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
   // occasionally a butterfly instead. Each flyer removes itself once its
   // flight animation finishes.
   const [flyers, setFlyers] = useState([]);
+  // Touching a bird or butterfly startles it: it flaps off fast and is gone.
+  const [fleeing, setFleeing] = useState({}); // id -> { x, y } where it was when touched
+  const startleFlyer = (id, e) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    setFleeing(prev => (prev[id] ? prev : { ...prev, [id]: { x: r.left, y: r.top } }));
+    setTimeout(() => setFlyers(prev => prev.filter(f => f.id !== id)), 1000);
+  };
   useEffect(() => {
     let cancelled = false;
     const spawnWave = () => {
@@ -213,15 +227,18 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
 
   const handleBuyLand = () => {
     if (world.landUnlocked >= MAX_PLOTS) { showToast('Your whole plot of land is already unlocked!'); return; }
+    const weekKey = currentWeekKey();
+    const boughtThisWeek = world.landWeekKey === weekKey ? (world.landWeekCount || 0) : 0;
+    if (!isTeacherPreview && boughtThisWeek >= LAND_PLOTS_PER_WEEK) { showToast(`You can buy ${LAND_PLOTS_PER_WEEK} plots a week. Come back next week!`); return; }
     const cost = plotCost(world.landUnlocked);
     if (!isTeacherPreview && coinBalance < cost) { showToast('Not enough coins.'); return; }
     if (!isTeacherPreview) {
       setCoinBalance(prev => Math.max(0, prev - cost));
       persist({ coinBalance: increment(-cost) });
     }
-    const nextWorld = { ...world, landUnlocked: world.landUnlocked + 1 };
+    const nextWorld = { ...world, landUnlocked: world.landUnlocked + 1, landWeekKey: weekKey, landWeekCount: boughtThisWeek + 1 };
     setWorld(nextWorld);
-    persist({ natureWorld: { landUnlocked: nextWorld.landUnlocked } });
+    persist({ natureWorld: { landUnlocked: nextWorld.landUnlocked, landWeekKey: weekKey, landWeekCount: nextWorld.landWeekCount } });
     showToast('🟫 New land unlocked!');
   };
 
@@ -329,18 +346,27 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
         @keyframes natureFlyLTR { 0% { transform: translateX(-10vw) scaleX(-1) translateY(0); } 25% { transform: translateX(30vw) scaleX(-1) translateY(-10px); } 50% { transform: translateX(60vw) scaleX(-1) translateY(6px); } 75% { transform: translateX(90vw) scaleX(-1) translateY(-6px); } 100% { transform: translateX(120vw) scaleX(-1) translateY(0); } }
         @keyframes natureFlyRTL { 0% { transform: translateX(120vw) translateY(0); } 25% { transform: translateX(80vw) translateY(-10px); } 50% { transform: translateX(50vw) translateY(6px); } 75% { transform: translateX(20vw) translateY(-6px); } 100% { transform: translateX(-10vw) translateY(0); } }
         @keyframes natureBunnyHop { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+        @keyframes natureFleeLTR { 0% { transform: translate(0, 0) scaleX(-1); } 12% { transform: translate(-8px, 6px) scaleX(-1); } 100% { transform: translate(70vw, -80vh) scaleX(-1); opacity: 0; } }
+        @keyframes natureFleeRTL { 0% { transform: translate(0, 0); } 12% { transform: translate(8px, 6px); } 100% { transform: translate(-70vw, -80vh); opacity: 0; } }
         @keyframes natureFlap { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
       `}</style>
       {/* Ambient sky life -- birds (solo or in a small flock) and the
           occasional butterfly drift across the top of the screen. Purely
-          decorative: no coins, no click target, sits above everything but
-          never blocks taps (pointer-events none). */}
+          decorative: no coins; tapping one startles it away. The strip itself
+          ignores taps -- only the birds can be touched. */}
       <div className="fixed inset-x-0 top-0 h-40 z-30 pointer-events-none overflow-hidden">
         {flyers.map(f => (
           <div
             key={f.id}
-            className="absolute text-2xl"
-            style={{
+            onClick={(e) => startleFlyer(f.id, e)}
+            className="text-2xl p-2 cursor-pointer pointer-events-auto"
+            style={fleeing[f.id] ? {
+              position: 'fixed',
+              left: fleeing[f.id].x,
+              top: fleeing[f.id].y,
+              animation: `${f.rtl ? 'natureFleeRTL' : 'natureFleeLTR'} 0.9s ease-in forwards`,
+            } : {
+              position: 'absolute',
               top: `${f.top}%`,
               left: 0,
               animation: `${f.rtl ? 'natureFlyRTL' : 'natureFlyLTR'} ${f.duration}s linear ${f.delay}s forwards`,
