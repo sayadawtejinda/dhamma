@@ -67,6 +67,43 @@ const treeGrowthScale = (plantedAt) => {
   return 0.55 + (weeks / TREE_MAX_GROWTH_WEEKS) * 0.95;
 };
 
+// A little rabbit that hops from plot to plot across the land the student
+// owns -- purely decorative, no coins, never blocks a tap. Picks a random
+// unlocked plot every few seconds and glides there. (Uses the front-facing
+// 🐰 so it looks right whichever way it's heading.)
+function Bunny({ unlockedCount, startDelayMs = 0 }) {
+  const cellOf = (i) => ({
+    left: ((i % GRID_COLS) + 0.5) / GRID_COLS * 100,
+    top: (Math.floor(i / GRID_COLS) + 0.5) / GRID_ROWS * 100,
+  });
+  const randomCell = () => Math.floor(Math.random() * Math.max(1, unlockedCount));
+  const [pos, setPos] = useState(() => cellOf(randomCell()));
+  useEffect(() => {
+    let cancelled = false;
+    let timer;
+    const hop = () => {
+      if (cancelled) return;
+      setPos(cellOf(randomCell()));
+      timer = setTimeout(hop, 2200 + Math.random() * 2800);
+    };
+    timer = setTimeout(hop, startDelayMs + 800);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [unlockedCount]);
+  return (
+    <div
+      className="absolute pointer-events-none z-10"
+      style={{
+        left: `${pos.left}%`,
+        top: `${pos.top}%`,
+        transform: 'translate(-50%, -50%)',
+        transition: 'left 2.2s ease-in-out, top 2.2s ease-in-out',
+      }}
+    >
+      <span className="inline-block text-2xl sm:text-3xl drop-shadow" style={{ animation: 'natureBunnyHop 0.45s ease-in-out infinite' }}>🐰</span>
+    </div>
+  );
+}
+
 const DEFAULT_WORLD = { landUnlocked: FREE_PLOTS, placedTrees: {} };
 
 export default function NatureWorldApp({ entryRequest, onExit }) {
@@ -222,6 +259,7 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
   const closeVisit = () => { setVisitingStudentName(null); setVisitingWorld(null); };
 
   const renderGrid = (w, { interactive }) => (
+    <div className="relative w-full">
     <div
       className="grid gap-0 w-full"
       style={{ gridTemplateColumns: `repeat(${GRID_COLS}, minmax(0, 1fr))` }}
@@ -261,6 +299,9 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
         );
       })}
     </div>
+    <Bunny unlockedCount={w.landUnlocked} />
+    <Bunny unlockedCount={w.landUnlocked} startDelayMs={1300} />
+    </div>
   );
 
   return (
@@ -269,6 +310,7 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
         @keyframes natureTreeSway { 0%, 100% { transform: rotate(-4deg); } 50% { transform: rotate(4deg); } }
         @keyframes natureFlyLTR { 0% { transform: translateX(-10vw) scaleX(-1) translateY(0); } 25% { transform: translateX(30vw) scaleX(-1) translateY(-10px); } 50% { transform: translateX(60vw) scaleX(-1) translateY(6px); } 75% { transform: translateX(90vw) scaleX(-1) translateY(-6px); } 100% { transform: translateX(120vw) scaleX(-1) translateY(0); } }
         @keyframes natureFlyRTL { 0% { transform: translateX(120vw) translateY(0); } 25% { transform: translateX(80vw) translateY(-10px); } 50% { transform: translateX(50vw) translateY(6px); } 75% { transform: translateX(20vw) translateY(-6px); } 100% { transform: translateX(-10vw) translateY(0); } }
+        @keyframes natureBunnyHop { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
         @keyframes natureFlap { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
       `}</style>
       {/* Ambient sky life -- birds (solo or in a small flock) and the
