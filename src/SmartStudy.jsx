@@ -1750,6 +1750,10 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
   // student's first visit there -- subtracted from this app's own coin
   // display so the same coins don't effectively exist in both places.
   const [smartStudyCoinsTransferredOut, setSmartStudyCoinsTransferredOut] = useState(0);
+  // False until the "already deposited" total has actually been read. Before
+  // this the total reads as 0, which made every earned coin look depositable
+  // again -- on reopening the app, or if the read was slow/failed.
+  const [depositLedgerLoaded, setDepositLedgerLoaded] = useState(false);
   const [showClassSwitchPrompt, setShowClassSwitchPrompt] = useState(false);
   const [switchClassInput, setSwitchClassInput] = useState('');
   const classCompletePromptShownRef = useRef({});
@@ -1890,15 +1894,34 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
   // pulled in (see smartStudyCoinsTransferredOut above) -- not a listener,
   // since that number only changes once, on a student's first Shrine Room
   // visit.
+  // The running total lives in TWO places, read as the larger of the two: the
+  // Shrine Room roster doc (legacy, also what the teacher's top-up tool
+  // reads) and a ledger keyed by this student's SmartStudy name -- the same
+  // identity the earned coins are computed from. Only the Shrine doc used to
+  // exist, and it's keyed by whatever name Shrine Room resolves; if that
+  // resolved differently on a later visit, the total read back as 0 and the
+  // same coins could be deposited again.
+  const depositLedgerRef = (name) => doc(db, 'artifacts', appId, 'public', 'data', 'smartStudyDeposits', (name || 'unknown').trim().replace(/[.$#/\[\]]/g, '_'));
   useEffect(() => {
     if (!isAuthReady || !userName || !classId) return;
+    setDepositLedgerLoaded(false);
     const sanitize = (key) => (key || 'unknown').trim().replace(/[.$#/\[\]]/g, '_');
+    let cancelled = false;
     (async () => {
-      const targetName = await resolveShrineTargetName();
-      getDoc(doc(db, 'artifacts/shrine-room-app/public/data/roster', sanitize(targetName)))
-        .then(snap => setSmartStudyCoinsTransferredOut(snap.exists() ? (snap.data().smartStudyCoinsTransferred || 0) : 0))
-        .catch(() => {});
+      try {
+        const targetName = await resolveShrineTargetName();
+        const [shrineSnap, ledgerSnap] = await Promise.all([
+          getDoc(doc(db, 'artifacts/shrine-room-app/public/data/roster', sanitize(targetName))),
+          getDoc(depositLedgerRef(userName)),
+        ]);
+        if (cancelled) return;
+        const fromShrine = shrineSnap.exists() ? (shrineSnap.data().smartStudyCoinsTransferred || 0) : 0;
+        const fromLedger = ledgerSnap.exists() ? (ledgerSnap.data().transferred || 0) : 0;
+        setSmartStudyCoinsTransferredOut(Math.max(fromShrine, fromLedger));
+        setDepositLedgerLoaded(true);
+      } catch (e) { console.error('Could not read SmartStudy deposit total:', e); }
     })();
+    return () => { cancelled = true; };
   }, [isAuthReady, userName, classId, resolveShrineTargetName]);
 
   // User-initiated deposit into the Shrine Room wallet, replacing the old
@@ -1906,40 +1929,53 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
   // confirms before anything moves. Same pattern to be reused by other
   // apps' coin displays later.
   const handleDepositCoinsToShrineRoom = useCallback(async () => {
+    if (!depositLedgerLoaded) return; // total not read yet -- don't guess it's 0
     const earned = goldCoinsForScore(computeStudentTotalScore(allMyScoresGlobal, userName));
-    const depositable = Math.max(0, earned - smartStudyCoinsTransferredOut);
-    if (depositable <= 0) return;
-    const confirmed = window.confirm(`Deposit ${depositable} gold coin(s) into your Shrine Room wallet?`);
+    const previewDepositable = Math.max(0, earned - smartStudyCoinsTransferredOut);
+    if (previewDepositable <= 0) return;
+    const confirmed = window.confirm(`Deposit ${previewDepositable} gold coin(s) into your Shrine Room wallet?`);
     if (!confirmed) return;
     const sanitize = (key) => (key || 'unknown').trim().replace(/[.$#/\[\]]/g, '_');
     const targetName = await resolveShrineTargetName();
     const shrineRef = doc(db, 'artifacts/shrine-room-app/public/data/roster', sanitize(targetName));
+    const ledgerRef = depositLedgerRef(userName);
     try {
-      const shrineSnap = await getDoc(shrineRef);
+      // Everything is decided inside one transaction from the stored totals,
+      // not from React state: two taps, two tabs or a stale screen can't each
+      // deposit the same coins, and the recorded total can only go up.
       // A student who has never opened Shrine Room yet still gets its usual
       // 20-coin starter balance, on top of whatever they're depositing here.
-      // increment() (not "current balance + depositable") because
-      // coinBalance is also written concurrently from Shrine Room's own
-      // purchases and from Myanmar Poems/Abhidhamma's identical deposit
-      // buttons -- reading the balance and writing back a computed
-      // absolute number is a lost-update race: whichever of those writes
-      // commits last would silently discard the others.
       const SHRINE_STARTER_COINS = 20;
-      const newTransferredOut = smartStudyCoinsTransferredOut + depositable;
-      await setDoc(shrineRef, {
-        studentName: targetName,
-        coinBalance: shrineSnap.exists() ? increment(depositable) : SHRINE_STARTER_COINS + depositable,
-        smartStudyCoinsTransferred: newTransferredOut,
-      }, { merge: true });
-      setSmartStudyCoinsTransferredOut(newTransferredOut);
-      setModal({ message: `🪙 Deposited ${depositable} coin(s) into your Shrine Room wallet!`, type: 'success', visible: true });
+      const result = await runTransaction(db, async (tx) => {
+        const [shrineSnap, ledgerSnap] = await Promise.all([tx.get(shrineRef), tx.get(ledgerRef)]);
+        const storedTotal = Math.max(
+          shrineSnap.exists() ? (shrineSnap.data().smartStudyCoinsTransferred || 0) : 0,
+          ledgerSnap.exists() ? (ledgerSnap.data().transferred || 0) : 0,
+        );
+        const depositable = Math.max(0, earned - storedTotal);
+        if (depositable <= 0) return { depositable: 0, total: storedTotal };
+        const newTotal = storedTotal + depositable;
+        tx.set(shrineRef, {
+          studentName: targetName,
+          coinBalance: shrineSnap.exists() ? increment(depositable) : SHRINE_STARTER_COINS + depositable,
+          smartStudyCoinsTransferred: newTotal,
+        }, { merge: true });
+        tx.set(ledgerRef, { studentName: userName, transferred: newTotal }, { merge: true });
+        return { depositable, total: newTotal };
+      });
+      setSmartStudyCoinsTransferredOut(result.total);
+      if (result.depositable > 0) {
+        setModal({ message: `🪙 Deposited ${result.depositable} coin(s) into your Shrine Room wallet!`, type: 'success', visible: true });
+      } else {
+        setModal({ message: 'These coins were already deposited.', type: 'success', visible: true });
+      }
     } catch (e) {
       console.error('Error depositing coins to Shrine Room:', e);
       // Previously failed silently -- a genuine write failure looked
       // identical to a successful deposit from the student's side.
       setModal({ message: `⚠️ Something went wrong depositing your coins. Please try again, or tell your teacher if it keeps happening.`, type: 'error', visible: true });
     }
-  }, [allMyScoresGlobal, userName, smartStudyCoinsTransferredOut, resolveShrineTargetName]);
+  }, [allMyScoresGlobal, userName, smartStudyCoinsTransferredOut, depositLedgerLoaded, resolveShrineTargetName]);
 
   useEffect(() => {
     if (!isAuthReady || !classId) return;
@@ -3090,7 +3126,7 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
           <OnlineStatusWidget
             rosterPath={getRosterCollectionRef().path}
             studentName={userName}
-            coinBalance={Math.max(0, goldCoinsForScore(computeStudentTotalScore(allMyScoresGlobal, userName)) - smartStudyCoinsTransferredOut)}
+            coinBalance={depositLedgerLoaded ? Math.max(0, goldCoinsForScore(computeStudentTotalScore(allMyScoresGlobal, userName)) - smartStudyCoinsTransferredOut) : 0}
             onCoinClick={handleDepositCoinsToShrineRoom}
             filterDocs={(d) => d.status === 'approved'}
             renderActivity={(s) => <span className="text-gray-600">{s.classId}{s.currentLessonId ? ` · ${s.currentLessonId}` : ''}</span>}
