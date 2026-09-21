@@ -1216,7 +1216,6 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
         if (!snap.exists()) return false; // already opened somewhere else
         const g = snap.data();
         if ((g.coins || 0) > 0) tx.set(rosterRef, { studentName, coinBalance: increment(g.coins) }, { merge: true });
-        if ((g.trophies || 0) > 0) tx.update(doc(db, `${publicDataPath}/students`, studentUid), { trophyCount: increment(g.trophies) });
         tx.delete(giftRef);
         return true;
       });

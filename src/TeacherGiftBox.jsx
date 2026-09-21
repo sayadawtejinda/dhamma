@@ -2,8 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { spawnFlyingCoins } from './flyingCoins';
 
 // A present from the teacher, shown inside the Shrine Room. Tap the closed
-// box: the lid pops off, light pours out, fireworks burst if there's a trophy
-// inside, the coins swirl up into the wallet, and the box is gone about five
+// box: the lid pops off, light pours out, fireworks burst, the coins swirl up into the wallet, and the box is gone about five
 // seconds after it was opened. The database work (paying out the gift and
 // deleting it so it can't be opened twice) is done by `onOpen`; this
 // component only runs the show.
@@ -16,28 +15,28 @@ const BURSTS = [
   { x: 70, y: -140, delay: 1.9 },
 ];
 
-const Fireworks = ({ trophies }) => (
+const Fireworks = () => (
   <>
     {BURSTS.map((b, bi) => (
       <div key={bi} className="absolute left-1/2 top-1/2 pointer-events-none" style={{ transform: `translate(${b.x}px, ${b.y}px)` }}>
         {Array.from({ length: 14 }).map((_, i) => {
           const ang = (i / 14) * Math.PI * 2;
           const dist = 55 + (i % 3) * 22;
-          const isTrophy = trophies > 0 && i % 7 === 0;
+          const isCoin = i % 7 === 0;
           return (
             <span
               key={i}
               className="absolute"
               style={{
                 left: 0, top: 0,
-                fontSize: isTrophy ? 26 : 12,
+                fontSize: isCoin ? 22 : 12,
                 color: SPARK_COLORS[(i + bi) % SPARK_COLORS.length],
                 '--tx': `${Math.cos(ang) * dist}px`,
                 '--ty': `${Math.sin(ang) * dist}px`,
                 animation: `giftSpark 1.1s ease-out ${b.delay}s both`,
               }}
             >
-              {isTrophy ? '🏆' : '●'}
+              {isCoin ? '🪙' : '●'}
             </span>
           );
         })}
@@ -127,10 +126,9 @@ export default function TeacherGiftBox({ gift, onOpen, onCoinsLanded, onDone }) 
       <div ref={boxRef} className="relative" style={{ animation: 'giftPop 0.5s ease-out' }}>
         <GiftBoxSvg open={opened} />
       </div>
-      {opened && <Fireworks trophies={gift.trophies || 0} />}
-      {opened && (gift.message || gift.trophies > 0) && (
+      {opened && <Fireworks />}
+      {opened && gift.message && (
         <div className="absolute left-0 right-0 bottom-[22%] text-center px-6 pointer-events-none" style={{ animation: 'giftMsgIn 0.6s ease-out 0.9s both' }}>
-          {gift.trophies > 0 && <p className="text-3xl drop-shadow-lg">{'🏆'.repeat(Math.min(gift.trophies, 5))}</p>}
           {gift.message && <p className="text-white font-bold text-lg drop-shadow-lg">{gift.message}</p>}
         </div>
       )}

@@ -1320,7 +1320,6 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
 
   const [sendActionType, setSendActionType] = useState('lesson'); 
   const [giftCoins, setGiftCoins] = useState('50');
-  const [giftTrophies, setGiftTrophies] = useState('0');
   const [giftMessage, setGiftMessage] = useState('');
   const [isSendingGift, setIsSendingGift] = useState(false);
   const [selectedStudentUid, setSelectedStudentUid] = useState('');
@@ -2365,8 +2364,7 @@ const handleUndoTrophyAward = async () => {
     e.preventDefault();
     if (isSendingGift) return;
     const coins = Math.max(0, Math.floor(Number(giftCoins) || 0));
-    const trophies = Math.max(0, Math.floor(Number(giftTrophies) || 0));
-    if (coins === 0 && trophies === 0) { alert('Enter some coins or trophies to give.'); return; }
+    if (coins === 0) { alert('Enter how many coins to give.'); return; }
     let recipients = [];
     let targetText = '';
     if (sendTargetType === 'student') {
@@ -2383,8 +2381,7 @@ const handleUndoTrophyAward = async () => {
       targetText = `ALL ${recipients.length} students`;
     }
     if (recipients.length === 0) { alert('No students to send to.'); return; }
-    const what = [coins > 0 ? `${coins} coins` : '', trophies > 0 ? `${trophies} trophy(s)` : ''].filter(Boolean).join(' + ');
-    if (!window.confirm(`Send a gift of ${what} to ${targetText}?
+    if (!window.confirm(`Send a gift of ${coins} coins to ${targetText}?
 
 Each one will find a gift box the next time they enter their Shrine Room.`)) return;
     setIsSendingGift(true);
@@ -2393,7 +2390,7 @@ Each one will find a gift box the next time they enter their Shrine Room.`)) ret
       for (let i = 0; i < recipients.length; i += 400) {
         const batch = writeBatch(db);
         recipients.slice(i, i + 400).forEach(s => {
-          batch.set(doc(col), { studentUid: s.id, studentName: s.name || '', coins, trophies, message: giftMessage.trim().slice(0, 80), createdAt: serverTimestamp() });
+          batch.set(doc(col), { studentUid: s.id, studentName: s.name || '', coins, message: giftMessage.trim().slice(0, 80), createdAt: serverTimestamp() });
         });
         await batch.commit();
       }
@@ -5042,14 +5039,9 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
           
           {sendActionType === 'gift' && (
             <div className="mb-4 p-4 rounded-xl bg-pink-50 border border-pink-200 space-y-3">
-              <div className="flex gap-3">
-                <label className="flex-1 text-sm font-semibold text-gray-700">🪙 Coins
-                  <input type="number" min="0" value={giftCoins} onChange={(e) => setGiftCoins(e.target.value)} className="mt-1 w-full p-2 border rounded-lg text-center font-bold" />
-                </label>
-                <label className="flex-1 text-sm font-semibold text-gray-700">🏆 Trophies (optional)
-                  <input type="number" min="0" value={giftTrophies} onChange={(e) => setGiftTrophies(e.target.value)} className="mt-1 w-full p-2 border rounded-lg text-center font-bold" />
-                </label>
-              </div>
+              <label className="block text-sm font-semibold text-gray-700">🪙 Coins inside the gift box
+                <input type="number" min="1" value={giftCoins} onChange={(e) => setGiftCoins(e.target.value)} className="mt-1 w-full p-2 border rounded-lg text-center font-bold" />
+              </label>
               <label className="block text-sm font-semibold text-gray-700">Short message (optional)
                 <input type="text" maxLength={80} value={giftMessage} onChange={(e) => setGiftMessage(e.target.value)} placeholder="e.g. Well done this week!" className="mt-1 w-full p-2 border rounded-lg" />
               </label>
