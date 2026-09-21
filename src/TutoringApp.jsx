@@ -142,6 +142,27 @@ const SHRINE_ROSTER_PATH_LOCAL = 'artifacts/shrine-room-app/public/data/roster';
 // different roster doc than the one Shrine Room actually reads from.
 const sanitizeShrineKeyLocal = (key) => (key || 'unknown').trim().replace(/[.$#/\[\]]/g, '_');
 
+// Progress for the small game apps lives on a roster doc per student. Those apps
+// now write it under the student's uid, but their old name-keyed doc is still
+// there frozen at the moment of migration -- reading only that one made the
+// Report's auto-filled "Lesson completed" come from stale data (missing
+// everything done since). This reads both and merges: lists are unioned, other
+// fields prefer the uid doc. Same shape the callers already expect
+// (.exists() / .data()).
+const readAppRoster = async (appIdValue, studentUidValue, sanitizeFn, studentNameValue) => {
+  const base = ['artifacts', appIdValue, 'public', 'data', 'roster'];
+  const reads = [getDoc(doc(db, ...base, sanitizeFn(studentNameValue)))];
+  if (studentUidValue && studentUidValue !== 'offline') reads.push(getDoc(doc(db, ...base, studentUidValue)));
+  const snaps = await Promise.all(reads);
+  const datas = snaps.filter(s => s.exists()).map(s => s.data());
+  const merged = {};
+  datas.forEach(d => Object.entries(d).forEach(([k, v]) => {
+    if (Array.isArray(v) && Array.isArray(merged[k])) merged[k] = [...new Set([...merged[k], ...v])];
+    else merged[k] = v;
+  }));
+  return { exists: () => datas.length > 0, data: () => merged };
+};
+
 // ── Dhammaschool app (standalone HTML app — opened via window.open, NOT mounted as React component) ──
 const DHAMMASCHOOL_APP_ID = 'dhammaschool-app'; // Firestore appId used inside the HTML app's PATHS.*
 const MYANMAR_SPEAKING_APP_ID = 'myanmar-speaking-app'; // Firestore appId used inside myanmar-speaking-app.jsx
@@ -8033,7 +8054,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       const stuName = studentProfile?.name;
       if (stuName) {
         try {
-          const rosterSnap = await getDoc(doc(db, 'artifacts', MYANMAR_SOUND_PRACTICE_APP_ID, 'public', 'data', 'roster', sanitizeSoundPracticeKey(stuName)));
+          const rosterSnap = await readAppRoster(MYANMAR_SOUND_PRACTICE_APP_ID, studentUid, sanitizeSoundPracticeKey, stuName);
           const passedLevels = rosterSnap.exists() && Array.isArray(rosterSnap.data().passedLevels) ? rosterSnap.data().passedLevels : [];
           if (passedLevels.length > 0) handleCompletedUnitChange(String(passedLevels.length));
         } catch (e) { console.error('Myanmar Sound Practice progress fetch:', e); }
@@ -8046,7 +8067,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       const stuName = studentProfile?.name;
       if (stuName) {
         try {
-          const rosterSnap = await getDoc(doc(db, 'artifacts', BURMESE_GAME_APP_ID, 'public', 'data', 'roster', sanitizeBurmeseGameKey(stuName)));
+          const rosterSnap = await readAppRoster(BURMESE_GAME_APP_ID, studentUid, sanitizeBurmeseGameKey, stuName);
           const completedGames = rosterSnap.exists() && Array.isArray(rosterSnap.data().completedGames) ? rosterSnap.data().completedGames : [];
           if (completedGames.length > 0) handleCompletedUnitChange(String(completedGames.length));
         } catch (e) { console.error('Burmese Consonant Game progress fetch:', e); }
@@ -8059,7 +8080,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       const stuName = studentProfile?.name;
       if (stuName) {
         try {
-          const rosterSnap = await getDoc(doc(db, 'artifacts', MYANMAR_VOWELS_APP_ID, 'public', 'data', 'roster', sanitizeVowelsKey(stuName)));
+          const rosterSnap = await readAppRoster(MYANMAR_VOWELS_APP_ID, studentUid, sanitizeVowelsKey, stuName);
           const completedGames = rosterSnap.exists() && Array.isArray(rosterSnap.data().completedGames) ? rosterSnap.data().completedGames : [];
           if (completedGames.length > 0) handleCompletedUnitChange(String(completedGames.length));
         } catch (e) { console.error('Myanmar Vowels Learning progress fetch:', e); }
@@ -8072,7 +8093,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       const stuName = studentProfile?.name;
       if (stuName) {
         try {
-          const rosterSnap = await getDoc(doc(db, 'artifacts', MYANMAR_POEMS_APP_ID, 'public', 'data', 'roster', sanitizePoemsKey(stuName)));
+          const rosterSnap = await readAppRoster(MYANMAR_POEMS_APP_ID, studentUid, sanitizePoemsKey, stuName);
           const completedPoemIds = rosterSnap.exists() && Array.isArray(rosterSnap.data().completedPoemIds) ? rosterSnap.data().completedPoemIds : [];
           if (completedPoemIds.length > 0) handleCompletedUnitChange(String(completedPoemIds.length));
         } catch (e) { console.error('Myanmar Poems progress fetch:', e); }
@@ -8085,7 +8106,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       const stuName = studentProfile?.name;
       if (stuName) {
         try {
-          const rosterSnap = await getDoc(doc(db, 'artifacts', MYANMAR_NUMBER_LEARNING_APP_ID, 'public', 'data', 'roster', sanitizeNumberLearningKey(stuName)));
+          const rosterSnap = await readAppRoster(MYANMAR_NUMBER_LEARNING_APP_ID, studentUid, sanitizeNumberLearningKey, stuName);
           const completedLevels = rosterSnap.exists() && Array.isArray(rosterSnap.data().completedLevels) ? rosterSnap.data().completedLevels : [];
           if (completedLevels.length > 0) handleCompletedUnitChange(String(completedLevels.length));
         } catch (e) { console.error('Myanmar Number Learning progress fetch:', e); }
@@ -8098,7 +8119,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       const stuName = studentProfile?.name;
       if (stuName) {
         try {
-          const rosterSnap = await getDoc(doc(db, 'artifacts', ANIMAL_SOUND_APP_ID, 'public', 'data', 'roster', sanitizeAnimalSoundKey(stuName)));
+          const rosterSnap = await readAppRoster(ANIMAL_SOUND_APP_ID, studentUid, sanitizeAnimalSoundKey, stuName);
           const trophyWins = rosterSnap.exists() ? (rosterSnap.data().trophyWins || 0) : 0;
           if (trophyWins > 0) handleCompletedUnitChange(String(trophyWins));
         } catch (e) { console.error('Animal Sound Quiz progress fetch:', e); }
@@ -8111,7 +8132,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       const stuName = studentProfile?.name;
       if (stuName) {
         try {
-          const rosterSnap = await getDoc(doc(db, 'artifacts', BURMESE_LEARNING_GAMES_APP_ID, 'public', 'data', 'roster', sanitizeBurmeseLearningGamesKey(stuName)));
+          const rosterSnap = await readAppRoster(BURMESE_LEARNING_GAMES_APP_ID, studentUid, sanitizeBurmeseLearningGamesKey, stuName);
           const trophyUnits = rosterSnap.exists() ? (rosterSnap.data().trophyUnits || 0) : 0;
           if (trophyUnits > 0) handleCompletedUnitChange(String(trophyUnits));
         } catch (e) { console.error('Burmese Learning Games progress fetch:', e); }
@@ -8124,7 +8145,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       const stuName = studentProfile?.name;
       if (stuName) {
         try {
-          const rosterSnap = await getDoc(doc(db, 'artifacts', INTERACTIVE_QUIZ_APP_ID, 'public', 'data', 'roster', sanitizeInteractiveQuizKey(stuName)));
+          const rosterSnap = await readAppRoster(INTERACTIVE_QUIZ_APP_ID, studentUid, sanitizeInteractiveQuizKey, stuName);
           const completedPhases = rosterSnap.exists() && Array.isArray(rosterSnap.data().completedPhases) ? rosterSnap.data().completedPhases.length : 0;
           if (completedPhases > 0) handleCompletedUnitChange(String(completedPhases));
         } catch (e) { console.error('Interactive Learning Quiz progress fetch:', e); }
@@ -8189,7 +8210,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       const stuName = studentProfile?.name;
       if (stuName) {
         try {
-          const rosterSnap = await getDoc(doc(db, 'artifacts', MYANMAR_SOUND_PRACTICE_APP_ID, 'public', 'data', 'roster', sanitizeSoundPracticeKey(stuName)));
+          const rosterSnap = await readAppRoster(MYANMAR_SOUND_PRACTICE_APP_ID, studentUid, sanitizeSoundPracticeKey, stuName);
           const passedLevels = rosterSnap.exists() && Array.isArray(rosterSnap.data().passedLevels) ? rosterSnap.data().passedLevels : [];
           if (passedLevels.length > 0) handleCompletedUnitChange(String(passedLevels.length));
         } catch (e) { console.error('Myanmar Sound Practice redo fetch:', e); }
@@ -8200,7 +8221,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       const stuName = studentProfile?.name;
       if (stuName) {
         try {
-          const rosterSnap = await getDoc(doc(db, 'artifacts', BURMESE_GAME_APP_ID, 'public', 'data', 'roster', sanitizeBurmeseGameKey(stuName)));
+          const rosterSnap = await readAppRoster(BURMESE_GAME_APP_ID, studentUid, sanitizeBurmeseGameKey, stuName);
           const completedGames = rosterSnap.exists() && Array.isArray(rosterSnap.data().completedGames) ? rosterSnap.data().completedGames : [];
           if (completedGames.length > 0) handleCompletedUnitChange(String(completedGames.length));
         } catch (e) { console.error('Burmese Consonant Game redo fetch:', e); }
@@ -8211,7 +8232,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       const stuName = studentProfile?.name;
       if (stuName) {
         try {
-          const rosterSnap = await getDoc(doc(db, 'artifacts', MYANMAR_VOWELS_APP_ID, 'public', 'data', 'roster', sanitizeVowelsKey(stuName)));
+          const rosterSnap = await readAppRoster(MYANMAR_VOWELS_APP_ID, studentUid, sanitizeVowelsKey, stuName);
           const completedGames = rosterSnap.exists() && Array.isArray(rosterSnap.data().completedGames) ? rosterSnap.data().completedGames : [];
           if (completedGames.length > 0) handleCompletedUnitChange(String(completedGames.length));
         } catch (e) { console.error('Myanmar Vowels Learning redo fetch:', e); }
@@ -8222,7 +8243,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       const stuName = studentProfile?.name;
       if (stuName) {
         try {
-          const rosterSnap = await getDoc(doc(db, 'artifacts', MYANMAR_POEMS_APP_ID, 'public', 'data', 'roster', sanitizePoemsKey(stuName)));
+          const rosterSnap = await readAppRoster(MYANMAR_POEMS_APP_ID, studentUid, sanitizePoemsKey, stuName);
           const completedPoemIds = rosterSnap.exists() && Array.isArray(rosterSnap.data().completedPoemIds) ? rosterSnap.data().completedPoemIds : [];
           if (completedPoemIds.length > 0) handleCompletedUnitChange(String(completedPoemIds.length));
         } catch (e) { console.error('Myanmar Poems redo fetch:', e); }
@@ -8233,7 +8254,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       const stuName = studentProfile?.name;
       if (stuName) {
         try {
-          const rosterSnap = await getDoc(doc(db, 'artifacts', MYANMAR_NUMBER_LEARNING_APP_ID, 'public', 'data', 'roster', sanitizeNumberLearningKey(stuName)));
+          const rosterSnap = await readAppRoster(MYANMAR_NUMBER_LEARNING_APP_ID, studentUid, sanitizeNumberLearningKey, stuName);
           const completedLevels = rosterSnap.exists() && Array.isArray(rosterSnap.data().completedLevels) ? rosterSnap.data().completedLevels : [];
           if (completedLevels.length > 0) handleCompletedUnitChange(String(completedLevels.length));
         } catch (e) { console.error('Myanmar Number Learning redo fetch:', e); }
@@ -8244,7 +8265,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       const stuName = studentProfile?.name;
       if (stuName) {
         try {
-          const rosterSnap = await getDoc(doc(db, 'artifacts', ANIMAL_SOUND_APP_ID, 'public', 'data', 'roster', sanitizeAnimalSoundKey(stuName)));
+          const rosterSnap = await readAppRoster(ANIMAL_SOUND_APP_ID, studentUid, sanitizeAnimalSoundKey, stuName);
           const trophyWins = rosterSnap.exists() ? (rosterSnap.data().trophyWins || 0) : 0;
           if (trophyWins > 0) handleCompletedUnitChange(String(trophyWins));
         } catch (e) { console.error('Animal Sound Quiz redo fetch:', e); }
@@ -8255,7 +8276,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       const stuName = studentProfile?.name;
       if (stuName) {
         try {
-          const rosterSnap = await getDoc(doc(db, 'artifacts', BURMESE_LEARNING_GAMES_APP_ID, 'public', 'data', 'roster', sanitizeBurmeseLearningGamesKey(stuName)));
+          const rosterSnap = await readAppRoster(BURMESE_LEARNING_GAMES_APP_ID, studentUid, sanitizeBurmeseLearningGamesKey, stuName);
           const trophyUnits = rosterSnap.exists() ? (rosterSnap.data().trophyUnits || 0) : 0;
           if (trophyUnits > 0) handleCompletedUnitChange(String(trophyUnits));
         } catch (e) { console.error('Burmese Learning Games redo fetch:', e); }
@@ -8266,7 +8287,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       const stuName = studentProfile?.name;
       if (stuName) {
         try {
-          const rosterSnap = await getDoc(doc(db, 'artifacts', INTERACTIVE_QUIZ_APP_ID, 'public', 'data', 'roster', sanitizeInteractiveQuizKey(stuName)));
+          const rosterSnap = await readAppRoster(INTERACTIVE_QUIZ_APP_ID, studentUid, sanitizeInteractiveQuizKey, stuName);
           const completedPhases = rosterSnap.exists() && Array.isArray(rosterSnap.data().completedPhases) ? rosterSnap.data().completedPhases.length : 0;
           if (completedPhases > 0) handleCompletedUnitChange(String(completedPhases));
         } catch (e) { console.error('Interactive Learning Quiz redo fetch:', e); }

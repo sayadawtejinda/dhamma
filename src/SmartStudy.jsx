@@ -1799,6 +1799,13 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
   const [isSavingScore, setIsSavingScore] = useState(false); 
   const [quizCompetitors, setQuizCompetitors] = useState([]);
   const timerId = useRef(null);
+  // Which question index has already been answered / already moved on from.
+  // Callbacks read state from the render they were created in, so two quick
+  // taps on the same button (or a tap right as the timer runs out) could both
+  // run before React re-rendered: answers counted and scored twice, "Next"
+  // advancing twice (skipping a question) or "Finish" saving the score twice.
+  const answeredIndexRef = useRef(-1);
+  const advancedFromIndexRef = useRef(-1);
   const clickSoundRef = useRef(null);
   const fileInputRef = useRef(null);
   const fileInputRefLessonsOnly = useRef(null);
@@ -2056,9 +2063,11 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
 
   useEffect(() => {
     if (timerValue <= 0 && view === 'quiz' && showFeedback === null && !showPreview) {
+      if (answeredIndexRef.current === currentQuestionIndex) return; // a tap just answered it
+      answeredIndexRef.current = currentQuestionIndex;
       if (timerId.current) clearInterval(timerId.current); setShowFeedback({ status: 'timeup', points: 0 }); setIncorrectAnswerCount(p => p + 1);
     }
-  }, [timerValue, view, showFeedback, showPreview]);
+  }, [timerValue, view, showFeedback, showPreview, currentQuestionIndex]);
 
   useEffect(() => {
     if (view === 'quiz') { setShowPreview(true); const previewTimer = setTimeout(() => setShowPreview(false), 5000); return () => clearTimeout(previewTimer); }
@@ -2953,6 +2962,7 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
     playClickSound(); setActiveLessonId(lesson.lessonId); setCurrentLesson(lesson); 
     if (!lesson.questions || !lesson.questions[studentAgeLevel] || lesson.questions[studentAgeLevel].length === 0) { setModal({ message: 'Quiz not available.', type: 'error', visible: true }); return; }
     setQuizCompetitors(generateQuizCompetitors(lesson.lessonId, lesson.questions[studentAgeLevel].length, desiredCompetitorTotal));
+    answeredIndexRef.current = -1; advancedFromIndexRef.current = -1;
     setCurrentQuestionIndex(0); setCurrentQuizScore(0); setCorrectAnswerCount(0); setIncorrectAnswerCount(0); setShowFeedback(null); setTimerValue(30); setShowPreview(true); setNeedsToStartQuiz(true); 
   }, [playClickSound, studentAgeLevel, generateQuizCompetitors]);
   
@@ -2977,6 +2987,8 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
 
   const handleAnswerSubmit = useCallback((selectedAnswer) => {
     playClickSound(); if (showFeedback) return;
+    if (answeredIndexRef.current === currentQuestionIndex) return; // already answered this one
+    answeredIndexRef.current = currentQuestionIndex;
     if (timerId.current) clearInterval(timerId.current);
     if (!currentLesson || !currentLesson.questions || !currentLesson.questions[studentAgeLevel]) return; 
     const q = currentLesson.questions[studentAgeLevel][currentQuestionIndex];
@@ -2987,8 +2999,10 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
 
   const handleNextQuestion = useCallback(() => {
     playClickSound(); 
+    if (advancedFromIndexRef.current === currentQuestionIndex) return; // already moving on from this question
+    advancedFromIndexRef.current = currentQuestionIndex;
     const currentQuizQuestions = currentLesson?.questions?.[studentAgeLevel] || [];
-    if (currentQuestionIndex < currentQuizQuestions.length - 1) { setCurrentQuestionIndex(p => p + 1); setShowFeedback(null); setShowPreview(true); setTimerValue(30); }
+    if (currentQuestionIndex < currentQuizQuestions.length - 1) { setCurrentQuestionIndex(p => (p === currentQuestionIndex ? p + 1 : p)); setShowFeedback(null); setShowPreview(true); setTimerValue(30); }
     else { handleFinishQuiz(); }
   }, [currentQuestionIndex, currentLesson, studentAgeLevel, handleFinishQuiz, playClickSound]);
 
