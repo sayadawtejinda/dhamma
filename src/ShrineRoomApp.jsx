@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { collection, query, where, getDocs, doc, getDoc, getDocFromServer, setDoc, updateDoc, serverTimestamp, increment } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc, getDocFromServer, setDoc, updateDoc, serverTimestamp, increment, runTransaction } from 'firebase/firestore';
 import { db } from './firebase';
 import { presenceIntervalMs } from './presenceDay';
 import { appId } from './firebaseConfig';
 import OnlineStatusWidget from './OnlineStatusWidget';
+import TeacherGiftBox from './TeacherGiftBox';
 import { spawnFlyingCoins, trackLastClickPoint } from './flyingCoins';
 import bigBellSound from '../audio/big-bellburmese.mp3';
 import windChimesSound from '../audio/wind-chimes.mp3';
@@ -18,6 +19,7 @@ import meditationBowlsSound from '../audio/meditation-bowls.mp3';
 
 const publicDataPath = `/artifacts/${appId}/public/data`;
 const SHRINE_ROSTER_PATH = 'artifacts/shrine-room-app/public/data/roster';
+export const TEACHER_GIFTS_PATH = 'artifacts/shrine-room-app/public/data/teacherGifts';
 // .trim() matters here -- SmartStudy's deposit-into-Shrine-Room code
 // (SmartStudy.jsx) sanitizes the same way, and any mismatch (e.g. a name
 // with stray leading/trailing whitespace) would make a deposit land on a
@@ -1193,6 +1195,38 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   // as a student's coins "disappearing" with no obvious cause. increment()
   // is safe regardless of what else is writing to the same field at the
   // same time.
+  // Presents the teacher sent (one small doc per student, see the Send tab in
+  // the Tutoring Dashboard). Read once when the room opens; opening a gift
+  // pays it out and deletes it in one transaction, so it can't be opened twice
+  // from two devices.
+  const [teacherGifts, setTeacherGifts] = useState([]);
+  useEffect(() => {
+    if (!studentUid || loading) return;
+    let cancelled = false;
+    getDocs(query(collection(db, TEACHER_GIFTS_PATH), where('studentUid', '==', studentUid)))
+      .then(snap => { if (!cancelled) setTeacherGifts(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0))); })
+      .catch(e => console.error('Could not read teacher gifts:', e));
+    return () => { cancelled = true; };
+  }, [studentUid, loading]);
+  const openTeacherGift = async (gift) => {
+    try {
+      const giftRef = doc(db, TEACHER_GIFTS_PATH, gift.id);
+      return await runTransaction(db, async (tx) => {
+        const snap = await tx.get(giftRef);
+        if (!snap.exists()) return false; // already opened somewhere else
+        const g = snap.data();
+        if ((g.coins || 0) > 0) tx.set(rosterRef, { studentName, coinBalance: increment(g.coins) }, { merge: true });
+        if ((g.trophies || 0) > 0) tx.update(doc(db, `${publicDataPath}/students`, studentUid), { trophyCount: increment(g.trophies) });
+        tx.delete(giftRef);
+        return true;
+      });
+    } catch (e) {
+      console.error('Could not open gift:', e);
+      showToast('Could not open the gift -- please try again.');
+      return false;
+    }
+  };
+
   const awardCoins = (delta) => {
     setCoinBalance(prev => Math.max(0, prev + delta));
     if (rosterRef) setDoc(rosterRef, { studentName, coinBalance: increment(delta) }, { merge: true }).catch(() => {});
@@ -1608,6 +1642,16 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
           </span>
         )}
       />
+
+      {teacherGifts.length > 0 && !isTeacherPreview && (
+        <TeacherGiftBox
+          key={teacherGifts[0].id}
+          gift={teacherGifts[0]}
+          onOpen={openTeacherGift}
+          onCoinsLanded={(n) => setCoinBalance(prev => prev + n)}
+          onDone={() => setTeacherGifts(prev => prev.slice(1))}
+        />
+      )}
 
       <div className="fixed top-16 right-3 z-50 flex flex-col items-end gap-2">
         {(() => {

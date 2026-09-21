@@ -1319,6 +1319,10 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
   const draggedLessonIdRef = useRef(null);
 
   const [sendActionType, setSendActionType] = useState('lesson'); 
+  const [giftCoins, setGiftCoins] = useState('50');
+  const [giftTrophies, setGiftTrophies] = useState('0');
+  const [giftMessage, setGiftMessage] = useState('');
+  const [isSendingGift, setIsSendingGift] = useState(false);
   const [selectedStudentUid, setSelectedStudentUid] = useState('');
   const [selectedBankLessonId, setSelectedBankLessonId] = useState('');
   const [sendSmartStudyClassId, setSendSmartStudyClassId] = useState(''); // class chosen in Send Action for smartstudy:// lessons
@@ -2354,10 +2358,60 @@ const handleUndoTrophyAward = async () => {
     setLastTrophyAward(null);
   };
 
+  // A present for one student, a group, or everyone: one small doc per
+  // recipient in Shrine Room's teacherGifts collection. Each student finds
+  // the box next time they walk into their Shrine Room (see TeacherGiftBox).
+  const handleSendGift = async (e) => {
+    e.preventDefault();
+    if (isSendingGift) return;
+    const coins = Math.max(0, Math.floor(Number(giftCoins) || 0));
+    const trophies = Math.max(0, Math.floor(Number(giftTrophies) || 0));
+    if (coins === 0 && trophies === 0) { alert('Enter some coins or trophies to give.'); return; }
+    let recipients = [];
+    let targetText = '';
+    if (sendTargetType === 'student') {
+      const s = students.find(x => x.id === selectedStudentUid);
+      if (!s) { alert('Please select a student.'); return; }
+      recipients = [s]; targetText = s.name;
+    } else if (sendTargetType === 'group') {
+      const g = groups.find(x => x.id === selectedGroupId);
+      if (!g) { alert('Please select a group.'); return; }
+      recipients = g.studentUids.map(uid => students.find(x => x.id === uid)).filter(Boolean);
+      targetText = `group "${g.groupName}" (${recipients.length} students)`;
+    } else {
+      recipients = students.filter(s => s.id);
+      targetText = `ALL ${recipients.length} students`;
+    }
+    if (recipients.length === 0) { alert('No students to send to.'); return; }
+    const what = [coins > 0 ? `${coins} coins` : '', trophies > 0 ? `${trophies} trophy(s)` : ''].filter(Boolean).join(' + ');
+    if (!window.confirm(`Send a gift of ${what} to ${targetText}?
+
+Each one will find a gift box the next time they enter their Shrine Room.`)) return;
+    setIsSendingGift(true);
+    try {
+      const col = collection(db, 'artifacts/shrine-room-app/public/data/teacherGifts');
+      for (let i = 0; i < recipients.length; i += 400) {
+        const batch = writeBatch(db);
+        recipients.slice(i, i + 400).forEach(s => {
+          batch.set(doc(col), { studentUid: s.id, studentName: s.name || '', coins, trophies, message: giftMessage.trim().slice(0, 80), createdAt: serverTimestamp() });
+        });
+        await batch.commit();
+      }
+      alert(`🎁 Gift sent to ${recipients.length} student(s).`);
+      setGiftMessage('');
+    } catch (err) {
+      console.error('Error sending gift:', err);
+      alert('Could not send the gift. Please try again.');
+    }
+    setIsSendingGift(false);
+  };
+
   const handleSendSubmit = (e) => {
     e.preventDefault();
     if (sendActionType === 'lesson') {
         handleSendLesson(e);
+    } else if (sendActionType === 'gift') {
+        handleSendGift(e);
     } else {
         handleAwardDirectTrophies(e);
     }
@@ -4897,16 +4951,20 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
           <div className="mb-4">
             <label className="block text-gray-700 mb-2">Action Type</label>
             <div className="flex rounded-lg bg-gray-100 p-1">
-              <button type="button" onClick={() => setSendActionType('lesson')} className={`w-1/2 p-2 rounded-lg font-semibold ${sendActionType === 'lesson' ? 'bg-white shadow text-indigo-600' : 'text-gray-600'}`}>Assign Lesson</button>
-              <button type="button" onClick={() => { setSendActionType('trophy'); setSendTargetType('student'); }} className={`w-1/2 p-2 rounded-lg font-semibold ${sendActionType === 'trophy' ? 'bg-white shadow text-yellow-600' : 'text-gray-600'}`}>Award Trophies Only</button>
+              <button type="button" onClick={() => { setSendActionType('lesson'); if (sendTargetType === 'all') setSendTargetType('student'); }} className={`flex-1 p-2 rounded-lg font-semibold ${sendActionType === 'lesson' ? 'bg-white shadow text-indigo-600' : 'text-gray-600'}`}>Assign Lesson</button>
+              <button type="button" onClick={() => { setSendActionType('trophy'); setSendTargetType('student'); }} className={`flex-1 p-2 rounded-lg font-semibold ${sendActionType === 'trophy' ? 'bg-white shadow text-yellow-600' : 'text-gray-600'}`}>Award Trophies Only</button>
+              <button type="button" onClick={() => setSendActionType('gift')} className={`flex-1 p-2 rounded-lg font-semibold ${sendActionType === 'gift' ? 'bg-white shadow text-pink-600' : 'text-gray-600'}`}>🎁 Send Gift</button>
             </div>
           </div>
 
           <div className="mb-4">
             <label className="block text-gray-700 mb-2">Target</label>
             <div className="flex rounded-lg bg-gray-100 p-1">
-              <button type="button" onClick={() => setSendTargetType('student')} className={`w-1/2 p-2 rounded-lg font-semibold ${sendTargetType === 'student' ? 'bg-white shadow text-indigo-600' : 'text-gray-600'}`}>Single Student</button>
-              <button type="button" disabled={sendActionType === 'trophy'} onClick={() => setSendTargetType('group')} className={`w-1/2 p-2 rounded-lg font-semibold ${sendTargetType === 'group' ? 'bg-white shadow text-indigo-600' : 'text-gray-600'} disabled:opacity-50 disabled:cursor-not-allowed`} title={sendActionType === 'trophy' ? "Trophies can only be awarded directly to a single student." : ""}>Group</button>
+              <button type="button" onClick={() => setSendTargetType('student')} className={`flex-1 p-2 rounded-lg font-semibold ${sendTargetType === 'student' ? 'bg-white shadow text-indigo-600' : 'text-gray-600'}`}>Single Student</button>
+              <button type="button" disabled={sendActionType === 'trophy'} onClick={() => setSendTargetType('group')} className={`flex-1 p-2 rounded-lg font-semibold ${sendTargetType === 'group' ? 'bg-white shadow text-indigo-600' : 'text-gray-600'} disabled:opacity-50 disabled:cursor-not-allowed`} title={sendActionType === 'trophy' ? "Trophies can only be awarded directly to a single student." : ""}>Group</button>
+              {sendActionType === 'gift' && (
+                <button type="button" onClick={() => setSendTargetType('all')} className={`flex-1 p-2 rounded-lg font-semibold ${sendTargetType === 'all' ? 'bg-white shadow text-pink-600' : 'text-gray-600'}`}>Everyone</button>
+              )}
             </div>
           </div>
           
@@ -4970,6 +5028,8 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                 </div>
               )}
             </div>
+          ) : sendTargetType === 'all' ? (
+            <p className="mb-4 text-sm text-pink-700 bg-pink-50 border border-pink-200 rounded-lg p-3">🎁 This gift goes to all {students.length} students.</p>
           ) : (
             <div className="mb-4">
               <label className="block text-gray-700 mb-2">Select Group</label>
@@ -4980,6 +5040,22 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
             </div>
           )}
           
+          {sendActionType === 'gift' && (
+            <div className="mb-4 p-4 rounded-xl bg-pink-50 border border-pink-200 space-y-3">
+              <div className="flex gap-3">
+                <label className="flex-1 text-sm font-semibold text-gray-700">🪙 Coins
+                  <input type="number" min="0" value={giftCoins} onChange={(e) => setGiftCoins(e.target.value)} className="mt-1 w-full p-2 border rounded-lg text-center font-bold" />
+                </label>
+                <label className="flex-1 text-sm font-semibold text-gray-700">🏆 Trophies (optional)
+                  <input type="number" min="0" value={giftTrophies} onChange={(e) => setGiftTrophies(e.target.value)} className="mt-1 w-full p-2 border rounded-lg text-center font-bold" />
+                </label>
+              </div>
+              <label className="block text-sm font-semibold text-gray-700">Short message (optional)
+                <input type="text" maxLength={80} value={giftMessage} onChange={(e) => setGiftMessage(e.target.value)} placeholder="e.g. Well done this week!" className="mt-1 w-full p-2 border rounded-lg" />
+              </label>
+            </div>
+          )}
+          {sendActionType !== 'gift' && (<>
           <div className="mb-4">
             <label className="block text-gray-700 mb-2">Select Lesson from Bank</label>
             <select value={selectedBankLessonId} onChange={(e) => { setSelectedBankLessonId(e.target.value); hasAutoSelectedBankLessonRef.current = true; setSendSmartStudyClassId(''); setSendAbhidhammaClassId(''); setSendGroupPartKey(''); setSendWatchLearnVideoKey(''); }} className="w-full p-3 border rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500">
@@ -5290,7 +5366,13 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
               );
           })()}
 
-          {sendActionType === 'lesson' ? (
+          </>)}
+
+          {sendActionType === 'gift' ? (
+             <button type="submit" disabled={isSendingGift} className="w-full bg-pink-500 text-white p-3 rounded-lg font-bold hover:bg-pink-600 transition-transform transform hover:scale-105 shadow-md disabled:opacity-50">
+               {isSendingGift ? 'Sending...' : '🎁 Send Gift'}
+             </button>
+          ) : sendActionType === 'lesson' ? (
              <button type="submit" className="w-full bg-indigo-500 text-white p-3 rounded-lg font-semibold hover:bg-indigo-600 transition-transform transform hover:scale-105 shadow-md">
                Assign Lesson
              </button>

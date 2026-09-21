@@ -72,6 +72,11 @@ const GIFT_OPTIONS = [
   { id: 'gift-rose', name: 'Rose', emoji: '🌹', kind: 'gift' },
 ];
 const GIFT_BAG_MAX = 30;
+// One gift per visiting friend, ever -- keyed by the visitor's name, so
+// coming back again doesn't bring another. (Older keys were name + visit
+// time; those still count as "already opened" for that name.)
+const giftKeyFor = (name) => `gift:${name}`;
+const hasOpenedGiftFrom = (opened, name) => (opened || []).some(k => k === giftKeyFor(name) || k.startsWith(`${name}-`));
 // Which gift a given visit brings is fixed by the visit itself, so the same
 // visitor always shows the same present however many times it's looked at.
 const giftForVisit = (key) => {
@@ -318,14 +323,14 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
   // the gift bag (once per visit -- reopening just replays the hearts).
   const openGift = (visit) => {
     if (heartRainId) return;
-    const key = `${visit.name}-${visit.visitedAt}`;
-    const already = (world.giftsOpened || []).includes(key);
+    const key = giftKeyFor(visit.name);
+    const already = hasOpenedGiftFrom(world.giftsOpened, visit.name);
     if (!already) {
       const bag = world.giftBag || [];
       if (bag.length >= GIFT_BAG_MAX) { showToast('Your gift bag is full -- plant some first!'); return; }
       const gift = giftForVisit(key);
       const nextBag = [...bag, { id: gift.id, from: visit.name, key }];
-      const nextOpened = [...(world.giftsOpened || []), key].slice(-80);
+      const nextOpened = [...(world.giftsOpened || []), key].slice(-300);
       setWorld(prev => ({ ...prev, giftBag: nextBag, giftsOpened: nextOpened }));
       persist({ natureWorld: { giftBag: nextBag, giftsOpened: nextOpened } });
       showToast(`${gift.emoji} ${gift.name} from ${visit.name} -- it's in your gift bag!`);
@@ -722,9 +727,8 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
             ) : (
               <div className="space-y-2 mb-4 max-h-64 overflow-y-auto text-left">
                 {recentVisitors.map((v, i) => {
-                  const giftKey = `${v.name}-${v.visitedAt}`;
-                  const isOpened = (world.giftsOpened || []).includes(giftKey);
-                  const gift = giftForVisit(giftKey);
+                  const isOpened = hasOpenedGiftFrom(world.giftsOpened, v.name);
+                  const gift = giftForVisit(giftKeyFor(v.name));
                   return (
                     <div key={i} className="flex items-center gap-3 bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2">
                       <GiftBox opened={isOpened} onClick={() => openGift(v)} />
