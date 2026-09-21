@@ -305,7 +305,11 @@ const GROUP_APP_PART_UNIT_COUNT = {
     vowelslearning: 11,
   },
   'speakingmyanmar://': {
-    numberlearning: 4,
+    // 8 levels at 2 trophies each = the 16 in GROUP_APP_PART_MAX (the 4 game
+    // levels the app tracks, then the 4 read-through place-value levels the
+    // teacher awards by hand). Was 4, which doubled the trophies asked for
+    // per level (4 each instead of 2).
+    numberlearning: 8,
     interactivequiz: 5,
     myanmarpoems: 48,
     // 1 trophy per game win, confirmed by the teacher (capped at 5) --
@@ -341,6 +345,29 @@ const extractGroupPartKey = (link) => {
   }
   return null;
 };
+// Lessons and sessions store unitCount/trophyLimit as they were when the lesson
+// was sent, so a correction to the tables above never reached lessons already
+// sent (a student's Number Learning kept asking for double trophies). For
+// group-app lessons, the current tables win over the stored numbers.
+const currentGroupCounts = (link) => {
+  const scheme = groupSchemeOfLink(link);
+  const part = scheme ? extractGroupPartKey(link) : null;
+  if (!scheme || !part) return null;
+  const unitCount = GROUP_APP_PART_UNIT_COUNT[scheme]?.[part];
+  const trophyLimit = GROUP_APP_PART_MAX[scheme]?.[part];
+  return unitCount != null || trophyLimit != null ? { unitCount, trophyLimit } : null;
+};
+const withCurrentLessonCounts = (lesson) => {
+  const c = lesson && currentGroupCounts(lesson.link);
+  if (!c) return lesson;
+  return { ...lesson, ...(c.unitCount != null ? { unitCount: c.unitCount } : {}), ...(c.trophyLimit != null ? { trophyLimit: c.trophyLimit } : {}) };
+};
+const withCurrentSessionCounts = (session) => {
+  const c = session && currentGroupCounts(session.lessonLink);
+  if (!c) return session;
+  return { ...session, ...(c.unitCount != null ? { lessonUnitCount: c.unitCount } : {}), ...(c.trophyLimit != null ? { lessonTrophyLimit: c.trophyLimit } : {}) };
+};
+
 const groupPartLabel = (scheme, partKey) => {
   const parts = GROUP_PARTS_BY_SCHEME[scheme];
   const part = parts && parts.find(p => p.key === partKey);
@@ -7208,7 +7235,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         return dateB - dateA; 
       });
 
-      setMyLessons(lessonList);
+      setMyLessons(lessonList.map(withCurrentLessonCounts));
     }, (error) => {
       console.error("Error fetching student lessons: ", error);
     });
@@ -7221,7 +7248,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     const activeQ = query(sessionsCollection, where("studentUid", "==", studentUid), where("endTime", "==", null));
     const unsubActive = onSnapshot(activeQ, (snapshot) => {
       const activeDoc = snapshot.docs[0];
-      setActiveSession(activeDoc ? { id: activeDoc.id, ...activeDoc.data() } : null);
+      setActiveSession(activeDoc ? withCurrentSessionCounts({ id: activeDoc.id, ...activeDoc.data() }) : null);
     }, (error) => {
       console.error("Error fetching active session:", error);
     });
@@ -7241,7 +7268,8 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       const startOfYear = new Date(new Date().getFullYear(), 0, 1).getTime();
       const sessionList = snapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
-        .filter(s => s.endTime && s.startTime && typeof s.startTime.toDate === 'function' && s.startTime.toDate().getTime() >= startOfYear);
+        .filter(s => s.endTime && s.startTime && typeof s.startTime.toDate === 'function' && s.startTime.toDate().getTime() >= startOfYear)
+        .map(withCurrentSessionCounts);
       setMySessions(sessionList);
     }, (error) => {
       console.error("Error fetching recent sessions:", error);

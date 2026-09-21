@@ -32,7 +32,7 @@ const FREE_PLOTS = 10;
 // (see PLOT_COST_GROWTH), so the first few are cheap and a big world takes
 // a long time.
 // At most this many plots can be bought per week (Monday-based week).
-const LAND_PLOTS_PER_WEEK = 5;
+const LAND_PLOTS_PER_WEEK = 2;
 const currentWeekKey = () => {
   const d = new Date();
   d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
