@@ -1200,7 +1200,10 @@ const longPressTimerRef = useRef(null);
   const [hasReadAloudCurrent, setHasReadAloudCurrent] = useState(false);
   const [completedSentences, setCompletedSentences] = useState(new Set());
   
-  const [scorePos, setScorePos] = useState({ x: 0, y: 20 });
+  // Phones only (narrower than Tailwind's sm breakpoint, 640px) get the
+  // adjustments below -- iPad and computer layouts are unchanged.
+  const isPhone = typeof window !== 'undefined' && window.innerWidth < 640;
+  const [scorePos, setScorePos] = useState(isPhone ? { x: window.innerWidth - 76, y: window.innerHeight - 120 } : { x: 0, y: 20 });
   const [isScoreDragging, setIsScoreDragging] = useState(false);
   const [scoreDragOffset, setScoreDragOffset] = useState({ x: 0, y: 0 });
 
@@ -1335,8 +1338,15 @@ const [sheetBAudio] = useState(new Audio());
 
   useEffect(() => {
       if (typeof window !== 'undefined') {
-          setTransPos({ x: Math.max(20, window.innerWidth - 350), y: 80 });
-          setScorePos({ x: Math.max(20, window.innerWidth / 2 - 700), y: 80 });
+          if (window.innerWidth < 640) {
+              // Phones: keep both floating boxes down at the bottom edge,
+              // out of the way of the sentence being read (still draggable).
+              setTransPos({ x: 8, y: window.innerHeight - 150 });
+              setScorePos({ x: window.innerWidth - 76, y: window.innerHeight - 230 });
+          } else {
+              setTransPos({ x: Math.max(20, window.innerWidth - 350), y: 80 });
+              setScorePos({ x: Math.max(20, window.innerWidth / 2 - 700), y: 80 });
+          }
       }
   }, []);
 
@@ -3236,7 +3246,7 @@ useEffect(() => {
       {/* Floating Score Box */}
       {appMode === 'sheet' && sheetData.length > 0 && (
           <div
-              className="fixed z-[9900] px-4 py-3 rounded-2xl shadow-2xl border-[3px] cursor-move flex flex-col items-center justify-center transition-all duration-500 hover:scale-105"
+              className={`fixed z-[9900] rounded-2xl shadow-2xl border-[3px] cursor-move flex flex-col items-center justify-center transition-all duration-500 hover:scale-105 ${isPhone ? 'px-2 py-1' : 'px-4 py-3'}`}
               style={{
                   left: scorePos.x, top: scorePos.y, touchAction: 'none',
                   backgroundColor: `hsl(40, 100%, ${Math.max(40, 95 - (score/1000)*40)}%)`,
@@ -3253,8 +3263,8 @@ useEffect(() => {
               onPointerUp={(e) => { setIsScoreDragging(false); e.target.releasePointerCapture(e.pointerId); }}
               onPointerCancel={(e) => { setIsScoreDragging(false); e.target.releasePointerCapture(e.pointerId); }}
           >
-              <span className="text-lg bg-white/60 px-3 py-0.5 rounded-full mb-1 shadow-sm" title="Gold coins from this sentence">🪙</span>
-              <span className="text-3xl font-extrabold text-amber-950 drop-shadow-sm">{Math.round(score)}</span>
+              <span className={`bg-white/60 rounded-full shadow-sm ${isPhone ? 'text-sm px-2 mb-0' : 'text-lg px-3 py-0.5 mb-1'}`} title="Gold coins from this sentence">🪙</span>
+              <span className={`font-extrabold text-amber-950 drop-shadow-sm ${isPhone ? 'text-xl' : 'text-3xl'}`}>{Math.round(score)}</span>
           </div>
       )}
 
@@ -3435,7 +3445,7 @@ useEffect(() => {
 
       {showTranslation && appMode === 'sheet' && sheetData.length > 0 && currentSheetIndex > 0 && sheetData[currentSheetIndex]?.en && (
           <div
-              className="fixed z-[9980] bg-amber-100 border-[3px] border-amber-400 text-amber-900 px-5 py-3 rounded-2xl shadow-2xl cursor-move flex items-center justify-between gap-6 animate-in fade-in zoom-in duration-300 min-w-[200px]"
+              className="fixed z-[9980] bg-amber-100 border-[3px] border-amber-400 text-amber-900 px-3 sm:px-5 py-2 sm:py-3 rounded-2xl shadow-2xl cursor-move flex items-center justify-between gap-3 sm:gap-6 animate-in fade-in zoom-in duration-300 min-w-[200px] max-w-[calc(100vw-16px)]"
               style={{ left: transPos.x, top: transPos.y, touchAction: 'none' }}
               onPointerDown={(e) => {
                   setIsTransDragging(true);
@@ -3736,7 +3746,7 @@ useEffect(() => {
             
           </div>
 
-          <div className={`flex flex-nowrap items-center gap-3 mt-6 overflow-x-auto pb-2 scrollbar-hide px-1 ${onboardingStep === 'sheet_icon' ? 'pt-28' : ''}`}>
+          <div className={`flex flex-wrap justify-center sm:justify-start sm:flex-nowrap items-center gap-3 mt-6 sm:overflow-x-auto pb-2 scrollbar-hide px-1 ${onboardingStep === 'sheet_icon' ? 'pt-28' : ''}`}>
             
             {appMode === 'sheet' && sheetData.length > 0 && currentSheetIndex >= 0 ? (
                 <div className="flex items-center gap-1 h-[60px]">
