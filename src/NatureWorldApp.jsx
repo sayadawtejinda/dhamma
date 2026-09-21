@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { doc, getDoc, setDoc, increment, deleteField } from 'firebase/firestore';
 import { db } from './firebase';
 import OnlineStatusWidget from './OnlineStatusWidget';
@@ -46,9 +46,12 @@ const TREE_OPTIONS = [
   { id: 'pine', name: 'Pine Tree', emoji: '🌲', cost: 10, kind: 'tree' },
   { id: 'oak', name: 'Oak Tree', emoji: '🌳', cost: 15, kind: 'tree' },
   { id: 'palm', name: 'Palm Tree', emoji: '🌴', cost: 15, kind: 'tree' },
+  { id: 'cactus', name: 'Cactus', emoji: '🌵', cost: 12, kind: 'tree' },
+  { id: 'bare', name: 'Bare Tree', emoji: '🪾', cost: 12, kind: 'tree' },
+  { id: 'island', name: 'Palm Island', emoji: '🏝️', cost: 20, kind: 'tree' },
 ];
-// Non-growing scenery -- placed instantly at full size, no color choice,
-// so a garden isn't only ever trees.
+// Scenery (rock/pond/path) is no longer sold, but land that already has some
+// still needs to draw it -- so these stay defined, just out of the shop.
 const DECOR_OPTIONS = [
   { id: 'rock', name: 'Rock', emoji: '🪨', cost: 6, kind: 'decor' },
   { id: 'pond', name: 'Pond', emoji: '🌊', cost: 18, kind: 'decor' },
@@ -129,6 +132,111 @@ function Bunny({ unlockedCount, startDelayMs = 0 }) {
   );
 }
 
+// Sky over the whole world: rain, snow or sunshine, picked at random each time
+// the world is opened and changing again every couple of minutes. Purely
+// decorative and never blocks a tap.
+const WEATHER_TYPES = ['rain', 'snow', 'sun'];
+function Weather() {
+  const [type, setType] = useState(() => WEATHER_TYPES[Math.floor(Math.random() * WEATHER_TYPES.length)]);
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setType(prev => {
+        const others = WEATHER_TYPES.filter(w => w !== prev);
+        return others[Math.floor(Math.random() * others.length)];
+      });
+    }, 120000);
+    return () => clearInterval(timer);
+  }, []);
+  const particles = useMemo(() => Array.from({ length: type === 'snow' ? 38 : 55 }).map((_, i) => ({
+    id: i,
+    left: Math.random() * 100,
+    delay: -Math.random() * 10,
+    duration: type === 'snow' ? 7 + Math.random() * 6 : 0.7 + Math.random() * 0.7,
+    size: type === 'snow' ? 12 + Math.random() * 16 : 0,
+    sway: (Math.random() - 0.5) * 60,
+  })), [type]);
+  return (
+    <div className="fixed inset-0 z-20 pointer-events-none overflow-hidden" aria-hidden="true">
+      <style>{`
+        @keyframes natureRainFall { from { transform: translateY(-8vh); } to { transform: translateY(108vh); } }
+        @keyframes natureSnowFall { from { transform: translate(0, -8vh) rotate(0deg); } to { transform: translate(var(--sway), 108vh) rotate(360deg); } }
+        @keyframes natureSunPulse { 0%, 100% { transform: scale(1) rotate(0deg); filter: drop-shadow(0 0 14px rgba(255,200,0,0.9)); } 50% { transform: scale(1.1) rotate(12deg); filter: drop-shadow(0 0 30px rgba(255,190,0,1)); } }
+      `}</style>
+      {type === 'rain' && (
+        <>
+          <div className="absolute inset-0 bg-slate-700/10" />
+          {particles.map(p => (
+            <span key={p.id} className="absolute top-0 w-[2px] h-5 rounded-full bg-sky-500/60"
+              style={{ left: `${p.left}%`, animation: `natureRainFall ${p.duration}s linear ${p.delay}s infinite` }} />
+          ))}
+        </>
+      )}
+      {type === 'snow' && (
+        <>
+          <div className="absolute inset-0 bg-sky-100/20" />
+          {particles.map(p => (
+            <span key={p.id} className="absolute top-0 select-none"
+              style={{ left: `${p.left}%`, fontSize: p.size, '--sway': `${p.sway}px`, animation: `natureSnowFall ${p.duration}s linear ${p.delay}s infinite` }}>❄️</span>
+          ))}
+        </>
+      )}
+      {type === 'sun' && (
+        <>
+          <div className="absolute inset-0 bg-gradient-to-b from-yellow-200/25 via-transparent to-transparent" />
+          <span className="absolute top-14 right-6 text-7xl select-none" style={{ animation: 'natureSunPulse 4s ease-in-out infinite' }}>☀️</span>
+        </>
+      )}
+    </div>
+  );
+}
+
+// A visitor's gift, wrapped up: the lid lifts and sparkles when opened.
+function GiftBox({ opened, onClick }) {
+  return (
+    <button onClick={onClick} className="relative w-11 h-11 flex-shrink-0 hover:scale-110 transition-transform" aria-label="Open the gift" style={{ animation: opened ? 'none' : 'natureGiftWobble 2.2s ease-in-out infinite' }}>
+      <span className="absolute left-1 right-1 bottom-0 h-6 rounded-md bg-gradient-to-b from-pink-400 to-rose-500 shadow-md" />
+      <span className="absolute left-1/2 -translate-x-1/2 bottom-0 w-2 h-6 bg-yellow-300/90" />
+      <span className="absolute left-0 right-0 h-3 rounded-md bg-gradient-to-b from-pink-300 to-pink-500 shadow transition-all duration-500 origin-left"
+        style={{ bottom: 22, transform: opened ? 'translateY(-14px) rotate(-28deg)' : 'none' }}>
+        <span className="absolute left-1/2 -translate-x-1/2 top-0 w-2 h-3 bg-yellow-300/90" />
+        <span className="absolute -top-3 left-1/2 -translate-x-1/2 text-base leading-none">🎀</span>
+      </span>
+      {opened && <span className="absolute -top-3 left-1/2 -translate-x-1/2 text-lg" style={{ animation: 'natureGiftSparkle 1.4s ease-out forwards' }}>✨</span>}
+    </button>
+  );
+}
+
+// Five seconds of hearts falling. A fresh random mix of colours, sizes, spots
+// and speeds every time, so no two gifts look alike.
+const HEART_EMOJIS = ['💝', '❤️', '🩷', '🧡', '💛', '💚', '💙', '🩵', '💜', '🤎', '🖤', '🩶', '🤍', '💗', '💖'];
+function HeartRain({ onDone }) {
+  const hearts = useMemo(() => {
+    const palette = [...HEART_EMOJIS].sort(() => Math.random() - 0.5).slice(0, 6 + Math.floor(Math.random() * 4));
+    return Array.from({ length: 60 }).map((_, i) => ({
+      id: i,
+      emoji: palette[Math.floor(Math.random() * palette.length)],
+      left: Math.random() * 100,
+      delay: Math.random() * 2.6,
+      duration: 1.8 + Math.random() * 1.6,
+      size: 18 + Math.random() * 26,
+      drift: (Math.random() - 0.5) * 120,
+    }));
+  }, []);
+  useEffect(() => {
+    const timer = setTimeout(onDone, 5000);
+    return () => clearTimeout(timer);
+  }, []);
+  return (
+    <div className="fixed inset-0 z-[10010] pointer-events-none overflow-hidden" aria-hidden="true">
+      <style>{`@keyframes natureHeartFall { 0% { transform: translate(0, -10vh) rotate(0deg); opacity: 0; } 10% { opacity: 1; } 100% { transform: translate(var(--drift), 108vh) rotate(40deg); opacity: 1; } }`}</style>
+      {hearts.map(h => (
+        <span key={h.id} className="absolute top-0 select-none"
+          style={{ left: `${h.left}%`, fontSize: h.size, '--drift': `${h.drift}px`, opacity: 0, animation: `natureHeartFall ${h.duration}s ease-in ${h.delay}s forwards` }}>{h.emoji}</span>
+      ))}
+    </div>
+  );
+}
+
 const DEFAULT_WORLD = { landUnlocked: FREE_PLOTS, placedTrees: {} };
 
 export default function NatureWorldApp({ entryRequest, onExit }) {
@@ -183,6 +291,23 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
 
   const [recentVisitors, setRecentVisitors] = useState([]);
   const [showVisitorsPanel, setShowVisitorsPanel] = useState(false);
+  // Each visit leaves a gift behind; which ones this student has already
+  // opened is remembered on this device (no Firebase writes for it).
+  const giftStoreKey = `natureGiftsOpened_${studentName}`;
+  const [openedGifts, setOpenedGifts] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(giftStoreKey) || '[]'); } catch (e) { return []; }
+  });
+  const [heartRainId, setHeartRainId] = useState(null);
+  const openGift = (key) => {
+    if (heartRainId) return;
+    setOpenedGifts(prev => {
+      if (prev.includes(key)) return prev;
+      const next = [...prev, key].slice(-60);
+      try { localStorage.setItem(giftStoreKey, JSON.stringify(next)); } catch (e) { /* fine */ }
+      return next;
+    });
+    setHeartRainId(Date.now());
+  };
   const [visitingStudentName, setVisitingStudentName] = useState(null);
   const [visitingWorld, setVisitingWorld] = useState(null);
   const [visitLoading, setVisitLoading] = useState(false);
@@ -311,6 +436,7 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
               if (!interactive || !unlocked) return;
               if (tree) { handleRemoveTree(i); return; }
               setShopSlot(i);
+              setShopCategory('tree');
             }}
             title={!interactive ? undefined : !unlocked ? 'Locked land' : tree ? `${tree.name} -- tap to remove` : 'Tap to plant or place something'}
             className={`aspect-square flex items-center justify-center text-2xl sm:text-3xl transition-transform border ${
@@ -348,6 +474,8 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
         @keyframes natureBunnyHop { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
         @keyframes natureFleeLTR { 0% { transform: translate(0, 0) scaleX(-1); } 12% { transform: translate(-8px, 6px) scaleX(-1); } 100% { transform: translate(70vw, -80vh) scaleX(-1); opacity: 0; } }
         @keyframes natureFleeRTL { 0% { transform: translate(0, 0); } 12% { transform: translate(8px, 6px); } 100% { transform: translate(-70vw, -80vh); opacity: 0; } }
+        @keyframes natureGiftWobble { 0%, 100% { transform: rotate(0deg); } 25% { transform: rotate(-6deg); } 75% { transform: rotate(6deg); } }
+        @keyframes natureGiftSparkle { 0% { opacity: 0; transform: translate(-50%, 6px) scale(0.6); } 30% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -26px) scale(1.5); } }
         @keyframes natureFlap { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
       `}</style>
       {/* Ambient sky life -- birds (solo or in a small flock) and the
@@ -376,6 +504,8 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
           </div>
         ))}
       </div>
+      <Weather />
+      {heartRainId && <HeartRain key={heartRainId} onDone={() => setHeartRainId(null)} />}
       <button
         onClick={onExit}
         className="fixed top-3 left-3 z-50 w-12 h-12 flex items-center justify-center bg-gray-800 text-white rounded-full shadow-lg text-2xl hover:bg-gray-900"
@@ -416,7 +546,7 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
         {studentName}'s Nature World
       </h1>
       <p className="text-emerald-600 text-sm mb-2 text-center">
-        🌱 Buy land, then plant trees and place scenery with coins you've earned
+        🌱 Buy land, then plant trees with coins you've earned
       </p>
       {/* Landscape hint -- true orientation-lock isn't reliable across
           browsers without a user gesture + Fullscreen API (and doesn't
@@ -462,24 +592,7 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
       {shopSlot != null && (
         <div className="fixed inset-0 z-[10001] bg-black/50 flex items-center justify-center p-4" onClick={() => { setShopSlot(null); setShopCategory(null); setShopPickedTree(null); }}>
           <div className="bg-white rounded-2xl shadow-2xl max-w-xs w-full p-6" onClick={(e) => e.stopPropagation()}>
-            {!shopCategory ? (
-              <>
-                <h2 className="text-lg font-bold text-emerald-800 mb-4 text-center">🌿 What would you like to place?</h2>
-                <div className="grid grid-cols-2 gap-2 mb-2">
-                  <button onClick={() => setShopCategory('tree')} className="flex flex-col items-center justify-center gap-1 p-4 rounded-xl border bg-emerald-50 border-emerald-200 hover:bg-emerald-100">
-                    <span className="text-2xl">🌳</span>
-                    <span className="text-sm font-semibold text-gray-800">Trees</span>
-                  </button>
-                  <button onClick={() => setShopCategory('decor')} className="flex flex-col items-center justify-center gap-1 p-4 rounded-xl border bg-sky-50 border-sky-200 hover:bg-sky-100">
-                    <span className="text-2xl">🪨</span>
-                    <span className="text-sm font-semibold text-gray-800">Scenery</span>
-                  </button>
-                </div>
-                <button onClick={() => setShopSlot(null)} className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2.5 rounded-xl mt-2">
-                  Cancel
-                </button>
-              </>
-            ) : shopCategory === 'tree' && !shopPickedTree ? (
+            {!shopPickedTree ? (
               <>
                 <h2 className="text-lg font-bold text-emerald-800 mb-4 text-center">🌱 Plant a Tree</h2>
                 <div className="space-y-2 mb-2">
@@ -497,11 +610,11 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
                     </button>
                   ))}
                 </div>
-                <button onClick={() => setShopCategory(null)} className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2.5 rounded-xl mt-2">
-                  Back
+                <button onClick={() => { setShopSlot(null); setShopCategory(null); setShopPickedTree(null); }} className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2.5 rounded-xl mt-2">
+                  Cancel
                 </button>
               </>
-            ) : shopCategory === 'tree' && shopPickedTree ? (
+            ) : (
               <>
                 <h2 className="text-lg font-bold text-emerald-800 mb-4 text-center">{shopPickedTree.emoji} Pick a Color</h2>
                 <div className="grid grid-cols-3 gap-2 mb-2">
@@ -520,28 +633,6 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
                   Back
                 </button>
               </>
-            ) : (
-              <>
-                <h2 className="text-lg font-bold text-sky-800 mb-4 text-center">🪨 Add Scenery</h2>
-                <div className="space-y-2 mb-2">
-                  {DECOR_OPTIONS.map(option => (
-                    <button
-                      key={option.id}
-                      onClick={() => handlePlantTree(option, null)}
-                      className="w-full flex items-center justify-between p-3 rounded-xl border bg-sky-50 border-sky-200 hover:bg-sky-100"
-                    >
-                      <span className="font-semibold text-gray-800 flex items-center gap-2">
-                        <span className="text-xl">{option.emoji}</span>
-                        {option.name}
-                      </span>
-                      <span className="text-sm font-bold text-sky-700">🪙 {option.cost}</span>
-                    </button>
-                  ))}
-                </div>
-                <button onClick={() => setShopCategory(null)} className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2.5 rounded-xl mt-2">
-                  Back
-                </button>
-              </>
             )}
           </div>
         </div>
@@ -557,12 +648,18 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
               <p className="text-sm text-gray-400 mb-4">No one has visited your world yet.</p>
             ) : (
               <div className="space-y-2 mb-4 max-h-64 overflow-y-auto text-left">
-                {recentVisitors.map((v, i) => (
-                  <div key={i} className="flex items-center justify-between bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2">
-                    <span className="font-semibold text-gray-800">{v.name}</span>
-                    <span className="text-xs text-gray-400">{new Date(v.visitedAt).toLocaleString()}</span>
-                  </div>
-                ))}
+                {recentVisitors.map((v, i) => {
+                  const giftKey = `${v.name}-${v.visitedAt}`;
+                  return (
+                    <div key={i} className="flex items-center gap-3 bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2">
+                      <GiftBox opened={openedGifts.includes(giftKey)} onClick={() => openGift(giftKey)} />
+                      <div className="flex-1 min-w-0">
+                        <span className="font-semibold text-gray-800 block truncate">{v.name}</span>
+                        <span className="text-xs text-gray-400">{new Date(v.visitedAt).toLocaleString()}</span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
             <button onClick={() => setShowVisitorsPanel(false)} className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2.5 rounded-xl">
