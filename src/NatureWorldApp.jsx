@@ -57,7 +57,29 @@ const DECOR_OPTIONS = [
   { id: 'pond', name: 'Pond', emoji: '🌊', cost: 18, kind: 'decor' },
   { id: 'path', name: 'Path Stone', emoji: '🟫', cost: 4, kind: 'decor' },
 ];
-const ITEM_OPTIONS = [...TREE_OPTIONS, ...DECOR_OPTIONS];
+// Plants that only come as visitor gifts (see GiftBox) -- not sold in the shop.
+// A gift never grows; it sits at full size with the giver's name attached.
+const GIFT_OPTIONS = [
+  { id: 'gift-cherry', name: 'Cherry Blossom', emoji: '🌸', kind: 'gift' },
+  { id: 'gift-sunflower', name: 'Sunflower', emoji: '🌻', kind: 'gift' },
+  { id: 'gift-tulip', name: 'Tulip', emoji: '🌷', kind: 'gift' },
+  { id: 'gift-mushroom', name: 'Mushroom', emoji: '🍄', kind: 'gift' },
+  { id: 'gift-potted', name: 'Potted Plant', emoji: '🪴', kind: 'gift' },
+  { id: 'gift-shell', name: 'Seashell', emoji: '🐚', kind: 'gift' },
+  { id: 'gift-hibiscus', name: 'Hibiscus', emoji: '🌺', kind: 'gift' },
+  { id: 'gift-blossom', name: 'Daisy', emoji: '🌼', kind: 'gift' },
+  { id: 'gift-clover', name: 'Lucky Clover', emoji: '🍀', kind: 'gift' },
+  { id: 'gift-rose', name: 'Rose', emoji: '🌹', kind: 'gift' },
+];
+const GIFT_BAG_MAX = 30;
+// Which gift a given visit brings is fixed by the visit itself, so the same
+// visitor always shows the same present however many times it's looked at.
+const giftForVisit = (key) => {
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
+  return GIFT_OPTIONS[h % GIFT_OPTIONS.length];
+};
+const ITEM_OPTIONS = [...TREE_OPTIONS, ...DECOR_OPTIONS, ...GIFT_OPTIONS];
 const findTree = (id) => ITEM_OPTIONS.find(t => t.id === id);
 
 // Same 3 tree shapes, recolored with a CSS filter so a whole plot of land
@@ -237,7 +259,7 @@ function HeartRain({ onDone }) {
   );
 }
 
-const DEFAULT_WORLD = { landUnlocked: FREE_PLOTS, placedTrees: {} };
+const DEFAULT_WORLD = { landUnlocked: FREE_PLOTS, placedTrees: {}, giftBag: [], giftsOpened: [] };
 
 export default function NatureWorldApp({ entryRequest, onExit }) {
   const isTeacherPreview = !entryRequest?.studentUid;
@@ -291,21 +313,23 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
 
   const [recentVisitors, setRecentVisitors] = useState([]);
   const [showVisitorsPanel, setShowVisitorsPanel] = useState(false);
-  // Each visit leaves a gift behind; which ones this student has already
-  // opened is remembered on this device (no Firebase writes for it).
-  const giftStoreKey = `natureGiftsOpened_${studentName}`;
-  const [openedGifts, setOpenedGifts] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(giftStoreKey) || '[]'); } catch (e) { return []; }
-  });
   const [heartRainId, setHeartRainId] = useState(null);
-  const openGift = (key) => {
+  // Opening a visitor's gift shakes out hearts, and the plant inside goes into
+  // the gift bag (once per visit -- reopening just replays the hearts).
+  const openGift = (visit) => {
     if (heartRainId) return;
-    setOpenedGifts(prev => {
-      if (prev.includes(key)) return prev;
-      const next = [...prev, key].slice(-60);
-      try { localStorage.setItem(giftStoreKey, JSON.stringify(next)); } catch (e) { /* fine */ }
-      return next;
-    });
+    const key = `${visit.name}-${visit.visitedAt}`;
+    const already = (world.giftsOpened || []).includes(key);
+    if (!already) {
+      const bag = world.giftBag || [];
+      if (bag.length >= GIFT_BAG_MAX) { showToast('Your gift bag is full -- plant some first!'); return; }
+      const gift = giftForVisit(key);
+      const nextBag = [...bag, { id: gift.id, from: visit.name, key }];
+      const nextOpened = [...(world.giftsOpened || []), key].slice(-80);
+      setWorld(prev => ({ ...prev, giftBag: nextBag, giftsOpened: nextOpened }));
+      persist({ natureWorld: { giftBag: nextBag, giftsOpened: nextOpened } });
+      showToast(`${gift.emoji} ${gift.name} from ${visit.name} -- it's in your gift bag!`);
+    }
     setHeartRainId(Date.now());
   };
   const [visitingStudentName, setVisitingStudentName] = useState(null);
@@ -384,6 +408,37 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
     setShopPickedTree(null);
   };
 
+  const handlePlantGift = (bagIndex) => {
+    if (shopSlot == null) return;
+    const bag = world.giftBag || [];
+    const item = bag[bagIndex];
+    const option = item && findTree(item.id);
+    if (!item || !option) return;
+    const nextBag = bag.filter((_, i) => i !== bagIndex);
+    const data = { id: item.id, from: item.from, plantedAt: Date.now() };
+    const nextTrees = { ...world.placedTrees, [shopSlot]: data };
+    setWorld(prev => ({ ...prev, placedTrees: nextTrees, giftBag: nextBag }));
+    persist({ natureWorld: { placedTrees: { [shopSlot]: data }, giftBag: nextBag } });
+    setShopSlot(null); setShopCategory(null); setShopPickedTree(null);
+    showToast(`${option.emoji} Planted -- a gift from ${item.from}!`);
+  };
+
+  // Tapping a gift plant tells who gave it, and offers to pick it back up
+  // into the bag (a gift is never thrown away).
+  const handlePickUpGift = (slotIndex) => {
+    const placed = world.placedTrees[slotIndex];
+    const option = placed && findTree(placed.id);
+    if (!option) return;
+    if (!window.confirm(`${option.emoji} ${option.name} -- a gift from ${placed.from || 'a friend'}.\n\nPut it back in your gift bag?`)) return;
+    const bag = world.giftBag || [];
+    if (bag.length >= GIFT_BAG_MAX) { showToast('Your gift bag is full.'); return; }
+    const nextBag = [...bag, { id: placed.id, from: placed.from || 'a friend', key: `back-${Date.now()}` }];
+    const nextTrees = { ...world.placedTrees };
+    delete nextTrees[slotIndex];
+    setWorld(prev => ({ ...prev, placedTrees: nextTrees, giftBag: nextBag }));
+    persist({ natureWorld: { placedTrees: { [slotIndex]: deleteField() }, giftBag: nextBag } });
+  };
+
   const handleRemoveTree = (slotIndex) => {
     if (!window.confirm('Are you sure you want to remove this item? The coins you spent on it will not be refunded.')) return;
     const nextTrees = { ...world.placedTrees };
@@ -434,11 +489,11 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
             key={i}
             onClick={() => {
               if (!interactive || !unlocked) return;
-              if (tree) { handleRemoveTree(i); return; }
+              if (tree) { if (tree.kind === 'gift') handlePickUpGift(i); else handleRemoveTree(i); return; }
               setShopSlot(i);
               setShopCategory('tree');
             }}
-            title={!interactive ? undefined : !unlocked ? 'Locked land' : tree ? `${tree.name} -- tap to remove` : 'Tap to plant or place something'}
+            title={tree && tree.kind === 'gift' ? `${tree.name} -- a gift from ${placed.from || 'a friend'}` : !interactive ? undefined : !unlocked ? 'Locked land' : tree ? `${tree.name} -- tap to remove` : 'Tap to plant or place something'}
             className={`aspect-square flex items-center justify-center text-2xl sm:text-3xl transition-transform border ${
               unlocked
                 ? 'bg-gradient-to-b from-lime-200 to-green-300 border-green-400' + (interactive ? ' hover:scale-105 cursor-pointer' : '')
@@ -449,6 +504,8 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
               <span className="inline-block" style={{ transform: `scale(${treeGrowthScale(placed.plantedAt)})` }}>
                 <span className="inline-block" style={{ animation: 'natureTreeSway 3.2s ease-in-out infinite', filter: color.filter }}>{tree.emoji}</span>
               </span>
+            ) : tree && tree.kind === 'gift' ? (
+              <span className="inline-block" style={{ animation: 'natureTreeSway 3.6s ease-in-out infinite' }}>{tree.emoji}</span>
             ) : tree ? (
               <span className="inline-block">{tree.emoji}</span>
             ) : unlocked ? (
@@ -610,6 +667,22 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
                     </button>
                   ))}
                 </div>
+                {(world.giftBag || []).length > 0 && (
+                  <div className="mb-3 rounded-xl border border-pink-200 bg-pink-50 p-2">
+                    <p className="text-xs font-bold text-pink-700 mb-1.5 px-1">🎁 Gift bag (free)</p>
+                    <div className="grid grid-cols-2 gap-1.5 max-h-40 overflow-y-auto">
+                      {world.giftBag.map((g, gi) => {
+                        const opt = findTree(g.id);
+                        return opt ? (
+                          <button key={g.key || gi} onClick={() => handlePlantGift(gi)} className="flex items-center gap-1.5 bg-white border border-pink-200 hover:bg-pink-100 rounded-lg px-2 py-1.5 text-left">
+                            <span className="text-xl">{opt.emoji}</span>
+                            <span className="text-[11px] font-semibold text-gray-700 leading-tight truncate">{g.from}</span>
+                          </button>
+                        ) : null;
+                      })}
+                    </div>
+                  </div>
+                )}
                 <button onClick={() => { setShopSlot(null); setShopCategory(null); setShopPickedTree(null); }} className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2.5 rounded-xl mt-2">
                   Cancel
                 </button>
@@ -650,13 +723,16 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
               <div className="space-y-2 mb-4 max-h-64 overflow-y-auto text-left">
                 {recentVisitors.map((v, i) => {
                   const giftKey = `${v.name}-${v.visitedAt}`;
+                  const isOpened = (world.giftsOpened || []).includes(giftKey);
+                  const gift = giftForVisit(giftKey);
                   return (
                     <div key={i} className="flex items-center gap-3 bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2">
-                      <GiftBox opened={openedGifts.includes(giftKey)} onClick={() => openGift(giftKey)} />
+                      <GiftBox opened={isOpened} onClick={() => openGift(v)} />
                       <div className="flex-1 min-w-0">
                         <span className="font-semibold text-gray-800 block truncate">{v.name}</span>
                         <span className="text-xs text-gray-400">{new Date(v.visitedAt).toLocaleString()}</span>
                       </div>
+                      {isOpened && <span className="text-2xl" title={gift.name}>{gift.emoji}</span>}
                     </div>
                   );
                 })}
