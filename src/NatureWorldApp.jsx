@@ -75,8 +75,12 @@ const GIFT_BAG_MAX = 30;
 // One gift per visiting friend, ever -- keyed by the visitor's name, so
 // coming back again doesn't bring another. (Older keys were name + visit
 // time; those still count as "already opened" for that name.)
-const giftKeyFor = (name) => `gift:${name}`;
-const hasOpenedGiftFrom = (opened, name) => (opened || []).some(k => k === giftKeyFor(name) || k.startsWith(`${name}-`));
+// A visiting classmate only ever gives one gift, however many times they drop
+// by -- but a gift the TEACHER personally sends (see TutoringApp's Send Gift
+// -> Visit) is its own event each time, so a student visited three separate
+// weeks gets three trees, one per visit.
+const giftKeyFor = (visit) => visit.teacher ? `teacher:${visit.name}-${visit.visitedAt}` : `gift:${visit.name}`;
+const hasOpenedGiftFrom = (opened, visit) => (opened || []).some(k => k === giftKeyFor(visit) || (!visit.teacher && k.startsWith(`${visit.name}-`)));
 // Which gift a given visit brings is fixed by the visit itself, so the same
 // visitor always shows the same present however many times it's looked at.
 const giftForVisit = (key) => {
@@ -323,8 +327,8 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
   // the gift bag (once per visit -- reopening just replays the hearts).
   const openGift = (visit) => {
     if (heartRainId) return;
-    const key = giftKeyFor(visit.name);
-    const already = hasOpenedGiftFrom(world.giftsOpened, visit.name);
+    const key = giftKeyFor(visit);
+    const already = hasOpenedGiftFrom(world.giftsOpened, visit);
     if (!already) {
       const bag = world.giftBag || [];
       if (bag.length >= GIFT_BAG_MAX) { showToast('Your gift bag is full -- plant some first!'); return; }
@@ -727,13 +731,13 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
             ) : (
               <div className="space-y-2 mb-4 max-h-64 overflow-y-auto text-left">
                 {recentVisitors.map((v, i) => {
-                  const isOpened = hasOpenedGiftFrom(world.giftsOpened, v.name);
-                  const gift = giftForVisit(giftKeyFor(v.name));
+                  const isOpened = hasOpenedGiftFrom(world.giftsOpened, v);
+                  const gift = giftForVisit(giftKeyFor(v));
                   return (
                     <div key={i} className="flex items-center gap-3 bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2">
                       <GiftBox opened={isOpened} onClick={() => openGift(v)} />
                       <div className="flex-1 min-w-0">
-                        <span className="font-semibold text-gray-800 block truncate">{v.name}</span>
+                        <span className="font-semibold text-gray-800 block truncate">{v.name}{v.teacher ? ' 🧑‍🏫' : ''}</span>
                         <span className="text-xs text-gray-400">{new Date(v.visitedAt).toLocaleString()}</span>
                       </div>
                       {isOpened && <span className="text-2xl" title={gift.name}>{gift.emoji}</span>}

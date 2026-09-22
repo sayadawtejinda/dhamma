@@ -1322,6 +1322,7 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
   const [giftCoins, setGiftCoins] = useState('50');
   const [giftMessage, setGiftMessage] = useState('');
   const [isSendingGift, setIsSendingGift] = useState(false);
+  const [giftKind, setGiftKind] = useState('coin'); // 'coin' | 'visit'
   const [selectedStudentUid, setSelectedStudentUid] = useState('');
   const [selectedBankLessonId, setSelectedBankLessonId] = useState('');
   const [sendSmartStudyClassId, setSendSmartStudyClassId] = useState(''); // class chosen in Send Action for smartstudy:// lessons
@@ -2357,7 +2358,24 @@ const handleUndoTrophyAward = async () => {
     setLastTrophyAward(null);
   };
 
-  // A present for one student, a group, or everyone: one small doc per
+  // Resolves the Send tab's target picker (student/group/all) into a plain
+  // list of {id, name} -- shared by both gift kinds below.
+  const resolveGiftRecipients = () => {
+    if (sendTargetType === 'student') {
+      const s = students.find(x => x.id === selectedStudentUid);
+      return s ? { recipients: [s], targetText: s.name } : { recipients: [], targetText: '' };
+    }
+    if (sendTargetType === 'group') {
+      const g = groups.find(x => x.id === selectedGroupId);
+      if (!g) return { recipients: [], targetText: '' };
+      const recipients = g.studentUids.map(uid => students.find(x => x.id === uid)).filter(Boolean);
+      return { recipients, targetText: `group "${g.groupName}" (${recipients.length} students)` };
+    }
+    const recipients = students.filter(s => s.id);
+    return { recipients, targetText: `ALL ${recipients.length} students` };
+  };
+
+  // A coin present for one student, a group, or everyone: one small doc per
   // recipient in Shrine Room's teacherGifts collection. Each student finds
   // the box next time they walk into their Shrine Room (see TeacherGiftBox).
   const handleSendGift = async (e) => {
@@ -2365,22 +2383,8 @@ const handleUndoTrophyAward = async () => {
     if (isSendingGift) return;
     const coins = Math.max(0, Math.floor(Number(giftCoins) || 0));
     if (coins === 0) { alert('Enter how many coins to give.'); return; }
-    let recipients = [];
-    let targetText = '';
-    if (sendTargetType === 'student') {
-      const s = students.find(x => x.id === selectedStudentUid);
-      if (!s) { alert('Please select a student.'); return; }
-      recipients = [s]; targetText = s.name;
-    } else if (sendTargetType === 'group') {
-      const g = groups.find(x => x.id === selectedGroupId);
-      if (!g) { alert('Please select a group.'); return; }
-      recipients = g.studentUids.map(uid => students.find(x => x.id === uid)).filter(Boolean);
-      targetText = `group "${g.groupName}" (${recipients.length} students)`;
-    } else {
-      recipients = students.filter(s => s.id);
-      targetText = `ALL ${recipients.length} students`;
-    }
-    if (recipients.length === 0) { alert('No students to send to.'); return; }
+    const { recipients, targetText } = resolveGiftRecipients();
+    if (recipients.length === 0) { alert('Please choose who to send to.'); return; }
     if (!window.confirm(`Send a gift of ${coins} coins to ${targetText}?
 
 Each one will find a gift box the next time they enter their Shrine Room.`)) return;
@@ -2403,12 +2407,48 @@ Each one will find a gift box the next time they enter their Shrine Room.`)) ret
     setIsSendingGift(false);
   };
 
+  // "Visit" gift: the teacher drops into each recipient's Nature World the
+  // same way a classmate's visit does (see NatureWorldApp's Visitors panel),
+  // so a gift plant is waiting there to open -- no coins, just the teacher
+  // stopping by. Marked `teacher: true` so opening it isn't limited to once
+  // ever the way a classmate's visit is (see giftKeyFor in NatureWorldApp.jsx)
+  // -- every visit from the teacher is its own gift.
+  const handleSendTeacherVisit = async (e) => {
+    e.preventDefault();
+    if (isSendingGift) return;
+    const { recipients, targetText } = resolveGiftRecipients();
+    if (recipients.length === 0) { alert('Please choose who to send to.'); return; }
+    if (!window.confirm(`Visit ${targetText}'s Nature World and leave a gift?
+
+Each one will see the Teacher in their Visitors list, with a gift waiting to open.`)) return;
+    setIsSendingGift(true);
+    const sanitize = (key) => (key || 'unknown').trim().replace(/[.$#/\[\]]/g, '_');
+    const teacherVisitorName = '🧑‍🏫 Teacher';
+    const visitedAt = Date.now();
+    let ok = 0;
+    await Promise.all(recipients.map(async (s) => {
+      try {
+        const targetRef = doc(db, 'artifacts/shrine-room-app/public/data/roster', sanitize(s.name));
+        const snap = await getDoc(targetRef);
+        const data = snap.exists() ? snap.data() : {};
+        const others = (data.natureWorldRecentVisitors || []).filter(v => !(v.name === teacherVisitorName && v.teacher));
+        const nextVisitors = [{ name: teacherVisitorName, visitedAt, teacher: true }, ...others].slice(0, 10);
+        await setDoc(targetRef, { studentName: s.name, natureWorldRecentVisitors: nextVisitors }, { merge: true });
+        ok++;
+      } catch (err) {
+        console.error('Error visiting', s.name, err);
+      }
+    }));
+    alert(`Visited ${ok} of ${recipients.length} student(s)' Nature World.`);
+    setIsSendingGift(false);
+  };
+
   const handleSendSubmit = (e) => {
     e.preventDefault();
     if (sendActionType === 'lesson') {
         handleSendLesson(e);
     } else if (sendActionType === 'gift') {
-        handleSendGift(e);
+        (giftKind === 'visit' ? handleSendTeacherVisit : handleSendGift)(e);
     } else {
         handleAwardDirectTrophies(e);
     }
@@ -5039,12 +5079,22 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
           
           {sendActionType === 'gift' && (
             <div className="mb-4 p-4 rounded-xl bg-pink-50 border border-pink-200 space-y-3">
-              <label className="block text-sm font-semibold text-gray-700">🪙 Coins inside the gift box
-                <input type="number" min="1" value={giftCoins} onChange={(e) => setGiftCoins(e.target.value)} className="mt-1 w-full p-2 border rounded-lg text-center font-bold" />
-              </label>
-              <label className="block text-sm font-semibold text-gray-700">Short message (optional)
-                <input type="text" maxLength={80} value={giftMessage} onChange={(e) => setGiftMessage(e.target.value)} placeholder="e.g. Well done this week!" className="mt-1 w-full p-2 border rounded-lg" />
-              </label>
+              <div className="flex rounded-lg bg-white border border-pink-200 p-1">
+                <button type="button" onClick={() => setGiftKind('coin')} className={`flex-1 p-2 rounded-lg font-semibold text-sm ${giftKind === 'coin' ? 'bg-pink-500 text-white shadow' : 'text-gray-600'}`}>🪙 Coin gift box</button>
+                <button type="button" onClick={() => setGiftKind('visit')} className={`flex-1 p-2 rounded-lg font-semibold text-sm ${giftKind === 'visit' ? 'bg-pink-500 text-white shadow' : 'text-gray-600'}`}>👣 Visit (Nature World)</button>
+              </div>
+              {giftKind === 'coin' ? (
+                <>
+                  <label className="block text-sm font-semibold text-gray-700">🪙 Coins inside the gift box
+                    <input type="number" min="1" value={giftCoins} onChange={(e) => setGiftCoins(e.target.value)} className="mt-1 w-full p-2 border rounded-lg text-center font-bold" />
+                  </label>
+                  <label className="block text-sm font-semibold text-gray-700">Short message (optional)
+                    <input type="text" maxLength={80} value={giftMessage} onChange={(e) => setGiftMessage(e.target.value)} placeholder="e.g. Well done this week!" className="mt-1 w-full p-2 border rounded-lg" />
+                  </label>
+                </>
+              ) : (
+                <p className="text-sm text-gray-600">You'll show up as a visitor in each student's Nature World, with a gift plant waiting there for them to open -- no coins, just a visit.</p>
+              )}
             </div>
           )}
           {sendActionType !== 'gift' && (<>
@@ -5362,7 +5412,7 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
 
           {sendActionType === 'gift' ? (
              <button type="submit" disabled={isSendingGift} className="w-full bg-pink-500 text-white p-3 rounded-lg font-bold hover:bg-pink-600 transition-transform transform hover:scale-105 shadow-md disabled:opacity-50">
-               {isSendingGift ? 'Sending...' : '🎁 Send Gift'}
+               {isSendingGift ? 'Sending...' : giftKind === 'visit' ? '👣 Visit & Leave a Gift' : '🎁 Send Gift'}
              </button>
           ) : sendActionType === 'lesson' ? (
              <button type="submit" className="w-full bg-indigo-500 text-white p-3 rounded-lg font-semibold hover:bg-indigo-600 transition-transform transform hover:scale-105 shadow-md">
