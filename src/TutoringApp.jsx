@@ -10054,18 +10054,24 @@ function YearAttendanceBoard({ role, targetStudentUid }) {
   useEffect(() => {
     // Only this year's schedule is needed here — a single range filter on one
     // field doesn't require a composite index, and cuts the download size a
-    // lot for classes with years of history.
+    // lot for classes with years of history. A ONE-TIME read, not a live
+    // listener: this is a leaderboard snapshot, not something that needs to
+    // move the instant another student's session ends, and a live listener
+    // here used to mean every session/schedule write from ANY student, all
+    // day, kept re-billing every open tab sitting on this view.
+    let cancelled = false;
     const startOfYear = new Date(new Date().getFullYear(), 0, 1);
     const q = query(teacherScheduleCollection, where("startTime", ">=", Timestamp.fromDate(startOfYear)));
-    const unsub = onSnapshot(q, (snap) => setTeacherSchedule(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-    return () => unsub();
+    getDocs(q).then(snap => { if (!cancelled) setTeacherSchedule(snap.docs.map(d => ({ id: d.id, ...d.data() }))); }).catch(e => console.error('Error loading year schedule:', e));
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
     const startOfYear = new Date(new Date().getFullYear(), 0, 1);
     const q = query(sessionsCollection, where("startTime", ">=", Timestamp.fromDate(startOfYear)));
-    const unsub = onSnapshot(q, (snap) => setSessions(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-    return () => unsub();
+    getDocs(q).then(snap => { if (!cancelled) setSessions(snap.docs.map(d => ({ id: d.id, ...d.data() }))); }).catch(e => console.error('Error loading year sessions:', e));
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
@@ -10190,18 +10196,31 @@ function TrophyBoard({ role, targetStudentUid, studentProfile }) {
   }, []);
 
   useEffect(() => {
-    const startOfYear = new Date(new Date().getFullYear(), 0, 1);
-    const q = query(teacherScheduleCollection, where("startTime", ">=", Timestamp.fromDate(startOfYear)));
-    const unsub = onSnapshot(q, (snap) => setTeacherSchedule(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-    return () => unsub();
-  }, []);
+    // Only a student needs these two (to work out their own remaining
+    // hearts below) -- the teacher's ranked list further down is built
+    // straight from each student's stored trophyCount and never reads
+    // `teacherSchedule`/`sessions` at all, so the teacher doesn't subscribe
+    // to either. A one-time read, not live: this is only ever read once, on
+    // mount, to compute a number shown once -- there's no reason for it to
+    // keep re-billing for as long as the student leaves this tab open.
+    if (role !== 'student' || !targetStudentUid) return;
+    let cancelled = false;
+    // Equality-only filter (no composite index needed) -- a single student's
+    // whole schedule history is tiny, so filtering down to "this year" isn't
+    // worth a second server-side range clause; the render code below already
+    // checks each entry's date against startOfYear anyway.
+    const q = query(teacherScheduleCollection, where("studentUid", "==", targetStudentUid));
+    getDocs(q).then(snap => { if (!cancelled) setTeacherSchedule(snap.docs.map(d => ({ id: d.id, ...d.data() }))); }).catch(e => console.error('Error loading my schedule:', e));
+    return () => { cancelled = true; };
+  }, [role, targetStudentUid]);
 
   useEffect(() => {
-    const startOfYear = new Date(new Date().getFullYear(), 0, 1);
-    const q = query(sessionsCollection, where("startTime", ">=", Timestamp.fromDate(startOfYear)));
-    const unsub = onSnapshot(q, (snap) => setSessions(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-    return () => unsub();
-  }, []);
+    if (role !== 'student' || !targetStudentUid) return;
+    let cancelled = false;
+    const q = query(sessionsCollection, where("studentUid", "==", targetStudentUid));
+    getDocs(q).then(snap => { if (!cancelled) setSessions(snap.docs.map(d => ({ id: d.id, ...d.data() }))); }).catch(e => console.error('Error loading my sessions:', e));
+    return () => { cancelled = true; };
+  }, [role, targetStudentUid]);
 
   const rankedList = useMemo(() => {
     return students
