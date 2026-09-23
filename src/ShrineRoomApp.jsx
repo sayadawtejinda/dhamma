@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { collection, query, where, getDocs, doc, getDoc, getDocFromServer, setDoc, updateDoc, serverTimestamp, increment, runTransaction } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc, getDocFromServer, setDoc, updateDoc, deleteDoc, serverTimestamp, increment, runTransaction } from 'firebase/firestore';
 import { db } from './firebase';
 import { presenceIntervalMs } from './presenceDay';
 import { appId } from './firebaseConfig';
@@ -503,11 +503,13 @@ const buddhaSvg = (skinColor, robeColor, baseColor, haloColor, accentColor) => `
 // Golden/Jade are temporary (durationBuddhaDays), not a permanent unlock --
 // once their 7 days run out the statue automatically reverts to the free
 // Wooden Buddha (see the Buddha-expiry check alongside the offering one).
-const BUDDHA_DURATION_DAYS = 7;
+// Once bought, a Buddha image is the student's for good -- no expiry, no
+// re-buying. Jade specifically needs a Bodhi Tree that's actually grown for
+// 10 real weeks (not the coarser title-milestone scale other things use).
 const BUDDHA_OPTIONS = [
-  { id: 'wood', name: 'Wooden Buddha', cost: 0, requiresBodhiStage: 0, svg: buddhaSvg('#8D6E63', '#5D4037', '#4E342E', '#D7CCC8', '#3E2723') },
-  { id: 'golden', name: 'Golden Buddha', cost: 500, requiresBodhiStage: 0, durationDays: BUDDHA_DURATION_DAYS, svg: buddhaSvg('#FFD54F', '#FFA000', '#FF8F00', '#FFF3C4', '#8D5A00') },
-  { id: 'jade', name: 'Jade Buddha', cost: 700, requiresBodhiStage: 5, durationDays: BUDDHA_DURATION_DAYS, svg: buddhaSvg('#66BB6A', '#2E7D32', '#1B5E20', '#C8E6C9', '#0D3D14') },
+  { id: 'wood', name: 'Wooden Buddha', cost: 0, requiresBodhiWeeks: 0, svg: buddhaSvg('#8D6E63', '#5D4037', '#4E342E', '#D7CCC8', '#3E2723') },
+  { id: 'golden', name: 'Golden Buddha', cost: 500, requiresBodhiWeeks: 0, svg: buddhaSvg('#FFD54F', '#FFA000', '#FF8F00', '#FFF3C4', '#8D5A00') },
+  { id: 'jade', name: 'Jade Buddha', cost: 700, requiresBodhiWeeks: 10, svg: buddhaSvg('#66BB6A', '#2E7D32', '#1B5E20', '#C8E6C9', '#0D3D14') },
 ];
 // Custom-drawn golden ceremonial umbrella (hti) -- the ⛱️ emoji looked like
 // a beach umbrella, not a Buddhist offering, so this replaces it: a domed
@@ -562,7 +564,6 @@ const OFFERING_OPTIONS = [
   { id: 'flower', name: 'Lotus Flower', emoji: '🪷', durationHours: 5, cost: durationCost(5) },
   { id: 'umbrella', name: 'Golden Umbrella', svg: umbrellaSvg('#FFD54F', '#5D4037', '#B8860B'), durationHours: 20, cost: durationCost(20) },
   { id: 'lamp', name: 'Oil Lamp', emoji: '🪔', durationHours: 5, cost: durationCost(5) },
-  { id: 'bell', name: 'Bell', emoji: '🔔', durationHours: 10, cost: durationCost(10) },
 ];
 // Renders an offering's icon whether it's a plain emoji or custom SVG
 // artwork (only the umbrella uses SVG so far).
@@ -572,6 +573,10 @@ const OfferingIcon = ({ offering, className }) =>
     : <span className={className}>{offering.emoji}</span>;
 const ALL_OFFERING_IDS = OFFERING_OPTIONS.map(o => o.id);
 const findOffering = (id) => OFFERING_OPTIONS.find(o => o.id === id);
+// The Bell isn't a shop-list item any more -- it's bought straight from its
+// own spot on the altar (a silhouette until then), and once bought it's
+// permanent, same as any Buddha image.
+const BELL_OPTION = { id: 'bell', name: 'Bell', emoji: '🔔', cost: 500 };
 const findBuddha = (id) => BUDDHA_OPTIONS.find(o => o.id === id);
 
 const SLOT_COUNT = 6;
@@ -808,6 +813,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   // Teacher preview also gets full access to the two Bodhi-tree-gated items
   // (there's no real attendance to compute a stage from).
   const [bodhiStageIndex, setBodhiStageIndex] = useState(isTeacherPreview ? BODHI_MILESTONES.length - 1 : 0);
+  const [bodhiWeeksGrown, setBodhiWeeksGrown] = useState(isTeacherPreview ? 99 : 0);
   const [shopOpen, setShopOpen] = useState(false);
   const [chantingOpen, setChantingOpen] = useState(false);
   // Goes true once 3 minutes pass with no touch/click/key while the chant
@@ -1149,7 +1155,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
             .filter(e => e.endTime?.toDate?.() < now && getAttendanceStatus(e, sessions) === 'attended')
             .map(e => getWeekKey(e.startTime.toDate()))
         );
-        if (isMounted) setBodhiStageIndex(getBodhiStageIndex(attendedWeeks.size * 7));
+        if (isMounted) { setBodhiStageIndex(getBodhiStageIndex(attendedWeeks.size * 7)); setBodhiWeeksGrown(attendedWeeks.size); }
 
         if (rosterSnap && rosterSnap.exists()) {
           const data = rosterSnap.data();
@@ -1204,7 +1210,19 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     if (!studentUid || loading) return;
     let cancelled = false;
     getDocs(query(collection(db, TEACHER_GIFTS_PATH), where('studentUid', '==', studentUid)))
-      .then(snap => { if (!cancelled) setTeacherGifts(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0))); })
+      .then(snap => {
+        const now = Date.now();
+        const live = [];
+        // A gift older than its 2-week expiresAt is swept away here (never
+        // opened, so nothing was ever paid out) -- best-effort cleanup so
+        // this collection doesn't grow forever with stale, unopenable docs.
+        snap.docs.forEach(d => {
+          const g = { id: d.id, ...d.data() };
+          if (g.expiresAt && g.expiresAt < now) { deleteDoc(d.ref).catch(() => {}); return; }
+          live.push(g);
+        });
+        if (!cancelled) setTeacherGifts(live.sort((a, b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0)));
+      })
       .catch(e => console.error('Could not read teacher gifts:', e));
     return () => { cancelled = true; };
   }, [studentUid, loading]);
@@ -1231,30 +1249,26 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     if (rosterRef) setDoc(rosterRef, { studentName, coinBalance: increment(delta) }, { merge: true }).catch(() => {});
   };
 
-  // Golden/Jade are temporary (BUDDHA_DURATION_DAYS) -- buddhaPlacedAt
-  // records when the current one was bought so the expiry check below can
-  // revert to the free Wooden Buddha once it runs out. Buying Wooden
-  // itself (cost 0) just clears the timer, same as it being permanent.
+  // Permanent once bought -- no expiry, no reverting back to Wooden on its
+  // own, so a student never has to spend coins on the same image twice.
   const handleBuyBuddha = (option) => {
     if (SHOP_LOCKED) { showToast('🚧 Shopping opens soon -- still being built!'); return; }
-    if (option.requiresBodhiStage > bodhiStageIndex) {
+    if (option.requiresBodhiWeeks > bodhiWeeksGrown) {
       showToast(`Grow your Bodhi Tree further to unlock this.`);
       return;
     }
     if (buddhaId === option.id) return;
     if (!isTeacherPreview && coinBalance < option.cost) { showToast('Not enough coins.'); return; }
     awardCoins(-option.cost);
-    const placedAt = option.durationDays != null ? Date.now() : null;
     setBuddhaId(option.id);
-    setBuddhaPlacedAt(placedAt);
-    persist({ buddhaId: option.id, buddhaPlacedAt: placedAt });
+    persist({ buddhaId: option.id });
     showToast(`${option.name} placed on the altar.`);
   };
 
   const handleBuyOffering = (option) => {
     if (SHOP_LOCKED) { showToast('🚧 Shopping opens soon -- still being built!'); return; }
     if (option.id === 'umbrella') { handleBuyUmbrella(); return; }
-    if (option.id === 'bell') { handleBuyBell(); return; }
+    if (option.id === 'bell') { handleBuyBell(); return; } // defensive: bell isn't in OFFERING_OPTIONS any more
     if (option.requiresBodhiStage != null && option.requiresBodhiStage > bodhiStageIndex) {
       showToast(`Grow your Bodhi Tree further to unlock this.`);
       return;
@@ -1319,7 +1333,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   // Bell is also its own single slot (not the regular altar grid) -- big,
   // to the left of the whole altar. Tapping it plays the bell sound; unlike
   // before, nothing plays automatically just from re-entering the room.
-  const BELL_OPTION = findOffering('bell');
+  // Permanent once bought, same as a Buddha image -- no expiry timer.
   const handleBuyBell = () => {
     if (SHOP_LOCKED) { showToast('🚧 Shopping opens soon -- still being built!'); return; }
     if (placedBell) { showToast('A Bell is already placed.'); return; }
@@ -1462,29 +1476,11 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
         if (changed) persist({ placedUmbrellas: next });
         return changed ? next : prev;
       });
-      setPlacedBell(prev => {
-        if (!prev) return prev;
-        const expired = (now - prev.placedAt) >= BELL_OPTION.durationHours * 60 * 60 * 1000;
-        if (!expired) return prev;
-        persist({ placedBell: null });
-        return null;
-      });
-      // Golden/Jade Buddha reverts to the free Wooden Buddha once its
-      // BUDDHA_DURATION_DAYS runs out.
-      setBuddhaId(prevId => {
-        const option = findBuddha(prevId);
-        if (!option?.durationDays || buddhaPlacedAt == null) return prevId;
-        const expired = (now - buddhaPlacedAt) >= option.durationDays * 24 * 60 * 60 * 1000;
-        if (!expired) return prevId;
-        setBuddhaPlacedAt(null);
-        persist({ buddhaId: 'wood', buddhaPlacedAt: null });
-        return 'wood';
-      });
     };
     checkExpiry();
     const interval = setInterval(checkExpiry, 60000);
     return () => clearInterval(interval);
-  }, [loading, buddhaPlacedAt]);
+  }, [loading]);
 
   // A little welcome-back chime: if a Golden Umbrella is still up (within
   // its durationHours) from an earlier visit, play the wind chimes once
@@ -1561,7 +1557,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     .filter(o => o.id !== 'umbrella' && o.id !== 'bell' && !(o.requiresBodhiStage != null && o.requiresBodhiStage > bodhiStageIndex))
     .reduce((best, o) => (!best || o.cost < best.cost ? o : best), null);
   const cheapestBuddha = BUDDHA_OPTIONS
-    .filter(o => !(o.requiresBodhiStage != null && o.requiresBodhiStage > bodhiStageIndex))
+    .filter(o => !(o.requiresBodhiWeeks > bodhiWeeksGrown))
     .reduce((best, o) => (!best || o.cost < best.cost ? o : best), null);
   let guideStage = 'done';
   let guideTargetId = null;
@@ -1926,21 +1922,19 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
                   Myanmar tradition placed level with the pagoda's own image
                   (not floating separately) and a bit further out to the
                   side. Escapes the 360px-wide column via a negative left
-                  offset. Bought from the Offerings shop list like any other
-                  offering (see BELL_OPTION/handleBuyBell) -- this spot only
-                  ever shows it once actually placed, per the teacher; it's
-                  not a "+" invitation to buy the way the umbrellas are. */}
-              {placedBell && (
-                <button
-                  onClick={handleRingBell}
-                  title="Ring the Bell"
-                  {...(showRingGuide ? { 'data-guide-target': '1' } : {})}
-                  className={`absolute left-[-72px] bottom-[52px] w-20 h-20 flex items-center justify-center rounded-full transition-transform hover:scale-110 drop-shadow-lg ${ringing ? 'animate-pulse' : ''}`}
-                >
-                  <OfferingIcon offering={BELL_OPTION} className="text-6xl leading-none" />
-                  {showRingGuide && <GuideHand dir="up" className="left-1/2 -translate-x-1/2 top-full -mt-2" />}
-                </button>
-              )}
+                  offset. Not in the Offerings shop list -- this spot IS the
+                  shop for it: a dim silhouette until bought (🪙 500, tap to
+                  buy), the real Bell once it's placed (tap to ring). */}
+              <button
+                onClick={placedBell ? handleRingBell : handleBuyBell}
+                title={placedBell ? 'Ring the Bell' : `Buy the Bell (🪙 ${BELL_OPTION.cost})`}
+                {...((showRingGuide || (showBuyGuide && guideStage === 'bell')) ? { 'data-guide-target': '1' } : {})}
+                className={`absolute left-[-72px] bottom-[52px] w-20 h-20 flex items-center justify-center rounded-full transition-transform hover:scale-110 ${placedBell ? 'drop-shadow-lg' : 'opacity-30 grayscale hover:opacity-50'} ${ringing ? 'animate-pulse' : ''}`}
+              >
+                <OfferingIcon offering={BELL_OPTION} className="text-6xl leading-none" />
+                {showRingGuide && <GuideHand dir="up" className="left-1/2 -translate-x-1/2 top-full -mt-2" />}
+                {showBuyGuide && guideStage === 'bell' && <GuideHand dir="up" className="left-1/2 -translate-x-1/2 top-full -mt-2" />}
+              </button>
 
               {/* Pinned to the treetop itself (not off in the corner with
                   the Chanting/Meditation/Merit Shop buttons, and not
@@ -2147,7 +2141,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
             <h3 className="text-sm font-bold text-gray-700 mb-2">Buddha Image</h3>
             <div className="space-y-2 mb-5">
               {BUDDHA_OPTIONS.map(option => {
-                const locked = option.requiresBodhiStage > bodhiStageIndex;
+                const locked = option.requiresBodhiWeeks > bodhiWeeksGrown;
                 const owned = buddhaId === option.id;
                 return (
                   <button
@@ -2174,9 +2168,8 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
             <div className="space-y-2">
               {OFFERING_OPTIONS.map(option => {
                 const locked = option.requiresBodhiStage != null && option.requiresBodhiStage > bodhiStageIndex;
-                const notDraggable = option.id === 'umbrella' || option.id === 'bell';
-                const soldOut = (option.id === 'umbrella' && placedUmbrellas.left && placedUmbrellas.right)
-                  || (option.id === 'bell' && !!placedBell);
+                const notDraggable = option.id === 'umbrella';
+                const soldOut = option.id === 'umbrella' && placedUmbrellas.left && placedUmbrellas.right;
                 return (
                   <button
                     key={option.id}

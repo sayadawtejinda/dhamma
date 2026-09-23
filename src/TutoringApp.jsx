@@ -2391,10 +2391,15 @@ Each one will find a gift box the next time they enter their Shrine Room.`)) ret
     setIsSendingGift(true);
     try {
       const col = collection(db, 'artifacts/shrine-room-app/public/data/teacherGifts');
+      // A gift only waits 2 weeks to be opened -- past that it quietly stops
+      // showing up (see ShrineRoomApp's read of this collection), same as an
+      // unclaimed real present eventually gets put away.
+      const TWO_WEEKS_MS = 14 * 24 * 60 * 60 * 1000;
+      const expiresAt = Date.now() + TWO_WEEKS_MS;
       for (let i = 0; i < recipients.length; i += 400) {
         const batch = writeBatch(db);
         recipients.slice(i, i + 400).forEach(s => {
-          batch.set(doc(col), { studentUid: s.id, studentName: s.name || '', coins, message: giftMessage.trim().slice(0, 80), createdAt: serverTimestamp() });
+          batch.set(doc(col), { studentUid: s.id, studentName: s.name || '', coins, message: giftMessage.trim().slice(0, 80), createdAt: serverTimestamp(), expiresAt });
         });
         await batch.commit();
       }
