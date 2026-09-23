@@ -9012,6 +9012,17 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     });
     
   const availableLessons = myLessons;
+  // What actually SHOWS in the Available Lessons panel: everything except a
+  // 🔜 Pre-send lesson that hasn't reached the front of its own queue yet --
+  // only the earliest still-unreported pre-send lesson is visible, the rest
+  // stay out of sight until it's reported (see the tierOf sort in the
+  // lessons listener above, which already keeps them grouped together in
+  // send order). A normal send, a legacy lesson, or anything already
+  // reported is always visible -- nothing about those is ever hidden.
+  const firstUnresolvedPreSendId = myLessons.find(l => l.isPreSend === true && l.status !== 'reported')?.id;
+  const visibleLessons = availableLessons.filter(l =>
+    l.status === 'reported' || l.isPreSend !== true || l.id === firstUnresolvedPreSendId
+  );
   // Highlights the 📖 Latest Lesson button the moment the teacher assigns a
   // lesson the student hasn't opened yet (status stays 'pending' until
   // they start it) or while one is actively in progress, so it's obvious
@@ -9535,9 +9546,11 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           <p className="text-gray-500 mt-3">No new lessons from the teacher.</p>
         ) : (
           <div className={`space-y-4 ${activeSession ? 'opacity-60 pointer-events-none select-none' : ''}`}>
-            {/* Everything shows here -- in progress/yellow, stale/gray, older
-                sends, all of it, exactly like always. Nothing is hidden. */}
-            {availableLessons.map((lesson, index) => {
+            {/* Everything shows here -- in progress/yellow, reported/yellow,
+                stale/gray, older sends, all of it, exactly like always.
+                Only a not-yet-its-turn 🔜 Pre-send lesson stays out of sight
+                (see visibleLessons above). */}
+            {visibleLessons.map((lesson, index) => {
               // A pending (never-opened) lesson reads as "stale" once it's
               // sat unopened past the day AFTER the student's own study
               // time -- not "24 hours after it was sent", so a lesson the
