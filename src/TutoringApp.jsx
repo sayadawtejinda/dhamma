@@ -1331,7 +1331,8 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
   const [isMerging, setIsMerging] = useState(false); 
   const draggedLessonIdRef = useRef(null);
 
-  const [sendActionType, setSendActionType] = useState('lesson'); 
+  const [sendActionType, setSendActionType] = useState('lesson');
+  const [sendIsInterrupt, setSendIsInterrupt] = useState(false);
   const [giftCoins, setGiftCoins] = useState('50');
   const [giftMessage, setGiftMessage] = useState('');
   const [isSendingGift, setIsSendingGift] = useState(false);
@@ -2088,6 +2089,7 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
               unitLabel: effectiveLessonUnitLabel,
               unitCount: effectiveLessonUnitCount,
               status: 'pending',
+              isInterrupt: sendIsInterrupt,
               sentAt: serverTimestamp()
             });
           }
@@ -2095,12 +2097,13 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
         } catch (error) {
           console.error("Error sending lesson to group:", error);
         }
+        setSendIsInterrupt(false);
       };
-      
+
       setShowConfirmModal({
         isOpen: true,
         title: 'Send to Group',
-        message: `Are you sure you want to assign "${lessonToSend.title}" to "${group.groupName}" (${targetStudents.length} students)?\n(${studentNames})\n\nNote: If they already have this lesson, the old one will be replaced.`,
+        message: `Are you sure you want to assign "${lessonToSend.title}" to "${group.groupName}" (${targetStudents.length} students)?\n(${studentNames})\n\nNote: If they already have this lesson, the old one will be replaced.${sendIsInterrupt ? '\n\n🚨 Sent as an interrupt -- it will jump ahead of anything already queued.' : ''}`,
         onConfirm: () => {
           executeSend();
           setShowConfirmModal({ isOpen: false });
@@ -2126,18 +2129,20 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
             unitLabel: effectiveLessonUnitLabel,
             unitCount: effectiveLessonUnitCount,
             status: 'pending',
+            isInterrupt: sendIsInterrupt,
             sentAt: serverTimestamp()
           });
           playSound(2);
         } catch (error) {
           console.error("Error sending lesson:", error);
         }
+        setSendIsInterrupt(false);
       };
-      
+
       setShowConfirmModal({
         isOpen: true,
         title: 'Assign Lesson',
-        message: `Are you sure you want to assign "${lessonToSend.title}" to ${student.name}?\n\nNote: If they already have this lesson, the old one will be replaced.`,
+        message: `Are you sure you want to assign "${lessonToSend.title}" to ${student.name}?\n\nNote: If they already have this lesson, the old one will be replaced.${sendIsInterrupt ? '\n\n🚨 Sent as an interrupt -- it will jump ahead of anything already queued.' : ''}`,
         onConfirm: () => {
           executeSend();
           setShowConfirmModal({ isOpen: false });
@@ -5426,6 +5431,15 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
               );
           })()}
 
+          {sendActionType === 'lesson' && (
+            <label className="flex items-start gap-2 mb-4 p-3 rounded-lg bg-rose-50 border border-rose-200 cursor-pointer">
+              <input type="checkbox" checked={sendIsInterrupt} onChange={(e) => setSendIsInterrupt(e.target.checked)} className="mt-1" />
+              <span className="text-sm text-rose-800">
+                <span className="font-bold">🚨 Send as an interrupt</span> — jumps ahead of anything already queued for this student, instead of waiting its turn. Use this for an ad hoc replacement (e.g. the queued lesson won't open) — not for normal pre-sending ahead of time.
+              </span>
+            </label>
+          )}
+
           </>)}
 
           {sendActionType === 'gift' ? (
@@ -7319,7 +7333,10 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       handleContinueActiveSession();
       return;
     }
-    const pendingLesson = availableLessons.find(l => l.status === 'pending');
+    // Only the front of the queue (position 0) is ever the "current" one to
+    // open here -- see the lessons listener's sort + the Available Lessons
+    // render below, which only ever shows/opens that same position.
+    const pendingLesson = availableLessons[0]?.status === 'pending' ? availableLessons[0] : null;
     if (pendingLesson) {
       setShowLessonsPanel(true);
       handleStartLesson(pendingLesson);
@@ -7371,10 +7388,19 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       }
       prevLessonCount.current = lessonList.length;
       
+      // Interrupts always jump to the front (see the 🚨 checkbox in Assign
+      // Lesson); otherwise FIFO by send order -- the OLDEST still-unreported
+      // lesson comes first, not the most-recently-sent one, so pre-sending a
+      // week's worth of lessons queues them instead of the newest one
+      // silently jumping the line. A lesson only stops being "pending"/
+      // "started" (and so drops out of this list) once its report is
+      // submitted -- see handleSubmitFeedback -- which is what reveals the
+      // next one in the queue.
       lessonList.sort((a, b) => {
+        if (!!a.isInterrupt !== !!b.isInterrupt) return a.isInterrupt ? -1 : 1;
         const dateA = a.sentAt?.toDate ? a.sentAt.toDate() : new Date(0);
         const dateB = b.sentAt?.toDate ? b.sentAt.toDate() : new Date(0);
-        return dateB - dateA; 
+        return dateA - dateB;
       });
 
       setMyLessons(lessonList.map(withCurrentLessonCounts));
@@ -8520,6 +8546,15 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         lessonUnitLabel: targetSession.lessonUnitLabel || 'Chapter',
         previousCompletedUnit: previousHighestUnit
       });
+      // Marks the ASSIGNMENT (not the session) as reported -- this is what
+      // drops it out of the pending/started queue (see the lessons listener
+      // above) and reveals the next queued lesson, if any. targetSession's
+      // lessonId was recorded when the lesson was started (see
+      // handleStartLesson's addDoc calls); best-effort since a redo of an
+      // old, already-cleared lesson may not carry one.
+      if (targetSession.lessonId) {
+        updateDoc(doc(db, `${publicDataPath}/lessons`, targetSession.lessonId), { status: 'reported' }).catch(() => {});
+      }
       playSound(0); 
 
       const studentDocRef = doc(db, `${publicDataPath}/students`, studentUid);
@@ -9226,19 +9261,34 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       })()}
 
       <div ref={lessonsSectionRef} className="bg-white/90 backdrop-blur-sm p-6 rounded-xl shadow-lg mb-8 border border-gray-200 relative">
-        <h3 className="text-xl font-semibold mb-4 text-gray-800">Available Lessons</h3>
+        <h3 className="text-xl font-semibold mb-1 text-gray-800">Available Lessons</h3>
+        {availableLessons.length > 1 && (
+          <p className="text-xs text-gray-400 mb-3">
+            {availableLessons.length - 1} more lesson{availableLessons.length - 1 === 1 ? '' : 's'} queued -- {availableLessons[0]?.isInterrupt ? 'this interrupt' : 'they’ll'} show up after this one is reported.
+          </p>
+        )}
         {availableLessons.length === 0 ? (
-          <p className="text-gray-500">No new lessons from the teacher.</p>
+          <p className="text-gray-500 mt-3">No new lessons from the teacher.</p>
         ) : (
           <div className={`space-y-4 ${activeSession ? 'opacity-60 pointer-events-none select-none' : ''}`}>
-            {availableLessons.map((lesson, index) => {
-              const isNew = lesson.status === 'pending';
-              const divBg = isNew ? 'bg-emerald-50' : 'bg-yellow-50'; 
-              const divBorder = isNew ? 'border-emerald-200' : 'border-yellow-200';
-              const textHColor = isNew ? 'text-emerald-900' : 'text-yellow-900';
-              const textPColor = isNew ? 'text-emerald-700' : 'text-yellow-700';
-              const buttonBg = isNew ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-yellow-500 hover:bg-yellow-600';
-              
+            {/* Only the FRONT of the queue is ever shown/openable here -- the
+                rest stay hidden (queued in Firestore, not deleted) until this
+                one is reported, see the lessons listener's sort above. */}
+            {availableLessons.slice(0, 1).map((lesson, index) => {
+              // A pending (never-opened) lesson that's sat for over a day
+              // reads as "stale" -- not the fresh, just-assigned green, but
+              // not the yellow "in progress" either, since nothing's
+              // happened with it yet. Still the one that opens on tap.
+              const sentAtMs = lesson.sentAt?.toDate ? lesson.sentAt.toDate().getTime() : null;
+              const isPendingStatus = lesson.status === 'pending';
+              const isStale = isPendingStatus && sentAtMs != null && (Date.now() - sentAtMs) > 24 * 60 * 60 * 1000;
+              const isNew = isPendingStatus && !isStale;
+              const divBg = isNew ? 'bg-emerald-50' : isStale ? 'bg-gray-100' : 'bg-yellow-50';
+              const divBorder = isNew ? 'border-emerald-200' : isStale ? 'border-gray-300' : 'border-yellow-200';
+              const textHColor = isNew ? 'text-emerald-900' : isStale ? 'text-gray-600' : 'text-yellow-900';
+              const textPColor = isNew ? 'text-emerald-700' : isStale ? 'text-gray-500' : 'text-yellow-700';
+              const buttonBg = isNew ? 'bg-emerald-500 hover:bg-emerald-600' : isStale ? 'bg-gray-500 hover:bg-gray-600' : 'bg-yellow-500 hover:bg-yellow-600';
+
               const lessonKeyList = computeLessonKey(lesson.title, lesson.link);
               const earnedTrophiesMapList = studentProfile?.earnedTrophies || {};
               const previouslyEarnedList = earnedTrophiesMapList[lessonKeyList] || 0;
@@ -9258,7 +9308,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
               const showNowFinished = !!latestSessionForLesson;
               const isSmartStudyLesson = !!(lesson.link && lesson.link.startsWith('smartstudy://'));
               const ssClassIdForBtn = isSmartStudyLesson ? extractSmartStudyClassId(lesson.link) : null;
-              const buttonText = isNew
+              const buttonText = isPendingStatus
                 ? (lesson.unitCount > 0 ? `Start ${lesson.unitLabel || 'Chapter'} ${nextUnitNumber}` : 'Start Lesson')
                 : (lesson.unitCount > 0 ? `Continue ${lesson.unitLabel || 'Chapter'} ${nextUnitNumber}` : 'Continue Lesson');
 
@@ -9278,6 +9328,9 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className={`font-semibold text-lg ${textHColor}`}>{lesson.title}</p>
+                      {lesson.isInterrupt && (
+                        <span className="text-xs font-bold text-rose-700 bg-rose-100 border border-rose-300 px-2 py-0.5 rounded-full">🚨 Interrupt</span>
+                      )}
                       {isSmartStudyLesson && ssClassIdForBtn && (
                         <span className="text-sm font-semibold text-blue-600 ml-1">— {ssClassIdForBtn}</span>
                       )}
