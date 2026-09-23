@@ -771,6 +771,19 @@ const starAnnouncementsCollection = collection(db, `${publicDataPath}/starAnnoun
 const greetingsCollection = collection(db, `${publicDataPath}/greetings`);
 const teacherConfigDoc = doc(configCollection, 'teacher');
 
+// Shared fetch of public/weeklySnapshot.json (see scripts/generate-weekly-
+// snapshot.mjs) -- used by both YearAttendanceBoard and TrophyBoard so
+// opening one and then the other doesn't fetch the file twice.
+let weeklySnapshotCache = null; // Promise<{generatedAt, attendanceRankedList, trophyList}>
+function fetchWeeklySnapshot() {
+  if (!weeklySnapshotCache) {
+    weeklySnapshotCache = fetch(`${import.meta.env.BASE_URL}weeklySnapshot.json?v=${Date.now()}`)
+      .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
+      .catch(e => { weeklySnapshotCache = null; throw e; }); // let a failed fetch be retried later
+  }
+  return weeklySnapshotCache;
+}
+
 // --- Components ---
 
 function ConfirmationModal({ 
@@ -10045,9 +10058,9 @@ function WeeklySchedule({ role, targetStudentUid }) {
 }
 function YearAttendanceBoard({ role, targetStudentUid }) {
   // This whole leaderboard is precomputed OFFLINE (see
-  // scripts/generate-attendance-snapshot.mjs), refreshed weekly by
-  // .github/workflows/weekly-attendance-snapshot.yml, and served here as a
-  // plain static file -- zero Firestore reads for this view, however many
+  // scripts/generate-weekly-snapshot.mjs), refreshed weekly by
+  // .github/workflows/weekly-snapshot.yml, and served here as a plain
+  // static file -- zero Firestore reads for this view, however many
   // students open it or how often. It used to read the WHOLE class's WHOLE
   // year of schedule+session docs (~11,000+) live, every single open; the
   // tradeoff the teacher accepted is that this board can be up to a week
@@ -10061,11 +10074,10 @@ function YearAttendanceBoard({ role, targetStudentUid }) {
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`${import.meta.env.BASE_URL}yearAttendanceSnapshot.json?v=${Date.now()}`)
-      .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
+    fetchWeeklySnapshot()
       .then(data => {
         if (cancelled) return;
-        setRankedList(data.rankedList || []);
+        setRankedList(data.attendanceRankedList || []);
         setGeneratedAt(data.generatedAt || null);
       })
       .catch(e => console.error('Error loading attendance snapshot:', e))
@@ -10158,50 +10170,41 @@ function YearAttendanceBoard({ role, targetStudentUid }) {
 }
 
 function TrophyBoard({ role, targetStudentUid, studentProfile }) {
-  const [students, setStudents] = useState([]);
-  const [teacherSchedule, setTeacherSchedule] = useState([]);
-  const [sessions, setSessions] = useState([]);
+  // Same static weekly snapshot as YearAttendanceBoard (see
+  // scripts/generate-weekly-snapshot.mjs) -- this used to read the whole
+  // `students` collection live PLUS (for a student) their own whole year of
+  // schedule+sessions, every single open. Sending a ❤️ is still a real,
+  // live Firestore write (see handleHeart below) -- only the numbers shown
+  // on screen come from the once-a-week snapshot, nudged optimistically the
+  // moment you send one so it doesn't look like nothing happened.
+  const [trophyList, setTrophyList] = useState([]);
+  const [generatedAt, setGeneratedAt] = useState(null);
+  const [snapshotLoading, setSnapshotLoading] = useState(true);
   const [expandedGivers, setExpandedGivers] = useState(null);
+  // Local-only bump so a just-sent heart shows up immediately without
+  // waiting for next week's snapshot -- id -> extra hearts sent this visit.
+  const [localHeartBumps, setLocalHeartBumps] = useState({});
   const myRowRef = useRef(null);
   const hasScrolledToMineRef = useRef(false);
 
   useEffect(() => {
-    const unsub = onSnapshot(studentsCollection, (snap) => setStudents(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-    return () => unsub();
+    let cancelled = false;
+    fetchWeeklySnapshot()
+      .then(data => {
+        if (cancelled) return;
+        setTrophyList(data.trophyList || []);
+        setGeneratedAt(data.generatedAt || null);
+      })
+      .catch(e => console.error('Error loading trophy snapshot:', e))
+      .finally(() => { if (!cancelled) setSnapshotLoading(false); });
+    return () => { cancelled = true; };
   }, []);
 
-  useEffect(() => {
-    // Only a student needs these two (to work out their own remaining
-    // hearts below) -- the teacher's ranked list further down is built
-    // straight from each student's stored trophyCount and never reads
-    // `teacherSchedule`/`sessions` at all, so the teacher doesn't subscribe
-    // to either. A one-time read, not live: this is only ever read once, on
-    // mount, to compute a number shown once -- there's no reason for it to
-    // keep re-billing for as long as the student leaves this tab open.
-    if (role !== 'student' || !targetStudentUid) return;
-    let cancelled = false;
-    // Equality-only filter (no composite index needed) -- a single student's
-    // whole schedule history is tiny, so filtering down to "this year" isn't
-    // worth a second server-side range clause; the render code below already
-    // checks each entry's date against startOfYear anyway.
-    const q = query(teacherScheduleCollection, where("studentUid", "==", targetStudentUid));
-    getDocs(q).then(snap => { if (!cancelled) setTeacherSchedule(snap.docs.map(d => ({ id: d.id, ...d.data() }))); }).catch(e => console.error('Error loading my schedule:', e));
-    return () => { cancelled = true; };
-  }, [role, targetStudentUid]);
-
-  useEffect(() => {
-    if (role !== 'student' || !targetStudentUid) return;
-    let cancelled = false;
-    const q = query(sessionsCollection, where("studentUid", "==", targetStudentUid));
-    getDocs(q).then(snap => { if (!cancelled) setSessions(snap.docs.map(d => ({ id: d.id, ...d.data() }))); }).catch(e => console.error('Error loading my sessions:', e));
-    return () => { cancelled = true; };
-  }, [role, targetStudentUid]);
-
   const rankedList = useMemo(() => {
-    return students
-      .filter(s => s.isActive === true && (s.trophyCount || 0) > 0)
+    return trophyList
+      .filter(s => (s.trophyCount || 0) > 0)
       .sort((a, b) => (b.trophyCount || 0) - (a.trophyCount || 0));
-  }, [students]);
+  }, [trophyList]);
   useEffect(() => {
     if (hasScrolledToMineRef.current || role !== 'student' || !targetStudentUid) return;
     const timer = setTimeout(() => {
@@ -10213,27 +10216,8 @@ function TrophyBoard({ role, targetStudentUid, studentProfile }) {
     return () => clearTimeout(timer);
   }, [rankedList, role, targetStudentUid]);
 
-  const myAttendedThisYear = useMemo(() => {
-    if (role !== 'student' || !targetStudentUid) return 0;
-    const now = new Date();
-    const startOfYear = new Date(now.getFullYear(), 0, 1);
-    let attended = 0;
-    teacherSchedule.forEach(sched => {
-      if (sched.studentUid !== targetStudentUid) return;
-      const entryDate = sched.startTime.toDate();
-      if (entryDate > now || entryDate < startOfYear) return;
-      if (sched.overrideStatus === 'attended') attended++;
-      else if (sched.overrideStatus === 'absent') return;
-      else {
-        const startOfDay = new Date(entryDate.getFullYear(), entryDate.getMonth(), entryDate.getDate());
-        const endOfDay = new Date(entryDate.getFullYear(), entryDate.getMonth(), entryDate.getDate(), 23, 59, 59);
-        const didAttend = sessions.some(s => s.studentUid === targetStudentUid && s.startTime.toDate() >= startOfDay && s.startTime.toDate() <= endOfDay);
-        if (didAttend) attended++;
-      }
-    });
-    return attended;
-  }, [teacherSchedule, sessions, targetStudentUid, role]);
-
+  // From last week's snapshot -- see the tradeoff note above.
+  const myAttendedThisYear = trophyList.find(s => s.id === targetStudentUid)?.attendedThisYear || 0;
   const heartsGivenSoFar = studentProfile?.heartsGivenCount || 0;
   const remainingHearts = role === 'student' ? Math.max(0, myAttendedThisYear - heartsGivenSoFar) : null;
 
@@ -10251,6 +10235,7 @@ function TrophyBoard({ role, targetStudentUid, studentProfile }) {
         const giverRef = doc(db, `${publicDataPath}/students`, targetStudentUid);
         await updateDoc(giverRef, { heartsGivenCount: increment(1) });
       }
+      setLocalHeartBumps(prev => ({ ...prev, [recipientId]: (prev[recipientId] || 0) + 1 }));
     } catch (e) {
       console.error("Error sending heart:", e);
     }
@@ -10258,14 +10243,19 @@ function TrophyBoard({ role, targetStudentUid, studentProfile }) {
 
   return (
     <div className="p-6 max-w-2xl mx-auto pb-24">
-      <h2 className="text-3xl font-bold mb-2 text-yellow-600">🏆 Trophies Awarded</h2>
+      <h2 className="text-3xl font-bold mb-1 text-yellow-600">🏆 Trophies Awarded</h2>
+      <p className="text-xs text-gray-400 mb-4">
+        {generatedAt ? `Updated weekly — as of ${new Date(generatedAt).toLocaleDateString()}` : ' '}
+      </p>
       {role === 'student' && (
         <p className="text-sm text-gray-600 mb-6">
           You can send <span className="font-bold text-rose-600">{remainingHearts}</span> more ❤️ this year (based on {myAttendedThisYear} attended sessions).
         </p>
       )}
       <div className="space-y-3">
-        {rankedList.length === 0 ? (
+        {snapshotLoading ? (
+          <p className="text-gray-500">Loading...</p>
+        ) : rankedList.length === 0 ? (
           <p className="text-gray-500">No trophies awarded yet.</p>
         ) : (
           rankedList.map((student, idx) => {
@@ -10277,25 +10267,26 @@ function TrophyBoard({ role, targetStudentUid, studentProfile }) {
               count: heartsFromCounts[`${k}_count`] || 0
             })).filter(g => g.name).sort((a, b) => b.count - a.count);
             const isExpanded = expandedGivers === student.id;
+            const heartsReceived = (student.heartsReceived || 0) + (localHeartBumps[student.id] || 0);
             return (
               <div key={student.id} ref={isSelf ? myRowRef : null} className={`bg-white p-4 rounded-xl shadow-md border ${isSelf ? 'border-indigo-500 ring-2 ring-indigo-500' : 'border-gray-100'}`}>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center">
-                    <span className="text-xl font-bold text-yellow-400 w-8">{idx + 1}</span>
-                    <div className="w-3 h-3 rounded-full mx-3 flex-shrink-0" style={{ backgroundColor: stringToColor(student.name) }}></div>
-                    <div>
-                      <p className="font-semibold text-gray-900">{student.name} {isSelf && <span className="ml-2 text-xs font-bold text-indigo-600">(You)</span>}</p>
-                      <p className="text-sm text-yellow-700 font-bold">🏆 {student.trophyCount}</p>
-                    </div>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="text-xl font-bold text-yellow-400 w-8 flex-shrink-0">{idx + 1}</span>
+                    <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: stringToColor(student.name) }}></div>
+                    <p className="font-semibold text-gray-900 truncate">
+                      {student.name} {isSelf && <span className="ml-1 text-xs font-bold text-indigo-600">(You)</span>}
+                    </p>
+                    <span className="text-lg font-extrabold text-yellow-600 flex-shrink-0 whitespace-nowrap">🏆 {student.trophyCount}</span>
                   </div>
                   <button
                     onClick={() => handleHeart(student.id)}
                     disabled={isSelf || (role === 'student' && remainingHearts <= 0)}
                     title={isSelf ? "You can't heart yourself" : (role === 'student' && remainingHearts <= 0 ? "No hearts remaining this year" : "Send a heart")}
-                    className="flex items-center space-x-1 bg-rose-50 hover:bg-rose-100 disabled:opacity-40 disabled:cursor-not-allowed px-3 py-2 rounded-lg transition-transform hover:scale-105"
+                    className="flex items-center space-x-1 bg-rose-50 hover:bg-rose-100 disabled:opacity-40 disabled:cursor-not-allowed px-3 py-2 rounded-lg transition-transform hover:scale-105 flex-shrink-0"
                   >
                     <span className="text-xl">❤️</span>
-                    <span className="font-bold text-rose-600">{student.heartsReceived || 0}</span>
+                    <span className="font-bold text-rose-600">{heartsReceived}</span>
                   </button>
                 </div>
                 {isSelf && givers.length > 0 && (

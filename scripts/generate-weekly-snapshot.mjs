@@ -1,21 +1,22 @@
-// Regenerates public/yearAttendanceSnapshot.json -- a static, precomputed
-// copy of the "This Year's Attendance" leaderboard (see YearAttendanceBoard
-// in src/TutoringApp.jsx). That board used to read the WHOLE class's whole
-// year of schedule+session docs (~11,000+) live from Firestore every single
-// time any student opened that tab -- a real, measured cost driver once a
-// few students flipped between view tabs a handful of times in one sitting.
+// Regenerates public/weeklySnapshot.json -- a static, precomputed copy of
+// TWO whole-class leaderboards (see YearAttendanceBoard and TrophyBoard in
+// src/TutoringApp.jsx) that both used to read the whole class's whole year
+// of schedule+session docs live from Firestore every single time ANY
+// student opened either tab -- a real, measured cost driver once a few
+// students flipped between view tabs a handful of times in one sitting.
 //
-// Instead, this script runs the same computation ONCE here, and the app
-// just fetches the resulting small JSON file (a normal static asset served
-// by GitHub Pages, same as everything under public/) -- zero Firestore
-// reads for that view, however many students open it or how often.
+// Instead, this script runs the computation ONCE here, and the app just
+// fetches the resulting small JSON file (a normal static asset served by
+// GitHub Pages, same as everything under public/) -- zero Firestore reads
+// for either view, however many students open them or how often.
 //
-// Run manually with `npm run snapshot:attendance`, or automatically once a
-// week by .github/workflows/weekly-attendance-snapshot.yml, which commits
-// the refreshed file and pushes to main (triggering the normal deploy).
-// The tradeoff the teacher explicitly accepted: this board can be up to a
-// week stale, off by the one or two students who attended since the last
-// run -- fine for a leaderboard, not something anyone needs to the second.
+// Run manually with `npm run snapshot:weekly`, or automatically once a week
+// by .github/workflows/weekly-attendance-snapshot.yml, which commits the
+// refreshed file and pushes to main (triggering the normal deploy). The
+// tradeoff the teacher explicitly accepted: both boards can be up to a week
+// stale -- fine for a leaderboard, not something anyone needs to the second.
+// (Sending a ❤️ on the Trophies tab is still a live Firestore write -- only
+// the DISPLAYED counts are the once-a-week snapshot.)
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously } from 'firebase/auth';
 import { getFirestore, collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
@@ -25,7 +26,7 @@ import { dirname, join } from 'node:path';
 import { firebaseConfig, appId } from '../src/firebaseConfig.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const OUT_PATH = join(__dirname, '..', 'public', 'yearAttendanceSnapshot.json');
+const OUT_PATH = join(__dirname, '..', 'public', 'weeklySnapshot.json');
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -83,13 +84,31 @@ async function main() {
     return { id: entry.id, name: entry.name, isOffline: entry.isOffline, attended, absent, total: attended + absent };
   });
 
-  const rankedList = computed
+  // "This Year's Attendance" board -- only students/classes with at least
+  // one scheduled session this year show up at all.
+  const attendanceRankedList = computed
     .filter(e => e.total > 0)
     .sort((a, b) => b.attended - a.attended);
 
-  const snapshot = { generatedAt: new Date().toISOString(), rankedList };
+  // "🏆 Trophies" board -- every active student, so a student with zero
+  // trophies still finds their own "attended this year" number (used to
+  // work out how many ❤️ they have left to give) and their row, even if the
+  // app only ever DISPLAYS the ones with trophyCount > 0.
+  const attendedById = Object.fromEntries(computed.filter(e => !e.isOffline).map(e => [e.id, e.attended]));
+  const trophyList = students
+    .filter(s => s.isActive === true)
+    .map(s => ({
+      id: s.id,
+      name: s.name,
+      trophyCount: s.trophyCount || 0,
+      heartsReceived: s.heartsReceived || 0,
+      heartsFromCounts: s.heartsFromCounts || {},
+      attendedThisYear: attendedById[s.id] || 0,
+    }));
+
+  const snapshot = { generatedAt: new Date().toISOString(), attendanceRankedList, trophyList };
   writeFileSync(OUT_PATH, JSON.stringify(snapshot, null, 2));
-  console.log(`Wrote ${rankedList.length} entries to ${OUT_PATH}`);
+  console.log(`Wrote ${attendanceRankedList.length} attendance rows and ${trophyList.length} trophy rows to ${OUT_PATH}`);
   process.exit(0);
 }
 
