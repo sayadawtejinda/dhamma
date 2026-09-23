@@ -9533,7 +9533,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       <div ref={lessonsSectionRef} className="bg-white/90 backdrop-blur-sm p-6 rounded-xl shadow-lg mb-8 border border-gray-200 relative">
         <h3 className="text-xl font-semibold mb-1 text-gray-800">Available Lessons</h3>
         {/* Only counts genuinely pre-sent (🔜 checkbox) lessons still
-            waiting BEHIND the one shown below -- old pre-queue lessons
+            waiting BEHIND the currently-active one -- old pre-queue lessons
             never count here, see the tierOf() sort above. */}
         {availableLessons.slice(1).filter(l => l.isPreSend === true).length > 0 && (
           <p className="text-xs text-gray-400 mb-3">
@@ -9544,10 +9544,11 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           <p className="text-gray-500 mt-3">No new lessons from the teacher.</p>
         ) : (
           <div className={`space-y-4 ${activeSession ? 'opacity-60 pointer-events-none select-none' : ''}`}>
-            {/* Only the FRONT of the queue is ever shown/openable here -- the
-                rest stay hidden (queued in Firestore, not deleted) until this
-                one is reported, see the lessons listener's sort above. */}
-            {availableLessons.slice(0, 1).map((lesson, index) => {
+            {/* Everything shows here (in progress/yellow, stale/gray, older
+                sends) same as always -- the ONLY thing kept out of sight is
+                a 🔜 Pre-send lesson that hasn't reached the front of its
+                queue yet (any other pre-send behind position 0). */}
+            {availableLessons.filter((l, i) => i === 0 || l.isPreSend !== true).map((lesson, index) => {
               // A pending (never-opened) lesson that's sat for over a day
               // reads as "stale" -- not the fresh, just-assigned green, but
               // not the yellow "in progress" either, since nothing's
