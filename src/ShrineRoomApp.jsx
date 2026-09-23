@@ -508,8 +508,8 @@ const buddhaSvg = (skinColor, robeColor, baseColor, haloColor, accentColor) => `
 // 10 real weeks (not the coarser title-milestone scale other things use).
 const BUDDHA_OPTIONS = [
   { id: 'wood', name: 'Wooden Buddha', cost: 0, requiresBodhiWeeks: 0, svg: buddhaSvg('#8D6E63', '#5D4037', '#4E342E', '#D7CCC8', '#3E2723') },
-  { id: 'golden', name: 'Golden Buddha', cost: 500, requiresBodhiWeeks: 0, svg: buddhaSvg('#FFD54F', '#FFA000', '#FF8F00', '#FFF3C4', '#8D5A00') },
-  { id: 'jade', name: 'Jade Buddha', cost: 700, requiresBodhiWeeks: 10, svg: buddhaSvg('#66BB6A', '#2E7D32', '#1B5E20', '#C8E6C9', '#0D3D14') },
+  { id: 'golden', name: 'Golden Buddha', cost: 5000, requiresBodhiWeeks: 0, svg: buddhaSvg('#FFD54F', '#FFA000', '#FF8F00', '#FFF3C4', '#8D5A00') },
+  { id: 'jade', name: 'Jade Buddha', cost: 7500, requiresBodhiWeeks: 10, svg: buddhaSvg('#66BB6A', '#2E7D32', '#1B5E20', '#C8E6C9', '#0D3D14') },
 ];
 // Custom-drawn golden ceremonial umbrella (hti) -- the ⛱️ emoji looked like
 // a beach umbrella, not a Buddhist offering, so this replaces it: a domed
@@ -562,7 +562,9 @@ const OFFERING_OPTIONS = [
   { id: 'fruit_grapes', name: 'Grapes', emoji: '🍇', durationHours: 3, cost: durationCost(3) },
   { id: 'fruit_mango', name: 'Mango', emoji: '🥭', durationHours: 3, cost: durationCost(3) },
   { id: 'flower', name: 'Lotus Flower', emoji: '🪷', durationHours: 5, cost: durationCost(5) },
-  { id: 'umbrella', name: 'Golden Umbrella', svg: umbrellaSvg('#FFD54F', '#5D4037', '#B8860B'), durationHours: 20, cost: durationCost(20) },
+  // Permanent once offered (no durationHours -- like a Buddha image or the
+  // Bell), not a wear-off-and-reoffer item any more.
+  { id: 'umbrella', name: 'Golden Umbrella', svg: umbrellaSvg('#FFD54F', '#5D4037', '#B8860B'), cost: 2500 },
   { id: 'lamp', name: 'Oil Lamp', emoji: '🪔', durationHours: 5, cost: durationCost(5) },
 ];
 // Renders an offering's icon whether it's a plain emoji or custom SVG
@@ -576,7 +578,7 @@ const findOffering = (id) => OFFERING_OPTIONS.find(o => o.id === id);
 // The Bell isn't a shop-list item any more -- it's bought straight from its
 // own spot on the altar (a silhouette until then), and once bought it's
 // permanent, same as any Buddha image.
-const BELL_OPTION = { id: 'bell', name: 'Bell', emoji: '🔔', cost: 500 };
+const BELL_OPTION = { id: 'bell', name: 'Bell', emoji: '🔔', cost: 2000 };
 const findBuddha = (id) => BUDDHA_OPTIONS.find(o => o.id === id);
 
 const SLOT_COUNT = 6;
@@ -609,7 +611,7 @@ const DAILY_LAMP_REWARD = 5;
 // bonus) combined, per calendar day -- see awardLotus below.
 const CHANT_LOTUS_SESSION_CAP = 15;
 const MEDITATION_LOTUS_SESSION_CAP = 30;
-const DAILY_LOTUS_CAP = 50;
+const DAILY_LOTUS_CAP = 40;
 // Shopping stays open for good -- prices are cheap enough that coin
 // balances aren't worth worrying over, so the earlier "trial period, coins
 // get reset once finalized" plan is off; no reset is coming. Prices may
@@ -1054,10 +1056,11 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     }, 60000);
     return () => clearInterval(interval);
   }, [studentUid, chantingOpen, chantingIdle, meditatingMinutes != null]);
-  // +10 lotus EVERY time the altar becomes complete -- all 6 slots and both
-  // Golden Umbrellas offered (the Bell is not required). Offerings run out
-  // over time (see the expiry check below), so completing it again later
-  // earns it again. Judged on the transition from "not complete" to
+  // +5 lotus EVERY time the altar becomes complete -- all 6 slots and both
+  // Golden Umbrellas offered (the Bell is not required). The 6 altar slots
+  // still run out over time (see the expiry check below; the umbrellas
+  // themselves are permanent now), so completing it again later earns it
+  // again. Judged on the transition from "not complete" to
   // "complete", with the state at load time as the baseline -- opening the
   // room with an altar that was already full doesn't pay out again, and the
   // daily lotus cap in awardLotus still applies.
@@ -1069,7 +1072,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     if (altarWasCompleteRef.current === null) { altarWasCompleteRef.current = complete; return; }
     if (complete && !altarWasCompleteRef.current) {
       setShopOpen(false); // done shopping -- get the panel out of the way
-      const granted = awardLotus(10);
+      const granted = awardLotus(5);
       if (granted > 0) showToast(`🪷 Full altar bonus! +${granted} lotus flowers`);
     }
     altarWasCompleteRef.current = complete;
@@ -1465,27 +1468,18 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
         if (changed) persist({ placedItems: next });
         return changed ? next : prev;
       });
-      setPlacedUmbrellas(prev => {
-        let changed = false;
-        const next = {};
-        Object.entries(prev).forEach(([side, item]) => {
-          const expired = (now - item.placedAt) >= UMBRELLA_OPTION.durationHours * 60 * 60 * 1000;
-          if (expired) { changed = true; return; }
-          next[side] = item;
-        });
-        if (changed) persist({ placedUmbrellas: next });
-        return changed ? next : prev;
-      });
+      // Golden Umbrellas no longer expire -- permanent once offered, like a
+      // Buddha image or the Bell.
     };
     checkExpiry();
     const interval = setInterval(checkExpiry, 60000);
     return () => clearInterval(interval);
   }, [loading]);
 
-  // A little welcome-back chime: if a Golden Umbrella is still up (within
-  // its durationHours) from an earlier visit, play the wind chimes once
-  // when the student re-enters the Shrine Room. The Bell no longer plays
-  // anything automatically on entry -- only when actually rung.
+  // A little welcome-back chime: if a Golden Umbrella is up from an earlier
+  // visit, play the wind chimes once when the student re-enters the Shrine
+  // Room. The Bell no longer plays anything automatically on entry -- only
+  // when actually rung.
   useEffect(() => {
     if (loading) return;
     if (placedUmbrellas.left || placedUmbrellas.right) playWindChimes();
