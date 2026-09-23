@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "snapshot:attendance": "node scripts/generate-attendance-snapshot.mjs"
   },
   "dependencies": {
     "firebase": "^10.12.2",

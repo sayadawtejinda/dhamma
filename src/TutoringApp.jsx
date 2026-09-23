@@ -771,38 +771,6 @@ const starAnnouncementsCollection = collection(db, `${publicDataPath}/starAnnoun
 const greetingsCollection = collection(db, `${publicDataPath}/greetings`);
 const teacherConfigDoc = doc(configCollection, 'teacher');
 
-// This whole year's schedule + sessions, shared (module-scope, this browser
-// tab only) between YearAttendanceBoard and TrophyBoard's teacher view --
-// both need the same "whole class, whole year" data just to build a
-// leaderboard, which doesn't need to be fresh to the second. Before this,
-// EVERY open of EITHER tab re-read both collections from scratch (~11,000+
-// docs combined) even for a student just flipping between view tabs to look
-// around -- a measured, real cost driver once multiple students did that in
-// the same sitting. A student's OWN attendance count (TrophyBoard's
-// "remaining hearts" line) still reads its own small scoped query instead,
-// see below -- this cache is only for the two whole-class boards.
-let yearBoardCache = null; // { schedule, sessions, fetchedAt }
-const YEAR_BOARD_CACHE_MS = 5 * 60 * 1000;
-function fetchYearBoardData() {
-  const now = Date.now();
-  if (yearBoardCache && (now - yearBoardCache.fetchedAt) < YEAR_BOARD_CACHE_MS) return Promise.resolve(yearBoardCache);
-  if (yearBoardCache?.inFlight) return yearBoardCache.inFlight; // two boards opening at once share one fetch
-  const startOfYear = new Date(new Date().getFullYear(), 0, 1);
-  const inFlight = Promise.all([
-    getDocs(query(teacherScheduleCollection, where("startTime", ">=", Timestamp.fromDate(startOfYear)))),
-    getDocs(query(sessionsCollection, where("startTime", ">=", Timestamp.fromDate(startOfYear)))),
-  ]).then(([scheduleSnap, sessionsSnap]) => {
-    yearBoardCache = {
-      schedule: scheduleSnap.docs.map(d => ({ id: d.id, ...d.data() })),
-      sessions: sessionsSnap.docs.map(d => ({ id: d.id, ...d.data() })),
-      fetchedAt: Date.now(),
-    };
-    return yearBoardCache;
-  });
-  yearBoardCache = { ...yearBoardCache, inFlight };
-  return inFlight;
-}
-
 // --- Components ---
 
 function ConfirmationModal({ 
@@ -10076,30 +10044,32 @@ function WeeklySchedule({ role, targetStudentUid }) {
   );
 }
 function YearAttendanceBoard({ role, targetStudentUid }) {
-  const [students, setStudents] = useState([]);
-  const [teacherSchedule, setTeacherSchedule] = useState([]);
-  const [sessions, setSessions] = useState([]);
+  // This whole leaderboard is precomputed OFFLINE (see
+  // scripts/generate-attendance-snapshot.mjs), refreshed weekly by
+  // .github/workflows/weekly-attendance-snapshot.yml, and served here as a
+  // plain static file -- zero Firestore reads for this view, however many
+  // students open it or how often. It used to read the WHOLE class's WHOLE
+  // year of schedule+session docs (~11,000+) live, every single open; the
+  // tradeoff the teacher accepted is that this board can be up to a week
+  // stale, off by whoever attended since the last weekly run.
+  const [rankedList, setRankedList] = useState([]);
+  const [generatedAt, setGeneratedAt] = useState(null);
+  const [snapshotLoading, setSnapshotLoading] = useState(true);
   const [hiddenOfflineNames, setHiddenOfflineNames] = useState([]);
   const myRowRef = useRef(null);
   const hasScrolledToMineRef = useRef(false);
 
   useEffect(() => {
-    const unsub = onSnapshot(studentsCollection, (snap) => setStudents(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-    return () => unsub();
-  }, []);
-
-  useEffect(() => {
-    // Only this year's schedule/sessions are needed here, and this is a
-    // leaderboard snapshot, not something that needs to move the instant
-    // another student's session ends -- see fetchYearBoardData above for why
-    // this is a shared, briefly-cached ONE-TIME read rather than either a
-    // live listener or a fresh fetch on every single open.
     let cancelled = false;
-    fetchYearBoardData().then(({ schedule, sessions }) => {
-      if (cancelled) return;
-      setTeacherSchedule(schedule);
-      setSessions(sessions);
-    }).catch(e => console.error('Error loading year board data:', e));
+    fetch(`${import.meta.env.BASE_URL}yearAttendanceSnapshot.json?v=${Date.now()}`)
+      .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
+      .then(data => {
+        if (cancelled) return;
+        setRankedList(data.rankedList || []);
+        setGeneratedAt(data.generatedAt || null);
+      })
+      .catch(e => console.error('Error loading attendance snapshot:', e))
+      .finally(() => { if (!cancelled) setSnapshotLoading(false); });
     return () => { cancelled = true; };
   }, []);
 
@@ -10121,35 +10091,6 @@ function YearAttendanceBoard({ role, targetStudentUid }) {
     }
   };
 
-  const rankedList = useMemo(() => {
-    const now = new Date();
-    const startOfYear = new Date(now.getFullYear(), 0, 1);
-
-    const offlineNames = [...new Set(teacherSchedule.filter(s => s.studentUid === 'offline').map(s => s.studentName))];
-    const offlineEntries = offlineNames.map(name => ({ id: `offline-${name}`, name, isOffline: true }));
-    const onlineEntries = students.filter(s => s.isActive === true).map(s => ({ id: s.id, name: s.name, isOffline: false }));
-    const allEntries = [...onlineEntries, ...offlineEntries];
-
-    const computed = allEntries.map(entry => {
-      let attended = 0, absent = 0;
-      teacherSchedule.forEach(sched => {
-        const entryDate = sched.startTime.toDate();
-        if (entryDate > now || entryDate < startOfYear) return;
-
-        const isMatch = entry.isOffline
-          ? (sched.studentUid === 'offline' && sched.studentName === entry.name)
-          : (sched.studentUid === entry.id);
-        if (!isMatch) return;
-
-        const status = getStudentAttendanceForEntry(sched, entry.id, sessions);
-        if (status === 'attended') attended++; else absent++;
-      });
-      return { ...entry, attended, absent, total: attended + absent };
-    });
-
-    return computed.filter(e => e.total > 0).sort((a, b) => b.attended - a.attended);
-  }, [students, teacherSchedule, sessions]);
-
   const visibleList = rankedList.filter(e => !e.isOffline || !hiddenOfflineNames.includes(e.name));
 
   useEffect(() => {
@@ -10165,9 +10106,14 @@ function YearAttendanceBoard({ role, targetStudentUid }) {
 
   return (
     <div className="p-6 max-w-2xl mx-auto pb-24">
-      <h2 className="text-3xl font-bold mb-6 text-indigo-700">This Year's Attendance</h2>
+      <h2 className="text-3xl font-bold mb-1 text-indigo-700">This Year's Attendance</h2>
+      <p className="text-xs text-gray-400 mb-6">
+        {generatedAt ? `Updated weekly — as of ${new Date(generatedAt).toLocaleDateString()}` : ' '}
+      </p>
       <div className="space-y-3">
-        {visibleList.length === 0 ? (
+        {snapshotLoading ? (
+          <p className="text-gray-500">Loading...</p>
+        ) : visibleList.length === 0 ? (
           <p className="text-gray-500">No attendance data yet this year.</p>
         ) : (
           visibleList.map((entry, idx) => {

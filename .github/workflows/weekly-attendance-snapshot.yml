@@ -1,0 +1,44 @@
+name: Weekly attendance snapshot
+
+# Refreshes public/yearAttendanceSnapshot.json (the "This Year's Attendance"
+# leaderboard, see scripts/generate-attendance-snapshot.mjs for why this
+# exists as a static file instead of a live Firestore read). Runs every
+# Monday at 09:00 UTC and can also be triggered by hand from the Actions tab.
+on:
+  schedule:
+    - cron: "0 9 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Regenerate snapshot
+        run: npm run snapshot:attendance
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- public/yearAttendanceSnapshot.json; then
+            echo "No change -- nothing to commit."
+          else
+            git add public/yearAttendanceSnapshot.json
+            git commit -m "Weekly attendance snapshot refresh"
+            git push
+          fi
