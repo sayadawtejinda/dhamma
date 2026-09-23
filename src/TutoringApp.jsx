@@ -1332,7 +1332,9 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
   const draggedLessonIdRef = useRef(null);
 
   const [sendActionType, setSendActionType] = useState('lesson');
-  const [sendIsInterrupt, setSendIsInterrupt] = useState(false);
+  // Default (unchecked) = same as always: shows right away, replacing
+  // whatever the student had. Checked = queue it instead (wait its turn).
+  const [sendPreSend, setSendPreSend] = useState(false);
   const [giftCoins, setGiftCoins] = useState('50');
   const [giftMessage, setGiftMessage] = useState('');
   const [isSendingGift, setIsSendingGift] = useState(false);
@@ -2097,7 +2099,7 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
               unitLabel: effectiveLessonUnitLabel,
               unitCount: effectiveLessonUnitCount,
               status: 'pending',
-              isInterrupt: sendIsInterrupt,
+              isPreSend: sendPreSend,
               sentAt: serverTimestamp()
             });
           }
@@ -2105,13 +2107,13 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
         } catch (error) {
           console.error("Error sending lesson to group:", error);
         }
-        setSendIsInterrupt(false);
+        setSendPreSend(false);
       };
 
       setShowConfirmModal({
         isOpen: true,
         title: 'Send to Group',
-        message: `Are you sure you want to assign "${lessonToSend.title}" to "${group.groupName}" (${targetStudents.length} students)?\n(${studentNames})\n\nNote: If they already have this lesson, the old one will be replaced.${sendIsInterrupt ? '\n\n🚨 Sent as an interrupt -- it will jump ahead of anything already queued.' : ''}`,
+        message: `Are you sure you want to assign "${lessonToSend.title}" to "${group.groupName}" (${targetStudents.length} students)?\n(${studentNames})\n\nNote: If they already have this lesson, the old one will be replaced.${sendPreSend ? '\n\n🔜 Queued -- waits until anything currently active is reported.' : ''}`,
         onConfirm: () => {
           executeSend();
           setShowConfirmModal({ isOpen: false });
@@ -2137,20 +2139,20 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
             unitLabel: effectiveLessonUnitLabel,
             unitCount: effectiveLessonUnitCount,
             status: 'pending',
-            isInterrupt: sendIsInterrupt,
+            isPreSend: sendPreSend,
             sentAt: serverTimestamp()
           });
           playSound(2);
         } catch (error) {
           console.error("Error sending lesson:", error);
         }
-        setSendIsInterrupt(false);
+        setSendPreSend(false);
       };
 
       setShowConfirmModal({
         isOpen: true,
         title: 'Assign Lesson',
-        message: `Are you sure you want to assign "${lessonToSend.title}" to ${student.name}?\n\nNote: If they already have this lesson, the old one will be replaced.${sendIsInterrupt ? '\n\n🚨 Sent as an interrupt -- it will jump ahead of anything already queued.' : ''}`,
+        message: `Are you sure you want to assign "${lessonToSend.title}" to ${student.name}?\n\nNote: If they already have this lesson, the old one will be replaced.${sendPreSend ? '\n\n🔜 Queued -- waits until anything currently active is reported.' : ''}`,
         onConfirm: () => {
           executeSend();
           setShowConfirmModal({ isOpen: false });
@@ -5625,10 +5627,10 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
           })()}
 
           {sendActionType === 'lesson' && (
-            <label className="flex items-start gap-2 mb-4 p-3 rounded-lg bg-rose-50 border border-rose-200 cursor-pointer">
-              <input type="checkbox" checked={sendIsInterrupt} onChange={(e) => setSendIsInterrupt(e.target.checked)} className="mt-1" />
+            <label className="flex items-center gap-2 mb-4 p-3 rounded-lg bg-rose-50 border border-rose-200 cursor-pointer">
+              <input type="checkbox" checked={sendPreSend} onChange={(e) => setSendPreSend(e.target.checked)} />
               <span className="text-sm text-rose-800">
-                <span className="font-bold">🚨 Send as an interrupt</span> — jumps ahead of anything already queued for this student, instead of waiting its turn. Use this for an ad hoc replacement (e.g. the queued lesson won't open) — not for normal pre-sending ahead of time.
+                <span className="font-bold">🔜 Pre-send</span> — queue it for later instead of showing right away.
               </span>
             </label>
           )}
@@ -7654,19 +7656,21 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       }
       prevLessonCount.current = lessonList.length;
       
-      // Interrupts always jump to the front (see the 🚨 checkbox in Assign
-      // Lesson); otherwise FIFO by send order -- the OLDEST still-unreported
-      // lesson comes first, not the most-recently-sent one, so pre-sending a
-      // week's worth of lessons queues them instead of the newest one
-      // silently jumping the line. A lesson only stops being "pending"/
-      // "started" (and so drops out of this list) once its report is
-      // submitted -- see handleSubmitFeedback -- which is what reveals the
-      // next one in the queue.
+      // A normal send (isPreSend not checked -- the default, exactly like
+      // before this queue existed at all) always shows immediately, ahead of
+      // anything queued -- ties among normal sends go to the newest one,
+      // same as always. Only a lesson explicitly sent with 🔜 Pre-send
+      // checked waits its turn, FIFO by send order (oldest queued first), so
+      // pre-sending a week's worth queues them instead of the newest one
+      // jumping the line. A lesson only stops being "pending"/"started"
+      // (and so drops out of this list) once its report is submitted -- see
+      // handleSubmitFeedback -- which is what reveals the next queued one.
       lessonList.sort((a, b) => {
-        if (!!a.isInterrupt !== !!b.isInterrupt) return a.isInterrupt ? -1 : 1;
+        const aQueued = !!a.isPreSend, bQueued = !!b.isPreSend;
+        if (aQueued !== bQueued) return aQueued ? 1 : -1;
         const dateA = a.sentAt?.toDate ? a.sentAt.toDate() : new Date(0);
         const dateB = b.sentAt?.toDate ? b.sentAt.toDate() : new Date(0);
-        return dateA - dateB;
+        return aQueued ? (dateA - dateB) : (dateB - dateA);
       });
 
       setMyLessons(lessonList.map(withCurrentLessonCounts));
@@ -9530,7 +9534,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         <h3 className="text-xl font-semibold mb-1 text-gray-800">Available Lessons</h3>
         {availableLessons.length > 1 && (
           <p className="text-xs text-gray-400 mb-3">
-            {availableLessons.length - 1} more lesson{availableLessons.length - 1 === 1 ? '' : 's'} queued -- {availableLessons[0]?.isInterrupt ? 'this interrupt' : 'they’ll'} show up after this one is reported.
+            {availableLessons.length - 1} more lesson{availableLessons.length - 1 === 1 ? '' : 's'} queued -- they’ll show up after this one is reported.
           </p>
         )}
         {availableLessons.length === 0 ? (
@@ -9594,9 +9598,6 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className={`font-semibold text-lg ${textHColor}`}>{lesson.title}</p>
-                      {lesson.isInterrupt && (
-                        <span className="text-xs font-bold text-rose-700 bg-rose-100 border border-rose-300 px-2 py-0.5 rounded-full">🚨 Interrupt</span>
-                      )}
                       {isSmartStudyLesson && ssClassIdForBtn && (
                         <span className="text-sm font-semibold text-blue-600 ml-1">— {ssClassIdForBtn}</span>
                       )}
