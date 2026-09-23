@@ -7633,44 +7633,43 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     // composite index is required (see note on the sessions query above).
     const q = query(lessonsCollection, where("studentUid", "==", studentUid));
     const unsubscribe = onSnapshot(q, (snapshot) => {
+      // Reported lessons stay in this list too now (see below) -- once
+      // reported, a lesson keeps showing here forever (yellow, same as a
+      // "started" one), exactly like it always used to, instead of vanishing
+      // the moment its report is submitted.
       const lessonList = snapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
-        .filter(l => l.status === 'pending' || l.status === 'started');
-      
-      if (lessonList.length > prevLessonCount.current && prevLessonCount.current > 0) {
-        playSound(1); 
+        .filter(l => l.status === 'pending' || l.status === 'started' || l.status === 'reported');
+
+      const unresolvedCount = lessonList.filter(l => l.status !== 'reported').length;
+      if (unresolvedCount > prevLessonCount.current && prevLessonCount.current > 0) {
+        playSound(1);
         setTimeout(() => {
           if (lessonsSectionRef.current) {
             lessonsSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
           }
         }, 300);
       }
-      prevLessonCount.current = lessonList.length;
-      
-      // Three tiers, in priority order:
-      //  0. Normal sends (isPreSend === false) -- shows immediately, same as
-      //     always. Ties go to the newest one.
+      prevLessonCount.current = unresolvedCount;
+
+      // Four tiers, in priority order (only affects WHICH ONE ends up at the
+      // top / counts as "the current lesson" for the pulsing Latest Lesson
+      // button -- every tier still shows in the list below, nothing here is
+      // ever hidden):
+      //  0. Normal sends (isPreSend === false), unresolved -- shows
+      //     immediately, same as always. Ties go to the newest one.
       //  1. Pre-sent, queued lessons (isPreSend === true, from the 🔜
-      //     checkbox) -- FIFO, oldest queued first.
-      //  2. Old lessons from before this queue existed at all (isPreSend is
-      //     undefined -- the field was never written). Left completely
-      //     alone: never treated as "queued" and never counted in the "N
-      //     more queued" note below, on purpose -- they used to just pile up
-      //     as a flat list, and mixing years of that backlog into the new
-      //     queue made a single genuinely pre-sent lesson look buried behind
-      //     dozens of unrelated old ones. Still shown/opened like anything
-      //     else here if nothing newer exists, just last in line and never
-      //     part of the "queued" count.
-      // A lesson only stops being "pending"/"started" (and so drops out of
-      // this list) once its report is submitted -- see handleSubmitFeedback
-      // -- which is what reveals the next one in its own tier.
-      const tierOf = (l) => l.isPreSend === true ? 1 : l.isPreSend === false ? 0 : 2;
+      //     checkbox), unresolved -- FIFO, oldest queued first.
+      //  2. Old unresolved lessons from before this queue existed at all
+      //     (isPreSend is undefined).
+      //  3. Reported -- done, just history now. Newest first.
+      const tierOf = (l) => l.status === 'reported' ? 3 : (l.isPreSend === true ? 1 : l.isPreSend === false ? 0 : 2);
       lessonList.sort((a, b) => {
         const ta = tierOf(a), tb = tierOf(b);
         if (ta !== tb) return ta - tb;
         const dateA = a.sentAt?.toDate ? a.sentAt.toDate() : new Date(0);
         const dateB = b.sentAt?.toDate ? b.sentAt.toDate() : new Date(0);
-        return ta === 0 ? (dateB - dateA) : (dateA - dateB); // tier 0: newest first, tiers 1/2: oldest first
+        return (ta === 0 || ta === 3) ? (dateB - dateA) : (dateA - dateB); // tiers 0/3: newest first, tiers 1/2: oldest first
       });
 
       setMyLessons(lessonList.map(withCurrentLessonCounts));
