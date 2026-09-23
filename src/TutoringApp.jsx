@@ -1364,6 +1364,14 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
   const [directTrophyAmount, setDirectTrophyAmount] = useState(1);
   const [isReconcilingAllClasses, setIsReconcilingAllClasses] = useState(false);
   const [wholeAppMaxAvailable, setWholeAppMaxAvailable] = useState(null); // sum of each class's own max-available
+  // "🌸 Parami Trophy Catch-up" -- a one-off scan for students who earned
+  // trophies through real completions (SmartStudy/Abhidhamma/Dhammaschool)
+  // but never went through the in-app Report flow to claim them. See
+  // handleScanParamiCatchup below.
+  const [showParamiCatchup, setShowParamiCatchup] = useState(false);
+  const [paramiCatchupScanning, setParamiCatchupScanning] = useState(false);
+  const [paramiCatchupResults, setParamiCatchupResults] = useState(null); // null = not scanned yet this session
+  const [paramiCatchupCreating, setParamiCatchupCreating] = useState(false);
 
   // When no specific class is chosen, "Max Available" for the whole app must be
   // the SUM of each class's own max-available (floor(classLessons/5) per class)
@@ -2263,6 +2271,158 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
     setIsReconcilingAllClasses(false);
   };
 
+  // Scans the "Parami" group ONLY (never any other student -- the teacher
+  // asked for this explicitly) for real completions in SmartStudy/
+  // Abhidhamma/Dhammaschool that never went through the in-app Report flow,
+  // so no trophy was ever requested for them. A class counts once the
+  // student has done 5+ of its lessons (SmartStudy/Abhidhamma) -- partial
+  // credit, the same floor(done*classMax/total) formula every other trophy
+  // calculation in this app already uses -- or, for Dhammaschool, 2
+  // trophies per completed chapter, per the teacher. Read-only: this never
+  // writes anything by itself, it only fills paramiCatchupResults for the
+  // teacher to review before handleCreateParamiCatchupRequests below
+  // actually creates anything.
+  const handleScanParamiCatchup = async () => {
+    setParamiCatchupScanning(true);
+    setParamiCatchupResults(null);
+    try {
+      const paramiGroup = groups.find(g => (g.groupName || '').trim().toLowerCase() === 'parami');
+      if (!paramiGroup) {
+        alert('No "Parami" group found.');
+        setParamiCatchupScanning(false);
+        return;
+      }
+      const members = students.filter(s => (paramiGroup.studentUids || []).includes(s.id) && s.isActive === true);
+
+      const smartStudyBank = lessonBank.find(l => l.link === 'smartstudy://');
+      const abhidhammaBank = lessonBank.find(l => l.link === 'abhidhamma://');
+      const dhammaschoolBank = lessonBank.find(l => l.link === 'dhammaschool://');
+
+      const [smartStudyClassList, abhiClassList, dsLessonsSnap] = await Promise.all([
+        loadSmartStudyClassList(),
+        loadAbhidhammaClasses(),
+        getDocs(collection(db, 'artifacts', DHAMMASCHOOL_APP_ID, 'public', 'data', 'lessons')),
+      ]);
+      const dsLessonsByClass = {};
+      dsLessonsSnap.docs.forEach(d => {
+        const data = d.data();
+        const cid = (data.classId && data.classId.trim()) ? data.classId.trim() : 'GENERAL';
+        (dsLessonsByClass[cid] = dsLessonsByClass[cid] || []).push(d.id);
+      });
+
+      const results = [];
+      for (const student of members) {
+        const breakdown = [];
+
+        if (smartStudyBank && smartStudyClassList?.length) {
+          try {
+            const compSnap = await getDocs(query(
+              collection(db, 'artifacts', appId, 'public', 'data', 'quizCompletions'),
+              where('studentName', '==', student.name)
+            ));
+            const byClass = {};
+            compSnap.docs.forEach(d => {
+              const dt = d.data();
+              if (!dt.classId || !dt.lessonId) return;
+              (byClass[dt.classId] = byClass[dt.classId] || new Set()).add(dt.lessonId);
+            });
+            for (const c of smartStudyClassList) {
+              const done = byClass[c.classId]?.size || 0;
+              if (done < 5 || !c.lessonCount) continue;
+              const classMax = computeClassTrophyMax(c.lessonCount);
+              const deserved = Math.floor((done * classMax) / c.lessonCount);
+              const lessonKey = computeLessonKey(smartStudyBank.title, `smartstudy://${c.classId}`);
+              const owed = Math.max(0, deserved - (student.earnedTrophies?.[lessonKey] || 0));
+              if (owed > 0) breakdown.push({ app: 'SmartStudy', classId: c.classId, lessonKey, lessonTitle: `${smartStudyBank.title} — ${c.classId}`, lessonLink: `smartstudy://${c.classId}`, amount: owed, done, total: c.lessonCount });
+            }
+          } catch (e) { console.error('Parami catch-up SmartStudy scan error:', e); }
+        }
+
+        if (abhidhammaBank && abhiClassList?.length) {
+          for (const c of abhiClassList) {
+            if (!c.lessonCount) continue;
+            try {
+              const { doneLessonIds } = await fetchAbhidhammaProgress(student.id, c.classId);
+              const done = doneLessonIds.size;
+              if (done < 5) continue;
+              const classMax = computeClassTrophyMax(c.lessonCount);
+              const deserved = Math.floor((done * classMax) / c.lessonCount);
+              const lessonKey = computeLessonKey(abhidhammaBank.title, `abhidhamma://${c.classId}`);
+              const owed = Math.max(0, deserved - (student.earnedTrophies?.[lessonKey] || 0));
+              if (owed > 0) breakdown.push({ app: 'Abhidhamma', classId: c.classId, lessonKey, lessonTitle: `${abhidhammaBank.title} — ${c.classId}`, lessonLink: `abhidhamma://${c.classId}`, amount: owed, done, total: c.lessonCount });
+            } catch (e) { console.error('Parami catch-up Abhidhamma scan error:', e, c.classId); }
+          }
+        }
+
+        if (dhammaschoolBank) {
+          try {
+            const compSnap = await getDocs(query(
+              collection(db, 'artifacts', DHAMMASCHOOL_APP_ID, 'public', 'data', 'lesson_completions'),
+              where('studentName', '==', student.name)
+            ));
+            const completedIds = new Set(compSnap.docs.map(d => d.data().lessonId));
+            for (const [classId, lessonIds] of Object.entries(dsLessonsByClass)) {
+              const done = lessonIds.filter(lid => completedIds.has(lid)).length;
+              if (done <= 0) continue;
+              const deserved = done * 2;
+              const lessonKey = computeLessonKey(dhammaschoolBank.title, `dhammaschool://${classId}`);
+              const owed = Math.max(0, deserved - (student.earnedTrophies?.[lessonKey] || 0));
+              if (owed > 0) breakdown.push({ app: 'Dhammaschool', classId, lessonKey, lessonTitle: `${dhammaschoolBank.title} — ${classId}`, lessonLink: `dhammaschool://${classId}`, amount: owed, done, total: lessonIds.length });
+            }
+          } catch (e) { console.error('Parami catch-up Dhammaschool scan error:', e); }
+        }
+
+        const total = breakdown.reduce((sum, b) => sum + b.amount, 0);
+        if (total > 0) {
+          results.push({ studentId: student.id, studentName: student.name, breakdown, total, alreadyHasRequest: student.trophyRequested === true });
+        }
+      }
+      setParamiCatchupResults(results);
+    } catch (e) {
+      console.error('Error scanning Parami catch-up:', e);
+      alert('Error scanning. Please try again.');
+    }
+    setParamiCatchupScanning(false);
+  };
+
+  // Turns the scan results into real entries in the SAME 🏆 Trophy Requests
+  // queue the teacher already checks and approves from every week -- one
+  // combined request per student (not one per class), carrying a
+  // requestedTrophyBreakdown array so handleApproveTrophy can credit each
+  // class's own earnedTrophies ledger correctly on approval, instead of
+  // just a flat trophyCount bump (which would leave a normal future report
+  // for that same class free to award it a second time). Nothing is
+  // actually credited here -- Approve/Deny in the usual place still decides
+  // that, on the teacher's own schedule.
+  const handleCreateParamiCatchupRequests = async () => {
+    if (!paramiCatchupResults) return;
+    const eligible = paramiCatchupResults.filter(r => !r.alreadyHasRequest);
+    if (eligible.length === 0) {
+      alert('Nothing to create -- everyone here already has a pending trophy request.');
+      return;
+    }
+    setParamiCatchupCreating(true);
+    try {
+      for (const r of eligible) {
+        const studentDocRef = doc(db, `${publicDataPath}/students`, r.studentId);
+        await updateDoc(studentDocRef, {
+          trophyRequested: true,
+          requestedTrophyAmount: r.total,
+          requestedTrophyLessonTitle: `Parami catch-up (${r.breakdown.length} ${r.breakdown.length === 1 ? 'class' : 'classes'})`,
+          requestedTrophyLessonLink: null,
+          requestedTrophySessionId: null,
+          requestedTrophyBreakdown: r.breakdown.map(b => ({ lessonKey: b.lessonKey, lessonTitle: b.lessonTitle, lessonLink: b.lessonLink, amount: b.amount })),
+        });
+      }
+      alert(`Created ${eligible.length} trophy request(s). Review and approve them in 🏆 Trophy Requests above whenever you're ready.`);
+      setParamiCatchupResults(null);
+    } catch (e) {
+      console.error('Error creating Parami catch-up requests:', e);
+      alert('Error creating requests. Please try again.');
+    }
+    setParamiCatchupCreating(false);
+  };
+
   const handleAwardDirectTrophies = async (e) => {
     e.preventDefault();
     const student = students.find(s => s.id === selectedStudentUid);
@@ -2763,6 +2923,38 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
   const handleApproveTrophy = async (studentId, studentName, amount = 1, lessonTitle = null, sessionId = null, lessonLink = null) => {
     try {
       const studentDocRef = doc(db, `${publicDataPath}/students`, studentId);
+
+      // A "🌸 Parami Trophy Catch-up" request (see handleCreateParamiCatchupRequests)
+      // is one combined request covering several classes -- credit each
+      // class's own earnedTrophies ledger entry separately here, not just a
+      // flat trophyCount bump, so a normal future report/reconcile for the
+      // SAME class can never re-award what this already paid out.
+      const studentSnapForBreakdown = await getDoc(studentDocRef);
+      const breakdown = studentSnapForBreakdown.exists() ? (studentSnapForBreakdown.data().requestedTrophyBreakdown || null) : null;
+      if (breakdown && breakdown.length > 0) {
+        const updateData = {
+          trophyRequested: false,
+          requestedTrophyAmount: 0,
+          requestedTrophyLessonId: null,
+          requestedTrophyLessonTitle: null,
+          requestedTrophyLessonLink: null,
+          requestedTrophySessionId: null,
+          requestedTrophyBreakdown: deleteField(),
+          trophyCount: increment(amount),
+          justEarnedTrophy: true,
+        };
+        breakdown.forEach(b => { updateData[`earnedTrophies.${b.lessonKey}`] = increment(b.amount); });
+        await updateDoc(studentDocRef, updateData);
+
+        const expires = new Date();
+        expires.setDate(expires.getDate() + 1);
+        const newTotal = (studentSnapForBreakdown.data().trophyCount || 0) + amount;
+        await addDoc(announcementsCollection, {
+          studentName: studentName, trophyCount: newTotal, createdAt: serverTimestamp(), expiresAt: Timestamp.fromDate(expires), id: getUUID()
+        });
+        return;
+      }
+
       const lessonKey = lessonTitle ? computeLessonKey(lessonTitle, lessonLink) : null;
 
       // Hard safety cap, regardless of which app/lesson type generated this
@@ -2851,7 +3043,8 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
         requestedTrophyLessonId: null,
         requestedTrophyLessonTitle: null,
         requestedTrophyLessonLink: null,
-        requestedTrophySessionId: null
+        requestedTrophySessionId: null,
+        requestedTrophyBreakdown: deleteField()
       };
 
       if (sessionId && lessonTitle) {
@@ -6498,7 +6691,80 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
 
       {viewMode === 'students' && (
         <div className="bg-rose-50/70 backdrop-blur-sm p-6 rounded-xl shadow-lg border border-rose-200">
-          
+
+          {/* 🌸 Parami Trophy Catch-up -- a small, tucked-away tool (not part
+              of the normal weekly flow) for a one-off scan of the Parami
+              group's real completions. Hidden entirely once the teacher no
+              longer needs it (see the "Hide this tool" link below); creating
+              requests here just feeds the same 🏆 Trophy Requests queue
+              above, so approving still happens the normal way. */}
+          {!teacherConfigData?.hideParamiCatchupTool && (
+            <div className="mb-8">
+              <button
+                type="button"
+                onClick={() => setShowParamiCatchup(v => !v)}
+                className="text-sm font-semibold text-pink-700 bg-pink-50 hover:bg-pink-100 border border-pink-200 rounded-lg px-4 py-2"
+              >
+                🌸 Parami Trophy Catch-up {showParamiCatchup ? '▲' : '▼'}
+              </button>
+              {showParamiCatchup && (
+                <div className="mt-3 p-4 rounded-xl bg-pink-50 border border-pink-200">
+                  <p className="text-sm text-gray-700 mb-3">
+                    Scans the <strong>Parami</strong> group only for real completions in Smart Study / Abhidhamma (5+ lessons in a class) and Dhammaschool (2 trophies per completed chapter) that never went through Report, and lets you turn them into normal trophy requests to approve whenever you like -- nothing is awarded until you Approve it above.
+                  </p>
+                  <div className="flex flex-wrap gap-3 mb-3">
+                    <button
+                      type="button"
+                      disabled={paramiCatchupScanning}
+                      onClick={handleScanParamiCatchup}
+                      className="px-4 py-2 bg-pink-600 text-white rounded-lg text-sm font-bold hover:bg-pink-700 disabled:opacity-50"
+                    >
+                      {paramiCatchupScanning ? 'Scanning...' : '🔍 Scan Parami Group'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => { await setDoc(teacherConfigDoc, { hideParamiCatchupTool: true }, { merge: true }); }}
+                      className="px-4 py-2 bg-white border border-gray-300 text-gray-600 rounded-lg text-sm hover:bg-gray-50"
+                    >
+                      Hide this tool (all done)
+                    </button>
+                  </div>
+                  {paramiCatchupResults && (
+                    paramiCatchupResults.length === 0 ? (
+                      <p className="text-sm text-gray-500">Nothing found -- either everyone's already been credited, or no one has 5+ lessons done yet.</p>
+                    ) : (
+                      <div>
+                        <div className="space-y-2 mb-3 max-h-72 overflow-y-auto">
+                          {paramiCatchupResults.map(r => (
+                            <div key={r.studentId} className="bg-white p-3 rounded-lg border border-pink-100">
+                              <p className="font-semibold text-gray-800">
+                                {r.studentName} — <span className="text-pink-700 font-bold">{r.total} {r.total === 1 ? 'trophy' : 'trophies'}</span>
+                                {r.alreadyHasRequest && <span className="ml-2 text-xs font-semibold text-amber-600">(already has a pending request -- skipped)</span>}
+                              </p>
+                              <ul className="text-xs text-gray-500 mt-1 list-disc list-inside">
+                                {r.breakdown.map((b, i) => (
+                                  <li key={i}>{b.app} — {b.classId}: {b.done}/{b.total} lessons done → {b.amount} owed</li>
+                                ))}
+                              </ul>
+                            </div>
+                          ))}
+                        </div>
+                        <button
+                          type="button"
+                          disabled={paramiCatchupCreating || paramiCatchupResults.every(r => r.alreadyHasRequest)}
+                          onClick={handleCreateParamiCatchupRequests}
+                          className="px-4 py-2 bg-yellow-500 text-white rounded-lg text-sm font-bold hover:bg-yellow-600 disabled:opacity-50"
+                        >
+                          {paramiCatchupCreating ? 'Creating...' : `Create trophy request${paramiCatchupResults.filter(r => !r.alreadyHasRequest).length === 1 ? '' : 's'} for ${paramiCatchupResults.filter(r => !r.alreadyHasRequest).length} student(s)`}
+                        </button>
+                      </div>
+                    )
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {pendingStarAnnouncements.length > 0 && (
             <div className="mb-8">
               <h3 className="text-xl font-semibold mb-4 text-blue-800">
