@@ -6696,41 +6696,33 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
 
           {/* 🌸 Parami Trophy Catch-up -- a small, tucked-away tool (not part
               of the normal weekly flow) for a one-off scan of the Parami
-              group's real completions. Hidden entirely once the teacher no
-              longer needs it (see the "Hide this tool" link below); creating
-              requests here just feeds the same 🏆 Trophy Requests queue
-              above, so approving still happens the normal way. */}
-          {!teacherConfigData?.hideParamiCatchupTool && (
-            <div className="mb-8">
-              <button
-                type="button"
-                onClick={() => setShowParamiCatchup(v => !v)}
-                className="text-sm font-semibold text-pink-700 bg-pink-50 hover:bg-pink-100 border border-pink-200 rounded-lg px-4 py-2"
-              >
-                🌸 Parami Trophy Catch-up {showParamiCatchup ? '▲' : '▼'}
-              </button>
-              {showParamiCatchup && (
-                <div className="mt-3 p-4 rounded-xl bg-pink-50 border border-pink-200">
-                  <p className="text-sm text-gray-700 mb-3">
-                    Scans the <strong>Parami</strong> group only for real completions in Smart Study / Abhidhamma (5+ lessons in a class) and Dhammaschool (2 trophies per completed chapter) that never went through Report, and lets you turn them into normal trophy requests to approve whenever you like -- nothing is awarded until you Approve it above.
-                  </p>
-                  <div className="flex flex-wrap gap-3 mb-3">
-                    <button
-                      type="button"
-                      disabled={paramiCatchupScanning}
-                      onClick={handleScanParamiCatchup}
-                      className="px-4 py-2 bg-pink-600 text-white rounded-lg text-sm font-bold hover:bg-pink-700 disabled:opacity-50"
-                    >
-                      {paramiCatchupScanning ? 'Scanning...' : '🔍 Scan Parami Group'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={async () => { await setDoc(teacherConfigDoc, { hideParamiCatchupTool: true }, { merge: true }); }}
-                      className="px-4 py-2 bg-white border border-gray-300 text-gray-600 rounded-lg text-sm hover:bg-gray-50"
-                    >
-                      Hide this tool (all done)
-                    </button>
-                  </div>
+              group's real completions. Just a collapse toggle -- nothing
+              here is ever permanently removed. Creating requests here just
+              feeds the same 🏆 Trophy Requests queue above, so approving
+              still happens the normal way. */}
+          <div className="mb-8">
+            <button
+              type="button"
+              onClick={() => setShowParamiCatchup(v => !v)}
+              className="text-sm font-semibold text-pink-700 bg-pink-50 hover:bg-pink-100 border border-pink-200 rounded-lg px-4 py-2"
+            >
+              🌸 Parami Trophy Catch-up {showParamiCatchup ? '▲' : '▼'}
+            </button>
+            {showParamiCatchup && (
+              <div className="mt-3 p-4 rounded-xl bg-pink-50 border border-pink-200">
+                <p className="text-sm text-gray-700 mb-3">
+                  Scans the <strong>Parami</strong> group only for real completions in Smart Study / Abhidhamma (5+ lessons in a class) and Dhammaschool (2 trophies per completed chapter) that never went through Report, and lets you turn them into normal trophy requests to approve whenever you like -- nothing is awarded until you Approve it above.
+                </p>
+                <div className="flex flex-wrap gap-3 mb-3">
+                  <button
+                    type="button"
+                    disabled={paramiCatchupScanning}
+                    onClick={handleScanParamiCatchup}
+                    className="px-4 py-2 bg-pink-600 text-white rounded-lg text-sm font-bold hover:bg-pink-700 disabled:opacity-50"
+                  >
+                    {paramiCatchupScanning ? 'Scanning...' : '🔍 Scan Parami Group'}
+                  </button>
+                </div>
                   {paramiCatchupResults && (
                     paramiCatchupResults.length === 0 ? (
                       <p className="text-sm text-gray-500">Nothing found -- either everyone's already been credited, or no one has 5+ lessons done yet.</p>
@@ -6765,7 +6757,6 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                 </div>
               )}
             </div>
-          )}
 
           {pendingStarAnnouncements.length > 0 && (
             <div className="mb-8">
@@ -7656,21 +7647,30 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       }
       prevLessonCount.current = lessonList.length;
       
-      // A normal send (isPreSend not checked -- the default, exactly like
-      // before this queue existed at all) always shows immediately, ahead of
-      // anything queued -- ties among normal sends go to the newest one,
-      // same as always. Only a lesson explicitly sent with 🔜 Pre-send
-      // checked waits its turn, FIFO by send order (oldest queued first), so
-      // pre-sending a week's worth queues them instead of the newest one
-      // jumping the line. A lesson only stops being "pending"/"started"
-      // (and so drops out of this list) once its report is submitted -- see
-      // handleSubmitFeedback -- which is what reveals the next queued one.
+      // Three tiers, in priority order:
+      //  0. Normal sends (isPreSend === false) -- shows immediately, same as
+      //     always. Ties go to the newest one.
+      //  1. Pre-sent, queued lessons (isPreSend === true, from the 🔜
+      //     checkbox) -- FIFO, oldest queued first.
+      //  2. Old lessons from before this queue existed at all (isPreSend is
+      //     undefined -- the field was never written). Left completely
+      //     alone: never treated as "queued" and never counted in the "N
+      //     more queued" note below, on purpose -- they used to just pile up
+      //     as a flat list, and mixing years of that backlog into the new
+      //     queue made a single genuinely pre-sent lesson look buried behind
+      //     dozens of unrelated old ones. Still shown/opened like anything
+      //     else here if nothing newer exists, just last in line and never
+      //     part of the "queued" count.
+      // A lesson only stops being "pending"/"started" (and so drops out of
+      // this list) once its report is submitted -- see handleSubmitFeedback
+      // -- which is what reveals the next one in its own tier.
+      const tierOf = (l) => l.isPreSend === true ? 1 : l.isPreSend === false ? 0 : 2;
       lessonList.sort((a, b) => {
-        const aQueued = !!a.isPreSend, bQueued = !!b.isPreSend;
-        if (aQueued !== bQueued) return aQueued ? 1 : -1;
+        const ta = tierOf(a), tb = tierOf(b);
+        if (ta !== tb) return ta - tb;
         const dateA = a.sentAt?.toDate ? a.sentAt.toDate() : new Date(0);
         const dateB = b.sentAt?.toDate ? b.sentAt.toDate() : new Date(0);
-        return aQueued ? (dateA - dateB) : (dateB - dateA);
+        return ta === 0 ? (dateB - dateA) : (dateA - dateB); // tier 0: newest first, tiers 1/2: oldest first
       });
 
       setMyLessons(lessonList.map(withCurrentLessonCounts));
@@ -9532,9 +9532,12 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
 
       <div ref={lessonsSectionRef} className="bg-white/90 backdrop-blur-sm p-6 rounded-xl shadow-lg mb-8 border border-gray-200 relative">
         <h3 className="text-xl font-semibold mb-1 text-gray-800">Available Lessons</h3>
-        {availableLessons.length > 1 && (
+        {/* Only counts genuinely pre-sent (🔜 checkbox) lessons still
+            waiting BEHIND the one shown below -- old pre-queue lessons
+            never count here, see the tierOf() sort above. */}
+        {availableLessons.slice(1).filter(l => l.isPreSend === true).length > 0 && (
           <p className="text-xs text-gray-400 mb-3">
-            {availableLessons.length - 1} more lesson{availableLessons.length - 1 === 1 ? '' : 's'} queued -- they’ll show up after this one is reported.
+            {availableLessons.slice(1).filter(l => l.isPreSend === true).length} more lesson{availableLessons.slice(1).filter(l => l.isPreSend === true).length === 1 ? '' : 's'} queued -- they’ll show up after this one is reported.
           </p>
         )}
         {availableLessons.length === 0 ? (
