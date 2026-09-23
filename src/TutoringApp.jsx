@@ -9532,30 +9532,33 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
 
       <div ref={lessonsSectionRef} className="bg-white/90 backdrop-blur-sm p-6 rounded-xl shadow-lg mb-8 border border-gray-200 relative">
         <h3 className="text-xl font-semibold mb-1 text-gray-800">Available Lessons</h3>
-        {/* Only counts genuinely pre-sent (🔜 checkbox) lessons still
-            waiting BEHIND the currently-active one -- old pre-queue lessons
-            never count here, see the tierOf() sort above. */}
-        {availableLessons.slice(1).filter(l => l.isPreSend === true).length > 0 && (
-          <p className="text-xs text-gray-400 mb-3">
-            {availableLessons.slice(1).filter(l => l.isPreSend === true).length} more lesson{availableLessons.slice(1).filter(l => l.isPreSend === true).length === 1 ? '' : 's'} queued -- they’ll show up after this one is reported.
-          </p>
-        )}
         {availableLessons.length === 0 ? (
           <p className="text-gray-500 mt-3">No new lessons from the teacher.</p>
         ) : (
           <div className={`space-y-4 ${activeSession ? 'opacity-60 pointer-events-none select-none' : ''}`}>
-            {/* Everything shows here (in progress/yellow, stale/gray, older
-                sends) same as always -- the ONLY thing kept out of sight is
-                a 🔜 Pre-send lesson that hasn't reached the front of its
-                queue yet (any other pre-send behind position 0). */}
-            {availableLessons.filter((l, i) => i === 0 || l.isPreSend !== true).map((lesson, index) => {
-              // A pending (never-opened) lesson that's sat for over a day
-              // reads as "stale" -- not the fresh, just-assigned green, but
-              // not the yellow "in progress" either, since nothing's
-              // happened with it yet. Still the one that opens on tap.
+            {/* Everything shows here -- in progress/yellow, stale/gray, older
+                sends, all of it, exactly like always. Nothing is hidden. */}
+            {availableLessons.map((lesson, index) => {
+              // A pending (never-opened) lesson reads as "stale" once it's
+              // sat unopened past the day AFTER the student's own study
+              // time -- not "24 hours after it was sent", so a lesson the
+              // teacher pre-sends days ahead still reads fresh/green right
+              // up through the student's actual class day, per the teacher.
+              // "Their study time" = the most recent of their own scheduled
+              // sessions (mySchedule) that both (a) has already happened and
+              // (b) happened on or after this lesson was sent -- i.e. a
+              // class the student could have actually studied this lesson
+              // at. Falls back to the simple "24h after sent" rule if this
+              // student has no matching schedule entry to go by.
               const sentAtMs = lesson.sentAt?.toDate ? lesson.sentAt.toDate().getTime() : null;
               const isPendingStatus = lesson.status === 'pending';
-              const isStale = isPendingStatus && sentAtMs != null && (Date.now() - sentAtMs) > 24 * 60 * 60 * 1000;
+              const nowMs = Date.now();
+              const pastOwnSessionsSinceSent = (mySchedule || [])
+                .map(s => s.startTime?.toDate ? s.startTime.toDate().getTime() : null)
+                .filter(t => t != null && t <= nowMs && (sentAtMs == null || t >= sentAtMs));
+              const lastRelevantSessionMs = pastOwnSessionsSinceSent.length ? Math.max(...pastOwnSessionsSinceSent) : null;
+              const staleCutoffMs = lastRelevantSessionMs != null ? lastRelevantSessionMs + 24 * 60 * 60 * 1000 : (sentAtMs != null ? sentAtMs + 24 * 60 * 60 * 1000 : null);
+              const isStale = isPendingStatus && staleCutoffMs != null && nowMs > staleCutoffMs;
               const isNew = isPendingStatus && !isStale;
               const divBg = isNew ? 'bg-emerald-50' : isStale ? 'bg-gray-100' : 'bg-yellow-50';
               const divBorder = isNew ? 'border-emerald-200' : isStale ? 'border-gray-300' : 'border-yellow-200';
