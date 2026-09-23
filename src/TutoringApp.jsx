@@ -771,6 +771,38 @@ const starAnnouncementsCollection = collection(db, `${publicDataPath}/starAnnoun
 const greetingsCollection = collection(db, `${publicDataPath}/greetings`);
 const teacherConfigDoc = doc(configCollection, 'teacher');
 
+// This whole year's schedule + sessions, shared (module-scope, this browser
+// tab only) between YearAttendanceBoard and TrophyBoard's teacher view --
+// both need the same "whole class, whole year" data just to build a
+// leaderboard, which doesn't need to be fresh to the second. Before this,
+// EVERY open of EITHER tab re-read both collections from scratch (~11,000+
+// docs combined) even for a student just flipping between view tabs to look
+// around -- a measured, real cost driver once multiple students did that in
+// the same sitting. A student's OWN attendance count (TrophyBoard's
+// "remaining hearts" line) still reads its own small scoped query instead,
+// see below -- this cache is only for the two whole-class boards.
+let yearBoardCache = null; // { schedule, sessions, fetchedAt }
+const YEAR_BOARD_CACHE_MS = 5 * 60 * 1000;
+function fetchYearBoardData() {
+  const now = Date.now();
+  if (yearBoardCache && (now - yearBoardCache.fetchedAt) < YEAR_BOARD_CACHE_MS) return Promise.resolve(yearBoardCache);
+  if (yearBoardCache?.inFlight) return yearBoardCache.inFlight; // two boards opening at once share one fetch
+  const startOfYear = new Date(new Date().getFullYear(), 0, 1);
+  const inFlight = Promise.all([
+    getDocs(query(teacherScheduleCollection, where("startTime", ">=", Timestamp.fromDate(startOfYear)))),
+    getDocs(query(sessionsCollection, where("startTime", ">=", Timestamp.fromDate(startOfYear)))),
+  ]).then(([scheduleSnap, sessionsSnap]) => {
+    yearBoardCache = {
+      schedule: scheduleSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+      sessions: sessionsSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+      fetchedAt: Date.now(),
+    };
+    return yearBoardCache;
+  });
+  yearBoardCache = { ...yearBoardCache, inFlight };
+  return inFlight;
+}
+
 // --- Components ---
 
 function ConfirmationModal({ 
@@ -10057,25 +10089,17 @@ function YearAttendanceBoard({ role, targetStudentUid }) {
   }, []);
 
   useEffect(() => {
-    // Only this year's schedule is needed here — a single range filter on one
-    // field doesn't require a composite index, and cuts the download size a
-    // lot for classes with years of history. A ONE-TIME read, not a live
-    // listener: this is a leaderboard snapshot, not something that needs to
-    // move the instant another student's session ends, and a live listener
-    // here used to mean every session/schedule write from ANY student, all
-    // day, kept re-billing every open tab sitting on this view.
+    // Only this year's schedule/sessions are needed here, and this is a
+    // leaderboard snapshot, not something that needs to move the instant
+    // another student's session ends -- see fetchYearBoardData above for why
+    // this is a shared, briefly-cached ONE-TIME read rather than either a
+    // live listener or a fresh fetch on every single open.
     let cancelled = false;
-    const startOfYear = new Date(new Date().getFullYear(), 0, 1);
-    const q = query(teacherScheduleCollection, where("startTime", ">=", Timestamp.fromDate(startOfYear)));
-    getDocs(q).then(snap => { if (!cancelled) setTeacherSchedule(snap.docs.map(d => ({ id: d.id, ...d.data() }))); }).catch(e => console.error('Error loading year schedule:', e));
-    return () => { cancelled = true; };
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    const startOfYear = new Date(new Date().getFullYear(), 0, 1);
-    const q = query(sessionsCollection, where("startTime", ">=", Timestamp.fromDate(startOfYear)));
-    getDocs(q).then(snap => { if (!cancelled) setSessions(snap.docs.map(d => ({ id: d.id, ...d.data() }))); }).catch(e => console.error('Error loading year sessions:', e));
+    fetchYearBoardData().then(({ schedule, sessions }) => {
+      if (cancelled) return;
+      setTeacherSchedule(schedule);
+      setSessions(sessions);
+    }).catch(e => console.error('Error loading year board data:', e));
     return () => { cancelled = true; };
   }, []);
 
