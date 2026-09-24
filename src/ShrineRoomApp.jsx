@@ -1056,11 +1056,11 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     }, 60000);
     return () => clearInterval(interval);
   }, [studentUid, chantingOpen, chantingIdle, meditatingMinutes != null]);
-  // +5 lotus EVERY time the altar becomes complete -- all 6 slots and both
-  // Golden Umbrellas offered (the Bell is not required). The 6 altar slots
-  // still run out over time (see the expiry check below; the umbrellas
-  // themselves are permanent now), so completing it again later earns it
-  // again. Judged on the transition from "not complete" to
+  // +5 lotus EVERY time the 6 altar slots all become filled. The Golden
+  // Umbrellas and Bell are NOT required (umbrellas now cost 2500 each, so
+  // requiring them meant almost no one could ever earn this). The 6 slots
+  // run out over time (see the expiry check below), so filling them again
+  // later earns it again. Judged on the transition from "not complete" to
   // "complete", with the state at load time as the baseline -- opening the
   // room with an altar that was already full doesn't pay out again, and the
   // daily lotus cap in awardLotus still applies.
@@ -1068,7 +1068,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   useEffect(() => {
     if (!studentUid || loading) return;
     const filledSlots = Array.from({ length: SLOT_COUNT }).filter((_, i) => placedItems[i] && findOffering(placedItems[i].id)).length;
-    const complete = filledSlots >= SLOT_COUNT && !!placedUmbrellas.left && !!placedUmbrellas.right;
+    const complete = filledSlots >= SLOT_COUNT;
     if (altarWasCompleteRef.current === null) { altarWasCompleteRef.current = complete; return; }
     if (complete && !altarWasCompleteRef.current) {
       setShopOpen(false); // done shopping -- get the panel out of the way
@@ -1076,7 +1076,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
       if (granted > 0) showToast(`🪷 Full altar bonus! +${granted} lotus flowers`);
     }
     altarWasCompleteRef.current = complete;
-  }, [placedItems, placedUmbrellas, loading, studentUid]);
+  }, [placedItems, loading, studentUid]);
   const [dragOverSlot, setDragOverSlot] = useState(null);
   const [ringing, setRinging] = useState(false);
   const [toast, setToast] = useState(null);
