@@ -37,6 +37,7 @@ import {
     Lock
 } from 'lucide-react';
 import { appId } from './firebaseConfig';
+import { isOnlineStatusDay } from './presenceDay';
 import OnlineStatusWidget from './OnlineStatusWidget';
 import { auth, db } from './firebase';
 
@@ -1748,6 +1749,11 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
   const [lessons, setLessons] = useState([]);
   const [allScores, setAllScores] = useState([]);
   const [classRefreshKey, setClassRefreshKey] = useState(0);
+  // Class-wide scores read from the weekly static snapshot (see load() in the
+  // class-data effect); scoresBaseIsSnapshot => the student's OWN live scores
+  // get merged over it below.
+  const [scoresBase, setScoresBase] = useState(null);
+  const [scoresBaseIsSnapshot, setScoresBaseIsSnapshot] = useState(false);
   const [allReflections, setAllReflections] = useState([]);
   const [allMyScoresGlobal, setAllMyScoresGlobal] = useState([]);
   // Coins pulled into Shrine Room (ShrineRoomApp.jsx) come from here on a
@@ -1884,15 +1890,26 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
     const load = async () => {
       lastClassLoadRef.current = Date.now();
       try {
+        // Everyone's scores: outside the Sunday Parami window, from the weekly
+        // static snapshot (zero Firestore reads); during the window, live from
+        // Firestore like before. Falls back to Firestore if the file's missing.
+        let snapshotScores = null;
+        if (!isOnlineStatusDay()) {
+          try {
+            const r = await fetch(`${import.meta.env.BASE_URL}classSnapshots/smartstudy/${encodeURIComponent(classId)}.json`);
+            if (r.ok) snapshotScores = (await r.json()).scores || [];
+          } catch (e) { /* fall through to Firestore */ }
+        }
         const [scoresSnap, heartsSnap, reflSnap, rosterSnap, compSnap] = await Promise.all([
-          getDocs(query(getScoresCollectionRef(), where("classId", "==", classId))),
+          snapshotScores ? Promise.resolve(null) : getDocs(query(getScoresCollectionRef(), where("classId", "==", classId))),
           getDocs(query(getStudentHeartsCollectionRef(), where("classId", "==", classId))),
           getDocs(query(getReflectionsCollectionRef(), where("classId", "==", classId))),
           getDocs(query(getRosterCollectionRef(), where("classId", "==", classId))),
           getDocs(query(getCompletionsCollectionRef(), where("classId", "==", classId))),
         ]);
         if (cancelled) return;
-        setAllScores(scoresSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+        if (snapshotScores) { setScoresBase(snapshotScores); setScoresBaseIsSnapshot(true); }
+        else { setScoresBase(scoresSnap.docs.map(d => ({ id: d.id, ...d.data() }))); setScoresBaseIsSnapshot(false); }
         const hearts = {};
         heartsSnap.forEach((d) => { const data = d.data(); hearts[data.studentName] = { hearts: data.hearts || 0, heartsGiven: data.heartsGiven || 0, pointsSpent: data.pointsSpent || 0 }; });
         setHeartCounts(hearts);
@@ -1912,6 +1929,16 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
     document.addEventListener('visibilitychange', onVisible);
     return () => { cancelled = true; clearInterval(timer); document.removeEventListener('visibilitychange', onVisible); };
   }, [isAuthReady, classId, teacherLive, classRefreshKey]);
+  // allScores = the class-wide base, with THIS student's own live scores
+  // laid over it when the base came from the (up to a week old) snapshot, so
+  // their own row/rank is always current.
+  useEffect(() => {
+    if (teacherLive || scoresBase == null) return;
+    if (!scoresBaseIsSnapshot) { setAllScores(scoresBase); return; }
+    const mine = (allMyScoresGlobal || []).filter(s => s.classId === classId);
+    setAllScores([...scoresBase.filter(s => s.studentName !== userName), ...mine]);
+  }, [scoresBase, scoresBaseIsSnapshot, allMyScoresGlobal, classId, userName, teacherLive]);
+  useEffect(() => { setScoresBase(null); }, [classId]);
   // Opening SmartStudy again (switching back to it) also refreshes if the
   // data is more than CLASS_POLL_MS old.
   useEffect(() => {

@@ -9,7 +9,7 @@ import {
   ToggleLeft, ToggleRight, Plus, FolderOpen, ImageIcon, FileText, RefreshCw
 } from 'lucide-react';
 import { auth, db } from './firebase';
-import { presenceIntervalMs } from './presenceDay';
+import { presenceIntervalMs, isOnlineStatusDay } from './presenceDay';
 import OnlineStatusWidget from './OnlineStatusWidget';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -902,6 +902,7 @@ export default function AbhidhammaApp({ entryRequest, onExit, isActive }) {
   // displayed total so the same points don't count in both places at once.
   const ABHI_POINTS_PER_COIN=50;
   const [myAbhiTotalScore,setMyAbhiTotalScore]=useState(0);
+  const [myDoneByClass,setMyDoneByClass]=useState({}); // classId -> lessons I've completed (live)
   const [abhiCoinsTransferredOut,setAbhiCoinsTransferredOut]=useState(0);
   // Stays false until the already-deposited total has really been read --
   // before that it reads as 0, which made every earned coin look
@@ -911,8 +912,10 @@ export default function AbhidhammaApp({ entryRequest, onExit, isActive }) {
   useEffect(()=>{
     if(role!=='Student'||!effectiveUserId)return;
     const unsub=onSnapshot(query(abhiScoresRef(),where('userId','==',effectiveUserId)),snap=>{
-      let total=0;snap.forEach(d=>{total+=d.data().score||0;});
+      let total=0;const byClass={};
+      snap.forEach(d=>{const dt=d.data();total+=dt.score||0;if(dt.classId&&dt.lessonId){(byClass[dt.classId]=byClass[dt.classId]||new Set()).add(dt.lessonId);}});
       setMyAbhiTotalScore(total);
+      setMyDoneByClass(Object.fromEntries(Object.entries(byClass).map(([k,s])=>[k,s.size])));
     });
     return unsub;
   },[role,effectiveUserId]);
@@ -1103,6 +1106,8 @@ export default function AbhidhammaApp({ entryRequest, onExit, isActive }) {
   const STATS_POLL_MS=10*60*1000;
   const [statsRefreshKey,setStatsRefreshKey]=useState(0);
   const lessonCountCacheRef=useRef({});
+  const myDoneByClassRef=useRef({});
+  useEffect(()=>{myDoneByClassRef.current=myDoneByClass;},[myDoneByClass]);
   const lastStatsLoadRef=useRef(0);
   const isActiveRef=useRef(isActive);
   useEffect(()=>{isActiveRef.current=isActive;},[isActive]);
@@ -1110,7 +1115,7 @@ export default function AbhidhammaApp({ entryRequest, onExit, isActive }) {
   useEffect(()=>{ // own score changed (quiz just finished) -> refresh rank/badge now
     if(firstScoreRunRef.current){firstScoreRunRef.current=false;return;}
     setStatsRefreshKey(k=>k+1);
-  },[myAbhiTotalScore]);
+  },[myAbhiTotalScore,myDoneByClass]);
   useEffect(()=>{ if(isActive&&Date.now()-lastStatsLoadRef.current>STATS_POLL_MS) setStatsRefreshKey(k=>k+1); },[isActive]);
   useEffect(()=>{
     if(!studentProfile||allClasses.length===0){ setClassStats({}); return; }
@@ -1118,6 +1123,30 @@ export default function AbhidhammaApp({ entryRequest, onExit, isActive }) {
     let cancelled=false;
     const load=async()=>{
       lastStatsLoadRef.current=Date.now();
+      // Outside the Sunday Parami window, classmates' standings come from the
+      // weekly static snapshot (zero Firestore reads) with MY OWN live count
+      // laid over it; during the window they're read live like before.
+      if(!isOnlineStatusDay()){
+        try{
+          const r=await fetch(`${import.meta.env.BASE_URL}classSnapshots/abhidhamma.json`);
+          if(r.ok){
+            const snap=(await r.json()).classes||{};
+            if(cancelled)return;
+            const out={};
+            allClasses.forEach(c=>{
+              const sc=snap[c.id];if(!sc)return;
+              const students={...sc.students};
+              const mine=myDoneByClassRef.current[c.id]||0;
+              if(mine>0)students[name]=mine;else delete students[name];
+              const ranked=Object.entries(students).sort((a,b)=>b[1]-a[1]);
+              const myIdx=ranked.findIndex(([sn])=>sn===name);
+              out[c.id]={completedCount:students[name]||0,totalLessons:sc.totalLessons,rank:myIdx>=0?myIdx+1:0};
+            });
+            setClassStats(prev=>({...prev,...out}));
+            return;
+          }
+        }catch(e){ /* fall through to Firestore */ }
+      }
       await Promise.all(allClasses.map(async c=>{
         try{
           const scoresSnap=await getDocs(query(abhiScoresRef(),where('classId','==',c.id)));

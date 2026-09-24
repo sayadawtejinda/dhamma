@@ -1,7 +1,8 @@
 name: Weekly snapshot
 
 # Refreshes public/weeklySnapshot.json (the "This Year's Attendance" and
-# "🏆 Trophies" boards, see scripts/generate-weekly-snapshot.mjs for why
+# "🏆 Trophies" boards, plus the SmartStudy/Abhidhamma class leaderboards in
+# public/classSnapshots, see scripts/generate-weekly-snapshot.mjs for why
 # this exists as a static file instead of a live Firestore read). Runs
 # every Monday at 09:00 UTC and can also be triggered by hand from the
 # Actions tab.
@@ -36,10 +37,10 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet -- public/weeklySnapshot.json; then
+          git add public/weeklySnapshot.json public/classSnapshots
+          if git diff --cached --quiet; then
             echo "No change -- nothing to commit."
           else
-            git add public/weeklySnapshot.json
             git commit -m "Weekly snapshot refresh"
             git push
           fi
