@@ -1733,6 +1733,9 @@ const QuizView = React.memo(({ quiz, questionNumber, totalQuestions, timerValue,
 
 // --- Core App Component ---
 
+// How often a student's open tab re-reads the class-wide leaderboards.
+const CLASS_POLL_MS = 10 * 60 * 1000;
+
 const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
   const [currentUserId, setCurrentUserId] = useState(null);
   const [userName, setUserName] = useState(() => localStorage.getItem('lastUserName') || '');
@@ -1744,6 +1747,7 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
   const [classDataLoaded, setClassDataLoaded] = useState(false); // true once first Firestore response arrives
   const [lessons, setLessons] = useState([]);
   const [allScores, setAllScores] = useState([]);
+  const [classRefreshKey, setClassRefreshKey] = useState(0);
   const [allReflections, setAllReflections] = useState([]);
   const [allMyScoresGlobal, setAllMyScoresGlobal] = useState([]);
   // Coins pulled into Shrine Room (ShrineRoomApp.jsx) come from here on a
@@ -1823,48 +1827,97 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
     return () => unsubscribe(); 
   }, []); 
 
+  // The class's own doc (its lessons) stays live -- it's one small doc.
   useEffect(() => {
     if (!isAuthReady || !classId) return;
     setClassDataLoaded(false); // reset while new class loads
     const classUnsub = onSnapshot(getClassDocRef(classId), (docSnap) => {
       if (docSnap.exists()) { const data = docSnap.data(); setClassData(data); setLessons(data.lessons || []); } else { setClassData(null); setLessons([]); } setClassDataLoaded(true);
     }, (error) => console.error("Error fetching class data:", error));
-    const scoresUnsub = onSnapshot(query(getScoresCollectionRef(), where("classId", "==", classId)), (querySnapshot) => {
-      const fetchedScores = []; querySnapshot.forEach((doc) => fetchedScores.push({ id: doc.id, ...doc.data() })); setAllScores(fetchedScores);
-    }, (error) => console.error("Error fetching scores:", error));
-    const heartsUnsub = onSnapshot(query(getStudentHeartsCollectionRef(), where("classId", "==", classId)), (querySnapshot) => {
-      const fetchedHearts = {};
-      querySnapshot.forEach((doc) => { const data = doc.data(); fetchedHearts[data.studentName] = { hearts: data.hearts || 0, heartsGiven: data.heartsGiven || 0, pointsSpent: data.pointsSpent || 0 }; });
-      setHeartCounts(fetchedHearts);
-    }, (error) => console.error("Error fetching heart counts:", error));
-    const reflectionsUnsub = onSnapshot(query(getReflectionsCollectionRef(), where("classId", "==", classId)), (querySnapshot) => {
-      const fetched = []; querySnapshot.forEach(doc => fetched.push({ id: doc.id, ...doc.data() })); setAllReflections(fetched);
-    }, (error) => console.error("Error fetching reflections:", error));
-    const rosterUnsub = onSnapshot(query(getRosterCollectionRef(), where("classId", "==", classId)), (querySnapshot) => {
-      const fetchedRoster = []; querySnapshot.forEach(doc => fetchedRoster.push(doc.data())); setClassRoster(fetchedRoster);
-    }, (error) => console.error("Error fetching roster:", error));
-    return () => { classUnsub(); scoresUnsub(); heartsUnsub(); reflectionsUnsub(); rosterUnsub(); };
+    return () => classUnsub();
   }, [isAuthReady, classId]);
-  
+
+  // Everyone's scores / hearts / reflections / roster / completions for the
+  // class (the leaderboards). A student's tab keeps this app mounted all day,
+  // and a live listener on these collections re-delivered (and billed) every
+  // score any classmate saved to every open tab -- measured as a big share of
+  // a 329k-read day. Now a student's tab reads them once, then again every
+  // CLASS_POLL_MS while the app is actually on screen (and again straight
+  // after they save a score / send a heart themselves, via classRefreshKey).
+  // The student's OWN scores stay live (separate listener below), and the
+  // teacher's view stays live -- one person, and they watch it during class.
+  const teacherLive = entryRequest?.mode === 'teacher';
+  const isActiveRef = useRef(isActive);
+  useEffect(() => { isActiveRef.current = isActive; }, [isActive]);
+  const lastClassLoadRef = useRef(0);
   useEffect(() => {
     if (!isAuthReady || !classId) return;
-    const q = query(getCompletionsCollectionRef(), where("classId", "==", classId));
-    const unsub = onSnapshot(q, (snapshot) => {
-      const list = snapshot.docs.map(doc => doc.data()).sort((a, b) => b.timestamp - a.timestamp).slice(0, 100);
-      setCompletionsList(list);
-      if (list.length > 0) {
-        const newCompletion = list[0];
-        if ((Date.now() - newCompletion.timestamp) < 10000 && newCompletion.timestamp !== lastNotifiedRef.current) {
-          lastNotifiedRef.current = newCompletion.timestamp;
-          setNotification(newCompletion);
-          if (notificationTimer.current) clearTimeout(notificationTimer.current);
-          notificationTimer.current = setTimeout(() => setNotification(null), 5000);
+    if (teacherLive) {
+      const scoresUnsub = onSnapshot(query(getScoresCollectionRef(), where("classId", "==", classId)), (qs) => {
+        const f = []; qs.forEach((d) => f.push({ id: d.id, ...d.data() })); setAllScores(f);
+      }, (error) => console.error("Error fetching scores:", error));
+      const heartsUnsub = onSnapshot(query(getStudentHeartsCollectionRef(), where("classId", "==", classId)), (qs) => {
+        const f = {}; qs.forEach((d) => { const data = d.data(); f[data.studentName] = { hearts: data.hearts || 0, heartsGiven: data.heartsGiven || 0, pointsSpent: data.pointsSpent || 0 }; }); setHeartCounts(f);
+      }, (error) => console.error("Error fetching heart counts:", error));
+      const reflectionsUnsub = onSnapshot(query(getReflectionsCollectionRef(), where("classId", "==", classId)), (qs) => {
+        const f = []; qs.forEach(d => f.push({ id: d.id, ...d.data() })); setAllReflections(f);
+      }, (error) => console.error("Error fetching reflections:", error));
+      const rosterUnsub = onSnapshot(query(getRosterCollectionRef(), where("classId", "==", classId)), (qs) => {
+        const f = []; qs.forEach(d => f.push(d.data())); setClassRoster(f);
+      }, (error) => console.error("Error fetching roster:", error));
+      const completionsUnsub = onSnapshot(query(getCompletionsCollectionRef(), where("classId", "==", classId)), (snapshot) => {
+        const list = snapshot.docs.map(doc => doc.data()).sort((a, b) => b.timestamp - a.timestamp).slice(0, 100);
+        setCompletionsList(list);
+        if (list.length > 0) {
+          const newCompletion = list[0];
+          if ((Date.now() - newCompletion.timestamp) < 10000 && newCompletion.timestamp !== lastNotifiedRef.current) {
+            lastNotifiedRef.current = newCompletion.timestamp;
+            setNotification(newCompletion);
+            if (notificationTimer.current) clearTimeout(notificationTimer.current);
+            notificationTimer.current = setTimeout(() => setNotification(null), 5000);
+          }
         }
-      }
-    });
-    return () => { unsub(); if (notificationTimer.current) clearTimeout(notificationTimer.current); };
-  }, [isAuthReady, classId]);
-  
+      });
+      return () => { scoresUnsub(); heartsUnsub(); reflectionsUnsub(); rosterUnsub(); completionsUnsub(); if (notificationTimer.current) clearTimeout(notificationTimer.current); };
+    }
+    let cancelled = false;
+    const load = async () => {
+      lastClassLoadRef.current = Date.now();
+      try {
+        const [scoresSnap, heartsSnap, reflSnap, rosterSnap, compSnap] = await Promise.all([
+          getDocs(query(getScoresCollectionRef(), where("classId", "==", classId))),
+          getDocs(query(getStudentHeartsCollectionRef(), where("classId", "==", classId))),
+          getDocs(query(getReflectionsCollectionRef(), where("classId", "==", classId))),
+          getDocs(query(getRosterCollectionRef(), where("classId", "==", classId))),
+          getDocs(query(getCompletionsCollectionRef(), where("classId", "==", classId))),
+        ]);
+        if (cancelled) return;
+        setAllScores(scoresSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+        const hearts = {};
+        heartsSnap.forEach((d) => { const data = d.data(); hearts[data.studentName] = { hearts: data.hearts || 0, heartsGiven: data.heartsGiven || 0, pointsSpent: data.pointsSpent || 0 }; });
+        setHeartCounts(hearts);
+        setAllReflections(reflSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+        setClassRoster(rosterSnap.docs.map(d => d.data()));
+        setCompletionsList(compSnap.docs.map(d => d.data()).sort((a, b) => b.timestamp - a.timestamp).slice(0, 100));
+      } catch (e) { console.error("Error loading class data:", e); }
+    };
+    load();
+    const timer = setInterval(() => {
+      if (isActiveRef.current && !document.hidden) load();
+    }, CLASS_POLL_MS);
+    // Coming back to this app after it sat hidden for a while: refresh once.
+    const onVisible = () => {
+      if (!document.hidden && isActiveRef.current && Date.now() - lastClassLoadRef.current > CLASS_POLL_MS) load();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { cancelled = true; clearInterval(timer); document.removeEventListener('visibilitychange', onVisible); };
+  }, [isAuthReady, classId, teacherLive, classRefreshKey]);
+  // Opening SmartStudy again (switching back to it) also refreshes if the
+  // data is more than CLASS_POLL_MS old.
+  useEffect(() => {
+    if (isActive && !teacherLive && Date.now() - lastClassLoadRef.current > CLASS_POLL_MS) setClassRefreshKey(k => k + 1);
+  }, [isActive]);
+
   useEffect(() => {
     if (!isAuthReady || !userName) return;
     const q = query(getScoresCollectionRef(), where("studentName", "==", userName));
@@ -2982,7 +3035,7 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
       await addDoc(getCompletionsCollectionRef(), { classId: classId, studentName: userName, lessonId: currentLesson.lessonId, timestamp: submissionTime });
       setModal({ message: `Quiz Finished! Correct: ${correctAnswerCount}, Wrong: ${incorrectAnswerCount}. Final score: ${currentQuizScore}`, type: 'success', visible: true });
     } catch (error) { console.error(error); setModal({ message: 'Failed to save score. Please check your connection.', type: 'error', visible: true }); }
-    finally { setIsSavingScore(false); setView('studentLesson'); }
+    finally { setIsSavingScore(false); setView('studentLesson'); setClassRefreshKey(k => k + 1); }
   }, [currentLesson, classId, userName, currentUserId, currentQuizScore, correctAnswerCount, incorrectAnswerCount, studentAgeLevel]);
 
   const handleAnswerSubmit = useCallback((selectedAnswer) => {

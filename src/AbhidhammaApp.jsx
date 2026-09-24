@@ -1092,17 +1092,38 @@ export default function AbhidhammaApp({ entryRequest, onExit, isActive }) {
   // Load per-class stats for student: rank, lessons they've completed, and the class's total lesson
   // count (so the UI can show "9 / 10 completed" or "✅ all completed"). Also drives the floating
   // rank/lessons badge for whichever class is currently open (classStats[classId]).
-  // Live (onSnapshot) per class, not a one-off getDocs — so a badge/rank updates immediately right
-  // after a lesson quiz is submitted, instead of only refreshing on next class switch/reload.
-  // Matches "me" by studentName only — linkedToTutoring already guarantees the roster name is
+  // These need EVERY student's scores for every class (for the rank), and used to be a live
+  // listener per class -- a student's tab keeps this app mounted all day, so every score any
+  // classmate saved in any class was re-delivered (and billed) to every open tab. Now: one read of
+  // each class on open, again every STATS_POLL_MS while this app is on screen, and again right
+  // after the student's OWN total score changes (i.e. they just finished a quiz -- see
+  // statsRefreshKey). The class's lesson count is cached per class (it rarely changes).
+  // Matches "me" by studentName only -- linkedToTutoring already guarantees the roster name is
   // correct, so a separate userId match is unnecessary.
+  const STATS_POLL_MS=10*60*1000;
+  const [statsRefreshKey,setStatsRefreshKey]=useState(0);
+  const lessonCountCacheRef=useRef({});
+  const lastStatsLoadRef=useRef(0);
+  const isActiveRef=useRef(isActive);
+  useEffect(()=>{isActiveRef.current=isActive;},[isActive]);
+  const firstScoreRunRef=useRef(true);
+  useEffect(()=>{ // own score changed (quiz just finished) -> refresh rank/badge now
+    if(firstScoreRunRef.current){firstScoreRunRef.current=false;return;}
+    setStatsRefreshKey(k=>k+1);
+  },[myAbhiTotalScore]);
+  useEffect(()=>{ if(isActive&&Date.now()-lastStatsLoadRef.current>STATS_POLL_MS) setStatsRefreshKey(k=>k+1); },[isActive]);
   useEffect(()=>{
     if(!studentProfile||allClasses.length===0){ setClassStats({}); return; }
     const name=studentProfile.name;
-    const unsubs=allClasses.map(c=>
-      onSnapshot(query(abhiScoresRef(),where('classId','==',c.id)), async scoresSnap=>{
+    let cancelled=false;
+    const load=async()=>{
+      lastStatsLoadRef.current=Date.now();
+      await Promise.all(allClasses.map(async c=>{
         try{
-          const lessonsSnap=await getDocs(abhiLessonsRef(c.id));
+          const scoresSnap=await getDocs(query(abhiScoresRef(),where('classId','==',c.id)));
+          if(lessonCountCacheRef.current[c.id]==null){
+            lessonCountCacheRef.current[c.id]=(await getDocs(abhiLessonsRef(c.id))).size;
+          }
           const byStudent={};
           scoresSnap.docs.forEach(d=>{
             const dt=d.data();const li=dt.lessonId;
@@ -1112,12 +1133,14 @@ export default function AbhidhammaApp({ entryRequest, onExit, isActive }) {
           });
           const ranked=Object.entries(byStudent).sort((a,b)=>b[1].size-a[1].size);
           const myIdx=ranked.findIndex(([sn])=>sn===name);
-          setClassStats(prev=>({...prev,[c.id]:{completedCount:byStudent[name]?.size||0,totalLessons:lessonsSnap.size,rank:myIdx>=0?myIdx+1:0}}));
+          if(!cancelled)setClassStats(prev=>({...prev,[c.id]:{completedCount:byStudent[name]?.size||0,totalLessons:lessonCountCacheRef.current[c.id],rank:myIdx>=0?myIdx+1:0}}));
         }catch(e){ console.error('Class stats load ('+c.id+'):', e.code||e.message||e); }
-      }, err=>console.error('Class stats listener ('+c.id+'):', err.code||err.message||err))
-    );
-    return ()=>unsubs.forEach(u=>u());
-  },[studentProfile,allClasses]);
+      }));
+    };
+    load();
+    const timer=setInterval(()=>{ if(isActiveRef.current&&!document.hidden) load(); },STATS_POLL_MS);
+    return ()=>{cancelled=true;clearInterval(timer);};
+  },[studentProfile,allClasses,statsRefreshKey]);
 
   // Load lessons from SUBCOLLECTION (no 1MB limit!)
   useEffect(()=>{
