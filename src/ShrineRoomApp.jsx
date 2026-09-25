@@ -814,6 +814,10 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   // Every Buddha image the student has bought (Wooden is always theirs). Buying is
   // permanent; switching between owned images is free.
   const [ownedBuddhas, setOwnedBuddhas] = useState([]);
+  // Bell and Golden Umbrellas are bought once too: removing them from the altar
+  // never loses them, placing an owned one again is free.
+  const [ownedBell, setOwnedBell] = useState(false);
+  const [ownedUmbrellas, setOwnedUmbrellas] = useState(0);
   const [lastLampLitDate, setLastLampLitDate] = useState(null);
   // Teacher preview also gets full access to the two Bodhi-tree-gated items
   // (there's no real attendance to compute a stage from).
@@ -1170,6 +1174,8 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
             setPlacedItems(data.placedItems || {});
             setPlacedUmbrellas(data.placedUmbrellas || {});
             setPlacedBell(data.placedBell || null);
+            setOwnedBell(!!data.ownedBell || !!data.placedBell);
+            setOwnedUmbrellas(Math.max(data.ownedUmbrellas || 0, (data.placedUmbrellas?.left ? 1 : 0) + (data.placedUmbrellas?.right ? 1 : 0)));
             setBuddhaId(data.buddhaId || null);
             setOwnedBuddhas(Array.from(new Set([...(data.ownedBuddhas || []), ...(data.buddhaId ? [data.buddhaId] : [])])));
             setBuddhaPlacedAt(data.buddhaPlacedAt || null);
@@ -1326,18 +1332,23 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     if (SHOP_LOCKED) { showToast('🚧 Shopping opens soon -- still being built!'); return; }
     const targetSide = side || (!placedUmbrellas.left ? 'left' : !placedUmbrellas.right ? 'right' : null);
     if (!targetSide || placedUmbrellas[targetSide]) { showToast('Both hands already hold a Golden Umbrella.'); return; }
-    if (!isTeacherPreview && coinBalance < UMBRELLA_OPTION.cost) { showToast('Not enough coins.'); return; }
-    awardCoins(-UMBRELLA_OPTION.cost);
+    const placedNow = (placedUmbrellas.left ? 1 : 0) + (placedUmbrellas.right ? 1 : 0);
+    const alreadyOwned = ownedUmbrellas > placedNow;
+    if (!alreadyOwned) {
+      if (!isTeacherPreview && coinBalance < UMBRELLA_OPTION.cost) { showToast('Not enough coins.'); return; }
+      awardCoins(-UMBRELLA_OPTION.cost);
+      setOwnedUmbrellas(placedNow + 1);
+    }
     setPlacedUmbrellas(prev => {
       const next = { ...prev, [targetSide]: { placedAt: Date.now() } };
-      persist({ placedUmbrellas: next });
+      persist({ placedUmbrellas: next, ...(alreadyOwned ? {} : { ownedUmbrellas: placedNow + 1 }) });
       return next;
     });
     playWindChimes();
     showToast('Golden Umbrella placed.');
   };
   const handleRemoveUmbrella = (side) => {
-    if (!window.confirm('Are you sure you want to remove this Golden Umbrella? The coins you spent on it will not be refunded.')) return;
+    if (!window.confirm('Take this Golden Umbrella down? It stays yours -- you can place it again for free.')) return;
     setPlacedUmbrellas(prev => {
       const next = { ...prev };
       delete next[side];
@@ -1353,15 +1364,18 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   const handleBuyBell = () => {
     if (SHOP_LOCKED) { showToast('🚧 Shopping opens soon -- still being built!'); return; }
     if (placedBell) { showToast('A Bell is already placed.'); return; }
-    if (!isTeacherPreview && coinBalance < BELL_OPTION.cost) { showToast('Not enough coins.'); return; }
-    awardCoins(-BELL_OPTION.cost);
+    if (!ownedBell) {
+      if (!isTeacherPreview && coinBalance < BELL_OPTION.cost) { showToast('Not enough coins.'); return; }
+      awardCoins(-BELL_OPTION.cost);
+    }
     const next = { placedAt: Date.now() };
     setPlacedBell(next);
-    persist({ placedBell: next });
+    setOwnedBell(true);
+    persist({ placedBell: next, ownedBell: true });
     showToast('Bell placed.');
   };
   const handleRemoveBell = () => {
-    if (!window.confirm('Are you sure you want to remove this Bell? The coins you spent on it will not be refunded.')) return;
+    if (!window.confirm('Take this Bell down? It stays yours -- you can place it again for free.')) return;
     setPlacedBell(null);
     persist({ placedBell: null });
   };
@@ -1934,7 +1948,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
                   buy), the real Bell once it's placed (tap to ring). */}
               <button
                 onClick={placedBell ? handleRingBell : handleBuyBell}
-                title={placedBell ? 'Ring the Bell' : `Buy the Bell (🪙 ${BELL_OPTION.cost})`}
+                title={placedBell ? 'Ring the Bell' : ownedBell ? 'Place your Bell' : `Buy the Bell (🪙 ${BELL_OPTION.cost})`}
                 {...((showRingGuide || (showBuyGuide && guideStage === 'bell')) ? { 'data-guide-target': '1' } : {})}
                 className={`absolute left-[-72px] bottom-[52px] w-20 h-20 flex items-center justify-center rounded-full transition-transform hover:scale-110 ${placedBell ? 'drop-shadow-lg' : 'opacity-30 grayscale hover:opacity-50'} ${ringing ? 'animate-pulse' : ''}`}
               >
@@ -2193,7 +2207,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
                       <OfferingIcon offering={option} className="w-5 h-5 inline-flex items-center justify-center flex-shrink-0" />
                       <span>{option.name}</span>
                     </span>
-                    <span className="text-sm font-bold text-amber-700">{locked ? '🔒 Bodhi Tree' : `🪙 ${option.cost}`}</span>
+                    <span className="text-sm font-bold text-amber-700">{locked ? '🔒 Bodhi Tree' : (option.id === 'umbrella' && ownedUmbrellas > ((placedUmbrellas.left ? 1 : 0) + (placedUmbrellas.right ? 1 : 0))) ? 'Owned – free' : `🪙 ${option.cost}`}</span>
                   </button>
                 );
               })}
