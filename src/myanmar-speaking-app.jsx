@@ -29,6 +29,24 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 
 const APP_SETTINGS_DOC_PATH = `artifacts/${appId}/public/data/app_settings/roles`;
+// Cost control: this course content (dictionary, lessons, games, poems) almost
+// never changes, so students keep a copy in localStorage for a week and only
+// hit Firestore on the first open (or after it expires). Teacher stays live.
+const CONTENT_CACHE_MS = 7 * 24 * 60 * 60 * 1000;
+function listenContentCached(name, ref, onNext) {
+    const key = 'msaContentCache_' + name;
+    try {
+        const c = JSON.parse(localStorage.getItem(key) || 'null');
+        if (c && Date.now() - c.at < CONTENT_CACHE_MS && Array.isArray(c.docs)) {
+            onNext({ docs: c.docs.map(d => ({ id: d.id, data: () => d.data })), forEach(fn) { this.docs.forEach(fn); } });
+            return () => {};
+        }
+    } catch (e) {}
+    return listenLiveOrOnce(ref, (snap) => {
+        try { localStorage.setItem(key, JSON.stringify({ at: Date.now(), docs: snap.docs.map(d => ({ id: d.id, data: d.data() })) })); } catch (e) {}
+        onNext(snap);
+    });
+}
 const DICTIONARY_COLLECTION_PATH = `artifacts/${appId}/public/data/myanmar_dictionary`;
 const CATEGORIES_COLLECTION_PATH = `artifacts/${appId}/public/data/myanmar_categories`;
 const LESSONS_COLLECTION_PATH = `artifacts/${appId}/public/data/myanmar_lessons`;
@@ -4143,7 +4161,7 @@ const StudentDashboard = ({ lessons, matchingGames, showRomanization, setShowRom
 const [poems, setPoems] = useState([]);
 
 useEffect(() => {
-    const unsubscribe = listenLiveOrOnce(query(collection(db, POEMS_COLLECTION_PATH)), (snapshot) => {
+    const unsubscribe = listenContentCached('poems', query(collection(db, POEMS_COLLECTION_PATH)), (snapshot) => {
         setPoems(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
     return unsubscribe;
@@ -5003,14 +5021,14 @@ export default function MyanmarSpeakingApp({ entryRequest, onExit, isActive }) {
         // Cost control: only the teacher (who edits this content) keeps live
         // listeners; students read once per open.
         const teacherLive = activeRole === 'teacher';
-        const listenContent = (ref, cb) => teacherLive ? onSnapshot(ref, cb) : listenLiveOrOnce(ref, cb);
+        const listenContent = (name, ref, cb) => teacherLive ? onSnapshot(ref, cb) : listenContentCached(name, ref, cb);
         const listenDocContent = (ref, cb) => {
             if (teacherLive) return onSnapshot(ref, cb);
             let off = false; getDoc(ref).then(sn => { if (!off) cb(sn); }).catch(() => {});
             return () => { off = true; };
         };
         const qDictionary = query(collection(db, DICTIONARY_COLLECTION_PATH));
-        const unsubscribeDictionary = listenContent(qDictionary, (snapshot) => {
+        const unsubscribeDictionary = listenContent('dictionary', qDictionary, (snapshot) => {
             const dictionaryMap = {};
             snapshot.docs.forEach(doc => {
                 dictionaryMap[doc.id] = { id: doc.id, ...doc.data() };
@@ -5018,22 +5036,22 @@ export default function MyanmarSpeakingApp({ entryRequest, onExit, isActive }) {
             setDictionary(dictionaryMap);
         });
         const qCategories = query(collection(db, CATEGORIES_COLLECTION_PATH));
-        const unsubscribeCategories = listenContent(qCategories, (snapshot) => {
+        const unsubscribeCategories = listenContent('categories', qCategories, (snapshot) => {
             const categoryList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setCategories(categoryList);
         });
         const qLessons = query(collection(db, LESSONS_COLLECTION_PATH));
-        const unsubscribeLessons = listenContent(qLessons, (snapshot) => {
+        const unsubscribeLessons = listenContent('lessons', qLessons, (snapshot) => {
             const lessonList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setLessons(lessonList);
         });
         const qMatchingGames = query(collection(db, MATCHING_GAMES_COLLECTION_PATH));
-        const unsubscribeMatchingGames = listenContent(qMatchingGames, (snapshot) => {
+        const unsubscribeMatchingGames = listenContent('games', qMatchingGames, (snapshot) => {
             const gameList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setMatchingGames(gameList);
         });
         const qPoems = query(collection(db, POEMS_COLLECTION_PATH));
-        const unsubscribePoems = listenContent(qPoems, (snapshot) => {
+        const unsubscribePoems = listenContent('poems', qPoems, (snapshot) => {
             const poemList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setPoems(poemList);
         });
