@@ -1166,6 +1166,7 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
   const [currentKeys, setCurrentKeys] = useState([]);
   const [isPlaying, setIsPlaying] = useState(false);
   const [autoReadMode, setAutoReadMode] = useState(false);
+  const [showLessonPicker, setShowLessonPicker] = useState(false);
   // Sheet B: some students don't need the word-by-word read-aloud in the
   // reading box; when off, only the paragraph line audio plays.
   const [readWordsAloud, setReadWordsAloud] = useState(() => { try { return localStorage.getItem('readerReadWordsAloud') !== '0'; } catch (e) { return true; } });
@@ -1759,14 +1760,16 @@ const [sheetBAudio] = useState(new Audio());
     return finalSyllables;
   };
 
-  const handleBookClick = () => {
+  const handleBookClick = (targetIndex) => {
     if (isLocked) return;
     interruptPlayback();
     setIsPracticeMode(false);
     setPracticeStep(0);
     
     let nextIndex = 0;
-if (appMode === 'lesson') {
+if (typeof targetIndex === 'number') {
+    nextIndex = targetIndex;
+} else if (appMode === 'lesson') {
     nextIndex = (currentLessonIndex + 1) % LESSONS.length;
 } else if (appMode === 'sheet' && sheetData.length > 0) {
     const title = sheetData[0].mm.replace(/,/g, '');
@@ -3765,6 +3768,29 @@ useEffect(() => {
             
           </div>
 
+          {showLessonPicker && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowLessonPicker(false)}>
+              <div className="bg-white rounded-2xl shadow-2xl p-4 w-full max-w-sm max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-lg font-bold text-gray-800">Choose a Lesson</h3>
+                  <button onClick={() => setShowLessonPicker(false)} className="p-1 text-gray-500 hover:text-gray-800"><X size={22} /></button>
+                </div>
+                <div className="flex flex-col gap-2">
+                  {LESSONS.map((lesson, i) => (
+                    <button
+                      key={i}
+                      onClick={() => { setShowLessonPicker(false); handleBookClick(i); }}
+                      className={`flex items-center gap-3 text-left px-3 py-2 rounded-xl border-b-4 active:scale-95 transition-all bg-indigo-500 border-indigo-700 text-white ${appMode === 'lesson' && currentLessonIndex === i ? 'ring-4 ring-yellow-300' : ''}`}
+                    >
+                      <span className="font-extrabold text-lg w-8 flex-shrink-0 text-center">{i + 1}</span>
+                      <span className="text-base font-bold truncate">{lesson.replace(/,/g, ' ')}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className={`flex flex-wrap justify-center sm:justify-start sm:flex-nowrap items-center gap-3 mt-6 sm:overflow-x-auto pb-2 scrollbar-hide px-1 ${onboardingStep === 'sheet_icon' ? 'pt-28' : ''}`}>
             
             {appMode === 'sheet' && sheetData.length > 0 && currentSheetIndex >= 0 ? (
@@ -3937,7 +3963,7 @@ useEffect(() => {
             )}
 
             <button
-              onClick={handleBookClick}
+              onClick={() => setShowLessonPicker(true)}
               disabled={isLocked}
               title={`Change Lesson (${LESSONS.length} lines)`}
               className="flex items-center justify-center gap-2 bg-indigo-500 hover:bg-indigo-600 disabled:bg-indigo-300 disabled:cursor-not-allowed text-white px-5 py-4 rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transition-all active:scale-95 border-b-4 border-indigo-700 h-[60px]"
