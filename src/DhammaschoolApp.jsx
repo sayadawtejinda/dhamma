@@ -1492,7 +1492,7 @@ let bilingualMode = false;
             // everything -- an accepted, rare/legacy exception.
             const needsFullScan = scope === 'GENERAL';
             const lessonsQuery = needsFullScan ? collection(db, PATHS.lessons) : query(collection(db, PATHS.lessons), where('classId', '==', scope));
-            lessonsUnsub = onSnapshot(lessonsQuery, (snap) => {
+            lessonsUnsub = listenTeacherLiveElseOnce(lessonsQuery, (snap) => {
                 allLessons = {}; studentLibraryLessons = [];
                 snap.docs.forEach(d => {
                     const data = d.data(); const lessonObj = { id: d.id, ...data }; allLessons[d.id] = lessonObj;
@@ -1505,6 +1505,13 @@ let bilingualMode = false;
                     renderStudentLibrary();
                 }
             });
+        }
+
+        // Cost control: the teacher keeps live listeners (edits show at once);
+        // students read ONCE when they open -- no listener held open, so nobody
+        // else's activity is pushed to every student's device.
+        function listenTeacherLiveElseOnce(ref, onNext) {
+            return isTeacher ? onSnapshot(ref, onNext) : listenLiveOrOnce(ref, onNext);
         }
 
         function setupListeners() {
@@ -1521,7 +1528,7 @@ let bilingualMode = false;
             // reading any actual lesson content to find out which classes
             // exist -- that used to mean scanning the whole lessons
             // collection just to render this "choose a class" screen.
-            onSnapshot(collection(db, PATHS.classes), (snap) => {
+            listenTeacherLiveElseOnce(collection(db, PATHS.classes), (snap) => {
                 allClassRegistry = {};
                 snap.docs.forEach(d => { allClassRegistry[d.id] = { id: d.id, ...d.data() }; });
                 if (isTeacher) renderTeacherClassPicker();
@@ -1728,7 +1735,7 @@ let bilingualMode = false;
                     }
                 }
             });
-            const unsubScores = onSnapshot(query(collection(db, PATHS.scores), where('lessonId', '==', lid)), (snap) => {
+            const unsubScores = listenTeacherLiveElseOnce(query(collection(db, PATHS.scores), where('lessonId', '==', lid)), (snap) => {
                 allScores = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                 if (isTeacher && currentLessonId === lid) renderTeacherScores(lid);
             });
@@ -1742,11 +1749,11 @@ let bilingualMode = false;
             // below), so this one is left as a whole-collection listener
             // for now; typically far fewer docs than answers/scores.
             if (allCompletionsUnsub) allCompletionsUnsub();
-            allCompletionsUnsub = onSnapshot(collection(db, PATHS.completions), (snap) => {
+            allCompletionsUnsub = listenLiveOrOnce(collection(db, PATHS.completions), (snap) => {
                 allCompletions = [];
                 snap.forEach(d => allCompletions.push({ id: d.id, ...d.data() }));
                 renderNotificationBell();
-            });
+            }, undefined, isTeacher);
         }
 
         // Which class's notifications are relevant right now — the teacher's

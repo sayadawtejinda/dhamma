@@ -1,3 +1,4 @@
+import { listenLiveOrOnce } from './presenceDay';
 import React, { useEffect, useState } from 'react';
 import { collection, doc, addDoc, deleteDoc, getDoc, increment, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from './firebase';
@@ -43,12 +44,14 @@ export default function WatchAndLearnApp({ entryRequest, onExit }) {
 
   useEffect(() => {
     const q = query(videosCollection, orderBy('order', 'asc'));
-    const unsub = onSnapshot(q, (snap) => {
+    // Students read the video list once per open; only the teacher listens live.
+    const listen = isTeacherMode ? (r, n, e) => onSnapshot(r, n, e) : (r, n, e) => listenLiveOrOnce(r, n, e);
+    const unsub = listen(q, (snap) => {
       setVideos(snap.docs.map(d => ({ id: d.id, ...d.data() })));
       setLoading(false);
     }, (e) => { console.error('Error loading videos:', e); setLoading(false); });
     return () => unsub();
-  }, []);
+  }, [isTeacherMode]);
 
   // Presence + coin balance -- mirrors every other simple app's roster
   // ping (isOnline/lastSeen every 60s, offline on unload), just also

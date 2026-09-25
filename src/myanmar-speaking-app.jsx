@@ -16,6 +16,7 @@ import {
 import { app } from './firebase';
 import { rosterDocRefByUid, migrateNameKeyedRosterDoc } from './studentRosterIdentity';
 import OnlineStatusWidget from './OnlineStatusWidget';
+import { listenLiveOrOnce } from './presenceDay';
 
 // --- Firebase Auth/DB Setup ---
 // Reuses the shared Firebase app instance from ./firebase.js instead of
@@ -4142,7 +4143,7 @@ const StudentDashboard = ({ lessons, matchingGames, showRomanization, setShowRom
 const [poems, setPoems] = useState([]);
 
 useEffect(() => {
-    const unsubscribe = onSnapshot(query(collection(db, POEMS_COLLECTION_PATH)), (snapshot) => {
+    const unsubscribe = listenLiveOrOnce(query(collection(db, POEMS_COLLECTION_PATH)), (snapshot) => {
         setPoems(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
     return unsubscribe;
@@ -4999,8 +5000,17 @@ export default function MyanmarSpeakingApp({ entryRequest, onExit, isActive }) {
     useEffect(() => {
         if (!isAuthReady || !userId) return;
         
+        // Cost control: only the teacher (who edits this content) keeps live
+        // listeners; students read once per open.
+        const teacherLive = activeRole === 'teacher';
+        const listenContent = (ref, cb) => teacherLive ? onSnapshot(ref, cb) : listenLiveOrOnce(ref, cb);
+        const listenDocContent = (ref, cb) => {
+            if (teacherLive) return onSnapshot(ref, cb);
+            let off = false; getDoc(ref).then(sn => { if (!off) cb(sn); }).catch(() => {});
+            return () => { off = true; };
+        };
         const qDictionary = query(collection(db, DICTIONARY_COLLECTION_PATH));
-        const unsubscribeDictionary = onSnapshot(qDictionary, (snapshot) => {
+        const unsubscribeDictionary = listenContent(qDictionary, (snapshot) => {
             const dictionaryMap = {};
             snapshot.docs.forEach(doc => {
                 dictionaryMap[doc.id] = { id: doc.id, ...doc.data() };
@@ -5008,29 +5018,29 @@ export default function MyanmarSpeakingApp({ entryRequest, onExit, isActive }) {
             setDictionary(dictionaryMap);
         });
         const qCategories = query(collection(db, CATEGORIES_COLLECTION_PATH));
-        const unsubscribeCategories = onSnapshot(qCategories, (snapshot) => {
+        const unsubscribeCategories = listenContent(qCategories, (snapshot) => {
             const categoryList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setCategories(categoryList);
         });
         const qLessons = query(collection(db, LESSONS_COLLECTION_PATH));
-        const unsubscribeLessons = onSnapshot(qLessons, (snapshot) => {
+        const unsubscribeLessons = listenContent(qLessons, (snapshot) => {
             const lessonList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setLessons(lessonList);
         });
         const qMatchingGames = query(collection(db, MATCHING_GAMES_COLLECTION_PATH));
-        const unsubscribeMatchingGames = onSnapshot(qMatchingGames, (snapshot) => {
+        const unsubscribeMatchingGames = listenContent(qMatchingGames, (snapshot) => {
             const gameList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setMatchingGames(gameList);
         });
         const qPoems = query(collection(db, POEMS_COLLECTION_PATH));
-        const unsubscribePoems = onSnapshot(qPoems, (snapshot) => {
+        const unsubscribePoems = listenContent(qPoems, (snapshot) => {
             const poemList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setPoems(poemList);
         });
-        const unsubscribeWelcomeQuestions = onSnapshot(doc(db, WELCOME_QUESTIONS_DOC_PATH), (docSnap) => {
+        const unsubscribeWelcomeQuestions = listenDocContent(doc(db, WELCOME_QUESTIONS_DOC_PATH), (docSnap) => {
             setWelcomeQuestions(docSnap.exists() && Array.isArray(docSnap.data().questions) ? docSnap.data().questions : []);
         });
-        const unsubscribeAudioSettings = onSnapshot(doc(db, AUDIO_SETTINGS_DOC_PATH), (docSnap) => {
+        const unsubscribeAudioSettings = listenDocContent(doc(db, AUDIO_SETTINGS_DOC_PATH), (docSnap) => {
             if (docSnap.exists() && typeof docSnap.data().rate === 'number') {
                 setAudioPlaybackRate(docSnap.data().rate);
             }
@@ -5044,7 +5054,7 @@ export default function MyanmarSpeakingApp({ entryRequest, onExit, isActive }) {
             unsubscribeWelcomeQuestions();
             unsubscribeAudioSettings();
         };
-    }, [isAuthReady, userId]);
+    }, [isAuthReady, userId, activeRole]);
 
     // Presence + minutes tracking, combined so both respect idle time: if the
     // student hasn't touched/clicked/typed anything for IDLE_MS, they're
