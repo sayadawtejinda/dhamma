@@ -8822,7 +8822,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       // handleStartLesson's addDoc calls); best-effort since a redo of an
       // old, already-cleared lesson may not carry one.
       if (targetSession.lessonId) {
-        updateDoc(doc(db, `${publicDataPath}/lessons`, targetSession.lessonId), { status: 'reported' }).catch(() => {});
+        updateDoc(doc(db, `${publicDataPath}/lessons`, targetSession.lessonId), { status: 'reported', reportedAt: serverTimestamp() }).catch(() => {});
       }
       playSound(0); 
 
@@ -9020,9 +9020,25 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
   // send order). A normal send, a legacy lesson, or anything already
   // reported is always visible -- nothing about those is ever hidden.
   const firstUnresolvedPreSendId = myLessons.find(l => l.isPreSend === true && l.status !== 'reported')?.id;
-  const visibleLessons = availableLessons.filter(l =>
+  const visibleUnordered = availableLessons.filter(l =>
     l.status === 'reported' || l.isPreSend !== true || l.id === firstUnresolvedPreSendId
   );
+  // DISPLAY order (separate from the tier order above, which only decides
+  // what counts as "the current lesson"): a fresh normal send first (newest
+  // first, as always), then the front pre-sent lesson, then everything else
+  // -- reported lessons AND older leftover ones -- by most recent activity,
+  // so the lesson a student reported last sits at the top of that group and
+  // older reports sink down one by one. A lesson's "activity" is its report
+  // time if it has been reported (older reports without one fall back to
+  // when they were sent), else when it was sent.
+  const lessonMs = (ts) => (ts?.toDate ? ts.toDate().getTime() : 0);
+  const activityMs = (l) => (l.status === 'reported' && l.reportedAt ? lessonMs(l.reportedAt) : lessonMs(l.sentAt));
+  const displayGroup = (l) => (l.status !== 'reported' && l.isPreSend === false ? 0 : (l.status !== 'reported' && l.isPreSend === true ? 1 : 2));
+  const visibleLessons = [...visibleUnordered].sort((a, b) => {
+    const ga = displayGroup(a), gb = displayGroup(b);
+    if (ga !== gb) return ga - gb;
+    return activityMs(b) - activityMs(a);
+  });
   // Highlights the 📖 Latest Lesson button the moment the teacher assigns a
   // lesson the student hasn't opened yet (status stays 'pending' until
   // they start it) or while one is actively in progress, so it's obvious
