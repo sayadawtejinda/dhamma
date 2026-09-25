@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Play, Volume2, Lock, Delete, RotateCcw, BookOpen, DownloadCloud, FileText, Library, Settings, X, Plus, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Play, Volume2, VolumeX, Lock, Delete, RotateCcw, BookOpen, DownloadCloud, FileText, Library, Settings, X, Plus, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { collection, doc, getDoc, getDocs, setDoc, updateDoc, onSnapshot, query, where, serverTimestamp, increment } from 'firebase/firestore';
 import { auth, db } from './firebase';
@@ -773,7 +773,8 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
   // below -- score still needs to reach 700 the same way whether or not the
   // chapter's trophy is already earned) AND this student's lifetime coin
   // total (never resets, persisted on their roster doc) -- 1 score point =
-  // 1 coin normally, but only half a coin per point once the CHAPTER (both
+  // 1 coin normally, but only half a coin per point (a quarter once the
+  // student holds over 1000 coins) once the CHAPTER (both
   // sheets) has already earned its trophy, so re-reading/practicing an
   // already-rewarded chapter can't be used to farm coins at the same rate
   // as fresh, not-yet-trophied reading.
@@ -782,7 +783,9 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
     setScore(prev => prev + amount);
     if (studentName && userId) {
       const alreadyHasTrophy = completedFullChapters.has(getColumnIndex(selectedColumn));
-      const coinAmount = alreadyHasTrophy ? amount / 2 : amount;
+      // Re-reading a trophied chapter pays half; once the student holds
+      // more than 1000 coins it drops to a quarter of the normal rate.
+      const coinAmount = !alreadyHasTrophy ? amount : (coinBalance > 1000 ? amount / 4 : amount / 2);
       setDoc(readerRosterDocRef(studentName), { coinBalance: increment(Math.round(coinAmount)) }, { merge: true }).catch(() => {});
     }
   };
@@ -1163,6 +1166,10 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
   const [currentKeys, setCurrentKeys] = useState([]);
   const [isPlaying, setIsPlaying] = useState(false);
   const [autoReadMode, setAutoReadMode] = useState(false);
+  // Sheet B: some students don't need the word-by-word read-aloud in the
+  // reading box; when off, only the paragraph line audio plays.
+  const [readWordsAloud, setReadWordsAloud] = useState(() => { try { return localStorage.getItem('readerReadWordsAloud') !== '0'; } catch (e) { return true; } });
+  const toggleReadWordsAloud = () => setReadWordsAloud(prev => { const n = !prev; try { localStorage.setItem('readerReadWordsAloud', n ? '1' : '0'); } catch (e) {} return n; });
   const [isSpeakerHeld, setIsSpeakerHeld] = useState(false);
 const longPressTimerRef = useRef(null);
   const [isFetchingSheet, setIsFetchingSheet] = useState(false);
@@ -2114,7 +2121,7 @@ setTimeout(() => {
 
       let justRead = false;
       if (autoReadMode && appMode === 'sheet' && syllables.length > 0 && currentSheetIndex > 0) {
-          await playSyllablesArray(syllables);
+          if (readWordsAloud || currentSheetName !== 'B') await playSyllablesArray(syllables);
 
           if (currentSheetName === 'B' && sheetBParagraph && sheetBParagraph[sheetBParaIndex] && sheetBLineIndex >= 0) {
               interruptPlayback();
@@ -2753,7 +2760,8 @@ const closeQAPanel = () => {
       allSyllables.push({ keys: modifier ? [base, modifier] : [base], combined: combinedStr });
     }
 
-    const sequence = buildPlaybackSequence(allSyllables);
+    const skipWords = !readWordsAloud && currentSheetName === 'B' && sheetBParagraph && sheetBParagraph[sheetBParaIndex] && sheetBLineIndex >= 0;
+    const sequence = skipWords ? [] : buildPlaybackSequence(allSyllables);
     
     for (const step of sequence) {
       if (playbackIdRef.current !== currentPlaybackId) break;
@@ -3567,6 +3575,17 @@ useEffect(() => {
         }
     }}
     className={`min-h-[100px] bg-gray-50 rounded-2xl pt-16 pb-4 border-2 border-dashed border-gray-300 flex flex-col relative mt-10 w-full overflow-x-auto scroll-smooth`}>
+            {appMode === 'sheet' && currentSheetName === 'B' && (
+              <div className="sticky left-0 h-0 w-full z-20 self-start">
+                <button
+                  onClick={toggleReadWordsAloud}
+                  title={readWordsAloud ? 'Word-by-word reading ON — tap to turn off' : 'Word-by-word reading OFF — tap to turn on'}
+                  className={`absolute top-2 right-2 p-2 rounded-full shadow border-2 ${readWordsAloud ? 'bg-emerald-500 border-emerald-700 text-white' : 'bg-gray-300 border-gray-400 text-gray-600'}`}
+                >
+                  {readWordsAloud ? <Volume2 size={20} /> : <VolumeX size={20} />}
+                </button>
+              </div>
+            )}
             <div className="flex flex-col min-w-full w-max justify-center items-center px-4 m-auto">
               
               <div className={`font-bold text-gray-900 tracking-wide flex flex-nowrap items-center text-center gap-x-1 ${currentLessonIndex >= 0 && appMode === 'lesson' ? 'text-3xl md:text-4xl lg:text-5xl' : 'text-4xl md:text-5xl'}`}>
