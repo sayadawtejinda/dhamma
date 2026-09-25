@@ -811,6 +811,9 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   const [placedBell, setPlacedBell] = useState(null);
   const [buddhaId, setBuddhaId] = useState(null);
   const [buddhaPlacedAt, setBuddhaPlacedAt] = useState(null);
+  // Every Buddha image the student has bought (Wooden is always theirs). Buying is
+  // permanent; switching between owned images is free.
+  const [ownedBuddhas, setOwnedBuddhas] = useState([]);
   const [lastLampLitDate, setLastLampLitDate] = useState(null);
   // Teacher preview also gets full access to the two Bodhi-tree-gated items
   // (there's no real attendance to compute a stage from).
@@ -1168,6 +1171,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
             setPlacedUmbrellas(data.placedUmbrellas || {});
             setPlacedBell(data.placedBell || null);
             setBuddhaId(data.buddhaId || null);
+            setOwnedBuddhas(Array.from(new Set([...(data.ownedBuddhas || []), ...(data.buddhaId ? [data.buddhaId] : [])])));
             setBuddhaPlacedAt(data.buddhaPlacedAt || null);
             setLastLampLitDate(data.lastLampLitDate || null);
             setTotalMeditationMinutes(data.totalMeditationMinutes || 0);
@@ -1261,10 +1265,19 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
       return;
     }
     if (buddhaId === option.id) return;
+    // Already bought (or the free Wooden one): switch without paying again.
+    if (option.cost === 0 || ownedBuddhas.includes(option.id)) {
+      setBuddhaId(option.id);
+      persist({ buddhaId: option.id });
+      showToast(`${option.name} placed on the altar.`);
+      return;
+    }
     if (!isTeacherPreview && coinBalance < option.cost) { showToast('Not enough coins.'); return; }
     awardCoins(-option.cost);
+    const nextOwned = Array.from(new Set([...ownedBuddhas, option.id]));
+    setOwnedBuddhas(nextOwned);
     setBuddhaId(option.id);
-    persist({ buddhaId: option.id });
+    persist({ buddhaId: option.id, ownedBuddhas: nextOwned });
     showToast(`${option.name} placed on the altar.`);
   };
 
@@ -2137,6 +2150,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
               {BUDDHA_OPTIONS.map(option => {
                 const locked = option.requiresBodhiWeeks > bodhiWeeksGrown;
                 const owned = buddhaId === option.id;
+                const bought = owned || option.cost === 0 || ownedBuddhas.includes(option.id);
                 return (
                   <button
                     key={option.id}
@@ -2151,7 +2165,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
                       <span className="font-semibold text-gray-800">{option.name}</span>
                     </div>
                     <span className="text-sm font-bold text-amber-700">
-                      {owned ? 'Placed' : locked ? `🔒 Bodhi Tree` : option.cost === 0 ? 'Free' : `🪙 ${option.cost}`}
+                      {owned ? 'Placed' : bought ? 'Owned – tap to place' : locked ? `🔒 Bodhi Tree` : option.cost === 0 ? 'Free' : `🪙 ${option.cost}`}
                     </span>
                   </button>
                 );
