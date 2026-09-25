@@ -1166,7 +1166,6 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
   const [currentKeys, setCurrentKeys] = useState([]);
   const [isPlaying, setIsPlaying] = useState(false);
   const [autoReadMode, setAutoReadMode] = useState(false);
-  const [showChapterPicker, setShowChapterPicker] = useState(false);
   // Sheet B: some students don't need the word-by-word read-aloud in the
   // reading box; when off, only the paragraph line audio plays.
   const [readWordsAloud, setReadWordsAloud] = useState(() => { try { return localStorage.getItem('readerReadWordsAloud') !== '0'; } catch (e) { return true; } });
@@ -3766,32 +3765,6 @@ useEffect(() => {
             
           </div>
 
-          {showChapterPicker && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowChapterPicker(false)}>
-              <div className="bg-white rounded-2xl shadow-2xl p-4 w-full max-w-sm max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-lg font-bold text-gray-800">Choose a Chapter</h3>
-                  <button onClick={() => setShowChapterPicker(false)} className="p-1 text-gray-500 hover:text-gray-800"><X size={22} /></button>
-                </div>
-                <div className="grid grid-cols-5 gap-2">
-                  {Array.from({ length: TOTAL_CHAPTERS }, (_, i) => {
-                    const col = getColumnName(i);
-                    const done = effectiveCompletedFullChapters.has(i + 1);
-                    const current = getColumnIndex(selectedColumn) === i + 1;
-                    return (
-                      <button
-                        key={col}
-                        onClick={() => { setShowChapterPicker(false); handleColumnSelect({ target: { value: col } }); }}
-                        className={`py-3 rounded-xl font-bold text-lg border-b-4 active:scale-95 transition-all ${current ? 'ring-4 ring-yellow-300 ' : ''}${done ? 'bg-blue-500 border-blue-700 text-white' : 'bg-green-500 border-green-700 text-white'}`}
-                      >{i + 1}</button>
-                    );
-                  })}
-                </div>
-                <p className="text-xs text-gray-500 mt-3 text-center">🔵 finished &nbsp; 🟢 not finished yet</p>
-              </div>
-            </div>
-          )}
-
           <div className={`flex flex-wrap justify-center sm:justify-start sm:flex-nowrap items-center gap-3 mt-6 sm:overflow-x-auto pb-2 scrollbar-hide px-1 ${onboardingStep === 'sheet_icon' ? 'pt-28' : ''}`}>
             
             {appMode === 'sheet' && sheetData.length > 0 && currentSheetIndex >= 0 ? (
@@ -3806,13 +3779,18 @@ useEffect(() => {
             <button className="flex items-center justify-center px-2 h-full w-full text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 transition-all text-sm">
   <BookOpen size={24} />
 </button>
-            <button
-                  type="button"
-                  onClick={() => { setOnboardingStep(null); setShowChapterPicker(true); }}
-                  disabled={isLocked}
-                  aria-label="Choose chapter"
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed z-10"
-                />
+            <select
+                onChange={(e) => { setOnboardingStep(null); handleColumnSelect(e); }}
+                disabled={isLocked}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed z-10 text-base"
+                value=""
+            >
+                <option value="" disabled hidden>Sheet</option>
+                {Array.from({length: TOTAL_CHAPTERS}, (_, i) => {
+                    const col = getColumnName(i);
+                    return <option key={col} value={col}>{SHEET_CHAPTER_PREFIX} {i + 1}{effectiveCompletedFullChapters.has(i + 1) ? ' 🔵' : ' 🟢'}</option>
+                })}
+            </select>
         </div>
         <div className="w-[1px] h-[60%] bg-teal-700 opacity-50"></div>
         <button
@@ -3841,13 +3819,18 @@ useEffect(() => {
                     <div className="flex items-center gap-1 bg-teal-500 border-b-4 border-teal-700 h-full hover:shadow-xl transition-all">
                         <div className="relative inline-block h-full w-[50px]">
                             <button className="flex items-center justify-center px-2 h-full w-full text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 transition-all text-sm"><BookOpen size={24} /></button>
-                            <button
-                  type="button"
-                  onClick={() => { setOnboardingStep(null); setShowChapterPicker(true); }}
-                  disabled={isLocked}
-                  aria-label="Choose chapter"
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed z-10"
-                />
+                            <select
+                                onChange={(e) => { setOnboardingStep(null); handleColumnSelect(e); }}
+                                disabled={isLocked}
+                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed z-10 text-base"
+                                value=""
+                            >
+                                <option value="" disabled hidden>Sheet</option>
+                                {Array.from({length: TOTAL_CHAPTERS}, (_, i) => {
+                                    const col = getColumnName(i);
+                                    return <option key={col} value={col}>{SHEET_CHAPTER_PREFIX} {i + 1}{effectiveCompletedFullChapters.has(i + 1) ? ' 🔵' : ' 🟢'}</option>
+                                })}
+                            </select>
                         </div>
                         <div className="w-[1px] h-[60%] bg-teal-700 opacity-50"></div>
                         <button
@@ -3887,13 +3870,18 @@ useEffect(() => {
                     >
                       <FileText size={24} />
                     </button>
-                    <button
-                  type="button"
-                  onClick={() => { setOnboardingStep(null); setShowChapterPicker(true); }}
-                  disabled={isLocked}
-                  aria-label="Choose chapter"
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed z-10"
-                />
+                    <select
+                      onChange={(e) => { setOnboardingStep(null); handleColumnSelect(e); }}
+                      disabled={isLocked}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed z-10 text-base"
+                      value=""
+                    >
+                      <option value="" disabled hidden>Sheet</option>
+                      {Array.from({length: TOTAL_CHAPTERS}, (_, i) => {
+                          const col = getColumnName(i);
+                          return <option key={col} value={col}>{SHEET_CHAPTER_PREFIX} {i + 1}{effectiveCompletedFullChapters.has(i + 1) ? ' 🔵' : ' 🟢'}</option>
+                      })}
+                    </select>
                 </div>
             )}
 
