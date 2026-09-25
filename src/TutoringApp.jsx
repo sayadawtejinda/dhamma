@@ -771,6 +771,18 @@ const starAnnouncementsCollection = collection(db, `${publicDataPath}/starAnnoun
 const greetingsCollection = collection(db, `${publicDataPath}/greetings`);
 const teacherConfigDoc = doc(configCollection, 'teacher');
 
+// "Visitor" login: typing 0000 as the Student ID on the login screen opens
+// the student dashboard as a shared, look-around account -- everything
+// except lessons (no Latest Lesson / Available Lessons / history). It has no
+// document in the students collection; the profile below lives only in this
+// browser's memory, and the profile listener + greeting are skipped for it.
+const VISITOR_STUDENT_ID = '0000';
+const VISITOR_UID = 'visitor';
+const makeVisitorProfile = () => ({
+  name: 'Visitor', displayId: VISITOR_STUDENT_ID, isActive: true, isVisitor: true,
+  trophyCount: 0, earnedTrophies: {}, completedUnits: {}, heartsReceived: 0, heartsGivenCount: 0,
+});
+
 // Shared fetch of public/weeklySnapshot.json (see scripts/generate-weekly-
 // snapshot.mjs) -- used by both YearAttendanceBoard and TrophyBoard so
 // opening one and then the other doesn't fetch the file twice.
@@ -7387,6 +7399,7 @@ function StudentDashboard({ user, studentProfile, studentUid, announcements, onO
   // gets their own greeting.
   const GREETING_PROMPT_KEY = `dhamma_greeted_teacher_on_${studentUid}`;
   const [showGreetingPrompt, setShowGreetingPrompt] = useState(() => {
+    if (studentUid === VISITOR_UID) return false;
     try {
       return localStorage.getItem(GREETING_PROMPT_KEY) !== new Date().toDateString();
     } catch (e) {
@@ -9061,6 +9074,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       {/* Experimental: reading-room buttons over the house illustration --
           rough first-pass placement, to be adjusted together once the
           teacher has seen it live. */}
+      {!studentProfile?.isVisitor && (
       <div className="fixed z-30 flex flex-col gap-2" style={{ top: '16%', right: '6%' }}>
         <button
           onClick={handleOpenLatestLesson}
@@ -9079,6 +9093,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           📚 Lessons & History
         </button>
       </div>
+      )}
 
       {isLessonOverlayOpen && (
         <div className="fixed inset-0 z-[9999] bg-indigo-900/95 flex flex-col justify-center items-center p-6 text-center">
@@ -10965,7 +10980,7 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpen
   }, [user, isAuthReady, teacherUid]);
   
   useEffect(() => {
-    if (role === 'student' && targetStudentUid) {
+    if (role === 'student' && targetStudentUid && targetStudentUid !== VISITOR_UID) {
       console.log('[DIAG] Attaching student profile listener for uid:', targetStudentUid);
       const studentDocRef = doc(db, `${publicDataPath}/students`, targetStudentUid);
       
@@ -11182,6 +11197,14 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpen
 
   const handleStudentLoginById = async (displayId, onError) => {
     console.log('[DIAG] handleStudentLoginById called with displayId:', displayId);
+    if (displayId === VISITOR_STUDENT_ID) {
+      // Not remembered in localStorage: a refresh returns to the login screen.
+      setStudentProfile(makeVisitorProfile());
+      setRole('student');
+      setTargetStudentUid(VISITOR_UID);
+      setView('student');
+      return;
+    }
     const q = query(studentsCollection, where("displayId", "==", displayId));
     try {
       const querySnapshot = await getDocs(q);
