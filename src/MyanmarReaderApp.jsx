@@ -782,11 +782,11 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
     if (!amount) return;
     setScore(prev => prev + amount);
     if (studentName && userId) {
-      const alreadyHasTrophy = completedFullChapters.has(getColumnIndex(selectedColumn));
+      const alreadyHasTrophy = effectiveCompletedFullChapters.has(getColumnIndex(selectedColumn));
       // Re-reading a trophied chapter pays half; once the student holds
       // more than 1000 coins it drops to a quarter of the normal rate.
       const coinAmount = !alreadyHasTrophy ? amount : (coinBalance > 1000 ? amount / 4 : amount / 2);
-      setDoc(readerRosterDocRef(studentName), { coinBalance: increment(Math.round(coinAmount)) }, { merge: true }).catch(() => {});
+      setDoc(readerRosterDocRef(studentName), { coinBalance: increment(Math.max(1, Math.round(coinAmount))) }, { merge: true }).catch(() => {});
     }
   };
 
