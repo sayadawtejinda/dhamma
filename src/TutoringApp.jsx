@@ -1190,8 +1190,26 @@ function StarAnnouncementModal({ isOpen, onClose, students, onSend }) {
   );
 }
 
-function AttendanceReports({ students, teacherSchedule, sessions }) {
+function AttendanceReports({ students }) {
   const [period, setPeriod] = useState('monthly'); 
+  // The dashboard only keeps the last two weeks live (cost control -- the
+  // full year is ~13,000 docs), so this report reads the year once, on demand.
+  const [full, setFull] = useState(null);
+  const [loadingFull, setLoadingFull] = useState(false);
+  const loadFull = async () => {
+    setLoadingFull(true);
+    try {
+      const startOfYear = Timestamp.fromDate(new Date(new Date().getFullYear(), 0, 1));
+      const [schedSnap, sessSnap] = await Promise.all([
+        getDocs(query(teacherScheduleCollection, where('startTime', '>=', startOfYear))),
+        getDocs(query(sessionsCollection, where('startTime', '>=', startOfYear))),
+      ]);
+      setFull({ schedule: schedSnap.docs.map(d => ({ id: d.id, ...d.data() })), sessions: sessSnap.docs.map(d => ({ id: d.id, ...d.data() })) });
+    } catch (e) { alert('Could not load the report: ' + (e.message || e)); }
+    setLoadingFull(false);
+  };
+  const teacherSchedule = full?.schedule || [];
+  const sessions = full?.sessions || [];
 
   const reportData = useMemo(() => {
     const now = new Date();
@@ -1246,6 +1264,15 @@ function AttendanceReports({ students, teacherSchedule, sessions }) {
 
     return report.filter(r => r.total > 0).sort((a, b) => (b.attended / b.total) - (a.attended / a.total));
   }, [period, students, teacherSchedule, sessions]);
+
+  if (!full) {
+    return (
+      <div className="bg-white/90 backdrop-blur-sm p-6 rounded-xl shadow-lg border border-indigo-200 mt-6 text-center">
+        <h3 className="text-xl font-semibold text-indigo-800 mb-3">Attendance Overview</h3>
+        <button onClick={loadFull} disabled={loadingFull} className="px-5 py-3 rounded-xl bg-indigo-600 text-white font-bold disabled:opacity-50">{loadingFull ? 'Loading...' : 'Load this year report'}</button>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white/90 backdrop-blur-sm p-6 rounded-xl shadow-lg border border-indigo-200 mt-6">
@@ -1688,7 +1715,10 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
   }, [user.uid]);
 
   useEffect(() => {
-    const q = query(sessionsCollection); 
+    // Cost control: only the last two weeks live (the whole collection is
+    // ~7,000 docs and nobody browses old sessions). Older data: backup/reports.
+    const since = Timestamp.fromDate(new Date(Date.now() - 14 * 24 * 60 * 60 * 1000));
+    const q = query(sessionsCollection, where('startTime', '>=', since)); 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const sessionList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setSessions(sessionList);
@@ -1706,7 +1736,9 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
 
   useEffect(() => {
     // Not filtered by teacherUid -- see the lessonBank listener above.
-    const q = query(teacherScheduleCollection);
+    // Last two weeks + everything upcoming (the whole collection is ~5,900 docs).
+    const since = Timestamp.fromDate(new Date(Date.now() - 14 * 24 * 60 * 60 * 1000));
+    const q = query(teacherScheduleCollection, where('startTime', '>=', since));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const scheduleList = snapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
@@ -6698,7 +6730,7 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
           })()}
 
           {reportTab === 'attendance' && (
-            <AttendanceReports students={students} teacherSchedule={teacherSchedule} sessions={sessions} />
+            <AttendanceReports students={students} />
           )}
         </div>
       )}
@@ -9965,6 +9997,14 @@ function TodaySchedule() {
   );
 }
 
+// Live listener for the teacher; students read once when the view opens.
+function watchTeacherLiveElseOnce(isTeacher, ref, onNext) {
+  if (isTeacher) return onSnapshot(ref, onNext);
+  let cancelled = false;
+  getDocs(ref).then(snap => { if (!cancelled) onNext(snap); }).catch(() => {});
+  return () => { cancelled = true; };
+}
+
 function WeeklySchedule({ role, targetStudentUid }) {
   const [schedule, setSchedule] = useState([]);
   const [sessions, setSessions] = useState([]);
@@ -9980,12 +10020,13 @@ function WeeklySchedule({ role, targetStudentUid }) {
   const hasScrolledToMineRef = useRef(false);
 
   useEffect(() => {
-    const unsub = onSnapshot(studentsCollection, (snap) => setStudents(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+    // Students read once (no live listener held open); only the teacher stays live.
+    const unsub = watchTeacherLiveElseOnce(role === 'teacher', studentsCollection, (snap) => setStudents(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
     return () => unsub();
   }, []);
 
   useEffect(() => {
-    const unsub = onSnapshot(groupsCollection, (snap) => setGroups(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+    const unsub = watchTeacherLiveElseOnce(role === 'teacher', groupsCollection, (snap) => setGroups(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
     return () => unsub();
   }, []);
   
@@ -10026,7 +10067,7 @@ function WeeklySchedule({ role, targetStudentUid }) {
       where("startTime", ">=", Timestamp.fromDate(weekStartDate)), 
       where("startTime", "<", Timestamp.fromDate(weekEndDate))   
     );
-    const unsubSessions = onSnapshot(qSessions, (snapshot) => {
+    const unsubSessions = watchTeacherLiveElseOnce(role === 'teacher', qSessions, (snapshot) => {
       const sessionList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setSessions(sessionList);
     });
