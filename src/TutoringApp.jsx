@@ -10055,7 +10055,7 @@ function WeeklySchedule({ role, targetStudentUid }) {
       where("startTime", "<", Timestamp.fromDate(weekEndDate))
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribe = watchTeacherLiveElseOnce(role === 'teacher', q, (snapshot) => {
       const scheduleList = snapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
         .sort((a, b) => a.startTime.toDate() - b.startTime.toDate());
