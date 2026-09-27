@@ -1735,10 +1735,10 @@ let bilingualMode = false;
                     }
                 }
             });
-            const unsubScores = listenTeacherLiveElseOnce(query(collection(db, PATHS.scores), where('lessonId', '==', lid)), (snap) => {
+            const unsubScores = listenLiveOrOnce(query(collection(db, PATHS.scores), where('lessonId', '==', lid)), (snap) => {
                 allScores = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                 if (isTeacher && currentLessonId === lid) renderTeacherScores(lid);
-            });
+            }, undefined, isTeacher);
             answersScoresUnsubs = [unsubAnswers, unsubScores];
         }
 

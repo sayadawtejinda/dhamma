@@ -214,19 +214,34 @@ const AbhiClassRoster = ({ userId, classId }) => {
   // whole time. Name is the far more stable signal for THIS display purpose.
   useEffect(()=>{
     if(!classId)return;
-    return onSnapshot(query(abhiScoresRef(),where('classId','==',classId)),snap=>{
-      const byStudent={};
-      snap.docs.forEach(d=>{
-        const dt=d.data();const sn=dt.studentName||dt.name;
-        if(!sn||!dt.lessonId)return;
-        if(!byStudent[sn])byStudent[sn]=new Set();
-        byStudent[sn].add(dt.lessonId);
-      });
-      const ranked=Object.entries(byStudent).sort((a,b)=>b[1].size-a[1].size);
+    // Cost control: ranks come from the weekly static snapshot (zero reads);
+    // only on the Sunday class window is Firestore read (once per open).
+    let cancelled=false;
+    const applyCounts=(counts)=>{
+      const ranked=Object.entries(counts).sort((a,b)=>b[1]-a[1]);
       const stats={};
-      ranked.forEach(([sn,set],idx)=>{stats[sn]={rank:idx+1,completed:set.size};});
-      setStudentStats(stats);
-    },err=>console.error('Roster stats:',err.code));
+      ranked.forEach(([sn,n],idx)=>{stats[sn]={rank:idx+1,completed:n};});
+      if(!cancelled)setStudentStats(stats);
+    };
+    (async()=>{
+      if(!isOnlineStatusDay()){
+        try{
+          const r=await fetch(`${import.meta.env.BASE_URL}classSnapshots/abhidhamma.json`);
+          if(r.ok){const j=await r.json();const st=j.classes?.[classId]?.students;if(st){applyCounts(st);return;}}
+        }catch(e){}
+      }
+      try{
+        const snap=await getDocs(query(abhiScoresRef(),where('classId','==',classId)));
+        const byStudent={};
+        snap.docs.forEach(d=>{
+          const dt=d.data();const sn=dt.studentName||dt.name;
+          if(!sn||!dt.lessonId)return;
+          (byStudent[sn]=byStudent[sn]||new Set()).add(dt.lessonId);
+        });
+        applyCounts(Object.fromEntries(Object.entries(byStudent).map(([k,v])=>[k,v.size])));
+      }catch(err){console.error('Roster stats:',err.code);}
+    })();
+    return()=>{cancelled=true;};
   },[classId]);
 
   useEffect(()=>{

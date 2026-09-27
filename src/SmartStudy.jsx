@@ -1852,7 +1852,7 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
   // after they save a score / send a heart themselves, via classRefreshKey).
   // The student's OWN scores stay live (separate listener below), and the
   // teacher's view stays live -- one person, and they watch it during class.
-  const teacherLive = entryRequest?.mode === 'teacher';
+  const teacherLive = false; // was entryRequest?.mode === 'teacher' -- teacher now also reads weekly snapshot + 10-min polling (cost)
   const isActiveRef = useRef(isActive);
   useEffect(() => { isActiveRef.current = isActive; }, [isActive]);
   const lastClassLoadRef = useRef(0);
