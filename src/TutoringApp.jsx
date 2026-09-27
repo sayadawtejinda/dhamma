@@ -4804,6 +4804,17 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
 
     return { weekAttended, weekAbsent, monthAttended, monthAbsent, yearAttended, yearAbsent };
   }, [teacherSchedule, sessions]);
+  // The dashboard only keeps ~2 weeks of schedule live, so month/year totals
+  // come from the weekly snapshot instead (refreshed every Monday).
+  const [weeklyTotals, setWeeklyTotals] = useState(null);
+  useEffect(() => {
+    fetchWeeklySnapshot().then(d => { if (d?.attendanceTotals) setWeeklyTotals(d.attendanceTotals); }).catch(() => {});
+  }, []);
+  const attendanceSummaryShown = weeklyTotals ? {
+    ...attendanceSummary,
+    monthAttended: weeklyTotals.month.attended, monthAbsent: weeklyTotals.month.absent,
+    yearAttended: weeklyTotals.year.attended, yearAbsent: weeklyTotals.year.absent,
+  } : attendanceSummary;
 
   const openAttendanceModal = (student) => {
     if (student.id !== 'offline' && student.displayId) {
@@ -5206,8 +5217,8 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
               <div>
                 <p className="text-sm font-bold text-emerald-800 uppercase tracking-wide">This Week's Attendance</p>
                 <div className="mt-1">
-                  <span className="text-gray-600 text-sm">Attended:</span> <span className="font-bold text-lg text-emerald-600 mr-4">{attendanceSummary.weekAttended}</span>
-                  <span className="text-gray-600 text-sm">Absent:</span> <span className="font-bold text-lg text-red-600">{attendanceSummary.weekAbsent}</span>
+                  <span className="text-gray-600 text-sm">Attended:</span> <span className="font-bold text-lg text-emerald-600 mr-4">{attendanceSummaryShown.weekAttended}</span>
+                  <span className="text-gray-600 text-sm">Absent:</span> <span className="font-bold text-lg text-red-600">{attendanceSummaryShown.weekAbsent}</span>
                 </div>
               </div>
            </div>
@@ -5215,8 +5226,8 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
               <div>
                 <p className="text-sm font-bold text-indigo-800 uppercase tracking-wide">This Month's Attendance</p>
                 <div className="mt-1">
-                  <span className="text-gray-600 text-sm">Attended:</span> <span className="font-bold text-lg text-emerald-600 mr-4">{attendanceSummary.monthAttended}</span>
-                  <span className="text-gray-600 text-sm">Absent:</span> <span className="font-bold text-lg text-red-600">{attendanceSummary.monthAbsent}</span>
+                  <span className="text-gray-600 text-sm">Attended:</span> <span className="font-bold text-lg text-emerald-600 mr-4">{attendanceSummaryShown.monthAttended}</span>
+                  <span className="text-gray-600 text-sm">Absent:</span> <span className="font-bold text-lg text-red-600">{attendanceSummaryShown.monthAbsent}</span>
                 </div>
               </div>
            </div>
@@ -5224,8 +5235,8 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
               <div>
                 <p className="text-sm font-bold text-violet-800 uppercase tracking-wide">This Year's Attendance</p>
                 <div className="mt-1">
-                  <span className="text-gray-600 text-sm">Attended:</span> <span className="font-bold text-lg text-emerald-600 mr-4">{attendanceSummary.yearAttended}</span>
-                  <span className="text-gray-600 text-sm">Absent:</span> <span className="font-bold text-lg text-red-600">{attendanceSummary.yearAbsent}</span>
+                  <span className="text-gray-600 text-sm">Attended:</span> <span className="font-bold text-lg text-emerald-600 mr-4">{attendanceSummaryShown.yearAttended}</span>
+                  <span className="text-gray-600 text-sm">Absent:</span> <span className="font-bold text-lg text-red-600">{attendanceSummaryShown.yearAbsent}</span>
                 </div>
               </div>
            </div>
