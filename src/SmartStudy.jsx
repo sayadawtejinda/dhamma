@@ -2927,16 +2927,40 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
               allMyScoresGlobal.filter(s => s.classId === cId).map(s => s.lessonId)
             );
             const completedCount = myCompletions.size;
-            // per-class rank: count distinct lessonIds per student name in scores
-            const scoresSnap = await getDocs(query(
-              collection(db,'artifacts',appId,'public','data','scores'),
-              where('classId','==',cId)
-            ));
+            // per-class rank: count distinct lessonIds per student name --
+            // from the weekly static snapshot (zero Firestore reads); only
+            // during the live Sunday class window does this read Firestore,
+            // and even then just this one class instead of every class in
+            // the picker (this used to run a full scores query PER CLASS,
+            // for every student, on every open of this screen).
             const byName = {};
-            scoresSnap.docs.forEach(d => {
-              const n = d.data().studentName; const l = d.data().lessonId;
-              if(n&&l){ if(!byName[n])byName[n]=new Set(); byName[n].add(l); }
-            });
+            let gotSnapshot = false;
+            if (!isOnlineStatusDay()) {
+              try {
+                const r = await fetch(`${import.meta.env.BASE_URL}classSnapshots/smartstudy/${encodeURIComponent(cId)}.json`);
+                if (r.ok) {
+                  const j = await r.json();
+                  (j.scores || []).forEach(s => {
+                    const n = s.studentName; const l = s.lessonId;
+                    if (n && l) { if (!byName[n]) byName[n] = new Set(); byName[n].add(l); }
+                  });
+                  gotSnapshot = true;
+                }
+              } catch (e) { /* fall through to Firestore */ }
+            }
+            if (!gotSnapshot) {
+              const scoresSnap = await getDocs(query(
+                collection(db,'artifacts',appId,'public','data','scores'),
+                where('classId','==',cId)
+              ));
+              scoresSnap.docs.forEach(d => {
+                const n = d.data().studentName; const l = d.data().lessonId;
+                if(n&&l){ if(!byName[n])byName[n]=new Set(); byName[n].add(l); }
+              });
+            }
+            // This student's OWN completions are always live (allMyScoresGlobal),
+            // merged over the snapshot so their own rank/count is never stale.
+            byName[userName] = new Set([...(byName[userName] || []), ...myCompletions]);
             const ranked = Object.entries(byName).sort((a,b)=>b[1].size-a[1].size);
             const myIdx = ranked.findIndex(([n])=> n===userName || (allMyScoresGlobal.some(s=>s.studentName===n&&s.classId===cId)&&allMyScoresGlobal[0]?.studentName===n));
             // Better: find by studentName matching userName
