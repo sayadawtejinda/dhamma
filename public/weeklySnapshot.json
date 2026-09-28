@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-27T00:37:36.011Z",
+  "generatedAt": "2026-09-28T17:26:11.938Z",
   "attendanceRankedList": [
     {
       "id": "offline-Vinaya Class",
@@ -29,9 +29,9 @@
       "id": "07869321494653277000",
       "name": "Sin soe🫧",
       "isOffline": false,
-      "attended": 52,
+      "attended": 53,
       "absent": 25,
-      "total": 77
+      "total": 78
     },
     {
       "id": "11060425178850379550",
@@ -45,33 +45,49 @@
       "id": "11605406172832584914",
       "name": "Phyo",
       "isOffline": false,
-      "attended": 51,
+      "attended": 52,
       "absent": 26,
-      "total": 77
+      "total": 78
     },
     {
       "id": "00802625881036049904",
       "name": "Zin Zin",
       "isOffline": false,
-      "attended": 37,
+      "attended": 38,
       "absent": 1,
-      "total": 38
+      "total": 39
     },
     {
       "id": "02300601134442423019",
       "name": "Moe",
       "isOffline": false,
-      "attended": 37,
+      "attended": 38,
       "absent": 1,
-      "total": 38
+      "total": 39
     },
     {
       "id": "00861516168006851630",
       "name": "Caran Zay Lynn",
       "isOffline": false,
-      "attended": 36,
+      "attended": 37,
       "absent": 21,
-      "total": 57
+      "total": 58
+    },
+    {
+      "id": "03482378613444434898",
+      "name": "Asher Han",
+      "isOffline": false,
+      "attended": 36,
+      "absent": 3,
+      "total": 39
+    },
+    {
+      "id": "04234204323460967681",
+      "name": "Hansel",
+      "isOffline": false,
+      "attended": 36,
+      "absent": 3,
+      "total": 39
     },
     {
       "id": "04382713743183613195",
@@ -80,6 +96,14 @@
       "attended": 36,
       "absent": 2,
       "total": 38
+    },
+    {
+      "id": "05640800844344076883",
+      "name": "Yuya Chin",
+      "isOffline": false,
+      "attended": 36,
+      "absent": 3,
+      "total": 39
     },
     {
       "id": "12107057628683538624",
@@ -106,36 +130,20 @@
       "total": 39
     },
     {
-      "id": "03482378613444434898",
-      "name": "Asher Han",
+      "id": "06858861930495135121",
+      "name": "AidenHan",
       "isOffline": false,
       "attended": 35,
-      "absent": 3,
-      "total": 38
+      "absent": 4,
+      "total": 39
     },
     {
-      "id": "04234204323460967681",
-      "name": "Hansel",
+      "id": "15589612097373962855",
+      "name": "Craig Chan",
       "isOffline": false,
       "attended": 35,
-      "absent": 3,
-      "total": 38
-    },
-    {
-      "id": "05640800844344076883",
-      "name": "Yuya Chin",
-      "isOffline": false,
-      "attended": 35,
-      "absent": 3,
-      "total": 38
-    },
-    {
-      "id": "07644816819740308841",
-      "name": "Jaden jian :) hi",
-      "isOffline": false,
-      "attended": 35,
-      "absent": 3,
-      "total": 38
+      "absent": 4,
+      "total": 39
     },
     {
       "id": "E78SixkuHYb9CmO46WhC6IaCpul1",
@@ -150,36 +158,28 @@
       "name": "Hayzel",
       "isOffline": false,
       "attended": 34,
-      "absent": 4,
-      "total": 38
+      "absent": 5,
+      "total": 39
     },
     {
       "id": "03122051251594116336",
       "name": "Hayden",
       "isOffline": false,
       "attended": 34,
-      "absent": 4,
-      "total": 38
+      "absent": 5,
+      "total": 39
     },
     {
-      "id": "06858861930495135121",
-      "name": "AidenHan",
-      "isOffline": false,
-      "attended": 34,
-      "absent": 4,
-      "total": 38
-    },
-    {
-      "id": "11171738439920447327",
-      "name": "Leon_123",
+      "id": "11301375659175373882",
+      "name": "Jayce",
       "isOffline": false,
       "attended": 34,
       "absent": 5,
       "total": 39
     },
     {
-      "id": "15589612097373962855",
-      "name": "Craig Chan",
+      "id": "12798861857420230640",
+      "name": "Aaron",
       "isOffline": false,
       "attended": 34,
       "absent": 4,
@@ -202,28 +202,36 @@
       "total": 38
     },
     {
-      "id": "11192846145860761661",
-      "name": "Alyson",
+      "id": "07035317489929864976",
+      "name": "Evelyn Myint",
       "isOffline": false,
       "attended": 33,
       "absent": 6,
       "total": 39
     },
     {
-      "id": "11301375659175373882",
-      "name": "Jayce",
+      "id": "11192846145860761661",
+      "name": "Alyson",
+      "isOffline": false,
+      "attended": 33,
+      "absent": 7,
+      "total": 40
+    },
+    {
+      "id": "12714103203344387805",
+      "name": "Sandra Lin 🩵",
       "isOffline": false,
       "attended": 33,
       "absent": 5,
       "total": 38
     },
     {
-      "id": "12798861857420230640",
-      "name": "Aaron",
-      "isOffline": false,
+      "id": "offline-Study Dhamma Class",
+      "name": "Study Dhamma Class",
+      "isOffline": true,
       "attended": 33,
-      "absent": 4,
-      "total": 37
+      "absent": 6,
+      "total": 39
     },
     {
       "id": "offline-Vietnamese Group",
@@ -234,36 +242,20 @@
       "total": 40
     },
     {
-      "id": "offline-Study Dhamma Class",
-      "name": "Study Dhamma Class",
-      "isOffline": true,
-      "attended": 33,
-      "absent": 5,
-      "total": 38
-    },
-    {
-      "id": "07035317489929864976",
-      "name": "Evelyn Myint",
+      "id": "04300902649186016315",
+      "name": "Lyra",
       "isOffline": false,
       "attended": 32,
-      "absent": 6,
-      "total": 38
+      "absent": 13,
+      "total": 45
     },
     {
-      "id": "10363880024560530844",
-      "name": "Bryan Zaw",
+      "id": "11171738439920447327",
+      "name": "Leon_123",
       "isOffline": false,
       "attended": 32,
       "absent": 7,
       "total": 39
-    },
-    {
-      "id": "12714103203344387805",
-      "name": "Sandra Lin 🩵",
-      "isOffline": false,
-      "attended": 32,
-      "absent": 6,
-      "total": 38
     },
     {
       "id": "16475607144557267157",
@@ -278,32 +270,24 @@
       "name": "Ryan",
       "isOffline": false,
       "attended": 31,
-      "absent": 9,
-      "total": 40
+      "absent": 10,
+      "total": 41
     },
     {
       "id": "03932052732596581115",
       "name": "Amara",
       "isOffline": false,
       "attended": 31,
-      "absent": 7,
-      "total": 38
+      "absent": 8,
+      "total": 39
     },
     {
-      "id": "04300902649186016315",
-      "name": "Lyra",
+      "id": "10363880024560530844",
+      "name": "Bryan Zaw",
       "isOffline": false,
       "attended": 31,
-      "absent": 13,
-      "total": 44
-    },
-    {
-      "id": "08698398135077813599",
-      "name": "Amara Lin",
-      "isOffline": false,
-      "attended": 31,
-      "absent": 7,
-      "total": 38
+      "absent": 8,
+      "total": 39
     },
     {
       "id": "13853615692537432416",
@@ -322,20 +306,44 @@
       "total": 39
     },
     {
+      "id": "06413950706311222670",
+      "name": "Long Phan",
+      "isOffline": false,
+      "attended": 30,
+      "absent": 3,
+      "total": 33
+    },
+    {
+      "id": "08698398135077813599",
+      "name": "Amara Lin",
+      "isOffline": false,
+      "attended": 30,
+      "absent": 9,
+      "total": 39
+    },
+    {
+      "id": "09929444368870187789",
+      "name": "Jayden Lwin",
+      "isOffline": false,
+      "attended": 30,
+      "absent": 9,
+      "total": 39
+    },
+    {
+      "id": "11055575881844874884",
+      "name": "Lauren",
+      "isOffline": false,
+      "attended": 30,
+      "absent": 9,
+      "total": 39
+    },
+    {
       "id": "offline-Meditation Lecture ",
       "name": "Meditation Lecture ",
       "isOffline": true,
       "attended": 30,
       "absent": 8,
       "total": 38
-    },
-    {
-      "id": "06413950706311222670",
-      "name": "Long Phan",
-      "isOffline": false,
-      "attended": 29,
-      "absent": 3,
-      "total": 32
     },
     {
       "id": "09730791856845722754",
@@ -346,27 +354,11 @@
       "total": 39
     },
     {
-      "id": "09929444368870187789",
-      "name": "Jayden Lwin",
+      "id": "00866228154468732206",
+      "name": "Jewel",
       "isOffline": false,
-      "attended": 29,
-      "absent": 9,
-      "total": 38
-    },
-    {
-      "id": "11055575881844874884",
-      "name": "Lauren",
-      "isOffline": false,
-      "attended": 29,
-      "absent": 9,
-      "total": 38
-    },
-    {
-      "id": "15582281378698029156",
-      "name": "Kaung Myat Lin",
-      "isOffline": false,
-      "attended": 29,
-      "absent": 10,
+      "attended": 28,
+      "absent": 11,
       "total": 39
     },
     {
@@ -378,12 +370,12 @@
       "total": 40
     },
     {
-      "id": "13513403903623688395",
-      "name": "Jaxton Lim",
+      "id": "15551325004499972988",
+      "name": "Tyler",
       "isOffline": false,
       "attended": 28,
-      "absent": 11,
-      "total": 39
+      "absent": 14,
+      "total": 42
     },
     {
       "id": "15767510113185887078",
@@ -402,20 +394,12 @@
       "total": 40
     },
     {
-      "id": "00866228154468732206",
-      "name": "Jewel",
-      "isOffline": false,
-      "attended": 27,
-      "absent": 11,
-      "total": 38
-    },
-    {
       "id": "06074766434471607048",
       "name": "Adrian",
       "isOffline": false,
       "attended": 27,
-      "absent": 6,
-      "total": 33
+      "absent": 7,
+      "total": 34
     },
     {
       "id": "08181467230011867332",
@@ -434,6 +418,14 @@
       "total": 38
     },
     {
+      "id": "13513403903623688395",
+      "name": "Jaxton Lim",
+      "isOffline": false,
+      "attended": 27,
+      "absent": 12,
+      "total": 39
+    },
+    {
       "id": "14536940136335309066",
       "name": "Aldrick Moe",
       "isOffline": false,
@@ -450,22 +442,6 @@
       "total": 39
     },
     {
-      "id": "12170098044770804865",
-      "name": "Keira Lay",
-      "isOffline": false,
-      "attended": 26,
-      "absent": 13,
-      "total": 39
-    },
-    {
-      "id": "15551325004499972988",
-      "name": "Tyler",
-      "isOffline": false,
-      "attended": 26,
-      "absent": 14,
-      "total": 40
-    },
-    {
       "id": "offline-Weekly Meditation ",
       "name": "Weekly Meditation ",
       "isOffline": true,
@@ -474,16 +450,32 @@
       "total": 39
     },
     {
+      "id": "07644816819740308841",
+      "name": "Jaden jian :) hi",
+      "isOffline": false,
+      "attended": 25,
+      "absent": 14,
+      "total": 39
+    },
+    {
       "id": "11204632504995024875",
       "name": "Kevin",
       "isOffline": false,
       "attended": 25,
-      "absent": 7,
-      "total": 32
+      "absent": 8,
+      "total": 33
     },
     {
-      "id": "13244126480807031250",
-      "name": "daniel the chin",
+      "id": "12170098044770804865",
+      "name": "Keira Lay",
+      "isOffline": false,
+      "attended": 25,
+      "absent": 15,
+      "total": 40
+    },
+    {
+      "id": "15582281378698029156",
+      "name": "Kaung Myat Lin",
       "isOffline": false,
       "attended": 25,
       "absent": 14,
@@ -509,17 +501,25 @@
       "id": "18371634261141600932",
       "name": "Ethan Lwin",
       "isOffline": false,
-      "attended": 23,
+      "attended": 24,
       "absent": 15,
-      "total": 38
+      "total": 39
     },
     {
       "id": "05719712880890142386",
       "name": "William Win",
       "isOffline": false,
-      "attended": 22,
+      "attended": 23,
       "absent": 16,
-      "total": 38
+      "total": 39
+    },
+    {
+      "id": "13244126480807031250",
+      "name": "daniel the chin",
+      "isOffline": false,
+      "attended": 23,
+      "absent": 16,
+      "total": 39
     },
     {
       "id": "03891002505761493940",
@@ -550,16 +550,16 @@
       "name": "💕",
       "isOffline": false,
       "attended": 18,
-      "absent": 1,
-      "total": 19
+      "absent": 2,
+      "total": 20
     },
     {
       "id": "02329224622088429602",
       "name": "JR Slone",
       "isOffline": false,
       "attended": 17,
-      "absent": 21,
-      "total": 38
+      "absent": 22,
+      "total": 39
     },
     {
       "id": "12623801953711947772",
@@ -574,56 +574,56 @@
       "name": "Htet like’s turtles",
       "isOffline": false,
       "attended": 16,
-      "absent": 3,
-      "total": 19
+      "absent": 4,
+      "total": 20
+    },
+    {
+      "id": "08069175322986561953",
+      "name": "Aung Naing Khant",
+      "isOffline": false,
+      "attended": 15,
+      "absent": 5,
+      "total": 20
     },
     {
       "id": "13614081013479265779",
       "name": "Min",
       "isOffline": false,
       "attended": 15,
-      "absent": 4,
-      "total": 19
+      "absent": 5,
+      "total": 20
     },
     {
-      "id": "08069175322986561953",
-      "name": "Aung Naing Khant",
+      "id": "14366683585434345045",
+      "name": "Ivory Lin",
       "isOffline": false,
       "attended": 14,
-      "absent": 5,
-      "total": 19
+      "absent": 24,
+      "total": 38
     },
     {
       "id": "rYySLxcRDZZ1k2r3j4OLmB5xy0u1",
       "name": "Htoo Htet",
       "isOffline": false,
       "attended": 14,
-      "absent": 5,
-      "total": 19
+      "absent": 6,
+      "total": 20
     },
     {
       "id": "09352906718502329265",
       "name": "Yun",
       "isOffline": false,
       "attended": 13,
-      "absent": 6,
-      "total": 19
-    },
-    {
-      "id": "14366683585434345045",
-      "name": "Ivory Lin",
-      "isOffline": false,
-      "attended": 13,
-      "absent": 24,
-      "total": 37
+      "absent": 7,
+      "total": 20
     },
     {
       "id": "AgOxDpk7u2RE4bx7n3cQgdcTOxr2",
       "name": "William Kaung",
       "isOffline": false,
       "attended": 13,
-      "absent": 6,
-      "total": 19
+      "absent": 7,
+      "total": 20
     },
     {
       "id": "offline-Nibbana Gamini Class",
@@ -638,16 +638,16 @@
       "name": "Lillian",
       "isOffline": false,
       "attended": 12,
-      "absent": 7,
-      "total": 19
+      "absent": 8,
+      "total": 20
     },
     {
       "id": "10685412375519437740",
       "name": "emily",
       "isOffline": false,
       "attended": 12,
-      "absent": 7,
-      "total": 19
+      "absent": 8,
+      "total": 20
     },
     {
       "id": "18185253476078240259",
@@ -670,72 +670,72 @@
       "name": "Daniel taw",
       "isOffline": false,
       "attended": 11,
-      "absent": 8,
-      "total": 19
+      "absent": 9,
+      "total": 20
     },
     {
       "id": "00504188520020246095",
       "name": "Kori 🌸",
       "isOffline": false,
       "attended": 10,
-      "absent": 9,
-      "total": 19
-    },
-    {
-      "id": "09006969831180230587",
-      "name": "thadoe",
-      "isOffline": false,
-      "attended": 10,
-      "absent": 28,
-      "total": 38
+      "absent": 10,
+      "total": 20
     },
     {
       "id": "09608707569725225778",
       "name": "Bodhi",
       "isOffline": false,
       "attended": 10,
-      "absent": 9,
-      "total": 19
+      "absent": 10,
+      "total": 20
     },
     {
       "id": "18139451830809456219",
       "name": "Alexander",
       "isOffline": false,
       "attended": 10,
-      "absent": 9,
-      "total": 19
+      "absent": 10,
+      "total": 20
+    },
+    {
+      "id": "09006969831180230587",
+      "name": "thadoe",
+      "isOffline": false,
+      "attended": 9,
+      "absent": 29,
+      "total": 38
     },
     {
       "id": "Pg4rz10pQnUs9HmbTkKzTxy8jkr2",
       "name": "Damian Min",
       "isOffline": false,
       "attended": 9,
-      "absent": 10,
-      "total": 19
+      "absent": 11,
+      "total": 20
     },
     {
       "id": "13965261086134661540",
       "name": "Fiona",
       "isOffline": false,
       "attended": 8,
-      "absent": 11,
-      "total": 19
+      "absent": 12,
+      "total": 20
     },
     {
       "id": "18059646231411340277",
       "name": "Yukesh",
       "isOffline": false,
       "attended": 8,
-      "absent": 11,
-      "total": 19
+      "absent": 12,
+      "total": 20
     },
     {
       "id": "16868186232520866045",
       "name": "Maddie",
       "isOffline": false,
       "attended": 7,
-      "absent": 31,
-      "total": 38
+      "absent": 32,
+      "total": 39
     },
     {
       "id": "offline-Vietnam students ",
@@ -750,32 +750,32 @@
       "name": "Khaing Yati Linn",
       "isOffline": false,
       "attended": 6,
-      "absent": 13,
-      "total": 19
+      "absent": 14,
+      "total": 20
     },
     {
       "id": "03010181431553739966",
       "name": "yuri",
       "isOffline": false,
       "attended": 6,
-      "absent": 13,
-      "total": 19
+      "absent": 14,
+      "total": 20
     },
     {
       "id": "09974893205597105698",
       "name": "eddie",
       "isOffline": false,
       "attended": 6,
-      "absent": 33,
-      "total": 39
+      "absent": 34,
+      "total": 40
     },
     {
       "id": "12505934861142635323",
       "name": "Meow",
       "isOffline": false,
       "attended": 6,
-      "absent": 13,
-      "total": 19
+      "absent": 14,
+      "total": 20
     },
     {
       "id": "05126293330586440320",
@@ -790,104 +790,104 @@
       "name": "Aww",
       "isOffline": false,
       "attended": 4,
-      "absent": 15,
-      "total": 19
+      "absent": 16,
+      "total": 20
     },
     {
       "id": "01386355304594994874",
       "name": "Harry",
       "isOffline": false,
       "attended": 3,
-      "absent": 16,
-      "total": 19
+      "absent": 17,
+      "total": 20
     },
     {
       "id": "78PyDa7UUeYYp00191Fp4LTsSJm1",
       "name": "Arkar",
       "isOffline": false,
       "attended": 3,
-      "absent": 16,
-      "total": 19
+      "absent": 17,
+      "total": 20
     },
     {
       "id": "DroWVnsDn0MDndtv57xAYQIRv8g1",
       "name": "Aung",
       "isOffline": false,
       "attended": 3,
-      "absent": 16,
-      "total": 19
+      "absent": 17,
+      "total": 20
     },
     {
       "id": "GLHX0R1O3bZS10caogGvqn1wquz2",
       "name": "Adam",
       "isOffline": false,
       "attended": 3,
-      "absent": 16,
-      "total": 19
+      "absent": 17,
+      "total": 20
     },
     {
       "id": "N8RfW51UThWfvwxQchp0i6fWbkJ3",
       "name": "Kyle",
       "isOffline": false,
       "attended": 3,
-      "absent": 16,
-      "total": 19
+      "absent": 17,
+      "total": 20
     },
     {
       "id": "PGvzLK0VXZOaqpqAWzNcL6TGoKD2",
       "name": "Tristan",
       "isOffline": false,
       "attended": 3,
-      "absent": 16,
-      "total": 19
+      "absent": 17,
+      "total": 20
     },
     {
       "id": "WLuIaqHjQUZaruSAissaw0NhSaY2",
       "name": "Jasper",
       "isOffline": false,
       "attended": 3,
-      "absent": 16,
-      "total": 19
+      "absent": 17,
+      "total": 20
     },
     {
       "id": "hnhnk4PtZHbnllvWfkDrqELhPEp2",
       "name": "Adrian min",
       "isOffline": false,
       "attended": 3,
-      "absent": 16,
-      "total": 19
+      "absent": 17,
+      "total": 20
     },
     {
       "id": "04544774042809518688",
       "name": "Hninei",
       "isOffline": false,
       "attended": 2,
-      "absent": 17,
-      "total": 19
+      "absent": 18,
+      "total": 20
     },
     {
       "id": "08305157728097398468",
       "name": "Tiffanini",
       "isOffline": false,
       "attended": 2,
-      "absent": 17,
-      "total": 19
+      "absent": 18,
+      "total": 20
     },
     {
       "id": "WPo3J3NgZBQ32IGdc61Xy3LUNre2",
       "name": "amber",
       "isOffline": false,
       "attended": 2,
-      "absent": 17,
-      "total": 19
+      "absent": 18,
+      "total": 20
     },
     {
       "id": "qtt3ALbAucWoGQGch7KjBHMZbV02",
       "name": "Khant",
       "isOffline": false,
       "attended": 2,
-      "absent": 17,
-      "total": 19
+      "absent": 18,
+      "total": 20
     },
     {
       "id": "offline-ဒေါ်အုံးကြိုင်",
@@ -902,56 +902,56 @@
       "name": "Travis",
       "isOffline": false,
       "attended": 1,
-      "absent": 6,
-      "total": 7
+      "absent": 7,
+      "total": 8
     },
     {
       "id": "12106085581460073383",
       "name": "Thila Sithu",
       "isOffline": false,
       "attended": 1,
-      "absent": 18,
-      "total": 19
+      "absent": 19,
+      "total": 20
     },
     {
       "id": "17310952783695120067",
       "name": "Arthur",
       "isOffline": false,
       "attended": 1,
-      "absent": 18,
-      "total": 19
+      "absent": 19,
+      "total": 20
     },
     {
       "id": "qqUDU9iyLNWPCuuLxSVehC1UjQ32",
       "name": "Temperance",
       "isOffline": false,
       "attended": 1,
-      "absent": 18,
-      "total": 19
+      "absent": 19,
+      "total": 20
     },
     {
       "id": "ryAXl7z6AlR4J6sjzkG3eVgVvp73",
       "name": "Henry",
       "isOffline": false,
       "attended": 1,
-      "absent": 18,
-      "total": 19
+      "absent": 19,
+      "total": 20
     },
     {
       "id": "e8nTdR56lvOgiqt0X554ff9R4EW2",
       "name": "Dihpression",
       "isOffline": false,
       "attended": 0,
-      "absent": 19,
-      "total": 19
+      "absent": 20,
+      "total": 20
     },
     {
       "id": "syvXvAmf7reiuIVHXcvM4gxiqqC2",
       "name": "Jennifer",
       "isOffline": false,
       "attended": 0,
-      "absent": 19,
-      "total": 19
+      "absent": 20,
+      "total": 20
     }
   ],
   "trophyList": [
@@ -977,8 +977,8 @@
       "trophyCount": 25,
       "heartsReceived": 3,
       "heartsFromCounts": {
-        "Teacher_name": "Teacher",
-        "Teacher_count": 3
+        "Teacher_count": 3,
+        "Teacher_name": "Teacher"
       },
       "attendedThisYear": 27
     },
@@ -993,7 +993,7 @@
         "Moe_count": 1,
         "Teacher_name": "Teacher"
       },
-      "attendedThisYear": 37
+      "attendedThisYear": 38
     },
     {
       "id": "00861516168006851630",
@@ -1001,29 +1001,29 @@
       "trophyCount": 151,
       "heartsReceived": 6,
       "heartsFromCounts": {
-        "Xandra Han Tun_count": 1,
-        "Xandra Han Tun_name": "Xandra Han Tun",
         "daniel the chin_count": 1,
         "daniel the chin_name": "daniel the chin",
-        "Amara_name": "Amara",
         "Teacher_count": 3,
+        "Amara_name": "Amara",
+        "Xandra Han Tun_name": "Xandra Han Tun",
+        "Xandra Han Tun_count": 1,
         "Amara_count": 1,
         "Teacher_name": "Teacher"
       },
-      "attendedThisYear": 36
+      "attendedThisYear": 37
     },
     {
       "id": "00866228154468732206",
       "name": "Jewel",
-      "trophyCount": 111,
+      "trophyCount": 112,
       "heartsReceived": 4,
       "heartsFromCounts": {
-        "Xandra Han Tun_name": "Xandra Han Tun",
         "Teacher_name": "Teacher",
+        "Xandra Han Tun_name": "Xandra Han Tun",
         "Xandra Han Tun_count": 1,
         "Teacher_count": 3
       },
-      "attendedThisYear": 27
+      "attendedThisYear": 28
     },
     {
       "id": "01149173619276614204",
@@ -1055,13 +1055,13 @@
       "trophyCount": 195,
       "heartsReceived": 6,
       "heartsFromCounts": {
+        "Xandra Han Tun_name": "Xandra Han Tun",
+        "daniel the chin_count": 1,
+        "Xandra Han Tun_count": 1,
+        "Teacher_name": "Teacher",
+        "Amara_name": "Amara",
         "Teacher_count": 3,
         "daniel the chin_name": "daniel the chin",
-        "daniel the chin_count": 1,
-        "Teacher_name": "Teacher",
-        "Xandra Han Tun_name": "Xandra Han Tun",
-        "Xandra Han Tun_count": 1,
-        "Amara_name": "Amara",
         "Amara_count": 1
       },
       "attendedThisYear": 31
@@ -1083,11 +1083,11 @@
       "trophyCount": 1,
       "heartsReceived": 6,
       "heartsFromCounts": {
-        "Teacher_name": "Teacher",
-        "Teacher_count": 4,
         "Leon_123_count": 1,
-        "Leon_123_name": "Leon_123",
+        "Teacher_name": "Teacher",
         "Moana Nguyen_count": 1,
+        "Teacher_count": 4,
+        "Leon_123_name": "Leon_123",
         "Moana Nguyen_name": "Moana Nguyen"
       },
       "attendedThisYear": 0
@@ -1099,11 +1099,11 @@
       "heartsReceived": 4,
       "heartsFromCounts": {
         "Teacher_count": 3,
-        "Zin Zin_name": "Zin Zin",
         "Zin Zin_count": 1,
+        "Zin Zin_name": "Zin Zin",
         "Teacher_name": "Teacher"
       },
-      "attendedThisYear": 37
+      "attendedThisYear": 38
     },
     {
       "id": "02329224622088429602",
@@ -1111,10 +1111,10 @@
       "trophyCount": 5,
       "heartsReceived": 6,
       "heartsFromCounts": {
-        "Teacher_count": 3,
-        "Teacher_name": "Teacher",
         "Kaung Myat Lin_count": 3,
-        "Kaung Myat Lin_name": "Kaung Myat Lin"
+        "Kaung Myat Lin_name": "Kaung Myat Lin",
+        "Teacher_name": "Teacher",
+        "Teacher_count": 3
       },
       "attendedThisYear": 17
     },
@@ -1154,10 +1154,10 @@
       "trophyCount": 34,
       "heartsReceived": 3,
       "heartsFromCounts": {
-        "Teacher_name": "Teacher",
-        "Teacher_count": 3
+        "Teacher_count": 3,
+        "Teacher_name": "Teacher"
       },
-      "attendedThisYear": 35
+      "attendedThisYear": 36
     },
     {
       "id": "03891002505761493940",
@@ -1165,14 +1165,14 @@
       "trophyCount": 171,
       "heartsReceived": 6,
       "heartsFromCounts": {
-        "daniel the chin_name": "daniel the chin",
         "Xandra Han Tun_name": "Xandra Han Tun",
+        "daniel the chin_name": "daniel the chin",
+        "Teacher_count": 3,
+        "Amara_name": "Amara",
+        "daniel the chin_count": 1,
         "Xandra Han Tun_count": 1,
         "Amara_count": 1,
-        "daniel the chin_count": 1,
-        "Teacher_name": "Teacher",
-        "Amara_name": "Amara",
-        "Teacher_count": 3
+        "Teacher_name": "Teacher"
       },
       "attendedThisYear": 20
     },
@@ -1182,38 +1182,38 @@
       "trophyCount": 96,
       "heartsReceived": 19,
       "heartsFromCounts": {
-        "daniel the chin_count": 1,
-        "Caran Zay Lynn_count": 15,
-        "Teacher_count": 3,
-        "Teacher_name": "Teacher",
         "Caran Zay Lynn_name": "Caran Zay Lynn",
-        "daniel the chin_name": "daniel the chin"
+        "daniel the chin_count": 1,
+        "Teacher_count": 3,
+        "daniel the chin_name": "daniel the chin",
+        "Teacher_name": "Teacher",
+        "Caran Zay Lynn_count": 15
       },
       "attendedThisYear": 31
     },
     {
       "id": "04234204323460967681",
       "name": "Hansel",
-      "trophyCount": 69,
+      "trophyCount": 70,
       "heartsReceived": 4,
       "heartsFromCounts": {
-        "Teacher_name": "Teacher",
+        "Zin Zin_count": 1,
         "Teacher_count": 3,
         "Zin Zin_name": "Zin Zin",
-        "Zin Zin_count": 1
+        "Teacher_name": "Teacher"
       },
-      "attendedThisYear": 35
+      "attendedThisYear": 36
     },
     {
       "id": "04300902649186016315",
       "name": "Lyra",
-      "trophyCount": 70,
+      "trophyCount": 71,
       "heartsReceived": 3,
       "heartsFromCounts": {
-        "Teacher_name": "Teacher",
-        "Teacher_count": 3
+        "Teacher_count": 3,
+        "Teacher_name": "Teacher"
       },
-      "attendedThisYear": 31
+      "attendedThisYear": 32
     },
     {
       "id": "04382713743183613195",
@@ -1223,8 +1223,8 @@
       "heartsFromCounts": {
         "Kaung Myat Lin_count": 1,
         "Teacher_name": "Teacher",
-        "Teacher_count": 3,
-        "Kaung Myat Lin_name": "Kaung Myat Lin"
+        "Kaung Myat Lin_name": "Kaung Myat Lin",
+        "Teacher_count": 3
       },
       "attendedThisYear": 36
     },
@@ -1269,17 +1269,17 @@
     {
       "id": "05640800844344076883",
       "name": "Yuya Chin",
-      "trophyCount": 69,
+      "trophyCount": 70,
       "heartsReceived": 5,
       "heartsFromCounts": {
         "Teacher_name": "Teacher",
-        "Zin Zin_count": 1,
-        "Teacher_count": 3,
         "Moe_count": 1,
-        "Moe_name": "Moe",
-        "Zin Zin_name": "Zin Zin"
+        "Zin Zin_name": "Zin Zin",
+        "Teacher_count": 3,
+        "Zin Zin_count": 1,
+        "Moe_name": "Moe"
       },
-      "attendedThisYear": 35
+      "attendedThisYear": 36
     },
     {
       "id": "05719712880890142386",
@@ -1287,14 +1287,14 @@
       "trophyCount": 267,
       "heartsReceived": 20,
       "heartsFromCounts": {
-        "Andrian Win_name": "Andrian Win",
-        "Andrian Win_count": 16,
+        "Teacher_name": "Teacher",
         "Amara_name": "Amara",
         "Amara_count": 1,
-        "Teacher_name": "Teacher",
-        "Teacher_count": 3
+        "Teacher_count": 3,
+        "Andrian Win_count": 16,
+        "Andrian Win_name": "Andrian Win"
       },
-      "attendedThisYear": 22
+      "attendedThisYear": 23
     },
     {
       "id": "06074766434471607048",
@@ -1302,23 +1302,23 @@
       "trophyCount": 50,
       "heartsReceived": 4,
       "heartsFromCounts": {
+        "Andrian Win_name": "Andrian Win",
         "Teacher_count": 3,
         "Andrian Win_count": 1,
-        "Teacher_name": "Teacher",
-        "Andrian Win_name": "Andrian Win"
+        "Teacher_name": "Teacher"
       },
       "attendedThisYear": 27
     },
     {
       "id": "06413950706311222670",
       "name": "Long Phan",
-      "trophyCount": 50,
+      "trophyCount": 52,
       "heartsReceived": 3,
       "heartsFromCounts": {
         "Teacher_count": 3,
         "Teacher_name": "Teacher"
       },
-      "attendedThisYear": 29
+      "attendedThisYear": 30
     },
     {
       "id": "06858861930495135121",
@@ -1328,21 +1328,21 @@
       "heartsFromCounts": {
         "daniel the chin_count": 3,
         "Teacher_name": "Teacher",
-        "Teacher_count": 3,
-        "daniel the chin_name": "daniel the chin"
+        "daniel the chin_name": "daniel the chin",
+        "Teacher_count": 3
       },
-      "attendedThisYear": 34
+      "attendedThisYear": 35
     },
     {
       "id": "07035317489929864976",
       "name": "Evelyn Myint",
-      "trophyCount": 78,
+      "trophyCount": 80,
       "heartsReceived": 3,
       "heartsFromCounts": {
-        "Teacher_count": 3,
-        "Teacher_name": "Teacher"
+        "Teacher_name": "Teacher",
+        "Teacher_count": 3
       },
-      "attendedThisYear": 32
+      "attendedThisYear": 33
     },
     {
       "id": "07644816819740308841",
@@ -1350,29 +1350,29 @@
       "trophyCount": 115,
       "heartsReceived": 17,
       "heartsFromCounts": {
-        "Xandra Han Tun_name": "Xandra Han Tun",
-        "Teacher_name": "Teacher",
+        "Xandra Han Tun_count": 11,
         "Teacher_count": 3,
+        "Xandra Han Tun_name": "Xandra Han Tun",
         "daniel the chin_name": "daniel the chin",
-        "daniel the chin_count": 2,
         "Amara_count": 1,
-        "Amara_name": "Amara",
-        "Xandra Han Tun_count": 11
+        "Teacher_name": "Teacher",
+        "daniel the chin_count": 2,
+        "Amara_name": "Amara"
       },
-      "attendedThisYear": 35
+      "attendedThisYear": 25
     },
     {
       "id": "07869321494653277000",
       "name": "Sin soe🫧",
-      "trophyCount": 47,
+      "trophyCount": 48,
       "heartsReceived": 6,
       "heartsFromCounts": {
-        "Teacher_count": 3,
-        "Xandra Han Tun_count": 3,
+        "Teacher_name": "Teacher",
         "Xandra Han Tun_name": "Xandra Han Tun",
-        "Teacher_name": "Teacher"
+        "Xandra Han Tun_count": 3,
+        "Teacher_count": 3
       },
-      "attendedThisYear": 52
+      "attendedThisYear": 53
     },
     {
       "id": "08069175322986561953",
@@ -1380,7 +1380,7 @@
       "trophyCount": 0,
       "heartsReceived": 0,
       "heartsFromCounts": {},
-      "attendedThisYear": 14
+      "attendedThisYear": 15
     },
     {
       "id": "08112323690613594671",
@@ -1388,16 +1388,16 @@
       "trophyCount": 155,
       "heartsReceived": 11,
       "heartsFromCounts": {
-        "Amara_count": 1,
-        "Leon_123_count": 5,
         "daniel the chin_name": "daniel the chin",
+        "Leon_123_count": 5,
+        "Amara_count": 1,
+        "Teacher_count": 3,
         "Leon_123_name": "Leon_123",
         "daniel the chin_count": 1,
+        "Xandra Han Tun_name": "Xandra Han Tun",
         "Teacher_name": "Teacher",
-        "Amara_name": "Amara",
         "Xandra Han Tun_count": 1,
-        "Teacher_count": 3,
-        "Xandra Han Tun_name": "Xandra Han Tun"
+        "Amara_name": "Amara"
       },
       "attendedThisYear": 26
     },
@@ -1407,14 +1407,14 @@
       "trophyCount": 188,
       "heartsReceived": 6,
       "heartsFromCounts": {
-        "Amara_count": 1,
-        "Amara_name": "Amara",
-        "daniel the chin_count": 1,
-        "Teacher_count": 3,
-        "Teacher_name": "Teacher",
-        "daniel the chin_name": "daniel the chin",
         "Xandra Han Tun_count": 1,
-        "Xandra Han Tun_name": "Xandra Han Tun"
+        "Teacher_name": "Teacher",
+        "Amara_name": "Amara",
+        "Xandra Han Tun_name": "Xandra Han Tun",
+        "daniel the chin_name": "daniel the chin",
+        "Teacher_count": 3,
+        "Amara_count": 1,
+        "daniel the chin_count": 1
       },
       "attendedThisYear": 27
     },
@@ -1432,12 +1432,12 @@
       "trophyCount": 264,
       "heartsReceived": 4,
       "heartsFromCounts": {
+        "Amara_name": "Amara",
         "Amara_count": 1,
         "Teacher_name": "Teacher",
-        "Amara_name": "Amara",
         "Teacher_count": 3
       },
-      "attendedThisYear": 31
+      "attendedThisYear": 30
     },
     {
       "id": "09006969831180230587",
@@ -1448,7 +1448,7 @@
         "Teacher_name": "Teacher",
         "Teacher_count": 3
       },
-      "attendedThisYear": 10
+      "attendedThisYear": 9
     },
     {
       "id": "09352906718502329265",
@@ -1480,13 +1480,13 @@
     {
       "id": "09929444368870187789",
       "name": "Jayden Lwin",
-      "trophyCount": 72,
+      "trophyCount": 73,
       "heartsReceived": 3,
       "heartsFromCounts": {
-        "Teacher_count": 3,
-        "Teacher_name": "Teacher"
+        "Teacher_name": "Teacher",
+        "Teacher_count": 3
       },
-      "attendedThisYear": 29
+      "attendedThisYear": 30
     },
     {
       "id": "09974893205597105698",
@@ -1505,20 +1505,20 @@
       "trophyCount": 200,
       "heartsReceived": 11,
       "heartsFromCounts": {
-        "Teacher_name": "Teacher",
-        "Teacher_count": 3,
-        "Amara_count": 1,
-        "Xandra Han Tun_name": "Xandra Han Tun",
         "daniel the chin_count": 1,
-        "Xandra Han Tun_count": 1,
-        "Andrian Win_name": "Andrian Win",
-        "Amara_name": "Amara",
+        "daniel the chin_name": "daniel the chin",
+        "Teacher_count": 3,
         "Leon_123_count": 3,
         "Leon_123_name": "Leon_123",
+        "Amara_name": "Amara",
+        "Xandra Han Tun_count": 1,
         "Andrian Win_count": 2,
-        "daniel the chin_name": "daniel the chin"
+        "Andrian Win_name": "Andrian Win",
+        "Xandra Han Tun_name": "Xandra Han Tun",
+        "Amara_count": 1,
+        "Teacher_name": "Teacher"
       },
-      "attendedThisYear": 32
+      "attendedThisYear": 31
     },
     {
       "id": "10685412375519437740",
@@ -1531,13 +1531,13 @@
     {
       "id": "11055575881844874884",
       "name": "Lauren",
-      "trophyCount": 77,
+      "trophyCount": 78,
       "heartsReceived": 3,
       "heartsFromCounts": {
-        "Teacher_name": "Teacher",
-        "Teacher_count": 3
+        "Teacher_count": 3,
+        "Teacher_name": "Teacher"
       },
-      "attendedThisYear": 29
+      "attendedThisYear": 30
     },
     {
       "id": "11060425178850379550",
@@ -1547,12 +1547,12 @@
       "heartsFromCounts": {
         "daniel the chin_name": "daniel the chin",
         "Sarah_name": "Sarah",
-        "Teacher_name": "Teacher",
-        "Sarah_count": 12,
-        "daniel the chin_count": 1,
         "Teacher_count": 3,
+        "daniel the chin_count": 1,
+        "Moana Nguyen_count": 15,
         "Moana Nguyen_name": "Moana Nguyen",
-        "Moana Nguyen_count": 15
+        "Teacher_name": "Teacher",
+        "Sarah_count": 12
       },
       "attendedThisYear": 52
     },
@@ -1563,19 +1563,19 @@
       "heartsReceived": 11,
       "heartsFromCounts": {
         "Teacher_name": "Teacher",
+        "Lily htike_name": "Lily htike",
+        "daniel the chin_count": 1,
+        "Andrian Win_count": 4,
         "Amara_count": 1,
+        "Xandra Han Tun_name": "Xandra Han Tun",
         "daniel the chin_name": "daniel the chin",
         "Teacher_count": 3,
-        "Andrian Win_count": 4,
-        "daniel the chin_count": 1,
-        "Xandra Han Tun_name": "Xandra Han Tun",
         "Lily htike_count": 1,
-        "Amara_name": "Amara",
         "Xandra Han Tun_count": 1,
-        "Lily htike_name": "Lily htike",
+        "Amara_name": "Amara",
         "Andrian Win_name": "Andrian Win"
       },
-      "attendedThisYear": 34
+      "attendedThisYear": 32
     },
     {
       "id": "11192846145860761661",
@@ -1583,11 +1583,11 @@
       "trophyCount": 97,
       "heartsReceived": 5,
       "heartsFromCounts": {
-        "daniel the chin_count": 1,
         "Teacher_count": 3,
+        "Amara_name": "Amara",
+        "daniel the chin_count": 1,
         "Teacher_name": "Teacher",
         "Amara_count": 1,
-        "Amara_name": "Amara",
         "daniel the chin_name": "daniel the chin"
       },
       "attendedThisYear": 33
@@ -1598,23 +1598,23 @@
       "trophyCount": 43,
       "heartsReceived": 4,
       "heartsFromCounts": {
-        "daniel the chin_count": 1,
+        "Teacher_name": "Teacher",
         "daniel the chin_name": "daniel the chin",
         "Teacher_count": 3,
-        "Teacher_name": "Teacher"
+        "daniel the chin_count": 1
       },
       "attendedThisYear": 25
     },
     {
       "id": "11301375659175373882",
       "name": "Jayce",
-      "trophyCount": 66,
+      "trophyCount": 69,
       "heartsReceived": 3,
       "heartsFromCounts": {
         "Teacher_name": "Teacher",
         "Teacher_count": 3
       },
-      "attendedThisYear": 33
+      "attendedThisYear": 34
     },
     {
       "id": "11387669167230724182",
@@ -1633,7 +1633,7 @@
         "Teacher_name": "Teacher",
         "Teacher_count": 3
       },
-      "attendedThisYear": 51
+      "attendedThisYear": 52
     },
     {
       "id": "12012683896306866901",
@@ -1641,12 +1641,12 @@
       "trophyCount": 85,
       "heartsReceived": 40,
       "heartsFromCounts": {
+        "Teacher_count": 3,
+        "Sarah_name": "Sarah",
         "Uydi Nguyen_name": "Uydi Nguyen",
         "Sarah_count": 15,
-        "Sarah_name": "Sarah",
         "Uydi Nguyen_count": 22,
-        "Teacher_name": "Teacher",
-        "Teacher_count": 3
+        "Teacher_name": "Teacher"
       },
       "attendedThisYear": 55
     },
@@ -1664,14 +1664,14 @@
       "trophyCount": 347,
       "heartsReceived": 8,
       "heartsFromCounts": {
-        "daniel the chin_name": "daniel the chin",
-        "Amara_count": 1,
-        "daniel the chin_count": 1,
-        "Leon_123_name": "Leon_123",
-        "Leon_123_count": 3,
         "Teacher_name": "Teacher",
+        "Amara_count": 1,
         "Amara_name": "Amara",
-        "Teacher_count": 3
+        "daniel the chin_name": "daniel the chin",
+        "Leon_123_name": "Leon_123",
+        "Teacher_count": 3,
+        "Leon_123_count": 3,
+        "daniel the chin_count": 1
       },
       "attendedThisYear": 36
     },
@@ -1681,10 +1681,10 @@
       "trophyCount": 250,
       "heartsReceived": 4,
       "heartsFromCounts": {
+        "Teacher_name": "Teacher",
         "Amara_name": "Amara",
         "Amara_count": 1,
-        "Teacher_count": 3,
-        "Teacher_name": "Teacher"
+        "Teacher_count": 3
       },
       "attendedThisYear": 27
     },
@@ -1694,10 +1694,10 @@
       "trophyCount": 36,
       "heartsReceived": 3,
       "heartsFromCounts": {
-        "Teacher_count": 3,
-        "Teacher_name": "Teacher"
+        "Teacher_name": "Teacher",
+        "Teacher_count": 3
       },
-      "attendedThisYear": 26
+      "attendedThisYear": 25
     },
     {
       "id": "12309875323100516098",
@@ -1705,12 +1705,12 @@
       "trophyCount": 64,
       "heartsReceived": 75,
       "heartsFromCounts": {
-        "Teacher_name": "Teacher",
-        "Teacher_count": 3,
-        "Moana Nguyen_count": 44,
         "Uydi Nguyen_count": 28,
-        "Moana Nguyen_name": "Moana Nguyen",
-        "Uydi Nguyen_name": "Uydi Nguyen"
+        "Moana Nguyen_count": 44,
+        "Teacher_count": 3,
+        "Teacher_name": "Teacher",
+        "Uydi Nguyen_name": "Uydi Nguyen",
+        "Moana Nguyen_name": "Moana Nguyen"
       },
       "attendedThisYear": 28
     },
@@ -1728,12 +1728,12 @@
       "trophyCount": 199,
       "heartsReceived": 5,
       "heartsFromCounts": {
-        "Xandra Han Tun_name": "Xandra Han Tun",
-        "Amara_name": "Amara",
-        "Teacher_name": "Teacher",
-        "Xandra Han Tun_count": 1,
         "Teacher_count": 3,
-        "Amara_count": 1
+        "Teacher_name": "Teacher",
+        "Amara_count": 1,
+        "Xandra Han Tun_name": "Xandra Han Tun",
+        "Xandra Han Tun_count": 1,
+        "Amara_name": "Amara"
       },
       "attendedThisYear": 17
     },
@@ -1757,9 +1757,9 @@
         "Amara_count": 1,
         "daniel the chin_name": "daniel the chin",
         "Amara_name": "Amara",
-        "Teacher_count": 3,
         "Teacher_name": "Teacher",
-        "daniel the chin_count": 1
+        "daniel the chin_count": 1,
+        "Teacher_count": 3
       },
       "attendedThisYear": 36
     },
@@ -1770,9 +1770,9 @@
       "heartsReceived": 8,
       "heartsFromCounts": {
         "Teacher_count": 3,
+        "Kaung Myat Lin_name": "Kaung Myat Lin",
         "Teacher_name": "Teacher",
-        "Kaung Myat Lin_count": 5,
-        "Kaung Myat Lin_name": "Kaung Myat Lin"
+        "Kaung Myat Lin_count": 5
       },
       "attendedThisYear": 24
     },
@@ -1782,10 +1782,10 @@
       "trophyCount": 67,
       "heartsReceived": 3,
       "heartsFromCounts": {
-        "Teacher_name": "Teacher",
-        "Teacher_count": 3
+        "Teacher_count": 3,
+        "Teacher_name": "Teacher"
       },
-      "attendedThisYear": 32
+      "attendedThisYear": 33
     },
     {
       "id": "12798861857420230640",
@@ -1793,12 +1793,12 @@
       "trophyCount": 69,
       "heartsReceived": 4,
       "heartsFromCounts": {
-        "Kaung Myat Lin_name": "Kaung Myat Lin",
         "Teacher_name": "Teacher",
         "Teacher_count": 3,
-        "Kaung Myat Lin_count": 1
+        "Kaung Myat Lin_count": 1,
+        "Kaung Myat Lin_name": "Kaung Myat Lin"
       },
-      "attendedThisYear": 33
+      "attendedThisYear": 34
     },
     {
       "id": "13244126480807031250",
@@ -1806,14 +1806,14 @@
       "trophyCount": 92,
       "heartsReceived": 6,
       "heartsFromCounts": {
-        "Kaung Myat Lin_name": "Kaung Myat Lin",
-        "Teacher_name": "Teacher",
         "Kaung Myat Lin_count": 1,
         "Teacher_count": 3,
+        "Kaung Myat Lin_name": "Kaung Myat Lin",
         "Amara_name": "Amara",
-        "Amara_count": 2
+        "Amara_count": 2,
+        "Teacher_name": "Teacher"
       },
-      "attendedThisYear": 25
+      "attendedThisYear": 23
     },
     {
       "id": "13513403903623688395",
@@ -1821,12 +1821,12 @@
       "trophyCount": 54,
       "heartsReceived": 10,
       "heartsFromCounts": {
-        "Teacher_name": "Teacher",
         "Teacher_count": 3,
         "Kaung Myat Lin_name": "Kaung Myat Lin",
-        "Kaung Myat Lin_count": 7
+        "Kaung Myat Lin_count": 7,
+        "Teacher_name": "Teacher"
       },
-      "attendedThisYear": 28
+      "attendedThisYear": 27
     },
     {
       "id": "13614081013479265779",
@@ -1842,10 +1842,10 @@
       "trophyCount": 307,
       "heartsReceived": 5,
       "heartsFromCounts": {
-        "Teacher_count": 3,
         "Teacher_name": "Teacher",
-        "Amara_count": 1,
+        "Teacher_count": 3,
         "daniel the chin_name": "daniel the chin",
+        "Amara_count": 1,
         "Amara_name": "Amara",
         "daniel the chin_count": 1
       },
@@ -1865,38 +1865,38 @@
       "trophyCount": 210,
       "heartsReceived": 5,
       "heartsFromCounts": {
-        "Amara_name": "Amara",
-        "Amara_count": 1,
+        "Teacher_count": 3,
         "Xandra Han Tun_name": "Xandra Han Tun",
-        "Teacher_name": "Teacher",
         "Xandra Han Tun_count": 1,
-        "Teacher_count": 3
+        "Teacher_name": "Teacher",
+        "Amara_name": "Amara",
+        "Amara_count": 1
       },
-      "attendedThisYear": 13
+      "attendedThisYear": 14
     },
     {
       "id": "14536940136335309066",
       "name": "Aldrick Moe",
-      "trophyCount": 50,
+      "trophyCount": 51,
       "heartsReceived": 3,
       "heartsFromCounts": {
-        "Teacher_count": 3,
-        "Teacher_name": "Teacher"
+        "Teacher_name": "Teacher",
+        "Teacher_count": 3
       },
       "attendedThisYear": 27
     },
     {
       "id": "15551325004499972988",
       "name": "Tyler",
-      "trophyCount": 31,
+      "trophyCount": 35,
       "heartsReceived": 4,
       "heartsFromCounts": {
         "Teacher_name": "Teacher",
+        "daniel the chin_count": 1,
         "daniel the chin_name": "daniel the chin",
-        "Teacher_count": 3,
-        "daniel the chin_count": 1
+        "Teacher_count": 3
       },
-      "attendedThisYear": 26
+      "attendedThisYear": 28
     },
     {
       "id": "15582281378698029156",
@@ -1904,29 +1904,29 @@
       "trophyCount": 128,
       "heartsReceived": 6,
       "heartsFromCounts": {
-        "daniel the chin_count": 1,
-        "Amara_count": 1,
         "Amara_name": "Amara",
-        "Xandra Han Tun_count": 1,
-        "Teacher_name": "Teacher",
-        "Xandra Han Tun_name": "Xandra Han Tun",
         "daniel the chin_name": "daniel the chin",
-        "Teacher_count": 3
+        "Xandra Han Tun_name": "Xandra Han Tun",
+        "Teacher_name": "Teacher",
+        "daniel the chin_count": 1,
+        "Teacher_count": 3,
+        "Xandra Han Tun_count": 1,
+        "Amara_count": 1
       },
-      "attendedThisYear": 29
+      "attendedThisYear": 25
     },
     {
       "id": "15589612097373962855",
       "name": "Craig Chan",
-      "trophyCount": 72,
+      "trophyCount": 73,
       "heartsReceived": 4,
       "heartsFromCounts": {
         "Teacher_name": "Teacher",
-        "Teacher_count": 3,
         "Zin Zin_count": 1,
+        "Teacher_count": 3,
         "Zin Zin_name": "Zin Zin"
       },
-      "attendedThisYear": 34
+      "attendedThisYear": 35
     },
     {
       "id": "15767510113185887078",
@@ -1946,9 +1946,9 @@
       "heartsReceived": 15,
       "heartsFromCounts": {
         "Teacher_name": "Teacher",
-        "Teacher_count": 3,
+        "Caran Zay Lynn_count": 12,
         "Caran Zay Lynn_name": "Caran Zay Lynn",
-        "Caran Zay Lynn_count": 12
+        "Teacher_count": 3
       },
       "attendedThisYear": 31
     },
@@ -1969,24 +1969,24 @@
       "trophyCount": 368,
       "heartsReceived": 13,
       "heartsFromCounts": {
+        "Leon_123_name": "Leon_123",
+        "Andrian Win_name": "Andrian Win",
+        "Amara_name": "Amara",
+        "Xandra Han Tun_count": 1,
         "Andrian Win_count": 2,
-        "Kaung Myat Lin_count": 1,
+        "Teacher_count": 3,
         "Teacher_name": "Teacher",
+        "Amara_count": 1,
+        "Kaung Myat Lin_name": "Kaung Myat Lin",
         "Xandra Han Tun_name": "Xandra Han Tun",
+        "Lily htike_name": "Lily htike",
         "Madi_name": "Madi",
         "daniel the chin_count": 1,
-        "Leon_123_count": 1,
-        "Andrian Win_name": "Andrian Win",
         "Lily htike_count": 1,
-        "Xandra Han Tun_count": 1,
-        "Leon_123_name": "Leon_123",
         "Madi_count": 2,
-        "Amara_count": 1,
-        "Lily htike_name": "Lily htike",
-        "daniel the chin_name": "daniel the chin",
-        "Teacher_count": 3,
-        "Amara_name": "Amara",
-        "Kaung Myat Lin_name": "Kaung Myat Lin"
+        "Kaung Myat Lin_count": 1,
+        "Leon_123_count": 1,
+        "daniel the chin_name": "daniel the chin"
       },
       "attendedThisYear": 36
     },
@@ -1996,8 +1996,8 @@
       "trophyCount": 22,
       "heartsReceived": 3,
       "heartsFromCounts": {
-        "Teacher_name": "Teacher",
-        "Teacher_count": 3
+        "Teacher_count": 3,
+        "Teacher_name": "Teacher"
       },
       "attendedThisYear": 7
     },
@@ -2039,27 +2039,27 @@
       "trophyCount": 354,
       "heartsReceived": 5,
       "heartsFromCounts": {
+        "daniel the chin_count": 1,
         "Teacher_count": 3,
-        "daniel the chin_name": "daniel the chin",
-        "Teacher_name": "Teacher",
-        "Amara_count": 1,
         "Amara_name": "Amara",
-        "daniel the chin_count": 1
+        "Amara_count": 1,
+        "Teacher_name": "Teacher",
+        "daniel the chin_name": "daniel the chin"
       },
       "attendedThisYear": 34
     },
     {
       "id": "18371634261141600932",
       "name": "Ethan Lwin",
-      "trophyCount": 65,
+      "trophyCount": 66,
       "heartsReceived": 4,
       "heartsFromCounts": {
-        "daniel the chin_name": "daniel the chin",
         "Teacher_name": "Teacher",
         "Teacher_count": 3,
-        "daniel the chin_count": 1
+        "daniel the chin_count": 1,
+        "daniel the chin_name": "daniel the chin"
       },
-      "attendedThisYear": 23
+      "attendedThisYear": 24
     },
     {
       "id": "78PyDa7UUeYYp00191Fp4LTsSJm1",
@@ -2211,12 +2211,12 @@
   ],
   "attendanceTotals": {
     "month": {
-      "attended": 273,
-      "absent": 129
+      "attended": 298,
+      "absent": 175
     },
     "year": {
-      "attended": 2612,
-      "absent": 1343
+      "attended": 2614,
+      "absent": 1417
     }
   }
 }
