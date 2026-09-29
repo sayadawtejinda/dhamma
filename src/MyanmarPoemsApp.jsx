@@ -3,6 +3,13 @@ import { doc, setDoc, updateDoc, serverTimestamp, getDoc, arrayUnion, increment 
 import { db } from './firebase';
 import { presenceIntervalMs } from './presenceDay';
 import { rosterDocRefByUid, migrateNameKeyedRosterDoc } from './studentRosterIdentity';
+
+// 25 trophies is the ceiling for the 48 poems (see GROUP_APP_PART_MAX/
+// GROUP_APP_PART_UNIT_COUNT in TutoringApp.jsx) -- trophies are earned
+// proportionally, not 1 per poem, so a trophy count only tells us a MINIMUM
+// number of poems that must already be confirmed (not which specific ones).
+const TUTORING_STUDENTS_PATH = 'artifacts/dhamma-tutoring-app/public/data/students';
+const POEMS_TROPHY_MAX = 25;
 import OnlineStatusWidget from './OnlineStatusWidget';
 import { spawnFlyingCoins, trackLastClickPoint } from './flyingCoins';
 
@@ -2018,6 +2025,7 @@ export default function MyanmarPoemsApp({ entryRequest, onExit, hideOwnOnlineBad
         let newPoemsCountedThisSession = 0;
         let poemStartTime = Date.now();
         let audioCoinAwardedForThisPoem = false;
+        let audioCoinTimer = null; // fires the listen-coin at 60s if the audio hasn't finished by then
         // Lowered from 15s -- many of these poems are short enough that a
         // student reciting fluently (especially a familiar one, or after
         // the novelty of the first poem wears off) clears them in well
@@ -2071,10 +2079,26 @@ export default function MyanmarPoemsApp({ entryRequest, onExit, hideOwnOnlineBad
                 const carried = await migrateNameKeyedRosterDoc(db, MPOEMS_ROSTER_PATH, studentUid, studentName, sanitizeMpoemsKey);
                 if (carried) await setDoc(progressRosterRef, carried, { merge: true });
             } catch (e) { console.error('Roster migration error:', e); }
+            // Trophy-confirmed floor: however many poems the teacher's trophy
+            // grant already guarantees (proportional, so this is a minimum,
+            // not necessarily this exact set of poems) count as done too --
+            // shown the same way no matter when the app is opened or which
+            // device recorded the original self-report.
+            let trophyFloorCount = 0;
+            if (studentUid) {
+                try {
+                    const tSnap = await getDoc(doc(db, TUTORING_STUDENTS_PATH, studentUid));
+                    const trophyCount = tSnap.exists() ? (tSnap.data().earnedTrophies?.['Poem'] || 0) : 0;
+                    trophyFloorCount = Math.floor((trophyCount * poemsData.length) / POEMS_TROPHY_MAX);
+                } catch (e) { console.error('Poem trophy fetch error:', e); }
+            }
             return getDoc(progressRosterRef).then(snap => {
                 const data = snap.exists() ? snap.data() : {};
                 completedPoemIds = Array.isArray(data.completedPoemIds) ? data.completedPoemIds : [];
                 recitedDates = (data.recitedDates && typeof data.recitedDates === 'object') ? data.recitedDates : {};
+                for (let i = 0; i < trophyFloorCount && i < poemsData.length; i++) {
+                    if (!completedPoemIds.includes(i)) completedPoemIds.push(i);
+                }
                 coinBalanceRef.current = data.coinBalance || 0;
                 setMyCoinBalance(coinBalanceRef.current);
                 const nextNewIndex = poemsData.findIndex((_, i) => !completedPoemIds.includes(i));
@@ -2095,6 +2119,7 @@ export default function MyanmarPoemsApp({ entryRequest, onExit, hideOwnOnlineBad
 
             poemStartTime = Date.now();
             audioCoinAwardedForThisPoem = false;
+            clearTimeout(audioCoinTimer);
             const doneTag = completedPoemIds.includes(currentPoemIndex) ? ' ✅ Completed' : '';
             poemTitle.textContent = `${currentPoemIndex + 1}. ${poem.title}${doneTag}`;
             poemContainer.innerHTML = '';
@@ -2339,6 +2364,7 @@ export default function MyanmarPoemsApp({ entryRequest, onExit, hideOwnOnlineBad
             if (currentAudio && !currentAudio.paused) {
                 currentAudio.pause();
                 currentAudio.currentTime = 0;
+                clearTimeout(audioCoinTimer);
                 alertUser("အသံကို ရပ်လိုက်ပါပြီ။");
                 return;
             }
@@ -2369,16 +2395,24 @@ export default function MyanmarPoemsApp({ entryRequest, onExit, hideOwnOnlineBad
                  console.error("Audio playback error:", error);
             });
 
+            // Coin for listening now needs the audio to actually finish, or 60
+            // seconds of listening, whichever comes first -- not just tapping
+            // play (a student could previously tap play and immediately skip
+            // away with the coin already banked).
             currentAudio.onplaying = () => {
                 alertUser(`"${poem.title}" ကို ဖွင့်နေပါသည်...`);
                 if (!audioCoinAwardedForThisPoem) {
-                    audioCoinAwardedForThisPoem = true;
-                    awardCoins(20);
+                    clearTimeout(audioCoinTimer);
+                    audioCoinTimer = setTimeout(() => {
+                        if (!audioCoinAwardedForThisPoem) { audioCoinAwardedForThisPoem = true; awardCoins(20); }
+                    }, 60000);
                 }
             }
             
             currentAudio.onended = () => {
                 alertUser("အသံဖွင့်ခြင်း ပြီးဆုံးပါပြီ။");
+                clearTimeout(audioCoinTimer);
+                if (!audioCoinAwardedForThisPoem) { audioCoinAwardedForThisPoem = true; awardCoins(20); }
             }
         }
         
