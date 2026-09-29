@@ -273,7 +273,7 @@ const GROUP_APP_PART_MAX = {
     soundpractice: 16, // Quiz Mode Levels 1-8, 2 trophies per level passed
   },
   'speakingmyanmar://': {
-    myanmarpoems: 25,
+    myanmarpoems: 24, // 2 self-recited poems = 1 trophy (48 poems / 2), confirmed by the teacher
     numberlearning: 16,
     animalsound: 5,
     burmeselearninggames: 20,

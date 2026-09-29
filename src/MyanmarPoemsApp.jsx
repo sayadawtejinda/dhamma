@@ -4,12 +4,11 @@ import { db } from './firebase';
 import { presenceIntervalMs } from './presenceDay';
 import { rosterDocRefByUid, migrateNameKeyedRosterDoc } from './studentRosterIdentity';
 
-// 25 trophies is the ceiling for the 48 poems (see GROUP_APP_PART_MAX/
-// GROUP_APP_PART_UNIT_COUNT in TutoringApp.jsx) -- trophies are earned
-// proportionally, not 1 per poem, so a trophy count only tells us a MINIMUM
-// number of poems that must already be confirmed (not which specific ones).
+// 2 self-recited poems = 1 trophy (confirmed by the teacher; matches
+// GROUP_APP_PART_MAX/GROUP_APP_PART_UNIT_COUNT in TutoringApp.jsx: 24
+// trophies for 48 poems).
 const TUTORING_STUDENTS_PATH = 'artifacts/dhamma-tutoring-app/public/data/students';
-const POEMS_TROPHY_MAX = 25;
+const POEMS_PER_TROPHY = 2;
 import OnlineStatusWidget from './OnlineStatusWidget';
 import { spawnFlyingCoins, trackLastClickPoint } from './flyingCoins';
 
@@ -2089,7 +2088,7 @@ export default function MyanmarPoemsApp({ entryRequest, onExit, hideOwnOnlineBad
                 try {
                     const tSnap = await getDoc(doc(db, TUTORING_STUDENTS_PATH, studentUid));
                     const trophyCount = tSnap.exists() ? (tSnap.data().earnedTrophies?.['Poem'] || 0) : 0;
-                    trophyFloorCount = Math.floor((trophyCount * poemsData.length) / POEMS_TROPHY_MAX);
+                    trophyFloorCount = trophyCount * POEMS_PER_TROPHY;
                 } catch (e) { console.error('Poem trophy fetch error:', e); }
             }
             return getDoc(progressRosterRef).then(snap => {
