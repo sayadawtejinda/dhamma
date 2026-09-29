@@ -700,6 +700,7 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
   // to the next unread chapter and show earlier ones as already completed.
   const [tutoringStudentUid, setTutoringStudentUid] = useState(null);
   const [teacherCompletedChapters, setTeacherCompletedChapters] = useState(0); // whole chapters (both sheets) the teacher has confirmed done
+  const [trophiedSheetCount, setTrophiedSheetCount] = useState(0); // sheets actually trophied so far (1 trophy = 1 sheet, in reading order) -- see "Fix Completed Chapter" listener
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (user) => {
@@ -1018,6 +1019,16 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
       const completedUnits = snap.data().completedUnits || {};
       const best = READER_LESSON_KEYS.reduce((max, key) => Math.max(max, completedUnits[key] || 0), 0);
       setTeacherCompletedChapters(best);
+      // "Completed" (the blue chapter marker, the coin halving, the
+      // already-read banner) is driven by trophies actually earned, not by
+      // completedUnits/session reports -- a chapter/sheet the teacher hasn't
+      // trophied yet isn't confirmed done, however far the student has
+      // read. 1 trophy = 1 sheet, awarded in reading order (Ch1 Sheet A,
+      // Ch1 Sheet B, Ch2 Sheet A, ...), matching how Reader trophies are
+      // requested/approved (2 per finished chapter).
+      const earnedTrophies = snap.data().earnedTrophies || {};
+      const trophyCount = READER_LESSON_KEYS.reduce((max, key) => Math.max(max, earnedTrophies[key] || 0), 0);
+      setTrophiedSheetCount(Math.max(0, Math.floor(trophyCount)));
     }, e => console.error('Teacher completed-chapter listen error:', e));
     return () => unsub();
   }, [tutoringStudentUid]);
@@ -1046,29 +1057,19 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
     });
   }, [teacherCompletedChapters, tutoringStudentUid]);
 
-  // Merge the teacher's confirmed count with this app's own record of fully
-  // finished chapters (both sheets, via READER_SCORES_PATH) so "already
-  // completed" checks and the chapter picker reflect whichever is further.
-  // teacherCompletedChapters itself isn't a full-chapters count -- a whole
-  // number means that chapter's Sheet A is done but Sheet B isn't (so the
-  // chapter itself isn't finished yet), only the .5 form means the chapter
-  // is fully done.
-  let ownCompletedThrough = 0;
-  while (completedFullChapters.has(ownCompletedThrough + 1)) ownCompletedThrough++;
-  const teacherFullChaptersDone = Number.isInteger(teacherCompletedChapters)
-    ? Math.max(0, teacherCompletedChapters - 1)
-    : Math.floor(teacherCompletedChapters);
-  const effectiveCompletedThrough = Math.max(ownCompletedThrough, teacherFullChaptersDone);
-  const effectiveCompletedFullChapters = effectiveCompletedThrough > ownCompletedThrough
-    ? new Set([...completedFullChapters, ...Array.from({ length: effectiveCompletedThrough }, (_, i) => i + 1)])
-    : completedFullChapters;
-  const effectiveCompletedChapterSheets = effectiveCompletedThrough > 0
-    ? new Set([
-        ...completedChapterSheets,
-        ...Array.from({ length: effectiveCompletedThrough }, (_, i) => i + 1).flatMap(c => [chapterSheetKey(c, 'A'), chapterSheetKey(c, 'B')])
-      ])
-    : completedChapterSheets;
-
+  // "Completed" sheets/chapters -- driven purely by trophies actually
+  // earned (trophiedSheetCount, set above), not by the student's own score
+  // docs or by completedUnits/session reports. A chapter isn't shown as
+  // done until the teacher has trophied it.
+  const effectiveCompletedChapterSheets = new Set();
+  for (let i = 0; i < trophiedSheetCount; i++) {
+    const chNum = Math.floor(i / 2) + 1;
+    const sheetName = i % 2 === 0 ? 'A' : 'B';
+    effectiveCompletedChapterSheets.add(chapterSheetKey(chNum, sheetName));
+  }
+  const effectiveCompletedFullChapters = new Set(
+    Array.from({ length: Math.floor(trophiedSheetCount / 2) }, (_, i) => i + 1)
+  );
   // Chapters are meant to be studied in order, but a capable student is
   // allowed to read ahead of that -- this isn't a hard lock. Whether
   // reading ahead actually earns a trophy is a separate, teacher-approved
