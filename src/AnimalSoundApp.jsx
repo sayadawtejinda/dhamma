@@ -173,7 +173,7 @@ const AS_APP_BODY_HTML = `
             <div class="flex flex-wrap justify-center items-center gap-6 mb-6">
                 <!-- REPLAY BUTTON -->
                 <button id="replay-sound-btn" 
-                        title="အသံပြန်နားထောင်ရန်"
+                        title="မေးခွန်း/အသံ ပြန်နားထောင်ရန်"
                         class="w-16 h-16 flex items-center justify-center bg-blue-100 text-blue-600 rounded-full shadow-md transition-all transform hover:scale-110 active:scale-95 disabled:opacity-50 disabled:hover:scale-100"
                         disabled>
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-8 h-8">
@@ -842,7 +842,11 @@ export default function AnimalSoundApp({ entryRequest, onExit, hideOwnOnlineBadg
                         });
                     });
                 } else {
-                    replaySoundBtn.disabled = true; 
+                    // TEXT questions have no animal-sound clip to repeat, but
+                    // the spoken Burmese question prompt itself can still be
+                    // replayed -- kids asked for this since one listen often
+                    // isn't enough to catch it.
+                    replaySoundBtn.disabled = false;
 
                     readChoicesSequentially(quizChoices, 0, () => {
                         isPlaying = false;
@@ -854,7 +858,9 @@ export default function AnimalSoundApp({ entryRequest, onExit, hideOwnOnlineBadg
         }
 
         function replaySound() {
-            if (isQuizMode && currentQuestion && currentQuestion.type === 'SOUND' && correctAnimalIndex !== -1 && !isPlaying) {
+            if (!isQuizMode || !currentQuestion || isPlaying) return;
+
+            if (currentQuestion.type === 'SOUND' && correctAnimalIndex !== -1) {
                 stopCurrentPlayback();
                 
                 const correctAnimal = ANIMAL_DATA[correctAnimalIndex];
@@ -875,6 +881,23 @@ export default function AnimalSoundApp({ entryRequest, onExit, hideOwnOnlineBadg
                     if (!hasAnswered) {
                         replaySoundBtn.disabled = false;
                         toggleEnglishBtn.disabled = false; 
+                    }
+                });
+            } else {
+                // Replay the spoken Burmese question prompt itself.
+                stopCurrentPlayback();
+
+                isPlaying = true;
+                replaySoundBtn.disabled = true;
+                askQuestionBtn.disabled = true;
+                toggleEnglishBtn.disabled = true;
+
+                playSegment(quizAudioBuffer, currentQuestion.audioStart, QUIZ_PROMPT_DURATION, () => {
+                    isPlaying = false;
+                    const hasAnswered = feedbackMessageElement.textContent.length > 0;
+                    if (!hasAnswered) {
+                        replaySoundBtn.disabled = false;
+                        toggleEnglishBtn.disabled = false;
                     }
                 });
             }
