@@ -1766,9 +1766,21 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
             ) : (
               <div className="space-y-2 mb-4 max-h-64 overflow-y-auto text-left">
                 {recentVisitors.map((v, i) => (
-                  <div key={i} className="flex items-center justify-between bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2">
-                    <span className="font-semibold text-gray-800">{v.name}</span>
-                    <span className="text-xs text-gray-400">{new Date(v.visitedAt).toLocaleString()}</span>
+                  <div key={i} className="flex items-center justify-between gap-2 bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2">
+                    <div className="min-w-0">
+                      <span className="font-semibold text-gray-800 block truncate">{v.name}</span>
+                      <span className="text-xs text-gray-400">{new Date(v.visitedAt).toLocaleString()}</span>
+                    </div>
+                    {/* Visit them back -- reachable from here since a
+                        visitor isn't always still online to find in the
+                        students list above. */}
+                    <button
+                      onClick={() => { setShowVisitorsPanel(false); handleVisitStudent(v.name); }}
+                      className="flex-shrink-0 text-xs font-semibold text-emerald-700 bg-white hover:bg-emerald-100 border border-emerald-300 rounded-full px-2 py-1"
+                      title={`Visit ${v.name}'s Shrine Room back`}
+                    >
+                      👣 Visit back
+                    </button>
                   </div>
                 ))}
               </div>

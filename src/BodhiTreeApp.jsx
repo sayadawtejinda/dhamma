@@ -750,7 +750,7 @@ export default function BodhiTreeApp({ entryRequest, onExit }) {
         const targetSnap = await getDoc(targetRef);
         const existing = targetSnap.exists() ? (targetSnap.data().recentVisitors || []) : [];
         const others = existing.filter(v => v.name !== studentName);
-        const nextVisitors = [{ name: studentName, visitedAt: Date.now() }, ...others].slice(0, 10);
+        const nextVisitors = [{ name: studentName, uid: studentUid, visitedAt: Date.now() }, ...others].slice(0, 10);
         setDoc(targetRef, { recentVisitors: nextVisitors }, { merge: true }).catch(() => {});
       }
     } catch (e) {
@@ -992,9 +992,23 @@ export default function BodhiTreeApp({ entryRequest, onExit }) {
             ) : (
               <div className="space-y-2 mb-4 max-h-64 overflow-y-auto text-left">
                 {recentVisitors.map((v, i) => (
-                  <div key={i} className="flex items-center justify-between bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2">
-                    <span className="font-semibold text-gray-800">{v.name}</span>
-                    <span className="text-xs text-gray-400">{new Date(v.visitedAt).toLocaleString()}</span>
+                  <div key={i} className="flex items-center justify-between gap-2 bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2">
+                    <div className="min-w-0">
+                      <span className="font-semibold text-gray-800 block truncate">{v.name}</span>
+                      <span className="text-xs text-gray-400">{new Date(v.visitedAt).toLocaleString()}</span>
+                    </div>
+                    {/* Visit them back -- only possible for visits recorded
+                        after this uid field was added; older entries just
+                        don't show the button. */}
+                    {v.uid && (
+                      <button
+                        onClick={() => { setShowVisitorsPanel(false); handleVisitStudent(v.name, v.uid); }}
+                        className="flex-shrink-0 text-xs font-semibold text-emerald-700 bg-white hover:bg-emerald-100 border border-emerald-300 rounded-full px-2 py-1"
+                        title={`Visit ${v.name}'s Bodhi Tree back`}
+                      >
+                        👣 Visit back
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
