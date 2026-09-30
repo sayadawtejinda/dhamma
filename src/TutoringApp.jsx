@@ -7651,7 +7651,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     // Only the front of the queue (position 0) is ever the "current" one to
     // open here -- see the lessons listener's sort + the Available Lessons
     // render below, which only ever shows/opens that same position.
-    const pendingLesson = availableLessons[0]?.status === 'pending' ? availableLessons[0] : null;
+    const pendingLesson = (availableLessons[0]?.status === 'pending' && !isLessonStale(availableLessons[0])) ? availableLessons[0] : null;
     if (pendingLesson) {
       setShowLessonsPanel(true);
       handleStartLesson(pendingLesson);
@@ -9067,6 +9067,26 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       return bT - aT;
     });
     
+  // Shared staleness check -- a never-opened (still 'pending') lesson reads
+  // as stale once it's sat unopened past the day AFTER the student's own
+  // study time (see the Available Lessons render below for the long
+  // version of this reasoning). Factored out so the 📖 Latest Lesson
+  // button's glow/auto-open (hasNewOrActiveLesson/handleOpenLatestLesson)
+  // agrees with what the Available Lessons panel actually shows -- it used
+  // to just check status==='pending', so the button kept glowing/opening a
+  // lesson the panel itself already showed as gray/stale.
+  const isLessonStale = (lesson) => {
+    if (!lesson || lesson.status !== 'pending') return false;
+    const sentAtMs = lesson.sentAt?.toDate ? lesson.sentAt.toDate().getTime() : null;
+    const nowMs = Date.now();
+    const pastOwnSessionsSinceSent = (mySchedule || [])
+      .map(s => s.startTime?.toDate ? s.startTime.toDate().getTime() : null)
+      .filter(t => t != null && t <= nowMs && (sentAtMs == null || t >= sentAtMs));
+    const lastRelevantSessionMs = pastOwnSessionsSinceSent.length ? Math.max(...pastOwnSessionsSinceSent) : null;
+    const staleCutoffMs = lastRelevantSessionMs != null ? lastRelevantSessionMs + 24 * 60 * 60 * 1000 : (sentAtMs != null ? sentAtMs + 24 * 60 * 60 * 1000 : null);
+    return staleCutoffMs != null && nowMs > staleCutoffMs;
+  };
+
   const availableLessons = myLessons;
   // What actually SHOWS in the Available Lessons panel: everything except a
   // 🔜 Pre-send lesson that hasn't reached the front of its own queue yet --
@@ -9103,7 +9123,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
   // button actually opens) -- an older pending lesson further down the
   // list showing green on its own doesn't mean there's something new to
   // jump to right now, so it shouldn't make this button pulse either.
-  const hasNewOrActiveLesson = !!activeSession || availableLessons[0]?.status === 'pending';
+  const hasNewOrActiveLesson = !!activeSession || (availableLessons[0]?.status === 'pending' && !isLessonStale(availableLessons[0]));
 
   return (
     <div
@@ -9636,15 +9656,8 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
               // class the student could have actually studied this lesson
               // at. Falls back to the simple "24h after sent" rule if this
               // student has no matching schedule entry to go by.
-              const sentAtMs = lesson.sentAt?.toDate ? lesson.sentAt.toDate().getTime() : null;
               const isPendingStatus = lesson.status === 'pending';
-              const nowMs = Date.now();
-              const pastOwnSessionsSinceSent = (mySchedule || [])
-                .map(s => s.startTime?.toDate ? s.startTime.toDate().getTime() : null)
-                .filter(t => t != null && t <= nowMs && (sentAtMs == null || t >= sentAtMs));
-              const lastRelevantSessionMs = pastOwnSessionsSinceSent.length ? Math.max(...pastOwnSessionsSinceSent) : null;
-              const staleCutoffMs = lastRelevantSessionMs != null ? lastRelevantSessionMs + 24 * 60 * 60 * 1000 : (sentAtMs != null ? sentAtMs + 24 * 60 * 60 * 1000 : null);
-              const isStale = isPendingStatus && staleCutoffMs != null && nowMs > staleCutoffMs;
+              const isStale = isLessonStale(lesson);
               const isNew = isPendingStatus && !isStale;
               const divBg = isNew ? 'bg-emerald-50' : isStale ? 'bg-gray-100' : 'bg-yellow-50';
               const divBorder = isNew ? 'border-emerald-200' : isStale ? 'border-gray-300' : 'border-yellow-200';
