@@ -568,8 +568,11 @@ export default function AnimalSoundApp({ entryRequest, onExit, hideOwnOnlineBadg
             let remainder = score % POINTS_PER_LAP;
             
             if (score > 0 && remainder === 0) {
-                // Hit the finish line! (30, 60, 90...)
+                // Hit the finish line! (30, 60, 90...) -- this IS "winning a
+                // game", so exactly one trophy is recorded here, never more
+                // than once per lap.
                 car.style.left = '85%'; 
+                recordWin();
                 
                 // Reset to start after a delay for the next lap
                 setTimeout(() => {
@@ -936,7 +939,10 @@ export default function AnimalSoundApp({ entryRequest, onExit, hideOwnOnlineBadg
             if (isCorrect) {
                 score++;
                 awardCoins(20);
-                recordWin();
+                // One trophy is earned when the race car actually reaches
+                // the finish line (see updateRaceCarProgress), not for
+                // every correct answer -- "a game" means a full lap, not a
+                // single question.
                 cardElement.classList.add('correct-answer');
                 
                 const correctAnimal = ANIMAL_DATA[animalIndex];
