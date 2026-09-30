@@ -593,8 +593,9 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
           <button
             onClick={(e) => { e.stopPropagation(); handleVisitStudent(s.studentName); }}
             className="text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-full px-2 py-0.5"
+            title="Visit their Nature World and leave them a surprise gift"
           >
-            👣 Visit
+            📦 Send
           </button>
         )}
       />
@@ -741,6 +742,19 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
                         <span className="text-xs text-gray-400">{new Date(v.visitedAt).toLocaleString()}</span>
                       </div>
                       {isOpened && <span className="text-2xl" title={gift.name}>{gift.emoji}</span>}
+                      {/* Send a gift back to whoever visited -- same visit
+                          action as the online-students list, just reachable
+                          from here too, since a visitor isn't always still
+                          online/active to show up in that list. */}
+                      {!v.teacher && (
+                        <button
+                          onClick={() => { setShowVisitorsPanel(false); handleVisitStudent(v.name); }}
+                          className="flex-shrink-0 text-xs font-semibold text-emerald-700 bg-white hover:bg-emerald-100 border border-emerald-300 rounded-full px-2 py-1"
+                          title={`Visit ${v.name}'s Nature World and send them a gift back`}
+                        >
+                          📦 Send back
+                        </button>
+                      )}
                     </div>
                   );
                 })}
