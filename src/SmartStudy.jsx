@@ -2445,26 +2445,37 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
   }, [completionsList, allScores, classRoster]);
 
   const handleApproveStudentsWithCompletions = useCallback(async () => {
-    if (studentsWithCompletionsNotApproved.length === 0) return;
+    if (!classId) return;
     setIsLoading(true);
     try {
-      // Same bug as the join flow (see handleSelectClassFromPicker) --
-      // approving a student here used to never attach a tutoringStudentUid
-      // at all, so a name that exactly matches a current Tutoring student
-      // silently ended up "approved" but unlinked. Look that up once here
-      // so an exact-name match gets linked immediately instead of needing
-      // a separate manual "Link to Tutoring" pass right after.
-      let tutoringByName = {};
-      try {
-        const tSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'students'));
-        tSnap.docs.forEach(d => {
-          const n = (d.data().name || '').trim().toLowerCase();
-          const active = d.data().isActive === true || d.data().isActive === 'pending';
-          if (n && active) tutoringByName[n] = d.id;
-        });
-      } catch (e) { console.error('Error loading Tutoring students for auto-link:', e); }
+      // The button's list (studentsWithCompletionsNotApproved) comes from
+      // whatever scores/completions/roster this tab already has loaded,
+      // which can be stale if this screen has been open a while (the
+      // teacher-side data here only polls every 10 minutes for cost). Acting
+      // on a stale list is how an already-renamed student's OLD name got
+      // re-created as a fresh, unlinked roster entry -- confirmed live.
+      // So re-check against Firestore right now instead of trusting it.
+      const [scoresSnap, compSnap, rosterSnap, tSnap] = await Promise.all([
+        getDocs(query(collection(db, 'artifacts', appId, 'public', 'data', 'scores'), where('classId', '==', classId))),
+        getDocs(query(collection(db, 'artifacts', appId, 'public', 'data', 'quizCompletions'), where('classId', '==', classId))),
+        getDocs(query(getRosterCollectionRef(), where('classId', '==', classId), where('status', '==', 'approved'))),
+        getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'students')),
+      ]);
+      const approvedNames = new Set(rosterSnap.docs.map(d => (d.data().studentName || '').toLowerCase()));
+      const freshNames = new Set([
+        ...scoresSnap.docs.map(d => d.data().studentName),
+        ...compSnap.docs.map(d => d.data().studentName),
+      ].filter(n => n && !approvedNames.has(n.toLowerCase())));
 
-      for (const name of studentsWithCompletionsNotApproved) {
+      let tutoringByName = {};
+      tSnap.docs.forEach(d => {
+        const n = (d.data().name || '').trim().toLowerCase();
+        const active = d.data().isActive === true || d.data().isActive === 'pending';
+        if (n && active) tutoringByName[n] = d.id;
+      });
+
+      const approvedNow = [];
+      for (const name of freshNames) {
         const rRef = getRosterDocRef(classId, name);
         const snap = await getDoc(rRef);
         const match = tutoringByName[name.trim().toLowerCase()];
@@ -2474,10 +2485,20 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
         } else {
           await setDoc(rRef, { classId, studentName: name, status: 'approved', joinedAt: Date.now(), lastSeen: Date.now(), ...linkFields });
         }
+        approvedNow.push({ classId, studentName: name, status: 'approved', ...linkFields });
       }
-      setModal({ message: `✅ Approved ${studentsWithCompletionsNotApproved.length} student(s).`, type: 'success', visible: true });
+      // Patch locally too, same as linking, so the list/button updates
+      // instantly instead of needing the next 10-minute poll.
+      if (approvedNow.length > 0) {
+        setClassRoster(prev => {
+          const byKey = new Map(prev.map(s => [`${s.classId}_${s.studentName}`, s]));
+          approvedNow.forEach(s => byKey.set(`${s.classId}_${s.studentName}`, { ...byKey.get(`${s.classId}_${s.studentName}`), ...s }));
+          return [...byKey.values()];
+        });
+      }
+      setModal({ message: approvedNow.length > 0 ? `✅ Approved ${approvedNow.length} student(s).` : `Already up to date -- nothing new to approve.`, type: 'success', visible: true });
     } catch(e) { console.error(e); } finally { setIsLoading(false); }
-  }, [studentsWithCompletionsNotApproved, classId]);
+  }, [classId]);
 
   // Core rename logic, parameterized by class so it can run for ANY class —
   // not just whichever one the teacher currently has open. Silent: no
