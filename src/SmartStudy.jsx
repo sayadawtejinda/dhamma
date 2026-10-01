@@ -2461,6 +2461,12 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
         getDocs(query(getRosterCollectionRef(), where('classId', '==', classId), where('status', '==', 'approved'))),
         getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'students')),
       ]);
+      // While we're already fetching these fresh, use them to replace this
+      // screen's own allScores/completionsList too -- fixes the leaderboard
+      // and any other scores-derived display showing a renamed/approved
+      // student's old state, without waiting for the next 10-minute poll.
+      setAllScores(scoresSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setCompletionsList(compSnap.docs.map(d => ({ id: d.id, ...d.data() })));
       const approvedNames = new Set(rosterSnap.docs.map(d => (d.data().studentName || '').toLowerCase()));
       const freshNames = new Set([
         ...scoresSnap.docs.map(d => d.data().studentName),
@@ -2619,6 +2625,12 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
     setAllScores(patchName);
     setCompletionsList(patchName);
     setAllReflections(patchName);
+    // The local patch above covers everything THIS action is known to have
+    // changed; also kick off a background full refresh (not awaited, so it
+    // never delays the success message) so anything else on screen that
+    // depends on allScores/etc. -- the leaderboard, heart totals -- catches
+    // up too instead of staying stale until the next 10-minute poll.
+    setClassRefreshKey(k => k + 1);
     if (oldName === newName) {
       setModal({ message: `Linked "${newName}" to Tutoring.`, type: 'success', visible: true });
       return;
