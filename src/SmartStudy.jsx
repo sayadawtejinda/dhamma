@@ -3002,6 +3002,14 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
 
   const handleSelectClassFromPicker = useCallback(async (targetId) => {
     const enteredName = (entryRequest?.studentName || userName || '').trim();
+    // Carried straight through from TutoringApp's deep link -- without this,
+    // a student entering via Tutoring got marked linkedToTutoring:true with
+    // NO uid attached at all (a real bug, confirmed live: dozens of
+    // students showed "linked" in the roster but had no tutoringStudentUid,
+    // silently breaking name-rename sync, coin-deposit name resolution, and
+    // the Lesson Bank's own "Smart Study Lesson" progress auto-fill for
+    // them -- all of which depend on this uid, not just the flag).
+    const tutoringStudentUid = entryRequest?.studentUid || null;
     if (!enteredName || !studentAgeLevel) { setModal({ message: 'Missing name or age level.', type: 'error', visible: true }); return; }
     // Whatever class the student tapped, if the teacher currently has one
     // class "open" (Auto-Approve ON), that's where every student goes —
@@ -3017,16 +3025,16 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
       const docSnap = await getDoc(rosterDocRef);
       if (docSnap.exists()) {
         const data = docSnap.data();
-        if (data.status !== 'approved' || !data.linkedToTutoring) {
+        if (data.status !== 'approved' || !data.linkedToTutoring || (tutoringStudentUid && !data.tutoringStudentUid)) {
           // Coming in through Tutoring means this student is already
           // verified — always approve and mark as linked immediately.
-          await updateDoc(rosterDocRef, { status: 'approved', linkedToTutoring: true, lastSeen: Date.now() });
+          await updateDoc(rosterDocRef, { status: 'approved', linkedToTutoring: true, tutoringStudentUid, lastSeen: Date.now() });
         } else {
           updateDoc(rosterDocRef, { lastSeen: Date.now() });
         }
         setClassId(actualTargetId); setUserName(enteredName); setView('studentLesson');
       } else {
-        await setDoc(rosterDocRef, { classId: actualTargetId, studentName: enteredName, studentAgeLevel: studentAgeLevel, status: 'approved', linkedToTutoring: true, joinedAt: Date.now(), lastSeen: Date.now() });
+        await setDoc(rosterDocRef, { classId: actualTargetId, studentName: enteredName, studentAgeLevel: studentAgeLevel, status: 'approved', linkedToTutoring: true, tutoringStudentUid, joinedAt: Date.now(), lastSeen: Date.now() });
         cleanupStrayClassRosterEntries(enteredName, actualTargetId);
         setClassId(actualTargetId); setUserName(enteredName); setView('studentLesson');
       }
