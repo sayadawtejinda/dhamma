@@ -1859,14 +1859,13 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
   // after they save a score / send a heart themselves, via classRefreshKey).
   // The student's OWN scores stay live (separate listener below), and the
   // teacher's view stays live -- one person, and they watch it during class.
-  // Reverted back to live for the teacher (was switched to the same
-  // snapshot+10-min-poll regime as students for cost reasons) -- the
-  // teacher's own admin actions here (approving, linking a renamed
-  // student) need the scores list to be actually current, and the
-  // snapshot file is only regenerated once a week. One teacher's live
-  // listener is a small, acceptable cost next to the student-side savings,
-  // which this does NOT touch -- students still read the snapshot/poll.
-  const teacherLive = entryRequest?.mode === 'teacher';
+  // Teacher reads the weekly snapshot + 10-min polling too, same as
+  // students (cost) -- the teacher explicitly chose this over a live
+  // listener after seeing what it fixes: renames/approvals still land
+  // correctly, they just don't show on the teacher's own screen until the
+  // next weekly snapshot refresh (or a manual "npm run snapshot:weekly").
+  // Briefly reverted to live and reverted back on the teacher's own call.
+  const teacherLive = false;
   const isActiveRef = useRef(isActive);
   useEffect(() => { isActiveRef.current = isActive; }, [isActive]);
   const lastClassLoadRef = useRef(0);
