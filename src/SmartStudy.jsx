@@ -2448,13 +2448,31 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
     if (studentsWithCompletionsNotApproved.length === 0) return;
     setIsLoading(true);
     try {
+      // Same bug as the join flow (see handleSelectClassFromPicker) --
+      // approving a student here used to never attach a tutoringStudentUid
+      // at all, so a name that exactly matches a current Tutoring student
+      // silently ended up "approved" but unlinked. Look that up once here
+      // so an exact-name match gets linked immediately instead of needing
+      // a separate manual "Link to Tutoring" pass right after.
+      let tutoringByName = {};
+      try {
+        const tSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'students'));
+        tSnap.docs.forEach(d => {
+          const n = (d.data().name || '').trim().toLowerCase();
+          const active = d.data().isActive === true || d.data().isActive === 'pending';
+          if (n && active) tutoringByName[n] = d.id;
+        });
+      } catch (e) { console.error('Error loading Tutoring students for auto-link:', e); }
+
       for (const name of studentsWithCompletionsNotApproved) {
         const rRef = getRosterDocRef(classId, name);
         const snap = await getDoc(rRef);
+        const match = tutoringByName[name.trim().toLowerCase()];
+        const linkFields = match ? { linkedToTutoring: true, tutoringStudentUid: match } : {};
         if (snap.exists()) {
-          await updateDoc(rRef, { status: 'approved' });
+          await updateDoc(rRef, { status: 'approved', ...(match && !snap.data().tutoringStudentUid ? linkFields : {}) });
         } else {
-          await setDoc(rRef, { classId, studentName: name, status: 'approved', joinedAt: Date.now(), lastSeen: Date.now() });
+          await setDoc(rRef, { classId, studentName: name, status: 'approved', joinedAt: Date.now(), lastSeen: Date.now(), ...linkFields });
         }
       }
       setModal({ message: `✅ Approved ${studentsWithCompletionsNotApproved.length} student(s).`, type: 'success', visible: true });
