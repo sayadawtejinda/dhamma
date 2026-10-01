@@ -750,6 +750,44 @@ const getStudentAttendanceForEntry = (entry, studentUid, sessions) => {
   return 'absent'; // legacy 'offline' placeholder entries count as absent unless overridden
 };
 
+// A student's weekly slot (recurringScheduleCollection) replaces creating a
+// new dated teacherSchedule doc every week -- this fills in a real-looking
+// occurrence for any date in range that doesn't already have a real dated
+// doc, so anything that reads "the schedule" (the attendance bar, weekly
+// views) keeps working across the cutover without needing its own special
+// case. Mirrors synthesizeOccurrencesFromRecurringSchedule in
+// scripts/generate-weekly-snapshot.mjs -- keep the two in sync by hand.
+const synthesizeScheduleOccurrences = (recurringSlots, realSchedule, rangeStart, rangeEnd) => {
+  const covered = new Set();
+  realSchedule.forEach(e => {
+    const d = e.startTime.toDate();
+    covered.add(`${e.studentUid}_${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`);
+  });
+  const synthetic = [];
+  (recurringSlots || []).forEach(slot => {
+    const [sh, sm] = (slot.startTime || '00:00').split(':').map(Number);
+    const [eh, em] = (slot.endTime || '00:00').split(':').map(Number);
+    const cursor = new Date(rangeStart);
+    while (cursor <= rangeEnd) {
+      if (cursor.getDay() === slot.dayOfWeek) {
+        const dateKey = `${slot.studentUid}_${cursor.getFullYear()}-${cursor.getMonth()}-${cursor.getDate()}`;
+        if (!covered.has(dateKey)) {
+          synthetic.push({
+            id: `synthetic-${slot.id}-${dateKey}`,
+            studentUid: slot.studentUid,
+            studentName: slot.studentName,
+            startTime: Timestamp.fromDate(new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate(), sh, sm)),
+            endTime: Timestamp.fromDate(new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate(), eh, em)),
+            overrideStatus: null,
+          });
+        }
+      }
+      cursor.setDate(cursor.getDate() + 1);
+    }
+  });
+  return synthetic;
+};
+
 const toLocalDateString = (date) => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -764,7 +802,13 @@ const studentsCollection = collection(db, `${publicDataPath}/students`);
 const lessonsCollection = collection(db, `${publicDataPath}/lessons`); 
 const sessionsCollection = collection(db, `${publicDataPath}/studySessions`);
 const lessonBankCollection = collection(db, `${publicDataPath}/lessonBank`); 
-const teacherScheduleCollection = collection(db, `${publicDataPath}/teacherSchedule`); 
+const teacherScheduleCollection = collection(db, `${publicDataPath}/teacherSchedule`);
+// One persistent "this is when Student X comes" doc per weekly slot (see
+// migrate-to-recurring-schedule.mjs) -- replaces creating a new dated
+// teacherSchedule doc for every week's occurrence. teacherSchedule itself is
+// left untouched as the historical record for dates before this existed.
+const recurringScheduleCollection = collection(db, `${publicDataPath}/recurringSchedule`);
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const groupsCollection = collection(db, `${publicDataPath}/studentGroups`);
 const announcementsCollection = collection(db, `${publicDataPath}/announcements`);
 const starAnnouncementsCollection = collection(db, `${publicDataPath}/starAnnouncements`);
@@ -1328,7 +1372,8 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
   const [students, setStudents] = useState([]);
   const [lessonBank, setLessonBank] = useState([]); 
   const [sessions, setSessions] = useState([]); 
-  const [teacherSchedule, setTeacherSchedule] = useState([]); 
+  const [teacherSchedule, setTeacherSchedule] = useState([]);
+  const [recurringSchedule, setRecurringSchedule] = useState([]);
   const [groups, setGroups] = useState([]); 
   const [viewMode, setViewMode] = useState('send'); 
   const [reportTab, setReportTab] = useState('feedback'); 
@@ -1458,15 +1503,12 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
   const [scheduleStudentSearch, setScheduleStudentSearch] = useState(''); 
   const [isScheduleDropdownOpen, setIsScheduleDropdownOpen] = useState(false); 
   const [manualStudentName, setManualStudentName] = useState('');
-  const [manualDate, setManualDate] = useState(toLocalDateString(new Date()));
+  // A weekly slot, not a date -- see recurringScheduleCollection. Defaults
+  // to today's weekday so a fresh form needs the least editing for the
+  // common case of adding someone to today's regular time.
+  const [scheduleDayOfWeek, setScheduleDayOfWeek] = useState(() => new Date().getDay());
   const [manualStartTime, setManualStartTime] = useState('09:00');
   const [manualEndTime, setManualEndTime] = useState('10:00');
-  const [isRecurring, setIsRecurring] = useState(false);
-  const [recurEndDate, setRecurEndDate] = useState(() => {
-    const d = new Date();
-    d.setMonth(d.getMonth() + 3); 
-    return toLocalDateString(d);
-  });
 
   const [showDeleteModal, setShowDeleteModal] = useState({ isOpen: false, id: null, title: '', type: '' });
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
@@ -1747,6 +1789,15 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
     });
     return () => unsubscribe();
   }, [user.uid]);
+
+  useEffect(() => {
+    // One doc per weekly slot (~1 per student) -- small, so live is cheap,
+    // unlike the capped teacherSchedule listener above.
+    const unsubscribe = onSnapshot(recurringScheduleCollection, (snapshot) => {
+      setRecurringSchedule(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     if (editingLessonId) {
@@ -2717,79 +2768,40 @@ Each one will see the Teacher in their Visitors list, with a gift waiting to ope
       studentName = manualStudentName;
     }
 
-    if (!manualDate || !manualStartTime || !manualEndTime) return;
+    if (scheduleDayOfWeek === '' || scheduleDayOfWeek == null || !manualStartTime || !manualEndTime) return;
 
+    // A persistent weekly slot, not a batch of dated occurrences -- one doc
+    // per student (or per group member) that Today/This Week map onto real
+    // dates on the fly (see recurringScheduleCollection). No recurrenceId,
+    // no end date: it just keeps applying every week until the teacher
+    // edits or deletes it.
     const executeAdd = async () => {
-      const [startHour, startMinute] = manualStartTime.split(':').map(Number);
-      const [endHour, endMinute] = manualEndTime.split(':').map(Number);
-
       try {
-        const [year, month, day] = manualDate.split('-').map(Number);
-        const baseStartDate = new Date(year, month - 1, day, startHour, startMinute);
-
-        const occurrenceDates = [];
-        if (isRecurring) {
-          if (!recurEndDate) return;
-          const [endYear, endMonth, endDay] = recurEndDate.split('-').map(Number);
-          const finalEntryDate = new Date(endYear, endMonth - 1, endDay, 23, 59, 59);
-          let currentLoopDate = new Date(baseStartDate.getTime());
-          while (currentLoopDate <= finalEntryDate) {
-            occurrenceDates.push(new Date(currentLoopDate.getTime()));
-            currentLoopDate.setDate(currentLoopDate.getDate() + 7);
-          }
-        } else {
-          occurrenceDates.push(baseStartDate);
-        }
-        const recurrenceId = isRecurring ? getUUID() : null;
-
-        let batch = writeBatch(db);
-        let opCount = 0;
-        const addToBatch = async (data) => {
-          batch.set(doc(teacherScheduleCollection), data);
-          opCount++;
-          if (opCount >= 400) { await batch.commit(); batch = writeBatch(db); opCount = 0; }
-        };
-
-        for (const occDate of occurrenceDates) {
-          const currentStartTime = new Date(occDate.getTime());
-          currentStartTime.setHours(startHour, startMinute);
-          const currentEndTime = new Date(occDate.getTime());
-          currentEndTime.setHours(endHour, endMinute);
-
-          if (groupMembers) {
-            // Distinguishes this specific occurrence's entries from any
-            // other occurrence of the same group (e.g. next week's class),
-            // so schedule views can cluster "the same class session"
-            // without accidentally merging different days together.
-            const groupBatchKey = `${scheduleSelectedGroupId}_${currentStartTime.getTime()}`;
-            for (const member of groupMembers) {
-              await addToBatch({
-                teacherUid: user.uid,
-                studentUid: member.id,
-                studentName: member.name,
-                startTime: Timestamp.fromDate(currentStartTime),
-                endTime: Timestamp.fromDate(currentEndTime),
-                isRecurring: !!isRecurring,
-                recurrenceId,
-                overrideStatus: null,
-                groupId: scheduleSelectedGroupId,
-                groupBatchKey,
-              });
-            }
-          } else {
-            await addToBatch({
+        const slotFields = { dayOfWeek: Number(scheduleDayOfWeek), startTime: manualStartTime, endTime: manualEndTime, createdAt: Timestamp.now(), updatedAt: Timestamp.now() };
+        if (groupMembers) {
+          let batch = writeBatch(db);
+          let opCount = 0;
+          for (const member of groupMembers) {
+            batch.set(doc(recurringScheduleCollection), {
               teacherUid: user.uid,
-              studentUid,
-              studentName,
-              startTime: Timestamp.fromDate(currentStartTime),
-              endTime: Timestamp.fromDate(currentEndTime),
-              isRecurring: !!isRecurring,
-              recurrenceId,
-              overrideStatus: null,
+              studentUid: member.id,
+              studentName: member.name,
+              groupId: scheduleSelectedGroupId,
+              ...slotFields,
             });
+            opCount++;
+            if (opCount >= 400) { await batch.commit(); batch = writeBatch(db); opCount = 0; }
           }
+          await batch.commit();
+        } else {
+          await addDoc(recurringScheduleCollection, {
+            teacherUid: user.uid,
+            studentUid,
+            studentName,
+            groupId: null,
+            ...slotFields,
+          });
         }
-        await batch.commit();
         setManualStudentName('');
         setScheduleSelectedGroupId('');
       } catch (error) {
@@ -2799,10 +2811,10 @@ Each one will see the Teacher in their Visitors list, with a gift waiting to ope
 
     setShowConfirmModal({
       isOpen: true,
-      title: 'Add Schedule Entry',
+      title: 'Add Weekly Schedule Slot',
       message: groupMembers
-        ? `Are you sure you want to add this schedule entry for the "${studentName}" group (${groupMembers.length} students)?`
-        : `Are you sure you want to add this schedule entry for ${studentName}?`,
+        ? `Are you sure you want to add a weekly ${DAY_NAMES[scheduleDayOfWeek]} ${manualStartTime}-${manualEndTime} slot for the "${studentName}" group (${groupMembers.length} students)?`
+        : `Are you sure you want to add a weekly ${DAY_NAMES[scheduleDayOfWeek]} ${manualStartTime}-${manualEndTime} slot for ${studentName}?`,
       onConfirm: () => {
         executeAdd();
         setShowConfirmModal({ isOpen: false });
@@ -3212,6 +3224,7 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
     let docRef;
     if (type === 'lessonBank') docRef = doc(db, `${publicDataPath}/lessonBank`, id);
     else if (type === 'teacherSchedule') docRef = doc(db, `${publicDataPath}/teacherSchedule`, id);
+    else if (type === 'recurringSchedule') docRef = doc(db, `${publicDataPath}/recurringSchedule`, id);
     else if (type === 'student') docRef = doc(db, `${publicDataPath}/students`, id);
     else if (type === 'group') docRef = doc(db, `${publicDataPath}/studentGroups`, id);
     else return;
@@ -4693,32 +4706,28 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
     .filter(s => s.endTime)
     .sort((a, b) => b.startTime.toDate() - a.startTime.toDate());
     
-  const futureScheduleEntries = teacherSchedule.filter(
-    entry => entry.startTime.toDate() > new Date()
-  );
+  // Replaces the old teacherSchedule-driven "Upcoming Scheduled Sessions"
+  // (which grew forever and needed manual weekly "renewal") -- derived
+  // on the fly from each student's persistent weekly slot instead. A
+  // deactivated student's slot doc is left alone (history stays intact)
+  // but drops out of these views via the isActive check.
+  const activeRecurringSchedule = useMemo(() => {
+    const activeByUid = new Map(students.filter(s => s.isActive === true).map(s => [s.id, s]));
+    return recurringSchedule.filter(entry => entry.studentUid === 'offline' || activeByUid.has(entry.studentUid));
+  }, [recurringSchedule, students]);
 
-  const expiringSchedules = useMemo(() => {
-    const now = new Date();
-    const twoWeeksFromNow = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000); 
-    
-    const latestSchedules = {};
-    teacherSchedule.forEach(entry => {
-      const key = entry.studentUid === 'offline' ? `offline-${entry.studentName}` : entry.studentUid;
-      if (!latestSchedules[key] || entry.startTime.toDate() > latestSchedules[key].startTime.toDate()) {
-        latestSchedules[key] = entry;
-      }
-    });
-    
-    const expiring = [];
-    Object.values(latestSchedules).forEach(entry => {
-      const lastDate = entry.startTime.toDate();
-      if (lastDate > now && lastDate <= twoWeeksFromNow) {
-        expiring.push(entry);
-      }
-    });
-    
-    return expiring.sort((a,b) => a.startTime.toDate() - b.startTime.toDate()); 
-  }, [teacherSchedule]);
+  const todayScheduledEntries = useMemo(() => {
+    const todayDow = new Date().getDay();
+    return activeRecurringSchedule
+      .filter(e => e.dayOfWeek === todayDow)
+      .sort((a, b) => a.startTime.localeCompare(b.startTime));
+  }, [activeRecurringSchedule]);
+
+  const thisWeekScheduleEntries = useMemo(() => {
+    return [...activeRecurringSchedule].sort((a, b) =>
+      a.dayOfWeek - b.dayOfWeek || a.startTime.localeCompare(b.startTime)
+    );
+  }, [activeRecurringSchedule]);
 
   const pendingStudents = useMemo(() => students.filter(s => s.isActive === 'pending'), [students]);
   const pendingNameChanges = useMemo(() => students.filter(s => s.pendingName), [students]);
@@ -4888,38 +4897,6 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
     setShowEditModal(false);
   };
   
-  const handleRenewSchedule = (entry) => {
-    if (entry.studentUid === 'offline') {
-      setScheduleStudentType('offline');
-      setManualStudentName(entry.studentName);
-      setScheduleSelectedStudentUid('');
-      setScheduleStudentSearch(''); 
-    } else {
-      setScheduleStudentType('online');
-      setScheduleSelectedStudentUid(entry.studentUid);
-      setScheduleStudentSearch(entry.studentName); 
-      setManualStudentName('');
-    }
-    
-    const lastDate = entry.startTime.toDate();
-    const nextDate = new Date(lastDate.getTime() + 7 * 24 * 60 * 60 * 1000);
-    setManualDate(toLocalDateString(nextDate));
-    
-    const formatTime = (date) => {
-      const h = date.getHours().toString().padStart(2, '0');
-      const m = date.getMinutes().toString().padStart(2, '0');
-      return `${h}:${m}`;
-    };
-    setManualStartTime(formatTime(entry.startTime.toDate()));
-    setManualEndTime(formatTime(entry.endTime.toDate()));
-    
-    setIsRecurring(true);
-    
-    const newEndDate = new Date(nextDate.getTime());
-    newEndDate.setMonth(newEndDate.getMonth() + 3);
-    setRecurEndDate(toLocalDateString(newEndDate));
-  };
-
   return (
     <div className="p-6">
       <div className="fixed top-4 right-4 z-[9500]">
@@ -5122,9 +5099,6 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
           <button onClick={() => setViewMode('send')} className={`py-2 px-4 font-medium ${viewMode === 'send' ? 'border-b-2 border-indigo-500 text-indigo-600' : 'text-gray-600 hover:text-indigo-600'}`}>Send Action</button>
           <button onClick={() => setViewMode('schedule')} className={`py-2 px-4 font-medium flex items-center ${viewMode === 'schedule' ? 'border-b-2 border-emerald-500 text-emerald-600' : 'text-gray-600 hover:text-emerald-600'}`}>
             My Schedule
-            {expiringSchedules.length > 0 && (
-              <span className="ml-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full animate-pulse">{expiringSchedules.length}</span>
-            )}
           </button>
           <button onClick={() => setViewMode('bank')} className={`py-2 px-4 font-medium ${viewMode === 'bank' ? 'border-b-2 border-sky-500 text-sky-600' : 'text-gray-600 hover:text-sky-600'}`}>Lesson Bank</button>
           <button onClick={() => setViewMode('reports')} className={`py-2 px-4 font-medium ${viewMode === 'reports' ? 'border-b-2 border-amber-500 text-amber-600' : 'text-gray-600 hover:text-amber-600'}`}>Reports</button>
@@ -5823,8 +5797,11 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
             ) : null}
 
             <div className="mb-4">
-              <label className="block text-gray-700 mb-2">Date</label>
-              <input type="date" value={manualDate} onChange={(e) => setManualDate(e.target.value)} className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              <label className="block text-gray-700 mb-2">Day of the Week</label>
+              <select value={scheduleDayOfWeek} onChange={(e) => setScheduleDayOfWeek(Number(e.target.value))} className="w-full p-3 border rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                {DAY_NAMES.map((name, idx) => <option key={idx} value={idx}>{name}</option>)}
+              </select>
+              <p className="text-xs text-gray-500 mt-1">This is a standing weekly slot -- it applies every week until you change or remove it. No more re-adding each week.</p>
             </div>
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div>
@@ -5836,71 +5813,54 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                 <input type="time" value={manualEndTime} onChange={(e) => setManualEndTime(e.target.value)} className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
             </div>
-            
-            <div className="mb-4 space-y-2">
-              <div className="flex items-center">
-                <input type="checkbox" checked={isRecurring} onChange={(e) => setIsRecurring(e.target.checked)} className="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500" />
-                <label className="ml-2 block text-sm text-gray-900">Repeat weekly</label>
-              </div>
-              {isRecurring && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Repeat until</label>
-                  <input type="date" value={recurEndDate} onChange={(e) => setRecurEndDate(e.target.value)} className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                </div>
-              )}
-            </div>
             <button type="submit" className="w-full bg-emerald-500 text-white p-3 rounded-lg font-semibold hover:bg-emerald-600 transition-transform transform hover:scale-105 shadow-md">
-              Add to Schedule
+              Add Weekly Slot
             </button>
           </form>
-          
+
           <div className="space-y-8">
-            {expiringSchedules.length > 0 && (
-              <div className="bg-yellow-50/70 backdrop-blur-sm p-6 rounded-xl shadow-lg border border-yellow-300">
-                <h3 className="text-xl font-semibold mb-4 text-yellow-800">Schedules Needing Renewal</h3>
-                <p className="text-sm text-yellow-700 mb-4">The following weekly schedules will expire within 2 weeks.</p>
-                <div className="space-y-3 max-h-48 overflow-y-auto">
-                  {expiringSchedules.map(entry => (
-                    <div key={entry.id} className="bg-white p-3 rounded-lg flex flex-col sm:flex-row justify-between sm:items-center">
-                      <div className="mb-2 sm:mb-0">
-                        <p className="font-semibold">{entry.studentName}</p>
-                        <p className="text-sm text-gray-600">Expires on: {formatTimestamp(entry.startTime)}</p>
-                      </div>
-                      <button onClick={() => handleRenewSchedule(entry)} className="bg-emerald-500 text-white px-4 py-2 rounded-lg font-semibold hover:bg-emerald-600 shadow-md text-sm flex-shrink-0 w-full sm-w-auto">
-                        Renew
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          
             <div className="bg-emerald-50/70 backdrop-blur-sm p-6 rounded-xl shadow-lg border border-emerald-200">
-               <h3 className="text-xl font-semibold mb-4 text-gray-800">Upcoming Scheduled Sessions</h3>
-               <div className="space-y-3 max-h-96 overflow-y-auto">
-                 {futureScheduleEntries.length === 0 ? <p>No upcoming sessions.</p> :
-                  futureScheduleEntries.map(entry => (
-                    <div key={entry.id} className="bg-white p-3 rounded-lg group">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <p className="font-semibold">{entry.studentName}</p>
-                          <p className="text-sm text-gray-600">{formatTimestamp(entry.startTime)}</p>
-                          {entry.isRecurring && (
-                            <span className="text-xs font-medium bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-full">Recurring</span>
-                          )}
-                        </div>
-                        <div className="flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button onClick={() => openDeleteModal(entry.id, entry.studentName, 'teacherSchedule')} className="text-red-500 hover:text-red-700" title="Delete">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clipRule="evenodd" />
-                            </svg>
-                          </button>
-                        </div>
-                       </div>
+               <h3 className="text-xl font-semibold mb-1 text-gray-800">Today Scheduled</h3>
+               <p className="text-sm text-gray-500 mb-4">{DAY_NAMES[new Date().getDay()]}</p>
+               <div className="space-y-2 max-h-48 overflow-y-auto">
+                 {todayScheduledEntries.length === 0 ? <p className="text-gray-500">No one scheduled today.</p> :
+                  todayScheduledEntries.map(entry => (
+                    <div key={entry.id} className="bg-white p-3 rounded-lg flex justify-between items-center">
+                      <div>
+                        <p className="font-semibold">{entry.studentName}</p>
+                        <p className="text-sm text-gray-600">{entry.startTime} - {entry.endTime}</p>
+                      </div>
+                      <button onClick={() => openDeleteModal(entry.id, entry.studentName, 'recurringSchedule')} className="text-red-500 hover:text-red-700" title="Remove this weekly slot">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clipRule="evenodd" />
+                        </svg>
+                      </button>
                     </div>
                   ))
                  }
                </div>
+            </div>
+
+            <div className="bg-emerald-50/70 backdrop-blur-sm p-6 rounded-xl shadow-lg border border-emerald-200">
+               <h3 className="text-xl font-semibold mb-4 text-gray-800">This Week's Schedule</h3>
+               <div className="space-y-2 max-h-96 overflow-y-auto">
+                 {thisWeekScheduleEntries.length === 0 ? <p className="text-gray-500">No weekly slots yet -- add one on the left.</p> :
+                  thisWeekScheduleEntries.map(entry => (
+                    <div key={entry.id} className="bg-white p-3 rounded-lg flex justify-between items-center group">
+                      <div>
+                        <p className="font-semibold">{entry.studentName}</p>
+                        <p className="text-sm text-gray-600">{DAY_NAMES[entry.dayOfWeek]}, {entry.startTime} - {entry.endTime}</p>
+                      </div>
+                      <button onClick={() => openDeleteModal(entry.id, entry.studentName, 'recurringSchedule')} className="text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity" title="Remove this weekly slot">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clipRule="evenodd" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))
+                 }
+               </div>
+               <p className="text-xs text-gray-500 mt-3">Older history isn't shown live here -- see the weekly attendance snapshot for past weeks.</p>
             </div>
           </div>
         </div>
@@ -7907,6 +7867,20 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     return () => unsubscribe();
   }, [studentUid]);
 
+  // This student's own standing weekly slot(s) -- see recurringScheduleCollection.
+  // Used below to fill in weeks that no longer get a dated teacherSchedule
+  // doc, so the attendance bar keeps showing a chip for every week without
+  // the student's own page needing to change what it looks like.
+  const [myRecurringSchedule, setMyRecurringSchedule] = useState([]);
+  useEffect(() => {
+    if (!studentUid) return;
+    const q = query(recurringScheduleCollection, where("studentUid", "==", studentUid));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setMyRecurringSchedule(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (error) => { console.error("Error fetching student's recurring schedule:", error); });
+    return () => unsubscribe();
+  }, [studentUid]);
+
   useEffect(() => {
     const checkSchedule = () => {
       const now = new Date();
@@ -8093,9 +8067,16 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     const startOfYear = new Date(today.getFullYear(), 0, 1);
     const endOfYear = new Date(today.getFullYear(), 11, 31, 23, 59, 59);
 
+    // Weeks that no longer get a new dated teacherSchedule doc (see
+    // recurringScheduleCollection) get a stand-in occurrence here instead,
+    // so this bar keeps showing an unbroken run of weekly chips exactly as
+    // before -- only where the entry comes from changes.
+    const synthetic = synthesizeScheduleOccurrences(myRecurringSchedule, mySchedule, startOfYear, endOfYear);
+    const combinedSchedule = [...mySchedule, ...synthetic];
+
     const yearEntries = [];
 
-    mySchedule.forEach(entry => {
+    combinedSchedule.forEach(entry => {
        const entryDate = entry.startTime.toDate();
        // Not reached yet, or (for a group entry) nobody's toggled this
        // student either way -- shown blank, not counted as attended/absent.
@@ -8113,7 +8094,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       yearAbsent: countOf(yearEntries, 'absent'),
       yearEntries,
     };
-  }, [mySchedule, mySessions, studentUid]);
+  }, [mySchedule, myRecurringSchedule, mySessions, studentUid]);
 
   // Opens whatever app the current Active Session's lesson link points to,
   // without creating a new session (one already exists) or touching lesson
@@ -10081,6 +10062,7 @@ function watchTeacherLiveElseOnce(isTeacher, ref, onNext) {
 
 function WeeklySchedule({ role, targetStudentUid }) {
   const [schedule, setSchedule] = useState([]);
+  const [recurringSlots, setRecurringSlots] = useState([]);
   const [sessions, setSessions] = useState([]);
   const [students, setStudents] = useState([]);
   const [groups, setGroups] = useState([]);
@@ -10135,7 +10117,15 @@ function WeeklySchedule({ role, targetStudentUid }) {
         .sort((a, b) => a.startTime.toDate() - b.startTime.toDate());
       setSchedule(scheduleList);
     });
-    
+
+    // Fills in weeks that no longer get a new dated teacherSchedule doc
+    // (see recurringScheduleCollection) -- read once per week view, cheap
+    // either way since it's a small collection.
+    const recurringQuery = targetStudentUid
+      ? query(recurringScheduleCollection, where('studentUid', '==', targetStudentUid))
+      : recurringScheduleCollection;
+    getDocs(recurringQuery).then(snap => setRecurringSlots(snap.docs.map(d => ({ id: d.id, ...d.data() })))).catch(() => {});
+
     const qSessions = query(
       sessionsCollection,
       where("startTime", ">=", Timestamp.fromDate(weekStartDate)), 
@@ -10151,6 +10141,19 @@ function WeeklySchedule({ role, targetStudentUid }) {
       unsubSessions();
     };
   }, [weekStartDate]);
+
+  // schedule + a synthetic stand-in occurrence for any weekly slot that
+  // doesn't already have a real dated doc this week -- see
+  // synthesizeScheduleOccurrences. Everything below renders this, not the
+  // raw `schedule` state, so a week with no dated docs at all (every week
+  // from now on) still shows correctly.
+  const displaySchedule = useMemo(() => {
+    const weekEndDate = new Date(weekStartDate);
+    weekEndDate.setDate(weekEndDate.getDate() + 7);
+    const synthetic = synthesizeScheduleOccurrences(recurringSlots, schedule, weekStartDate, weekEndDate);
+    return [...schedule, ...synthetic].sort((a, b) => a.startTime.toDate() - b.startTime.toDate());
+  }, [schedule, recurringSlots, weekStartDate]);
+
   useEffect(() => {
     if (hasScrolledToMineRef.current || !targetStudentUid) return;
     const timer = setTimeout(() => {
@@ -10160,7 +10163,7 @@ function WeeklySchedule({ role, targetStudentUid }) {
       }
     }, 400);
     return () => clearTimeout(timer);
-  }, [schedule, targetStudentUid]);
+  }, [displaySchedule, targetStudentUid]);
 
   // A student's own group class (e.g. "Parami") now clusters the same way
   // the teacher's view does -- pre-expand whichever cluster contains this
@@ -10168,9 +10171,9 @@ function WeeklySchedule({ role, targetStudentUid }) {
   // having to find and tap the group first.
   useEffect(() => {
     if (!targetStudentUid || expandedGroupBatchKey) return;
-    const mine = schedule.find(e => e.studentUid === targetStudentUid && e.groupBatchKey);
+    const mine = displaySchedule.find(e => e.studentUid === targetStudentUid && e.groupBatchKey);
     if (mine) setExpandedGroupBatchKey(mine.groupBatchKey);
-  }, [schedule, targetStudentUid]);
+  }, [displaySchedule, targetStudentUid]);
 
   const daysOfWeek = useMemo(() => {
     return Array.from({ length: 7 }).map((_, i) => {
@@ -10281,6 +10284,21 @@ function WeeklySchedule({ role, targetStudentUid }) {
   // single tap, not a popup each time.
   const quickSetAttendance = async (entry, status) => {
     try {
+      if (String(entry.id).startsWith('synthetic-')) {
+        // A stand-in occurrence (see synthesizeScheduleOccurrences) has no
+        // real doc to update -- overriding it means it's actually being
+        // recorded now, so materialize a real teacherSchedule doc for just
+        // this one date instead, the same shape a dated entry always had.
+        await addDoc(teacherScheduleCollection, {
+          teacherUid: auth.currentUser?.uid || null,
+          studentUid: entry.studentUid,
+          studentName: entry.studentName,
+          startTime: entry.startTime,
+          endTime: entry.endTime,
+          overrideStatus: status,
+        });
+        return;
+      }
       const docRef = doc(db, `${publicDataPath}/teacherSchedule`, entry.id);
       await updateDoc(docRef, { overrideStatus: status });
     } catch (error) {
@@ -10336,7 +10354,7 @@ function WeeklySchedule({ role, targetStudentUid }) {
 
       <div className="space-y-6">
         {daysOfWeek.map(day => {
-          const dayEntries = schedule.filter(entry => {
+          const dayEntries = displaySchedule.filter(entry => {
             const entryDate = entry.startTime.toDate();
             return entryDate.getDate() === day.getDate() && entryDate.getMonth() === day.getMonth() && entryDate.getFullYear() === day.getFullYear();
           });
