@@ -557,7 +557,7 @@ const TeacherDashboard = React.memo(({
   handleDownloadLessons, handleUploadLessons, fileInputRef,
   handleDownloadLessonsOnly, handleUploadLessonsOnly, fileInputRefLessonsOnly,
   heartCounts, setSelectedAgeLevel,
-  classRoster, handleApproveStudent, handleDeleteStudent,
+  classRoster, handleApproveStudent, handleDeleteStudent, setClassRefreshKey,
   allScores, studentsWithCompletionsNotApproved, onApproveStudentsWithCompletions,
   autoApprove, handleToggleAutoApprove,
   completionsList, onLinkStudent, onUnlinkStudent
@@ -588,6 +588,13 @@ const TeacherDashboard = React.memo(({
   // ဒီ app ထဲကလည်း နာမည်ကို ပြန် sync လုပ်ပေးမယ် (manual re-link မလိုတော့ပါ)
   useEffect(() => {
     if (activeTab !== 'students') return;
+    // This tab's buttons (link/approve students) act on classRoster/scores/
+    // completions, which otherwise only refresh every 10 minutes (see the
+    // teacher-side polling in the parent) -- force a fresh read the moment
+    // the teacher actually opens this tab, so a just-approved or just-
+    // completed student shows up right away instead of possibly minutes
+    // late.
+    if (setClassRefreshKey) setClassRefreshKey(k => k + 1);
     (async () => {
       try {
         const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'students'));
@@ -3192,7 +3199,7 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
       case 'studentWaiting': return <StudentWaitingView handleSetView={handleSetView} userName={userName} isRejected={isRejected} />;
       case 'teacherDashboard':
         if (!classData) return <ClassCreateView classId={classId} handleTeacherCreateClass={handleTeacherCreateClass} isLoading={isLoading} handleSetView={handleSetView} />;
-        return <TeacherDashboard classId={classId} newLesson={newLesson} setNewLesson={setNewLesson} lessons={lessons} isLoading={isLoading} handleSaveLesson={handleSaveLesson} handleFormatLesson={handleFormatLesson} generateQuestions={generateQuestions} handleGenerateAllLevels={handleGenerateAllLevels} handleRegenerateLevel={handleRegenerateLevel} handleEditLesson={handleEditLesson} handleDeleteLesson={handleDeleteLesson} globalLeaderboardScores={globalLeaderboardScores} setSelectedName={setSelectedName} handleSetView={handleSetView} playClickSound={playClickSound} handleDownloadLessons={handleDownloadLessons} handleUploadLessons={handleUploadLessons} fileInputRef={fileInputRef} handleDownloadLessonsOnly={handleDownloadLessonsOnly} handleUploadLessonsOnly={handleUploadLessonsOnly} fileInputRefLessonsOnly={fileInputRefLessonsOnly} heartCounts={heartCounts} setSelectedAgeLevel={setSelectedAgeLevel} classRoster={classRoster} handleApproveStudent={handleApproveStudent} handleDeleteStudent={handleDeleteStudent} autoApprove={classData?.autoApprove || false} handleToggleAutoApprove={handleToggleAutoApprove} completionsList={completionsList} onLinkStudent={handleLinkStudentToTutoring} onUnlinkStudent={handleUnlinkStudent} allScores={allScores} studentsWithCompletionsNotApproved={studentsWithCompletionsNotApproved} onApproveStudentsWithCompletions={handleApproveStudentsWithCompletions} />;
+        return <TeacherDashboard classId={classId} setClassRefreshKey={setClassRefreshKey} newLesson={newLesson} setNewLesson={setNewLesson} lessons={lessons} isLoading={isLoading} handleSaveLesson={handleSaveLesson} handleFormatLesson={handleFormatLesson} generateQuestions={generateQuestions} handleGenerateAllLevels={handleGenerateAllLevels} handleRegenerateLevel={handleRegenerateLevel} handleEditLesson={handleEditLesson} handleDeleteLesson={handleDeleteLesson} globalLeaderboardScores={globalLeaderboardScores} setSelectedName={setSelectedName} handleSetView={handleSetView} playClickSound={playClickSound} handleDownloadLessons={handleDownloadLessons} handleUploadLessons={handleUploadLessons} fileInputRef={fileInputRef} handleDownloadLessonsOnly={handleDownloadLessonsOnly} handleUploadLessonsOnly={handleUploadLessonsOnly} fileInputRefLessonsOnly={fileInputRefLessonsOnly} heartCounts={heartCounts} setSelectedAgeLevel={setSelectedAgeLevel} classRoster={classRoster} handleApproveStudent={handleApproveStudent} handleDeleteStudent={handleDeleteStudent} autoApprove={classData?.autoApprove || false} handleToggleAutoApprove={handleToggleAutoApprove} completionsList={completionsList} onLinkStudent={handleLinkStudentToTutoring} onUnlinkStudent={handleUnlinkStudent} allScores={allScores} studentsWithCompletionsNotApproved={studentsWithCompletionsNotApproved} onApproveStudentsWithCompletions={handleApproveStudentsWithCompletions} />;
       case 'studentLesson':
         if (!classDataLoaded) return <LoadingView />;
         if (!classData) return <ClassErrorView classId={classId} handleSetView={handleSetView} />;
