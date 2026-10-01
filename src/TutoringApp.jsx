@@ -2882,6 +2882,56 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
         console.error("Error migrating Shrine Room roster to new name:", error);
       }
     }
+
+    // SmartStudy keys scores/completions/reflections/hearts/roster by
+    // studentName PER CLASS (see renameStudentEverywhere in SmartStudy.jsx,
+    // the function this mirrors) -- a rename here used to only take effect
+    // once a teacher happened to open that specific class's Students &
+    // Scores tab (which re-syncs already-linked names). Doing it here too
+    // means it happens immediately, for every class the student is in, the
+    // moment the rename is approved -- no separate manual step needed.
+    if (oldName && oldName.trim() && oldName.trim() !== trimmedNew) {
+      try {
+        // SmartStudy shares this same app's data store (same appId), so
+        // publicDataPath already points at its collections too.
+        const ssPath = (name) => `${publicDataPath}/${name}`;
+        const ssRosterRef = (classId, name) => doc(db, ssPath('classRoster'), `${classId}_${encodeURIComponent(name)}`);
+        const ssHeartRef = (classId, name) => doc(db, ssPath('studentHearts'), `${classId}_${encodeURIComponent(name)}`);
+
+        const rosterSnap = await getDocs(query(collection(db, ssPath('classRoster')), where('studentName', '==', oldName)));
+        const classIds = [...new Set(rosterSnap.docs.map(d => d.data().classId).filter(Boolean))];
+
+        for (const classIdForSS of classIds) {
+          const renameInCollection = async (collectionName) => {
+            const snap = await getDocs(query(collection(db, ssPath(collectionName)), where('classId', '==', classIdForSS), where('studentName', '==', oldName)));
+            for (let i = 0; i < snap.docs.length; i += 400) {
+              const batch = writeBatch(db);
+              snap.docs.slice(i, i + 400).forEach(d => batch.update(d.ref, { studentName: trimmedNew }));
+              await batch.commit();
+            }
+          };
+          await renameInCollection('scores');
+          await renameInCollection('quizCompletions');
+          await renameInCollection('reflections');
+
+          const oldHeartSnap = await getDoc(ssHeartRef(classIdForSS, oldName));
+          if (oldHeartSnap.exists()) {
+            await setDoc(ssHeartRef(classIdForSS, trimmedNew), { ...oldHeartSnap.data(), classId: classIdForSS, studentName: trimmedNew }, { merge: true });
+            await deleteDoc(oldHeartSnap.ref);
+          }
+
+          const oldRosterSnap = await getDoc(ssRosterRef(classIdForSS, oldName));
+          if (oldRosterSnap.exists()) {
+            await setDoc(ssRosterRef(classIdForSS, trimmedNew), { ...oldRosterSnap.data(), studentName: trimmedNew, linkedToTutoring: true, tutoringStudentUid: studentId }, { merge: true });
+            await deleteDoc(oldRosterSnap.ref);
+          }
+
+          await updateDoc(doc(db, ssPath('students'), studentId), { [`smartStudyNames.${classIdForSS}`]: oldName }).catch(() => {});
+        }
+      } catch (error) {
+        console.error("Error migrating SmartStudy records to new name:", error);
+      }
+    }
   };
 
   const handleRejectNameChange = async (studentId) => {
