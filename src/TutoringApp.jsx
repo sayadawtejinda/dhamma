@@ -4706,29 +4706,6 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
     .filter(s => s.endTime)
     .sort((a, b) => b.startTime.toDate() - a.startTime.toDate());
     
-  // Replaces the old teacherSchedule-driven "Upcoming Scheduled Sessions"
-  // (which grew forever and needed manual weekly "renewal") -- derived
-  // on the fly from each student's persistent weekly slot instead. A
-  // deactivated student's slot doc is left alone (history stays intact)
-  // but drops out of these views via the isActive check.
-  const activeRecurringSchedule = useMemo(() => {
-    const activeByUid = new Map(students.filter(s => s.isActive === true).map(s => [s.id, s]));
-    return recurringSchedule.filter(entry => entry.studentUid === 'offline' || activeByUid.has(entry.studentUid));
-  }, [recurringSchedule, students]);
-
-  const todayScheduledEntries = useMemo(() => {
-    const todayDow = new Date().getDay();
-    return activeRecurringSchedule
-      .filter(e => e.dayOfWeek === todayDow)
-      .sort((a, b) => a.startTime.localeCompare(b.startTime));
-  }, [activeRecurringSchedule]);
-
-  const thisWeekScheduleEntries = useMemo(() => {
-    return [...activeRecurringSchedule].sort((a, b) =>
-      a.dayOfWeek - b.dayOfWeek || a.startTime.localeCompare(b.startTime)
-    );
-  }, [activeRecurringSchedule]);
-
   const pendingStudents = useMemo(() => students.filter(s => s.isActive === 'pending'), [students]);
   const pendingNameChanges = useMemo(() => students.filter(s => s.pendingName), [students]);
 
@@ -5733,7 +5710,7 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
       )}
 
       {viewMode === 'schedule' && (
-         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+         <div className="max-w-xl">
           <form onSubmit={handleAddSchedule} className="bg-emerald-50/70 backdrop-blur-sm p-6 rounded-xl shadow-lg border border-emerald-200">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-xl font-semibold text-gray-800">Add Manual Schedule Entry</h3>
@@ -5816,53 +5793,8 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
             <button type="submit" className="w-full bg-emerald-500 text-white p-3 rounded-lg font-semibold hover:bg-emerald-600 transition-transform transform hover:scale-105 shadow-md">
               Add Weekly Slot
             </button>
+            <p className="text-xs text-gray-500 mt-3">A student with two class times just gets added twice. To see who's on today or any week, use Weekly Schedule.</p>
           </form>
-
-          <div className="space-y-8">
-            <div className="bg-emerald-50/70 backdrop-blur-sm p-6 rounded-xl shadow-lg border border-emerald-200">
-               <h3 className="text-xl font-semibold mb-1 text-gray-800">Today Scheduled</h3>
-               <p className="text-sm text-gray-500 mb-4">{DAY_NAMES[new Date().getDay()]}</p>
-               <div className="space-y-2 max-h-48 overflow-y-auto">
-                 {todayScheduledEntries.length === 0 ? <p className="text-gray-500">No one scheduled today.</p> :
-                  todayScheduledEntries.map(entry => (
-                    <div key={entry.id} className="bg-white p-3 rounded-lg flex justify-between items-center">
-                      <div>
-                        <p className="font-semibold">{entry.studentName}</p>
-                        <p className="text-sm text-gray-600">{entry.startTime} - {entry.endTime}</p>
-                      </div>
-                      <button onClick={() => openDeleteModal(entry.id, entry.studentName, 'recurringSchedule')} className="text-red-500 hover:text-red-700" title="Remove this weekly slot">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clipRule="evenodd" />
-                        </svg>
-                      </button>
-                    </div>
-                  ))
-                 }
-               </div>
-            </div>
-
-            <div className="bg-emerald-50/70 backdrop-blur-sm p-6 rounded-xl shadow-lg border border-emerald-200">
-               <h3 className="text-xl font-semibold mb-4 text-gray-800">This Week's Schedule</h3>
-               <div className="space-y-2 max-h-96 overflow-y-auto">
-                 {thisWeekScheduleEntries.length === 0 ? <p className="text-gray-500">No weekly slots yet -- add one on the left.</p> :
-                  thisWeekScheduleEntries.map(entry => (
-                    <div key={entry.id} className="bg-white p-3 rounded-lg flex justify-between items-center group">
-                      <div>
-                        <p className="font-semibold">{entry.studentName}</p>
-                        <p className="text-sm text-gray-600">{DAY_NAMES[entry.dayOfWeek]}, {entry.startTime} - {entry.endTime}</p>
-                      </div>
-                      <button onClick={() => openDeleteModal(entry.id, entry.studentName, 'recurringSchedule')} className="text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity" title="Remove this weekly slot">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clipRule="evenodd" />
-                        </svg>
-                      </button>
-                    </div>
-                  ))
-                 }
-               </div>
-               <p className="text-xs text-gray-500 mt-3">Older history isn't shown live here -- see the weekly attendance snapshot for past weeks.</p>
-            </div>
-          </div>
         </div>
       )}
 
