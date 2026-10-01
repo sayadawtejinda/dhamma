@@ -2579,10 +2579,25 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
     // possibly moves scores/completions too) -- the already-loaded
     // classRoster/allScores/etc. in this screen has no idea that happened
     // on its own, so the "Linked" badge and the Find Matching Names list
-    // kept showing the pre-rename state until the next 10-minute poll.
-    // Force an immediate re-read so the success message and what's on
-    // screen actually agree.
-    setClassRefreshKey(k => k + 1);
+    // used to keep showing the pre-rename state until the next 10-minute
+    // poll. Re-running the full class load() to fix that (an earlier
+    // attempt) made every link feel slow -- it re-fetches scores, hearts,
+    // reflections and completions for the WHOLE class just to update one
+    // row. Patching the already-known change into local state instead is
+    // instant and costs no extra reads.
+    const patchName = (list) => oldName === newName ? list : list.map(item =>
+      item.studentName === oldName && item.classId === classId ? { ...item, studentName: newName } : item
+    );
+    setClassRoster(prev => {
+      const withoutOld = prev.filter(s => !(s.studentName === oldName && s.classId === classId));
+      const already = withoutOld.find(s => s.studentName === newName && s.classId === classId);
+      const base = prev.find(s => s.studentName === oldName && s.classId === classId) || already || { classId, status: 'approved' };
+      const updated = { ...base, studentName: newName, linkedToTutoring: true, tutoringStudentUid };
+      return already ? withoutOld.map(s => (s.studentName === newName && s.classId === classId) ? updated : s) : [...withoutOld, updated];
+    });
+    setAllScores(patchName);
+    setCompletionsList(patchName);
+    setAllReflections(patchName);
     if (oldName === newName) {
       setModal({ message: `Linked "${newName}" to Tutoring.`, type: 'success', visible: true });
       return;
