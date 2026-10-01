@@ -2575,6 +2575,14 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
     setIsLoading(true);
     const results = await renameStudentEverywhere(classId, oldName, newName, tutoringStudentUid);
     setIsLoading(false);
+    // The rename above rewrites the roster doc under a different ID (and
+    // possibly moves scores/completions too) -- the already-loaded
+    // classRoster/allScores/etc. in this screen has no idea that happened
+    // on its own, so the "Linked" badge and the Find Matching Names list
+    // kept showing the pre-rename state until the next 10-minute poll.
+    // Force an immediate re-read so the success message and what's on
+    // screen actually agree.
+    setClassRefreshKey(k => k + 1);
     if (oldName === newName) {
       setModal({ message: `Linked "${newName}" to Tutoring.`, type: 'success', visible: true });
       return;
