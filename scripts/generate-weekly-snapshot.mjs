@@ -49,25 +49,76 @@ function getStudentAttendanceForEntry(entry, studentUid, sessions) {
   return 'absent';
 }
 
+// The app no longer creates a new dated teacherSchedule doc for every week
+// (see recurringSchedule / migrate-to-recurring-schedule.mjs) -- a student's
+// weekly slot is now one persistent doc that this script has to map onto
+// real calendar dates itself for any week that doesn't already have a real
+// dated teacherSchedule doc (i.e. every week from here on). Weeks that DO
+// still have real dated docs (everything before this change shipped, plus
+// the very week it shipped in, which is what seeded recurringSchedule) are
+// left exactly as they were -- this only fills the gap going forward.
+function synthesizeOccurrencesFromRecurringSchedule(recurringSlots, realSchedule, startOfYear, now) {
+  const covered = new Set(); // `${studentKey}_${yyyy-mm-dd}`
+  realSchedule.forEach(e => {
+    const d = e.startTime.toDate();
+    const key = e.studentUid === 'offline' ? `offline:${e.studentName}` : `uid:${e.studentUid}`;
+    covered.add(`${key}_${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`);
+  });
+
+  const synthetic = [];
+  for (const slot of recurringSlots) {
+    const key = slot.studentUid === 'offline' ? `offline:${slot.studentName}` : `uid:${slot.studentUid}`;
+    const [sh, sm] = (slot.startTime || '00:00').split(':').map(Number);
+    const [eh, em] = (slot.endTime || '00:00').split(':').map(Number);
+    // Walk every date in range, pick out the ones matching this slot's weekday.
+    const cursor = new Date(startOfYear);
+    while (cursor <= now) {
+      if (cursor.getDay() === slot.dayOfWeek) {
+        const dateKey = `${key}_${cursor.getFullYear()}-${cursor.getMonth()}-${cursor.getDate()}`;
+        if (!covered.has(dateKey)) {
+          const start = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate(), sh, sm);
+          const end = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate(), eh, em);
+          synthetic.push({
+            id: `synthetic-${slot.id}-${dateKey}`,
+            studentUid: slot.studentUid,
+            studentName: slot.studentName,
+            startTime: Timestamp.fromDate(start),
+            endTime: Timestamp.fromDate(end),
+            overrideStatus: null,
+          });
+        }
+      }
+      cursor.setDate(cursor.getDate() + 1);
+    }
+  }
+  return synthetic;
+}
+
 async function main() {
   await signInAnonymously(auth);
 
   const startOfYear = new Date(new Date().getFullYear(), 0, 1);
-  const [studentsSnap, scheduleSnap, sessionsSnap] = await Promise.all([
+  const [studentsSnap, scheduleSnap, sessionsSnap, recurringSnap] = await Promise.all([
     getDocs(collection(db, `${publicDataPath}/students`)),
     getDocs(query(collection(db, `${publicDataPath}/teacherSchedule`), where('startTime', '>=', Timestamp.fromDate(startOfYear)))),
     getDocs(query(collection(db, `${publicDataPath}/studySessions`), where('startTime', '>=', Timestamp.fromDate(startOfYear)))),
+    getDocs(collection(db, `${publicDataPath}/recurringSchedule`)),
   ]);
 
   const students = studentsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-  const schedule = scheduleSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const realSchedule = scheduleSnap.docs.map(d => ({ id: d.id, ...d.data() }));
   const sessions = sessionsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const recurringSlots = recurringSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
   const now = new Date();
-  const offlineNames = [...new Set(schedule.filter(s => s.studentUid === 'offline').map(s => s.studentName))];
-  const offlineEntries = offlineNames.map(name => ({ id: `offline-${name}`, name, isOffline: true }));
+  const synthetic = synthesizeOccurrencesFromRecurringSchedule(recurringSlots, realSchedule, startOfYear, now);
+  const schedule = [...realSchedule, ...synthetic];
+
+  // Offline students are no longer counted in attendance at all (per the
+  // teacher) -- they still appear in the live Today/This Week schedule view
+  // in the app, just excluded from every tally here.
   const onlineEntries = students.filter(s => s.isActive === true).map(s => ({ id: s.id, name: s.name, isOffline: false }));
-  const allEntries = [...onlineEntries, ...offlineEntries];
+  const allEntries = onlineEntries;
 
   const computed = allEntries.map(entry => {
     let attended = 0, absent = 0;
@@ -111,6 +162,7 @@ async function main() {
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const attendanceTotals = { month: { attended: 0, absent: 0 }, year: { attended: 0, absent: 0 } };
   schedule.forEach(entry => {
+    if (entry.studentUid === 'offline') return; // no longer counted (see allEntries above)
     const d = entry.startTime.toDate();
     if (d > now || d < startOfYear) return;
     const status = getStudentAttendanceForEntry(entry, entry.studentUid, sessions);
