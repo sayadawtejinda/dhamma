@@ -517,6 +517,74 @@ const getEffectiveCompletedUnit = (lesson, studentProfile, sessionsForLesson, ss
   return unitCount > 0 ? Math.min(unitCount, effective) : effective;
 };
 
+// This Week's Schedule, one section per day (Sun-Sat) -- today's section is
+// highlighted, and within it, whichever slot's start/end time currently
+// contains right-now gets its own "live" highlight. Auto-scrolls to today's
+// section on mount so the teacher doesn't have to hunt for it.
+function ThisWeekScheduleCard({ scheduleByDay, onRemoveSlot }) {
+  const todayRef = useRef(null);
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 60000); // keep the "live now" highlight current
+    return () => clearInterval(timer);
+  }, []);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (todayRef.current) todayRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 150);
+    return () => clearTimeout(t);
+  }, []);
+
+  const todayDow = now.getDay();
+  const isLiveNow = (entry) => {
+    if (entry.dayOfWeek !== todayDow) return false;
+    const [sh, sm] = (entry.startTime || '00:00').split(':').map(Number);
+    const [eh, em] = (entry.endTime || '00:00').split(':').map(Number);
+    const mins = now.getHours() * 60 + now.getMinutes();
+    return mins >= sh * 60 + sm && mins < eh * 60 + em;
+  };
+
+  return (
+    <div className="bg-emerald-50/70 backdrop-blur-sm p-6 rounded-xl shadow-lg border border-emerald-200">
+      <h3 className="text-xl font-semibold mb-4 text-gray-800">This Week's Schedule</h3>
+      <div className="space-y-4 max-h-[32rem] overflow-y-auto">
+        {DAY_NAMES.map((name, dow) => {
+          const isToday = dow === todayDow;
+          const entries = scheduleByDay[dow] || [];
+          return (
+            <div key={dow} ref={isToday ? todayRef : null} className={`rounded-lg p-3 ${isToday ? 'bg-amber-100 border-2 border-amber-400' : 'bg-white/60'}`}>
+              <p className={`font-bold mb-2 ${isToday ? 'text-amber-800' : 'text-gray-600'}`}>{name}{isToday ? ' — Today' : ''}</p>
+              {entries.length === 0 ? (
+                <p className="text-sm text-gray-400">No one scheduled.</p>
+              ) : (
+                <div className="space-y-2">
+                  {entries.map(entry => {
+                    const live = isLiveNow(entry);
+                    return (
+                      <div key={entry.id} className={`p-2 rounded-lg flex justify-between items-center group ${live ? 'bg-emerald-500 text-white shadow-md' : 'bg-white'}`}>
+                        <div>
+                          <p className="font-semibold">{entry.studentName}{live ? ' 🔴 Live now' : ''}</p>
+                          <p className={`text-sm ${live ? 'text-emerald-50' : 'text-gray-600'}`}>{entry.startTime} - {entry.endTime}</p>
+                        </div>
+                        <button onClick={() => onRemoveSlot(entry)} className={`opacity-0 group-hover:opacity-100 transition-opacity ${live ? 'text-white hover:text-emerald-100' : 'text-red-500 hover:text-red-700'}`} title="Remove this weekly slot">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clipRule="evenodd" />
+                          </svg>
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <p className="text-xs text-gray-500 mt-3">Older history isn't shown live here -- see the weekly attendance snapshot for past weeks.</p>
+    </div>
+  );
+}
+
 // One small chip per scheduled class for the whole year, in date order --
 // green with the day-of-month number (attended), red with the day-of-month
 // number (absent), or a small blank/outlined dot (hasn't happened yet).
@@ -4706,6 +4774,19 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
     .filter(s => s.endTime)
     .sort((a, b) => b.startTime.toDate() - a.startTime.toDate());
     
+  // This Week's Schedule, grouped by day -- derived live from the small
+  // recurringSchedule collection (replaces the old ever-growing
+  // teacherSchedule-driven list). A deactivated student's slot doc is left
+  // alone (history stays intact) but drops out here via the isActive check.
+  const scheduleByDay = useMemo(() => {
+    const activeByUid = new Map(students.filter(s => s.isActive === true).map(s => [s.id, s]));
+    const active = recurringSchedule.filter(entry => entry.studentUid === 'offline' || activeByUid.has(entry.studentUid));
+    const byDay = Array.from({ length: 7 }, () => []);
+    active.forEach(entry => { if (byDay[entry.dayOfWeek]) byDay[entry.dayOfWeek].push(entry); });
+    byDay.forEach(list => list.sort((a, b) => a.startTime.localeCompare(b.startTime)));
+    return byDay;
+  }, [recurringSchedule, students]);
+
   const pendingStudents = useMemo(() => students.filter(s => s.isActive === 'pending'), [students]);
   const pendingNameChanges = useMemo(() => students.filter(s => s.pendingName), [students]);
 
@@ -5710,7 +5791,7 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
       )}
 
       {viewMode === 'schedule' && (
-         <div className="max-w-xl">
+         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           <form onSubmit={handleAddSchedule} className="bg-emerald-50/70 backdrop-blur-sm p-6 rounded-xl shadow-lg border border-emerald-200">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-xl font-semibold text-gray-800">Add Manual Schedule Entry</h3>
@@ -5793,8 +5874,10 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
             <button type="submit" className="w-full bg-emerald-500 text-white p-3 rounded-lg font-semibold hover:bg-emerald-600 transition-transform transform hover:scale-105 shadow-md">
               Add Weekly Slot
             </button>
-            <p className="text-xs text-gray-500 mt-3">A student with two class times just gets added twice. To see who's on today or any week, use Weekly Schedule.</p>
+            <p className="text-xs text-gray-500 mt-3">A student with two class times just gets added twice.</p>
           </form>
+
+          <ThisWeekScheduleCard scheduleByDay={scheduleByDay} onRemoveSlot={(entry) => openDeleteModal(entry.id, entry.studentName, 'recurringSchedule')} />
         </div>
       )}
 
