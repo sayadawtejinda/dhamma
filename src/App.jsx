@@ -105,6 +105,10 @@ const NatureWorldApp = lazyLoad(() => import('./NatureWorldApp'));
 // assignable lesson with a list screen, extensible via its own "Add a
 // video" form instead of needing new Lesson Bank entries for each one.
 const WatchAndLearnApp = lazyLoad(() => import('./WatchAndLearnApp'));
+// Festival -- a seasonal app (first: Thadingyut festival of lights) that is
+// only offered on the student home page while its dates in festivals.js are
+// open. Same standalone-app pattern as the other "Home" pieces above.
+const FestivalApp = lazyLoad(() => import('./FestivalApp'));
 
 // Catches a failed lazy-chunk load (e.g. the browser has an old page open
 // from before a new deploy replaced that chunk's file) so it shows a
@@ -343,6 +347,7 @@ export default function App() {
   const [avatarRequest, setAvatarRequest] = useState(null);
   const [natureWorldRequest, setNatureWorldRequest] = useState(null);
   const [watchAndLearnRequest, setWatchAndLearnRequest] = useState(null);
+  const [festivalRequest, setFestivalRequest] = useState(null);
 
   const openMyanmarSpelling = (request) => {
     setMyanmarSpellingRequest(request || {});
@@ -405,6 +410,15 @@ export default function App() {
   const closeWatchAndLearn = () => {
     setActiveApp('tutoring');
     setWatchAndLearnRequest(null);
+  };
+
+  const openFestival = (request) => {
+    setFestivalRequest(request || {});
+    setActiveApp('festival');
+  };
+  const closeFestival = () => {
+    setActiveApp('tutoring');
+    setFestivalRequest(null);
   };
 
   const openReadingMyanmar = (request) => {
@@ -608,6 +622,7 @@ export default function App() {
           onOpenAvatar={openAvatar}
           onOpenNatureWorld={openNatureWorld}
           onOpenWatchAndLearn={openWatchAndLearn}
+          onOpenFestival={openFestival}
           onTrophyEarned={(totalTrophies) => setTrophyCelebration({ totalTrophies })}
         />
       </div>
@@ -942,6 +957,12 @@ export default function App() {
         {activeApp === 'natureworld' && (
           <div>
             <NatureWorldApp entryRequest={natureWorldRequest} onExit={closeNatureWorld} />
+          </div>
+        )}
+
+        {activeApp === 'festival' && (
+          <div>
+            <FestivalApp entryRequest={festivalRequest} onExit={closeFestival} />
           </div>
         )}
 

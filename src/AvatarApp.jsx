@@ -4,6 +4,7 @@ import { db } from './firebase';
 import { appId } from './firebaseConfig';
 import { HOME_BACKGROUNDS } from './homeBackgrounds';
 import OnlineStatusWidget from './OnlineStatusWidget';
+import { FESTIVAL_AVATAR_ITEMS } from './festivals';
 
 // Avatar deliberately has no wallet of its own -- it spends directly out of
 // the same Shrine Room coin balance every other app already deposits into,
@@ -75,6 +76,10 @@ const BG_OPTIONS = [
   { id: 'forest', name: 'Forest', color: '#C8E6C9', cost: 15 },
   { id: 'night', name: 'Night', color: '#5C6BC0', cost: 25 },
 ];
+// Limited-edition festival items (see festivals.js) are drawable at all times
+// but only listed in the shop once a student owns them (see the category grid).
+const ALL_OUTFITS = [...OUTFIT_OPTIONS, ...(FESTIVAL_AVATAR_ITEMS.outfit || [])];
+const ALL_ACCESSORIES = [...ACCESSORY_OPTIONS, ...(FESTIVAL_AVATAR_ITEMS.accessory || [])];
 const find = (list, id) => list.find(o => o.id === id) || list[0];
 
 // setDoc(ref, {'avatar.hair': 'x'}, {merge: true}) does NOT nest -- unlike
@@ -103,7 +108,7 @@ function readNestedWithLegacyFallback(data, prefix) {
 // other, which never quite look like they belong together. Every part is
 // driven purely by the config passed in, so equipping a new item is just
 // swapping one color/shape parameter, not re-drawing anything.
-function CharacterSvg({ skinColor, hair, outfitColor, accessory, className }) {
+function CharacterSvg({ skinColor, hair, outfitColor, outfitPattern, accessory, className }) {
   const hairPath = hair.style === 'short'
     ? <path d="M58,72 Q58,24 100,24 Q142,24 142,72 L142,54 Q100,32 58,54 Z" fill={hair.color} />
     : hair.style === 'long'
@@ -133,12 +138,27 @@ function CharacterSvg({ skinColor, hair, outfitColor, accessory, className }) {
         <line x1="92" y1="98" x2="108" y2="98" />
       </g>
     );
+  } else if (accessory.kind === 'lantern') {
+    accessoryMarkup = (
+      <g>
+        <line x1="138" y1="30" x2="138" y2="44" stroke="#8D6E63" strokeWidth="2" />
+        <ellipse cx="138" cy="56" rx="11" ry="13" fill={accessory.color} stroke="#E65100" strokeWidth="2" />
+        <ellipse cx="138" cy="56" rx="4" ry="7" fill="#FFF8E1" />
+        <rect x="132" y="43" width="12" height="3" rx="1.5" fill="#E65100" />
+        <rect x="132" y="68" width="12" height="3" rx="1.5" fill="#E65100" />
+      </g>
+    );
   }
 
   return (
     <svg viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg" className={className}>
       <ellipse cx="100" cy="224" rx="58" ry="9" fill="#00000022" />
       <path d="M55,240 C49,174 60,148 100,148 C140,148 151,174 145,240 Z" fill={outfitColor} />
+      {outfitPattern === 'lights' && (
+        <g fill="#FFF3B0">
+          {[[84,176],[116,176],[100,194],[78,208],[122,208],[100,222],[70,228],[130,228]].map(([cx, cy], i) => <circle key={i} cx={cx} cy={cy} r="3.6" />)}
+        </g>
+      )}
       <circle cx="68" cy="108" r="8" fill={skinColor} opacity="0.55" />
       <circle cx="132" cy="108" r="8" fill={skinColor} opacity="0.55" />
       <circle cx="100" cy="95" r="55" fill={skinColor} />
@@ -154,8 +174,8 @@ function CharacterSvg({ skinColor, hair, outfitColor, accessory, className }) {
 const DEFAULT_CONFIG = { skin: 'light', hair: 'short-black', outfit: 'blue', accessory: 'none', bg: 'sky', homeBackground: 'default' };
 const CATEGORIES = [
   { key: 'hair', label: '💇 Hair', options: HAIR_OPTIONS },
-  { key: 'outfit', label: '👘 Outfit', options: OUTFIT_OPTIONS },
-  { key: 'accessory', label: '✨ Accessory', options: ACCESSORY_OPTIONS },
+  { key: 'outfit', label: '👘 Outfit', options: ALL_OUTFITS },
+  { key: 'accessory', label: '✨ Accessory', options: ALL_ACCESSORIES },
   { key: 'bg', label: '🎨 Background', options: BG_OPTIONS },
   { key: 'homeBackground', label: '🏠 Home Wallpaper', options: HOME_BACKGROUNDS },
 ];
@@ -398,8 +418,8 @@ export default function AvatarApp({ entryRequest, onExit }) {
 
   const skin = find(SKIN_OPTIONS, config.skin);
   const hair = find(HAIR_OPTIONS, config.hair);
-  const outfit = find(OUTFIT_OPTIONS, config.outfit);
-  const accessory = find(ACCESSORY_OPTIONS, config.accessory);
+  const outfit = find(ALL_OUTFITS, config.outfit);
+  const accessory = find(ALL_ACCESSORIES, config.accessory);
   const bg = find(BG_OPTIONS, config.bg);
   const activeCat = CATEGORIES.find(c => c.key === activeCategory);
 
@@ -486,8 +506,9 @@ export default function AvatarApp({ entryRequest, onExit }) {
                 <CharacterSvg
                   skinColor={find(SKIN_OPTIONS, visitingConfig.skin).color}
                   hair={find(HAIR_OPTIONS, visitingConfig.hair)}
-                  outfitColor={find(OUTFIT_OPTIONS, visitingConfig.outfit).color}
-                  accessory={find(ACCESSORY_OPTIONS, visitingConfig.accessory)}
+                  outfitColor={find(ALL_OUTFITS, visitingConfig.outfit).color}
+                  outfitPattern={find(ALL_OUTFITS, visitingConfig.outfit).pattern}
+                  accessory={find(ALL_ACCESSORIES, visitingConfig.accessory)}
                   className="w-32 h-32"
                 />
               </div>
@@ -626,7 +647,7 @@ export default function AvatarApp({ entryRequest, onExit }) {
         className="w-56 h-56 rounded-3xl shadow-xl border-4 border-white flex items-center justify-center mb-4 transition-colors duration-500"
         style={{ background: bg.color }}
       >
-        <CharacterSvg skinColor={skin.color} hair={hair} outfitColor={outfit.color} accessory={accessory} className="w-44 h-44" />
+        <CharacterSvg skinColor={skin.color} hair={hair} outfitColor={outfit.color} outfitPattern={outfit.pattern} accessory={accessory} className="w-44 h-44" />
       </div>
 
       {/* Skin tone -- free, always available */}
@@ -664,7 +685,7 @@ export default function AvatarApp({ entryRequest, onExit }) {
 
       {/* Shop grid for the active category */}
       <div className="w-full max-w-2xl grid grid-cols-2 sm:grid-cols-3 gap-3">
-        {activeCat.options.map(option => {
+        {activeCat.options.filter(o => !o.festival || isTeacherPreview || isOwned(activeCategory, o.id)).map(option => {
           const owns = isTeacherPreview || isOwned(activeCategory, option.id);
           const equipped = config[activeCategory] === option.id;
           const swatchColor = option.color || '#CFD8DC';
