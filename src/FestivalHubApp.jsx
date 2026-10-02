@@ -76,7 +76,7 @@ function FestivalRow({ festival, onOpen }) {
 
 export default function FestivalHubApp({ onExit, onOpenFestival }) {
   const [settings, setSettings] = useState(null);
-  useEffect(() => { loadFestivalSettings().then(setSettings); }, []);
+  useEffect(() => { loadFestivalSettings(true).then(setSettings); }, []);
   const festivals = settings ? getFestivalList(settings) : [];
   return (
     <div className="min-h-screen bg-gradient-to-b from-amber-50 via-white to-indigo-50 px-4 pt-20 pb-16">

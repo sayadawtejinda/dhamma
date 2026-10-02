@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { doc, getDoc, runTransaction, serverTimestamp, increment } from 'firebase/firestore';
 import { db } from './firebase';
-import OnlineStatusWidget from './OnlineStatusWidget';
 import { spawnFlyingCoins } from './flyingCoins';
 import { localDateKey, festivalStatus } from './festivals';
 import bigBellSound from '../audio/big-bellburmese.mp3';
@@ -16,7 +15,8 @@ import bigBellSound from '../audio/big-bellburmese.mp3';
 //
 // Firestore cost: one read of the student's progress doc and one of their
 // roster doc on open; lamp taps and respects are queued and saved together
-// in ONE transaction a moment after the last tap (not one write per tap).
+// in ONE transaction a few seconds after the last tap (and straight away
+// when leaving or hiding the page), not one write per tap.
 const SHRINE_ROSTER_PATH = 'artifacts/shrine-room-app/public/data/roster';
 const PROGRESS_PATH = 'artifacts/festival-app/public/data/progress';
 const SHRINE_STARTER_COINS = 20;
@@ -241,7 +241,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
   flushRef.current = flush;
   const scheduleFlush = () => {
     clearTimeout(flushTimerRef.current);
-    flushTimerRef.current = setTimeout(() => flushRef.current(), 1200);
+    flushTimerRef.current = setTimeout(() => flushRef.current(), 4000);
   };
 
   // Save whatever is still queued if the student leaves or hides the tab.
@@ -351,16 +351,20 @@ export default function FestivalApp({ entryRequest, onExit }) {
         🏡
       </button>
 
-      <OnlineStatusWidget
-        rosterPath={SHRINE_ROSTER_PATH}
-        studentName={isTeacherPreview ? null : studentName}
-        isTeacherMode={isTeacherPreview}
-        coinBalance={isTeacherPreview ? null : coinBalance}
-        coinIcon="🪙"
-        panelTitle={`${festival.icon} Students`}
-        teacherLabel="🧑‍🏫 Teacher"
-        showInactiveWarning={false}
-      />
+      {/* Just my own name and coin count. The shared OnlineStatusWidget would
+          read the whole class roster collection every time this opens, which is
+          far more than anything here needs -- so it is deliberately not used.
+          The id lets flying coins land on it, same as that widget's badge. */}
+      <div className="fixed top-3 right-3 z-50 flex items-center gap-2 bg-white/90 text-gray-800 rounded-full shadow-lg px-4 py-2 text-sm font-bold">
+        {isTeacherPreview ? (
+          <span className="text-indigo-700">🧑‍🏫 Teacher</span>
+        ) : (
+          <>
+            <span className="truncate max-w-[110px]">{studentName}</span>
+            <span id="online-status-coin-badge" className="text-amber-600">🪙 {coinBalance ?? 0}</span>
+          </>
+        )}
+      </div>
 
       {/* Sky */}
       <div className="absolute inset-0 pointer-events-none">

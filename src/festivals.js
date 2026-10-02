@@ -102,8 +102,19 @@ const notify = () => settingsListeners.forEach(fn => fn(settingsCache));
 // Now the read waits for sign-in, retries a few times, never remembers a
 // failure, and refreshes after 15 minutes so a long-open tab hears about a
 // date the teacher changed.
-const SETTINGS_TTL_MS = 15 * 60 * 1000;
+// The read is also kept on the device (localStorage) so reopening the app or
+// reloading within the hour costs no Firestore read at all -- this home-page
+// check runs for every student, so it is the festival's one always-on cost.
+const SETTINGS_TTL_MS = 60 * 60 * 1000;
+const SETTINGS_STORE_KEY = 'festival_settings_cache_v1';
 let settingsLoadedAt = 0;
+try {
+  const saved = JSON.parse(localStorage.getItem(SETTINGS_STORE_KEY) || 'null');
+  if (saved && saved.data && Date.now() - saved.at < SETTINGS_TTL_MS) { settingsCache = saved.data; settingsLoadedAt = saved.at; }
+} catch (e) { /* no storage -- just reads from Firestore */ }
+const rememberSettings = () => {
+  try { localStorage.setItem(SETTINGS_STORE_KEY, JSON.stringify({ at: settingsLoadedAt, data: settingsCache })); } catch (e) { /* ignore */ }
+};
 const waitForSignIn = () => new Promise(resolve => {
   if (auth.currentUser) { resolve(); return; }
   const timer = setTimeout(() => { unsub(); resolve(); }, 15000);
@@ -120,6 +131,7 @@ async function fetchFestivalSettings() {
       const snap = await getDoc(SETTINGS_DOC);
       settingsCache = snap.exists() ? snap.data() : {};
       settingsLoadedAt = Date.now();
+      rememberSettings();
       notify();
       return settingsCache;
     } catch (e) {
@@ -130,8 +142,9 @@ async function fetchFestivalSettings() {
   return null;
 }
 
-export function loadFestivalSettings() {
-  if (settingsCache && Date.now() - settingsLoadedAt < SETTINGS_TTL_MS) return Promise.resolve(settingsCache);
+// `force` skips the device cache -- used by the teacher's Festival apps screen.
+export function loadFestivalSettings(force = false) {
+  if (!force && settingsCache && Date.now() - settingsLoadedAt < SETTINGS_TTL_MS) return Promise.resolve(settingsCache);
   if (!settingsPromise) {
     settingsPromise = fetchFestivalSettings().then(result => {
       settingsPromise = null; // a failure is not remembered; the next call tries again
@@ -147,6 +160,7 @@ export async function saveFestivalSetting(festivalId, patch) {
   await setDoc(SETTINGS_DOC, { [festivalId]: patch }, { merge: true });
   settingsCache = { ...(settingsCache || {}), [festivalId]: { ...(settingsCache?.[festivalId] || {}), ...patch } };
   settingsLoadedAt = Date.now();
+  rememberSettings();
   notify();
 }
 
