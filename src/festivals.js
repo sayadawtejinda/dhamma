@@ -76,7 +76,8 @@ export const FESTIVALS = [
 
 import { useEffect, useState } from 'react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { db } from './firebase';
+import { db, auth } from './firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 import { appId } from './firebaseConfig';
 
 const pad = (n) => String(n).padStart(2, '0');
@@ -93,12 +94,51 @@ let settingsPromise = null;
 const settingsListeners = new Set();
 const notify = () => settingsListeners.forEach(fn => fn(settingsCache));
 
+// The settings doc can only be read once the anonymous sign-in has finished.
+// On a slower phone the home page can ask before that happens; the read then
+// fails, and the old code remembered that failure as "no teacher settings"
+// for the rest of the visit -- so the phone fell back to the built-in default
+// dates and showed no announcement even while the teacher's dates were open.
+// Now the read waits for sign-in, retries a few times, never remembers a
+// failure, and refreshes after 15 minutes so a long-open tab hears about a
+// date the teacher changed.
+const SETTINGS_TTL_MS = 15 * 60 * 1000;
+let settingsLoadedAt = 0;
+const waitForSignIn = () => new Promise(resolve => {
+  if (auth.currentUser) { resolve(); return; }
+  const timer = setTimeout(() => { unsub(); resolve(); }, 15000);
+  const unsub = onAuthStateChanged(auth, (user) => {
+    if (user) { clearTimeout(timer); unsub(); resolve(); }
+  });
+});
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+async function fetchFestivalSettings() {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    await waitForSignIn();
+    try {
+      const snap = await getDoc(SETTINGS_DOC);
+      settingsCache = snap.exists() ? snap.data() : {};
+      settingsLoadedAt = Date.now();
+      notify();
+      return settingsCache;
+    } catch (e) {
+      console.error('Could not read festival settings (will retry):', e);
+      await sleep(1500 * (attempt + 1));
+    }
+  }
+  return null;
+}
+
 export function loadFestivalSettings() {
-  if (settingsCache) return Promise.resolve(settingsCache);
+  if (settingsCache && Date.now() - settingsLoadedAt < SETTINGS_TTL_MS) return Promise.resolve(settingsCache);
   if (!settingsPromise) {
-    settingsPromise = getDoc(SETTINGS_DOC)
-      .then(snap => { settingsCache = snap.exists() ? snap.data() : {}; notify(); return settingsCache; })
-      .catch(e => { console.error('Could not read festival settings:', e); settingsCache = {}; notify(); return settingsCache; });
+    settingsPromise = fetchFestivalSettings().then(result => {
+      settingsPromise = null; // a failure is not remembered; the next call tries again
+      // Only after every retry has failed: show the built-in dates for now.
+      if (!result && !settingsCache) { settingsCache = {}; settingsLoadedAt = 0; notify(); }
+      return settingsCache;
+    });
   }
   return settingsPromise;
 }
@@ -106,6 +146,7 @@ export function loadFestivalSettings() {
 export async function saveFestivalSetting(festivalId, patch) {
   await setDoc(SETTINGS_DOC, { [festivalId]: patch }, { merge: true });
   settingsCache = { ...(settingsCache || {}), [festivalId]: { ...(settingsCache?.[festivalId] || {}), ...patch } };
+  settingsLoadedAt = Date.now();
   notify();
 }
 
