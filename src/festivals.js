@@ -62,7 +62,7 @@ export const FESTIVALS = [
         id: 'thadingyut-2026-robe',
         category: 'outfit',
         requires: { type: 'lamps', count: 40 },
-        item: { id: 'festival-thadingyut-2026-robe', name: '🪔 Festival Lights Robe', color: '#F97316', pattern: 'lights', cost: 0, festival: true },
+        item: { id: 'festival-thadingyut-2026-robe', name: '🪔 Festival Lights Robe', color: '#F97316', swatch: 'linear-gradient(135deg,#FFC107,#FB8C00 55%,#7B1FA2)', pattern: 'lights', cost: 0, festival: true },
       },
       {
         id: 'thadingyut-2026-lantern',

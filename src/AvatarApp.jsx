@@ -108,6 +108,66 @@ function readNestedWithLegacyFallback(data, prefix) {
 // other, which never quite look like they belong together. Every part is
 // driven purely by the config passed in, so equipping a new item is just
 // swapping one color/shape parameter, not re-drawing anything.
+// Festival Lights Robe: not a flat colour like the shop robes -- a glowing
+// orange-to-gold gradient with a plum sash, a gold V collar, lotus flowers,
+// little lamp flames, sparkles and an embroidered hem. Clipped to the body so
+// nothing spills outside the robe.
+function Lotus({ cx, cy, r = 7 }) {
+  return (
+    <g transform={`translate(${cx} ${cy})`}>
+      {[0, 72, 144, 216, 288].map(a => (
+        <ellipse key={a} cx="0" cy={-r * 0.8} rx={r * 0.42} ry={r * 0.8} fill="#F8BBD0" stroke="#EC407A" strokeWidth="0.6" transform={`rotate(${a})`} />
+      ))}
+      <circle r={r * 0.34} fill="#FFEB3B" />
+    </g>
+  );
+}
+function FestivalRobeArt() {
+  return (
+    <>
+      <defs>
+        <linearGradient id="festRobeGrad" x1="0" y1="0" x2="0.6" y2="1">
+          <stop offset="0" stopColor="#FFC107" />
+          <stop offset="0.5" stopColor="#FB8C00" />
+          <stop offset="1" stopColor="#D84315" />
+        </linearGradient>
+        <clipPath id="festRobeClip">
+          <path d="M55,240 C49,174 60,148 100,148 C140,148 151,174 145,240 Z" />
+        </clipPath>
+      </defs>
+      <g clipPath="url(#festRobeClip)">
+        {/* plum sash across the chest, with gold edging */}
+        <polygon points="62,156 84,152 150,214 150,236 138,236" fill="#7B1FA2" />
+        <polygon points="62,156 84,152 150,214 150,236 138,236" fill="none" stroke="#FFD54F" strokeWidth="2.2" />
+        <circle cx="100" cy="186" r="2.4" fill="#FFD54F" />
+        <circle cx="114" cy="199" r="2.4" fill="#FFD54F" />
+        <circle cx="127" cy="212" r="2.4" fill="#FFD54F" />
+        {/* lotus flowers */}
+        <Lotus cx="78" cy="190" r="7" />
+        <Lotus cx="68" cy="214" r="6" />
+        <Lotus cx="122" cy="176" r="6" />
+        <Lotus cx="96" cy="226" r="7" />
+        {/* lamp flames */}
+        {[[86, 208], [140, 232], [112, 232]].map(([x, y], i) => (
+          <g key={i} transform={`translate(${x} ${y})`}>
+            <path d="M0,-7 Q4,-2 0,3 Q-4,-2 0,-7 Z" fill="#FFF59D" stroke="#FFB300" strokeWidth="0.7" />
+          </g>
+        ))}
+        {/* sparkles */}
+        {[[72, 172], [128, 190], [88, 238], [108, 164]].map(([x, y], i) => (
+          <path key={i} d={`M${x},${y - 4} L${x + 1.2},${y - 1.2} L${x + 4},${y} L${x + 1.2},${y + 1.2} L${x},${y + 4} L${x - 1.2},${y + 1.2} L${x - 4},${y} L${x - 1.2},${y - 1.2} Z`} fill="#FFF8E1" />
+        ))}
+        {/* embroidered hem */}
+        <rect x="40" y="228" width="120" height="12" fill="#B71C1C" />
+        <rect x="40" y="228" width="120" height="2.4" fill="#FFD54F" />
+        {Array.from({ length: 11 }).map((_, i) => <circle key={i} cx={52 + i * 9.6} cy="235" r="2" fill="#FFD54F" />)}
+        {/* gold V collar */}
+        <path d="M76,150 L100,184 L124,150 L116,148 L100,170 L84,148 Z" fill="#FFE082" stroke="#FFB300" strokeWidth="1.4" strokeLinejoin="round" />
+      </g>
+    </>
+  );
+}
+
 function CharacterSvg({ skinColor, hair, outfitColor, outfitPattern, accessory, className }) {
   const hairPath = hair.style === 'short'
     ? <path d="M58,72 Q58,24 100,24 Q142,24 142,72 L142,54 Q100,32 58,54 Z" fill={hair.color} />
@@ -153,12 +213,8 @@ function CharacterSvg({ skinColor, hair, outfitColor, outfitPattern, accessory, 
   return (
     <svg viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg" className={className}>
       <ellipse cx="100" cy="224" rx="58" ry="9" fill="#00000022" />
-      <path d="M55,240 C49,174 60,148 100,148 C140,148 151,174 145,240 Z" fill={outfitColor} />
-      {outfitPattern === 'lights' && (
-        <g fill="#FFF3B0">
-          {[[84,176],[116,176],[100,194],[78,208],[122,208],[100,222],[70,228],[130,228]].map(([cx, cy], i) => <circle key={i} cx={cx} cy={cy} r="3.6" />)}
-        </g>
-      )}
+      <path d="M55,240 C49,174 60,148 100,148 C140,148 151,174 145,240 Z" fill={outfitPattern === 'lights' ? 'url(#festRobeGrad)' : outfitColor} />
+      {outfitPattern === 'lights' && <FestivalRobeArt />}
       <circle cx="68" cy="108" r="8" fill={skinColor} opacity="0.55" />
       <circle cx="132" cy="108" r="8" fill={skinColor} opacity="0.55" />
       <circle cx="100" cy="95" r="55" fill={skinColor} />
@@ -688,7 +744,7 @@ export default function AvatarApp({ entryRequest, onExit }) {
         {activeCat.options.filter(o => !o.festival || isTeacherPreview || isOwned(activeCategory, o.id)).map(option => {
           const owns = isTeacherPreview || isOwned(activeCategory, option.id);
           const equipped = config[activeCategory] === option.id;
-          const swatchColor = option.color || '#CFD8DC';
+          const swatchColor = option.swatch || option.color || '#CFD8DC';
           return (
             <button
               key={option.id}

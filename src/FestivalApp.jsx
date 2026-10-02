@@ -512,7 +512,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
                 return (
                   <div key={rw.id} className={`rounded-2xl border-2 p-3 ${got ? 'border-emerald-400/60 bg-emerald-500/10' : 'border-white/20 bg-white/5'}`}>
                     <div className="flex items-center gap-3">
-                      <span className="w-11 h-11 rounded-full border border-white/30 flex-shrink-0" style={{ background: rw.item.color }} />
+                      <span className="w-11 h-11 rounded-full border border-white/30 flex-shrink-0" style={{ background: rw.item.swatch || rw.item.color }} />
                       <div className="flex-1 min-w-0">
                         <div className="font-bold text-sm">{rw.item.name}</div>
                         <div className="text-xs text-indigo-200">
