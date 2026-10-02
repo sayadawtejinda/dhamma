@@ -612,6 +612,11 @@ const DAILY_LAMP_REWARD = 5;
 const CHANT_LOTUS_SESSION_CAP = 15;
 const MEDITATION_LOTUS_SESSION_CAP = 30;
 const DAILY_LOTUS_CAP = 40;
+// Visiting another student's altar brings up to this many of THEIR offerings
+// as gifts for me: the next time I buy that offering in the Merit Shop it is
+// free. At most SHRINE_GIFT_MAX unused gifts are held at once.
+const SHRINE_GIFTS_PER_VISIT = 2;
+const SHRINE_GIFT_MAX = 3;
 // Shopping stays open for good -- prices are cheap enough that coin
 // balances aren't worth worrying over, so the earlier "trial period, coins
 // get reset once finalized" plan is off; no reset is coming. Prices may
@@ -1098,6 +1103,11 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   const [visitingStudentName, setVisitingStudentName] = useState(null);
   const [visitingData, setVisitingData] = useState(null);
   const [visitLoading, setVisitLoading] = useState(false);
+  // Free-offering gifts from visiting friends' altars: [{ id, from }], plus
+  // which friends have already given me theirs (once each).
+  const [giftOfferings, setGiftOfferings] = useState([]);
+  const [giftFriends, setGiftFriends] = useState([]);
+  const [visitGiftNote, setVisitGiftNote] = useState(null);
 
   const rosterRef = studentUid ? doc(db, SHRINE_ROSTER_PATH, sanitizeShrineKey(studentName)) : null;
 
@@ -1115,12 +1125,14 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     if (!targetName || targetName === studentName) return;
     setVisitingStudentName(targetName);
     setVisitingData(null);
+    setVisitGiftNote(null);
     setVisitLoading(true);
     try {
       const targetRef = doc(db, SHRINE_ROSTER_PATH, sanitizeShrineKey(targetName));
       const snap = await getDoc(targetRef);
       const data = snap.exists() ? snap.data() : {};
       setVisitingData(data);
+      if (!isTeacherPreview) collectVisitGifts(targetName, data);
       if (studentName) {
         const others = (data.recentVisitors || []).filter(v => v.name !== studentName);
         const nextVisitors = [{ name: studentName, visitedAt: Date.now() }, ...others].slice(0, 10);
@@ -1133,7 +1145,44 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     }
     setVisitLoading(false);
   };
-  const closeVisit = () => { setVisitingStudentName(null); setVisitingData(null); };
+  const closeVisit = () => { setVisitingStudentName(null); setVisitingData(null); setVisitGiftNote(null); };
+
+  // Picks up to SHRINE_GIFTS_PER_VISIT different offerings from the altar
+  // being visited as gifts (a friend only ever gives once; the Golden
+  // Umbrella and Bell are never gifted). Gifts I'm already holding aren't
+  // doubled up, and no more than SHRINE_GIFT_MAX are held at a time.
+  function collectVisitGifts(targetName, data) {
+    if (giftFriends.includes(targetName)) return;
+    const room = SHRINE_GIFT_MAX - giftOfferings.length;
+    const heldIds = new Set(giftOfferings.map(g => g.id));
+    const candidates = Array.from(new Set(Object.values(data.placedItems || {}).map(item => item.id)))
+      .filter(id => id !== 'umbrella' && id !== 'bell' && findOffering(id) && !heldIds.has(id));
+    if (candidates.length === 0) return;
+    if (room <= 0) {
+      setVisitGiftNote(`🎁 You already hold ${SHRINE_GIFT_MAX} gifts -- use one in the Merit Shop to receive more.`);
+      return;
+    }
+    for (let i = candidates.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+    }
+    const picks = candidates.slice(0, Math.min(SHRINE_GIFTS_PER_VISIT, room));
+    const nextGifts = [...giftOfferings, ...picks.map(id => ({ id, from: targetName }))];
+    const nextFriends = [...giftFriends, targetName].slice(-300);
+    setGiftOfferings(nextGifts);
+    setGiftFriends(nextFriends);
+    persist({ shrineGifts: nextGifts, shrineGiftFriends: nextFriends });
+    setVisitGiftNote(`🎁 A gift from ${targetName}'s altar: ${picks.map(id => `${findOffering(id).emoji || ''} ${findOffering(id).name}`).join(' and ')}. Your next purchase of ${picks.length > 1 ? 'each' : 'it'} in the Merit Shop is free!`);
+  }
+  // A gift is used up the moment the free purchase is made.
+  const takeGift = (offeringId) => {
+    const idx = giftOfferings.findIndex(g => g.id === offeringId);
+    if (idx < 0) return false;
+    const next = giftOfferings.filter((_, i) => i !== idx);
+    setGiftOfferings(next);
+    persist({ shrineGifts: next });
+    return true;
+  };
 
   const persist = (patch) => {
     if (!rosterRef) return;
@@ -1187,6 +1236,8 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
             setLotusDailyDate(data.lotusDailyDate || null);
             setLotusDailyCount(data.lotusDailyCount || 0);
             setRecentVisitors(data.recentVisitors || []);
+            setGiftOfferings(data.shrineGifts || []);
+            setGiftFriends(data.shrineGiftFriends || []);
           }
           if (data.coinBalance == null) persist({ coinBalance: STARTER_COINS });
         } else {
@@ -1303,8 +1354,9 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     // slots to the next real empty one every time.
     const emptySlot = Array.from({ length: SLOT_COUNT }).findIndex((_, i) => !placedItems[i] || !findOffering(placedItems[i].id));
     if (emptySlot === -1) { showToast('Your altar is full -- remove something first.'); return; }
-    if (!isTeacherPreview && coinBalance < option.cost) { showToast('Not enough coins.'); return; }
-    awardCoins(-option.cost);
+    const isGift = giftOfferings.some(g => g.id === option.id);
+    if (!isTeacherPreview && !isGift && coinBalance < option.cost) { showToast('Not enough coins.'); return; }
+    if (isGift) takeGift(option.id); else awardCoins(-option.cost);
     setPlacedItems(prev => {
       const next = { ...prev, [emptySlot]: { id: option.id, placedAt: Date.now() } };
       persist({ placedItems: next });
@@ -1408,8 +1460,9 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
       showToast(`Grow your Bodhi Tree further to unlock this.`);
       return;
     }
-    if (!isTeacherPreview && coinBalance < option.cost) { showToast('Not enough coins.'); return; }
-    awardCoins(-option.cost);
+    const isGift = giftOfferings.some(g => g.id === option.id);
+    if (!isTeacherPreview && !isGift && coinBalance < option.cost) { showToast('Not enough coins.'); return; }
+    if (isGift) takeGift(option.id); else awardCoins(-option.cost);
     setPlacedItems(prev => {
       const next = { ...prev, [slotIndex]: { id: offeringId, placedAt: Date.now() } };
       persist({ placedItems: next });
@@ -1802,6 +1855,9 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
           <button onClick={closeVisit} className="fixed top-3 right-3 z-[10002] w-11 h-11 rounded-full bg-red-600 hover:bg-red-700 text-white text-2xl font-bold shadow-lg flex items-center justify-center" aria-label="Close">×</button>
           <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-bold text-emerald-800 mb-4">🛕 {visitingStudentName}'s Shrine Room</h2>
+            {visitGiftNote && (
+              <p className="mb-4 text-sm font-semibold text-amber-800 bg-amber-50 border border-amber-300 rounded-xl px-3 py-2">{visitGiftNote}</p>
+            )}
             {visitLoading ? (
               <p className="text-sm text-gray-400 py-8">Opening...</p>
             ) : !visitingData ? (
@@ -2219,7 +2275,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
                       <OfferingIcon offering={option} className="w-5 h-5 inline-flex items-center justify-center flex-shrink-0" />
                       <span>{option.name}</span>
                     </span>
-                    <span className="text-sm font-bold text-amber-700">{locked ? '🔒 Bodhi Tree' : (option.id === 'umbrella' && ownedUmbrellas > ((placedUmbrellas.left ? 1 : 0) + (placedUmbrellas.right ? 1 : 0))) ? 'Owned – free' : `🪙 ${option.cost}`}</span>
+                    <span className="text-sm font-bold text-amber-700">{locked ? '🔒 Bodhi Tree' : (option.id === 'umbrella' && ownedUmbrellas > ((placedUmbrellas.left ? 1 : 0) + (placedUmbrellas.right ? 1 : 0))) ? 'Owned – free' : giftOfferings.some(g => g.id === option.id) ? '🎁 Gift – free' : `🪙 ${option.cost}`}</span>
                   </button>
                 );
               })}

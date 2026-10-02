@@ -72,6 +72,8 @@ const GIFT_OPTIONS = [
   { id: 'gift-rose', name: 'Rose', emoji: '🌹', kind: 'gift' },
 ];
 const GIFT_BAG_MAX = 30;
+// A student can send gifts (by visiting) to this many different friends a week.
+const GIFTS_SENT_PER_WEEK = 2;
 // One gift per visiting friend, ever -- keyed by the visitor's name, so
 // coming back again doesn't bring another. (Older keys were name + visit
 // time; those still count as "already opened" for that name.)
@@ -353,6 +355,7 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
   const [visitingStudentName, setVisitingStudentName] = useState(null);
   const [visitingWorld, setVisitingWorld] = useState(null);
   const [visitLoading, setVisitLoading] = useState(false);
+  const [visitGiftNote, setVisitGiftNote] = useState(null);
 
   const rosterRef = studentUid ? doc(db, SHRINE_ROSTER_PATH, sanitizeShrineKey(studentName)) : null;
 
@@ -471,6 +474,7 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
     if (!targetName || targetName === studentName) return;
     setVisitingStudentName(targetName);
     setVisitingWorld(null);
+    setVisitGiftNote(null);
     setVisitLoading(true);
     try {
       const targetRef = doc(db, SHRINE_ROSTER_PATH, sanitizeShrineKey(targetName));
@@ -478,8 +482,28 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
       const data = snap.exists() ? snap.data() : {};
       setVisitingWorld(snap.exists() ? { ...DEFAULT_WORLD, ...(data.natureWorld || {}) } : null);
       if (studentName) {
+        // A visit is also the gift: only GIFTS_SENT_PER_WEEK different
+        // friends a week actually receive one from me. Beyond that I can
+        // still look around, it just comes without a gift. Visiting someone
+        // I already gifted this week (or who already opened my gift) costs
+        // nothing more.
+        const weekKey = currentWeekKey();
+        const given = world.giftWeekKey === weekKey ? (world.giftWeekGiven || []) : [];
+        const noExtraCost = given.includes(targetName) || hasOpenedGiftFrom(data.natureWorld?.giftsOpened, { name: studentName });
+        let withGift = true;
+        if (!noExtraCost) {
+          if (given.length < GIFTS_SENT_PER_WEEK) {
+            const nextGiven = [...given, targetName];
+            setWorld(prev => ({ ...prev, giftWeekKey: weekKey, giftWeekGiven: nextGiven }));
+            persist({ natureWorld: { giftWeekKey: weekKey, giftWeekGiven: nextGiven } });
+            setVisitGiftNote(`🎁 Your gift is on its way to ${targetName}! (${nextGiven.length}/${GIFTS_SENT_PER_WEEK} gifts this week)`);
+          } else {
+            withGift = false;
+            setVisitGiftNote(`You have already sent gifts to ${GIFTS_SENT_PER_WEEK} friends this week, so this visit comes without a gift. New gifts next week!`);
+          }
+        }
         const others = (data.natureWorldRecentVisitors || []).filter(v => v.name !== studentName);
-        const nextVisitors = [{ name: studentName, visitedAt: Date.now() }, ...others].slice(0, 10);
+        const nextVisitors = [{ name: studentName, visitedAt: Date.now(), gift: withGift }, ...others].slice(0, 10);
         setDoc(targetRef, { natureWorldRecentVisitors: nextVisitors }, { merge: true }).catch(() => {});
       }
     } catch (e) {
@@ -489,7 +513,7 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
     }
     setVisitLoading(false);
   };
-  const closeVisit = () => { setVisitingStudentName(null); setVisitingWorld(null); };
+  const closeVisit = () => { setVisitingStudentName(null); setVisitingWorld(null); setVisitGiftNote(null); };
 
   const renderGrid = (w, { interactive }) => (
     <div className="relative w-full">
@@ -746,12 +770,14 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
                   const gift = giftForVisit(giftKeyFor(v));
                   return (
                     <div key={i} className="flex items-center gap-3 bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2">
-                      <GiftBox opened={isOpened} onClick={() => openGift(v)} />
+                      {v.gift === false
+                        ? <span className="w-11 h-11 flex-shrink-0 flex items-center justify-center text-2xl" title="Visited without a gift">👣</span>
+                        : <GiftBox opened={isOpened} onClick={() => openGift(v)} />}
                       <div className="flex-1 min-w-0">
                         <span className="font-semibold text-gray-800 block truncate">{v.name}{v.teacher ? ' 🧑‍🏫' : ''}</span>
                         <span className="text-xs text-gray-400">{new Date(v.visitedAt).toLocaleString()}</span>
                       </div>
-                      {isOpened && <span className="text-2xl" title={gift.name}>{gift.emoji}</span>}
+                      {isOpened && v.gift !== false && <span className="text-2xl" title={gift.name}>{gift.emoji}</span>}
                       {/* Send a gift back to whoever visited -- same visit
                           action as the online-students list, just reachable
                           from here too, since a visitor isn't always still
@@ -783,6 +809,9 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
           <button onClick={closeVisit} className="fixed top-3 right-3 z-[10002] w-11 h-11 rounded-full bg-red-600 hover:bg-red-700 text-white text-2xl font-bold shadow-lg flex items-center justify-center" aria-label="Close">×</button>
           <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 text-center max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-bold text-emerald-800 mb-4">🌿 {visitingStudentName}'s Nature World</h2>
+            {visitGiftNote && (
+              <p className="mb-4 text-sm font-semibold text-emerald-800 bg-emerald-50 border border-emerald-300 rounded-xl px-3 py-2">{visitGiftNote}</p>
+            )}
             {visitLoading ? (
               <p className="text-sm text-gray-400 py-8">Opening...</p>
             ) : !visitingWorld ? (
