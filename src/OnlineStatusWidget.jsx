@@ -108,6 +108,9 @@ export default function OnlineStatusWidget({
   // instead of it living in a separate badge that a shop panel can cover.
   secondaryBalance,
   secondaryIcon = '🪙',
+  // How the "active students" count reads on the pill (e.g. Nature World
+  // shows it as "visit 46 👥" since tapping it lists who to visit).
+  weeklyLabel = (n) => <>👥 {n} this week</>,
 }) {
   const { weeklyRosterList, onlineCount, warningCount: rawWarningCount } = useOnlineRoster(rosterPath, filterDocs, lastSeenField, isTeacherMode);
   const warningCount = showInactiveWarning ? rawWarningCount : 0;
@@ -147,7 +150,7 @@ export default function OnlineStatusWidget({
         <button onClick={() => setShowPanel(true)} className="flex items-center gap-1 text-emerald-600 font-bold hover:underline">
           {(isTeacherMode && isOnlineStatusDay())
             ? <><span className="w-2 h-2 bg-emerald-500 rounded-full inline-block"></span>{onlineCount} online</>
-            : <>👥 {weeklyRosterList.length} this week</>}
+            : weeklyLabel(weeklyRosterList.length)}
           {warningCount > 0 && (
             <span className="text-xs font-bold text-red-600 bg-red-100 border border-red-300 px-1.5 py-0.5 rounded-full ml-1">{warningCount} inactive</span>
           )}

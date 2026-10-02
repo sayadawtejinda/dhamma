@@ -191,7 +191,7 @@ function Weather() {
       <style>{`
         @keyframes natureRainFall { from { transform: translateY(-8vh); } to { transform: translateY(108vh); } }
         @keyframes natureSnowFall { from { transform: translate(0, -8vh) rotate(0deg); } to { transform: translate(var(--sway), 108vh) rotate(360deg); } }
-        @keyframes natureSunPulse { 0%, 100% { transform: scale(1) rotate(0deg); filter: drop-shadow(0 0 14px rgba(255,200,0,0.9)); } 50% { transform: scale(1.1) rotate(12deg); filter: drop-shadow(0 0 30px rgba(255,190,0,1)); } }
+        @keyframes natureSunPulse { 0%, 100% { transform: scale(1) rotate(0deg); box-shadow: 0 0 28px 10px rgba(255,190,70,0.55), 0 0 70px 26px rgba(255,160,40,0.28); } 50% { transform: scale(1.08) rotate(12deg); box-shadow: 0 0 40px 16px rgba(255,200,90,0.7), 0 0 100px 40px rgba(255,170,50,0.38); } }
       `}</style>
       {type === 'rain' && (
         <>
@@ -213,8 +213,17 @@ function Weather() {
       )}
       {type === 'sun' && (
         <>
-          <div className="absolute inset-0 bg-gradient-to-b from-yellow-200/25 via-transparent to-transparent" />
-          <span className="absolute top-14 right-6 text-7xl select-none" style={{ animation: 'natureSunPulse 4s ease-in-out infinite' }}>☀️</span>
+          <div className="absolute inset-0 bg-gradient-to-b from-amber-200/30 via-transparent to-transparent" />
+          {/* A warm golden sun, the colour of a lit shrine lamp. Sits below
+              the top-right pills/Visitors button (which used to cover it). */}
+          <span
+            className="absolute top-32 right-8 rounded-full"
+            style={{
+              width: 84, height: 84,
+              background: 'radial-gradient(circle at 40% 38%, #fff6c9 0%, #ffd866 38%, #ffb23c 72%, #f59a23 100%)',
+              animation: 'natureSunPulse 4s ease-in-out infinite',
+            }}
+          />
         </>
       )}
     </div>
@@ -587,6 +596,7 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
         coinBalance={isTeacherPreview ? null : coinBalance}
         coinIcon="🪙"
         panelTitle="🌿 Students"
+        weeklyLabel={(n) => <>visit {n} 👥</>}
         teacherLabel="🧑‍🏫 Teacher"
         showInactiveWarning={false}
         renderActivity={(s) => !isTeacherPreview && s.studentName !== studentName && (

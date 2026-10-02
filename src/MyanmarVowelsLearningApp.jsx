@@ -749,11 +749,20 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
             if (!btnP) return;
             const locked = !isBasicFullyDone();
             btnP.title = locked ? 'Finish Basic mode first to unlock Pro mode' : 'Pro Mode';
-            btnP.style.opacity = locked ? '0.5' : '';
+            // Locked = visibly greyed out AND untappable (until the Basic
+            // Listen & Match / Click Sequence games are all won).
+            btnP.style.opacity = locked ? '0.35' : '';
+            btnP.style.filter = locked ? 'grayscale(1)' : '';
+            btnP.style.pointerEvents = locked ? 'none' : '';
+            btnP.style.cursor = locked ? 'not-allowed' : '';
+            btnP.setAttribute('aria-disabled', locked ? 'true' : 'false');
         }
         // Gold coins: +10 per correct Listen/Click answer, -1 per wrong
-        // (Typing Practice excluded), +20 per consonant picked in "Choose
-        // Consonants" -- clamped at 0, same convention as ConsonantPracticeApp.
+        // (Typing Practice excluded), +5 per consonant picked in "Choose
+        // Consonants", +2 per vowel read (tapped, or read in order) --
+        // clamped at 0, same convention as ConsonantPracticeApp.
+        const READ_COINS = 2;
+        const CONSONANT_PICK_COINS = 5;
         function awardCoins(delta) {
             if (!progressRosterRef) return;
             const newBalance = Math.max(0, coinBalanceRef.current + delta);
@@ -834,6 +843,7 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
         let randomGameCurrentAnswer = '';
         
         let isReadingAloud = false;
+        let lastReadCoinAt = 0;
         let audioUnlocked = false;
 
         const vowelAudio = new Audio(singleAudioFile);
@@ -846,6 +856,7 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
         const runMasterInit = () => {
             vowelAudio.preload = 'auto';
             level1AllAudio.preload = 'auto';
+            updateModeButtonLockUI();
             initConsonantModal();
             proGrid.classList.add('hidden');
         };
@@ -1196,7 +1207,18 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
         function handleVowelClick(baseKey, element) {
             unlockAudio();
             if(!baseKey || currentGameType !== 'click') {
-                if(!currentGameType) playAudio(baseKey);
+                if(!currentGameType) {
+                    playAudio(baseKey);
+                    // +2 coins per tapped vowel (not while "read in order"
+                    // is already paying per vowel). Ignores taps closer than
+                    // 600ms apart so mashing a vowel can't farm coins faster
+                    // than its sound can even play.
+                    const now = Date.now();
+                    if (baseKey && !isReadingAloud && now - lastReadCoinAt > 600) {
+                        lastReadCoinAt = now;
+                        awardCoins(READ_COINS);
+                    }
+                }
                 return;
             }
             
@@ -1290,7 +1312,8 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
             });
         }
         
-        async function playIntroSequence(callback) {
+        let readCoinsUnsaved = false;
+        async function playIntroSequence(callback, payCoins = false) {
             if (isReadingAloud) return;
             isReadingAloud = true;
             rootEl.querySelectorAll('.vowel-item').forEach(item => item.classList.remove('hide-roman'));
@@ -1307,6 +1330,15 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
                         element.classList.add('highlight-reading');
                         element.scrollIntoView({ behavior: 'smooth', block: 'center' });
                         await playAudio(vowel);
+                        // +2 coins per vowel read in order -- paid on screen
+                        // as each one is read, saved to Firestore once the
+                        // whole read-through ends (not one write per vowel).
+                        if (payCoins && progressRosterRef) {
+                            coinBalanceRef.current += READ_COINS;
+                            setMyCoinBalance(coinBalanceRef.current);
+                            spawnFlyingCoins(clickTracker.get(), READ_COINS);
+                            readCoinsUnsaved = true;
+                        }
                         await new Promise(resolve => setTimeout(resolve, 150));
                         element.classList.remove('highlight-reading');
                     }
@@ -1315,6 +1347,10 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
             }
 
             isReadingAloud = false;
+            if (readCoinsUnsaved && progressRosterRef) {
+                readCoinsUnsaved = false;
+                setDoc(progressRosterRef, { coinBalance: coinBalanceRef.current }, { merge: true }).catch(() => {});
+            }
             if (currentGameType) rootEl.querySelectorAll('.vowel-item').forEach(item => item.classList.add('hide-roman'));
             if (callback) callback();
         }
@@ -1322,7 +1358,7 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
         async function readAloud() {
             if (isReadingAloud || currentGameType) return;
             unlockAudio();
-            playIntroSequence(null);
+            playIntroSequence(null, true);
         }
 
         function findVowelElement(baseKey) {
@@ -1562,7 +1598,7 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
                     byId('btn-consonant').textContent = currentC;
                     updateGridsWithConsonant();
                     closeConsonantModal();
-                    awardCoins(20);
+                    awardCoins(CONSONANT_PICK_COINS);
                 };
                 grid.appendChild(btn);
             });
