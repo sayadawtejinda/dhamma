@@ -24,7 +24,8 @@ export const FESTIVALS = [
     // Paying respect -- once per person per day, each answered with a
     // blessing and a few coins. The Triple Gem comes first.
     kadaw: {
-      coins: 10,
+      coins: 20,
+      lotus: 1, // 🪷 per respect paid (Shrine Room's daily lotus limit still applies)
       recipients: [
         {
           id: 'triple-gem', emoji: '🛕', name: 'The Triple Gem',

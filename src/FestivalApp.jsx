@@ -20,6 +20,9 @@ import bigBellSound from '../audio/big-bellburmese.mp3';
 const SHRINE_ROSTER_PATH = 'artifacts/shrine-room-app/public/data/roster';
 const PROGRESS_PATH = 'artifacts/festival-app/public/data/progress';
 const SHRINE_STARTER_COINS = 20;
+// Shrine Room caps lotus income across every source at this many a day, keyed
+// by the UTC date (see DAILY_LOTUS_CAP / todayKey in ShrineRoomApp.jsx).
+const SHRINE_DAILY_LOTUS_CAP = 40;
 const sanitizeShrineKey = (key) => (key || 'unknown').trim().replace(/[.$#/\[\]]/g, '_');
 
 // Lamp positions as % of the scene (x from left, y from top): an arc in
@@ -60,6 +63,10 @@ async function saveFestivalProgress({ festival, studentUid, studentName, lampIdx
     newKadaw.forEach(id => kadawToday.add(id));
 
     let coins = newLamps.length * festival.lamps.coins + newKadaw.length * festival.kadaw.coins;
+    // Each new respect also earns lotus flowers, held to Shrine Room's daily cap.
+    const shrineDay = new Date().toISOString().slice(0, 10);
+    const lotusBase = r.lotusDailyDate === shrineDay ? (r.lotusDailyCount || 0) : 0;
+    const lotus = Math.min(newKadaw.length * (festival.kadaw.lotus || 0), Math.max(0, SHRINE_DAILY_LOTUS_CAP - lotusBase));
     const allLitBonus = !wasAllLit && litToday.size >= festival.lamps.perDay;
     if (allLitBonus) coins += festival.lamps.allLitBonus;
 
@@ -71,7 +78,7 @@ async function saveFestivalProgress({ festival, studentUid, studentName, lampIdx
     const newlyUnlocked = festival.rewards.filter(rw => !alreadyUnlocked.includes(rw.id) && requirementMet(rw.requires, festival, state));
 
     if (newLamps.length === 0 && newKadaw.length === 0 && newlyUnlocked.length === 0) {
-      return { balance: r.coinBalance ?? SHRINE_STARTER_COINS, coins: 0, newlyUnlocked: [], lampsTotal: state.lampsTotal, kadawEver: state.kadawEver };
+      return { balance: r.coinBalance ?? SHRINE_STARTER_COINS, coins: 0, lotus: 0, newlyUnlocked: [], lampsTotal: state.lampsTotal, kadawEver: state.kadawEver };
     }
 
     tx.set(progRef, {
@@ -100,9 +107,14 @@ async function saveFestivalProgress({ festival, studentUid, studentName, lampIdx
       });
       rosterPatch.avatarOwned = ownedPatch;
     }
+    if (lotus > 0) {
+      rosterPatch.lotusCount = increment(lotus);
+      rosterPatch.lotusDailyDate = shrineDay;
+      rosterPatch.lotusDailyCount = lotusBase + lotus;
+    }
     tx.set(rosterRef, rosterPatch, { merge: true });
 
-    return { balance: base + coins, coins, newlyUnlocked, lampsTotal: state.lampsTotal, kadawEver: state.kadawEver };
+    return { balance: base + coins, coins, lotus, newlyUnlocked, lampsTotal: state.lampsTotal, kadawEver: state.kadawEver };
   });
 }
 
@@ -200,11 +212,13 @@ export default function FestivalApp({ entryRequest, onExit }) {
     const kadawIds = Array.from(pendingRef.current.kadaw);
     if (isTeacherPreview || !festival || (lampIdxs.length === 0 && kadawIds.length === 0)) return;
     pendingRef.current = { lamps: new Set(), kadaw: new Set() };
+    const expectedLotus = kadawIds.length * (festival.kadaw.lotus || 0);
     try {
       const res = await saveFestivalProgress({ festival, studentUid, studentName, lampIdxs, kadawIds });
       retriesRef.current = 0;
       if (!mountedRef.current) return;
       setCoinBalance(res.balance);
+      if (expectedLotus > 0 && res.lotus < expectedLotus) showToast('Daily lotus limit reached 🪷');
       setLampsTotal(res.lampsTotal);
       setKadawEver(res.kadawEver);
       if (res.newlyUnlocked.length > 0) {
@@ -441,7 +455,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
                   <button key={r.id} onClick={() => openKadaw(r)} className={`rounded-2xl border-2 p-3 text-center transition ${done ? 'border-emerald-400/60 bg-emerald-500/10' : 'border-amber-300/50 bg-white/5 hover:bg-white/10'}`}>
                     <div className="text-4xl">{r.emoji}</div>
                     <div className="text-sm font-bold mt-1">{r.name}</div>
-                    <div className={`text-xs font-bold mt-1 ${done ? 'text-emerald-300' : 'text-amber-300'}`}>{done ? '✅ Done today' : `🪙 +${festival.kadaw.coins}`}</div>
+                    <div className={`text-xs font-bold mt-1 ${done ? 'text-emerald-300' : 'text-amber-300'}`}>{done ? '✅ Done today' : `🪙 +${festival.kadaw.coins}  🪷 +${festival.kadaw.lotus}`}</div>
                   </button>
                 );
               })}
@@ -469,7 +483,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
                 <p className="mt-3 text-sm font-bold text-emerald-300">
                   {kadawStage === 'blessedAgain'
                     ? 'You already paid respect today 🌸 Come back tomorrow.'
-                    : isTeacherPreview ? `🪙 +${festival.kadaw.coins} (preview)` : `🪙 +${festival.kadaw.coins} — thank you for being grateful.`}
+                    : isTeacherPreview ? `🪙 +${festival.kadaw.coins}  🪷 +${festival.kadaw.lotus} (preview)` : `🪙 +${festival.kadaw.coins}  🪷 +${festival.kadaw.lotus} — thank you for being grateful.`}
                 </p>
                 <button onClick={() => setKadawTarget(null)} className="mt-4 w-full py-2.5 rounded-2xl bg-white/15 hover:bg-white/25 font-bold">Sadhu 🙏</button>
               </>
@@ -515,7 +529,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
               })}
             </div>
             <p className="mt-4 text-xs text-indigo-300 text-center">
-              Every day: {festival.lamps.perDay} lamps × {festival.lamps.coins} 🪙 (+{festival.lamps.allLitBonus} 🪙 bonus for lighting all) and {festival.kadaw.recipients.length} respects × {festival.kadaw.coins} 🪙.
+              Every day: {festival.lamps.perDay} lamps × {festival.lamps.coins} 🪙 (+{festival.lamps.allLitBonus} 🪙 bonus for lighting all) and {festival.kadaw.recipients.length} respects × ({festival.kadaw.coins} 🪙 + {festival.kadaw.lotus} 🪷).
             </p>
             <button onClick={() => setPanel(null)} className="mt-4 w-full py-2 rounded-xl bg-white/10 hover:bg-white/20 font-semibold">Close</button>
           </div>
