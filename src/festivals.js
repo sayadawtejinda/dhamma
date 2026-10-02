@@ -1,16 +1,10 @@
-// Festival calendar -- the ONLY file that needs editing to open, move, or
-// close a festival, or to add the next one (Kathina, Waso, Water Festival,
-// ...). FestivalApp.jsx reads everything it shows from here.
-//
-// Nothing is stored in Firestore for this on purpose: whether a festival is
-// "open" is decided from the device's own date, so checking it costs zero
-// reads however many students open the home page. Once `end` has passed the
-// home-page button simply stops showing and the festival is gone (rewards a
-// student already won stay in their Avatar wardrobe for good).
-//
-// Dates are local calendar days (YYYY-MM-DD), inclusive on both ends.
-// `enabled: false` is the manual off-switch if a festival should be shut
-// before its end date (needs a redeploy, like any code change).
+// Festival definitions -- add the next festival (Kathina, Waso, Water
+// Festival, ...) as another entry here; it then shows up automatically on
+// the teacher's "Festival apps" screen, where the teacher sets its start
+// and end dates (and can switch it off). A festival is open to students
+// from its start date to its end date, both included, judged by the
+// device's own date. FestivalApp.jsx reads everything it shows from here.
+// Rewards a student already won stay in their Avatar wardrobe for good.
 export const FESTIVALS = [
   {
     id: 'thadingyut-2026',
@@ -18,44 +12,44 @@ export const FESTIVALS = [
     scene: 'lamps-night',
     icon: '🪔',
     title: 'Thadingyut Festival of Lights',
-    titleMy: 'သီတင်းကျွတ် မီးထွန်းပွဲတော်',
-    // Full moon of Thadingyut 2026 is taken as 26 Oct; the festival runs the
-    // day before it, the day itself, and the Kadaw day after, with a few
-    // days of slack either side. Move these two dates if the calendar differs.
+    tagline: 'Light the lamps, pay respect, and win festival gifts!',
+    // Default dates -- the teacher can change them any time from the
+    // "Festival apps" screen (saved in Firestore, see saveFestivalSetting).
+    // Full moon of Thadingyut 2026 is taken as 26 Oct.
     start: '2026-10-23',
     end: '2026-10-29',
     // Lamps scattered around the pagoda -- every student gets the same
     // `perDay` lamps again each new day; tapping one lights it for `coins`.
     lamps: { perDay: 12, coins: 5, allLitBonus: 30 },
-    // Paying respect (ကန်တော့) -- once per person per day, each answered
-    // with a blessing and a few coins.
+    // Paying respect -- once per person per day, each answered with a
+    // blessing and a few coins. The Triple Gem comes first.
     kadaw: {
       coins: 10,
       recipients: [
         {
-          id: 'mother', emoji: '👩', name: 'Mother', nameMy: 'မိခင် (အမေ)',
-          prayerMy: 'မေမေ့ကို ကျေးဇူးတင်ပါတယ်။ မေမေ့မေတ္တာကြောင့် ကျွန်တော်/ကျွန်မ ကြီးပြင်းလာရပါတယ်။ ကန်တော့ပါတယ် မေမေ။',
-          blessingMy: 'သားသမီးလေး ကျန်းမာချမ်းသာပါစေ၊ စိတ်ချမ်းသာပါစေ၊ ပညာတော်ပါစေ။',
+          id: 'triple-gem', emoji: '🛕', name: 'The Triple Gem',
+          prayer: 'I pay my respect to the Buddha, the Dhamma and the Sangha, the Triple Gem. Namo Buddhassa, Namo Dhammassa, Namo Sanghassa.',
+          blessing: 'May your good deeds keep growing every day. Sadhu! Sadhu! Sadhu!',
         },
         {
-          id: 'father', emoji: '👨', name: 'Father', nameMy: 'ဖခင် (အဖေ)',
-          prayerMy: 'ဖေဖေ့ကို ကျေးဇူးတင်ပါတယ်။ ဖေဖေ ပင်ပန်းခံ ကျွေးမွေးစောင့်ရှောက်ခဲ့လို့ ကျွန်တော်/ကျွန်မ ကြီးပြင်းလာရပါတယ်။ ကန်တော့ပါတယ် ဖေဖေ။',
-          blessingMy: 'သားသမီးလေး ကျန်းမာချမ်းသာပါစေ၊ ဘေးရန်ကင်းပါစေ၊ လိမ္မာပါစေ။',
+          id: 'mother', emoji: '👩', name: 'Mother',
+          prayer: 'Dear Mother, thank you for your love and care. I am grateful for everything you do for me. I bow to you with respect.',
+          blessing: 'May you be healthy, happy and wise, my dear child.',
         },
         {
-          id: 'grandparents', emoji: '👴', name: 'Grandparents', nameMy: 'ဘိုးဘွား',
-          prayerMy: 'ဘိုးဘိုး ဘွားဘွားတို့ကို ကျေးဇူးတင်ပါတယ်။ ချစ်ခင်စွာ ပြုစုစောင့်ရှောက်ခဲ့လို့ ကန်တော့ပါတယ် ဘိုးဘိုး ဘွားဘွား။',
-          blessingMy: 'မြေးလေး အသက်ရှည် ကျန်းမာပါစေ၊ ကောင်းမြတ်တဲ့လူ ဖြစ်ပါစေ။',
+          id: 'father', emoji: '👨', name: 'Father',
+          prayer: 'Dear Father, thank you for working so hard to look after me. I am grateful for everything you do for me. I bow to you with respect.',
+          blessing: 'May you be healthy, safe and kind, my dear child.',
         },
         {
-          id: 'teacher', emoji: '🧑‍🏫', name: 'Teacher', nameMy: 'ဆရာ',
-          prayerMy: 'ပညာသင်ကြားပေးတဲ့ ဆရာ့ကို ကျေးဇူးတင်ပါတယ်။ ကန်တော့ပါတယ် ဆရာ။',
-          blessingMy: 'ပညာတိုးပွားပါစေ၊ စိတ်ထားကောင်းပါစေ၊ ကောင်းကျိုးချမ်းသာတွေ ရပါစေ။',
+          id: 'grandparents', emoji: '👴', name: 'Grandparents',
+          prayer: 'Dear Grandparents, thank you for your warm love and for taking care of me. I bow to you with respect.',
+          blessing: 'May you grow up healthy and become a good person, my dear grandchild.',
         },
         {
-          id: 'triple-gem', emoji: '🛕', name: 'The Triple Gem', nameMy: 'ရတနာသုံးပါး',
-          prayerMy: 'ဗုဒ္ဓံ ပူဇေမိ၊ ဓမ္မံ ပူဇေမိ၊ သံဃံ ပူဇေမိ။ ဘုရား တရား သံဃာ ရတနာသုံးပါးကို ရိုသေစွာ ကန်တော့ပါတယ်။',
-          blessingMy: 'ကုသိုလ်ကောင်းမှု အစဉ်တိုးပွားပါစေ။ သာဓု သာဓု သာဓု။',
+          id: 'teacher', emoji: '🧑‍🏫', name: 'Teacher',
+          prayer: 'Dear Teacher, thank you for teaching me with patience. I bow to you with respect.',
+          blessing: 'May your wisdom grow, and may your heart stay kind.',
         },
       ],
     },
@@ -79,24 +73,69 @@ export const FESTIVALS = [
   },
 ];
 
+import { useEffect, useState } from 'react';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { db } from './firebase';
+import { appId } from './firebaseConfig';
+
 const pad = (n) => String(n).padStart(2, '0');
 export const localDateKey = (d = new Date()) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
-export function getActiveFestival(now = new Date()) {
-  const today = localDateKey(now);
-  return FESTIVALS.find(f => f.enabled && f.start <= today && today <= f.end) || null;
+// ---- Teacher-set dates ---------------------------------------------------
+// One small Firestore doc holds the teacher's overrides, { [festivalId]:
+// { start, end, enabled } }. It is read ONCE per page load (cached below),
+// so the whole student body costs one read each per visit -- not one per
+// home-page render. Without an override the dates above are used.
+const SETTINGS_DOC = doc(db, `artifacts/${appId}/public/data/festivalSettings`, 'dates');
+let settingsCache = null;
+let settingsPromise = null;
+const settingsListeners = new Set();
+const notify = () => settingsListeners.forEach(fn => fn(settingsCache));
+
+export function loadFestivalSettings() {
+  if (settingsCache) return Promise.resolve(settingsCache);
+  if (!settingsPromise) {
+    settingsPromise = getDoc(SETTINGS_DOC)
+      .then(snap => { settingsCache = snap.exists() ? snap.data() : {}; notify(); return settingsCache; })
+      .catch(e => { console.error('Could not read festival settings:', e); settingsCache = {}; notify(); return settingsCache; });
+  }
+  return settingsPromise;
 }
 
-// For the teacher's preview button: the open festival if there is one, else
-// the next one coming up, else the most recent one.
-export function getFestivalForPreview(now = new Date()) {
-  const today = localDateKey(now);
-  const live = getActiveFestival(now);
-  if (live) return live;
-  const enabled = FESTIVALS.filter(f => f.enabled);
-  const upcoming = enabled.filter(f => f.start > today).sort((a, b) => a.start.localeCompare(b.start))[0];
-  return upcoming || enabled.sort((a, b) => b.end.localeCompare(a.end))[0] || null;
+export async function saveFestivalSetting(festivalId, patch) {
+  await setDoc(SETTINGS_DOC, { [festivalId]: patch }, { merge: true });
+  settingsCache = { ...(settingsCache || {}), [festivalId]: { ...(settingsCache?.[festivalId] || {}), ...patch } };
+  notify();
 }
+
+// null until loaded, then the settings object.
+export function useFestivalSettings() {
+  const [settings, setSettings] = useState(settingsCache);
+  useEffect(() => {
+    settingsListeners.add(setSettings);
+    loadFestivalSettings();
+    return () => { settingsListeners.delete(setSettings); };
+  }, []);
+  return settings;
+}
+
+const resolveFestival = (def, settings) => {
+  const o = settings?.[def.id] || {};
+  return { ...def, start: o.start || def.start, end: o.end || def.end, enabled: o.enabled ?? def.enabled };
+};
+// Every festival with the teacher's dates applied (for the Festival apps screen).
+export const getFestivalList = (settings) => FESTIVALS.map(f => resolveFestival(f, settings));
+
+export function festivalStatus(f, now = new Date()) {
+  const today = localDateKey(now);
+  if (!f.enabled) return 'off';
+  if (today < f.start) return 'upcoming';
+  if (today > f.end) return 'ended';
+  return 'open';
+}
+// Festivals open right now -- what students see on their home page.
+export const getActiveFestivals = (settings, now = new Date()) =>
+  getFestivalList(settings).filter(f => festivalStatus(f, now) === 'open');
 
 // Every limited-edition Avatar item across all festivals, by category, so
 // AvatarApp can draw (and list, once owned) items from festivals that have

@@ -109,6 +109,8 @@ const WatchAndLearnApp = lazyLoad(() => import('./WatchAndLearnApp'));
 // only offered on the student home page while its dates in festivals.js are
 // open. Same standalone-app pattern as the other "Home" pieces above.
 const FestivalApp = lazyLoad(() => import('./FestivalApp'));
+// Teacher's Festival apps group -- lists every festival and sets its dates.
+const FestivalHubApp = lazyLoad(() => import('./FestivalHubApp'));
 
 // Catches a failed lazy-chunk load (e.g. the browser has an old page open
 // from before a new deploy replaced that chunk's file) so it shows a
@@ -412,11 +414,18 @@ export default function App() {
     setWatchAndLearnRequest(null);
   };
 
+  // No festival in the request = the teacher's Festival apps group; with one
+  // (a student's home-page banner, or the teacher's Preview button) = that
+  // festival itself. Closing a teacher preview returns to the group.
   const openFestival = (request) => {
     setFestivalRequest(request || {});
-    setActiveApp('festival');
+    setActiveApp(request?.festival ? 'festival' : 'festivalhub');
   };
   const closeFestival = () => {
+    setActiveApp(festivalRequest?.fromHub ? 'festivalhub' : 'tutoring');
+    if (!festivalRequest?.fromHub) setFestivalRequest(null);
+  };
+  const closeFestivalHub = () => {
     setActiveApp('tutoring');
     setFestivalRequest(null);
   };
@@ -957,6 +966,12 @@ export default function App() {
         {activeApp === 'natureworld' && (
           <div>
             <NatureWorldApp entryRequest={natureWorldRequest} onExit={closeNatureWorld} />
+          </div>
+        )}
+
+        {activeApp === 'festivalhub' && (
+          <div>
+            <FestivalHubApp onExit={closeFestivalHub} onOpenFestival={openFestival} />
           </div>
         )}
 

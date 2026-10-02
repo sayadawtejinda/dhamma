@@ -3,7 +3,7 @@ import { doc, getDoc, runTransaction, serverTimestamp, increment } from 'firebas
 import { db } from './firebase';
 import OnlineStatusWidget from './OnlineStatusWidget';
 import { spawnFlyingCoins } from './flyingCoins';
-import { getActiveFestival, getFestivalForPreview, localDateKey } from './festivals';
+import { localDateKey, festivalStatus } from './festivals';
 import bigBellSound from '../audio/big-bellburmese.mp3';
 
 // Seasonal festival app (first one: Thadingyut, the festival of lights).
@@ -134,7 +134,9 @@ export default function FestivalApp({ entryRequest, onExit }) {
   const isTeacherPreview = !entryRequest?.studentUid;
   const studentUid = entryRequest?.studentUid;
   const studentName = entryRequest?.studentName || 'Friend';
-  const festival = useMemo(() => (isTeacherPreview ? getFestivalForPreview() : getActiveFestival()), [isTeacherPreview]);
+  // The opener (home-page banner or the teacher's Festival apps screen)
+  // passes in the festival with its current dates applied.
+  const festival = entryRequest?.festival || null;
 
   const [loading, setLoading] = useState(!isTeacherPreview);
   const [coinBalance, setCoinBalance] = useState(isTeacherPreview ? null : 0);
@@ -296,11 +298,11 @@ export default function FestivalApp({ entryRequest, onExit }) {
     scheduleFlush();
   };
 
-  if (!festival) {
+  if (!festival || (!isTeacherPreview && festivalStatus(festival) !== 'open')) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-indigo-950 text-white px-6 text-center">
         <div className="text-6xl">🌙</div>
-        <p className="text-lg font-semibold">There is no festival right now.</p>
+        <p className="text-lg font-semibold">This festival is not open right now.</p>
         <button onClick={onExit} className="px-5 py-2 rounded-full bg-white/15 hover:bg-white/25 font-semibold">🏡 Back</button>
       </div>
     );
@@ -356,8 +358,8 @@ export default function FestivalApp({ entryRequest, onExit }) {
 
       {/* Header */}
       <div className="relative z-10 pt-14 px-4 text-center">
-        <h1 className="text-xl sm:text-2xl font-black text-amber-200 drop-shadow">{festival.icon} {festival.titleMy}</h1>
-        <p className="text-xs sm:text-sm text-indigo-200">{festival.title}{!isTeacherPreview && daysLeft >= 0 ? ` · ${daysLeft + 1} day${daysLeft === 0 ? '' : 's'} left` : ''}</p>
+        <h1 className="text-xl sm:text-2xl font-black text-amber-200 drop-shadow">{festival.icon} {festival.title}</h1>
+        <p className="text-xs sm:text-sm text-indigo-200">{festival.tagline}{!isTeacherPreview && daysLeft >= 0 ? ` · ${daysLeft + 1} day${daysLeft === 0 ? '' : 's'} left` : ''}</p>
         <div className="mt-2 inline-flex items-center gap-3 bg-black/30 rounded-full px-4 py-1.5 text-sm font-semibold">
           <span>🪔 {litCount}/{festival.lamps.perDay} today</span>
           <span className="opacity-40">|</span>
@@ -409,10 +411,10 @@ export default function FestivalApp({ entryRequest, onExit }) {
       {/* Action bar */}
       <div className="relative z-20 flex items-center justify-center gap-3 px-4 pb-5 pt-2">
         <button onClick={() => setPanel('kadaw')} className="flex-1 max-w-[200px] bg-amber-400 hover:bg-amber-300 text-indigo-950 font-black rounded-2xl py-3 shadow-lg" style={{ animation: kadawDoneCount === 0 ? 'fsPulse 2.2s ease-in-out infinite' : 'none' }}>
-          🙏 ကန်တော့မယ်
+          🙏 Pay Respect
         </button>
         <button onClick={() => setPanel('rewards')} className="flex-1 max-w-[200px] bg-white/15 hover:bg-white/25 border border-white/30 font-bold rounded-2xl py-3">
-          🎁 ဆုလာဘ်
+          🎁 Rewards
         </button>
       </div>
 
@@ -430,16 +432,15 @@ export default function FestivalApp({ entryRequest, onExit }) {
       {panel === 'kadaw' && !kadawTarget && (
         <div className="fixed inset-0 z-[9970] bg-black/70 flex items-end sm:items-center justify-center" onClick={() => setPanel(null)}>
           <div className="w-full max-w-md bg-indigo-950 border border-amber-300/40 rounded-t-3xl sm:rounded-3xl p-5 max-h-[88vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-black text-amber-200 text-center">🙏 ကန်တော့ခြင်း</h2>
-            <p className="text-xs text-indigo-200 text-center mb-4">Paying respect · once each, every day</p>
+            <h2 className="text-lg font-black text-amber-200 text-center">🙏 Pay Respect</h2>
+            <p className="text-xs text-indigo-200 text-center mb-4">Once each, every day</p>
             <div className="grid grid-cols-2 gap-3">
               {festival.kadaw.recipients.map(r => {
                 const done = kadawToday.has(r.id);
                 return (
                   <button key={r.id} onClick={() => openKadaw(r)} className={`rounded-2xl border-2 p-3 text-center transition ${done ? 'border-emerald-400/60 bg-emerald-500/10' : 'border-amber-300/50 bg-white/5 hover:bg-white/10'}`}>
                     <div className="text-4xl">{r.emoji}</div>
-                    <div className="text-sm font-bold mt-1">{r.nameMy}</div>
-                    <div className="text-[11px] text-indigo-200">{r.name}</div>
+                    <div className="text-sm font-bold mt-1">{r.name}</div>
                     <div className={`text-xs font-bold mt-1 ${done ? 'text-emerald-300' : 'text-amber-300'}`}>{done ? '✅ Done today' : `🪙 +${festival.kadaw.coins}`}</div>
                   </button>
                 );
@@ -455,22 +456,22 @@ export default function FestivalApp({ entryRequest, onExit }) {
         <div className="fixed inset-0 z-[9975] bg-black/80 flex items-center justify-center px-4" onClick={() => { setKadawTarget(null); }}>
           <div className="w-full max-w-sm bg-indigo-950 border border-amber-300/40 rounded-3xl p-6 text-center" onClick={(e) => e.stopPropagation()}>
             <div className="text-6xl" style={{ animation: kadawStage === 'pray' ? 'fsPulse 2s ease-in-out infinite' : 'none' }}>{kadawStage === 'pray' ? '🙇' : '🌸'}</div>
-            <h3 className="mt-2 text-lg font-black text-amber-200">{kadawTarget.emoji} {kadawTarget.nameMy}</h3>
+            <h3 className="mt-2 text-lg font-black text-amber-200">{kadawTarget.emoji} {kadawTarget.name}</h3>
             {kadawStage === 'pray' ? (
               <>
-                <p className="mt-3 text-base leading-relaxed">{kadawTarget.prayerMy}</p>
+                <p className="mt-3 text-base leading-relaxed">{kadawTarget.prayer}</p>
                 <p className="mt-3 text-xs text-indigo-300">Say it quietly in your heart, with your hands together.</p>
-                <button onClick={handleKadaw} className="mt-4 w-full py-3 rounded-2xl bg-amber-400 hover:bg-amber-300 text-indigo-950 font-black">🙏 ကန်တော့ပါတယ်</button>
+                <button onClick={handleKadaw} className="mt-4 w-full py-3 rounded-2xl bg-amber-400 hover:bg-amber-300 text-indigo-950 font-black">🙏 I Pay Respect</button>
               </>
             ) : (
               <>
-                <p className="mt-3 text-base leading-relaxed text-amber-100">{kadawTarget.blessingMy}</p>
+                <p className="mt-3 text-base leading-relaxed text-amber-100">{kadawTarget.blessing}</p>
                 <p className="mt-3 text-sm font-bold text-emerald-300">
                   {kadawStage === 'blessedAgain'
                     ? 'You already paid respect today 🌸 Come back tomorrow.'
                     : isTeacherPreview ? `🪙 +${festival.kadaw.coins} (preview)` : `🪙 +${festival.kadaw.coins} — thank you for being grateful.`}
                 </p>
-                <button onClick={() => setKadawTarget(null)} className="mt-4 w-full py-2.5 rounded-2xl bg-white/15 hover:bg-white/25 font-bold">သာဓု 🙏</button>
+                <button onClick={() => setKadawTarget(null)} className="mt-4 w-full py-2.5 rounded-2xl bg-white/15 hover:bg-white/25 font-bold">Sadhu 🙏</button>
               </>
             )}
           </div>
@@ -531,7 +532,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
               <p key={rw.id} className="mt-2 font-bold">{rw.item.name}</p>
             ))}
             <p className="mt-2 text-sm text-indigo-200">Find it in 🧑‍🎨 Avatar and wear it.</p>
-            <button onClick={() => setCelebration(null)} className="mt-4 w-full py-2.5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-indigo-950 font-black">သာဓု!</button>
+            <button onClick={() => setCelebration(null)} className="mt-4 w-full py-2.5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-indigo-950 font-black">Sadhu!</button>
           </div>
         </div>
       )}

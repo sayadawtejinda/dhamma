@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { getActiveFestival } from './festivals';
+import FestivalBanners from './FestivalBanner';
 import { signInAnonymously, signInWithCustomToken, onAuthStateChanged, signOut } from 'firebase/auth';
 import { 
   doc, 
@@ -5271,14 +5271,14 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
             <span className="flex items-center text-lg font-bold text-orange-800">🎥 Watch & Learn app</span>
             <span className="text-orange-500 text-xl">→</span>
           </button>
-          {/* Festival -- preview of the seasonal festival app (opens in
-              preview mode: nothing is saved). Students only get it on their
-              home page while the festival's dates in festivals.js are open. */}
+          {/* Festival apps -- the group of seasonal festivals. Opens the
+              teacher's list where each festival's start/end dates are set
+              and each one can be previewed. */}
           <button
             onClick={() => onOpenFestival && onOpenFestival({ mode: 'teacher' })}
             className="w-full flex items-center justify-between bg-white p-4 rounded-xl border-2 border-amber-200 hover:border-amber-400 hover:shadow-md transition-all mt-3"
           >
-            <span className="flex items-center text-lg font-bold text-amber-800">🪔 Festival app (preview)</span>
+            <span className="flex items-center text-lg font-bold text-amber-800">🎪 Festival apps</span>
             <span className="text-amber-500 text-xl">→</span>
           </button>
           {/* Myanmar Speaking app — now mounted inline in the same project as
@@ -9609,18 +9609,6 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                       🌿
                     </button>
                   )}
-                  {/* Seasonal festival button -- exists only while a festival's
-                      dates (festivals.js) are open, decided from the device
-                      date, so it costs no Firestore reads. */}
-                  {onOpenFestival && getActiveFestival() && (
-                    <button
-                      onClick={() => onOpenFestival({ studentUid, studentName: studentProfile?.name || '' })}
-                      className="flex items-center justify-center text-2xl bg-amber-100 hover:bg-amber-200 w-11 h-11 rounded-lg transition-colors border-2 border-amber-400 flex-shrink-0 animate-pulse"
-                      title={getActiveFestival().title}
-                    >
-                      {getActiveFestival().icon}
-                    </button>
-                  )}
                 </div>
                 <div className="flex items-center flex-wrap gap-3 mb-2">
                   <button
@@ -9684,6 +9672,11 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                 )}
             </div>
       </div>
+
+      {/* Festival announcement board -- centered on the home page, one per
+          festival open right now (dates set by the teacher in Festival apps);
+          tapping it goes straight into the festival. */}
+      <FestivalBanners onOpenFestival={onOpenFestival} studentUid={studentUid} studentName={studentProfile?.name || ''} />
 
       {showLessonsPanel && (
       <div className="fixed inset-0 z-[9900] bg-black/50 overflow-y-auto p-4" onClick={() => setShowLessonsPanel(false)}>
