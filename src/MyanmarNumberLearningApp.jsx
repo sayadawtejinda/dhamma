@@ -448,7 +448,37 @@ export default function MyanmarNumberLearningApp({ entryRequest, onExit, hideOwn
         }
 
         // Gold coins: +20 per correct quiz answer, -1 per wrong, clamped at
-        // 0 (same convention as ConsonantPracticeApp).
+        // 0 (same convention as ConsonantPracticeApp), plus +2 for every
+        // number heard in the learning screens (a number card or a 1-100
+        // chart cell -- tapped by hand, or reached by the auto-play), so
+        // younger students who can't play the quiz yet can still earn.
+        const READ_COINS = 2;
+        let lastReadCoinAt = 0;
+        let readSaveTimer = null;
+        function flushReadCoins() {
+            if (!readSaveTimer) return;
+            clearTimeout(readSaveTimer);
+            readSaveTimer = null;
+            if (progressRosterRef) setDoc(progressRosterRef, { coinBalance }, { merge: true }).catch(() => {});
+        }
+        // Shows the coins at once but saves them together a moment later --
+        // auto-play can pass dozens of numbers in a minute.
+        function awardReadCoins() {
+            if (!progressRosterRef) return;
+            coinBalance += READ_COINS;
+            setMyCoinBalance(coinBalance);
+            spawnFlyingCoins(clickTracker.get(), READ_COINS);
+            clearTimeout(readSaveTimer);
+            readSaveTimer = setTimeout(flushReadCoins, 1500);
+        }
+        // Manual taps only: ignores taps closer than 600ms apart so mashing
+        // a card can't earn faster than its sound can play.
+        function awardReadCoinsForTap() {
+            const now = Date.now();
+            if (now - lastReadCoinAt < 600) return;
+            lastReadCoinAt = now;
+            awardReadCoins();
+        }
         function awardCoins(delta) {
             if (!progressRosterRef) return;
             coinBalance = Math.max(0, coinBalance + delta);
@@ -628,6 +658,7 @@ export default function MyanmarNumberLearningApp({ entryRequest, onExit, hideOwn
         }
         const playSingleItem = function (startTime, digit, cardId) {
             stopHighlighting(); audioPlayer.pause(); 
+            awardReadCoinsForTap();
             const section = countingData[currentSection];
             const details = section.details.filter(d => d.digit);
             const currentItemIndex = details.findIndex(d => d.digit === digit);
@@ -782,6 +813,7 @@ export default function MyanmarNumberLearningApp({ entryRequest, onExit, hideOwn
 
                         const element = byId(`number-card-${item.digit}`);
                         if (element) { 
+                            if (shouldHighlight && !element.classList.contains('highlight-card')) awardReadCoins();
                             element.classList.toggle('highlight-card', shouldHighlight);
                             if (shouldHighlight) {
                                 currentlyHighlightedDigit = item.digit;
@@ -1213,7 +1245,7 @@ export default function MyanmarNumberLearningApp({ entryRequest, onExit, hideOwn
         function playSingleNumber(n) { if (isPlayingContinuous) stopContinuousSynchronization(); const targetTime = getStartTimeForNumber(n); const stopTime = getEndTimeForNumber(n); const duration = (stopTime - targetTime) * 1000; if (targetTime === 0 || stopTime === 0 || duration <= 0) { return; } audio.currentTime = targetTime; audio.play().catch(console.error); clearTimeout(singlePlayTimeout); singlePlayTimeout = setTimeout(() => audio.pause(), duration); if (!isQuizActive) updateHighlightAndDisplay(n); }
         function updateHighlightAndDisplay(currentNum) { if (lastHighlightedNumber > 0) { byId(`cell-${lastHighlightedNumber}`)?.classList.remove('highlight'); } if (currentNum >= 1 && currentNum <= 100) { const currentCell = byId(`cell-${currentNum}`); if (currentCell) { currentCell.classList.add('highlight'); lastHighlightedNumber = currentNum; currentCell.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } const data = NUMBER_DATA[currentNum]; currentNumber3D.textContent = getBurmeseNumber(currentNum); currentNumber3D.classList.add('opacity-100'); myanmarText.textContent = data.myanmar_word; romanText.textContent = data.roman; paliText.textContent = data.pali || '...'; englishText.textContent = data.english; } else { currentNumber3D.classList.remove('opacity-100'); lastHighlightedNumber = 0; myanmarText.textContent = '...'; romanText.textContent = '...'; paliText.textContent = '...'; englishText.textContent = '...'; } }
         function calculateStartNumberForContinuous() { let currentNum = lastHighlightedNumber; if (currentNum === 0 || currentNum < 1 || currentNum > 100) { currentNum = 1; } if (playbackMode === 'all') { return currentNum; } else if (playbackMode === 'evens') { return (currentNum % 2 === 0) ? currentNum : currentNum + 1; } else if (playbackMode === 'fives') { return (currentNum % 5 === 0) ? currentNum : Math.ceil(currentNum / 5) * 5; } return 1; }
-        function playNextInSequence(num) { if (!isPlayingContinuous || num > 100) { stopContinuousSynchronization(); updateHighlightAndDisplay(0); return; } updateHighlightAndDisplay(num); const startTime = getStartTimeForNumber(num); const endTime = getEndTimeForNumber(num); const duration = (endTime - startTime) * 1000; if (startTime === 0 || endTime === 0 || duration <= 0) { stopContinuousSynchronization(); return; } audio.currentTime = startTime; audio.play().catch(console.error); clearTimeout(sequenceTimeoutId); sequenceTimeoutId = setTimeout(() => { let nextNum; if (playbackMode === 'all') nextNum = num + 1; else if (playbackMode === 'evens') nextNum = num + 2; else nextNum = num + 5; playNextInSequence(nextNum); }, duration > 100 ? duration : 1000); }
+        function playNextInSequence(num) { if (!isPlayingContinuous || num > 100) { stopContinuousSynchronization(); updateHighlightAndDisplay(0); return; } updateHighlightAndDisplay(num); const startTime = getStartTimeForNumber(num); const endTime = getEndTimeForNumber(num); const duration = (endTime - startTime) * 1000; if (startTime === 0 || endTime === 0 || duration <= 0) { stopContinuousSynchronization(); return; } awardReadCoins(); audio.currentTime = startTime; audio.play().catch(console.error); clearTimeout(sequenceTimeoutId); sequenceTimeoutId = setTimeout(() => { let nextNum; if (playbackMode === 'all') nextNum = num + 1; else if (playbackMode === 'evens') nextNum = num + 2; else nextNum = num + 5; playNextInSequence(nextNum); }, duration > 100 ? duration : 1000); }
         function startContinuousSynchronization() { if (isPlayingContinuous || isQuizActive) return; clearTimeout(singlePlayTimeout); isPlayingContinuous = true; playIcon.style.display = 'none'; pauseIcon.style.display = 'block'; const startNum = calculateStartNumberForContinuous(); if (startNum > 100) { stopContinuousSynchronization(); updateHighlightAndDisplay(0); return; } playNextInSequence(startNum); }
         function stopContinuousSynchronization() { clearTimeout(sequenceTimeoutId); sequenceTimeoutId = null; isPlayingContinuous = false; audio.pause(); playIcon.style.display = 'block'; pauseIcon.style.display = 'none'; }
         
@@ -1309,6 +1341,7 @@ export default function MyanmarNumberLearningApp({ entryRequest, onExit, hideOwn
                 cell.style.backgroundColor = `hsl(${hue}, 80%, 95%)`;
                 cell.addEventListener('click', () => {
                     if (!isPlayingContinuous && !isQuizActive) {
+                        awardReadCoinsForTap();
                         playSingleNumber(i);
                     }
                 });
@@ -1367,6 +1400,7 @@ export default function MyanmarNumberLearningApp({ entryRequest, onExit, hideOwn
     return () => {
       if (unsubTeacherProgress) unsubTeacherProgress();
       clickTracker.stop();
+      flushReadCoins();
       delete window.__mnlApp;
       // Stop any playing audio -- otherwise it keeps going after this
       // component unmounts, since Audio objects aren't tied to React's
