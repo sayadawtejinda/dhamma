@@ -7650,6 +7650,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
   }, [studentProfile, studentUid]);
 
   const autoSubmitTimerRef = useRef(null);
+  const hiddenSubmitTimerRef = useRef(null);
   const lessonsSectionRef = useRef(null);
   const activeSessionRef = useRef(null);
   const firstLessonRef = useRef(null);
@@ -7869,6 +7870,44 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       if (autoSubmitTimerRef.current) clearTimeout(autoSubmitTimerRef.current);
     };
   }, [activeSession, showFeedbackModal, mySchedule]);
+
+  // Knowing the student actually left (switched away / closed the tab),
+  // rather than only ever waiting out the 45-min-or-class-end timer above,
+  // means a session that really did run the student's normal ~2 hours
+  // records that real duration, while one that was abandoned after a few
+  // minutes doesn't sit open paying nothing (or eventually getting capped
+  // at a flat 45 min that doesn't match how long they actually watched) --
+  // confirmed live for Watch & Learn, where coins are time-based. Needs a
+  // couple of minutes of being continuously hidden before it counts as
+  // "left" (not just switching tabs to check something), and fires with
+  // the REAL current time as the end -- not the 45-min default.
+  useEffect(() => {
+    if (hiddenSubmitTimerRef.current) { clearTimeout(hiddenSubmitTimerRef.current); hiddenSubmitTimerRef.current = null; }
+    if (!activeSession || showFeedbackModal) return;
+
+    const HIDDEN_GRACE_MS = 2 * 60 * 1000;
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        if (hiddenSubmitTimerRef.current) clearTimeout(hiddenSubmitTimerRef.current);
+        hiddenSubmitTimerRef.current = setTimeout(() => {
+          handleAutoSubmitSession(activeSession, new Date());
+        }, HIDDEN_GRACE_MS);
+      } else {
+        if (hiddenSubmitTimerRef.current) { clearTimeout(hiddenSubmitTimerRef.current); hiddenSubmitTimerRef.current = null; }
+      }
+    };
+    // Actually closing the tab/browser -- best-effort, since a page being
+    // torn down can't reliably await a Firestore write; this just starts
+    // the same grace timer so a reopen within it still cancels cleanly, and
+    // if it never reopens, the 45-min/class-end timer above is the backstop.
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('pagehide', onVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('pagehide', onVisibilityChange);
+      if (hiddenSubmitTimerRef.current) clearTimeout(hiddenSubmitTimerRef.current);
+    };
+  }, [activeSession, showFeedbackModal]);
 
   useEffect(() => {
     if (!studentUid) return;
