@@ -8882,11 +8882,32 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     try {
       const sessionDoc = await getDoc(doc(db, `${publicDataPath}/studySessions`, sessionToSubmit.id));
       if (!sessionDoc.exists() || sessionDoc.data().endTime !== null) return;
-      
+
       await updateDoc(doc(db, `${publicDataPath}/studySessions`, sessionToSubmit.id), {
         endTime: finalEndTime, feedbackNotes: autoFeedbackNotes, score: autoScore
       });
-      playSound(0); 
+      playSound(0);
+
+      // Watch & Learn pays coins for time spent, same rate/cap as a manual
+      // Report (see handleSubmitFeedback) -- a session that never gets
+      // manually reported (closing the tab after watching, say) used to
+      // auto-close with ZERO coins ever paid, silently, confirmed live.
+      const isWatchAndLearnSession = sessionToSubmit.lessonLink === 'watchandlearn://' || sessionToSubmit.lessonLink?.startsWith('watchandlearn://');
+      if (isWatchAndLearnSession && studentUid) {
+        const startMs = sessionToSubmit.startTime?.toDate?.()?.getTime?.();
+        const minutesWatched = startMs ? Math.max(0, (finalEndTime.toDate().getTime() - startMs) / 60000) : 0;
+        const WATCH_LEARN_COINS_PER_MINUTE = 20;
+        const WATCH_LEARN_COIN_CAP = 1000;
+        const coinsEarned = Math.min(WATCH_LEARN_COIN_CAP, Math.floor(minutesWatched * WATCH_LEARN_COINS_PER_MINUTE));
+        if (coinsEarned > 0) {
+          try {
+            await setDoc(doc(db, 'artifacts/watch-and-learn-app/public/data/roster', studentUid), {
+              studentName: studentProfile?.name || '',
+              coinBalance: increment(coinsEarned),
+            }, { merge: true });
+          } catch (e) { console.error('Error awarding Watch & Learn coins (auto-submit):', e); }
+        }
+      }
     } catch (error) {
       console.error("Error auto-submitting session:", error);
     }
