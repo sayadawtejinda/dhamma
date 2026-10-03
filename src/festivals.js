@@ -25,7 +25,7 @@ export const FESTIVALS = [
     // blessing and a few coins. The Triple Gem comes first.
     kadaw: {
       coins: 20,
-      lotus: 1, // 🪷 per respect paid (Shrine Room's daily lotus limit still applies)
+      lotus: 1, // 🪷 per respect paid -- festival lotus is separate from Shrine Room's own daily limit
       recipients: [
         {
           id: 'triple-gem', emoji: '🛕', name: 'The Triple Gem',
@@ -64,13 +64,23 @@ export const FESTIVALS = [
         requires: { type: 'lamps', count: 40 },
         item: { id: 'festival-thadingyut-2026-robe', name: '🪔 Festival Lights Robe', color: '#F97316', swatch: 'linear-gradient(135deg,#FFC107,#FB8C00 55%,#7B1FA2)', pattern: 'lights', cost: 0, festival: true },
       },
-      {
-        id: 'thadingyut-2026-lantern',
-        category: 'accessory',
-        requires: { type: 'kadawAll' },
-        item: { id: 'festival-thadingyut-2026-lantern', name: '🏮 Festival Lantern', kind: 'lantern', color: '#FBBF24', cost: 0, festival: true },
-      },
     ],
+    // The daily gift box: once a student has paid respect to everyone in a
+    // day, a gift box drops in and holds ONE new Avatar item -- the next one
+    // in this list they don't own yet (so a gift is never a repeat), one box
+    // a day. If they already own everything, the box holds bonus coins.
+    dailyGift: {
+      bonusCoins: 50,
+      pool: [
+        { category: 'accessory', item: { id: 'festival-thadingyut-2026-skylantern', name: '🏮 Sky Lantern', kind: 'skylantern', color: '#FF9800', cost: 0, festival: true } },
+        { category: 'outfit', item: { id: 'festival-thadingyut-2026-lotus', name: '🪷 Lotus Garden Robe', color: '#26A69A', swatch: 'linear-gradient(135deg,#4DB6AC,#00695C 60%,#F8BBD0)', pattern: 'lotus', cost: 0, festival: true } },
+        { category: 'accessory', item: { id: 'festival-thadingyut-2026-starglasses', name: '⭐ Star Glasses', kind: 'starglasses', color: '#FFD54F', cost: 0, festival: true } },
+        { category: 'outfit', item: { id: 'festival-thadingyut-2026-night', name: '🌙 Night Sky Robe', color: '#3949AB', swatch: 'linear-gradient(135deg,#3949AB,#1A1055 65%,#FFE082)', pattern: 'night', cost: 0, festival: true } },
+        { category: 'accessory', item: { id: 'festival-thadingyut-2026-lantern', name: '🏮 Festival Lantern', kind: 'lantern', color: '#FBBF24', cost: 0, festival: true } },
+        { category: 'outfit', item: { id: 'festival-thadingyut-2026-checks', name: '🟥 Checkered Gold Robe', color: '#C62828', swatch: 'linear-gradient(135deg,#FFC107 50%,#C62828 50%)', pattern: 'checks', cost: 0, festival: true } },
+        { category: 'accessory', item: { id: 'festival-thadingyut-2026-lampglasses', name: '🔶 Lamp Glasses', kind: 'lampglasses', color: '#FF9800', cost: 0, festival: true } },
+      ],
+    },
   },
 ];
 
@@ -198,5 +208,6 @@ export const getActiveFestivals = (settings, now = new Date()) =>
 // already closed.
 export const FESTIVAL_AVATAR_ITEMS = FESTIVALS.reduce((acc, f) => {
   (f.rewards || []).forEach(r => { (acc[r.category] = acc[r.category] || []).push(r.item); });
+  (f.dailyGift?.pool || []).forEach(r => { (acc[r.category] = acc[r.category] || []).push(r.item); });
   return acc;
 }, {});

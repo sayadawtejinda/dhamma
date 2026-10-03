@@ -3,6 +3,7 @@ import { doc, getDoc, runTransaction, serverTimestamp, increment } from 'firebas
 import { db } from './firebase';
 import { spawnFlyingCoins } from './flyingCoins';
 import { localDateKey, festivalStatus } from './festivals';
+import { CharacterSvg } from './AvatarCharacter';
 import bigBellSound from '../audio/big-bellburmese.mp3';
 
 // Seasonal festival app (first one: Thadingyut, the festival of lights).
@@ -20,9 +21,9 @@ import bigBellSound from '../audio/big-bellburmese.mp3';
 const SHRINE_ROSTER_PATH = 'artifacts/shrine-room-app/public/data/roster';
 const PROGRESS_PATH = 'artifacts/festival-app/public/data/progress';
 const SHRINE_STARTER_COINS = 20;
-// Shrine Room caps lotus income across every source at this many a day, keyed
-// by the UTC date (see DAILY_LOTUS_CAP / todayKey in ShrineRoomApp.jsx).
-const SHRINE_DAILY_LOTUS_CAP = 40;
+// Students have to wait this long on each respect before the button works, so
+// it isn't just tapped through.
+const RESPECT_WAIT_SECONDS = 5;
 const sanitizeShrineKey = (key) => (key || 'unknown').trim().replace(/[.$#/\[\]]/g, '_');
 
 // Lamp positions as % of the scene (x from left, y from top): an arc in
@@ -63,10 +64,9 @@ async function saveFestivalProgress({ festival, studentUid, studentName, lampIdx
     newKadaw.forEach(id => kadawToday.add(id));
 
     let coins = newLamps.length * festival.lamps.coins + newKadaw.length * festival.kadaw.coins;
-    // Each new respect also earns lotus flowers, held to Shrine Room's daily cap.
-    const shrineDay = new Date().toISOString().slice(0, 10);
-    const lotusBase = r.lotusDailyDate === shrineDay ? (r.lotusDailyCount || 0) : 0;
-    const lotus = Math.min(newKadaw.length * (festival.kadaw.lotus || 0), Math.max(0, SHRINE_DAILY_LOTUS_CAP - lotusBase));
+    // Each new respect also earns lotus flowers. These are the festival's own
+    // -- Shrine Room's separate daily lotus limit does not apply to them.
+    const lotus = newKadaw.length * (festival.kadaw.lotus || 0);
     const allLitBonus = !wasAllLit && litToday.size >= festival.lamps.perDay;
     if (allLitBonus) coins += festival.lamps.allLitBonus;
 
@@ -77,8 +77,32 @@ async function saveFestivalProgress({ festival, studentUid, studentName, lampIdx
     const alreadyUnlocked = p.unlocked || [];
     const newlyUnlocked = festival.rewards.filter(rw => !alreadyUnlocked.includes(rw.id) && requirementMet(rw.requires, festival, state));
 
-    if (newLamps.length === 0 && newKadaw.length === 0 && newlyUnlocked.length === 0) {
-      return { balance: r.coinBalance ?? SHRINE_STARTER_COINS, coins: 0, lotus: 0, newlyUnlocked: [], lampsTotal: state.lampsTotal, kadawEver: state.kadawEver };
+    // Items owned before this save (same legacy flat-name fallback AvatarApp
+    // reads, so an old purchase stored under a literal "avatarOwned.outfit"
+    // field isn't shadowed), plus anything this very save adds.
+    const ownedPatch = {};
+    const ownedNow = (cat) => ownedPatch[cat] || r.avatarOwned?.[cat] || r[`avatarOwned.${cat}`] || [];
+    const addOwned = (cat, id) => { ownedPatch[cat] = Array.from(new Set([...ownedNow(cat), id])); };
+    newlyUnlocked.forEach(rw => addOwned(rw.category, rw.item.id));
+
+    // The daily gift box: all of today's respects done, and no box yet today.
+    // It holds the next Avatar item they don't own, or bonus coins once they
+    // own the whole set.
+    const giftDays = p.giftDays || {};
+    let dailyGift = null;
+    if (festival.dailyGift && kadawToday.size >= recipientIds.length && !giftDays[dateKey]) {
+      const next = festival.dailyGift.pool.find(entry => !ownedNow(entry.category).includes(entry.item.id));
+      if (next) {
+        addOwned(next.category, next.item.id);
+        dailyGift = { kind: 'item', category: next.category, item: next.item };
+      } else {
+        coins += festival.dailyGift.bonusCoins;
+        dailyGift = { kind: 'coins', coins: festival.dailyGift.bonusCoins };
+      }
+    }
+
+    if (newLamps.length === 0 && newKadaw.length === 0 && newlyUnlocked.length === 0 && !dailyGift) {
+      return { balance: r.coinBalance ?? SHRINE_STARTER_COINS, coins: 0, lotus: 0, newlyUnlocked: [], dailyGift: null, lampsTotal: state.lampsTotal, kadawEver: state.kadawEver };
     }
 
     tx.set(progRef, {
@@ -88,6 +112,7 @@ async function saveFestivalProgress({ festival, studentUid, studentName, lampIdx
       lampsTotal: state.lampsTotal,
       kadawEver: state.kadawEver,
       unlocked: [...alreadyUnlocked, ...newlyUnlocked.map(rw => rw.id)],
+      ...(dailyGift ? { giftDays: { [dateKey]: dailyGift.item ? dailyGift.item.id : 'coins' } } : {}),
       updatedAt: serverTimestamp(),
     }, { merge: true });
 
@@ -97,26 +122,21 @@ async function saveFestivalProgress({ festival, studentUid, studentName, lampIdx
     // A roster doc with no balance yet gets the usual starter coins on top,
     // same as every other app that deposits into it for the first time.
     rosterPatch.coinBalance = hadBalance ? increment(coins) : base + coins;
-    if (newlyUnlocked.length > 0) {
-      const ownedPatch = {};
-      newlyUnlocked.forEach(rw => {
-        // Same legacy flat-name fallback AvatarApp reads, so an old purchase
-        // stored under a literal "avatarOwned.outfit" field isn't shadowed.
-        const current = ownedPatch[rw.category] || r.avatarOwned?.[rw.category] || r[`avatarOwned.${rw.category}`] || [];
-        ownedPatch[rw.category] = Array.from(new Set([...current, rw.item.id]));
-      });
-      rosterPatch.avatarOwned = ownedPatch;
-    }
-    if (lotus > 0) {
-      rosterPatch.lotusCount = increment(lotus);
-      rosterPatch.lotusDailyDate = shrineDay;
-      rosterPatch.lotusDailyCount = lotusBase + lotus;
-    }
+    if (Object.keys(ownedPatch).length > 0) rosterPatch.avatarOwned = ownedPatch;
+    if (lotus > 0) rosterPatch.lotusCount = increment(lotus);
     tx.set(rosterRef, rosterPatch, { merge: true });
 
-    return { balance: base + coins, coins, lotus, newlyUnlocked, lampsTotal: state.lampsTotal, kadawEver: state.kadawEver };
+    return { balance: base + coins, coins, lotus, newlyUnlocked, dailyGift, lampsTotal: state.lampsTotal, kadawEver: state.kadawEver };
   });
 }
+
+// Firework bursts behind the opened gift: fixed spots and colours so the show
+// doesn't re-roll on every render.
+const FIREWORK_COLORS = ['#fbbf24', '#f472b6', '#60a5fa', '#4ade80', '#f87171', '#c084fc'];
+const FIREWORK_BURSTS = [[18, 22], [80, 18], [50, 10], [12, 62], [88, 58], [30, 84], [70, 86], [50, 40]].map(([x, y], i) => ({
+  id: i, x, y, delay: (i % 4) * 0.35,
+  colors: [FIREWORK_COLORS[i % 6], FIREWORK_COLORS[(i + 2) % 6], FIREWORK_COLORS[(i + 4) % 6]],
+}));
 
 function Pagoda({ glow }) {
   return (
@@ -163,6 +183,12 @@ export default function FestivalApp({ entryRequest, onExit }) {
   const [kadawTarget, setKadawTarget] = useState(null);
   const [kadawStage, setKadawStage] = useState('pray'); // 'pray' | 'blessed'
   const [celebration, setCelebration] = useState(null); // newly unlocked rewards
+  // Daily gift box: null | { kind: 'item'|'coins', item?, category?, coins? }
+  const [giftBox, setGiftBox] = useState(null);
+  const [giftOpened, setGiftOpened] = useState(false);
+  const [giftTakenToday, setGiftTakenToday] = useState(false);
+  const [ownedFestivalIds, setOwnedFestivalIds] = useState([]);
+  const [respectWait, setRespectWait] = useState(0);
   const [toast, setToast] = useState(null);
 
   const pendingRef = useRef({ lamps: new Set(), kadaw: new Set() });
@@ -195,7 +221,10 @@ export default function FestivalApp({ entryRequest, onExit }) {
         setLampsTotal(p.lampsTotal || 0);
         setKadawEver(p.kadawEver || []);
         setUnlockedIds(p.unlocked || []);
-        setCoinBalance(rSnap.exists() ? (rSnap.data().coinBalance ?? SHRINE_STARTER_COINS) : SHRINE_STARTER_COINS);
+        setGiftTakenToday(!!p.giftDays?.[dateKey]);
+        const rd = rSnap.exists() ? rSnap.data() : {};
+        setOwnedFestivalIds(['outfit', 'accessory'].flatMap(cat => rd.avatarOwned?.[cat] || rd[`avatarOwned.${cat}`] || []).filter(id => String(id).startsWith('festival-')));
+        setCoinBalance(rSnap.exists() ? (rd.coinBalance ?? SHRINE_STARTER_COINS) : SHRINE_STARTER_COINS);
       } catch (e) {
         console.error('Error loading festival data:', e);
         setCoinBalance(0);
@@ -212,18 +241,23 @@ export default function FestivalApp({ entryRequest, onExit }) {
     const kadawIds = Array.from(pendingRef.current.kadaw);
     if (isTeacherPreview || !festival || (lampIdxs.length === 0 && kadawIds.length === 0)) return;
     pendingRef.current = { lamps: new Set(), kadaw: new Set() };
-    const expectedLotus = kadawIds.length * (festival.kadaw.lotus || 0);
     try {
       const res = await saveFestivalProgress({ festival, studentUid, studentName, lampIdxs, kadawIds });
       retriesRef.current = 0;
       if (!mountedRef.current) return;
       setCoinBalance(res.balance);
-      if (expectedLotus > 0 && res.lotus < expectedLotus) showToast('Daily lotus limit reached 🪷');
       setLampsTotal(res.lampsTotal);
       setKadawEver(res.kadawEver);
       if (res.newlyUnlocked.length > 0) {
         setUnlockedIds(prev => [...prev, ...res.newlyUnlocked.map(rw => rw.id)]);
+        setOwnedFestivalIds(prev => [...prev, ...res.newlyUnlocked.map(rw => rw.item.id)]);
         setCelebration(res.newlyUnlocked);
+      }
+      if (res.dailyGift) {
+        setGiftTakenToday(true);
+        if (res.dailyGift.item) setOwnedFestivalIds(prev => [...prev, res.dailyGift.item.id]);
+        setGiftOpened(false);
+        setGiftBox(res.dailyGift);
       }
     } catch (e) {
       console.error('Could not save festival progress:', e);
@@ -292,11 +326,18 @@ export default function FestivalApp({ entryRequest, onExit }) {
   const openKadaw = (recipient) => {
     setKadawTarget(recipient);
     setKadawStage('pray');
+    setRespectWait(kadawToday.has(recipient.id) ? 0 : RESPECT_WAIT_SECONDS);
   };
+  // The button stays locked while this counts down.
+  useEffect(() => {
+    if (respectWait <= 0) return;
+    const t = setTimeout(() => setRespectWait(w => w - 1), 1000);
+    return () => clearTimeout(t);
+  }, [respectWait]);
 
   const handleKadaw = (e) => {
     const r = kadawTarget;
-    if (!r) return;
+    if (!r || respectWait > 0) return;
     try {
       if (!bellRef.current) bellRef.current = new Audio(bigBellSound);
       bellRef.current.currentTime = 0;
@@ -309,7 +350,19 @@ export default function FestivalApp({ entryRequest, onExit }) {
     gainCoins(festival.kadaw.coins);
     if (!isTeacherPreview) spawnFlyingCoins({ x: e.clientX, y: e.clientY }, 6, '🪙', false);
     pendingRef.current.kadaw.add(r.id);
-    scheduleFlush();
+    // The fifth respect of the day brings the gift box -- save at once so it
+    // drops in straight away instead of after the usual short delay.
+    const countAfter = kadawToday.size + 1;
+    if (countAfter >= festival.kadaw.recipients.length) {
+      if (isTeacherPreview) {
+        const first = festival.dailyGift?.pool?.[0];
+        if (first) { setGiftOpened(false); setGiftBox({ kind: 'item', category: first.category, item: first.item }); }
+      } else {
+        flushRef.current();
+      }
+    } else {
+      scheduleFlush();
+    }
   };
 
   if (!festival || (!isTeacherPreview && festivalStatus(festival) !== 'open')) {
@@ -340,6 +393,9 @@ export default function FestivalApp({ entryRequest, onExit }) {
         @keyframes fsFloat { 0% { transform: translate(-50%,0); opacity: 1 } 100% { transform: translate(-50%,-60px); opacity: 0 } }
         @keyframes fsRise { 0% { transform: translateY(0) rotate(-4deg); opacity: 0 } 10% { opacity: 1 } 100% { transform: translateY(-115vh) rotate(6deg); opacity: .9 } }
         @keyframes fsPulse { 0%,100% { transform: scale(1) } 50% { transform: scale(1.12) } }
+        @keyframes fsDrop { 0% { transform: translateY(-110vh) rotate(-10deg) } 100% { transform: translateY(0) rotate(0) } }
+        @keyframes fsPop { 0% { transform: scale(.6); opacity: 0 } 100% { transform: scale(1); opacity: 1 } }
+        @keyframes fsSpark { 0% { transform: rotate(var(--angle)) translateX(0) scale(1); opacity: 1 } 100% { transform: rotate(var(--angle)) translateX(80px) scale(.2); opacity: 0 } }
         .fs-star { position: absolute; border-radius: 9999px; background: #fff; animation: fsTwinkle 3s ease-in-out infinite; }
       `}</style>
 
@@ -478,8 +534,10 @@ export default function FestivalApp({ entryRequest, onExit }) {
             {kadawStage === 'pray' ? (
               <>
                 <p className="mt-3 text-base leading-relaxed">{kadawTarget.prayer}</p>
-                <p className="mt-3 text-xs text-indigo-300">Say it quietly in your heart, with your hands together.</p>
-                <button onClick={handleKadaw} className="mt-4 w-full py-3 rounded-2xl bg-amber-400 hover:bg-amber-300 text-indigo-950 font-black">🙏 I Pay Respect</button>
+                <p className="mt-3 text-xs text-indigo-300">Read it slowly and say it quietly in your heart, with your hands together.</p>
+                <button onClick={handleKadaw} disabled={respectWait > 0} className="mt-4 w-full py-3 rounded-2xl bg-amber-400 hover:bg-amber-300 text-indigo-950 font-black disabled:opacity-50 disabled:cursor-not-allowed">
+                  {respectWait > 0 ? `🙏 Take a quiet moment… ${respectWait}` : '🙏 I Pay Respect'}
+                </button>
               </>
             ) : (
               <>
@@ -502,6 +560,30 @@ export default function FestivalApp({ entryRequest, onExit }) {
           <div className="w-full max-w-md bg-indigo-950 border border-amber-300/40 rounded-t-3xl sm:rounded-3xl p-5 max-h-[88vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-black text-amber-200 text-center">🎁 Limited-edition rewards</h2>
             <p className="text-xs text-indigo-200 text-center mb-4">Only available during this festival · they are yours to keep</p>
+            {festival.dailyGift && (
+              <div className="mb-3 rounded-2xl border-2 border-amber-300/70 bg-amber-400/10 p-3">
+                <div className="flex items-center gap-3">
+                  <span className="text-4xl">🎁</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-sm">Daily gift box</div>
+                    <div className="text-xs text-indigo-200">Pay respect to all {festival.kadaw.recipients.length} every day to get one new Avatar item. One box a day.</div>
+                  </div>
+                </div>
+                <p className={`mt-2 text-xs font-bold ${giftTakenToday ? 'text-emerald-300' : 'text-amber-300'}`}>
+                  {giftTakenToday ? '✅ Today\'s gift is opened. Come back tomorrow!' : `Today: ${kadawDoneCount} / ${festival.kadaw.recipients.length} respects`}
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {festival.dailyGift.pool.map(entry => {
+                    const got = ownedFestivalIds.includes(entry.item.id);
+                    return (
+                      <span key={entry.item.id} title={got ? entry.item.name : 'Surprise!'} className={`w-9 h-9 rounded-full border border-white/30 flex items-center justify-center text-sm font-black ${got ? '' : 'bg-white/10 text-indigo-200'}`} style={got ? { background: entry.item.swatch || entry.item.color } : undefined}>
+                        {got ? '' : '?'}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
             <div className="space-y-3">
               {festival.rewards.map(rw => {
                 const got = unlockedIds.includes(rw.id);
@@ -537,6 +619,53 @@ export default function FestivalApp({ entryRequest, onExit }) {
             </p>
             <button onClick={() => setPanel(null)} className="mt-4 w-full py-2 rounded-xl bg-white/10 hover:bg-white/20 font-semibold">Close</button>
           </div>
+        </div>
+      )}
+
+      {/* Daily gift box: drops in at once, opens with fireworks */}
+      {giftBox && (
+        <div className="fixed inset-0 z-[9998] bg-black/80 flex flex-col items-center justify-center px-4 overflow-hidden">
+          {giftOpened && FIREWORK_BURSTS.map(b => (
+            <div key={b.id} className="absolute" style={{ left: `${b.x}%`, top: `${b.y}%` }}>
+              {Array.from({ length: 14 }).map((_, i) => (
+                <span key={i} className="absolute rounded-full" style={{ width: 8, height: 8, background: b.colors[i % b.colors.length], '--angle': `${(i / 14) * 360}deg`, animation: `fsSpark 1.2s ease-out ${b.delay}s infinite` }} />
+              ))}
+            </div>
+          ))}
+          {!giftOpened ? (
+            <button onClick={() => setGiftOpened(true)} className="relative flex flex-col items-center" aria-label="Open your gift">
+              <span className="text-[150px] leading-none select-none" style={{ animation: 'fsDrop 0.9s cubic-bezier(.3,1.4,.5,1) both, fsPulse 1.6s ease-in-out 0.9s infinite', filter: 'drop-shadow(0 0 30px rgba(255,200,80,.9))' }}>🎁</span>
+              <span className="mt-4 text-xl font-black text-amber-200">Your daily gift box!</span>
+              <span className="mt-1 text-sm text-indigo-200">Tap to open</span>
+            </button>
+          ) : (
+            <div className="relative w-full max-w-sm bg-indigo-950 border-2 border-amber-300 rounded-3xl p-6 text-center" style={{ animation: 'fsPop 0.5s ease-out both' }}>
+              <h3 className="text-xl font-black text-amber-200">🎉 You got a new gift!</h3>
+              {giftBox.kind === 'item' ? (
+                <>
+                  <div className="mx-auto mt-3 w-44 h-44 rounded-2xl" style={{ background: 'linear-gradient(180deg,#1b1245,#3a1b5c)' }}>
+                    <CharacterSvg
+                      skinColor="#FFE0B2"
+                      hair={{ style: 'short', color: '#3E2723' }}
+                      outfitColor={giftBox.category === 'outfit' ? giftBox.item.color : '#42A5F5'}
+                      outfitPattern={giftBox.category === 'outfit' ? giftBox.item.pattern : undefined}
+                      accessory={giftBox.category === 'accessory' ? giftBox.item : { kind: 'none', color: null }}
+                      className="w-44 h-44"
+                    />
+                  </div>
+                  <p className="mt-3 text-lg font-black">{giftBox.item.name}</p>
+                  <p className="text-sm text-indigo-200">{isTeacherPreview ? 'Preview only.' : `It is now in your 🧑‍🎨 Avatar ${giftBox.category === 'outfit' ? 'Outfit' : 'Accessory'} shop. Wear it!`}</p>
+                </>
+              ) : (
+                <>
+                  <p className="mt-3 text-5xl">🪙</p>
+                  <p className="mt-2 text-lg font-black">+{giftBox.coins} bonus coins</p>
+                  <p className="text-sm text-indigo-200">You already have every festival item!</p>
+                </>
+              )}
+              <button onClick={() => { setGiftBox(null); setGiftOpened(false); }} className="mt-4 w-full py-2.5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-indigo-950 font-black">Sadhu!</button>
+            </div>
+          )}
         </div>
       )}
 

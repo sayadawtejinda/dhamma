@@ -25,7 +25,7 @@ export default function FestivalBanners({ onOpenFestival, studentUid, studentNam
   const open = getActiveFestivals(settings);
   if (open.length === 0) return null;
   return (
-    <div className="flex flex-col items-center gap-3 sm:gap-4 my-3 sm:my-6 px-1">
+    <div className="flex flex-col items-center gap-2 mb-3 px-1">
       <style>{`
         @keyframes fbGlow { 0%,100% { transform: scale(1); filter: drop-shadow(0 0 8px rgba(255,190,70,.7)) } 50% { transform: scale(1.12); filter: drop-shadow(0 0 20px rgba(255,200,90,1)) } }
         @keyframes fbTwinkle { 0%,100% { opacity: .2 } 50% { opacity: 1 } }
@@ -40,32 +40,32 @@ export default function FestivalBanners({ onOpenFestival, studentUid, studentNam
           <span>{f.icon}</span><span>{f.title}</span><span className="text-amber-300">→</span>
         </button>
       ) : (
-        <div key={f.id} className="relative w-full max-w-md">
+        <div key={f.id} className="relative w-full max-w-lg">
         <button
           onClick={(e) => { e.stopPropagation(); setBannerClosed(f.id, true); }}
           aria-label="Close this announcement"
           title="Close"
-          className="absolute -top-2 -right-2 z-10 w-8 h-8 rounded-full bg-gray-800 text-white font-bold shadow-lg hover:bg-gray-900 flex items-center justify-center"
+          className="absolute -top-2 -right-2 z-10 w-7 h-7 rounded-full bg-gray-800 text-white text-sm font-bold shadow-lg hover:bg-gray-900 flex items-center justify-center"
         >
           ✕
         </button>
         <button
           onClick={() => onOpenFestival({ studentUid, studentName, festival: f })}
-          className="relative w-full overflow-hidden rounded-3xl border-2 border-amber-300 text-white text-center shadow-2xl hover:scale-[1.02] transition-transform px-4 py-3 sm:px-6 sm:py-6"
+          className="relative w-full overflow-hidden rounded-2xl border-2 border-amber-300 text-white shadow-xl hover:scale-[1.01] transition-transform px-3 py-2 flex items-center gap-3 text-left"
           style={{ background: 'linear-gradient(160deg,#0b1030 0%,#241a5e 55%,#5a2a5e 100%)' }}
         >
-          {[[12, 18], [28, 70], [47, 12], [66, 74], [84, 22], [92, 62], [8, 56], [74, 10]].map(([x, y], i) => (
-            <span key={i} className="absolute rounded-full bg-white" style={{ left: `${x}%`, top: `${y}%`, width: 3, height: 3, animation: `fbTwinkle ${2 + (i % 3)}s ease-in-out ${i * 0.3}s infinite` }} />
+          {[[22, 20], [46, 70], [60, 18], [78, 66], [92, 24]].map(([x, y], i) => (
+            <span key={i} className="absolute rounded-full bg-white" style={{ left: `${x}%`, top: `${y}%`, width: 2, height: 2, animation: `fbTwinkle ${2 + (i % 3)}s ease-in-out ${i * 0.3}s infinite` }} />
           ))}
-          <span className="absolute inset-y-0 left-0 w-1/3 pointer-events-none" style={{ background: 'linear-gradient(90deg,transparent,rgba(255,255,255,.12),transparent)', animation: 'fbShine 4.5s ease-in-out infinite' }} />
-          {/* Kept short on phones so the Enter button is on screen without
-              scrolling; the full-size layout is for tablets and computers. */}
-          <div className="relative text-4xl sm:text-6xl leading-none" style={{ animation: 'fbGlow 2.4s ease-in-out infinite' }}>{f.icon}</div>
-          <div className="relative mt-1 sm:mt-2 text-[10px] sm:text-xs font-bold tracking-widest text-amber-300">FESTIVAL TIME</div>
-          <div className="relative text-lg sm:text-2xl font-black text-amber-100 leading-tight">{f.title}</div>
-          <div className="relative mt-1 hidden sm:block text-sm text-indigo-200">{f.tagline}</div>
-          <div className="relative mt-1 sm:mt-2 text-[11px] sm:text-xs text-indigo-300">Open {prettyDate(f.start)} – {prettyDate(f.end)}</div>
-          <div className="relative mt-2 sm:mt-4 inline-block bg-amber-400 text-indigo-950 font-black text-sm sm:text-base rounded-full px-5 py-1.5 sm:px-6 sm:py-2 shadow-lg">Enter the festival →</div>
+          <span className="absolute inset-y-0 left-0 w-1/4 pointer-events-none" style={{ background: 'linear-gradient(90deg,transparent,rgba(255,255,255,.12),transparent)', animation: 'fbShine 4.5s ease-in-out infinite' }} />
+          {/* One slim row (icon, name and dates, Enter) -- short enough that
+              a phone held sideways still shows the rest of the home page. */}
+          <span className="relative text-3xl leading-none flex-shrink-0" style={{ animation: 'fbGlow 2.4s ease-in-out infinite' }}>{f.icon}</span>
+          <span className="relative min-w-0 flex-1">
+            <span className="block text-sm font-black text-amber-100 leading-tight truncate">{f.title}</span>
+            <span className="block text-[11px] text-indigo-300 leading-tight">Festival time · Open {prettyDate(f.start)} – {prettyDate(f.end)}</span>
+          </span>
+          <span className="relative flex-shrink-0 bg-amber-400 text-indigo-950 font-black text-xs rounded-full px-3 py-1.5 shadow">Enter →</span>
         </button>
         </div>
       ))}

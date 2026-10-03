@@ -5,6 +5,7 @@ import { appId } from './firebaseConfig';
 import { HOME_BACKGROUNDS } from './homeBackgrounds';
 import OnlineStatusWidget from './OnlineStatusWidget';
 import { FESTIVAL_AVATAR_ITEMS } from './festivals';
+import { CharacterSvg } from './AvatarCharacter';
 
 // Avatar deliberately has no wallet of its own -- it spends directly out of
 // the same Shrine Room coin balance every other app already deposits into,
@@ -101,130 +102,6 @@ function readNestedWithLegacyFallback(data, prefix) {
     }
   }
   return result;
-}
-
-// --- Hand-drawn layered character (same recolor-by-parameter approach as
-// ShrineRoomApp's buddhaSvg) instead of stacking emoji on top of each
-// other, which never quite look like they belong together. Every part is
-// driven purely by the config passed in, so equipping a new item is just
-// swapping one color/shape parameter, not re-drawing anything.
-// Festival Lights Robe: not a flat colour like the shop robes -- a glowing
-// orange-to-gold gradient with a plum sash, a gold V collar, lotus flowers,
-// little lamp flames, sparkles and an embroidered hem. Clipped to the body so
-// nothing spills outside the robe.
-function Lotus({ cx, cy, r = 7 }) {
-  return (
-    <g transform={`translate(${cx} ${cy})`}>
-      {[0, 72, 144, 216, 288].map(a => (
-        <ellipse key={a} cx="0" cy={-r * 0.8} rx={r * 0.42} ry={r * 0.8} fill="#F8BBD0" stroke="#EC407A" strokeWidth="0.6" transform={`rotate(${a})`} />
-      ))}
-      <circle r={r * 0.34} fill="#FFEB3B" />
-    </g>
-  );
-}
-function FestivalRobeArt() {
-  return (
-    <>
-      <defs>
-        <linearGradient id="festRobeGrad" x1="0" y1="0" x2="0.6" y2="1">
-          <stop offset="0" stopColor="#FFC107" />
-          <stop offset="0.5" stopColor="#FB8C00" />
-          <stop offset="1" stopColor="#D84315" />
-        </linearGradient>
-        <clipPath id="festRobeClip">
-          <path d="M55,240 C49,174 60,148 100,148 C140,148 151,174 145,240 Z" />
-        </clipPath>
-      </defs>
-      <g clipPath="url(#festRobeClip)">
-        {/* plum sash across the chest, with gold edging */}
-        <polygon points="62,156 84,152 150,214 150,236 138,236" fill="#7B1FA2" />
-        <polygon points="62,156 84,152 150,214 150,236 138,236" fill="none" stroke="#FFD54F" strokeWidth="2.2" />
-        <circle cx="100" cy="186" r="2.4" fill="#FFD54F" />
-        <circle cx="114" cy="199" r="2.4" fill="#FFD54F" />
-        <circle cx="127" cy="212" r="2.4" fill="#FFD54F" />
-        {/* lotus flowers */}
-        <Lotus cx="78" cy="190" r="7" />
-        <Lotus cx="68" cy="214" r="6" />
-        <Lotus cx="122" cy="176" r="6" />
-        <Lotus cx="96" cy="226" r="7" />
-        {/* lamp flames */}
-        {[[86, 208], [140, 232], [112, 232]].map(([x, y], i) => (
-          <g key={i} transform={`translate(${x} ${y})`}>
-            <path d="M0,-7 Q4,-2 0,3 Q-4,-2 0,-7 Z" fill="#FFF59D" stroke="#FFB300" strokeWidth="0.7" />
-          </g>
-        ))}
-        {/* sparkles */}
-        {[[72, 172], [128, 190], [88, 238], [108, 164]].map(([x, y], i) => (
-          <path key={i} d={`M${x},${y - 4} L${x + 1.2},${y - 1.2} L${x + 4},${y} L${x + 1.2},${y + 1.2} L${x},${y + 4} L${x - 1.2},${y + 1.2} L${x - 4},${y} L${x - 1.2},${y - 1.2} Z`} fill="#FFF8E1" />
-        ))}
-        {/* embroidered hem */}
-        <rect x="40" y="228" width="120" height="12" fill="#B71C1C" />
-        <rect x="40" y="228" width="120" height="2.4" fill="#FFD54F" />
-        {Array.from({ length: 11 }).map((_, i) => <circle key={i} cx={52 + i * 9.6} cy="235" r="2" fill="#FFD54F" />)}
-        {/* gold V collar */}
-        <path d="M76,150 L100,184 L124,150 L116,148 L100,170 L84,148 Z" fill="#FFE082" stroke="#FFB300" strokeWidth="1.4" strokeLinejoin="round" />
-      </g>
-    </>
-  );
-}
-
-function CharacterSvg({ skinColor, hair, outfitColor, outfitPattern, accessory, className }) {
-  const hairPath = hair.style === 'short'
-    ? <path d="M58,72 Q58,24 100,24 Q142,24 142,72 L142,54 Q100,32 58,54 Z" fill={hair.color} />
-    : hair.style === 'long'
-    ? <path d="M52,72 Q46,18 100,18 Q154,18 148,72 L152,145 Q140,156 134,122 L134,70 Q100,44 66,70 L66,122 Q60,156 48,145 Z" fill={hair.color} />
-    : hair.style === 'bun'
-    ? <>
-        <circle cx="100" cy="14" r="13" fill={hair.color} />
-        <path d="M58,72 Q58,26 100,26 Q142,26 142,72 L142,54 Q100,34 58,54 Z" fill={hair.color} />
-      </>
-    : null;
-
-  let accessoryMarkup = null;
-  if (accessory.kind === 'headband') {
-    accessoryMarkup = <rect x="56" y="53" width="88" height="11" rx="5.5" fill={accessory.color} />;
-  } else if (accessory.kind === 'flower') {
-    accessoryMarkup = (
-      <>
-        <circle cx="136" cy="54" r="10" fill={accessory.color} />
-        <circle cx="136" cy="54" r="4" fill="#FFF59D" />
-      </>
-    );
-  } else if (accessory.kind === 'glasses') {
-    accessoryMarkup = (
-      <g stroke="#37474F" strokeWidth="3.5" fill="none">
-        <circle cx="80" cy="98" r="12" />
-        <circle cx="120" cy="98" r="12" />
-        <line x1="92" y1="98" x2="108" y2="98" />
-      </g>
-    );
-  } else if (accessory.kind === 'lantern') {
-    accessoryMarkup = (
-      <g>
-        <line x1="138" y1="30" x2="138" y2="44" stroke="#8D6E63" strokeWidth="2" />
-        <ellipse cx="138" cy="56" rx="11" ry="13" fill={accessory.color} stroke="#E65100" strokeWidth="2" />
-        <ellipse cx="138" cy="56" rx="4" ry="7" fill="#FFF8E1" />
-        <rect x="132" y="43" width="12" height="3" rx="1.5" fill="#E65100" />
-        <rect x="132" y="68" width="12" height="3" rx="1.5" fill="#E65100" />
-      </g>
-    );
-  }
-
-  return (
-    <svg viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg" className={className}>
-      <ellipse cx="100" cy="224" rx="58" ry="9" fill="#00000022" />
-      <path d="M55,240 C49,174 60,148 100,148 C140,148 151,174 145,240 Z" fill={outfitPattern === 'lights' ? 'url(#festRobeGrad)' : outfitColor} />
-      {outfitPattern === 'lights' && <FestivalRobeArt />}
-      <circle cx="68" cy="108" r="8" fill={skinColor} opacity="0.55" />
-      <circle cx="132" cy="108" r="8" fill={skinColor} opacity="0.55" />
-      <circle cx="100" cy="95" r="55" fill={skinColor} />
-      <circle cx="80" cy="98" r="5" fill="#3E2723" />
-      <circle cx="120" cy="98" r="5" fill="#3E2723" />
-      <path d="M82,120 Q100,132 118,120" stroke="#3E2723" strokeWidth="3" fill="none" strokeLinecap="round" />
-      {hairPath}
-      {accessoryMarkup}
-    </svg>
-  );
 }
 
 const DEFAULT_CONFIG = { skin: 'light', hair: 'short-black', outfit: 'blue', accessory: 'none', bg: 'sky', homeBackground: 'default' };

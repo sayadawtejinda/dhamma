@@ -1701,12 +1701,19 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
           <span className="flex items-center gap-2 justify-end">
             <span className="text-amber-600 font-semibold">🪷 {s.lotusCount || 0}</span>
             {!isTeacherPreview && s.studentName !== studentName && (
-              <button
-                onClick={(e) => { e.stopPropagation(); handleVisitStudent(s.studentName); }}
-                className="text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-full px-2 py-0.5"
-              >
-                👣 Visit
-              </button>
+              <>
+                {/* A friend gives their gift only once, so a friend already
+                    visited is marked -- visit someone new for the next gift. */}
+                {giftFriends.includes(s.studentName) && (
+                  <span className="text-xs font-bold text-emerald-700" title="You already received a gift from this friend. Visit someone new to get more!">✓ Visited</span>
+                )}
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleVisitStudent(s.studentName); }}
+                  className="text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-full px-2 py-0.5"
+                >
+                  👣 Visit
+                </button>
+              </>
             )}
           </span>
         )}
