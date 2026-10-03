@@ -40,6 +40,17 @@ const TOTAL_CHAPTERS = 29;
 // drill (the "gift box" reward, once every syllable for the chosen
 // consonant has been matched) -- per the teacher's request.
 const PRACTICE_MODE_REWARD_COINS = 99;
+// Re-reading a chapter whose trophy is already earned pays half the usual
+// coins, until that re-reading has earned REREAD_FULL_RATE_DAILY_COINS in one
+// day; past that, a quarter. Chapters without a trophy yet always pay in full,
+// with no daily limit.
+const REREAD_RATE = 0.5;
+const REREAD_RATE_AFTER_LIMIT = 0.25;
+const REREAD_FULL_RATE_DAILY_COINS = 1000;
+const localDayKey = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+};
 // ပြင်ဆင်ရန် နေရာ - ဆွဲယူမည့် Sheet နာမည်များကို ဤနေရာတွင် စိတ်ကြိုက် သတ်မှတ်နိုင်ပါသည်
 const AVAILABLE_SHEETS = ['A', 'B']; 
 const SHEET_B_AUDIO = "https://raw.githubusercontent.com/nathantun93/bell/main/သူငယ်တန်း1.mp3";
@@ -682,6 +693,8 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
   // roster doc (not the per-chapter/sheet "SCORE" box, which resets on every
   // new chapter). Meant to be spent in a Shop later.
   const [coinBalance, setCoinBalance] = useState(0);
+  // Coins earned today from re-reading already-trophied chapters (see awardScore).
+  const rereadTodayRef = useRef({ day: null, coins: 0 });
   // Set of "chapterNum_sheetName" keys already completed (score reached 700+)
   const [completedChapterSheets, setCompletedChapterSheets] = useState(new Set());
   const [completedFullChapters, setCompletedFullChapters] = useState(new Set()); // chapter numbers where BOTH sheets are done
@@ -770,24 +783,36 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
   const chapterSheetKey = (chapterNum, sheetName) => `${chapterNum}_${sheetName}`;
 
   // Every point of score earned bumps both the current chapter/sheet's
-  // "SCORE" box (resets on the next chapter, unaffected by the coin halving
+  // "SCORE" box (resets on the next chapter, unaffected by the coin rates
   // below -- score still needs to reach 700 the same way whether or not the
   // chapter's trophy is already earned) AND this student's lifetime coin
-  // total (never resets, persisted on their roster doc) -- 1 score point =
-  // 1 coin normally, but only half a coin per point (a quarter once the
-  // student holds over 1000 coins) once the CHAPTER (both
-  // sheets) has already earned its trophy, so re-reading/practicing an
-  // already-rewarded chapter can't be used to farm coins at the same rate
-  // as fresh, not-yet-trophied reading.
+  // total (never resets, persisted on their roster doc).
+  //   * A chapter whose trophy isn't earned yet (both sheets): 1 score point
+  //     = 1 coin, always, with no daily limit.
+  //   * Re-reading a chapter that already earned its trophy: half a coin per
+  //     point until that re-reading has earned 1000 coins today; after that
+  //     a quarter. Never less than 1 coin per award.
+  // The day's re-reading total is kept on the roster doc (not derived from
+  // the spendable balance, which a student can deposit away at any time).
   const awardScore = (amount) => {
     if (!amount) return;
     setScore(prev => prev + amount);
     if (studentName && userId) {
       const alreadyHasTrophy = effectiveCompletedFullChapters.has(getColumnIndex(selectedColumn));
-      // Re-reading a trophied chapter pays half; once the student holds
-      // more than 1000 coins it drops to a quarter of the normal rate.
-      const coinAmount = !alreadyHasTrophy ? amount : (coinBalance > 1000 ? amount / 4 : amount / 2);
-      setDoc(readerRosterDocRef(studentName), { coinBalance: increment(Math.max(1, Math.round(coinAmount))) }, { merge: true }).catch(() => {});
+      const patch = {};
+      let coinAmount = amount;
+      if (alreadyHasTrophy) {
+        const today = localDayKey();
+        const soFar = rereadTodayRef.current.day === today ? rereadTodayRef.current.coins : 0;
+        const rate = soFar < REREAD_FULL_RATE_DAILY_COINS ? REREAD_RATE : REREAD_RATE_AFTER_LIMIT;
+        coinAmount = Math.max(1, Math.round(amount * rate));
+        rereadTodayRef.current = { day: today, coins: soFar + coinAmount };
+        patch.rereadDay = today;
+        patch.rereadCoins = soFar + coinAmount;
+      } else {
+        coinAmount = Math.max(1, Math.round(amount));
+      }
+      setDoc(readerRosterDocRef(studentName), { coinBalance: increment(coinAmount), ...patch }, { merge: true }).catch(() => {});
     }
   };
 
@@ -1006,6 +1031,13 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
           setLastActivePosition({ chapterNum: dt.lastChapterNum, sheetName: dt.lastSheetName, index: dt.lastIndex });
         }
         setCoinBalance(dt.coinBalance || 0);
+        // Today's re-reading total: keep the larger of what is saved and what
+        // this screen has already counted, so a snapshot that lands a moment
+        // behind a just-made award can't wind it back.
+        const today = localDayKey();
+        const saved = dt.rereadDay === today ? (dt.rereadCoins || 0) : 0;
+        const local = rereadTodayRef.current.day === today ? rereadTodayRef.current.coins : 0;
+        rereadTodayRef.current = { day: today, coins: Math.max(saved, local) };
       }
     }, e => console.error('Resume position listen error:', e));
     return () => unsub();
