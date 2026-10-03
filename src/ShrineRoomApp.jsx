@@ -1290,6 +1290,12 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
       .catch(e => console.error('Could not read teacher gifts:', e));
     return () => { cancelled = true; };
   }, [studentUid, loading]);
+  // A teacher gift opened in the popup over this screen pays into the same wallet.
+  useEffect(() => {
+    const onGift = (e) => { setCoinBalance(b => b + (e.detail?.coins || 0)); setTeacherGifts(g => g.filter(x => x.id !== e.detail?.giftId)); };
+    window.addEventListener('dhamma-wallet-gift', onGift);
+    return () => window.removeEventListener('dhamma-wallet-gift', onGift);
+  }, []);
   const openTeacherGift = async (gift) => {
     try {
       const giftRef = doc(db, TEACHER_GIFTS_PATH, gift.id);

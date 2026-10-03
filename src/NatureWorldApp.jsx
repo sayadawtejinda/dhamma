@@ -360,6 +360,13 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
   const rosterRef = studentUid ? doc(db, SHRINE_ROSTER_PATH, sanitizeShrineKey(studentName)) : null;
 
   const showToast = (text) => { setToast(text); setTimeout(() => setToast(null), 2200); };
+  // A teacher gift opened in the popup over this screen pays into the same wallet.
+  useEffect(() => {
+    const onGift = (e) => { setCoinBalance(b => b + (e.detail?.coins || 0)); };
+    window.addEventListener('dhamma-wallet-gift', onGift);
+    return () => window.removeEventListener('dhamma-wallet-gift', onGift);
+  }, []);
+
 
   useEffect(() => {
     if (!studentUid) { setLoading(false); return; }

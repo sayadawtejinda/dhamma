@@ -198,6 +198,13 @@ export default function FestivalApp({ entryRequest, onExit }) {
   const mountedRef = useRef(true);
 
   const showToast = (text) => { setToast(text); setTimeout(() => setToast(null), 2600); };
+  // A teacher gift opened in the popup over this screen pays into the same wallet.
+  useEffect(() => {
+    const onGift = (e) => { setCoinBalance(b => (b == null ? b : b + (e.detail?.coins || 0))); };
+    window.addEventListener('dhamma-wallet-gift', onGift);
+    return () => window.removeEventListener('dhamma-wallet-gift', onGift);
+  }, []);
+
 
   const stars = useMemo(() => Array.from({ length: 46 }, (_, i) => ({
     id: i, x: Math.random() * 100, y: Math.random() * 55, size: 1 + Math.random() * 2, delay: Math.random() * 4,

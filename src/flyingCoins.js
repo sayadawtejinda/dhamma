@@ -30,9 +30,11 @@ function findVisibleCoinTarget() {
   }
   return candidates[0] || null;
 }
-export function spawnFlyingCoins(from, count = 8, emoji = '🪙', playSound = true) {
+// `targetEl` (optional) is an element to land on instead of the app's own
+// coin badge -- used by the teacher-gift popup, which brings its own wallet.
+export function spawnFlyingCoins(from, count = 8, emoji = '🪙', playSound = true, targetEl = null) {
   if (!from) return;
-  const coinTarget = findVisibleCoinTarget();
+  const coinTarget = targetEl || findVisibleCoinTarget();
   if (!coinTarget) return;
   // `from` is either a DOM element (fly from its center) or a plain
   // {x,y} point (e.g. the student's last click position).

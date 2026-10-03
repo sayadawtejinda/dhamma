@@ -2731,7 +2731,7 @@ const handleUndoTrophyAward = async () => {
     if (recipients.length === 0) { alert('Please choose who to send to.'); return; }
     if (!window.confirm(`Send a gift of ${coins} coins to ${targetText}?
 
-Each one will find a gift box the next time they enter their Shrine Room.`)) return;
+Each one will see the gift pop up on their screen right away (or when they next open the app).`)) return;
     setIsSendingGift(true);
     try {
       const col = collection(db, 'artifacts/shrine-room-app/public/data/teacherGifts');
@@ -2740,10 +2740,14 @@ Each one will find a gift box the next time they enter their Shrine Room.`)) ret
       // unclaimed real present eventually gets put away.
       const TWO_WEEKS_MS = 14 * 24 * 60 * 60 * 1000;
       const expiresAt = Date.now() + TWO_WEEKS_MS;
-      for (let i = 0; i < recipients.length; i += 400) {
+      for (let i = 0; i < recipients.length; i += 200) {
         const batch = writeBatch(db);
-        recipients.slice(i, i + 400).forEach(s => {
+        recipients.slice(i, i + 200).forEach(s => {
           batch.set(doc(col), { studentUid: s.id, studentName: s.name || '', coins, message: giftMessage.trim().slice(0, 80), createdAt: serverTimestamp(), expiresAt });
+          // Also flag the student's profile: their open app is already
+          // listening to it, so the gift pops up on their screen right away
+          // wherever they are (see TeacherGiftPopup), at no extra read cost.
+          batch.set(doc(db, `${publicDataPath}/students`, s.id), { hasTeacherGift: true }, { merge: true });
         });
         await batch.commit();
       }
@@ -7415,7 +7419,7 @@ function SmartStudyProgressBadge({ classId, studentName, smartStudyNames, compac
   return null;
 }
 
-function StudentDashboard({ user, studentProfile, studentUid, announcements, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenMyanmarSpeaking, onOpenConsonantPractice, onOpenBurmeseGame, onOpenNumberLearning, onOpenVowelsLearning, onOpenAnimalSound, onOpenBurmeseLearningGames, onOpenInteractiveQuiz, onOpenMyanmarPoems, onOpenConsonantEndings, onOpenTimeAndCalendar, onOpenMyanmarSpelling, onOpenMyanmarSoundPractice, onOpenReadingMyanmar, onOpenSpeakingMyanmar, onOpenMyanmarPart1And2, onOpenBodhiTree, onOpenShrineRoom, onOpenAvatar, onOpenNatureWorld, onOpenWatchAndLearn, onOpenFestival, onLogout, onNavigate, onTrophyEarned }) {
+function StudentDashboard({ user, studentProfile, studentUid, announcements, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenMyanmarSpeaking, onOpenConsonantPractice, onOpenBurmeseGame, onOpenNumberLearning, onOpenVowelsLearning, onOpenAnimalSound, onOpenBurmeseLearningGames, onOpenInteractiveQuiz, onOpenMyanmarPoems, onOpenConsonantEndings, onOpenTimeAndCalendar, onOpenMyanmarSpelling, onOpenMyanmarSoundPractice, onOpenReadingMyanmar, onOpenSpeakingMyanmar, onOpenMyanmarPart1And2, onOpenBodhiTree, onOpenShrineRoom, onOpenAvatar, onOpenNatureWorld, onOpenWatchAndLearn, onOpenFestival, onLogout, onNavigate, onTrophyEarned, onTeacherGift }) {
   const [myLessons, setMyLessons] = useState([]);
   const [ssCompletionCounts, setSsCompletionCounts] = useState({}); // classId → SmartStudy completedCount
   const [mySessions, setMySessions] = useState([]);
@@ -7625,6 +7629,15 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       }
     }
   }, [studentProfile, studentUid]);
+
+  // A gift the teacher just sent: pop it up over whatever app is open (owned
+  // by App.jsx, same as the trophy above), then clear the flag. Anything the
+  // student closes without opening still waits for them in the Shrine Room.
+  useEffect(() => {
+    if (!studentProfile?.hasTeacherGift) return;
+    onTeacherGift?.({ studentUid, studentName: studentProfile.name || '' });
+    updateDoc(doc(db, `${publicDataPath}/students`, studentUid), { hasTeacherGift: false }).catch(() => {});
+  }, [studentProfile?.hasTeacherGift, studentUid]);
 
   useEffect(() => {
     if (hasCheckedHeartsRef.current) return;
@@ -11124,7 +11137,7 @@ function DeactivatedScreen() {
   );
 }
 
-export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenConsonantPractice, onOpenBurmeseGame, onOpenMyanmarSpeaking, onOpenNumberLearning, onOpenVowelsLearning, onOpenAnimalSound, onOpenBurmeseLearningGames, onOpenInteractiveQuiz, onOpenMyanmarPoems, onOpenConsonantEndings, onOpenTimeAndCalendar, onOpenMyanmarSpelling, onOpenMyanmarSoundPractice, onOpenReadingMyanmar, onOpenSpeakingMyanmar, onOpenMyanmarPart1And2, onOpenBodhiTree, onOpenShrineRoom, onOpenAvatar, onOpenNatureWorld, onOpenWatchAndLearn, onOpenFestival, onTrophyEarned }) {
+export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenConsonantPractice, onOpenBurmeseGame, onOpenMyanmarSpeaking, onOpenNumberLearning, onOpenVowelsLearning, onOpenAnimalSound, onOpenBurmeseLearningGames, onOpenInteractiveQuiz, onOpenMyanmarPoems, onOpenConsonantEndings, onOpenTimeAndCalendar, onOpenMyanmarSpelling, onOpenMyanmarSoundPractice, onOpenReadingMyanmar, onOpenSpeakingMyanmar, onOpenMyanmarPart1And2, onOpenBodhiTree, onOpenShrineRoom, onOpenAvatar, onOpenNatureWorld, onOpenWatchAndLearn, onOpenFestival, onTrophyEarned, onTeacherGift }) {
   const [user, setUser] = useState(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [role, setRole] = useState(null); 
@@ -11507,7 +11520,7 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpen
             </div>
           );
         }
-        return <StudentDashboard user={user} studentProfile={studentProfile} studentUid={targetStudentUid} announcements={announcements} onOpenSmartStudy={onOpenSmartStudy} onOpenAbhidhamma={onOpenAbhidhamma} onOpenMyanmarReader={onOpenMyanmarReader} onOpenDhammaschool={onOpenDhammaschool} onOpenMyanmarSpeaking={onOpenMyanmarSpeaking} onOpenConsonantPractice={onOpenConsonantPractice} onOpenBurmeseGame={onOpenBurmeseGame} onOpenNumberLearning={onOpenNumberLearning} onOpenVowelsLearning={onOpenVowelsLearning} onOpenAnimalSound={onOpenAnimalSound} onOpenBurmeseLearningGames={onOpenBurmeseLearningGames} onOpenInteractiveQuiz={onOpenInteractiveQuiz} onOpenMyanmarPoems={onOpenMyanmarPoems} onOpenConsonantEndings={onOpenConsonantEndings} onOpenTimeAndCalendar={onOpenTimeAndCalendar} onOpenMyanmarSpelling={onOpenMyanmarSpelling} onOpenMyanmarSoundPractice={onOpenMyanmarSoundPractice} onOpenReadingMyanmar={onOpenReadingMyanmar} onOpenSpeakingMyanmar={onOpenSpeakingMyanmar} onOpenMyanmarPart1And2={onOpenMyanmarPart1And2} onOpenBodhiTree={onOpenBodhiTree} onOpenShrineRoom={onOpenShrineRoom} onOpenAvatar={onOpenAvatar} onOpenNatureWorld={onOpenNatureWorld} onOpenWatchAndLearn={onOpenWatchAndLearn} onOpenFestival={onOpenFestival} onLogout={handleStudentLogout} onNavigate={setView} onTrophyEarned={onTrophyEarned} />;
+        return <StudentDashboard user={user} studentProfile={studentProfile} studentUid={targetStudentUid} announcements={announcements} onOpenSmartStudy={onOpenSmartStudy} onOpenAbhidhamma={onOpenAbhidhamma} onOpenMyanmarReader={onOpenMyanmarReader} onOpenDhammaschool={onOpenDhammaschool} onOpenMyanmarSpeaking={onOpenMyanmarSpeaking} onOpenConsonantPractice={onOpenConsonantPractice} onOpenBurmeseGame={onOpenBurmeseGame} onOpenNumberLearning={onOpenNumberLearning} onOpenVowelsLearning={onOpenVowelsLearning} onOpenAnimalSound={onOpenAnimalSound} onOpenBurmeseLearningGames={onOpenBurmeseLearningGames} onOpenInteractiveQuiz={onOpenInteractiveQuiz} onOpenMyanmarPoems={onOpenMyanmarPoems} onOpenConsonantEndings={onOpenConsonantEndings} onOpenTimeAndCalendar={onOpenTimeAndCalendar} onOpenMyanmarSpelling={onOpenMyanmarSpelling} onOpenMyanmarSoundPractice={onOpenMyanmarSoundPractice} onOpenReadingMyanmar={onOpenReadingMyanmar} onOpenSpeakingMyanmar={onOpenSpeakingMyanmar} onOpenMyanmarPart1And2={onOpenMyanmarPart1And2} onOpenBodhiTree={onOpenBodhiTree} onOpenShrineRoom={onOpenShrineRoom} onOpenAvatar={onOpenAvatar} onOpenNatureWorld={onOpenNatureWorld} onOpenWatchAndLearn={onOpenWatchAndLearn} onOpenFestival={onOpenFestival} onLogout={handleStudentLogout} onNavigate={setView} onTrophyEarned={onTrophyEarned} onTeacherGift={onTeacherGift} />;
       case 'weekly': 
         return <WeeklySchedule role={role} targetStudentUid={targetStudentUid} />;
       case 'attendance':

@@ -316,6 +316,12 @@ export default function AvatarApp({ entryRequest, onExit }) {
     setStarSending(false);
   };
 
+  // A teacher gift opened in the popup over this screen pays into the same wallet.
+  useEffect(() => {
+    const onGift = (e) => { setCoinBalance(b => b + (e.detail?.coins || 0)); };
+    window.addEventListener('dhamma-wallet-gift', onGift);
+    return () => window.removeEventListener('dhamma-wallet-gift', onGift);
+  }, []);
   const isOwned = (categoryKey, id) => owned[categoryKey]?.includes(id);
 
   const handleEquip = (categoryKey, option) => {

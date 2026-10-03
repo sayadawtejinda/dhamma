@@ -45,7 +45,7 @@ const Fireworks = () => (
   </>
 );
 
-const GiftBoxSvg = ({ open }) => (
+export const GiftBoxSvg = ({ open }) => (
   <svg viewBox="0 0 160 150" width="200" height="188" style={{ overflow: 'visible' }}>
     <defs>
       <linearGradient id="giftBody" x1="0" y1="0" x2="1" y2="1">

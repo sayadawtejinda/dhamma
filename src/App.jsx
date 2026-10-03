@@ -2,6 +2,7 @@ import React, { useState, useEffect, Suspense } from 'react';
 import TutoringApp from './TutoringApp';
 import InstallAppBanner from './InstallAppBanner';
 import StarTicker from './StarTicker';
+import TeacherGiftPopup from './TeacherGiftPopup';
 
 // A React.lazy()+Suspense replacement. React.lazy's own resolution somehow
 // gets permanently stuck on this site -- the dynamic import() itself
@@ -302,6 +303,9 @@ export default function App() {
   // auto-close itself before the student ever saw it, if the teacher
   // awarded it while they were off in, say, Myanmar Reader.
   const [trophyCelebration, setTrophyCelebration] = useState(null);
+  // A present from the teacher, shown over whichever app is open (see
+  // TeacherGiftPopup) -- { studentUid, studentName } while one is up.
+  const [teacherGiftPopup, setTeacherGiftPopup] = useState(null);
   const [openedKeepAliveApps, setOpenedKeepAliveApps] = useState(() => new Set());
   const [showUpdateToast, setShowUpdateToast] = useState(false);
   // A fresh mount only happens via an actual page load, so getting here at
@@ -633,6 +637,7 @@ export default function App() {
           onOpenWatchAndLearn={openWatchAndLearn}
           onOpenFestival={openFestival}
           onTrophyEarned={(totalTrophies) => setTrophyCelebration({ totalTrophies })}
+          onTeacherGift={(who) => setTeacherGiftPopup(prev => prev || who)}
         />
       </div>
 
@@ -989,6 +994,13 @@ export default function App() {
       </Suspense>
       </AppErrorBoundary>
       <InstallAppBanner />
+      {teacherGiftPopup && (
+        <TeacherGiftPopup
+          studentUid={teacherGiftPopup.studentUid}
+          studentName={teacherGiftPopup.studentName}
+          onClose={() => setTeacherGiftPopup(null)}
+        />
+      )}
       {trophyCelebration && (
         <TrophyCelebration
           totalTrophies={trophyCelebration.totalTrophies}
