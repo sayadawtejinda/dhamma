@@ -823,6 +823,38 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
             setDoc(progressRosterRef, { coinBalance: newBalance }, { merge: true }).catch(() => {});
             if (delta > 0) spawnFlyingCoins(clickTracker.get(), delta);
         }
+
+        // +2 coins for every letter heard in the learning screen (a letter
+        // tapped by hand, or reached by Read Aloud) -- same idea as Number
+        // Learning, so students who aren't playing the games yet can still
+        // earn. Shown at once, saved together a moment later (Read Aloud
+        // passes many letters in a row). Game answers have their own coins
+        // (awardCoins above) and don't use this.
+        const READ_COINS = 2;
+        let lastReadCoinAt = 0;
+        let readSaveTimer = null;
+        function flushReadCoins() {
+            if (!readSaveTimer) return;
+            clearTimeout(readSaveTimer);
+            readSaveTimer = null;
+            if (progressRosterRef) setDoc(progressRosterRef, { coinBalance: coinBalanceRef.current }, { merge: true }).catch(() => {});
+        }
+        function awardReadCoins() {
+            if (!progressRosterRef) return;
+            coinBalanceRef.current += READ_COINS;
+            setMyCoinBalance(coinBalanceRef.current);
+            spawnFlyingCoins(clickTracker.get(), READ_COINS);
+            clearTimeout(readSaveTimer);
+            readSaveTimer = setTimeout(flushReadCoins, 1500);
+        }
+        // Taps closer than 600ms apart don't pay, so mashing a letter can't
+        // earn faster than its sound plays.
+        function awardReadCoinsForTap() {
+            const now = Date.now();
+            if (now - lastReadCoinAt < 600) return;
+            lastReadCoinAt = now;
+            awardReadCoins();
+        }
         function updateGroupSelectorBadge() {
             if (!elements.groupSelectorDisplay) return;
             const groupNumber = currentSelectedGroupIndex + 1;
@@ -1345,7 +1377,7 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
                     netScore--; updateSpiderProgress();
                     setTimeout(askClickQuestion, 2000);
                 }
-            } else if (!currentGameMode) { playAudio(clickedConsonant); }
+            } else if (!currentGameMode) { awardReadCoinsForTap(); playAudio(clickedConsonant); }
         }
         function askPickQuestion() {
             if (audioTimer) clearInterval(audioTimer);
@@ -1598,6 +1630,7 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
                     element.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 }
                 await playAudio(consonant);
+                awardReadCoins();
                 if (element) { element.classList.remove('reading-highlight'); }
                 await new Promise(res => setTimeout(res, 200)); 
             }
@@ -1637,6 +1670,7 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
     // its own.
     return () => {
       clickTracker.stop();
+      flushReadCoins();
       stopGame();
       delete window.__bcgApp;
     };

@@ -1088,6 +1088,38 @@ export default function ConsonantPracticeApp({ entryRequest, onExit, hideOwnOnli
             if (delta > 0) spawnFlyingCoins(clickTracker.get(), delta);
         }
 
+        // +2 coins for every letter heard in the learning screen (a letter
+        // tapped by hand, or reached by Read Aloud) -- same idea as Number
+        // Learning, so students who aren't playing the games yet can still
+        // earn. Shown at once, saved together a moment later (Read Aloud
+        // passes many letters in a row). Game answers have their own coins
+        // (awardCoins above) and don't use this.
+        const READ_COINS = 2;
+        let lastReadCoinAt = 0;
+        let readSaveTimer = null;
+        function flushReadCoins() {
+            if (!readSaveTimer) return;
+            clearTimeout(readSaveTimer);
+            readSaveTimer = null;
+            if (consonantRosterRef) setDoc(consonantRosterRef, { coinBalance: coinBalanceRef.current }, { merge: true }).catch(() => {});
+        }
+        function awardReadCoins() {
+            if (!consonantRosterRef) return;
+            coinBalanceRef.current += READ_COINS;
+            setMyCoinBalance(coinBalanceRef.current);
+            spawnFlyingCoins(clickTracker.get(), READ_COINS);
+            clearTimeout(readSaveTimer);
+            readSaveTimer = setTimeout(flushReadCoins, 1500);
+        }
+        // Taps closer than 600ms apart don't pay, so mashing a letter can't
+        // earn faster than its sound plays.
+        function awardReadCoinsForTap() {
+            const now = Date.now();
+            if (now - lastReadCoinAt < 600) return;
+            lastReadCoinAt = now;
+            awardReadCoins();
+        }
+
         // Deposits this student's entire local coin balance into their
         // Shrine Room wallet (the shared wallet several other apps in this
         // project already deposit into) via an atomic increment(), then
@@ -1553,6 +1585,9 @@ export default function ConsonantPracticeApp({ entryRequest, onExit, hideOwnOnli
                         checkControlsOverlapAndReposition();
                     }
                     await playAudio(char);
+                    // Paid on the first read-through only -- Read Aloud
+                    // repeats the list several times.
+                    if (i === 0) awardReadCoins();
                     if (element) element.classList.remove('highlight');
                     await new Promise(resolve => setTimeout(resolve, 100));
                 }
@@ -2236,6 +2271,7 @@ export default function ConsonantPracticeApp({ entryRequest, onExit, hideOwnOnli
             } else if (!currentGameMode) {
                 element.classList.add('active-pulse');
                 setTimeout(() => element.classList.remove('active-pulse'), 500);
+                if (clickedConsonant) awardReadCoinsForTap();
                 await playAudio(clickedConsonant, false, element);
             }
         }
@@ -2421,6 +2457,7 @@ export default function ConsonantPracticeApp({ entryRequest, onExit, hideOwnOnli
   return () => {
       if (unsubTeacherProgress) unsubTeacherProgress();
       clickTracker.stop();
+      flushReadCoins();
       // Stop any repeating audio/game state -- otherwise audioTimer (which
       // replays a question's sound every few seconds) keeps firing after
       // this component unmounts, since it's a plain JS timer with no React
