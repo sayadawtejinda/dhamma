@@ -983,6 +983,12 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     return () => { if (wakeLock) wakeLock.release().catch(() => {}); };
   }, [meditatingMinutes != null]);
   const [meditationRemainingSeconds, setMeditationRemainingSeconds] = useState(0);
+  // Tapping the little countdown badge blacks out the screen and shows the
+  // time left as a big green digital clock (easy to read from a distance on a
+  // phone). The screen stays awake (the meditation wake lock above is still
+  // held); a tap on the black screen goes back.
+  const [bigClockOpen, setBigClockOpen] = useState(false);
+  useEffect(() => { if (meditatingMinutes == null) setBigClockOpen(false); }, [meditatingMinutes]);
   const [totalMeditationMinutes, setTotalMeditationMinutes] = useState(0);
   // Shrine Room's own "online status" activity metric -- other apps show
   // coin balance there, but coins here already have their own meaning
@@ -2048,9 +2054,9 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
                   by ~260px in a 384px-tall box, so the canopy peak is
                   around 384-260=124px down, just below this badge). */}
               {meditatingMinutes != null && (
-                <div className="absolute top-[104px] left-1/2 -translate-x-1/2 z-30 flex items-center gap-1 bg-indigo-50 px-3 py-1.5 rounded-full shadow-lg border border-indigo-200 text-xs font-semibold text-indigo-700 whitespace-nowrap">
+                <button onClick={() => setBigClockOpen(true)} title="Tap for a big clock" className="absolute top-[104px] left-1/2 -translate-x-1/2 z-30 flex items-center gap-1 bg-indigo-50 px-3 py-1.5 rounded-full shadow-lg border border-indigo-200 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 whitespace-nowrap">
                   🧘 {String(Math.floor(meditationRemainingSeconds / 60)).padStart(2, '0')}:{String(meditationRemainingSeconds % 60).padStart(2, '0')} left
-                </div>
+                </button>
               )}
 
               {meditatingMinutes != null && buddha && <PetalRain />}
@@ -2293,6 +2299,33 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
                 );
               })}
             </div>
+        </div>
+      )}
+
+      {/* Big green digital clock for the meditation countdown -- pure black
+          behind it (kind to a phone screen in a dark room), tap anywhere to go
+          back. */}
+      {bigClockOpen && meditatingMinutes != null && (
+        <div
+          onClick={() => setBigClockOpen(false)}
+          className="fixed inset-0 z-[10010] flex flex-col items-center justify-center cursor-pointer select-none"
+          style={{ background: '#000' }}
+        >
+          <div
+            style={{
+              color: '#22ff55',
+              fontFamily: "ui-monospace, 'SFMono-Regular', Menlo, Consolas, 'Courier New', monospace",
+              fontWeight: 700,
+              fontVariantNumeric: 'tabular-nums',
+              letterSpacing: '0.04em',
+              lineHeight: 1,
+              fontSize: 'min(30vw, 34vh)',
+              textShadow: '0 0 18px rgba(34,255,85,0.55), 0 0 40px rgba(34,255,85,0.25)',
+            }}
+          >
+            {String(Math.floor(meditationRemainingSeconds / 60)).padStart(2, '0')}:{String(meditationRemainingSeconds % 60).padStart(2, '0')}
+          </div>
+          <p style={{ color: '#14803a' }} className="mt-6 text-sm">Tap anywhere to go back</p>
         </div>
       )}
 
