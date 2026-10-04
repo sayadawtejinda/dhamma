@@ -10250,7 +10250,10 @@ function WeeklySchedule({ role, targetStudentUid }) {
       where("startTime", ">=", Timestamp.fromDate(weekStartDate)), 
       where("startTime", "<", Timestamp.fromDate(weekEndDate))   
     );
-    const unsubSessions = watchTeacherLiveElseOnce(false, qSessions, (snapshot) => {
+    // Only the CURRENT week's sessions are live: a live listener is billed once
+    // for what it loads and then only per change (a student starting a session),
+    // never for time spent open. Other weeks never change, so read them once.
+    const unsubSessions = watchTeacherLiveElseOnce(role === 'teacher' && weekOffset === 0, qSessions, (snapshot) => {
       const sessionList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setSessions(sessionList);
     });
@@ -10259,7 +10262,7 @@ function WeeklySchedule({ role, targetStudentUid }) {
       unsubscribe();
       unsubSessions();
     };
-  }, [weekStartDate, refreshKey]);
+  }, [weekStartDate, weekOffset, refreshKey]);
 
   // schedule + a synthetic stand-in occurrence for any weekly slot that
   // doesn't already have a real dated doc this week -- see
@@ -10383,13 +10386,36 @@ function WeeklySchedule({ role, targetStudentUid }) {
     });
   };
 
+  // Writes one attendance mark and updates the list on screen from what was
+  // just written, so the schedule no longer needs a live listener (and the
+  // re-reads that come with one) just to show the teacher's own change.
+  const applyOverride = async (entry, status) => {
+    if (String(entry.id).startsWith('synthetic-')) {
+      // A stand-in occurrence (see synthesizeScheduleOccurrences) has no real
+      // doc to update -- overriding it means it's actually being recorded now,
+      // so materialize a real teacherSchedule doc for just this one date.
+      const data = {
+        teacherUid: auth.currentUser?.uid || null,
+        studentUid: entry.studentUid,
+        studentName: entry.studentName,
+        startTime: entry.startTime,
+        endTime: entry.endTime,
+        overrideStatus: status,
+      };
+      const ref = await addDoc(teacherScheduleCollection, data);
+      setSchedule(prev => [...prev, { id: ref.id, ...data }]);
+      return;
+    }
+    await updateDoc(doc(db, `${publicDataPath}/teacherSchedule`, entry.id), { overrideStatus: status });
+    setSchedule(prev => prev.map(e => (e.id === entry.id ? { ...e, overrideStatus: status } : e)));
+  };
+
   const confirmOverride = async () => {
     const { entry, newStatus } = showOverrideModal;
     if (!entry) return;
 
     try {
-      const docRef = doc(db, `${publicDataPath}/teacherSchedule`, entry.id);
-      await updateDoc(docRef, { overrideStatus: newStatus });
+      await applyOverride(entry, newStatus);
     } catch (error) {
       console.error("Error overriding attendance:", error);
     }
@@ -10403,23 +10429,7 @@ function WeeklySchedule({ role, targetStudentUid }) {
   // single tap, not a popup each time.
   const quickSetAttendance = async (entry, status) => {
     try {
-      if (String(entry.id).startsWith('synthetic-')) {
-        // A stand-in occurrence (see synthesizeScheduleOccurrences) has no
-        // real doc to update -- overriding it means it's actually being
-        // recorded now, so materialize a real teacherSchedule doc for just
-        // this one date instead, the same shape a dated entry always had.
-        await addDoc(teacherScheduleCollection, {
-          teacherUid: auth.currentUser?.uid || null,
-          studentUid: entry.studentUid,
-          studentName: entry.studentName,
-          startTime: entry.startTime,
-          endTime: entry.endTime,
-          overrideStatus: status,
-        });
-        return;
-      }
-      const docRef = doc(db, `${publicDataPath}/teacherSchedule`, entry.id);
-      await updateDoc(docRef, { overrideStatus: status });
+      await applyOverride(entry, status);
     } catch (error) {
       console.error("Error setting attendance:", error);
     }
@@ -10432,6 +10442,7 @@ function WeeklySchedule({ role, targetStudentUid }) {
     if (!window.confirm(`Delete this schedule entry for ${entry.studentName} (${formatTime(entry.startTime)} - ${formatTime(entry.endTime)})? This cannot be undone.`)) return;
     try {
       await deleteDoc(doc(db, `${publicDataPath}/teacherSchedule`, entry.id));
+      setSchedule(prev => prev.filter(e => e.id !== entry.id));
     } catch (error) {
       console.error("Error deleting schedule entry:", error);
     }
@@ -10447,6 +10458,8 @@ function WeeklySchedule({ role, targetStudentUid }) {
       const batch = writeBatch(db);
       entries.forEach(entry => batch.delete(doc(db, `${publicDataPath}/teacherSchedule`, entry.id)));
       await batch.commit();
+      const gone = new Set(entries.map(e => e.id));
+      setSchedule(prev => prev.filter(e => !gone.has(e.id)));
     } catch (error) {
       console.error("Error deleting schedule group:", error);
     }
@@ -10472,7 +10485,7 @@ function WeeklySchedule({ role, targetStudentUid }) {
       </div>
       {role === 'teacher' && (
         <div className="flex justify-center items-center gap-3 mb-4 text-sm text-gray-500">
-          <span>{lastLoadedAt ? `Loaded ${lastLoadedAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}` : 'Loading...'} · this week only</span>
+          <span>{weekOffset === 0 ? '🟢 Attendance updates live this week' : (lastLoadedAt ? `Loaded ${lastLoadedAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}` : 'Loading...')}</span>
           <button onClick={() => setRefreshKey(k => k + 1)} className="px-3 py-1 bg-white border border-gray-300 text-gray-700 rounded-full hover:bg-gray-100 shadow-sm font-semibold">🔄 Refresh</button>
         </div>
       )}
