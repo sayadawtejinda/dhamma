@@ -134,6 +134,13 @@ const MVL_APP_CSS = `
             gap: 0.25rem; 
             padding: 0.25rem;
         }
+        /* The Pro grid is hidden with Tailwind's "hidden" class while Basic is
+           showing, but .vowel-grid's own display:grid above wins over it, so the
+           Pro vowels (အ, အာ, အား ...) sat open under the Basic grid and students
+           tapped them before finishing Basic. This makes hidden really hide. */
+        .vowel-grid.hidden {
+            display: none !important;
+        }
         .vowel-grid.game-mode-grid {
              border-bottom: 1px solid #e5e7eb;
              border-radius: 0;
