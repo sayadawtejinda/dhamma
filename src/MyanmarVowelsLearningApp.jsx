@@ -756,6 +756,10 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
             btnP.style.pointerEvents = locked ? 'none' : '';
             btnP.style.cursor = locked ? 'not-allowed' : '';
             btnP.setAttribute('aria-disabled', locked ? 'true' : 'false');
+            // A padlock instead of the letter while it is locked, so it is
+            // obvious at a glance that it cannot be used yet.
+            btnP.textContent = locked ? '🔒' : 'P';
+            btnP.disabled = locked;
         }
         // Gold coins: +10 per correct Listen/Click answer, -1 per wrong
         // (Typing Practice excluded), +5 per consonant picked in "Choose
