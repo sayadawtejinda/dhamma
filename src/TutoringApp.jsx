@@ -1847,9 +1847,14 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
 
   useEffect(() => {
     // Not filtered by teacherUid -- see the lessonBank listener above.
-    // Last two weeks + everything upcoming (the whole collection is ~5,900 docs).
+    // Last two weeks up to today (the whole collection is ~5,900 docs).
+    // The dashboard only ever looks at the past 14 days and today (Select
+    // Student's colours, the week totals), so stop there: the old open-ended
+    // query also pulled every future occurrence that had been pre-made,
+    // live, each time the dashboard opened.
     const since = Timestamp.fromDate(new Date(Date.now() - 14 * 24 * 60 * 60 * 1000));
-    const q = query(teacherScheduleCollection, where('startTime', '>=', since));
+    const endOfToday = new Date(); endOfToday.setHours(23, 59, 59, 999);
+    const q = query(teacherScheduleCollection, where('startTime', '>=', since), where('startTime', '<=', Timestamp.fromDate(endOfToday)));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const scheduleList = snapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
@@ -4830,6 +4835,19 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
       await batch.commit();
     } catch (e) { console.error('Error rejecting announcement:', e); }
   };
+  // The past 14 days and today as the rest of the dashboard sees them: the real
+  // dated docs plus a stand-in for each standing weekly slot that has no real doc
+  // for that day (every week now -- no dated docs are made any more). Without
+  // this, Select Student could not colour anyone scheduled today.
+  const dashboardSchedule = useMemo(() => {
+    const activeIds = new Set(students.filter(s => s.isActive === true).map(s => s.id));
+    const slots = recurringSchedule.filter(r => r.studentUid === 'offline' || activeIds.has(r.studentUid));
+    const rangeStart = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000); rangeStart.setHours(0, 0, 0, 0);
+    const rangeEnd = new Date(); rangeEnd.setHours(23, 59, 59, 999);
+    const synthetic = synthesizeScheduleOccurrences(slots, teacherSchedule, rangeStart, rangeEnd);
+    return [...teacherSchedule, ...synthetic];
+  }, [teacherSchedule, recurringSchedule, students]);
+
   const currentStudents = useMemo(() => students.filter(s => s.isActive === true || s.isActive === false), [students]);
   const trophyRequests = useMemo(() => students.filter(s => s.trophyRequested === true), [students]);
   
@@ -4843,7 +4861,7 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
     const scheduledTodayUids = new Set();
     const scheduledThisHourUids = new Set();
 
-    teacherSchedule.forEach(entry => {
+    dashboardSchedule.forEach(entry => {
       if (entry.studentUid !== 'offline') {
         const entryStart = entry.startTime.toDate();
         const entryEnd = entry.endTime.toDate();
@@ -4879,7 +4897,7 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
       
       return a.name.localeCompare(b.name);
     });
-  }, [students, sendStudentSearch, teacherSchedule]);
+  }, [students, sendStudentSearch, dashboardSchedule]);
   
   const filteredScheduleStudents = useMemo(() => {
     const searchStr = String(scheduleStudentSearch || '').toLowerCase(); 
@@ -4916,7 +4934,8 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
       }
     };
 
-    teacherSchedule.forEach(entry => {
+    dashboardSchedule.forEach(entry => {
+       if (entry.studentUid === 'offline') return; // offline students are no longer counted in attendance
        const entryDate = entry.startTime.toDate();
        if (entryDate > now) return;
 
@@ -4925,7 +4944,7 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
     });
 
     return { weekAttended, weekAbsent, monthAttended, monthAbsent, yearAttended, yearAbsent };
-  }, [teacherSchedule, sessions]);
+  }, [dashboardSchedule, sessions]);
   // The dashboard only keeps ~2 weeks of schedule live, so month/year totals
   // come from the weekly snapshot instead (refreshed every Monday).
   const [weeklyTotals, setWeeklyTotals] = useState(null);
@@ -5398,7 +5417,7 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                       let isScheduledToday = false;
                       let isScheduledThisHour = false;
                       
-                      teacherSchedule.forEach(entry => {
+                      dashboardSchedule.forEach(entry => {
                         if (entry.studentUid === student.id) {
                           const entryStart = entry.startTime.toDate();
                           const entryEnd = entry.endTime.toDate();
@@ -7629,15 +7648,6 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       }
     }
   }, [studentProfile, studentUid]);
-
-  // A gift the teacher just sent: pop it up over whatever app is open (owned
-  // by App.jsx, same as the trophy above), then clear the flag. Anything the
-  // student closes without opening still waits for them in the Shrine Room.
-  useEffect(() => {
-    if (!studentProfile?.hasTeacherGift) return;
-    onTeacherGift?.({ studentUid, studentName: studentProfile.name || '' });
-    updateDoc(doc(db, `${publicDataPath}/students`, studentUid), { hasTeacherGift: false }).catch(() => {});
-  }, [studentProfile?.hasTeacherGift, studentUid]);
 
   useEffect(() => {
     if (hasCheckedHeartsRef.current) return;
@@ -10170,7 +10180,6 @@ function WeeklySchedule({ role, targetStudentUid }) {
   const [schedule, setSchedule] = useState([]);
   const [recurringSlots, setRecurringSlots] = useState([]);
   const [sessions, setSessions] = useState([]);
-  const [students, setStudents] = useState([]);
   const [groups, setGroups] = useState([]);
   const [weekOffset, setWeekOffset] = useState(0);
 
@@ -10181,14 +10190,17 @@ function WeeklySchedule({ role, targetStudentUid }) {
   const myEntryRef = useRef(null);
   const hasScrolledToMineRef = useRef(false);
 
-  useEffect(() => {
-    // Students read once (no live listener held open); only the teacher stays live.
-    const unsub = watchTeacherLiveElseOnce(role === 'teacher', studentsCollection, (snap) => setStudents(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-    return () => unsub();
-  }, []);
+  // (This screen used to hold a live listener on the WHOLE students collection
+  // that nothing here ever used, plus live listeners on the groups, the week's
+  // schedule and the week's sessions -- all of which re-read and re-billed
+  // every time anything in them changed. Now everything is read once when the
+  // week opens; the Refresh button below reads it again on request.)
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [lastLoadedAt, setLastLoadedAt] = useState(null);
 
   useEffect(() => {
-    const unsub = watchTeacherLiveElseOnce(role === 'teacher', groupsCollection, (snap) => setGroups(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+    // Group names only; rarely changes, so once per visit.
+    const unsub = watchTeacherLiveElseOnce(false, groupsCollection, (snap) => setGroups(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
     return () => unsub();
   }, []);
   
@@ -10217,7 +10229,8 @@ function WeeklySchedule({ role, targetStudentUid }) {
       where("startTime", "<", Timestamp.fromDate(weekEndDate))
     );
 
-    const unsubscribe = watchTeacherLiveElseOnce(role === 'teacher', q, (snapshot) => {
+    const unsubscribe = watchTeacherLiveElseOnce(false, q, (snapshot) => {
+      setLastLoadedAt(new Date());
       const scheduleList = snapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
         .sort((a, b) => a.startTime.toDate() - b.startTime.toDate());
@@ -10237,7 +10250,7 @@ function WeeklySchedule({ role, targetStudentUid }) {
       where("startTime", ">=", Timestamp.fromDate(weekStartDate)), 
       where("startTime", "<", Timestamp.fromDate(weekEndDate))   
     );
-    const unsubSessions = watchTeacherLiveElseOnce(role === 'teacher', qSessions, (snapshot) => {
+    const unsubSessions = watchTeacherLiveElseOnce(false, qSessions, (snapshot) => {
       const sessionList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setSessions(sessionList);
     });
@@ -10246,7 +10259,7 @@ function WeeklySchedule({ role, targetStudentUid }) {
       unsubscribe();
       unsubSessions();
     };
-  }, [weekStartDate]);
+  }, [weekStartDate, refreshKey]);
 
   // schedule + a synthetic stand-in occurrence for any weekly slot that
   // doesn't already have a real dated doc this week -- see
@@ -10457,6 +10470,12 @@ function WeeklySchedule({ role, targetStudentUid }) {
         </h3>
         <button onClick={() => setWeekOffset(o => o + 1)} className="px-4 py-2 bg-white text-gray-800 rounded-lg hover:bg-gray-100 shadow-md">Next Week &rarr;</button>
       </div>
+      {role === 'teacher' && (
+        <div className="flex justify-center items-center gap-3 mb-4 text-sm text-gray-500">
+          <span>{lastLoadedAt ? `Loaded ${lastLoadedAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}` : 'Loading...'} · this week only</span>
+          <button onClick={() => setRefreshKey(k => k + 1)} className="px-3 py-1 bg-white border border-gray-300 text-gray-700 rounded-full hover:bg-gray-100 shadow-sm font-semibold">🔄 Refresh</button>
+        </div>
+      )}
 
       <div className="space-y-6">
         {daysOfWeek.map(day => {
@@ -11218,6 +11237,18 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpen
     }
   }, [user, isAuthReady, teacherUid]);
   
+  // A gift the teacher just sent: pop it up over whatever app is open (owned
+  // by App.jsx, same as the trophy celebration), then clear the flag. This
+  // lives here, not in the home screen, so it fires on whichever screen the
+  // student is on. Anything they close without opening still waits for them
+  // in the Shrine Room.
+  useEffect(() => {
+    if (role !== 'student' || !targetStudentUid || targetStudentUid === VISITOR_UID) return;
+    if (!studentProfile?.hasTeacherGift) return;
+    onTeacherGift?.({ studentUid: targetStudentUid, studentName: studentProfile.name || '' });
+    updateDoc(doc(db, `${publicDataPath}/students`, targetStudentUid), { hasTeacherGift: false }).catch(() => {});
+  }, [role, targetStudentUid, studentProfile?.hasTeacherGift]);
+
   useEffect(() => {
     if (role === 'student' && targetStudentUid && targetStudentUid !== VISITOR_UID) {
       console.log('[DIAG] Attaching student profile listener for uid:', targetStudentUid);
