@@ -293,8 +293,11 @@ const YI_GROUP_EXCEPTIONS = {
   "ဈေးသည်": "GROUP3",  // "ဈေးသည်" → "ဈေးသယ်" (CUSTOM_EXCEPTIONS ထဲက အသံနဲ့ ကိုက်ညီရန်)
   "ခရီးသည်": "GROUP3",
   "ဆည်": "GROUP3",
+  "တပည့်": "GROUP3",
+  "တည့်": "GROUP3",
   "ဆည်းလည်း": "GROUP3",
   "ရည်": "GROUP2",
+  "ပြည့်": "GROUP2",
   "မည်း": "GROUP3",
   "အနည်း": "GROUP3",
   "နည်းနည်း": "GROUP3",
@@ -478,7 +481,7 @@ const INITIAL_STACKED_BREAKDOWNS = {
   "နာ့": ["န"]
 };
 
-// A ည with no asat (်) after it, and not ည့်.
+// A ည with no asat (်) after it, and not ည့်.
 const BARE_YI = /ည(?![့်])/;
 
 const getStackedBreakdown = (word, customDict) => {
@@ -538,8 +541,8 @@ const getStackedBreakdown = (word, customDict) => {
         
         // Only a BARE ည (no asat after it, with or without the ့ dot) is split the
         // Pali way, ဉ်+ဉ (သုည -> သုဉ်,ဉ). A ည that carries its own asat -- ည်,
-        // ည့်, ည်း (တပည့်, ပည်း ...) -- is an ordinary final sound and stays
-        // whole. (ည့် = ည + ့ + ်, so a plain "ည်" test missed it.)
+        // ည့်, ည်း (တပည့်, ပည်း ...) -- is an ordinary final sound and stays
+        // whole. (ည့် = ည + ့ + ်, so a plain "ည်" test missed it.)
         if (BARE_YI.test(part)) {
             let subParts = [];
             let idx = part.search(BARE_YI);
