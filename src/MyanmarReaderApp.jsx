@@ -1855,7 +1855,10 @@ if (appMode === 'sheet' && sheetData.length > 0) {
           for (let len = 4; len >= 1; len--) {
               if (i + len <= sylsList.length) {
                   let word = sylsList.slice(i, i + len).map(s => s.combined).join('');
-                  if (CUSTOM_EXCEPTIONS[word]) {
+                  // (same rule as handleWordClick: a word-specific ည်/ည့် entry in
+                  // YI_GROUP_EXCEPTIONS outranks a plain per-syllable custom spelling)
+                  const hasYiEntry = Array.from({ length: len }, (_, k) => findYiGroupException(sylsList, i + k)).some(Boolean);
+                  if (CUSTOM_EXCEPTIONS[word] && !hasYiEntry) {
                       let parts = CUSTOM_EXCEPTIONS[word].split(',');
                       parts.forEach(p => sequence.push({ index: i, type: 'combined', char: p }));
                       i += len;
@@ -2871,7 +2874,11 @@ const closeQAPanel = () => {
       }
 
       const breakdown = getStackedBreakdown(combinedStr, dynamicStacked);
-      const hasCustom = !!CUSTOM_EXCEPTIONS[combinedStr];
+      // A fixed spelling in CUSTOM_EXCEPTIONS wins -- unless this syllable sits in a
+      // word that has its own entry in YI_GROUP_EXCEPTIONS (e.g. ပည့် inside
+      // တပည့်): then that, more specific, entry decides. Otherwise the plain
+      // ပည့် -> ပြည့် fix kept overriding it and the new entry never took effect.
+      const hasCustom = !!CUSTOM_EXCEPTIONS[combinedStr] && !findYiGroupException(syllables, index);
       
       if (breakdown || hasCustom) {
           let phonetics = [];
