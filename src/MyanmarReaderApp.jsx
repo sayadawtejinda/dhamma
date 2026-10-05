@@ -374,7 +374,7 @@ const VALID_YI_GROUP3 = ['ဆ', 'တ', 'ထ', 'န', 'မ', 'လ', 'လှ', '�
 const VALID_YIN_GROUP = ['စ', 'ဇ', 'ည','ကျ',  'ချ', 'ပျ', 'ဖျ', 'မျ', 'ရှ', 'ယျာ'];
 
 const MAPPING_YI_GROUP2 = ['ပြ', 'ဖြ', 'ရှ'];
-const MAPPING_YI_GROUP3 = ['တ', 'ထ', 'လ', 'လှ', 'မှ'];
+const MAPPING_YI_GROUP3 = ['တ', 'ထ', 'လ', 'လှ', 'မှ', 'ပ'];
 
 function getCorrectVowelSuffix(consonant, suffix) {
     if (suffix.startsWith('ာ')) {
