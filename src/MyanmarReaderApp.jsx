@@ -370,7 +370,7 @@ const tallAaConsonants = ['ခ', 'ဂ', 'င', 'ဒ', 'ပ', 'ဝ', 'ခွ', '�
 
 const VALID_YI_GROUP1 = ['စ', 'ဆ', 'ည', 'န', 'မ', 'ရ', 'သ', 'ကျ','ကြ', 'ချ', 'ဗျ', 'မြ'];
 const VALID_YI_GROUP2 = ['ပြ', 'ရ', 'ဖြ', 'ရှ'];
-const VALID_YI_GROUP3 = ['ဆ', 'တ', 'ထ', 'န', 'မ', 'လ', 'လှ', 'သ', 'မှ'];
+const VALID_YI_GROUP3 = ['ဆ', 'တ', 'ထ', 'န', 'မ', 'လ', 'လှ', 'သ', 'မှ', 'ပ'];
 const VALID_YIN_GROUP = ['စ', 'ဇ', 'ည','ကျ',  'ချ', 'ပျ', 'ဖျ', 'မျ', 'ရှ', 'ယျာ'];
 
 const MAPPING_YI_GROUP2 = ['ပြ', 'ဖြ', 'ရှ'];
@@ -478,6 +478,9 @@ const INITIAL_STACKED_BREAKDOWNS = {
   "နာ့": ["န"]
 };
 
+// A ည with no asat (်) after it, and not ည့်.
+const BARE_YI = /ည(?![့်])/;
+
 const getStackedBreakdown = (word, customDict) => {
     if (customDict && customDict[word]) return customDict[word];
 
@@ -533,9 +536,13 @@ const getStackedBreakdown = (word, customDict) => {
     for (let i = 0; i < parts.length; i++) {
         let part = parts[i];
         
-        if (part.includes('ည') && !part.includes('ည်')) {
+        // Only a BARE ည (no asat after it, with or without the ့ dot) is split the
+        // Pali way, ဉ်+ဉ (သုည -> သုဉ်,ဉ). A ည that carries its own asat -- ည်,
+        // ည့်, ည်း (တပည့်, ပည်း ...) -- is an ordinary final sound and stays
+        // whole. (ည့် = ည + ့ + ်, so a plain "ည်" test missed it.)
+        if (BARE_YI.test(part)) {
             let subParts = [];
-            let idx = part.indexOf('ည');
+            let idx = part.search(BARE_YI);
             
             while (idx > 0) {
                 let preUpper = part.substring(0, idx);
@@ -546,7 +553,7 @@ const getStackedBreakdown = (word, customDict) => {
                 if (!hasTone && isShortVowel && !preUpper.endsWith('\u103A')) {
                     subParts.push(base + vowel + 'ဉ်');
                     part = 'ဉ' + part.substring(idx + 1);
-                    idx = part.indexOf('ည');
+                    idx = part.search(BARE_YI);
                     modified = true;
                 } else {
                     break;
@@ -555,7 +562,7 @@ const getStackedBreakdown = (word, customDict) => {
             if (subParts.length > 0) finalParts.push(...subParts);
         }
         
-        if (finalParts.length > 0 && part.startsWith('ည') && !part.includes('ည်')) {
+        if (finalParts.length > 0 && /^ည(?![့်])/.test(part)) {
             let prevPart = finalParts[finalParts.length - 1];
             let hasTone = prevPart.includes('့') || prevPart.includes('း');
             let { base, vowel } = extractBaseAndVowel(prevPart);
@@ -3610,7 +3617,7 @@ useEffect(() => {
                 <button
                   onClick={toggleReadWordsAloud}
                   title={readWordsAloud ? 'Word-by-word reading ON — tap to turn off' : 'Word-by-word reading OFF — tap to turn on'}
-                  className={`absolute top-2 right-2 p-2 rounded-full shadow border-2 ${readWordsAloud ? 'bg-emerald-500 border-emerald-700 text-white' : 'bg-gray-300 border-gray-400 text-gray-600'}`}
+                  className={`absolute -top-14 right-2 p-2 rounded-full shadow border-2 ${readWordsAloud ? 'bg-emerald-500 border-emerald-700 text-white' : 'bg-gray-300 border-gray-400 text-gray-600'}`}
                 >
                   {readWordsAloud ? <Volume2 size={20} /> : <VolumeX size={20} />}
                 </button>
