@@ -353,7 +353,7 @@ const getColumnIndex = (colName) => {
 const SPECIAL_YI_CONSONANTS = ['စ', 'ည', 'န', 'မ', 'သ', 'ကျ', 'ကြ', 'ချ', 'ဗျ', 'ပြ', 'ရ', 'ဖြ', 'ရှ', 'ဆ', 'တ', 'ထ', 'လ', 'လှ', 'ဇ', 'ပျ', 'ဖျ', 'မျ', 'ယျာ'];
 
 const SOUND_MAPPING = { 
-  'ဃ': 'ဂ', 'ယျ': 'ယ', 'ဆ': 'စ', 'ဈ': 'ဇ', 'ဉ': 'ည', 'ဿ': 'သ', 'ဩ': 'အော', 'ဋ': 'တ', 'ဌ': 'ထ', 'ဍ': 'ဒ', 'ဎ': 'ဒ', 'ဓ': 'ဒ', 'ဏ': 'န', 'ဘ': 'ဗ', 'ဠ': 'လ', 'ရ': 'ယ', 'ကြ': 'ကျ', 'ခြ': 'ချ', 'ဂြ': 'ဂျ', 'ငြ': 'ည', 'ပြ': 'ပျ', 'ဖြ': 'ဖျ', 'ဗြ': 'ဗျ', 'မြ': 'မျ', 'ဆွ': 'စွ', 'ဓွ': 'ဒွ', 'ဘွ': 'ဗွ', 'ရွ': 'ယွ','ရွှ': 'ယွှ', 'ဏှ': 'နှ', 'ကြွ': 'ကျွ', 'ခြွ': 'ချွ', 'မြှ': 'မျှ', 'ရှ': 'ယှ', 'ကိုယ့်': 'ကို့', 'ကိုယ်': 'ကို',
+  'ဃ': 'ဂ', 'ယျ': 'ယ', 'ဆ': 'စ', 'ဈ': 'ဇ', 'ဉ': 'ည', 'ဿ': 'သ', 'ဩ': 'အော', 'ဋ': 'တ', 'ဌ': 'ထ', 'ဍ': 'ဒ', 'ဎ': 'ဒ', 'ဓ': 'ဒ', 'ဏ': 'န', 'ဘ': 'ဗ', 'ဠ': 'လ', 'ရ': 'ယ', 'ကြ': 'ကျ', 'ခြ': 'ချ', 'ဂြ': 'ဂျ', 'ငြ': 'ည', 'ပြ': 'ပျ', 'ဖြ': 'ဖျ', 'ဗြ': 'ဗျ', 'မြ': 'မျ', 'ဆွ': 'စွ', 'ဓွ': 'ဒွ', 'ဘွ': 'ဗွ', 'ရွ': 'ယွ','ရွှ': 'ယွှ', 'ဏှ': 'နှ', 'ကြွ': 'ကျွ', 'ခြွ': 'ချွ', 'မြှ': 'မျှ', 'ရှ': 'ယှ', 'ကိုယ့်': 'ကို့', 'ကိုယ်': 'ကို',
   'က္':'က်', 'ဂ္':'က်', 'စ္':'စ်', 'ဇ္':'စ်', 'ဋ္':'တ်', 'ဍ္':'တ်', 'ဒ္':'တ်', 'ဓ္':'တ်', 'န္':'န်', 'ပ္':'ပ်', 'ဖ္':'ပ်', 'ဗ္':'ပ်', 'မ္':'မ်', 'ယ္':'ယ်', 'ရ္':'ယ်', 'လ္':'လ်', 'ဟ္':'ဟ်', 'ဠ္':'န်',
   'ဂ်':'က်', 'ခ်':'က်', 'ဇ်':'စ်', 'ဋ်':'တ်', 'ဍ်':'တ်', 'ဒ်':'တ်', 'သ်':'တ်', 'ဗ်':'ပ်', 'ဏ်':'န်' 
 };
@@ -438,7 +438,7 @@ const readBurmeseNumber = (numStr) => {
         '၆':['ချောက်'], '၇':['ခွန်', 'န'], '၈':['ယှစ်'], '၉':['ကိုး'] 
     };
     const places = ["", "ဆယ်", "ရာ", "ထောင်", "သောင်း", "သိန်း", "သန်း"];
-    const creakyPlaces = ["", "ဆယ့်", "ရာ", "ထောင့်", "သောင်း", "သိန်း", "သန်း"]; 
+    const creakyPlaces = ["", "ဆယ့်", "ရာ", "ထောင့်", "သောင်း", "သိန်း", "သန်း"]; 
 
     if (numStr.length === 1) return bDigits[numStr[0]] || [];
 
@@ -482,12 +482,25 @@ const INITIAL_STACKED_BREAKDOWNS = {
 };
 
 // A ည with no asat (်) after it, and not ည့်.
-const BARE_YI = /ည(?![့်])/;
+// The two marks of ည့် န့် မ့် င့် ဉ့် ယ့် ... can be typed in either order -- asat then
+// dot below (င + ် + ့) or dot below then asat (င + ့ + ်). They look identical,
+// but every rule in this app is written for ONE order, so text is put into it
+// (asat first, the order the on-screen keyboard also produces) the moment it
+// comes in. Without this a word typed the other way was split into the wrong
+// syllables and matched no pronunciation rule, so it was silently not read.
+const normYiOrder = (t) => (typeof t === 'string' ? t.replace(/\u1037\u103A/g, '\u103A\u1037') : t);
+
+const BARE_YI = /ည(?![့်])/;
 
 const getStackedBreakdown = (word, customDict) => {
-    if (customDict && customDict[word]) return customDict[word];
+    if (customDict) {
+        if (customDict[word]) return customDict[word];
+        const wantedKey = normYiOrder(word);
+        const hit = Object.keys(customDict).find(k => normYiOrder(k) === wantedKey);
+        if (hit) return customDict[hit];
+    }
 
-    let currentWord = word.replace(/့်/g, '့်');
+    let currentWord = normYiOrder(word);
     let parts = [];
 
     while (true) {
@@ -565,7 +578,7 @@ const getStackedBreakdown = (word, customDict) => {
             if (subParts.length > 0) finalParts.push(...subParts);
         }
         
-        if (finalParts.length > 0 && /^ည(?![့်])/.test(part)) {
+        if (finalParts.length > 0 && /^ည(?![့်])/.test(part)) {
             let prevPart = finalParts[finalParts.length - 1];
             let hasTone = prevPart.includes('့') || prevPart.includes('း');
             let { base, vowel } = extractBaseAndVowel(prevPart);
@@ -598,7 +611,7 @@ const LESSONS = [
   "အဲ့,အယ်,အဲ,အည့်,အည်,အည်း",
   "အော့,အော်,အော,ဪ,ဩ",
   "အံ့,အံ,အန့်,အန်,အန်း,အမ့်,အမ်,အမ်း",
-  "အို့,အို,အိုး,ကိုယ့်,ကိုယ်",
+  "အို့,အို,အိုး,ကိုယ့်,ကိုယ်",
   "အင့်,အင်,အင်း,အဉ့်,အဉ်,အဉ်း",
   "အောင့်,အောင်,အောင်း",
   "အိုင့်,အိုင်,အိုင်း",
@@ -1427,7 +1440,7 @@ const [sheetBAudio] = useState(new Audio());
   };
 
   const segmentSyllables = (text) => {
-      let normalized = text.replace(/့်/g, '့်');
+      let normalized = normYiOrder(text);
       normalized = normalized.replace(/([၀-၉]+)/g, ' $1 ').trim();
       
       let rawSegments = [];
@@ -1594,7 +1607,7 @@ const [sheetBAudio] = useState(new Audio());
   }, [isPracticeMode, practiceStep, currentKeys.length, syllables, keyboardTab]);
 
   const loadStringToSyllables = (text) => {
-      const stringWord = text.toString().replace(/့်/g, '့်').replace(/[၊။]/g, ' ');
+      const stringWord = normYiOrder(text.toString()).replace(/[၊။]/g, ' ');
       const words = stringWord.split(/\s+/).filter(Boolean);
       const newSyllables = [];
       
@@ -1614,6 +1627,7 @@ const [sheetBAudio] = useState(new Audio());
 
   const getMappedAudioInfo = (char, isIndividualKey = false) => {
     if (!char || char === ',' || char === ', ') return null;
+    char = normYiOrder(char);
     let mappedChar = char;
 
     if (isIndividualKey) {
@@ -1652,7 +1666,7 @@ const [sheetBAudio] = useState(new Audio());
                                .replace(/ိုယ်/g, 'ို')
                                .replace(/ို့ယ်/g, 'ို့')
                                .replace(/(?<!ိ)ုဂ်/g, 'ုတ်') 
-                               .replace(/ယ့်/g, 'ဲ့')
+                               .replace(/ယ့်/g, 'ဲ့')
                                .replace(/ဒာ/g, 'ဒါ')
                                .replace(/ဍာ/g, 'ဍါ') 
                                .replace(/ခာ/g, 'ခါ');
@@ -1702,7 +1716,7 @@ const [sheetBAudio] = useState(new Audio());
                                .replace(/ဉ်/g, 'င်'); 
 
         mappedChar = mappedChar.replace(/ွပ်/g, 'ွတ်').replace(/ိပ်/g, 'ိတ်').replace(/(?<!ိ)ုပ်/g, 'ုတ်').replace(/ပ်/g, 'တ်')
-                             .replace(/ယ့်/g, 'ဲ့').replace(/ိက်/g, 'ိတ်').replace(/(?<!ိ)ုက်/g, 'ုတ်')
+                             .replace(/ယ့်/g, 'ဲ့').replace(/ိက်/g, 'ိတ်').replace(/(?<!ိ)ုက်/g, 'ုတ်')
                              .replace(/‌ဟ်/g, 'န်').replace(/ိစ်/g, 'ိတ်').replace(/(?<!ိ)ုစ်/g, 'ုတ်')
                              .replace(/‌ုဂ်/g, 'ုတ်').replace(/ိဇ်/g, 'ိတ်').replace(/(?<!ိ)ုဇ်/g, 'ုတ်')
                              .replace(/‌ုဒ်/g, 'ုတ်').replace(/ိဒ်/g, 'ိတ်').replace(/(?<!ိ)ုဇ်/g, 'ုတ်')
@@ -1714,7 +1728,7 @@ const [sheetBAudio] = useState(new Audio());
                              .replace(/ွမ့်/g, 'ွန့်').replace(/ွမ်/g, 'ွန်').replace(/ွမ်း/g, 'ွန်း')
                              .replace(/ိမ့်/g, 'ိန့်').replace(/ိမ်/g, 'ိန်').replace(/ိမ်း/g, 'ိန်း')
                              .replace(/မ့်/g, 'န့်').replace(/မ်/g, 'န်').replace(/မ်း/g, 'န်း')
-                             .replace(/လ့်/g, 'န့်').replace(/လ်/g, 'န်').replace(/လ်း/g, 'န်း')
+                             .replace(/လ့်/g, 'န့်').replace(/လ်/g, 'န်').replace(/လ်း/g, 'န်း')
                              .replace(/ုံ့/g, 'ုန့်').replace(/ုံး/g, 'ုန်း').replace(/ုံ/g, 'ုန်')
                              .replace(/ံး/g, 'န်း').replace(/ံ့/g, 'န့်').replace(/ံ/g, 'န်');      
 
@@ -1855,7 +1869,7 @@ if (appMode === 'sheet' && sheetData.length > 0) {
           for (let len = 4; len >= 1; len--) {
               if (i + len <= sylsList.length) {
                   let word = sylsList.slice(i, i + len).map(s => s.combined).join('');
-                  // (same rule as handleWordClick: a word-specific ည်/ည့် entry in
+                  // (same rule as handleWordClick: a word-specific ည်/ည့် entry in
                   // YI_GROUP_EXCEPTIONS outranks a plain per-syllable custom spelling)
                   const hasYiEntry = Array.from({ length: len }, (_, k) => findYiGroupException(sylsList, i + k)).some(Boolean);
                   if (CUSTOM_EXCEPTIONS[word] && !hasYiEntry) {
@@ -2875,9 +2889,9 @@ const closeQAPanel = () => {
 
       const breakdown = getStackedBreakdown(combinedStr, dynamicStacked);
       // A fixed spelling in CUSTOM_EXCEPTIONS wins -- unless this syllable sits in a
-      // word that has its own entry in YI_GROUP_EXCEPTIONS (e.g. ပည့် inside
-      // တပည့်): then that, more specific, entry decides. Otherwise the plain
-      // ပည့် -> ပြည့် fix kept overriding it and the new entry never took effect.
+      // word that has its own entry in YI_GROUP_EXCEPTIONS (e.g. ပည့် inside
+      // တပည့်): then that, more specific, entry decides. Otherwise the plain
+      // ပည့် -> ပြည့် fix kept overriding it and the new entry never took effect.
       const hasCustom = !!CUSTOM_EXCEPTIONS[combinedStr] && !findYiGroupException(syllables, index);
       
       if (breakdown || hasCustom) {
