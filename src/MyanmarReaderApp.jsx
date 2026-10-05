@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { readerTrophyCount, readerProgressFromTrophies } from './readerProgress';
 import { Play, Volume2, VolumeX, Lock, Delete, RotateCcw, BookOpen, DownloadCloud, FileText, Library, Settings, X, Plus, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { collection, doc, getDoc, getDocs, setDoc, updateDoc, onSnapshot, query, where, serverTimestamp, increment } from 'firebase/firestore';
@@ -29,7 +30,8 @@ const sanitizeReaderKey = (key) => (key || 'unknown').replace(/[.$#/\[\]]/g, '_'
 // entry is known to have used: "MyanmarReader" is the title currently in use,
 // "Myanmar Reader Lesson" is TutoringApp.jsx's default for a freshly-added
 // entry. If a teacher renames it to something else, add that title here too.
-const READER_LESSON_KEYS = ['MyanmarReader', 'Myanmar Reader Lesson'];
+// (the keys and the trophy-to-progress rule live in readerProgress.js, shared
+// with the Tutoring app so both always agree)
 
 // --- DATA STRUCTURES ---
 
@@ -1020,7 +1022,9 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
     const unsub = onSnapshot(readerRosterDocRef(studentName), (snap) => {
       if (snap.exists()) {
         const dt = snap.data();
-        if (dt.furthestChapter != null) setResumePosition({ chapterNum: dt.furthestChapter, sheetName: dt.furthestSheet || 'A' });
+        // (Where to pick up is worked out from the trophies the teacher has
+        // recognised, further down -- not from how far the student has read,
+        // which may be far ahead.)
         setTutoringStudentUid(dt.tutoringStudentUid || null);
         // Exact spot they were last reading (not just the furthest reached --
         // they might have gone back to re-read an earlier sentence), so a
@@ -1048,9 +1052,9 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
     if (!tutoringStudentUid) { setTeacherCompletedChapters(0); return; }
     const unsub = onSnapshot(doc(db, TUTORING_STUDENTS_PATH, tutoringStudentUid), (snap) => {
       if (!snap.exists()) { setTeacherCompletedChapters(0); return; }
-      const completedUnits = snap.data().completedUnits || {};
-      const best = READER_LESSON_KEYS.reduce((max, key) => Math.max(max, completedUnits[key] || 0), 0);
-      setTeacherCompletedChapters(best);
+      // Progress = trophies the teacher has recognised, in reading order (see
+      // readerProgress.js) -- no longer a separately typed/tracked number.
+      setTeacherCompletedChapters(readerProgressFromTrophies(readerTrophyCount(snap.data().earnedTrophies)));
       // "Completed" (the blue chapter marker, the coin halving, the
       // already-read banner) is driven by trophies actually earned, not by
       // completedUnits/session reports -- a chapter/sheet the teacher hasn't
@@ -1059,7 +1063,7 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
       // Ch1 Sheet B, Ch2 Sheet A, ...), matching how Reader trophies are
       // requested/approved (2 per finished chapter).
       const earnedTrophies = snap.data().earnedTrophies || {};
-      const trophyCount = READER_LESSON_KEYS.reduce((max, key) => Math.max(max, earnedTrophies[key] || 0), 0);
+      const trophyCount = readerTrophyCount(earnedTrophies);
       setTrophiedSheetCount(Math.max(0, Math.floor(trophyCount)));
     }, e => console.error('Teacher completed-chapter listen error:', e));
     return () => unsub();
@@ -1168,20 +1172,10 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
       timestamp: serverTimestamp()
     }, { merge: true }).catch(e => console.error('Persist chapter score error:', e));
 
-    // Sequential guidance: nudge toward Sheet B right after Sheet A finishes,
-    // and remember the furthest point reached for the "resume here" prompt.
+    // Sequential guidance: nudge toward Sheet B right after Sheet A finishes.
+    // (This no longer moves the saved "resume here" point: reading ahead must
+    // not jump a student forward -- that follows the teacher's trophies.)
     if (isComplete && sheetName === 'A') setShowGoToSheetBPrompt(chapterNum);
-    if (isComplete) {
-      const isFurther = !resumePosition
-        || chapterNum > resumePosition.chapterNum
-        || (chapterNum === resumePosition.chapterNum && sheetName === 'B' && resumePosition.sheetName === 'A');
-      if (isFurther) {
-        const nextChapterNum = (sheetName === 'B') ? Math.min(TOTAL_CHAPTERS, chapterNum + 1) : chapterNum;
-        const nextSheetName = (sheetName === 'B') ? 'A' : 'B';
-        setResumePosition({ chapterNum: nextChapterNum, sheetName: nextSheetName });
-        setDoc(readerRosterDocRef(studentName), { furthestChapter: nextChapterNum, furthestSheet: nextSheetName }, { merge: true }).catch(() => {});
-      }
-    }
 
     // Mirror the same "what are they doing right now" info onto the roster
     // doc, since that's what the online panel actually reads from. setDoc

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import FestivalBanners from './FestivalBanner';
+import { readerTrophyCount, readerProgressFromTrophies, readerSheetsNeedingTrophy } from './readerProgress';
 import { signInAnonymously, signInWithCustomToken, onAuthStateChanged, signOut } from 'firebase/auth';
 import { 
   doc, 
@@ -511,6 +512,13 @@ const getEffectiveCompletedUnit = (lesson, studentProfile, sessionsForLesson, ss
   // a consonant-practice game, with the teacher confirming she never
   // granted Myanmar Reader trophies herself.
   const isMyanmarReader = lesson.link === MYANMAR_READER_APP_URL;
+  // Myanmar Reader: progress is the trophies the teacher has recognised
+  // (2 per chapter, in order) and nothing else -- not a tracked number, not an
+  // old report, not the student's own scores. See readerProgress.js.
+  if (isMyanmarReader) {
+    const readerValue = readerProgressFromTrophies(readerTrophyCount(studentProfile?.earnedTrophies, [lessonKey]));
+    return unitCount > 0 ? Math.min(unitCount, readerValue) : readerValue;
+  }
   const derivedCompletedUnit = (ssClassId == null && !isAbhi && !isMyanmarReader && unitCount > 0 && maxAvailable > 0)
     ? Math.min(unitCount, Math.ceil((previouslyEarned * unitCount) / maxAvailable))
     : 0;
@@ -2626,7 +2634,10 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
             };
             updateData[`earnedTrophies.${lessonKey}`] = increment(amountToAward);
 
-            if (unitCount > 0 && maxAvailable > 0) {
+            if (MYANMAR_READER_APP_URL && lesson.link?.startsWith(MYANMAR_READER_APP_URL)) {
+                // Reader progress is simply the trophy count laid out in reading order.
+                updateData[`completedUnits.${lessonKey}`] = readerProgressFromTrophies(newTotalEarned);
+            } else if (unitCount > 0 && maxAvailable > 0) {
                 newCompletedUnit = Math.min(unitCount, Math.ceil((newTotalEarned * unitCount) / maxAvailable));
                 if (newCompletedUnit > prevCompletedUnit) {
                     updateData[`completedUnits.${lessonKey}`] = newCompletedUnit;
@@ -5700,7 +5711,13 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
               const derivedCompletedUnit = (effectiveUnitCountForDisplay > 0 && maxAvailable > 0)
                 ? Math.min(effectiveUnitCountForDisplay, Math.ceil((previouslyEarned * effectiveUnitCountForDisplay) / maxAvailable))
                 : 0;
-              const completedUnit = Math.max(trackedCompletedUnit, derivedCompletedUnit);
+              // Myanmar Reader: how far along = the trophies recognised so far (see
+              // readerProgress.js), never a stored number -- that is what showed
+              // "completed up to Chapter 29 / 29" for a student on Chapter 2.
+              const isReaderForProgress = !!(MYANMAR_READER_APP_URL && lesson.link?.startsWith(MYANMAR_READER_APP_URL));
+              const completedUnit = isReaderForProgress
+                ? readerProgressFromTrophies(readerTrophyCount(student.earnedTrophies, [lessonKey]))
+                : Math.max(trackedCompletedUnit, derivedCompletedUnit);
 
               // Matching on title alone let two different classes that reuse
               // the same generic bank title (e.g. every Smart Study send is
@@ -7561,6 +7578,9 @@ function StudentDashboard({ user, studentProfile, studentUid, announcements, onO
 const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     const session = sessionForCalc || activeSession;
     if (!session) return 0;
+    if (MYANMAR_READER_APP_URL && session.lessonLink?.startsWith(MYANMAR_READER_APP_URL)) {
+      return readerProgressFromTrophies(readerTrophyCount(studentProfile.earnedTrophies, [lessonKey]));
+    }
     const unitCount = session.lessonUnitCount || 0;
     const trophyLimit = session.lessonTrophyLimit || 0;
     const completedUnitsMap = studentProfile.completedUnits || {};
@@ -8077,72 +8097,40 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           if (!latest || ts > latest._ts) latest = { ...dt, _ts: ts };
         });
 
-        // Which sheets are done for every chapter, recomputed directly from
-        // each sheet's own isComplete flag (not the chapterComplete stamp
-        // alone), since older completions from before that stamp existed
-        // wouldn't have it set and would otherwise never show up here.
-        const sheetStatus = {}; // chapterNum -> { A: bool, B: bool }
-        allDocs.forEach(dt => {
-          if (dt.chapterNum == null || !dt.sheetName) return;
-          sheetStatus[dt.chapterNum] = sheetStatus[dt.chapterNum] || {};
-          if (dt.isComplete) sheetStatus[dt.chapterNum][dt.sheetName] = true;
-        });
+        // How far along: the trophies the teacher has already recognised (see
+        // readerProgress.js) -- NOT the student's own scores, so a sheet read
+        // far ahead (even Chapter 29) doesn't make them "complete" until a
+        // trophy for it has been approved.
+        const readerLessonKey = computeLessonKey(session.lessonTitle, session.lessonLink);
+        const trophiesHeld = readerTrophyCount(studentProfile.earnedTrophies, [readerLessonKey]);
+        if (trophiesHeld > 0) handleCompletedUnitChange(String(readerProgressFromTrophies(trophiesHeld)), true);
 
-        // Every completed (score 700+) sheet not yet turned into a trophy
-        // request is its own pending trophy -- 1 for Sheet A, 1 more for
-        // Sheet B, so a full chapter is worth 2 total, same as before, but
-        // each sheet is requested as soon as it's done rather than waiting
-        // for its sibling sheet to also finish.
-        const pending = allDocs.filter(d => d.isComplete && !d.trophyRequested);
+        // Finished sheets (700+) still needing a trophy asked for: one request
+        // per sheet, skipping any whose trophy they already hold and any
+        // already asked for -- so a sheet that has its trophy is never
+        // requested again.
+        const needing = readerSheetsNeedingTrophy(allDocs, trophiesHeld);
 
-        // Score/"What did you study?" report on whichever PENDING (trophy-
-        // earning) sheet was completed most recently, not simply whichever
-        // sheet was touched last overall -- a student who finishes a
-        // chapter and then pokes at the next one (without finishing it)
-        // before reporting would otherwise show that unrelated, still-
-        // incomplete chapter's low score as if it were what the trophy
-        // request was for (e.g. "needs 700, only got 167"), when the
-        // trophy itself is correctly for the earlier chapter that actually
-        // crossed 700. Falls back to the overall latest-touched sheet only
-        // when nothing is pending.
-        const latestPending = pending.reduce((best, d) => {
-          const ts = d.completedAt?.toMillis ? d.completedAt.toMillis() : (d.timestamp?.toMillis ? d.timestamp.toMillis() : 0);
-          return (!best || ts > best._ts) ? { ...d, _ts: ts } : best;
+        // Score/"What did you study?" report on the most recently completed
+        // sheet that needs a trophy, not simply whichever was touched last
+        // (a student who finishes one chapter and pokes at the next before
+        // reporting would otherwise show that unrelated, unfinished sheet's
+        // low score). Falls back to the last sheet touched when none need one.
+        const tsOf = (d) => d.completedAt?.toMillis ? d.completedAt.toMillis() : (d.timestamp?.toMillis ? d.timestamp.toMillis() : 0);
+        const latestPending = needing.reduce((best, e) => {
+          const d0 = e.docs[0];
+          const ts = tsOf(d0);
+          return (!best || ts > best._ts) ? { ...d0, _ts: ts } : best;
         }, null);
         const reportOn = latestPending || latest;
         if (reportOn) {
           setScore(`${reportOn.score ?? 0}/1000`);
           setFeedbackNotes(`Chapter ${reportOn.chapterNum} (Sheet ${reportOn.sheetName})`);
         }
-        // "Lesson completed" reports the furthest chapter actually PASSED
-        // (isComplete, i.e. score reached 700+) -- not whichever chapter was
-        // merely last touched. That used to read latest.chapterNum directly,
-        // so barely starting the next chapter (any score, even far below
-        // 700) immediately displayed as "completed up to Chapter N+1"
-        // ("Sandra Lin completed up to Chapter 3... Now finished Chapter 3"
-        // off a 167/1000 attempt on Chapter 3 Sheet A -- she hadn't finished
-        // it at all). Reports as the chapter number once Sheet A is
-        // genuinely done, N.5 once Sheet B is also done, matching
-        // getNextChapterNumber's reading of this value everywhere else.
-        let furthestCompleteChapter = 0;
-        let furthestCompleteBothSheets = false;
-        Object.keys(sheetStatus).forEach(chNumStr => {
-          const st = sheetStatus[chNumStr];
-          if (!st.A) return;
-          const chNum = Number(chNumStr);
-          if (chNum > furthestCompleteChapter) {
-            furthestCompleteChapter = chNum;
-            furthestCompleteBothSheets = !!st.B;
-          }
-        });
-        if (furthestCompleteChapter > 0) {
-          const lessonCompletedValue = furthestCompleteChapter + (furthestCompleteBothSheets ? 0.5 : 0);
-          handleCompletedUnitChange(String(lessonCompletedValue));
-        }
 
-        setMyanmarReaderPendingScoreDocs(pending);
-        setRequestTrophyAmount(pending.length > 0 ? pending.length : 1);
-        setRequestTrophyChecked(pending.length > 0);
+        setMyanmarReaderPendingScoreDocs(needing);
+        setRequestTrophyAmount(needing.length > 0 ? needing.length : 1);
+        setRequestTrophyChecked(needing.length > 0);
       } catch (e) { console.error('Myanmar Reader auto-fill error:', e); }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -9002,7 +8990,10 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     const remainingTrophies = Math.max(0, maxAvailable - previouslyEarned);
 
     const previousHighestUnit = getEffectivePreviousUnit(lessonKey, targetSession);
-    const enteredUnit = parseFloat(completedUnitInput) || 0;
+    // Myanmar Reader progress is the trophies recognised so far, never a typed
+    // number (see readerProgress.js).
+    const isReaderReport = !!(MYANMAR_READER_APP_URL && targetSession.lessonLink?.startsWith(MYANMAR_READER_APP_URL));
+    const enteredUnit = isReaderReport ? previousHighestUnit : (parseFloat(completedUnitInput) || 0);
     const newHighestUnit = Math.max(previousHighestUnit, enteredUnit);
     
     try {
@@ -9057,40 +9048,13 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       const isMyanmarReaderSession = MYANMAR_READER_APP_URL && targetSession.lessonLink?.startsWith(MYANMAR_READER_APP_URL);
 
       if (isMyanmarReaderSession) {
-        // One trophy per completed sheet (Sheet A and Sheet B each count
-        // separately) that hasn't already been turned into a request —
-        // myanmarReaderPendingScoreDocs was computed when the modal opened.
-        //
-        // This count comes from Myanmar Reader's OWN "scores" Firestore
-        // (a completely separate data store), which only knows whether ITS
-        // own trophyRequested flag was ever set on a sheet -- it has no idea
-        // how many trophies this lesson has actually already paid out via
-        // earnedTrophies. Sheets completed before this per-sheet tracking
-        // existed (or awarded through some other historical path) never got
-        // that flag set, so a student who's genuinely already fully paid up
-        // could still have old "pending" sheets that resurface as a bogus
-        // new request the next time they study anything in this lesson.
-        // Capping at remainingTrophies (the same maxAvailable/previouslyEarned
-        // math every other lesson type already uses) isn't enough on its
-        // own -- remainingTrophies only reflects distance from the lesson's
-        // OVERALL 58-trophy ceiling across all 29 chapters, so a student who
-        // has only reached chapter 15 still has plenty of ceiling room left
-        // even though every trophy they actually deserve so far (2 per
-        // chapter) has already been paid. Old pre-per-sheet-tracking score
-        // docs for chapters at or below their current highest then look
-        // like legitimate "new" work and resurface a bogus request. Also
-        // capping at deservedShortfall -- the same
-        // floor(chapter*maxAvailable/unitCount) - previouslyEarned math the
-        // non-Reader branch below already uses -- closes that gap: once a
-        // student is paid up to what their current chapter actually earns,
-        // no further request fires no matter how many old unflagged sheets
-        // still exist.
-        const readerUnitCount = targetSession.lessonUnitCount || 0;
-        const readerDeservedSoFar = readerUnitCount > 0 && maxAvailable > 0
-          ? Math.min(maxAvailable, Math.floor((newHighestUnit * maxAvailable) / readerUnitCount))
-          : remainingTrophies;
-        const deservedShortfall = Math.max(0, readerDeservedSoFar - previouslyEarned);
-        const cappedAmount = Math.min(myanmarReaderPendingScoreDocs.length, remainingTrophies, deservedShortfall);
+        // One trophy request per finished sheet that has no trophy yet and has
+        // not already been asked for (see readerSheetsNeedingTrophy) -- the
+        // list was worked out when the Report opened. Capped only by what the
+        // lesson can still give. How far along the student is does NOT come
+        // into it any more: that used to be the typed "completed up to" number,
+        // so reporting a far-ahead chapter produced a pile of trophy requests.
+        const cappedAmount = Math.min(myanmarReaderPendingScoreDocs.length, remainingTrophies);
         if (cappedAmount > 0) {
           studentUpdateData.trophyRequested = true;
           studentUpdateData.requestedTrophyAmount = cappedAmount;
@@ -9107,8 +9071,10 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           // session instead of re-triggering this same bogus request forever.
           try {
             const batch = writeBatch(db);
-            myanmarReaderPendingScoreDocs.forEach(d => {
-              batch.update(doc(db, 'artifacts', 'myanmar-reader-app', 'public', 'data', 'scores', d.id), { trophyRequested: true });
+            myanmarReaderPendingScoreDocs.forEach(sheet => {
+              sheet.docs.forEach(d => {
+                batch.update(doc(db, 'artifacts', 'myanmar-reader-app', 'public', 'data', 'scores', d.id), { trophyRequested: true });
+              });
             });
             await batch.commit();
           } catch (e) { console.error('Error marking Myanmar Reader trophies as requested:', e); }
