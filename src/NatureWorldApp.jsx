@@ -509,6 +509,17 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
             setVisitGiftNote(`You have already sent gifts to ${GIFTS_SENT_PER_WEEK} friends this week, so this visit comes without a gift. New gifts next week!`);
           }
         }
+        // Remember every friend this visit brought (or already brought) a gift
+        // to, so the students list can mark them "Visited" -- a friend only ever
+        // gets one gift from me, so visiting them again achieves nothing.
+        if (withGift) {
+          const gifted = world.giftedFriends || [];
+          if (!gifted.includes(targetName)) {
+            const nextGifted = [...gifted, targetName].slice(-300);
+            setWorld(prev => ({ ...prev, giftedFriends: nextGifted }));
+            persist({ natureWorld: { giftedFriends: nextGifted } });
+          }
+        }
         const others = (data.natureWorldRecentVisitors || []).filter(v => v.name !== studentName);
         const nextVisitors = [{ name: studentName, visitedAt: Date.now(), gift: withGift }, ...others].slice(0, 10);
         setDoc(targetRef, { natureWorldRecentVisitors: nextVisitors }, { merge: true }).catch(() => {});
@@ -631,13 +642,20 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
         teacherLabel="🧑‍🏫 Teacher"
         showInactiveWarning={false}
         renderActivity={(s) => !isTeacherPreview && s.studentName !== studentName && (
-          <button
-            onClick={(e) => { e.stopPropagation(); handleVisitStudent(s.studentName); }}
-            className="text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-full px-2 py-0.5"
-            title="Visit their Nature World and leave them a surprise gift"
-          >
-            📦 Send
-          </button>
+          <span className="flex items-center gap-2 justify-end">
+            {/* A friend only ever receives one gift from me, so one already
+                visited is marked -- visit someone new to send another. */}
+            {(world.giftedFriends || []).includes(s.studentName) && (
+              <span className="text-xs font-bold text-emerald-700" title="You already sent this friend a gift. Visit someone new to send another!">✓ Visited</span>
+            )}
+            <button
+              onClick={(e) => { e.stopPropagation(); handleVisitStudent(s.studentName); }}
+              className="text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-full px-2 py-0.5"
+              title="Visit their Nature World and leave them a surprise gift"
+            >
+              📦 Send
+            </button>
+          </span>
         )}
       />
 

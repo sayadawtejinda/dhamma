@@ -563,6 +563,7 @@ export default function AvatarApp({ entryRequest, onExit }) {
             <p className="text-sm text-amber-700">✅ Done for this week.</p>
           ) : (
             <>
+              <p className="text-xs text-amber-700 mb-2">Up to 3 announcements run at a time, each for a week. If all 3 are taken, yours still goes through and starts when a spot opens up.</p>
               <textarea
                 value={starText}
                 onChange={(e) => setStarText(e.target.value.slice(0, STAR_MAX_LENGTH))}

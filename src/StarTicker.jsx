@@ -59,7 +59,10 @@ export default function StarTicker() {
         // Student-written ones only count once the teacher approved them.
         listRef.current = snap.docs
           .map(d => ({ id: d.id, ...d.data() }))
-          .filter(a => a.status !== 'pending' && a.status !== 'rejected' && a.message);
+          // An approved announcement may be waiting for a free slot (startsAt in the
+          // future -- at most 3 student ones run at a time); it joins when its turn comes.
+          .filter(a => a.status !== 'pending' && a.status !== 'rejected' && a.message
+            && (!a.startsAt || (a.startsAt.toMillis ? a.startsAt.toMillis() : 0) <= Date.now()));
       } catch (e) { console.error('Could not load announcements:', e); }
     };
     fetchList();

@@ -4823,15 +4823,43 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
     );
     return () => unsub();
   }, []);
+  // At most STAR_MAX_LIVE student announcements run at once, each for a week.
+  // Approving one when all slots are taken doesn't turn the teacher away or lose
+  // it: it is scheduled to start the moment the earliest running one ends (and
+  // so on, one after another), via a startsAt/expiresAt pair the ticker reads.
+  const STAR_MAX_LIVE = 3;
+  const STAR_RUN_MS = 7 * 24 * 60 * 60 * 1000;
   const handleApproveStarAnnouncement = async (ann) => {
-    const expires = new Date();
-    expires.setDate(expires.getDate() + 7);
     try {
+      const nowMs = Date.now();
+      // Student announcements already running or scheduled (a single-field
+      // range query, filtered here, so it needs no extra index).
+      const liveSnap = await getDocs(query(starAnnouncementsCollection, where('expiresAt', '>', Timestamp.fromMillis(nowMs))));
+      const intervals = liveSnap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter(a => a.id !== ann.id && a.status === 'approved' && a.source === 'student' && a.expiresAt)
+        .map(a => ({
+          start: (a.startsAt?.toMillis?.() ?? a.approvedAt?.toMillis?.() ?? nowMs),
+          end: a.expiresAt.toMillis(),
+        }));
+      // Earliest moment (now, or when something ends) at which a week-long run
+      // never has STAR_MAX_LIVE others overlapping it.
+      const fits = (t) => {
+        const end = t + STAR_RUN_MS;
+        const points = [t, ...intervals.map(i => i.start).filter(x => x > t && x < end)];
+        return points.every(pt => intervals.filter(i => i.start <= pt && pt < i.end).length < STAR_MAX_LIVE);
+      };
+      const candidates = [nowMs, ...intervals.map(i => i.end).filter(x => x > nowMs)].sort((x, y) => x - y);
+      const startMs = candidates.find(fits) ?? nowMs;
       await updateDoc(doc(db, `${publicDataPath}/starAnnouncements`, ann.id), {
         status: 'approved',
         approvedAt: serverTimestamp(),
-        expiresAt: Timestamp.fromDate(expires),
+        startsAt: Timestamp.fromMillis(startMs),
+        expiresAt: Timestamp.fromMillis(startMs + STAR_RUN_MS),
       });
+      if (startMs > nowMs + 60 * 1000) {
+        alert(`All ${STAR_MAX_LIVE} announcement slots are in use. ${ann.studentName}'s announcement is approved and will start on ${new Date(startMs).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}, when a slot frees up.`);
+      }
     } catch (e) { console.error('Error approving announcement:', e); }
   };
   // Rejecting gives the student their coins back and frees their weekly slot.
