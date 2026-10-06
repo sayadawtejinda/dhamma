@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import coinDropSound from '../audio/coin-drop.mp3';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { 
   doc, 
@@ -81,7 +82,34 @@ const getRosterDocRef = (classId, studentName) => doc(db, 'artifacts', appId, 'p
 // A quiz needs 80% to pass, so a child who misses it takes the same quiz again --
 // and with a fixed order that felt like "the same question asked over and over".
 const shuffled = (list) => { const a = [...list]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
-const freshQuizRun = (questions) => shuffled(questions).map(q => (q.type === 'mcq' && Array.isArray(q.options) ? { ...q, options: shuffled(q.options) } : q));
+// Each question keeps its place in the lesson's list (_i) so a missed one can be asked again.
+const withShuffledOptions = (q) => (q.type === 'mcq' && Array.isArray(q.options) ? { ...q, options: shuffled(q.options) } : q);
+const freshQuizRun = (questions) => shuffled(questions.map((q, i) => ({ ...q, _i: i }))).map(withShuffledOptions);
+
+// A quiz is asked in rounds of 5, so it never feels like one long test. After the
+// first round there is a short bird game (coins); after the last first-run round,
+// 8 of 10 right means done. If not, the missed questions come back in rounds of 5
+// (no points, no bonus) until 8 of 10 are right. A perfect first try earns a
+// bonus: all right = 100 coins, one wrong = 80.
+const QUIZ_ROUND_SIZE = 5;
+const quizBonusCoins = (correct, total) => (correct === total ? 100 : (correct === total - 1 ? 80 : 0));
+
+// Quiz coins go straight into the student's Shrine Room wallet. Each reward has a
+// fixed id (class + student + lesson + kind), so it can only ever be paid once,
+// however many times the lesson is taken, from however many devices.
+const payQuizCoins = async ({ rewardId, amount, shrineName, studentName }) => {
+  if (!amount || amount <= 0) return 0;
+  const rewardRef = doc(db, 'artifacts', appId, 'public', 'data', 'smartStudyQuizCoins', rewardId);
+  const shrineRef = doc(db, 'artifacts/shrine-room-app/public/data/roster', (shrineName || 'unknown').trim().replace(/[.$#/\[\]]/g, '_'));
+  return runTransaction(db, async (tx) => {
+    const [r, sh] = await Promise.all([tx.get(rewardRef), tx.get(shrineRef)]);
+    if (r.exists()) return 0;
+    tx.set(rewardRef, { studentName, amount, at: Date.now() });
+    const hadBalance = sh.exists() && sh.data().coinBalance != null;
+    tx.set(shrineRef, { studentName: shrineName, coinBalance: hadBalance ? increment(amount) : 20 + amount }, { merge: true });
+    return amount;
+  });
+};
 
 // ---- Quiz answer checking and result saving that survive a bad connection ----
 const normAnswer = (t) => String(t ?? '').trim().toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -117,9 +145,10 @@ const withRetries = async (fn, tries = 3) => {
     try { return await fn(); } catch (e) { if (i === tries - 1) throw e; await new Promise(r => setTimeout(r, 700 * (i + 1))); }
   }
 };
-const saveQuizResult = async ({ id, score, completion }) => {
-  await withRetries(() => setDoc(doc(getScoresCollectionRef(), id), score));
-  await withRetries(() => setDoc(doc(getCompletionsCollectionRef(), id), completion));
+const saveQuizResult = async ({ id, score, completion, awards }) => {
+  if (score) await withRetries(() => setDoc(doc(getScoresCollectionRef(), id), score));
+  if (completion) await withRetries(() => setDoc(doc(getCompletionsCollectionRef(), id), completion));
+  for (const a of (awards || [])) await withRetries(() => payQuizCoins(a));
 };
 const flushPendingResults = async () => {
   const list = readPendingResults();
@@ -1692,7 +1721,101 @@ const LoadingView = React.memo(() => (
   </div>
 ));
 
-const QuizView = React.memo(({ quiz, questionNumber, totalQuestions, timerValue, feedback, onAnswerSelect, onNext, userName, activeLesson, showPreview, totalScore, isLastQuestion, isSavingScore, competitors = [] }) => {
+
+// Between the two halves of a quiz: cages with little birds pop up here and there.
+// Tap one to open it -- the bird says thank you and drops 2 or 3 coins.
+const BIRD_CAGES = 8;
+const BIRD_FIRST_MS = 900;
+const BIRD_EVERY_MS = 2300;
+const BIRD_VISIBLE_MS = 4600;
+const BIRD_THANKS = ['Thank you!', 'Thanks!', 'Thank you, friend!', 'You are kind!'];
+const BirdRescueGame = ({ onDone }) => {
+  const [cages] = useState(() => Array.from({ length: BIRD_CAGES }, (_, i) => ({
+    id: i, x: 6 + Math.random() * 74, y: 16 + Math.random() * 56,
+    bird: ['🐦', '🐤', '🦜', '🕊️', '🐥'][i % 5], thanks: BIRD_THANKS[i % BIRD_THANKS.length],
+  })));
+  const [state, setState] = useState(() => Array(BIRD_CAGES).fill('waiting')); // waiting | visible | opened | missed
+  const [won, setWon] = useState(() => Array(BIRD_CAGES).fill(0));
+  const [finished, setFinished] = useState(false);
+  const total = won.reduce((a, b) => a + b, 0);
+  const soundRef = useRef(null);
+
+  useEffect(() => {
+    const timers = [];
+    cages.forEach((c) => {
+      const start = BIRD_FIRST_MS + c.id * BIRD_EVERY_MS;
+      timers.push(setTimeout(() => setState(st => st.map((v, i) => (i === c.id && v === 'waiting' ? 'visible' : v))), start));
+      timers.push(setTimeout(() => setState(st => st.map((v, i) => (i === c.id && v === 'visible' ? 'missed' : v))), start + BIRD_VISIBLE_MS));
+    });
+    return () => timers.forEach(clearTimeout);
+  }, [cages]);
+  useEffect(() => { if (!finished && state.every(v => v === 'opened' || v === 'missed')) setFinished(true); }, [state, finished]);
+
+  const openCage = (id) => {
+    if (state[id] !== 'visible') return;
+    const coins = 2 + Math.floor(Math.random() * 2); // 2 or 3
+    setState(st => st.map((v, i) => (i === id ? 'opened' : v)));
+    setWon(w => w.map((v, i) => (i === id ? coins : v)));
+    try { if (!soundRef.current) soundRef.current = new Audio(coinDropSound); soundRef.current.currentTime = 0; soundRef.current.play().catch(() => {}); } catch (e) { /* sound is optional */ }
+  };
+
+  return (
+    <div className="h-full relative overflow-hidden text-white" style={{ background: 'linear-gradient(180deg,#7dd3fc 0%,#bae6fd 55%,#86efac 100%)' }}>
+      <style>{`
+        @keyframes cagePop { 0% { transform: scale(0) } 70% { transform: scale(1.15) } 100% { transform: scale(1) } }
+        @keyframes birdHop { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-6px) } }
+        @keyframes birdFly { 0% { transform: translate(0,0) scale(1); opacity: 1 } 100% { transform: translate(110px,-190px) scale(1.5) rotate(18deg); opacity: 0 } }
+        @keyframes thankRise { 0% { transform: translateY(0); opacity: 0 } 15% { opacity: 1 } 100% { transform: translateY(-46px); opacity: 0 } }
+      `}</style>
+      <div className="absolute top-0 inset-x-0 flex items-center justify-between px-4 py-3 z-10">
+        <div className="bg-white/80 text-sky-900 font-bold rounded-full px-4 py-2 ml-14 sm:ml-16">🐦 Free the birds! Tap each cage</div>
+        <div className="bg-yellow-300 text-yellow-900 font-black rounded-full px-4 py-2 shadow">🪙 {total}</div>
+      </div>
+      {cages.map((c, i) => {
+        const st = state[i];
+        if (st === 'waiting' || st === 'missed') return null;
+        const opened = st === 'opened';
+        return (
+          <div key={c.id} className="absolute" style={{ left: `${c.x}%`, top: `${c.y}%` }}>
+            <button
+              onClick={() => openCage(c.id)}
+              disabled={opened}
+              aria-label="Open the cage"
+              className="relative block"
+              style={{ width: 76, height: 92, animation: opened ? 'none' : 'cagePop .35s ease-out', transform: opened ? 'rotate(-16deg) translateY(-8px)' : 'none', opacity: opened ? 0.35 : 1, transition: 'transform .4s, opacity .6s' }}
+            >
+              <span className="absolute left-1/2 text-3xl select-none" style={{ top: '30%', marginLeft: -16, animation: opened ? 'birdFly 1.3s ease-in forwards' : 'birdHop .7s ease-in-out infinite' }}>{c.bird}</span>
+              <svg viewBox="0 0 80 96" width="76" height="92" className="relative">
+                <path d="M12 58 Q12 14 40 14 Q68 14 68 58 Z" fill="rgba(255,255,255,0.18)" stroke="#8d6e63" strokeWidth="3" />
+                <g stroke="#8d6e63" strokeWidth="2.5"><line x1="26" y1="17" x2="26" y2="58" /><line x1="40" y1="14" x2="40" y2="58" /><line x1="54" y1="17" x2="54" y2="58" /></g>
+                <rect x="8" y="58" width="64" height="12" rx="5" fill="#a1887f" stroke="#6d4c41" strokeWidth="2" />
+                <circle cx="40" cy="8" r="5" fill="none" stroke="#8d6e63" strokeWidth="3" />
+              </svg>
+            </button>
+            {opened && (
+              <div className="absolute left-1/2 -translate-x-1/2 pointer-events-none text-center whitespace-nowrap" style={{ top: -28, animation: 'thankRise 1.8s ease-out forwards' }}>
+                <div className="bg-white text-sky-900 font-bold text-sm rounded-full px-3 py-1 shadow">{c.thanks}</div>
+                <div className="font-black text-yellow-600 drop-shadow">+{won[i]} 🪙</div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+      {finished && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20 px-4">
+          <div className="bg-white text-gray-900 rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
+            <div className="text-5xl mb-2">{total > 0 ? '🎉' : '🌤️'}</div>
+            <h2 className="text-2xl font-extrabold mb-1">{total > 0 ? `You freed ${won.filter(w => w > 0).length} birds!` : 'Nice try!'}</h2>
+            <p className="text-lg font-bold text-yellow-600 mb-4">{total > 0 ? `🪙 +${total} coins for your Shrine Room wallet` : 'No coins this time.'}</p>
+            <Button onClick={() => onDone(total)} className="bg-emerald-500 hover:bg-emerald-600 text-white w-full text-xl">Next questions →</Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const QuizView = React.memo(({ quiz, questionNumber, totalQuestions, timerValue, feedback, onAnswerSelect, onNext, userName, activeLesson, showPreview, totalScore, isLastQuestion, isSavingScore, competitors = [], roundNumber = 1, roundQuestionNumber = 1, roundTotal = 5, isPractice = false, nextLabel = 'Next' }) => {
   const answerStyles = [
     { bg: 'bg-red-600', hover: 'hover:bg-red-700', icon: <Triangle className="w-6 h-6 fill-white" /> },
     { bg: 'bg-blue-600', hover: 'hover:bg-blue-700', icon: <Square className="w-6 h-6 fill-white" /> },
@@ -1717,10 +1840,11 @@ const QuizView = React.memo(({ quiz, questionNumber, totalQuestions, timerValue,
   return (
     <div className="h-full flex flex-col bg-gray-800 text-white p-4 overflow-hidden">
       <div className="flex justify-between items-center mb-2 text-lg font-bold">
-        <div className="bg-black bg-opacity-30 px-4 py-2 rounded-lg ml-14 sm:ml-16">{questionNumber} / {totalQuestions}</div>
+        <div className="bg-black bg-opacity-30 px-4 py-2 rounded-lg ml-14 sm:ml-16">Round {roundNumber} · {roundQuestionNumber} / {roundTotal}</div>
         <div className="bg-black bg-opacity-30 px-4 py-2 rounded-lg text-yellow-300">{totalScore} Points</div>
         <div className="bg-black bg-opacity-30 px-4 py-2 rounded-lg truncate max-w-[100px] md:max-w-xs">{userName}</div>
       </div>
+      {isPractice && <div className="text-center text-sm font-bold text-yellow-300 mb-2">🔁 Practice round: no points. Get {Math.floor(totalQuestions * 0.8)} of {totalQuestions} right to finish!</div>}
       {!showPreview && !feedback && ( 
         <div className="relative w-full h-4 bg-gray-600 rounded-full overflow-hidden mb-4">
           <div className="absolute top-0 left-0 h-full bg-pink-500 transition-all duration-1000 linear" style={{ width: `${(timerValue / 30) * 100}%` }}></div>
@@ -1784,7 +1908,7 @@ const QuizView = React.memo(({ quiz, questionNumber, totalQuestions, timerValue,
             </div>
           )}
           <Button onClick={onNext} disabled={isSavingScore} className={`mt-6 mb-6 text-2xl px-10 py-4 ${feedback.status === 'correct' ? 'bg-white text-emerald-700 hover:bg-gray-100' : feedback.status === 'incorrect' ? 'bg-white text-red-700 hover:bg-gray-100' : 'bg-white text-gray-700 hover:bg-gray-100'} shadow-lg`}>
-            {isSavingScore ? <Loader2 className="w-8 h-8 animate-spin mx-auto text-current" /> : (isLastQuestion ? 'Finish' : 'Next')}
+            {isSavingScore ? <Loader2 className="w-8 h-8 animate-spin mx-auto text-current" /> : nextLabel}
           </Button>
         </div>
       )}
@@ -1869,6 +1993,13 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
   const [isSavingScore, setIsSavingScore] = useState(false); 
   const [quizCompetitors, setQuizCompetitors] = useState([]);
   const [quizRun, setQuizRun] = useState([]); // this attempt's questions, in this attempt's order
+  const [quizRound, setQuizRound] = useState(1);
+  const [quizRoundStart, setQuizRoundStart] = useState(0);
+  const [quizRoundEnd, setQuizRoundEnd] = useState(4);
+  const [quizBreakNext, setQuizBreakNext] = useState(null); // where the quiz resumes after the bird game
+  const quizOriginalRef = useRef([]);      // the lesson's questions for this attempt (each with its _i)
+  const quizMasteryRef = useRef({});       // _i -> was it answered right the LAST time it was asked
+  const quizCoinsEligibleRef = useRef(true); // first time this student takes this lesson (coins are paid once)
   const timerId = useRef(null);
   // Which question index has already been answered / already moved on from.
   // Callbacks read state from the render they were created in, so two quick
@@ -2164,7 +2295,7 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
   }, [heartCounts, userName]); 
 
   useEffect(() => {
-    if (isActive && (view === 'studentLesson' || view === 'studentWaiting' || view === 'studentReadLesson' || view === 'quiz') && classId && userName) {
+    if (isActive && (view === 'studentLesson' || view === 'studentWaiting' || view === 'studentReadLesson' || view === 'quiz' || view === 'quizBreak') && classId && userName) {
       const updateOnlineStatus = () => {
         let currentLesson = null;
         if (view === 'studentReadLesson' || view === 'quiz') { currentLesson = activeLessonId; }
@@ -2194,7 +2325,7 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
   }, [view, classId, userName]);
 
   const playClickSound = useCallback(() => {
-      if (clickSoundRef.current && (view.startsWith('student') || view === 'quiz') && view !== 'studentLogin') {
+      if (clickSoundRef.current && (view.startsWith('student') || view === 'quiz' || view === 'quizBreak') && view !== 'studentLogin') {
           clickSoundRef.current.currentTime = 0; clickSoundRef.current.play().catch(e => {});
       }
   }, [view]);
@@ -2212,9 +2343,12 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
     if (timerValue <= 0 && view === 'quiz' && showFeedback === null && !showPreview) {
       if (answeredIndexRef.current === currentQuestionIndex) return; // a tap just answered it
       answeredIndexRef.current = currentQuestionIndex;
-      if (timerId.current) clearInterval(timerId.current); setShowFeedback({ status: 'timeup', points: 0 }); setIncorrectAnswerCount(p => p + 1);
+      if (timerId.current) clearInterval(timerId.current); setShowFeedback({ status: 'timeup', points: 0 });
+      const tq = quizRun[currentQuestionIndex];
+      if (tq && tq._i !== undefined) quizMasteryRef.current[tq._i] = false;
+      if (currentQuestionIndex < quizOriginalRef.current.length) setIncorrectAnswerCount(p => p + 1);
     }
-  }, [timerValue, view, showFeedback, showPreview, currentQuestionIndex]);
+  }, [timerValue, view, showFeedback, showPreview, currentQuestionIndex, quizRun]);
 
   useEffect(() => {
     if (view === 'quiz') { setShowPreview(true); const previewTimer = setTimeout(() => setShowPreview(false), 5000); return () => clearTimeout(previewTimer); }
@@ -3237,27 +3371,42 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
     playClickSound(); setActiveLessonId(lesson.lessonId); setCurrentLesson(lesson); 
     if (!lesson.questions || !lesson.questions[studentAgeLevel] || lesson.questions[studentAgeLevel].length === 0) { setModal({ message: 'Quiz not available.', type: 'error', visible: true }); return; }
     setQuizCompetitors(generateQuizCompetitors(lesson.lessonId, lesson.questions[studentAgeLevel].length, desiredCompetitorTotal));
-    setQuizRun(freshQuizRun(lesson.questions[studentAgeLevel]));
+    const run = freshQuizRun(lesson.questions[studentAgeLevel]);
+    setQuizRun(run); quizOriginalRef.current = run; quizMasteryRef.current = {};
+    setQuizRound(1); setQuizRoundStart(0); setQuizRoundEnd(Math.min(QUIZ_ROUND_SIZE, run.length) - 1); setQuizBreakNext(null);
+    // Coins (bird game, bonus) are only for the FIRST time a student takes a lesson.
+    quizCoinsEligibleRef.current = !(allMyScoresGlobal || []).some(sc => sc.studentName === userName && sc.classId === classId && sc.lessonId === lesson.lessonId);
     answeredIndexRef.current = -1; advancedFromIndexRef.current = -1;
     setCurrentQuestionIndex(0); setCurrentQuizScore(0); setCorrectAnswerCount(0); setIncorrectAnswerCount(0); setShowFeedback(null); setTimerValue(30); setShowPreview(true); setNeedsToStartQuiz(true); 
-  }, [playClickSound, studentAgeLevel, generateQuizCompetitors]);
+  }, [playClickSound, studentAgeLevel, generateQuizCompetitors, allMyScoresGlobal, userName, classId]);
   
+  // Quiz coins (bird game, bonus) are paid once per lesson per student; if the
+  // connection fails they wait on the device and go out with the next sync.
+  const awardQuizCoins = useCallback(async (kind, amount) => {
+    if (!amount || amount <= 0 || !currentLesson) return;
+    const award = { rewardId: `${classId}_${encodeURIComponent(userName)}_${currentLesson.lessonId}_${kind}`, amount, shrineName: null, studentName: userName };
+    try {
+      award.shrineName = await resolveShrineTargetName();
+      await withRetries(() => payQuizCoins(award));
+      window.dispatchEvent(new CustomEvent('dhamma-wallet-gift', { detail: { coins: amount } }));
+    } catch (e) {
+      writePendingResults([...readPendingResults().filter(r => r.id !== `award_${award.rewardId}`), { id: `award_${award.rewardId}`, awards: [award] }]);
+    }
+  }, [classId, userName, currentLesson, resolveShrineTargetName]);
+
   const handleFinishQuiz = useCallback(async () => {
-    if (!currentLesson) return; 
-    const currentQuizQuestions = quizRun.length ? quizRun : (currentLesson.questions[studentAgeLevel] || []);
+    if (!currentLesson) return;
+    const currentQuizQuestions = quizOriginalRef.current.length ? quizOriginalRef.current : (currentLesson.questions[studentAgeLevel] || []);
     const totalQuestions = currentQuizQuestions.length || 10;
     const requiredToPass = Math.floor(totalQuestions * 0.8);
-    // A failed attempt leaves no score, so it was invisible. Note every attempt on
-    // the student's class record (one small write) -- best effort, never blocks.
+    const mastered = Object.values(quizMasteryRef.current).filter(Boolean).length;
+    const usedPractice = quizRun.length > currentQuizQuestions.length;
+    const bonus = (!usedPractice && quizCoinsEligibleRef.current) ? quizBonusCoins(correctAnswerCount, totalQuestions) : 0;
     setDoc(getRosterDocRef(classId, userName), {
       quizAttempts: increment(1),
-      ...(correctAnswerCount < requiredToPass ? { quizFails: increment(1) } : {}),
-      lastQuizAttempt: { lessonId: currentLesson.lessonId, level: studentAgeLevel, correct: correctAnswerCount, total: totalQuestions, passed: correctAnswerCount >= requiredToPass, at: Date.now() },
+      ...(usedPractice ? { quizFails: increment(1) } : {}),
+      lastQuizAttempt: { lessonId: currentLesson.lessonId, level: studentAgeLevel, correct: correctAnswerCount, total: totalQuestions, passed: mastered >= requiredToPass, practiceRounds: Math.ceil((quizRun.length - totalQuestions) / QUIZ_ROUND_SIZE), at: Date.now() },
     }, { merge: true }).catch(() => {});
-    if (correctAnswerCount < requiredToPass) {
-      setModal({ message: `You got ${correctAnswerCount}/${totalQuestions} correct. Need ${requiredToPass} to pass. Please review the lesson and try again.`, type: 'error', visible: true });
-      setView('studentLesson'); return;
-    }
     setIsSavingScore(true);
     const submissionTime = Date.now();
     const resultId = `${classId}_${encodeURIComponent(userName)}_${currentLesson.lessonId}_${submissionTime}`;
@@ -3266,18 +3415,21 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
       score: { classId: classId, studentName: userName, studentAgeLevel: studentAgeLevel, studentId: currentUserId, lessonId: currentLesson.lessonId, score: currentQuizScore, timestamp: submissionTime },
       completion: { classId: classId, studentName: userName, lessonId: currentLesson.lessonId, timestamp: submissionTime },
     };
+    const bonusLine = bonus > 0 ? `\n\n🎉 Bonus: +${bonus} coins in your Shrine Room wallet!` : '';
+    const practiceLine = usedPractice ? `\n\nWell done for practising until you passed!` : '';
     try {
       await saveQuizResult(result);
-      setModal({ message: `Quiz Finished! Correct: ${correctAnswerCount}, Wrong: ${incorrectAnswerCount}. Final score: ${currentQuizScore}`, type: 'success', visible: true });
+      if (bonus > 0) await awardQuizCoins('bonus', bonus);
+      setModal({ message: `Quiz Finished! You passed. First-round correct: ${correctAnswerCount}/${totalQuestions}. Final score: ${currentQuizScore}${practiceLine}${bonusLine}`, type: 'success', visible: true });
     } catch (error) {
       console.error(error);
       // No connection right now: keep the finished quiz on this device and send it
       // as soon as the connection is back -- the child does not have to redo it.
       writePendingResults([...readPendingResults().filter(r => r.id !== resultId), result]);
-      setModal({ message: `Quiz Finished! Correct: ${correctAnswerCount}, Wrong: ${incorrectAnswerCount}. Final score: ${currentQuizScore}.\n\nYour internet is not working right now, so your result is saved on this device and will be sent automatically when it is back. You do not need to do the quiz again.`, type: 'success', visible: true });
+      setModal({ message: `Quiz Finished! You passed. Final score: ${currentQuizScore}.\n\nYour internet is not working right now, so your result is saved on this device and will be sent automatically when it is back. You do not need to do the quiz again.`, type: 'success', visible: true });
     }
     finally { setIsSavingScore(false); setView('studentLesson'); setClassRefreshKey(k => k + 1); }
-  }, [currentLesson, classId, userName, currentUserId, currentQuizScore, correctAnswerCount, incorrectAnswerCount, studentAgeLevel, quizRun]);
+  }, [currentLesson, classId, userName, currentUserId, currentQuizScore, correctAnswerCount, studentAgeLevel, quizRun, awardQuizCoins]);
 
   const handleAnswerSubmit = useCallback((selectedAnswer) => {
     playClickSound(); if (showFeedback) return;
@@ -3288,18 +3440,50 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
     answeredIndexRef.current = currentQuestionIndex;
     if (timerId.current) clearInterval(timerId.current);
     const isCorrect = isAnswerCorrect(q, selectedAnswer);
-    let points = 0; if (isCorrect) { setCorrectAnswerCount(p => p + 1); points = Math.round(500 + (timerValue / 30) * 500); } else { setIncorrectAnswerCount(p => p + 1); }
+    const isPracticeQ = currentQuestionIndex >= quizOriginalRef.current.length; // asked again after a missed pass: no points
+    if (q._i !== undefined) quizMasteryRef.current[q._i] = isCorrect;
+    let points = 0;
+    if (isCorrect) { if (!isPracticeQ) { setCorrectAnswerCount(p => p + 1); points = Math.round(500 + (timerValue / 30) * 500); } }
+    else if (!isPracticeQ) { setIncorrectAnswerCount(p => p + 1); }
     setCurrentQuizScore(p => p + points); setShowFeedback({ status: isCorrect ? 'correct' : 'incorrect', points: points });
-  }, [currentLesson, studentAgeLevel, currentQuestionIndex, timerValue, showFeedback, playClickSound, quizRun]); 
+  }, [currentLesson, studentAgeLevel, currentQuestionIndex, timerValue, showFeedback, playClickSound, quizRun]);
 
   const handleNextQuestion = useCallback(() => {
-    playClickSound(); 
+    playClickSound();
     if (advancedFromIndexRef.current === currentQuestionIndex) return; // already moving on from this question
     advancedFromIndexRef.current = currentQuestionIndex;
-    const currentQuizQuestions = quizRun.length ? quizRun : (currentLesson?.questions?.[studentAgeLevel] || []);
-    if (currentQuestionIndex < currentQuizQuestions.length - 1) { setCurrentQuestionIndex(p => (p === currentQuestionIndex ? p + 1 : p)); setShowFeedback(null); setShowPreview(true); setTimerValue(30); }
-    else { handleFinishQuiz(); }
-  }, [currentQuestionIndex, currentLesson, studentAgeLevel, handleFinishQuiz, playClickSound, quizRun]);
+    const idx = currentQuestionIndex;
+    const origLen = quizOriginalRef.current.length || quizRun.length;
+    const goTo = (next, round, start, end) => {
+      setCurrentQuestionIndex(p => (p === idx ? next : p)); setShowFeedback(null); setShowPreview(true); setTimerValue(30);
+      setQuizRound(round); setQuizRoundStart(start); setQuizRoundEnd(end);
+    };
+    if (idx < quizRoundEnd) { goTo(idx + 1, quizRound, quizRoundStart, quizRoundEnd); return; }
+    // End of a round.
+    if (idx < origLen - 1) {
+      // Middle of the first run: next round of the original questions, with a bird game first.
+      const end = Math.min(idx + QUIZ_ROUND_SIZE, origLen - 1);
+      goTo(idx + 1, quizRound + 1, idx + 1, end);
+      if (quizCoinsEligibleRef.current) setView('quizBreak');
+      return;
+    }
+    // All of the 10 (or every practice round) done: did the child pass?
+    const required = Math.floor(origLen * 0.8);
+    const mastered = Object.values(quizMasteryRef.current).filter(Boolean).length;
+    if (mastered >= required) { handleFinishQuiz(); return; }
+    // Not yet: a practice round of 5 -- the missed questions first, topped up with ones already right.
+    const originals = quizOriginalRef.current;
+    const missed = shuffled(originals.filter(q => !quizMasteryRef.current[q._i]));
+    const known = shuffled(originals.filter(q => quizMasteryRef.current[q._i]));
+    const extra = [...missed, ...known].slice(0, Math.min(QUIZ_ROUND_SIZE, originals.length)).map(withShuffledOptions);
+    setQuizRun(prev => [...prev, ...extra]);
+    goTo(idx + 1, quizRound + 1, idx + 1, idx + extra.length);
+  }, [currentQuestionIndex, quizRun, quizRound, quizRoundStart, quizRoundEnd, handleFinishQuiz, playClickSound]);
+
+  const handleBirdGameDone = useCallback(async (coins) => {
+    setView('quiz');
+    if (coins > 0) awardQuizCoins('birds', coins);
+  }, [awardQuizCoins]);
 
   const handleHeartClick = async (recipientName) => {
     if (!classId || !userName || !recipientName) return;
@@ -3392,7 +3576,12 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
       case 'quiz':
         const quizQuestions = quizRun.length ? quizRun : ((currentLesson && currentLesson.questions && currentLesson.questions[studentAgeLevel]) ? currentLesson.questions[studentAgeLevel] : []);
         if (quizQuestions.length === 0 || quizQuestions[currentQuestionIndex] === undefined || !currentLesson) return <LoadingView />; 
-        return <QuizView quiz={quizQuestions[currentQuestionIndex]} questionNumber={currentQuestionIndex + 1} totalQuestions={quizQuestions.length} timerValue={timerValue} feedback={showFeedback} onAnswerSelect={handleAnswerSubmit} onNext={handleNextQuestion} isLastQuestion={currentQuestionIndex === quizQuestions.length - 1} totalScore={currentQuizScore} userName={userName} activeLesson={currentLesson} showPreview={showPreview} isSavingScore={isSavingScore} competitors={quizCompetitors} />;
+        const quizOrigLen = quizOriginalRef.current.length || quizQuestions.length;
+        const inPractice = currentQuestionIndex >= quizOrigLen;
+        const roundLast = currentQuestionIndex === quizRoundEnd;
+        return <QuizView quiz={quizQuestions[currentQuestionIndex]} questionNumber={currentQuestionIndex + 1} totalQuestions={quizOrigLen} timerValue={timerValue} feedback={showFeedback} onAnswerSelect={handleAnswerSubmit} onNext={handleNextQuestion} isLastQuestion={roundLast && currentQuestionIndex >= quizOrigLen - 1} totalScore={currentQuizScore} userName={userName} activeLesson={currentLesson} showPreview={showPreview} isSavingScore={isSavingScore} competitors={inPractice ? [] : quizCompetitors} roundNumber={quizRound} roundQuestionNumber={currentQuestionIndex - quizRoundStart + 1} roundTotal={quizRoundEnd - quizRoundStart + 1} isPractice={inPractice} nextLabel={roundLast ? (currentQuestionIndex >= quizOrigLen - 1 ? 'Finish' : (inPractice ? 'Continue' : (quizCoinsEligibleRef.current ? 'Bird game 🐦' : 'Continue'))) : 'Next'} />;
+      case 'quizBreak':
+        return <BirdRescueGame onDone={handleBirdGameDone} />;
       case 'studentProfile': return <StudentProfileView allScores={allScores} selectedName={selectedName} handleSetView={handleSetView} setSelectedLessonId={setSelectedLessonId} playClickSound={playClickSound} setSelectedAgeLevel={setSelectedAgeLevel} previousView={previousView} userName={userName} globalLeaderboardScores={globalLeaderboardScores} heartCounts={heartCounts} myTotalLessonsCompletedAllClasses={myTotalLessonsCompletedAllClasses}/>;
       case 'lessonLeaderboard': return <LessonLeaderboardView allScores={allScores} selectedLessonId={selectedLessonId} handleSetView={handleSetView} setSelectedName={setSelectedName} playClickSound={playClickSound} heartCounts={heartCounts} handleHeartClick={handleHeartClick} setSelectedAgeLevel={setSelectedAgeLevel} userName={userName} previousView={previousView} />;
       case 'globalLeaderboard': return <GlobalLeaderboardView globalLeaderboardScores={globalLeaderboardScores} handleSetView={handleSetView} previousView={previousView} setSelectedName={setSelectedName} playClickSound={playClickSound} heartCounts={heartCounts} handleHeartClick={handleHeartClick} setSelectedAgeLevel={setSelectedAgeLevel} userName={userName} />;
