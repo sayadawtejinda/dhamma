@@ -1724,10 +1724,10 @@ const LoadingView = React.memo(() => (
 
 // Between the two halves of a quiz: cages with little birds pop up here and there.
 // Tap one to open it -- the bird says thank you and drops 2 or 3 coins.
-const BIRD_CAGES = 8;
-const BIRD_FIRST_MS = 900;
-const BIRD_EVERY_MS = 2300;
-const BIRD_VISIBLE_MS = 4600;
+const BIRD_CAGES = 10;
+const BIRD_FIRST_MS = 800;
+const BIRD_EVERY_MS = 1500;
+const BIRD_VISIBLE_MS = 3200;
 const BIRD_THANKS = ['Thank you!', 'Thanks!', 'Thank you, friend!', 'You are kind!'];
 const BirdRescueGame = ({ onDone }) => {
   const [cages] = useState(() => Array.from({ length: BIRD_CAGES }, (_, i) => ({
@@ -1737,6 +1737,7 @@ const BirdRescueGame = ({ onDone }) => {
   const [state, setState] = useState(() => Array(BIRD_CAGES).fill('waiting')); // waiting | visible | opened | missed
   const [won, setWon] = useState(() => Array(BIRD_CAGES).fill(0));
   const [finished, setFinished] = useState(false);
+  const [leaving, setLeaving] = useState(false);
   const total = won.reduce((a, b) => a + b, 0);
   const soundRef = useRef(null);
 
@@ -1807,7 +1808,7 @@ const BirdRescueGame = ({ onDone }) => {
             <div className="text-5xl mb-2">{total > 0 ? '🎉' : '🌤️'}</div>
             <h2 className="text-2xl font-extrabold mb-1">{total > 0 ? `You freed ${won.filter(w => w > 0).length} birds!` : 'Nice try!'}</h2>
             <p className="text-lg font-bold text-yellow-600 mb-4">{total > 0 ? `🪙 +${total} coins for your Shrine Room wallet` : 'No coins this time.'}</p>
-            <Button onClick={() => onDone(total)} className="bg-emerald-500 hover:bg-emerald-600 text-white w-full text-xl">Next questions →</Button>
+            <Button disabled={leaving} onClick={() => { setLeaving(true); onDone(total); }} className="bg-emerald-500 hover:bg-emerald-600 text-white w-full text-xl">Continue →</Button>
           </div>
         </div>
       )}
@@ -3448,23 +3449,26 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
     setCurrentQuizScore(p => p + points); setShowFeedback({ status: isCorrect ? 'correct' : 'incorrect', points: points });
   }, [currentLesson, studentAgeLevel, currentQuestionIndex, timerValue, showFeedback, playClickSound, quizRun]);
 
-  const handleNextQuestion = useCallback(() => {
-    playClickSound();
-    if (advancedFromIndexRef.current === currentQuestionIndex) return; // already moving on from this question
-    advancedFromIndexRef.current = currentQuestionIndex;
+  // Moves on after a question. A bird game follows every round of 5 (first time a
+  // student takes the lesson); when it ends it calls this again with fromBreak=true.
+  const advanceQuiz = useCallback((fromBreak) => {
     const idx = currentQuestionIndex;
+    if (!fromBreak) {
+      playClickSound();
+      if (advancedFromIndexRef.current === idx) return; // already moving on from this question
+    }
+    advancedFromIndexRef.current = idx;
     const origLen = quizOriginalRef.current.length || quizRun.length;
     const goTo = (next, round, start, end) => {
       setCurrentQuestionIndex(p => (p === idx ? next : p)); setShowFeedback(null); setShowPreview(true); setTimerValue(30);
       setQuizRound(round); setQuizRoundStart(start); setQuizRoundEnd(end);
+      if (fromBreak) setView('quiz');
     };
     if (idx < quizRoundEnd) { goTo(idx + 1, quizRound, quizRoundStart, quizRoundEnd); return; }
-    // End of a round.
+    // End of a round of 5: bird game first (coins), then on.
+    if (!fromBreak && quizCoinsEligibleRef.current) { setView('quizBreak'); return; }
     if (idx < origLen - 1) {
-      // Middle of the first run: next round of the original questions, with a bird game first.
-      const end = Math.min(idx + QUIZ_ROUND_SIZE, origLen - 1);
-      goTo(idx + 1, quizRound + 1, idx + 1, end);
-      if (quizCoinsEligibleRef.current) setView('quizBreak');
+      goTo(idx + 1, quizRound + 1, idx + 1, Math.min(idx + QUIZ_ROUND_SIZE, origLen - 1));
       return;
     }
     // All of the 10 (or every practice round) done: did the child pass?
@@ -3480,10 +3484,12 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
     goTo(idx + 1, quizRound + 1, idx + 1, idx + extra.length);
   }, [currentQuestionIndex, quizRun, quizRound, quizRoundStart, quizRoundEnd, handleFinishQuiz, playClickSound]);
 
-  const handleBirdGameDone = useCallback(async (coins) => {
-    setView('quiz');
-    if (coins > 0) awardQuizCoins('birds', coins);
-  }, [awardQuizCoins]);
+  const handleNextQuestion = useCallback(() => advanceQuiz(false), [advanceQuiz]);
+
+  const handleBirdGameDone = useCallback((coins) => {
+    if (coins > 0) awardQuizCoins(`birds${quizRound}`, coins);
+    advanceQuiz(true);
+  }, [awardQuizCoins, advanceQuiz, quizRound]);
 
   const handleHeartClick = async (recipientName) => {
     if (!classId || !userName || !recipientName) return;
@@ -3579,7 +3585,7 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
         const quizOrigLen = quizOriginalRef.current.length || quizQuestions.length;
         const inPractice = currentQuestionIndex >= quizOrigLen;
         const roundLast = currentQuestionIndex === quizRoundEnd;
-        return <QuizView quiz={quizQuestions[currentQuestionIndex]} questionNumber={currentQuestionIndex + 1} totalQuestions={quizOrigLen} timerValue={timerValue} feedback={showFeedback} onAnswerSelect={handleAnswerSubmit} onNext={handleNextQuestion} isLastQuestion={roundLast && currentQuestionIndex >= quizOrigLen - 1} totalScore={currentQuizScore} userName={userName} activeLesson={currentLesson} showPreview={showPreview} isSavingScore={isSavingScore} competitors={inPractice ? [] : quizCompetitors} roundNumber={quizRound} roundQuestionNumber={currentQuestionIndex - quizRoundStart + 1} roundTotal={quizRoundEnd - quizRoundStart + 1} isPractice={inPractice} nextLabel={roundLast ? (currentQuestionIndex >= quizOrigLen - 1 ? 'Finish' : (inPractice ? 'Continue' : (quizCoinsEligibleRef.current ? 'Bird game 🐦' : 'Continue'))) : 'Next'} />;
+        return <QuizView quiz={quizQuestions[currentQuestionIndex]} questionNumber={currentQuestionIndex + 1} totalQuestions={quizOrigLen} timerValue={timerValue} feedback={showFeedback} onAnswerSelect={handleAnswerSubmit} onNext={handleNextQuestion} isLastQuestion={roundLast && currentQuestionIndex >= quizOrigLen - 1} totalScore={currentQuizScore} userName={userName} activeLesson={currentLesson} showPreview={showPreview} isSavingScore={isSavingScore} competitors={inPractice ? [] : quizCompetitors} roundNumber={quizRound} roundQuestionNumber={currentQuestionIndex - quizRoundStart + 1} roundTotal={quizRoundEnd - quizRoundStart + 1} isPractice={inPractice} nextLabel={roundLast ? (quizCoinsEligibleRef.current ? 'Bird game 🐦' : (currentQuestionIndex >= quizOrigLen - 1 ? 'Finish' : 'Continue')) : 'Next'} />;
       case 'quizBreak':
         return <BirdRescueGame onDone={handleBirdGameDone} />;
       case 'studentProfile': return <StudentProfileView allScores={allScores} selectedName={selectedName} handleSetView={handleSetView} setSelectedLessonId={setSelectedLessonId} playClickSound={playClickSound} setSelectedAgeLevel={setSelectedAgeLevel} previousView={previousView} userName={userName} globalLeaderboardScores={globalLeaderboardScores} heartCounts={heartCounts} myTotalLessonsCompletedAllClasses={myTotalLessonsCompletedAllClasses}/>;
