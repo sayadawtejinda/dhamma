@@ -122,12 +122,14 @@ export const FESTIVALS = [
         },
       ],
     },
-    // Pasukula: ten gift packets hang on the tree. Each student opens ONE a day;
-    // only a couple hold coins (the rest are empty). After opening, a student may
-    // throw some of their own coins into an empty packet for a friend to find.
-    // Whenever fewer than `minCoinPackets` hold coins, a packet of 50 / 75 / 100
-    // coins is added by itself (at most `autoPerDay` of those per day).
-    pasukula: { packets: 10, minCoinPackets: 2, autoAmounts: [50, 75, 100], autoPerDay: 4 },
+    // Pasukula: every student gets their own 10 gift packets each day and may
+    // open ONE. Two of the ten win (chosen by chance, different for each
+    // student and day): one holds a pasukula thrown by another student (the
+    // oldest waiting one) and the other holds a gift of 50 / 75 / 100 coins
+    // from the merit fund. If nobody has thrown anything, both are merit-fund
+    // gifts. After opening, a student may throw some of their own coins for
+    // another student to find.
+    pasukula: { packets: 10, winners: 2, autoAmounts: [50, 75, 100], maxWaiting: 300 },
     rewards: [
       {
         id: 'tazaungdaing-2026-robe',

@@ -41,63 +41,60 @@ const BALLOON_SPOTS = [
 ];
 
 // ---- Pasukula tree ----------------------------------------------------------
-// One shared doc per festival holds the packets on the tree: [{ c: coins, u:
-// who threw it, n: their name }], c = 0 means empty. Nobody reads it just to
-// look at the tree (the packets look identical); it is read and written inside
-// the transactions below, when a student opens or throws one.
+// Every student has their own 10 packets each day (which two win is decided by
+// a fixed shuffle from their id and the date, so it cannot be re-rolled by
+// reloading). One shared doc per festival only holds the pasukula that
+// students have thrown and nobody has taken yet: gifts: [{ c, u, n }]. It is
+// read only when a student opens a winning "thrown" packet or throws one.
 const PASUKULA_PATH = 'artifacts/festival-app/public/data/pasukula';
-const emptyPacket = () => ({ c: 0 });
+const hashString = (str) => { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
+const seededRandom = (seed) => () => { seed |= 0; seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 const pickOne = (arr) => arr[Math.floor(Math.random() * arr.length)];
-// Keeps a couple of coin packets on the tree even when nobody has thrown any.
-function topUpPackets(slots, cfg, autoDays, dateKey) {
-  let used = autoDays?.[dateKey] || 0;
-  let need = cfg.minCoinPackets - slots.filter(sl => sl.c > 0).length;
-  while (need > 0 && used < cfg.autoPerDay) {
-    const empties = slots.map((sl, i) => (sl.c === 0 ? i : -1)).filter(i => i >= 0);
-    if (empties.length === 0) break;
-    slots[pickOne(empties)] = { c: pickOne(cfg.autoAmounts), n: 'the merit fund' };
-    used += 1; need -= 1;
-  }
-  return { [dateKey]: used };
-}
-const readSlots = (pool, cfg, dateKey) => {
-  if (Array.isArray(pool.slots) && pool.slots.length === cfg.packets) return { slots: pool.slots.map(sl => ({ ...sl })), autoDays: pool.autoDays || {} };
-  const slots = Array.from({ length: cfg.packets }, emptyPacket);
-  return { slots, autoDays: topUpPackets(slots, cfg, {}, dateKey) };
+// Which packets win for this student today: [0] = a thrown pasukula, [1] = the merit fund.
+const winningPackets = (festival, studentUid, dateKey) => {
+  const rnd = seededRandom(hashString(`${festival.id}|${studentUid}|${dateKey}`));
+  const idx = Array.from({ length: festival.pasukula.packets }, (_, i) => i);
+  for (let i = idx.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [idx[i], idx[j]] = [idx[j], idx[i]]; }
+  return idx.slice(0, festival.pasukula.winners);
 };
 
-// A student opens ONE packet a day. Returns { coins, from } / { already } / { own }.
+// A student opens ONE packet a day. Returns { coins, from } or { already }.
 async function openPasukulaPacket({ festival, studentUid, studentName, slotIdx }) {
   const cfg = festival.pasukula;
   const dateKey = localDateKey();
   const poolRef = doc(db, PASUKULA_PATH, festival.id);
   const progRef = doc(db, PROGRESS_PATH, `${festival.id}_${studentUid}`);
   const rosterRef = doc(db, SHRINE_ROSTER_PATH, sanitizeShrineKey(studentName));
+  const winners = winningPackets(festival, studentUid, dateKey);
   return runTransaction(db, async (tx) => {
-    const poolSnap = await tx.get(poolRef);
     const progSnap = await tx.get(progRef);
-    const rSnap = await tx.get(rosterRef);
     const prog = progSnap.exists() ? progSnap.data() : {};
     if (prog.pasukula?.[dateKey] !== undefined) return { already: true, coins: prog.pasukula[dateKey] };
-    let { slots, autoDays } = readSlots(poolSnap.exists() ? poolSnap.data() : {}, cfg, dateKey);
-    const slot = slots[slotIdx];
-    if (!slot) return { error: true };
-    if (slot.c > 0 && slot.u === studentUid) return { own: true };
-    const coins = slot.c || 0;
-    slots[slotIdx] = emptyPacket();
-    autoDays = topUpPackets(slots, cfg, autoDays, dateKey);
-    tx.set(poolRef, { slots, autoDays, updatedAt: serverTimestamp() });
+    const rSnap = await tx.get(rosterRef);
+    let coins = 0; let from = null;
+    let poolUpdate = null;
+    if (slotIdx === winners[0]) {
+      // a pasukula another student threw (the oldest waiting one that is not their own) ...
+      const poolSnap = await tx.get(poolRef);
+      const gifts = poolSnap.exists() ? (poolSnap.data().gifts || []) : [];
+      const at = gifts.findIndex(g => g.u !== studentUid);
+      if (at >= 0) { coins = gifts[at].c; from = gifts[at].n || 'a friend'; poolUpdate = gifts.filter((_, i) => i !== at); }
+      else { coins = pickOne(cfg.autoAmounts); from = 'the merit fund'; } // ... or the merit fund when there is none
+    } else if (slotIdx === winners[1]) {
+      coins = pickOne(cfg.autoAmounts); from = 'the merit fund';
+    }
+    if (poolUpdate) tx.set(poolRef, { gifts: poolUpdate, updatedAt: serverTimestamp() }, { merge: true });
     tx.set(progRef, { studentUid, studentName, festivalId: festival.id, pasukula: { [dateKey]: coins } }, { merge: true });
     if (coins > 0) {
       const r = rSnap.exists() ? rSnap.data() : {};
       const hadBalance = r.coinBalance != null;
       tx.set(rosterRef, { studentName, coinBalance: hadBalance ? increment(coins) : SHRINE_STARTER_COINS + coins }, { merge: true });
     }
-    return { coins, from: slot.n || null };
+    return { coins, from };
   });
 }
 
-// Throws some of the student's own coins into an empty packet (once a day).
+// Throws some of the student's own coins for another student to find (once a day).
 async function throwPasukula({ festival, studentUid, studentName, amount }) {
   const cfg = festival.pasukula;
   const dateKey = localDateKey();
@@ -115,11 +112,9 @@ async function throwPasukula({ festival, studentUid, studentName, amount }) {
     const balance = hadBalance ? r.coinBalance : SHRINE_STARTER_COINS;
     if (!Number.isInteger(amount) || amount < 1) return { invalid: true };
     if (amount > balance) return { notEnough: true, balance };
-    let { slots, autoDays } = readSlots(poolSnap.exists() ? poolSnap.data() : {}, cfg, dateKey);
-    const empties = slots.map((sl, i) => (sl.c === 0 ? i : -1)).filter(i => i >= 0);
-    if (empties.length === 0) return { full: true };
-    slots[pickOne(empties)] = { c: amount, u: studentUid, n: studentName };
-    tx.set(poolRef, { slots, autoDays, updatedAt: serverTimestamp() });
+    const gifts = poolSnap.exists() ? (poolSnap.data().gifts || []) : [];
+    if (gifts.length >= cfg.maxWaiting) return { full: true };
+    tx.set(poolRef, { gifts: [...gifts, { c: amount, u: studentUid, n: studentName }], updatedAt: serverTimestamp() }, { merge: true });
     tx.set(progRef, { studentUid, studentName, festivalId: festival.id, pasukulaThrown: { [dateKey]: amount } }, { merge: true });
     tx.set(rosterRef, { studentName, coinBalance: hadBalance ? increment(-amount) : balance - amount }, { merge: true });
     return { thrown: amount, balance: balance - amount };
@@ -271,8 +266,7 @@ function PasukulaPanel({ festival, studentUid, studentName, isTeacherPreview, op
     const point = { x: e.clientX, y: e.clientY };
     try {
       const res = await openPasukulaPacket({ festival, studentUid, studentName, slotIdx: idx });
-      if (res.own) { setNote('That packet is the one you threw. Please pick another one. 🙂'); }
-      else if (res.already) { onOpened(res.coins || 0); setStage('done'); }
+      if (res.already) { onOpened(res.coins || 0); setStage('done'); }
       else if (res.error) { setNote('Something went wrong. Please try again.'); }
       else {
         setResult(res); onOpened(res.coins); setStage('opened');
@@ -292,7 +286,7 @@ function PasukulaPanel({ festival, studentUid, studentName, isTeacherPreview, op
       const res = await throwPasukula({ festival, studentUid, studentName, amount: n });
       if (res.thrown) { onCoins(-res.thrown); onThrown(res.thrown); setThrowing(false); setNote(`🎉 You threw ${res.thrown} coins into a packet. Sadhu! Someone will find it.`); }
       else if (res.already) { onThrown(0); setThrowing(false); setNote('You already threw pasukula today. Come back tomorrow. 🌸'); }
-      else if (res.full) { setNote('Every packet on the tree is full of coins already. Try again tomorrow. 🌸'); }
+      else if (res.full) { setNote('So many gifts are waiting already! Try again tomorrow. 🌸'); }
       else if (res.notEnough) { setNote(`You only have ${res.balance} coins.`); }
       else { setNote('Type a number of coins.'); }
     } catch (err) { console.error(err); setNote('Could not throw it. Check your internet connection and try again.'); }
@@ -304,7 +298,7 @@ function PasukulaPanel({ festival, studentUid, studentName, isTeacherPreview, op
     <div className="fixed inset-0 z-[9970] bg-black/75 flex items-end sm:items-center justify-center" onClick={onClose}>
       <div className="w-full max-w-md bg-indigo-950 border border-amber-300/40 rounded-t-3xl sm:rounded-3xl p-5 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-lg font-black text-amber-200 text-center">🧧 Pasukula Tree</h2>
-        <p className="text-xs text-indigo-200 text-center mb-3">Pasukula cloth is thrown for anyone to take. Open one packet a day. Most are empty, a few hold coins!</p>
+        <p className="text-xs text-indigo-200 text-center mb-3">Pasukula is thrown for anyone to take. You have 10 packets today. Open ONE: two of them hold coins, the rest are empty!</p>
 
         {stage === 'pick' && (
           <>
@@ -341,7 +335,7 @@ function PasukulaPanel({ festival, studentUid, studentName, isTeacherPreview, op
         {canThrow && !throwing && (
           <div className="mt-3 rounded-2xl border border-amber-300/50 bg-white/5 p-3 text-center">
             <p className="text-sm font-bold">Would you like to throw pasukula too?</p>
-            <p className="text-xs text-indigo-200 mt-1">Put as many of your coins as you like into a packet. Another student may find it.</p>
+            <p className="text-xs text-indigo-200 mt-1">Throw as many of your coins as you like. Another student may find them in a packet.</p>
             <div className="mt-2 flex gap-2">
               <button onClick={() => setThrowing(true)} className="flex-1 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-indigo-950 font-black">Yes, I will throw</button>
               <button onClick={onClose} className="flex-1 py-2 rounded-xl bg-white/10 hover:bg-white/20 font-bold">Not today</button>
