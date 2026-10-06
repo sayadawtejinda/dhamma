@@ -50,6 +50,7 @@ const PASUKULA_PATH = 'artifacts/festival-app/public/data/pasukula';
 const hashString = (str) => { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
 const seededRandom = (seed) => () => { seed |= 0; seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 const pickOne = (arr) => arr[Math.floor(Math.random() * arr.length)];
+const pasukulaFound = (prog, dateKey) => { const v = prog?.pasukula?.[dateKey]; return v && typeof v === 'object' ? v : {}; };
 // Which packets win for this student today: [0] = a thrown pasukula, [1] = the merit fund.
 const winningPackets = (festival, studentUid, dateKey) => {
   const rnd = seededRandom(hashString(`${festival.id}|${studentUid}|${dateKey}`));
@@ -58,7 +59,10 @@ const winningPackets = (festival, studentUid, dateKey) => {
   return idx.slice(0, festival.pasukula.winners);
 };
 
-// A student opens ONE packet a day. Returns { coins, from } or { already }.
+// Opens one of the two winning packets (the other eight are empty, and are
+// just shown as empty on the student's own screen -- see PasukulaPanel).
+// Whatever was found is recorded per packet, so a packet can't pay twice.
+// Returns { coins, from } or { already, coins }.
 async function openPasukulaPacket({ festival, studentUid, studentName, slotIdx }) {
   const cfg = festival.pasukula;
   const dateKey = localDateKey();
@@ -69,7 +73,8 @@ async function openPasukulaPacket({ festival, studentUid, studentName, slotIdx }
   return runTransaction(db, async (tx) => {
     const progSnap = await tx.get(progRef);
     const prog = progSnap.exists() ? progSnap.data() : {};
-    if (prog.pasukula?.[dateKey] !== undefined) return { already: true, coins: prog.pasukula[dateKey] };
+    const found = pasukulaFound(prog, dateKey);
+    if (found[slotIdx] !== undefined) return { already: true, coins: found[slotIdx] };
     const rSnap = await tx.get(rosterRef);
     let coins = 0; let from = null;
     let poolUpdate = null;
@@ -82,14 +87,14 @@ async function openPasukulaPacket({ festival, studentUid, studentName, slotIdx }
       else { coins = pickOne(cfg.autoAmounts); from = 'the merit fund'; } // ... or the merit fund when there is none
     } else if (slotIdx === winners[1]) {
       coins = pickOne(cfg.autoAmounts); from = 'the merit fund';
+    } else {
+      return { error: true };
     }
     if (poolUpdate) tx.set(poolRef, { gifts: poolUpdate, updatedAt: serverTimestamp() }, { merge: true });
-    tx.set(progRef, { studentUid, studentName, festivalId: festival.id, pasukula: { [dateKey]: coins } }, { merge: true });
-    if (coins > 0) {
-      const r = rSnap.exists() ? rSnap.data() : {};
-      const hadBalance = r.coinBalance != null;
-      tx.set(rosterRef, { studentName, coinBalance: hadBalance ? increment(coins) : SHRINE_STARTER_COINS + coins }, { merge: true });
-    }
+    tx.set(progRef, { studentUid, studentName, festivalId: festival.id, pasukula: { [dateKey]: { ...found, [slotIdx]: coins } } }, { merge: true });
+    const r = rSnap.exists() ? rSnap.data() : {};
+    const hadBalance = r.coinBalance != null;
+    tx.set(rosterRef, { studentName, coinBalance: hadBalance ? increment(coins) : SHRINE_STARTER_COINS + coins }, { merge: true });
     return { coins, from };
   });
 }
@@ -249,28 +254,51 @@ function Pagoda({ glow }) {
   );
 }
 
-// The Pasukula tree: pick one of the packets (once a day), then maybe throw one.
-function PasukulaPanel({ festival, studentUid, studentName, isTeacherPreview, openedToday, thrownToday, balance, onClose, onOpened, onThrown, onCoins, spawnAt }) {
+// The Pasukula tree: 10 packets a day, open them one by one -- two of them hold
+// coins. `found` = what the winning packets held ({ packetNumber: coins }).
+function PasukulaPanel({ festival, studentUid, studentName, isTeacherPreview, found, thrownToday, balance, onClose, onFound, onThrown, onCoins, spawnAt }) {
   const cfg = festival.pasukula;
-  const [stage, setStage] = useState(openedToday !== null ? 'done' : 'pick'); // pick | opened | done
-  const [result, setResult] = useState(null);
+  const dateKey = localDateKey();
+  const emptyKey = `pasukula_empty_${festival.id}_${studentUid || 'preview'}_${dateKey}`;
+  const [empties, setEmpties] = useState(() => { try { return JSON.parse(localStorage.getItem(emptyKey) || '[]'); } catch (e) { return []; } });
+  const [previewFound, setPreviewFound] = useState({});
   const [busy, setBusy] = useState(false);
+  const [lastOpened, setLastOpened] = useState(null); // { idx, coins, from }
   const [amount, setAmount] = useState('');
   const [throwing, setThrowing] = useState(false);
   const [note, setNote] = useState('');
+  const winners = useMemo(() => winningPackets(festival, studentUid || 'preview', dateKey), [festival, studentUid, dateKey]);
+  const shownFound = isTeacherPreview ? previewFound : found;
+  const isOpened = (i) => shownFound[i] !== undefined || empties.includes(i);
+  const openedCount = Array.from({ length: cfg.packets }).filter((_, i) => isOpened(i)).length;
+  const foundTotal = Object.values(shownFound).reduce((a, b) => a + b, 0);
 
   const pick = async (idx, e) => {
-    if (busy) return;
-    if (isTeacherPreview) { setNote('Teacher preview: nothing is opened or saved.'); return; }
-    setBusy(true); setNote('');
+    if (busy || isOpened(idx)) return;
+    setNote('');
     const point = { x: e.clientX, y: e.clientY };
+    if (!winners.includes(idx)) {
+      // An empty packet needs no server visit; it is only remembered on this device for today.
+      const next = [...empties, idx];
+      setEmpties(next);
+      try { localStorage.setItem(emptyKey, JSON.stringify(next)); } catch (err) { /* ignore */ }
+      setLastOpened({ idx, coins: 0 });
+      return;
+    }
+    if (isTeacherPreview) {
+      const coins = pickOne(cfg.autoAmounts);
+      setPreviewFound(prev => ({ ...prev, [idx]: coins }));
+      setLastOpened({ idx, coins, from: 'the merit fund (preview)' });
+      return;
+    }
+    setBusy(true);
     try {
       const res = await openPasukulaPacket({ festival, studentUid, studentName, slotIdx: idx });
-      if (res.already) { onOpened(res.coins || 0); setStage('done'); }
-      else if (res.error) { setNote('Something went wrong. Please try again.'); }
+      if (res.error) { setNote('Something went wrong. Please try again.'); }
       else {
-        setResult(res); onOpened(res.coins); setStage('opened');
-        if (res.coins > 0) { onCoins(res.coins); spawnAt(point, res.coins); }
+        onFound(idx, res.coins);
+        setLastOpened({ idx, coins: res.coins, from: res.from });
+        if (!res.already) { onCoins(res.coins); spawnAt(point, res.coins); }
       }
     } catch (err) { console.error(err); setNote('Could not open it. Check your internet connection and try again.'); }
     setBusy(false);
@@ -284,7 +312,7 @@ function PasukulaPanel({ festival, studentUid, studentName, isTeacherPreview, op
     setBusy(true); setNote('');
     try {
       const res = await throwPasukula({ festival, studentUid, studentName, amount: n });
-      if (res.thrown) { onCoins(-res.thrown); onThrown(res.thrown); setThrowing(false); setNote(`🎉 You threw ${res.thrown} coins into a packet. Sadhu! Someone will find it.`); }
+      if (res.thrown) { onCoins(-res.thrown); onThrown(res.thrown); setThrowing(false); setNote(`🎉 You threw ${res.thrown} coins. Sadhu! Another student will find them.`); }
       else if (res.already) { onThrown(0); setThrowing(false); setNote('You already threw pasukula today. Come back tomorrow. 🌸'); }
       else if (res.full) { setNote('So many gifts are waiting already! Try again tomorrow. 🌸'); }
       else if (res.notEnough) { setNote(`You only have ${res.balance} coins.`); }
@@ -293,57 +321,57 @@ function PasukulaPanel({ festival, studentUid, studentName, isTeacherPreview, op
     setBusy(false);
   };
 
-  const canThrow = !thrownToday && stage !== 'pick';
   return (
     <div className="fixed inset-0 z-[9970] bg-black/75 flex items-end sm:items-center justify-center" onClick={onClose}>
-      <div className="w-full max-w-md bg-indigo-950 border border-amber-300/40 rounded-t-3xl sm:rounded-3xl p-5 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-md bg-indigo-950 border border-amber-300/40 rounded-t-3xl sm:rounded-3xl p-5 max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-lg font-black text-amber-200 text-center">🧧 Pasukula Tree</h2>
-        <p className="text-xs text-indigo-200 text-center mb-3">Pasukula is thrown for anyone to take. You have 10 packets today. Open ONE: two of them hold coins, the rest are empty!</p>
+        <p className="text-xs text-indigo-200 text-center mb-3">Open all {cfg.packets} packets, one by one. {cfg.winners} of them hold coins, the rest are empty. New packets tomorrow!</p>
 
-        {stage === 'pick' && (
-          <>
-            <div className="grid grid-cols-5 gap-2 my-3">
-              {Array.from({ length: cfg.packets }).map((_, i) => (
-                <button key={i} disabled={busy} onClick={(e) => pick(i, e)} className="aspect-square rounded-xl bg-red-600/80 hover:bg-red-500 border-2 border-amber-300/70 text-2xl flex items-center justify-center" style={{ animation: `fsPulse ${2 + (i % 3) * 0.4}s ease-in-out ${i * 0.15}s infinite` }} aria-label="Open this packet">🧧</button>
-              ))}
-            </div>
-            <p className="text-center text-sm font-bold text-amber-200">Tap a packet to open it</p>
-          </>
-        )}
+        <div className="grid grid-cols-5 gap-2 my-3">
+          {Array.from({ length: cfg.packets }).map((_, i) => {
+            const coins = shownFound[i];
+            const won = coins !== undefined;
+            const empty = empties.includes(i);
+            return (
+              <button
+                key={i}
+                disabled={busy || won || empty}
+                onClick={(e) => pick(i, e)}
+                aria-label={won ? `Packet with ${coins} coins` : empty ? 'Empty packet' : 'Open this packet'}
+                className={`aspect-square rounded-xl border-2 flex flex-col items-center justify-center leading-tight ${won ? 'bg-amber-300 border-amber-100 text-indigo-950' : empty ? 'bg-white/10 border-white/15 text-indigo-300' : 'bg-red-600/80 hover:bg-red-500 border-amber-300/70'}`}
+                style={!won && !empty ? { animation: `fsPulse ${2 + (i % 3) * 0.4}s ease-in-out ${i * 0.15}s infinite` } : undefined}
+              >
+                {won ? (<><span className="text-lg">🪙</span><span className="text-sm font-black">{coins}</span></>) : empty ? (<span className="text-[11px] font-bold">empty</span>) : (<span className="text-2xl">🧧</span>)}
+              </button>
+            );
+          })}
+        </div>
 
-        {stage === 'opened' && result && (
-          <div className="text-center my-3">
-            <div className="text-6xl">{result.coins > 0 ? '🎉' : '🌸'}</div>
-            {result.coins > 0 ? (
+        <p className="text-center text-sm font-bold text-amber-200">
+          {openedCount >= cfg.packets ? `All opened! You found 🪙 ${foundTotal} today. Come back tomorrow.` : `Opened ${openedCount} / ${cfg.packets}${foundTotal > 0 ? ` · found 🪙 ${foundTotal}` : ''}`}
+        </p>
+        {lastOpened && (
+          <div className="mt-2 text-center rounded-xl bg-white/5 border border-white/15 p-2" style={{ animation: 'fsPop .35s ease-out both' }}>
+            {lastOpened.coins > 0 ? (
               <>
-                <p className="mt-2 text-xl font-black text-amber-300">+{result.coins} 🪙</p>
-                <p className="text-sm text-indigo-200">{result.from ? `A gift from ${result.from}. Sadhu!` : 'What a lucky packet! Sadhu!'}</p>
+                <p className="text-lg font-black text-amber-300">🎉 It has {lastOpened.coins} coins!</p>
+                <p className="text-xs text-indigo-200">{lastOpened.from ? `A gift from ${lastOpened.from}. Sadhu!` : 'Sadhu!'}</p>
               </>
             ) : (
-              <>
-                <p className="mt-2 text-lg font-black text-amber-200">This packet is empty</p>
-                <p className="text-sm text-indigo-200">Be happy for the person who finds the coins. Sadhu! Try again tomorrow.</p>
-              </>
+              <p className="text-sm font-bold text-indigo-200">🌸 This packet is empty. Open the next one!</p>
             )}
           </div>
         )}
 
-        {stage === 'done' && (
-          <p className="my-4 text-center text-sm font-bold text-emerald-300">✅ You opened your packet today{openedToday > 0 ? ` (+${openedToday} 🪙)` : ''}. Come back tomorrow!</p>
-        )}
-
-        {canThrow && !throwing && (
-          <div className="mt-3 rounded-2xl border border-amber-300/50 bg-white/5 p-3 text-center">
+        {!thrownToday && !throwing && (
+          <div className="mt-4 rounded-2xl border border-amber-300/50 bg-white/5 p-3 text-center">
             <p className="text-sm font-bold">Would you like to throw pasukula too?</p>
             <p className="text-xs text-indigo-200 mt-1">Throw as many of your coins as you like. Another student may find them in a packet.</p>
-            <div className="mt-2 flex gap-2">
-              <button onClick={() => setThrowing(true)} className="flex-1 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-indigo-950 font-black">Yes, I will throw</button>
-              <button onClick={onClose} className="flex-1 py-2 rounded-xl bg-white/10 hover:bg-white/20 font-bold">Not today</button>
-            </div>
+            <button onClick={() => setThrowing(true)} className="mt-2 w-full py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-indigo-950 font-black">🧧 Yes, I will throw</button>
           </div>
         )}
-        {canThrow && throwing && (
-          <div className="mt-3 rounded-2xl border border-amber-300/50 bg-white/5 p-3 text-center">
+        {!thrownToday && throwing && (
+          <div className="mt-4 rounded-2xl border border-amber-300/50 bg-white/5 p-3 text-center">
             <p className="text-sm font-bold">How many coins? <span className="text-amber-300">(You have 🪙 {balance})</span></p>
             <input type="number" min="1" max={balance} inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} className="mt-2 w-full text-center text-xl font-black text-indigo-950 rounded-xl px-3 py-2" placeholder="0" />
             <div className="mt-2 flex gap-2">
@@ -352,7 +380,7 @@ function PasukulaPanel({ festival, studentUid, studentName, isTeacherPreview, op
             </div>
           </div>
         )}
-        {stage !== 'pick' && thrownToday && !note && <p className="mt-3 text-center text-xs font-bold text-emerald-300">🧧 You already threw pasukula today.</p>}
+        {thrownToday && !note && <p className="mt-4 text-center text-xs font-bold text-emerald-300">🧧 You already threw pasukula today.</p>}
         {note && <p className="mt-3 text-center text-sm font-bold text-amber-100">{note}</p>}
         <button onClick={onClose} className="mt-4 w-full py-2 rounded-xl bg-white/10 hover:bg-white/20 font-semibold">Close</button>
       </div>
@@ -388,7 +416,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
   const [ownedFestivalIds, setOwnedFestivalIds] = useState([]);
   const [respectWait, setRespectWait] = useState(0);
   const [risers, setRisers] = useState([]);
-  const [pasukulaOpened, setPasukulaOpened] = useState(null); // null = not opened today, else coins found
+  const [pasukulaFoundMap, setPasukulaFoundMap] = useState({}); // winning packets opened today: { packetNumber: coins }
   const [pasukulaThrown, setPasukulaThrown] = useState(false);
   const [toast, setToast] = useState(null);
 
@@ -430,7 +458,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
         setKadawEver(p.kadawEver || []);
         setUnlockedIds(p.unlocked || []);
         setGiftTakenToday(!!p.giftDays?.[dateKey]);
-        setPasukulaOpened(p.pasukula?.[dateKey] !== undefined ? p.pasukula[dateKey] : null);
+        setPasukulaFoundMap(pasukulaFound(p, dateKey));
         setPasukulaThrown(p.pasukulaThrown?.[dateKey] !== undefined);
         const rd = rSnap.exists() ? rSnap.data() : {};
         setOwnedFestivalIds(['outfit', 'accessory'].flatMap(cat => rd.avatarOwned?.[cat] || rd[`avatarOwned.${cat}`] || []).filter(id => String(id).startsWith('festival-')));
@@ -712,7 +740,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
           {festival.kadaw.button || '🙏 Pay Respect'}
         </button>
         {festival.pasukula && (
-          <button onClick={() => setPanel('pasukula')} className="flex-1 max-w-[200px] bg-red-500 hover:bg-red-400 text-white font-black rounded-2xl py-3 shadow-lg" style={{ animation: pasukulaOpened === null ? 'fsPulse 2.2s ease-in-out infinite' : 'none' }}>
+          <button onClick={() => setPanel('pasukula')} className="flex-1 max-w-[200px] bg-red-500 hover:bg-red-400 text-white font-black rounded-2xl py-3 shadow-lg" style={{ animation: Object.keys(pasukulaFoundMap).length === 0 ? 'fsPulse 2.2s ease-in-out infinite' : 'none' }}>
             🧧 Pasukula
           </button>
         )}
@@ -924,11 +952,11 @@ export default function FestivalApp({ entryRequest, onExit }) {
           studentUid={studentUid}
           studentName={studentName}
           isTeacherPreview={isTeacherPreview}
-          openedToday={pasukulaOpened}
+          found={pasukulaFoundMap}
           thrownToday={pasukulaThrown}
           balance={coinBalance ?? 0}
           onClose={() => setPanel(null)}
-          onOpened={(c) => setPasukulaOpened(c)}
+          onFound={(idx, c) => setPasukulaFoundMap(prev => ({ ...prev, [idx]: c }))}
           onThrown={() => setPasukulaThrown(true)}
           onCoins={(n) => setCoinBalance(b => Math.max(0, (b ?? 0) + n))}
           spawnAt={(point) => spawnFlyingCoins(point, 8, '🪙', true)}
