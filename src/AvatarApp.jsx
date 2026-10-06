@@ -5,6 +5,7 @@ import { appId } from './firebaseConfig';
 import { HOME_BACKGROUNDS } from './homeBackgrounds';
 import OnlineStatusWidget from './OnlineStatusWidget';
 import { FESTIVAL_AVATAR_ITEMS } from './festivals';
+import { STAR_MAX_LIVE } from './starAnnouncementConfig';
 import { CharacterSvg } from './AvatarCharacter';
 
 // Avatar deliberately has no wallet of its own -- it spends directly out of
@@ -563,7 +564,7 @@ export default function AvatarApp({ entryRequest, onExit }) {
             <p className="text-sm text-amber-700">✅ Done for this week.</p>
           ) : (
             <>
-              <p className="text-xs text-amber-700 mb-2">Up to 3 announcements run at a time, each for a week. If all 3 are taken, yours still goes through and starts when a spot opens up.</p>
+              <p className="text-xs text-amber-700 mb-2">Only {STAR_MAX_LIVE} announcements run at a time so the screen isn't crowded. If they are all taken, yours still goes through and starts when a spot opens up.</p>
               <textarea
                 value={starText}
                 onChange={(e) => setStarText(e.target.value.slice(0, STAR_MAX_LENGTH))}

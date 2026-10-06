@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import FestivalBanners from './FestivalBanner';
+import { STAR_MAX_LIVE, STAR_RUN_DAYS } from './starAnnouncementConfig';
 import { readerTrophyCount, readerProgressFromTrophies, readerSheetsNeedingTrophy } from './readerProgress';
 import { signInAnonymously, signInWithCustomToken, onAuthStateChanged, signOut } from 'firebase/auth';
 import { 
@@ -2916,17 +2917,19 @@ Each one will see the Teacher in their Visitors list, with a gift waiting to ope
 const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) => {
     const student = students.find(s => s.id === studentUid);
     if (!student) return;
-    const expires = new Date();
-    expires.setDate(expires.getDate() + (durationWeeks * 7));
     try {
+      const runMs = durationWeeks * 7 * 24 * 60 * 60 * 1000;
+      const { nowMs, startMs } = await findStarStart(runMs, null);
       await addDoc(starAnnouncementsCollection, {
         studentUid: studentUid,
         studentName: student.name,
         message: message,
         status: 'approved',
         createdAt: serverTimestamp(),
-        expiresAt: Timestamp.fromDate(expires)
+        startsAt: Timestamp.fromMillis(startMs),
+        expiresAt: Timestamp.fromMillis(startMs + runMs)
       });
+      if (startMs > nowMs + 60 * 1000) waitingNotice(student.name, startMs);
       setShowStarModal(false);
     } catch (e) {
       console.error("Error sending star announcement:", e);
@@ -4823,45 +4826,64 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
     );
     return () => unsub();
   }, []);
-  // At most STAR_MAX_LIVE student announcements run at once, each for a week.
-  // Approving one when all slots are taken doesn't turn the teacher away or lose
-  // it: it is scheduled to start the moment the earliest running one ends (and
-  // so on, one after another), via a startsAt/expiresAt pair the ticker reads.
-  const STAR_MAX_LIVE = 3;
-  const STAR_RUN_MS = 7 * 24 * 60 * 60 * 1000;
+  // At most STAR_MAX_LIVE announcements (student-written or the teacher's own)
+  // run at once, each for its run length. Approving or sending one when every
+  // slot is taken doesn't lose it: it is scheduled to start the moment the
+  // earliest running one ends (and so on, one after another), via a
+  // startsAt/expiresAt pair the ticker reads. Raise STAR_MAX_LIVE (see
+  // starAnnouncementConfig.js) to allow more.
+  const findStarStart = async (runMs, excludeId) => {
+    const nowMs = Date.now();
+    // Already running or scheduled (a single-field range query, filtered
+    // here, so it needs no extra index).
+    const liveSnap = await getDocs(query(starAnnouncementsCollection, where('expiresAt', '>', Timestamp.fromMillis(nowMs))));
+    const intervals = liveSnap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .filter(a => a.id !== excludeId && a.status === 'approved' && a.expiresAt)
+      .map(a => ({
+        start: (a.startsAt?.toMillis?.() ?? a.approvedAt?.toMillis?.() ?? a.createdAt?.toMillis?.() ?? nowMs),
+        end: a.expiresAt.toMillis(),
+      }));
+    // Earliest moment (now, or when something ends) at which a run of this
+    // length never has STAR_MAX_LIVE others overlapping it.
+    const fits = (t) => {
+      const end = t + runMs;
+      const points = [t, ...intervals.map(i => i.start).filter(x => x > t && x < end)];
+      return points.every(pt => intervals.filter(i => i.start <= pt && pt < i.end).length < STAR_MAX_LIVE);
+    };
+    const candidates = [nowMs, ...intervals.map(i => i.end).filter(x => x > nowMs)].sort((x, y) => x - y);
+    return { nowMs, startMs: candidates.find(fits) ?? nowMs };
+  };
+  const waitingNotice = (name, startMs) => alert(`All ${STAR_MAX_LIVE} announcement slots are in use. ${name}'s announcement is approved and waiting: it will start on ${new Date(startMs).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}, when a slot frees up.`);
+
   const handleApproveStarAnnouncement = async (ann) => {
     try {
-      const nowMs = Date.now();
-      // Student announcements already running or scheduled (a single-field
-      // range query, filtered here, so it needs no extra index).
-      const liveSnap = await getDocs(query(starAnnouncementsCollection, where('expiresAt', '>', Timestamp.fromMillis(nowMs))));
-      const intervals = liveSnap.docs
-        .map(d => ({ id: d.id, ...d.data() }))
-        .filter(a => a.id !== ann.id && a.status === 'approved' && a.source === 'student' && a.expiresAt)
-        .map(a => ({
-          start: (a.startsAt?.toMillis?.() ?? a.approvedAt?.toMillis?.() ?? nowMs),
-          end: a.expiresAt.toMillis(),
-        }));
-      // Earliest moment (now, or when something ends) at which a week-long run
-      // never has STAR_MAX_LIVE others overlapping it.
-      const fits = (t) => {
-        const end = t + STAR_RUN_MS;
-        const points = [t, ...intervals.map(i => i.start).filter(x => x > t && x < end)];
-        return points.every(pt => intervals.filter(i => i.start <= pt && pt < i.end).length < STAR_MAX_LIVE);
-      };
-      const candidates = [nowMs, ...intervals.map(i => i.end).filter(x => x > nowMs)].sort((x, y) => x - y);
-      const startMs = candidates.find(fits) ?? nowMs;
+      const runMs = STAR_RUN_DAYS * 24 * 60 * 60 * 1000;
+      const { nowMs, startMs } = await findStarStart(runMs, ann.id);
       await updateDoc(doc(db, `${publicDataPath}/starAnnouncements`, ann.id), {
         status: 'approved',
         approvedAt: serverTimestamp(),
         startsAt: Timestamp.fromMillis(startMs),
-        expiresAt: Timestamp.fromMillis(startMs + STAR_RUN_MS),
+        expiresAt: Timestamp.fromMillis(startMs + runMs),
       });
-      if (startMs > nowMs + 60 * 1000) {
-        alert(`All ${STAR_MAX_LIVE} announcement slots are in use. ${ann.studentName}'s announcement is approved and will start on ${new Date(startMs).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}, when a slot frees up.`);
-      }
+      if (startMs > nowMs + 60 * 1000) waitingNotice(ann.studentName, startMs);
     } catch (e) { console.error('Error approving announcement:', e); }
   };
+  // Approved announcements still waiting for a free slot -- shown to the
+  // teacher so a queued one doesn't look lost.
+  const [waitingStarAnnouncements, setWaitingStarAnnouncements] = useState([]);
+  useEffect(() => {
+    const unsub = onSnapshot(
+      query(starAnnouncementsCollection, where('expiresAt', '>', Timestamp.now())),
+      (snap) => setWaitingStarAnnouncements(
+        snap.docs.map(d => ({ id: d.id, ...d.data() }))
+          .filter(a => a.status === 'approved' && a.startsAt && a.startsAt.toMillis() > Date.now())
+          .sort((x, y) => x.startsAt.toMillis() - y.startsAt.toMillis())
+      ),
+      (e) => console.error('Error loading waiting announcements:', e)
+    );
+    return () => unsub();
+  }, []);
   // Rejecting gives the student their coins back and frees their weekly slot.
   const handleRejectStarAnnouncement = async (ann) => {
     if (!window.confirm(`Reject ${ann.studentName}'s announcement? Their ${ann.cost || 0} coins will be refunded.`)) return;
@@ -6916,6 +6938,24 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                 </div>
               )}
             </div>
+
+          {waitingStarAnnouncements.length > 0 && (
+            <div className="mb-8">
+              <h3 className="text-xl font-semibold mb-3 text-indigo-800">
+                ⏳ Announcements waiting for a slot <span className="ml-3 text-base font-normal">({waitingStarAnnouncements.length})</span>
+              </h3>
+              <p className="text-sm text-gray-500 mb-3">Only {STAR_MAX_LIVE} run at a time; these start by themselves, one after another, as slots free up.</p>
+              <div className="space-y-2">
+                {waitingStarAnnouncements.map(ann => (
+                  <div key={ann.id} className="p-3 rounded-lg bg-indigo-50 border border-indigo-200 text-sm">
+                    <span className="font-bold text-indigo-900">{ann.studentName}</span>
+                    <span className="text-indigo-700"> — starts {ann.startsAt.toDate().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
+                    <p className="text-indigo-800 break-words">{ann.message}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {pendingStarAnnouncements.length > 0 && (
             <div className="mb-8">
