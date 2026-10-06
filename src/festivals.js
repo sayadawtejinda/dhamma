@@ -183,7 +183,7 @@ const notify = () => settingsListeners.forEach(fn => fn(settingsCache));
 // The read is also kept on the device (localStorage) so reopening the app or
 // reloading within the hour costs no Firestore read at all -- this home-page
 // check runs for every student, so it is the festival's one always-on cost.
-const SETTINGS_TTL_MS = 60 * 60 * 1000;
+const SETTINGS_TTL_MS = 10 * 60 * 1000;
 const SETTINGS_STORE_KEY = 'festival_settings_cache_v1';
 let settingsLoadedAt = 0;
 try {

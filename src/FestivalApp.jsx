@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { doc, getDoc, runTransaction, serverTimestamp, increment } from 'firebase/firestore';
 import { db } from './firebase';
 import { spawnFlyingCoins } from './flyingCoins';
-import { localDateKey, festivalStatus } from './festivals';
+import { localDateKey, festivalStatus, loadFestivalSettings, getFestivalList } from './festivals';
 import { CharacterSvg } from './AvatarCharacter';
 import bigBellSound from '../audio/big-bellburmese.mp3';
 
@@ -394,7 +394,14 @@ export default function FestivalApp({ entryRequest, onExit }) {
   const studentName = entryRequest?.studentName || 'Friend';
   // The opener (home-page banner or the teacher's Festival apps screen)
   // passes in the festival with its current dates applied.
-  const festival = entryRequest?.festival || null;
+  const baseFestival = entryRequest?.festival || null;
+  // The dates / on-off switch the home page used may be up to a few minutes old
+  // (they are cached on the device to save reads), so a student entering a
+  // festival gets ONE fresh read of the teacher's settings first. If the teacher
+  // has switched the festival off or moved the dates since, it closes here.
+  const [liveFestival, setLiveFestival] = useState(null);
+  const [settingsChecked, setSettingsChecked] = useState(!entryRequest?.studentUid);
+  const festival = liveFestival || baseFestival;
 
   const [loading, setLoading] = useState(!isTeacherPreview);
   const [coinBalance, setCoinBalance] = useState(isTeacherPreview ? null : 0);
@@ -439,6 +446,18 @@ export default function FestivalApp({ entryRequest, onExit }) {
     id: i, x: Math.random() * 100, y: Math.random() * 55, size: 1 + Math.random() * 2, delay: Math.random() * 4,
   })), []);
 
+  useEffect(() => {
+    if (isTeacherPreview || !baseFestival) return;
+    let cancelled = false;
+    loadFestivalSettings(true).then(st => {
+      if (cancelled) return;
+      const fresh = getFestivalList(st || {}).find(f => f.id === baseFestival.id);
+      if (fresh) setLiveFestival(fresh);
+      setSettingsChecked(true);
+    }).catch(() => { if (!cancelled) setSettingsChecked(true); });
+    return () => { cancelled = true; };
+  }, [baseFestival?.id, isTeacherPreview]);
+
   // One read of each doc on open.
   useEffect(() => {
     if (isTeacherPreview || !festival) { setLoading(false); return; }
@@ -470,7 +489,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
       if (!cancelled) setLoading(false);
     })();
     return () => { cancelled = true; };
-  }, [studentUid, studentName, isTeacherPreview, festival]);
+  }, [studentUid, studentName, isTeacherPreview, festival?.id]);
 
   const flush = async () => {
     clearTimeout(flushTimerRef.current);
@@ -616,7 +635,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
       </div>
     );
   }
-  if (loading) {
+  if (loading || !settingsChecked) {
     return <div className="min-h-screen flex items-center justify-center bg-indigo-950 text-indigo-200">Lighting the lamps…</div>;
   }
 
