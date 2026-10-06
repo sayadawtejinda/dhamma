@@ -97,14 +97,19 @@ const quizBonusCoins = (correct, total) => (correct === total ? 100 : (correct =
 // Quiz coins go straight into the student's Shrine Room wallet. Each reward has a
 // fixed id (class + student + lesson + kind), so it can only ever be paid once,
 // however many times the lesson is taken, from however many devices.
-const payQuizCoins = async ({ rewardId, amount, shrineName, studentName }) => {
+const BIRD_COIN_CAP = 30; // most bird-game coins one student can ever earn from one lesson
+const payQuizCoins = async ({ rewardId, amount, shrineName, studentName, cap }) => {
   if (!amount || amount <= 0) return 0;
   const rewardRef = doc(db, 'artifacts', appId, 'public', 'data', 'smartStudyQuizCoins', rewardId);
   const shrineRef = doc(db, 'artifacts/shrine-room-app/public/data/roster', (shrineName || 'unknown').trim().replace(/[.$#/\[\]]/g, '_'));
   return runTransaction(db, async (tx) => {
     const [r, sh] = await Promise.all([tx.get(rewardRef), tx.get(shrineRef)]);
-    if (r.exists()) return 0;
-    tx.set(rewardRef, { studentName, amount, at: Date.now() });
+    const already = r.exists() ? (r.data().amount || 0) : 0;
+    // one-time rewards (cap undefined) are paid once; capped ones top up to the cap
+    const pay = cap === undefined ? (r.exists() ? 0 : amount) : Math.max(0, Math.min(amount, cap - already));
+    if (pay <= 0) return 0;
+    amount = pay;
+    tx.set(rewardRef, { studentName, amount: already + pay, at: Date.now() });
     const hadBalance = sh.exists() && sh.data().coinBalance != null;
     tx.set(shrineRef, { studentName: shrineName, coinBalance: hadBalance ? increment(amount) : 20 + amount }, { merge: true });
     return amount;
@@ -1729,7 +1734,7 @@ const BIRD_FIRST_MS = 800;
 const BIRD_EVERY_MS = 1500;
 const BIRD_VISIBLE_MS = 3200;
 const BIRD_THANKS = ['Thank you!', 'Thanks!', 'Thank you, friend!', 'You are kind!'];
-const BirdRescueGame = ({ onDone }) => {
+const BirdRescueGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
   const [cages] = useState(() => Array.from({ length: BIRD_CAGES }, (_, i) => ({
     id: i, x: 6 + Math.random() * 74, y: 16 + Math.random() * 56,
     bird: ['🐦', '🐤', '🦜', '🕊️', '🐥'][i % 5], thanks: BIRD_THANKS[i % BIRD_THANKS.length],
@@ -1754,7 +1759,7 @@ const BirdRescueGame = ({ onDone }) => {
 
   const openCage = (id) => {
     if (state[id] !== 'visible') return;
-    const coins = 2 + Math.floor(Math.random() * 2); // 2 or 3
+    const coins = Math.max(0, Math.min(2 + Math.floor(Math.random() * 2), coinsLeft - total)); // 2 or 3, never past the lesson's limit
     setState(st => st.map((v, i) => (i === id ? 'opened' : v)));
     setWon(w => w.map((v, i) => (i === id ? coins : v)));
     try { if (!soundRef.current) soundRef.current = new Audio(coinDropSound); soundRef.current.currentTime = 0; soundRef.current.play().catch(() => {}); } catch (e) { /* sound is optional */ }
@@ -1770,7 +1775,7 @@ const BirdRescueGame = ({ onDone }) => {
       `}</style>
       <div className="absolute top-0 inset-x-0 flex items-center justify-between px-4 py-3 z-10">
         <div className="bg-white/80 text-sky-900 font-bold rounded-full px-4 py-2 ml-14 sm:ml-16">🐦 Free the birds! Tap each cage</div>
-        <div className="bg-yellow-300 text-yellow-900 font-black rounded-full px-4 py-2 shadow">🪙 {total}</div>
+        <div className="bg-yellow-300 text-yellow-900 font-black rounded-full px-4 py-2 shadow">🪙 {total}{coinsLeft <= 0 ? ' (limit reached)' : ''}</div>
       </div>
       {cages.map((c, i) => {
         const st = state[i];
@@ -1796,7 +1801,7 @@ const BirdRescueGame = ({ onDone }) => {
             {opened && (
               <div className="absolute left-1/2 -translate-x-1/2 pointer-events-none text-center whitespace-nowrap" style={{ top: -28, animation: 'thankRise 1.8s ease-out forwards' }}>
                 <div className="bg-white text-sky-900 font-bold text-sm rounded-full px-3 py-1 shadow">{c.thanks}</div>
-                <div className="font-black text-yellow-600 drop-shadow">+{won[i]} 🪙</div>
+                {won[i] > 0 && <div className="font-black text-yellow-600 drop-shadow">+{won[i]} 🪙</div>}
               </div>
             )}
           </div>
@@ -1807,7 +1812,7 @@ const BirdRescueGame = ({ onDone }) => {
           <div className="bg-white text-gray-900 rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
             <div className="text-5xl mb-2">{total > 0 ? '🎉' : '🌤️'}</div>
             <h2 className="text-2xl font-extrabold mb-1">{total > 0 ? `You freed ${won.filter(w => w > 0).length} birds!` : 'Nice try!'}</h2>
-            <p className="text-lg font-bold text-yellow-600 mb-4">{total > 0 ? `🪙 +${total} coins for your Shrine Room wallet` : 'No coins this time.'}</p>
+            <p className="text-lg font-bold text-yellow-600 mb-4">{total > 0 ? `🪙 +${total} coins for your Shrine Room wallet` : (coinsLeft <= 0 ? 'You have already earned all the bird coins for this lesson. Great job!' : 'No coins this time.')}</p>
             <Button disabled={leaving} onClick={() => { setLeaving(true); onDone(total); }} className="bg-emerald-500 hover:bg-emerald-600 text-white w-full text-xl">Continue →</Button>
           </div>
         </div>
@@ -2000,6 +2005,8 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
   const [quizBreakNext, setQuizBreakNext] = useState(null); // where the quiz resumes after the bird game
   const quizOriginalRef = useRef([]);      // the lesson's questions for this attempt (each with its _i)
   const quizMasteryRef = useRef({});       // _i -> was it answered right the LAST time it was asked
+  const birdCoinsEarnedRef = useRef(0);      // bird-game coins already earned for this lesson (capped)
+  const [birdCoinsLeft, setBirdCoinsLeft] = useState(30);
   const quizCoinsEligibleRef = useRef(true); // first time this student takes this lesson (coins are paid once)
   const timerId = useRef(null);
   // Which question index has already been answered / already moved on from.
@@ -3377,21 +3384,27 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
     setQuizRound(1); setQuizRoundStart(0); setQuizRoundEnd(Math.min(QUIZ_ROUND_SIZE, run.length) - 1); setQuizBreakNext(null);
     // Coins (bird game, bonus) are only for the FIRST time a student takes a lesson.
     quizCoinsEligibleRef.current = !(allMyScoresGlobal || []).some(sc => sc.studentName === userName && sc.classId === classId && sc.lessonId === lesson.lessonId);
+    birdCoinsEarnedRef.current = 0; setBirdCoinsLeft(BIRD_COIN_CAP);
+    if (quizCoinsEligibleRef.current) {
+      // a failed first try leaves no score, so ask what was already paid for this lesson (one small read)
+      getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'smartStudyQuizCoins', `${classId}_${encodeURIComponent(userName)}_${lesson.lessonId}_birds`))
+        .then(sn => { const paid = sn.exists() ? (sn.data().amount || 0) : 0; birdCoinsEarnedRef.current = paid; setBirdCoinsLeft(Math.max(0, BIRD_COIN_CAP - paid)); }).catch(() => {});
+    }
     answeredIndexRef.current = -1; advancedFromIndexRef.current = -1;
     setCurrentQuestionIndex(0); setCurrentQuizScore(0); setCorrectAnswerCount(0); setIncorrectAnswerCount(0); setShowFeedback(null); setTimerValue(30); setShowPreview(true); setNeedsToStartQuiz(true); 
   }, [playClickSound, studentAgeLevel, generateQuizCompetitors, allMyScoresGlobal, userName, classId]);
   
   // Quiz coins (bird game, bonus) are paid once per lesson per student; if the
   // connection fails they wait on the device and go out with the next sync.
-  const awardQuizCoins = useCallback(async (kind, amount) => {
+  const awardQuizCoins = useCallback(async (kind, amount, queueSuffix = '') => {
     if (!amount || amount <= 0 || !currentLesson) return;
-    const award = { rewardId: `${classId}_${encodeURIComponent(userName)}_${currentLesson.lessonId}_${kind}`, amount, shrineName: null, studentName: userName };
+    const award = { rewardId: `${classId}_${encodeURIComponent(userName)}_${currentLesson.lessonId}_${kind}`, amount, shrineName: null, studentName: userName, ...(kind === 'birds' ? { cap: BIRD_COIN_CAP } : {}), queueSuffix };
     try {
       award.shrineName = await resolveShrineTargetName();
       await withRetries(() => payQuizCoins(award));
       window.dispatchEvent(new CustomEvent('dhamma-wallet-gift', { detail: { coins: amount } }));
     } catch (e) {
-      writePendingResults([...readPendingResults().filter(r => r.id !== `award_${award.rewardId}`), { id: `award_${award.rewardId}`, awards: [award] }]);
+      writePendingResults([...readPendingResults().filter(r => r.id !== `award_${award.rewardId}${queueSuffix}`), { id: `award_${award.rewardId}${queueSuffix}`, awards: [award] }]);
     }
   }, [classId, userName, currentLesson, resolveShrineTargetName]);
 
@@ -3487,7 +3500,7 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
   const handleNextQuestion = useCallback(() => advanceQuiz(false), [advanceQuiz]);
 
   const handleBirdGameDone = useCallback((coins) => {
-    if (coins > 0) awardQuizCoins(`birds${quizRound}`, coins);
+    if (coins > 0) { awardQuizCoins('birds', coins, `_r${quizRound}`); birdCoinsEarnedRef.current += coins; setBirdCoinsLeft(Math.max(0, BIRD_COIN_CAP - birdCoinsEarnedRef.current)); }
     advanceQuiz(true);
   }, [awardQuizCoins, advanceQuiz, quizRound]);
 
@@ -3587,7 +3600,7 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
         const roundLast = currentQuestionIndex === quizRoundEnd;
         return <QuizView quiz={quizQuestions[currentQuestionIndex]} questionNumber={currentQuestionIndex + 1} totalQuestions={quizOrigLen} timerValue={timerValue} feedback={showFeedback} onAnswerSelect={handleAnswerSubmit} onNext={handleNextQuestion} isLastQuestion={roundLast && currentQuestionIndex >= quizOrigLen - 1} totalScore={currentQuizScore} userName={userName} activeLesson={currentLesson} showPreview={showPreview} isSavingScore={isSavingScore} competitors={inPractice ? [] : quizCompetitors} roundNumber={quizRound} roundQuestionNumber={currentQuestionIndex - quizRoundStart + 1} roundTotal={quizRoundEnd - quizRoundStart + 1} isPractice={inPractice} nextLabel={roundLast ? (quizCoinsEligibleRef.current ? 'Bird game 🐦' : (currentQuestionIndex >= quizOrigLen - 1 ? 'Finish' : 'Continue')) : 'Next'} />;
       case 'quizBreak':
-        return <BirdRescueGame onDone={handleBirdGameDone} />;
+        return <BirdRescueGame key={quizRound} coinsLeft={birdCoinsLeft} onDone={handleBirdGameDone} />;
       case 'studentProfile': return <StudentProfileView allScores={allScores} selectedName={selectedName} handleSetView={handleSetView} setSelectedLessonId={setSelectedLessonId} playClickSound={playClickSound} setSelectedAgeLevel={setSelectedAgeLevel} previousView={previousView} userName={userName} globalLeaderboardScores={globalLeaderboardScores} heartCounts={heartCounts} myTotalLessonsCompletedAllClasses={myTotalLessonsCompletedAllClasses}/>;
       case 'lessonLeaderboard': return <LessonLeaderboardView allScores={allScores} selectedLessonId={selectedLessonId} handleSetView={handleSetView} setSelectedName={setSelectedName} playClickSound={playClickSound} heartCounts={heartCounts} handleHeartClick={handleHeartClick} setSelectedAgeLevel={setSelectedAgeLevel} userName={userName} previousView={previousView} />;
       case 'globalLeaderboard': return <GlobalLeaderboardView globalLeaderboardScores={globalLeaderboardScores} handleSetView={handleSetView} previousView={previousView} setSelectedName={setSelectedName} playClickSound={playClickSound} heartCounts={heartCounts} handleHeartClick={handleHeartClick} setSelectedAgeLevel={setSelectedAgeLevel} userName={userName} />;
