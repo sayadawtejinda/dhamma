@@ -9610,12 +9610,6 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         )}
       </div>
 
-      {/* Festival announcement -- a slim strip at the very top of the home page
-          (a phone is usually held sideways here, so lower down it was pushed
-          off screen). One per festival open right now (dates set by the
-          teacher in Festival apps); tapping it goes into the festival. */}
-      <FestivalBanners onOpenFestival={onOpenFestival} studentUid={studentUid} studentName={studentProfile?.name || ''} />
-
       <h2 className="text-3xl font-bold mb-6 text-emerald-700 flex items-end flex-wrap gap-3">
         {/* Background-independent pill (not just a text color) -- the home
             background image is swappable now (see Avatar Shop), so this
@@ -9736,6 +9730,12 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
             </div>
       </div>
 
+
+      {/* Festival announcement -- in the middle of the home page, under the name
+          and shortcut buttons, so the "outstanding student" announcements at the
+          very top can never hide it. One slim strip per festival open right now
+          (dates set by the teacher in Festival apps); tapping goes into the festival. */}
+      <FestivalBanners onOpenFestival={onOpenFestival} studentUid={studentUid} studentName={studentProfile?.name || ''} />
 
       {showLessonsPanel && (
       <div className="fixed inset-0 z-[9900] bg-black/50 overflow-y-auto p-4" onClick={() => setShowLessonsPanel(false)}>
