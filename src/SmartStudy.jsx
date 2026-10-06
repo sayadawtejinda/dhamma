@@ -77,6 +77,12 @@ const getReflectionsCollectionRef = () => collection(db, 'artifacts', appId, 'pu
 const getRosterCollectionRef = () => collection(db, 'artifacts', appId, 'public', 'data', 'classRoster');
 const getRosterDocRef = (classId, studentName) => doc(db, 'artifacts', appId, 'public', 'data', 'classRoster', `${classId}_${encodeURIComponent(studentName)}`);
 
+// Every attempt gets its own order of questions and of each question's options.
+// A quiz needs 80% to pass, so a child who misses it takes the same quiz again --
+// and with a fixed order that felt like "the same question asked over and over".
+const shuffled = (list) => { const a = [...list]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const freshQuizRun = (questions) => shuffled(questions).map(q => (q.type === 'mcq' && Array.isArray(q.options) ? { ...q, options: shuffled(q.options) } : q));
+
 // ---- Quiz answer checking and result saving that survive a bad connection ----
 const normAnswer = (t) => String(t ?? '').trim().toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
 const answerStem = (w) => w.replace(/(ing|ed|es|s)$/, '');
@@ -1862,6 +1868,7 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
   const [needsToStartQuiz, setNeedsToStartQuiz] = useState(false); 
   const [isSavingScore, setIsSavingScore] = useState(false); 
   const [quizCompetitors, setQuizCompetitors] = useState([]);
+  const [quizRun, setQuizRun] = useState([]); // this attempt's questions, in this attempt's order
   const timerId = useRef(null);
   // Which question index has already been answered / already moved on from.
   // Callbacks read state from the render they were created in, so two quick
@@ -3230,15 +3237,23 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
     playClickSound(); setActiveLessonId(lesson.lessonId); setCurrentLesson(lesson); 
     if (!lesson.questions || !lesson.questions[studentAgeLevel] || lesson.questions[studentAgeLevel].length === 0) { setModal({ message: 'Quiz not available.', type: 'error', visible: true }); return; }
     setQuizCompetitors(generateQuizCompetitors(lesson.lessonId, lesson.questions[studentAgeLevel].length, desiredCompetitorTotal));
+    setQuizRun(freshQuizRun(lesson.questions[studentAgeLevel]));
     answeredIndexRef.current = -1; advancedFromIndexRef.current = -1;
     setCurrentQuestionIndex(0); setCurrentQuizScore(0); setCorrectAnswerCount(0); setIncorrectAnswerCount(0); setShowFeedback(null); setTimerValue(30); setShowPreview(true); setNeedsToStartQuiz(true); 
   }, [playClickSound, studentAgeLevel, generateQuizCompetitors]);
   
   const handleFinishQuiz = useCallback(async () => {
     if (!currentLesson) return; 
-    const currentQuizQuestions = currentLesson.questions[studentAgeLevel] || [];
+    const currentQuizQuestions = quizRun.length ? quizRun : (currentLesson.questions[studentAgeLevel] || []);
     const totalQuestions = currentQuizQuestions.length || 10;
     const requiredToPass = Math.floor(totalQuestions * 0.8);
+    // A failed attempt leaves no score, so it was invisible. Note every attempt on
+    // the student's class record (one small write) -- best effort, never blocks.
+    setDoc(getRosterDocRef(classId, userName), {
+      quizAttempts: increment(1),
+      ...(correctAnswerCount < requiredToPass ? { quizFails: increment(1) } : {}),
+      lastQuizAttempt: { lessonId: currentLesson.lessonId, level: studentAgeLevel, correct: correctAnswerCount, total: totalQuestions, passed: correctAnswerCount >= requiredToPass, at: Date.now() },
+    }, { merge: true }).catch(() => {});
     if (correctAnswerCount < requiredToPass) {
       setModal({ message: `You got ${correctAnswerCount}/${totalQuestions} correct. Need ${requiredToPass} to pass. Please review the lesson and try again.`, type: 'error', visible: true });
       setView('studentLesson'); return;
@@ -3262,28 +3277,29 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
       setModal({ message: `Quiz Finished! Correct: ${correctAnswerCount}, Wrong: ${incorrectAnswerCount}. Final score: ${currentQuizScore}.\n\nYour internet is not working right now, so your result is saved on this device and will be sent automatically when it is back. You do not need to do the quiz again.`, type: 'success', visible: true });
     }
     finally { setIsSavingScore(false); setView('studentLesson'); setClassRefreshKey(k => k + 1); }
-  }, [currentLesson, classId, userName, currentUserId, currentQuizScore, correctAnswerCount, incorrectAnswerCount, studentAgeLevel]);
+  }, [currentLesson, classId, userName, currentUserId, currentQuizScore, correctAnswerCount, incorrectAnswerCount, studentAgeLevel, quizRun]);
 
   const handleAnswerSubmit = useCallback((selectedAnswer) => {
     playClickSound(); if (showFeedback) return;
     if (answeredIndexRef.current === currentQuestionIndex) return; // already answered this one
+    if (!currentLesson || !currentLesson.questions || !currentLesson.questions[studentAgeLevel]) return;
+    const q = (quizRun.length ? quizRun : currentLesson.questions[studentAgeLevel])[currentQuestionIndex];
+    if (!q) return; // (checked BEFORE marking it answered, so a missing question can never lock the screen)
     answeredIndexRef.current = currentQuestionIndex;
     if (timerId.current) clearInterval(timerId.current);
-    if (!currentLesson || !currentLesson.questions || !currentLesson.questions[studentAgeLevel]) return; 
-    const q = currentLesson.questions[studentAgeLevel][currentQuestionIndex];
     const isCorrect = isAnswerCorrect(q, selectedAnswer);
     let points = 0; if (isCorrect) { setCorrectAnswerCount(p => p + 1); points = Math.round(500 + (timerValue / 30) * 500); } else { setIncorrectAnswerCount(p => p + 1); }
     setCurrentQuizScore(p => p + points); setShowFeedback({ status: isCorrect ? 'correct' : 'incorrect', points: points });
-  }, [currentLesson, studentAgeLevel, currentQuestionIndex, timerValue, showFeedback, playClickSound]); 
+  }, [currentLesson, studentAgeLevel, currentQuestionIndex, timerValue, showFeedback, playClickSound, quizRun]); 
 
   const handleNextQuestion = useCallback(() => {
     playClickSound(); 
     if (advancedFromIndexRef.current === currentQuestionIndex) return; // already moving on from this question
     advancedFromIndexRef.current = currentQuestionIndex;
-    const currentQuizQuestions = currentLesson?.questions?.[studentAgeLevel] || [];
+    const currentQuizQuestions = quizRun.length ? quizRun : (currentLesson?.questions?.[studentAgeLevel] || []);
     if (currentQuestionIndex < currentQuizQuestions.length - 1) { setCurrentQuestionIndex(p => (p === currentQuestionIndex ? p + 1 : p)); setShowFeedback(null); setShowPreview(true); setTimerValue(30); }
     else { handleFinishQuiz(); }
-  }, [currentQuestionIndex, currentLesson, studentAgeLevel, handleFinishQuiz, playClickSound]);
+  }, [currentQuestionIndex, currentLesson, studentAgeLevel, handleFinishQuiz, playClickSound, quizRun]);
 
   const handleHeartClick = async (recipientName) => {
     if (!classId || !userName || !recipientName) return;
@@ -3374,7 +3390,7 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
         return <StudentLessonView userName={userName} classId={classId} lessons={lessons} globalLeaderboardScores={globalLeaderboardScores} setSelectedName={setSelectedName} handleSetView={handleSetView} setActiveLessonId={setActiveLessonId} setSelectedLessonId={setSelectedLessonId} playClickSound={playClickSound} studentAgeLevel={studentAgeLevel} heartCounts={heartCounts} handleHeartClick={handleHeartClick} setSelectedAgeLevel={setSelectedAgeLevel} mySpendableCredits={mySpendableCredits} handleBuyAirplaneConfirmation={handleBuyAirplaneConfirmation} completionsList={completionsList} allScores={allScores} myTotalLessonsCompletedAllClasses={myTotalLessonsCompletedAllClasses} />;
       case 'studentReadLesson': return <StudentReadLessonView lessons={lessons} activeLessonId={activeLessonId} globalLeaderboardScores={globalLeaderboardScores} userName={userName} setSelectedName={setSelectedName} handleSetView={handleSetView} setQuizConfirmation={setQuizConfirmation} playClickSound={playClickSound} studentAgeLevel={studentAgeLevel} heartCounts={heartCounts} handleHeartClick={handleHeartClick} setSelectedAgeLevel={setSelectedAgeLevel} allReflections={allReflections} classId={classId} completionsList={completionsList} allScores={allScores} />;
       case 'quiz':
-        const quizQuestions = (currentLesson && currentLesson.questions && currentLesson.questions[studentAgeLevel]) ? currentLesson.questions[studentAgeLevel] : [];
+        const quizQuestions = quizRun.length ? quizRun : ((currentLesson && currentLesson.questions && currentLesson.questions[studentAgeLevel]) ? currentLesson.questions[studentAgeLevel] : []);
         if (quizQuestions.length === 0 || quizQuestions[currentQuestionIndex] === undefined || !currentLesson) return <LoadingView />; 
         return <QuizView quiz={quizQuestions[currentQuestionIndex]} questionNumber={currentQuestionIndex + 1} totalQuestions={quizQuestions.length} timerValue={timerValue} feedback={showFeedback} onAnswerSelect={handleAnswerSubmit} onNext={handleNextQuestion} isLastQuestion={currentQuestionIndex === quizQuestions.length - 1} totalScore={currentQuizScore} userName={userName} activeLesson={currentLesson} showPreview={showPreview} isSavingScore={isSavingScore} competitors={quizCompetitors} />;
       case 'studentProfile': return <StudentProfileView allScores={allScores} selectedName={selectedName} handleSetView={handleSetView} setSelectedLessonId={setSelectedLessonId} playClickSound={playClickSound} setSelectedAgeLevel={setSelectedAgeLevel} previousView={previousView} userName={userName} globalLeaderboardScores={globalLeaderboardScores} heartCounts={heartCounts} myTotalLessonsCompletedAllClasses={myTotalLessonsCompletedAllClasses}/>;
