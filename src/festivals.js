@@ -82,6 +82,72 @@ export const FESTIVALS = [
       ],
     },
   },
+  {
+    id: 'tazaungdaing-2026',
+    enabled: true,
+    scene: 'balloons-night',
+    icon: '🎈',
+    title: 'Tazaungdaing Festival of Fire Balloons',
+    tagline: 'Send up the fire balloons, offer robes, and share pasukula!',
+    // Default dates -- the teacher sets the real ones on the "Festival apps"
+    // screen. Full moon of Tazaungmon 2026 is taken as 24 Nov.
+    start: '2026-11-21',
+    end: '2026-11-27',
+    // Fire balloons drifting in the sky -- tap one and it floats up and away.
+    // Same `perDay` balloons again every new day, `coins` each.
+    lamps: { perDay: 10, coins: 5, allLitBonus: 0, style: 'balloon', icon: '🎈', noun: 'balloon' },
+    // Three offerings, once each per day (same rhythm as Thadingyut's respects).
+    kadaw: {
+      coins: 20,
+      lotus: 1,
+      title: 'Make Offerings',
+      doneWord: 'Offerings',
+      button: '🙏 Make Offerings',
+      actionLabel: '🙏 I Offer With Respect',
+      recipients: [
+        {
+          id: 'kathina', emoji: '🧡', name: 'Kathina Robe to the Sangha',
+          prayer: 'At the end of the rains retreat, I offer this Kathina robe to the Sangha with a happy heart. May this offering bring peace and merit to everyone.',
+          blessing: 'May the merit of your Kathina offering bring you a long, healthy and happy life. Sadhu! Sadhu! Sadhu!',
+        },
+        {
+          id: 'mathoe', emoji: '🧵', name: 'Mathoe Robe to the Buddha',
+          prayer: 'In one night, many hands spin, weave and sew a robe. I offer this Mathoe robe to the Buddha with respect and faith.',
+          blessing: 'May your faith and your good heart keep growing. Sadhu! Sadhu! Sadhu!',
+        },
+        {
+          id: 'samannaphala', emoji: '📿', name: 'Respect to the Monks (Samannaphala Sutta)',
+          prayer: 'Venerable monks, thank you for teaching the Dhamma, including the Samannaphala Sutta, the fruits of the life of a monk. I bow to you with respect.',
+          blessing: 'May you understand the Dhamma more and more every day. Sadhu! Sadhu! Sadhu!',
+        },
+      ],
+    },
+    // Pasukula: ten gift packets hang on the tree. Each student opens ONE a day;
+    // only a couple hold coins (the rest are empty). After opening, a student may
+    // throw some of their own coins into an empty packet for a friend to find.
+    // Whenever fewer than `minCoinPackets` hold coins, a packet of 50 / 75 / 100
+    // coins is added by itself (at most `autoPerDay` of those per day).
+    pasukula: { packets: 10, minCoinPackets: 2, autoAmounts: [50, 75, 100], autoPerDay: 4 },
+    rewards: [
+      {
+        id: 'tazaungdaing-2026-robe',
+        category: 'outfit',
+        requires: { type: 'lamps', count: 40 },
+        item: { id: 'festival-tazaungdaing-2026-robe', name: '🎈 Fire Balloon Robe', color: '#D81B60', swatch: 'linear-gradient(135deg,#FF8A65,#D81B60 55%,#4A148C)', pattern: 'lights', cost: 0, festival: true },
+      },
+    ],
+    dailyGift: {
+      bonusCoins: 50,
+      pool: [
+        { category: 'accessory', item: { id: 'festival-tazaungdaing-2026-balloon', name: '🎈 Fire Balloon', kind: 'skylantern', color: '#E91E63', cost: 0, festival: true } },
+        { category: 'outfit', item: { id: 'festival-tazaungdaing-2026-kathina', name: '🧡 Kathina Robe', color: '#EF6C00', swatch: 'linear-gradient(135deg,#FFB74D,#EF6C00 60%,#8D3B00)', pattern: 'checks', cost: 0, festival: true } },
+        { category: 'accessory', item: { id: 'festival-tazaungdaing-2026-glasses', name: '🎆 Balloon Glasses', kind: 'starglasses', color: '#FF7043', cost: 0, festival: true } },
+        { category: 'outfit', item: { id: 'festival-tazaungdaing-2026-mathoe', name: '🧵 Weaving-Night Robe', color: '#6D4C41', swatch: 'linear-gradient(135deg,#A1887F,#6D4C41 60%,#FFE082)', pattern: 'lotus', cost: 0, festival: true } },
+        { category: 'accessory', item: { id: 'festival-tazaungdaing-2026-lantern', name: '🏮 Tazaungdaing Lantern', kind: 'lantern', color: '#FF8F00', cost: 0, festival: true } },
+        { category: 'outfit', item: { id: 'festival-tazaungdaing-2026-midnight', name: '🌌 Midnight Balloon Robe', color: '#283593', swatch: 'linear-gradient(135deg,#3949AB,#1A1055 65%,#FF8A65)', pattern: 'night', cost: 0, festival: true } },
+      ],
+    },
+  },
 ];
 
 import { useEffect, useState } from 'react';

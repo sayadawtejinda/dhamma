@@ -34,6 +34,98 @@ const LAMP_SPOTS = [
   { x: 36, y: 79 }, { x: 64, y: 79 }, { x: 17, y: 60 }, { x: 83, y: 60 },
 ];
 
+// Fire balloons drift across the whole sky (x, y in % of the scene).
+const BALLOON_SPOTS = [
+  { x: 10, y: 26 }, { x: 28, y: 14 }, { x: 44, y: 30 }, { x: 60, y: 12 }, { x: 76, y: 28 },
+  { x: 90, y: 16 }, { x: 16, y: 54 }, { x: 36, y: 62 }, { x: 64, y: 56 }, { x: 84, y: 50 },
+];
+
+// ---- Pasukula tree ----------------------------------------------------------
+// One shared doc per festival holds the packets on the tree: [{ c: coins, u:
+// who threw it, n: their name }], c = 0 means empty. Nobody reads it just to
+// look at the tree (the packets look identical); it is read and written inside
+// the transactions below, when a student opens or throws one.
+const PASUKULA_PATH = 'artifacts/festival-app/public/data/pasukula';
+const emptyPacket = () => ({ c: 0 });
+const pickOne = (arr) => arr[Math.floor(Math.random() * arr.length)];
+// Keeps a couple of coin packets on the tree even when nobody has thrown any.
+function topUpPackets(slots, cfg, autoDays, dateKey) {
+  let used = autoDays?.[dateKey] || 0;
+  let need = cfg.minCoinPackets - slots.filter(sl => sl.c > 0).length;
+  while (need > 0 && used < cfg.autoPerDay) {
+    const empties = slots.map((sl, i) => (sl.c === 0 ? i : -1)).filter(i => i >= 0);
+    if (empties.length === 0) break;
+    slots[pickOne(empties)] = { c: pickOne(cfg.autoAmounts), n: 'the merit fund' };
+    used += 1; need -= 1;
+  }
+  return { [dateKey]: used };
+}
+const readSlots = (pool, cfg, dateKey) => {
+  if (Array.isArray(pool.slots) && pool.slots.length === cfg.packets) return { slots: pool.slots.map(sl => ({ ...sl })), autoDays: pool.autoDays || {} };
+  const slots = Array.from({ length: cfg.packets }, emptyPacket);
+  return { slots, autoDays: topUpPackets(slots, cfg, {}, dateKey) };
+};
+
+// A student opens ONE packet a day. Returns { coins, from } / { already } / { own }.
+async function openPasukulaPacket({ festival, studentUid, studentName, slotIdx }) {
+  const cfg = festival.pasukula;
+  const dateKey = localDateKey();
+  const poolRef = doc(db, PASUKULA_PATH, festival.id);
+  const progRef = doc(db, PROGRESS_PATH, `${festival.id}_${studentUid}`);
+  const rosterRef = doc(db, SHRINE_ROSTER_PATH, sanitizeShrineKey(studentName));
+  return runTransaction(db, async (tx) => {
+    const poolSnap = await tx.get(poolRef);
+    const progSnap = await tx.get(progRef);
+    const rSnap = await tx.get(rosterRef);
+    const prog = progSnap.exists() ? progSnap.data() : {};
+    if (prog.pasukula?.[dateKey] !== undefined) return { already: true, coins: prog.pasukula[dateKey] };
+    let { slots, autoDays } = readSlots(poolSnap.exists() ? poolSnap.data() : {}, cfg, dateKey);
+    const slot = slots[slotIdx];
+    if (!slot) return { error: true };
+    if (slot.c > 0 && slot.u === studentUid) return { own: true };
+    const coins = slot.c || 0;
+    slots[slotIdx] = emptyPacket();
+    autoDays = topUpPackets(slots, cfg, autoDays, dateKey);
+    tx.set(poolRef, { slots, autoDays, updatedAt: serverTimestamp() });
+    tx.set(progRef, { studentUid, studentName, festivalId: festival.id, pasukula: { [dateKey]: coins } }, { merge: true });
+    if (coins > 0) {
+      const r = rSnap.exists() ? rSnap.data() : {};
+      const hadBalance = r.coinBalance != null;
+      tx.set(rosterRef, { studentName, coinBalance: hadBalance ? increment(coins) : SHRINE_STARTER_COINS + coins }, { merge: true });
+    }
+    return { coins, from: slot.n || null };
+  });
+}
+
+// Throws some of the student's own coins into an empty packet (once a day).
+async function throwPasukula({ festival, studentUid, studentName, amount }) {
+  const cfg = festival.pasukula;
+  const dateKey = localDateKey();
+  const poolRef = doc(db, PASUKULA_PATH, festival.id);
+  const progRef = doc(db, PROGRESS_PATH, `${festival.id}_${studentUid}`);
+  const rosterRef = doc(db, SHRINE_ROSTER_PATH, sanitizeShrineKey(studentName));
+  return runTransaction(db, async (tx) => {
+    const poolSnap = await tx.get(poolRef);
+    const progSnap = await tx.get(progRef);
+    const rSnap = await tx.get(rosterRef);
+    const prog = progSnap.exists() ? progSnap.data() : {};
+    if (prog.pasukulaThrown?.[dateKey] !== undefined) return { already: true };
+    const r = rSnap.exists() ? rSnap.data() : {};
+    const hadBalance = r.coinBalance != null;
+    const balance = hadBalance ? r.coinBalance : SHRINE_STARTER_COINS;
+    if (!Number.isInteger(amount) || amount < 1) return { invalid: true };
+    if (amount > balance) return { notEnough: true, balance };
+    let { slots, autoDays } = readSlots(poolSnap.exists() ? poolSnap.data() : {}, cfg, dateKey);
+    const empties = slots.map((sl, i) => (sl.c === 0 ? i : -1)).filter(i => i >= 0);
+    if (empties.length === 0) return { full: true };
+    slots[pickOne(empties)] = { c: amount, u: studentUid, n: studentName };
+    tx.set(poolRef, { slots, autoDays, updatedAt: serverTimestamp() });
+    tx.set(progRef, { studentUid, studentName, festivalId: festival.id, pasukulaThrown: { [dateKey]: amount } }, { merge: true });
+    tx.set(rosterRef, { studentName, coinBalance: hadBalance ? increment(-amount) : balance - amount }, { merge: true });
+    return { thrown: amount, balance: balance - amount };
+  });
+}
+
 const requirementMet = (req, festival, state) => {
   if (req.type === 'lamps') return state.lampsTotal >= req.count;
   if (req.type === 'kadawAll') return festival.kadaw.recipients.every(r => state.kadawEver.includes(r.id));
@@ -162,6 +254,118 @@ function Pagoda({ glow }) {
   );
 }
 
+// The Pasukula tree: pick one of the packets (once a day), then maybe throw one.
+function PasukulaPanel({ festival, studentUid, studentName, isTeacherPreview, openedToday, thrownToday, balance, onClose, onOpened, onThrown, onCoins, spawnAt }) {
+  const cfg = festival.pasukula;
+  const [stage, setStage] = useState(openedToday !== null ? 'done' : 'pick'); // pick | opened | done
+  const [result, setResult] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [amount, setAmount] = useState('');
+  const [throwing, setThrowing] = useState(false);
+  const [note, setNote] = useState('');
+
+  const pick = async (idx, e) => {
+    if (busy) return;
+    if (isTeacherPreview) { setNote('Teacher preview: nothing is opened or saved.'); return; }
+    setBusy(true); setNote('');
+    const point = { x: e.clientX, y: e.clientY };
+    try {
+      const res = await openPasukulaPacket({ festival, studentUid, studentName, slotIdx: idx });
+      if (res.own) { setNote('That packet is the one you threw. Please pick another one. 🙂'); }
+      else if (res.already) { onOpened(res.coins || 0); setStage('done'); }
+      else if (res.error) { setNote('Something went wrong. Please try again.'); }
+      else {
+        setResult(res); onOpened(res.coins); setStage('opened');
+        if (res.coins > 0) { onCoins(res.coins); spawnAt(point, res.coins); }
+      }
+    } catch (err) { console.error(err); setNote('Could not open it. Check your internet connection and try again.'); }
+    setBusy(false);
+  };
+
+  const doThrow = async () => {
+    const n = parseInt(amount, 10);
+    if (!Number.isInteger(n) || n < 1) { setNote('Type how many coins you want to throw.'); return; }
+    if (isTeacherPreview) { setNote('Teacher preview: nothing is thrown.'); return; }
+    if (n > balance) { setNote(`You only have ${balance} coins.`); return; }
+    setBusy(true); setNote('');
+    try {
+      const res = await throwPasukula({ festival, studentUid, studentName, amount: n });
+      if (res.thrown) { onCoins(-res.thrown); onThrown(res.thrown); setThrowing(false); setNote(`🎉 You threw ${res.thrown} coins into a packet. Sadhu! Someone will find it.`); }
+      else if (res.already) { onThrown(0); setThrowing(false); setNote('You already threw pasukula today. Come back tomorrow. 🌸'); }
+      else if (res.full) { setNote('Every packet on the tree is full of coins already. Try again tomorrow. 🌸'); }
+      else if (res.notEnough) { setNote(`You only have ${res.balance} coins.`); }
+      else { setNote('Type a number of coins.'); }
+    } catch (err) { console.error(err); setNote('Could not throw it. Check your internet connection and try again.'); }
+    setBusy(false);
+  };
+
+  const canThrow = !thrownToday && stage !== 'pick';
+  return (
+    <div className="fixed inset-0 z-[9970] bg-black/75 flex items-end sm:items-center justify-center" onClick={onClose}>
+      <div className="w-full max-w-md bg-indigo-950 border border-amber-300/40 rounded-t-3xl sm:rounded-3xl p-5 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-lg font-black text-amber-200 text-center">🧧 Pasukula Tree</h2>
+        <p className="text-xs text-indigo-200 text-center mb-3">Pasukula cloth is thrown for anyone to take. Open one packet a day. Most are empty, a few hold coins!</p>
+
+        {stage === 'pick' && (
+          <>
+            <div className="grid grid-cols-5 gap-2 my-3">
+              {Array.from({ length: cfg.packets }).map((_, i) => (
+                <button key={i} disabled={busy} onClick={(e) => pick(i, e)} className="aspect-square rounded-xl bg-red-600/80 hover:bg-red-500 border-2 border-amber-300/70 text-2xl flex items-center justify-center" style={{ animation: `fsPulse ${2 + (i % 3) * 0.4}s ease-in-out ${i * 0.15}s infinite` }} aria-label="Open this packet">🧧</button>
+              ))}
+            </div>
+            <p className="text-center text-sm font-bold text-amber-200">Tap a packet to open it</p>
+          </>
+        )}
+
+        {stage === 'opened' && result && (
+          <div className="text-center my-3">
+            <div className="text-6xl">{result.coins > 0 ? '🎉' : '🌸'}</div>
+            {result.coins > 0 ? (
+              <>
+                <p className="mt-2 text-xl font-black text-amber-300">+{result.coins} 🪙</p>
+                <p className="text-sm text-indigo-200">{result.from ? `A gift from ${result.from}. Sadhu!` : 'What a lucky packet! Sadhu!'}</p>
+              </>
+            ) : (
+              <>
+                <p className="mt-2 text-lg font-black text-amber-200">This packet is empty</p>
+                <p className="text-sm text-indigo-200">Be happy for the person who finds the coins. Sadhu! Try again tomorrow.</p>
+              </>
+            )}
+          </div>
+        )}
+
+        {stage === 'done' && (
+          <p className="my-4 text-center text-sm font-bold text-emerald-300">✅ You opened your packet today{openedToday > 0 ? ` (+${openedToday} 🪙)` : ''}. Come back tomorrow!</p>
+        )}
+
+        {canThrow && !throwing && (
+          <div className="mt-3 rounded-2xl border border-amber-300/50 bg-white/5 p-3 text-center">
+            <p className="text-sm font-bold">Would you like to throw pasukula too?</p>
+            <p className="text-xs text-indigo-200 mt-1">Put as many of your coins as you like into a packet. Another student may find it.</p>
+            <div className="mt-2 flex gap-2">
+              <button onClick={() => setThrowing(true)} className="flex-1 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-indigo-950 font-black">Yes, I will throw</button>
+              <button onClick={onClose} className="flex-1 py-2 rounded-xl bg-white/10 hover:bg-white/20 font-bold">Not today</button>
+            </div>
+          </div>
+        )}
+        {canThrow && throwing && (
+          <div className="mt-3 rounded-2xl border border-amber-300/50 bg-white/5 p-3 text-center">
+            <p className="text-sm font-bold">How many coins? <span className="text-amber-300">(You have 🪙 {balance})</span></p>
+            <input type="number" min="1" max={balance} inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} className="mt-2 w-full text-center text-xl font-black text-indigo-950 rounded-xl px-3 py-2" placeholder="0" />
+            <div className="mt-2 flex gap-2">
+              <button disabled={busy} onClick={doThrow} className="flex-1 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-indigo-950 font-black disabled:opacity-50">🧧 Throw it</button>
+              <button onClick={() => setThrowing(false)} className="flex-1 py-2 rounded-xl bg-white/10 hover:bg-white/20 font-bold">Back</button>
+            </div>
+          </div>
+        )}
+        {stage !== 'pick' && thrownToday && !note && <p className="mt-3 text-center text-xs font-bold text-emerald-300">🧧 You already threw pasukula today.</p>}
+        {note && <p className="mt-3 text-center text-sm font-bold text-amber-100">{note}</p>}
+        <button onClick={onClose} className="mt-4 w-full py-2 rounded-xl bg-white/10 hover:bg-white/20 font-semibold">Close</button>
+      </div>
+    </div>
+  );
+}
+
 export default function FestivalApp({ entryRequest, onExit }) {
   const isTeacherPreview = !entryRequest?.studentUid;
   const studentUid = entryRequest?.studentUid;
@@ -189,6 +393,9 @@ export default function FestivalApp({ entryRequest, onExit }) {
   const [giftTakenToday, setGiftTakenToday] = useState(false);
   const [ownedFestivalIds, setOwnedFestivalIds] = useState([]);
   const [respectWait, setRespectWait] = useState(0);
+  const [risers, setRisers] = useState([]);
+  const [pasukulaOpened, setPasukulaOpened] = useState(null); // null = not opened today, else coins found
+  const [pasukulaThrown, setPasukulaThrown] = useState(false);
   const [toast, setToast] = useState(null);
 
   const pendingRef = useRef({ lamps: new Set(), kadaw: new Set() });
@@ -229,6 +436,8 @@ export default function FestivalApp({ entryRequest, onExit }) {
         setKadawEver(p.kadawEver || []);
         setUnlockedIds(p.unlocked || []);
         setGiftTakenToday(!!p.giftDays?.[dateKey]);
+        setPasukulaOpened(p.pasukula?.[dateKey] !== undefined ? p.pasukula[dateKey] : null);
+        setPasukulaThrown(p.pasukulaThrown?.[dateKey] !== undefined);
         const rd = rSnap.exists() ? rSnap.data() : {};
         setOwnedFestivalIds(['outfit', 'accessory'].flatMap(cat => rd.avatarOwned?.[cat] || rd[`avatarOwned.${cat}`] || []).filter(id => String(id).startsWith('festival-')));
         setCoinBalance(rSnap.exists() ? (rd.coinBalance ?? SHRINE_STARTER_COINS) : SHRINE_STARTER_COINS);
@@ -320,11 +529,15 @@ export default function FestivalApp({ entryRequest, onExit }) {
     gainCoins(earned);
     if (!isTeacherPreview) spawnFlyingCoins(point, 6, '🪙', true);
     const fid = `${Date.now()}-${i}`;
+    if (festival.lamps.style === 'balloon') {
+      setRisers(prev => [...prev, { id: fid, x: point.x, y: point.y }]);
+      setTimeout(() => setRisers(prev => prev.filter(r => r.id !== fid)), 3200);
+    }
     setFloaters(prev => [...prev, { id: fid, x: point.x, y: point.y, text: `+${festival.lamps.coins}` }]);
     setTimeout(() => setFloaters(prev => prev.filter(f => f.id !== fid)), 1100);
     if (completesAll) {
       releaseLanterns();
-      showToast(`🏮 All lamps lit! Bonus +${festival.lamps.allLitBonus} 🪙`);
+      if (festival.lamps.allLitBonus > 0) showToast(`${festival.lamps.icon || '🏮'} All ${festival.lamps.noun || 'lamp'}s done! Bonus +${festival.lamps.allLitBonus} 🪙`);
     }
     pendingRef.current.lamps.add(i);
     scheduleFlush();
@@ -402,6 +615,8 @@ export default function FestivalApp({ entryRequest, onExit }) {
         @keyframes fsPulse { 0%,100% { transform: scale(1) } 50% { transform: scale(1.12) } }
         @keyframes fsDrop { 0% { transform: translateY(-110vh) rotate(-10deg) } 100% { transform: translateY(0) rotate(0) } }
         @keyframes fsPop { 0% { transform: scale(.6); opacity: 0 } 100% { transform: scale(1); opacity: 1 } }
+        @keyframes fsBob { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-10px) } }
+        @keyframes fsRiseAway { 0% { transform: translate(-50%,-50%) scale(1); opacity: 1 } 100% { transform: translate(-50%,-115vh) scale(.5); opacity: 0 } }
         @keyframes fsSpark { 0% { transform: rotate(var(--angle)) translateX(0) scale(1); opacity: 1 } 100% { transform: rotate(var(--angle)) translateX(80px) scale(.2); opacity: 0 } }
         .fs-star { position: absolute; border-radius: 9999px; background: #fff; animation: fsTwinkle 3s ease-in-out infinite; }
       `}</style>
@@ -442,7 +657,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
         <h1 className="text-xl sm:text-2xl font-black text-amber-200 drop-shadow">{festival.icon} {festival.title}</h1>
         <p className="text-xs sm:text-sm text-indigo-200">{festival.tagline}{!isTeacherPreview && daysLeft >= 0 ? ` · ${daysLeft + 1} day${daysLeft === 0 ? '' : 's'} left` : ''}</p>
         <div className="mt-2 inline-flex items-center gap-3 bg-black/30 rounded-full px-4 py-1.5 text-sm font-semibold">
-          <span>🪔 {litCount}/{festival.lamps.perDay} today</span>
+          <span>{festival.lamps.icon || '🪔'} {litCount}/{festival.lamps.perDay} today</span>
           <span className="opacity-40">|</span>
           <span>🙏 {kadawDoneCount}/{festival.kadaw.recipients.length}</span>
         </div>
@@ -459,11 +674,19 @@ export default function FestivalApp({ entryRequest, onExit }) {
           <Pagoda glow={glow} />
         </div>
         <div className="absolute inset-x-0 bottom-0 h-[18%] pointer-events-none" style={{ background: 'linear-gradient(180deg,transparent,rgba(20,8,40,.75))' }} />
-        {LAMP_SPOTS.slice(0, festival.lamps.perDay).map((spot, i) => (i >= 10 ? (
+        {festival.lamps.style !== 'balloon' && LAMP_SPOTS.slice(0, festival.lamps.perDay).map((spot, i) => (i >= 10 ? (
           <div key={`post-${i}`} className="absolute pointer-events-none rounded-sm" style={{ left: `${spot.x}%`, top: `${spot.y}%`, bottom: '6%', width: 4, marginLeft: -2, marginTop: 18, background: 'linear-gradient(180deg,#8d6e63,#3e2723)' }} />
         ) : null))}
-        {LAMP_SPOTS.slice(0, festival.lamps.perDay).map((spot, i) => {
+        {(festival.lamps.style === 'balloon' ? BALLOON_SPOTS : LAMP_SPOTS).slice(0, festival.lamps.perDay).map((spot, i) => {
           const isLit = lit.has(i);
+          if (festival.lamps.style === 'balloon') {
+            if (isLit) return null;
+            return (
+              <button key={i} onClick={(e) => handleLamp(i, e)} aria-label="Send up this fire balloon" className="absolute z-20 flex items-center justify-center" style={{ left: `${spot.x}%`, top: `${spot.y}%`, width: 64, height: 72, marginLeft: -32, marginTop: -36, animation: `fsBob ${2.6 + (i % 4) * 0.4}s ease-in-out ${(i % 5) * 0.3}s infinite` }}>
+                <span className="text-5xl select-none" style={{ filter: 'drop-shadow(0 0 10px rgba(255,170,60,.95))' }}>🎈</span>
+              </button>
+            );
+          }
           return (
             <button
               key={i}
@@ -492,8 +715,13 @@ export default function FestivalApp({ entryRequest, onExit }) {
       {/* Action bar */}
       <div className="relative z-20 flex items-center justify-center gap-3 px-4 pb-5 pt-2">
         <button onClick={() => setPanel('kadaw')} className="flex-1 max-w-[200px] bg-amber-400 hover:bg-amber-300 text-indigo-950 font-black rounded-2xl py-3 shadow-lg" style={{ animation: kadawDoneCount === 0 ? 'fsPulse 2.2s ease-in-out infinite' : 'none' }}>
-          🙏 Pay Respect
+          {festival.kadaw.button || '🙏 Pay Respect'}
         </button>
+        {festival.pasukula && (
+          <button onClick={() => setPanel('pasukula')} className="flex-1 max-w-[200px] bg-red-500 hover:bg-red-400 text-white font-black rounded-2xl py-3 shadow-lg" style={{ animation: pasukulaOpened === null ? 'fsPulse 2.2s ease-in-out infinite' : 'none' }}>
+            🧧 Pasukula
+          </button>
+        )}
         <button onClick={() => setPanel('rewards')} className="flex-1 max-w-[200px] bg-white/15 hover:bg-white/25 border border-white/30 font-bold rounded-2xl py-3">
           🎁 Rewards
         </button>
@@ -502,6 +730,11 @@ export default function FestivalApp({ entryRequest, onExit }) {
       {/* Floating +coins */}
       {floaters.map(f => (
         <div key={f.id} className="fixed z-[9990] pointer-events-none font-black text-amber-300 text-lg drop-shadow" style={{ left: f.x, top: f.y - 24, animation: 'fsFloat 1s ease-out forwards' }}>{f.text} 🪙</div>
+      ))}
+
+      {/* A fire balloon floating up and away */}
+      {risers.map(r => (
+        <div key={r.id} className="fixed z-[9985] pointer-events-none text-5xl" style={{ left: r.x, top: r.y, animation: 'fsRiseAway 3s ease-in forwards', filter: 'drop-shadow(0 0 12px rgba(255,170,60,1))' }}>🎈</div>
       ))}
 
       {/* Sky lanterns when every lamp is lit */}
@@ -513,7 +746,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
       {panel === 'kadaw' && !kadawTarget && (
         <div className="fixed inset-0 z-[9970] bg-black/70 flex items-end sm:items-center justify-center" onClick={() => setPanel(null)}>
           <div className="w-full max-w-md bg-indigo-950 border border-amber-300/40 rounded-t-3xl sm:rounded-3xl p-5 max-h-[88vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-black text-amber-200 text-center">🙏 Pay Respect</h2>
+            <h2 className="text-lg font-black text-amber-200 text-center">{festival.kadaw.button || '🙏 Pay Respect'}</h2>
             <p className="text-xs text-indigo-200 text-center mb-4">Once each, every day</p>
             <div className="grid grid-cols-2 gap-3">
               {festival.kadaw.recipients.map(r => {
@@ -543,7 +776,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
                 <p className="mt-3 text-base leading-relaxed">{kadawTarget.prayer}</p>
                 <p className="mt-3 text-xs text-indigo-300">Read it slowly and say it quietly in your heart, with your hands together.</p>
                 <button onClick={handleKadaw} disabled={respectWait > 0} className="mt-4 w-full py-3 rounded-2xl bg-amber-400 hover:bg-amber-300 text-indigo-950 font-black disabled:opacity-50 disabled:cursor-not-allowed">
-                  {respectWait > 0 ? `🙏 Take a quiet moment… ${respectWait}` : '🙏 I Pay Respect'}
+                  {respectWait > 0 ? `🙏 Take a quiet moment… ${respectWait}` : (festival.kadaw.actionLabel || '🙏 I Pay Respect')}
                 </button>
               </>
             ) : (
@@ -551,7 +784,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
                 <p className="mt-3 text-base leading-relaxed text-amber-100">{kadawTarget.blessing}</p>
                 <p className="mt-3 text-sm font-bold text-emerald-300">
                   {kadawStage === 'blessedAgain'
-                    ? 'You already paid respect today 🌸 Come back tomorrow.'
+                    ? 'You already did this today 🌸 Come back tomorrow.'
                     : isTeacherPreview ? `🪙 +${festival.kadaw.coins}  🪷 +${festival.kadaw.lotus} (preview)` : `🪙 +${festival.kadaw.coins}  🪷 +${festival.kadaw.lotus} — thank you for being grateful.`}
                 </p>
                 <button onClick={() => setKadawTarget(null)} className="mt-4 w-full py-2.5 rounded-2xl bg-white/15 hover:bg-white/25 font-bold">Sadhu 🙏</button>
@@ -573,7 +806,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
                   <span className="text-4xl">🎁</span>
                   <div className="flex-1 min-w-0">
                     <div className="font-bold text-sm">Daily gift box</div>
-                    <div className="text-xs text-indigo-200">Pay respect to all {festival.kadaw.recipients.length} every day to get one new Avatar item. One box a day.</div>
+                    <div className="text-xs text-indigo-200">Complete all {festival.kadaw.recipients.length} {festival.kadaw.doneWord ? festival.kadaw.doneWord.toLowerCase() : 'respects'} every day to get one new Avatar item. One box a day.</div>
                   </div>
                 </div>
                 <p className={`mt-2 text-xs font-bold ${giftTakenToday ? 'text-emerald-300' : 'text-amber-300'}`}>
@@ -605,7 +838,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
                       <div className="flex-1 min-w-0">
                         <div className="font-bold text-sm">{rw.item.name}</div>
                         <div className="text-xs text-indigo-200">
-                          {req.type === 'lamps' ? `Light ${req.count} lamps in total` : 'Pay respect to all five'}
+                          {req.type === 'lamps' ? (festival.lamps.style === 'balloon' ? `Send up ${req.count} fire balloons in total` : `Light ${req.count} lamps in total`) : `Complete all ${festival.kadaw.recipients.length}`}
                         </div>
                       </div>
                     </div>
@@ -622,7 +855,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
               })}
             </div>
             <p className="mt-4 text-xs text-indigo-300 text-center">
-              Every day: {festival.lamps.perDay} lamps × {festival.lamps.coins} 🪙 (+{festival.lamps.allLitBonus} 🪙 bonus for lighting all) and {festival.kadaw.recipients.length} respects × ({festival.kadaw.coins} 🪙 + {festival.kadaw.lotus} 🪷).
+              Every day: {festival.lamps.perDay} {festival.lamps.noun || 'lamp'}s × {festival.lamps.coins} 🪙{festival.lamps.allLitBonus > 0 ? ` (+${festival.lamps.allLitBonus} 🪙 bonus for all)` : ''} and {festival.kadaw.recipients.length} {festival.kadaw.doneWord ? festival.kadaw.doneWord.toLowerCase() : 'respects'} × ({festival.kadaw.coins} 🪙 + {festival.kadaw.lotus} 🪷).
             </p>
             <button onClick={() => setPanel(null)} className="mt-4 w-full py-2 rounded-xl bg-white/10 hover:bg-white/20 font-semibold">Close</button>
           </div>
@@ -689,6 +922,23 @@ export default function FestivalApp({ entryRequest, onExit }) {
             <button onClick={() => setCelebration(null)} className="mt-4 w-full py-2.5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-indigo-950 font-black">Sadhu!</button>
           </div>
         </div>
+      )}
+
+      {panel === 'pasukula' && festival.pasukula && (
+        <PasukulaPanel
+          festival={festival}
+          studentUid={studentUid}
+          studentName={studentName}
+          isTeacherPreview={isTeacherPreview}
+          openedToday={pasukulaOpened}
+          thrownToday={pasukulaThrown}
+          balance={coinBalance ?? 0}
+          onClose={() => setPanel(null)}
+          onOpened={(c) => setPasukulaOpened(c)}
+          onThrown={() => setPasukulaThrown(true)}
+          onCoins={(n) => setCoinBalance(b => Math.max(0, (b ?? 0) + n))}
+          spawnAt={(point) => spawnFlyingCoins(point, 8, '🪙', true)}
+        />
       )}
 
       {toast && (
