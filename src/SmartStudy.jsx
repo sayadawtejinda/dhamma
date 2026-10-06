@@ -77,6 +77,53 @@ const getReflectionsCollectionRef = () => collection(db, 'artifacts', appId, 'pu
 const getRosterCollectionRef = () => collection(db, 'artifacts', appId, 'public', 'data', 'classRoster');
 const getRosterDocRef = (classId, studentName) => doc(db, 'artifacts', appId, 'public', 'data', 'classRoster', `${classId}_${encodeURIComponent(studentName)}`);
 
+// ---- Quiz answer checking and result saving that survive a bad connection ----
+const normAnswer = (t) => String(t ?? '').trim().toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+const answerStem = (w) => w.replace(/(ing|ed|es|s)$/, '');
+const answerWords = (t) => new Set(normAnswer(t).split(' ').filter(w => w.length > 2).map(answerStem));
+// A multiple-choice question whose stored "correct" text is not exactly one of
+// its options (the AI sometimes writes "Roll off" for the option "It rolls
+// off") could never be answered correctly. Find the option it clearly means; if
+// none clearly matches, the question is treated as unanswerable (null).
+const resolveCorrectOption = (q) => {
+  const opts = (Array.isArray(q.options) && q.options.length > 0) ? q.options : ['True', 'False'];
+  const exact = opts.find(o => normAnswer(o) === normAnswer(q.correct));
+  if (exact) return exact;
+  const target = answerWords(q.correct);
+  const scored = opts.map(o => { const w = answerWords(o); let sh = 0; target.forEach(x => { if (w.has(x)) sh++; }); return { o, s: sh / Math.max(1, Math.min(target.size, w.size)) }; }).sort((a, b) => b.s - a.s);
+  return scored[0] && scored[0].s >= 0.6 && scored[0].s > (scored[1] ? scored[1].s : 0) ? scored[0].o : null;
+};
+// A question with no answer that can be matched gives everyone the point, rather than unfairly failing a child.
+const isAnswerCorrect = (q, selected) => {
+  const right = resolveCorrectOption(q);
+  return right === null ? true : normAnswer(selected) === normAnswer(right);
+};
+
+// A finished quiz's two records are saved with fixed ids (so a retry can never
+// create a second copy), retried a few times, and -- if the connection is still
+// down -- kept on the device and sent later, instead of being lost and making
+// the child do the whole quiz again.
+const PENDING_RESULTS_KEY = 'smartstudy_pending_results_v1';
+const readPendingResults = () => { try { return JSON.parse(localStorage.getItem(PENDING_RESULTS_KEY) || '[]'); } catch (e) { return []; } };
+const writePendingResults = (list) => { try { localStorage.setItem(PENDING_RESULTS_KEY, JSON.stringify(list)); } catch (e) { /* private mode */ } };
+const withRetries = async (fn, tries = 3) => {
+  for (let i = 0; i < tries; i++) {
+    try { return await fn(); } catch (e) { if (i === tries - 1) throw e; await new Promise(r => setTimeout(r, 700 * (i + 1))); }
+  }
+};
+const saveQuizResult = async ({ id, score, completion }) => {
+  await withRetries(() => setDoc(doc(getScoresCollectionRef(), id), score));
+  await withRetries(() => setDoc(doc(getCompletionsCollectionRef(), id), completion));
+};
+const flushPendingResults = async () => {
+  const list = readPendingResults();
+  if (list.length === 0) return 0;
+  const remaining = [];
+  for (const item of list) { try { await saveQuizResult(item); } catch (e) { remaining.push(item); } }
+  writePendingResults(remaining);
+  return list.length - remaining.length;
+};
+
 // A student only ever belongs to one class at a time. If they previously
 // joined a different class (e.g. by mistake) before landing in `keepClassId`,
 // a leftover classRoster doc for that other class can still exist -- and
@@ -2167,6 +2214,28 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
   }, [view, currentQuestionIndex]); 
 
   useEffect(() => { if (needsToStartQuiz && currentLesson) { setView('quiz'); setNeedsToStartQuiz(false); } }, [needsToStartQuiz, currentLesson, setView]);
+
+  // Results saved on the device while offline (see saveQuizResult) go out when the
+  // lesson list opens and whenever the browser says it is back online.
+  useEffect(() => {
+    const send = async () => { const sent = await flushPendingResults(); if (sent > 0) setClassRefreshKey(k => k + 1); };
+    if (view === 'studentLesson') send();
+    window.addEventListener('online', send);
+    return () => window.removeEventListener('online', send);
+  }, [view]);
+
+  // Safety net: if a question has run out of time but nothing happened (no answer
+  // taken, no "time's up" shown), force the time's-up screen so a child can never
+  // be stuck on one question for good.
+  useEffect(() => {
+    if (!(view === 'quiz' && showFeedback === null && !showPreview && timerValue <= 0)) return;
+    const t = setTimeout(() => {
+      answeredIndexRef.current = currentQuestionIndex;
+      if (timerId.current) clearInterval(timerId.current);
+      setShowFeedback(prev => prev || { status: 'timeup', points: 0 });
+    }, 2500);
+    return () => clearTimeout(t);
+  }, [view, showFeedback, showPreview, timerValue, currentQuestionIndex]);
   
   const globalLeaderboardScores = useMemo(() => {
     const firstScores = allScores.reduce((acc, score) => {
@@ -3176,11 +3245,22 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
     }
     setIsSavingScore(true);
     const submissionTime = Date.now();
+    const resultId = `${classId}_${encodeURIComponent(userName)}_${currentLesson.lessonId}_${submissionTime}`;
+    const result = {
+      id: resultId,
+      score: { classId: classId, studentName: userName, studentAgeLevel: studentAgeLevel, studentId: currentUserId, lessonId: currentLesson.lessonId, score: currentQuizScore, timestamp: submissionTime },
+      completion: { classId: classId, studentName: userName, lessonId: currentLesson.lessonId, timestamp: submissionTime },
+    };
     try {
-      await addDoc(getScoresCollectionRef(), { classId: classId, studentName: userName, studentAgeLevel: studentAgeLevel, studentId: currentUserId, lessonId: currentLesson.lessonId, score: currentQuizScore, timestamp: submissionTime });
-      await addDoc(getCompletionsCollectionRef(), { classId: classId, studentName: userName, lessonId: currentLesson.lessonId, timestamp: submissionTime });
+      await saveQuizResult(result);
       setModal({ message: `Quiz Finished! Correct: ${correctAnswerCount}, Wrong: ${incorrectAnswerCount}. Final score: ${currentQuizScore}`, type: 'success', visible: true });
-    } catch (error) { console.error(error); setModal({ message: 'Failed to save score. Please check your connection.', type: 'error', visible: true }); }
+    } catch (error) {
+      console.error(error);
+      // No connection right now: keep the finished quiz on this device and send it
+      // as soon as the connection is back -- the child does not have to redo it.
+      writePendingResults([...readPendingResults().filter(r => r.id !== resultId), result]);
+      setModal({ message: `Quiz Finished! Correct: ${correctAnswerCount}, Wrong: ${incorrectAnswerCount}. Final score: ${currentQuizScore}.\n\nYour internet is not working right now, so your result is saved on this device and will be sent automatically when it is back. You do not need to do the quiz again.`, type: 'success', visible: true });
+    }
     finally { setIsSavingScore(false); setView('studentLesson'); setClassRefreshKey(k => k + 1); }
   }, [currentLesson, classId, userName, currentUserId, currentQuizScore, correctAnswerCount, incorrectAnswerCount, studentAgeLevel]);
 
@@ -3191,7 +3271,7 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
     if (timerId.current) clearInterval(timerId.current);
     if (!currentLesson || !currentLesson.questions || !currentLesson.questions[studentAgeLevel]) return; 
     const q = currentLesson.questions[studentAgeLevel][currentQuestionIndex];
-    const isCorrect = String(selectedAnswer).trim().toLowerCase() === String(q.correct).trim().toLowerCase();
+    const isCorrect = isAnswerCorrect(q, selectedAnswer);
     let points = 0; if (isCorrect) { setCorrectAnswerCount(p => p + 1); points = Math.round(500 + (timerValue / 30) * 500); } else { setIncorrectAnswerCount(p => p + 1); }
     setCurrentQuizScore(p => p + points); setShowFeedback({ status: isCorrect ? 'correct' : 'incorrect', points: points });
   }, [currentLesson, studentAgeLevel, currentQuestionIndex, timerValue, showFeedback, playClickSound]); 
