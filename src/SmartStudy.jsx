@@ -1736,7 +1736,7 @@ const BIRD_VISIBLE_MS = 3200;
 const BIRD_THANKS = ['Thank you!', 'Thanks!', 'Thank you, friend!', 'You are kind!'];
 const BirdRescueGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
   const [cages] = useState(() => Array.from({ length: BIRD_CAGES }, (_, i) => ({
-    id: i, x: 6 + Math.random() * 74, y: 16 + Math.random() * 56,
+    id: i, x: 4 + Math.random() * 62, y: 18 + Math.random() * 54,
     bird: ['🐦', '🐤', '🦜', '🕊️', '🐥'][i % 5], thanks: BIRD_THANKS[i % BIRD_THANKS.length],
   })));
   const [state, setState] = useState(() => Array(BIRD_CAGES).fill('waiting')); // waiting | visible | opened | missed
@@ -1766,16 +1766,16 @@ const BirdRescueGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
   };
 
   return (
-    <div className="relative overflow-hidden text-white" style={{ height: '100vh', minHeight: 420, background: 'linear-gradient(180deg,#7dd3fc 0%,#bae6fd 55%,#86efac 100%)' }}>
+    <div className="relative overflow-hidden text-white h-screen" style={{ height: '100dvh', minHeight: 420, background: 'linear-gradient(180deg,#7dd3fc 0%,#bae6fd 55%,#86efac 100%)' }}>
       <style>{`
         @keyframes cagePop { 0% { transform: scale(0) } 70% { transform: scale(1.15) } 100% { transform: scale(1) } }
         @keyframes birdHop { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-6px) } }
         @keyframes birdFly { 0% { transform: translate(0,0) scale(1); opacity: 1 } 100% { transform: translate(110px,-190px) scale(1.5) rotate(18deg); opacity: 0 } }
         @keyframes thankRise { 0% { transform: translateY(0); opacity: 0 } 15% { opacity: 1 } 100% { transform: translateY(-46px); opacity: 0 } }
       `}</style>
-      <div className="absolute top-0 inset-x-0 flex items-center justify-between px-4 py-3 z-10">
-        <div className="bg-white/80 text-sky-900 font-bold rounded-full px-4 py-2 ml-14 sm:ml-16">🐦 Free the birds! Tap each cage</div>
-        <div className="bg-yellow-300 text-yellow-900 font-black rounded-full px-4 py-2 shadow">🪙 {total}{coinsLeft <= 0 ? ' (limit reached)' : ''}</div>
+      <div className="absolute top-0 inset-x-0 flex items-center justify-between gap-2 px-3 py-3 z-10">
+        <div className="bg-white/80 text-sky-900 font-bold text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 ml-12 sm:ml-16 min-w-0 truncate">🐦 Free the birds! Tap the cages</div>
+        <div className="bg-yellow-300 text-yellow-900 font-black text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 shadow whitespace-nowrap flex-shrink-0">🪙 {total}{coinsLeft <= 0 ? ' (limit reached)' : ''}</div>
       </div>
       {cages.map((c, i) => {
         const st = state[i];
