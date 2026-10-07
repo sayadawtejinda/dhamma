@@ -1095,7 +1095,7 @@ const StudentLessonView = React.memo(({
                       : (lesson.questions?.[studentAgeLevel]?.length >= 8 ? null : <span className="text-sm text-gray-600 mt-1">⏳ Quiz Not Ready</span>)}
                   </div>
                   <div className="flex space-x-2 shrink-0">
-                      <span className="p-2 text-teal-600" title="Scores"><Award className="w-6 h-6" /></span>
+                      <button type="button" onClick={(e) => { e.stopPropagation(); playClickSound?.(); setSelectedLessonId(lesson.lessonId); handleSetView('lessonLeaderboard'); }} className="flex items-center gap-1 text-xs text-gray-500 bg-transparent border border-gray-300 rounded-md px-2 py-1 hover:text-teal-700 hover:border-teal-400 shadow-none" title="See this lesson's scores"><Award className="w-3.5 h-3.5" />Scores</button>
                   </div>
                 </div>
               ))}
