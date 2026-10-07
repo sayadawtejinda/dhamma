@@ -1070,10 +1070,10 @@ const StudentLessonView = React.memo(({
       <div className="flex justify-between items-start mb-8">
         <div className={`transition-all duration-700 ease-in-out overflow-hidden ${showWelcome ? 'max-h-60 opacity-100' : 'max-h-0 opacity-0'}`}>
           <h1 className="text-4xl font-extrabold text-green-700">Welcome, {userName}!</h1>
-          <p className="text-xl text-gray-600">Class ID: {classId}. Select a lesson to begin your journey.</p>
+          <p className="text-xl text-gray-600">Select a lesson to begin your journey.</p>
         </div>
         <div className="flex items-center space-x-2 flex-shrink-0">
-          <button onClick={() => { playClickSound?.(); handleSetView('classPicker'); }} className="p-2 bg-blue-100 text-blue-700 rounded-full shadow-md hover:bg-blue-200 transition-colors" title="Choose a Different Class"><LayoutGrid className="w-6 h-6" /></button>
+
           {myRank > 0 && (
             <DraggableRankBadge myRank={myRank} myLessonsCompleted={myLessonsCompleted} lessons={lessons} allScores={allScores} userName={userName} studentAgeLevel={studentAgeLevel} handleSetView={handleSetView} setActiveLessonId={setActiveLessonId} playClickSound={playClickSound} myTotalLessonsCompletedAllClasses={myTotalLessonsCompletedAllClasses} />
           )}
@@ -1090,10 +1090,12 @@ const StudentLessonView = React.memo(({
                 <div key={lesson.lessonId} id={`lesson-row-${lesson.lessonId}`} className="p-4 border-2 border-blue-200 rounded-xl bg-blue-50 flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-2 sm:space-y-0 hover:border-blue-400 transition-colors cursor-pointer" onClick={() => { playClickSound?.(); setActiveLessonId(lesson.lessonId); handleSetView('studentReadLesson'); }}>
                   <div className="flex flex-col flex-1 pr-4">
                     <h3 className="text-xl font-bold text-blue-800 hover:text-blue-600 hover:underline">{lesson.lessonId}: {lesson.title}</h3>
-                    <span className="text-sm text-gray-600 mt-1">{lesson.questions?.[studentAgeLevel]?.length >= 8 ? '✅ Quiz Ready for You' : '⏳ Quiz Not Ready'}</span>
+                    {(allScores || []).some(sc => sc.studentName === userName && sc.lessonId === lesson.lessonId)
+                      ? <span className="text-sm font-bold text-green-700 mt-1">✅ Completed</span>
+                      : (lesson.questions?.[studentAgeLevel]?.length >= 8 ? null : <span className="text-sm text-gray-600 mt-1">⏳ Quiz Not Ready</span>)}
                   </div>
                   <div className="flex space-x-2 shrink-0">
-                      <Button onClick={(e) => { e.stopPropagation(); playClickSound?.(); setSelectedLessonId(lesson.lessonId); handleSetView('lessonLeaderboard'); }} className="bg-teal-500 hover:bg-teal-600 shadow-lg shadow-teal-300 p-3 rounded-full" title="Lesson Scores"><Award className="w-5 h-5" /></Button>
+                      <span className="p-2 text-teal-600" title="Scores"><Award className="w-6 h-6" /></span>
                   </div>
                 </div>
               ))}
@@ -1593,7 +1595,6 @@ const HomeView = React.memo(({ handleSetView }) => (
       <h1 className="text-5xl font-extrabold text-blue-700"><span className="block text-6xl mb-2">📚</span>Smart Study</h1>
       <div className="space-y-4">
         <Button onClick={() => handleSetView(localStorage.getItem('smartstudy_teacher_verified') === 'true' ? 'teacherLogin' : 'teacherPasscode')} className="w-full bg-purple-500 hover:bg-purple-600 shadow-lg shadow-purple-300"><User className="w-5 h-5 mr-2" /> Teacher</Button>
-        <Button onClick={() => handleSetView('studentLogin')} className="w-full bg-teal-500 hover:bg-teal-600 shadow-lg shadow-teal-300"><Users className="w-5 h-5 mr-2" /> Student</Button>
       </div>
     </Card>
   </div>
@@ -3295,6 +3296,9 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
     if (entryRequest?.onAgeLevelChosen) {
       try { await entryRequest.onAgeLevelChosen(studentAgeLevel); } catch (e) { console.error('Error saving age level:', e); }
     }
+    // The class comes from the lesson the teacher assigned, so go straight into it
+    // (no Class ID, no class list). Only without an assigned class is the list shown.
+    if (entryRequest?.classId) { handleSelectClassFromPicker(entryRequest.classId); return; }
     setView('classPicker');
   };
 
