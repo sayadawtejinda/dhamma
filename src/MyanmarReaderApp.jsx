@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { readerTrophyCount, readerProgressFromTrophies } from './readerProgress';
 import { Play, Volume2, VolumeX, Lock, Delete, RotateCcw, BookOpen, DownloadCloud, FileText, Library, Settings, X, Plus, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { collection, doc, getDoc, getDocs, setDoc, updateDoc, onSnapshot, query, where, serverTimestamp, increment } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, setDoc, updateDoc, onSnapshot, query, where, serverTimestamp, increment, Timestamp } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { presenceIntervalMs, listenLiveOrOnce } from './presenceDay';
 import { rosterDocRefByUid, migrateNameKeyedRosterDoc } from './studentRosterIdentity';
@@ -960,12 +960,26 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
 
   // Full live roster — same data feeds both the teacher's view and every
   // student's own "who else is online" panel, so they see identical info.
+  // Cost: the roster holds every student who ever opened the Reader (about 90
+  // docs) but only the last week matters, so ask for just those (about 30).
+  // A student's own device only needs "who is online right now" for the small
+  // badge, so it asks for the last 10 minutes only (a handful of docs); the
+  // week-long list is fetched once, when they open the 📚 Students panel.
+  const rosterSince = (ms) => query(collection(db, READER_ROSTER_PATH), where('lastSeen', '>', Timestamp.fromMillis(Date.now() - ms)));
   useEffect(() => {
-    const unsub = listenLiveOrOnce(collection(db, READER_ROSTER_PATH), (snap) => {
+    const unsub = listenLiveOrOnce(rosterSince(isTeacherMode ? 7 * 24 * 60 * 60 * 1000 : 10 * 60 * 1000), (snap) => {
       setOnlineStudents(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     }, e => console.error('Roster listen error:', e), isTeacherMode);
     return () => unsub();
   }, [isTeacherMode]);
+  const weekRosterLoadedRef = useRef(false);
+  useEffect(() => {
+    if (!showOnlinePanel || isTeacherMode || weekRosterLoadedRef.current) return;
+    weekRosterLoadedRef.current = true;
+    getDocs(rosterSince(7 * 24 * 60 * 60 * 1000))
+      .then(snap => setOnlineStudents(snap.docs.map(d => ({ id: d.id, ...d.data() }))))
+      .catch(e => { weekRosterLoadedRef.current = false; console.error('Roster load error:', e); });
+  }, [showOnlinePanel, isTeacherMode]);
 
   // Ticks every 30s so "online" (last seen within 5 min) and the weekly
   // roster view both stay current without needing a page reload — a closed

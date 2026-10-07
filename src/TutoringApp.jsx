@@ -8142,8 +8142,13 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
   // Chapter X / 29" progress display and which chapter is shown/unlocked
   // next.
   const [myanmarReaderPendingScoreDocs, setMyanmarReaderPendingScoreDocs] = useState([]);
+  // True once the effect below has finished working out the sheets that need a
+  // trophy. If a student submits before that (slow connection), the submit
+  // works it out itself instead of sending a report with no trophy request.
+  const readerPendingReadyRef = useRef(false);
   useEffect(() => {
     const session = redoSession || activeSession;
+    readerPendingReadyRef.current = false;
     if (!showFeedbackModal || !session || !studentProfile?.name) { setMyanmarReaderPendingScoreDocs([]); return; }
     if (!MYANMAR_READER_APP_URL || !session.lessonLink?.startsWith(MYANMAR_READER_APP_URL)) { setMyanmarReaderPendingScoreDocs([]); return; }
     (async () => {
@@ -8152,7 +8157,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           collection(db, 'artifacts', 'myanmar-reader-app', 'public', 'data', 'scores'),
           where('studentName', '==', studentProfile.name)
         ));
-        if (snap.empty) { setMyanmarReaderPendingScoreDocs([]); return; }
+        if (snap.empty) { setMyanmarReaderPendingScoreDocs([]); readerPendingReadyRef.current = true; return; }
         const allDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
         // Most recently studied chapter+sheet, complete or not — this is what
@@ -8197,6 +8202,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         }
 
         setMyanmarReaderPendingScoreDocs(needing);
+        readerPendingReadyRef.current = true;
         setRequestTrophyAmount(needing.length > 0 ? needing.length : 1);
         setRequestTrophyChecked(needing.length > 0);
       } catch (e) { console.error('Myanmar Reader auto-fill error:', e); }
@@ -9049,7 +9055,8 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     
     if (autoSubmitTimerRef.current) clearTimeout(autoSubmitTimerRef.current);
     
-    const notes = feedbackNotes.trim() || "Submitted without writing."; 
+    let notes = feedbackNotes.trim() || "Submitted without writing."; 
+    let reportScore = score;
     
     const lessonKey = computeLessonKey(targetSession.lessonTitle, targetSession.lessonLink);
     const earnedTrophiesMap = studentProfile.earnedTrophies || {};
@@ -9063,10 +9070,31 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     const isReaderReport = !!(MYANMAR_READER_APP_URL && targetSession.lessonLink?.startsWith(MYANMAR_READER_APP_URL));
     const enteredUnit = isReaderReport ? previousHighestUnit : (parseFloat(completedUnitInput) || 0);
     const newHighestUnit = Math.max(previousHighestUnit, enteredUnit);
+
+    // Myanmar Reader: the sheets needing a trophy are normally ready by now (the
+    // form works them out when it opens). If the student was quicker than their
+    // connection, work them out here, so the trophy request is never lost.
+    let readerPending = myanmarReaderPendingScoreDocs;
+    if (isReaderReport && !readerPendingReadyRef.current && studentProfile?.name) {
+      try {
+        const snap = await getDocs(query(collection(db, 'artifacts', 'myanmar-reader-app', 'public', 'data', 'scores'), where('studentName', '==', studentProfile.name)));
+        const docsNow = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const held = readerTrophyCount(studentProfile.earnedTrophies, [lessonKey]);
+        readerPending = readerSheetsNeedingTrophy(docsNow, held);
+        const tsOf = (d) => d.completedAt?.toMillis ? d.completedAt.toMillis() : (d.timestamp?.toMillis ? d.timestamp.toMillis() : 0);
+        const newest = (list) => list.reduce((best, d) => (!best || tsOf(d) > tsOf(best) ? d : best), null);
+        const reportOn = newest(readerPending.map(e => e.docs[0])) || newest(docsNow);
+        if (reportOn) {
+          if (!reportScore) reportScore = `${reportOn.score ?? 0}/1000`;
+          if (!feedbackNotes.trim()) notes = `Chapter ${reportOn.chapterNum} (Sheet ${reportOn.sheetName})`;
+        }
+      } catch (e) { console.error('Could not work out Myanmar Reader trophies at submit:', e); }
+    }
+
     
     try {
       await updateDoc(doc(db, `${publicDataPath}/studySessions`, targetSession.id), {
-        endTime: serverTimestamp(), feedbackNotes: notes, score: score, completedUnit: enteredUnit,
+        endTime: serverTimestamp(), feedbackNotes: notes, score: reportScore, completedUnit: enteredUnit,
         lessonUnitLabel: targetSession.lessonUnitLabel || 'Chapter',
         previousCompletedUnit: previousHighestUnit
       });
@@ -9122,7 +9150,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         // lesson can still give. How far along the student is does NOT come
         // into it any more: that used to be the typed "completed up to" number,
         // so reporting a far-ahead chapter produced a pile of trophy requests.
-        const cappedAmount = Math.min(myanmarReaderPendingScoreDocs.length, remainingTrophies);
+        const cappedAmount = Math.min(readerPending.length, remainingTrophies);
         if (cappedAmount > 0) {
           studentUpdateData.trophyRequested = true;
           studentUpdateData.requestedTrophyAmount = cappedAmount;
@@ -9131,7 +9159,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           studentUpdateData.requestedTrophyLessonLink = targetSession.lessonLink || null;
           studentUpdateData.requestedTrophySessionId = targetSession.id;
         }
-        if (myanmarReaderPendingScoreDocs.length > 0) {
+        if (readerPending.length > 0) {
           // Mark EVERY pending sheet as requested (not just the ones inside
           // the cap) so sheets beyond what's still owed -- which, given the
           // lesson's fixed trophy ceiling, can only mean they were already
@@ -9139,7 +9167,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           // session instead of re-triggering this same bogus request forever.
           try {
             const batch = writeBatch(db);
-            myanmarReaderPendingScoreDocs.forEach(sheet => {
+            readerPending.forEach(sheet => {
               sheet.docs.forEach(d => {
                 batch.update(doc(db, 'artifacts', 'myanmar-reader-app', 'public', 'data', 'scores', d.id), { trophyRequested: true });
               });
@@ -9283,7 +9311,18 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
   // when they were sent), else when it was sent.
   const lessonMs = (ts) => (ts?.toDate ? ts.toDate().getTime() : 0);
   const activityMs = (l) => (l.status === 'reported' && l.reportedAt ? lessonMs(l.reportedAt) : lessonMs(l.sentAt));
-  const displayGroup = (l) => (l.status !== 'reported' && l.isPreSend === false ? 0 : (l.status !== 'reported' && l.isPreSend === true ? 1 : 2));
+  // A lesson the student opened ('started') but never reported, and that was sent
+  // BEFORE their latest report, is an old leftover: it no longer sits above the
+  // lesson they just reported (it joins the "everything else" group by its send
+  // time). A never-opened ('pending') fresh send, or anything sent after the
+  // latest report, still comes first.
+  const lastReportMs = availableLessons.reduce((m, l) => (l.status === 'reported' ? Math.max(m, lessonMs(l.reportedAt)) : m), 0);
+  const displayGroup = (l) => {
+    if (l.status === 'reported') return 2;
+    if (l.isPreSend === true) return 1;
+    if (l.isPreSend === false) return (l.status === 'started' && lessonMs(l.sentAt) < lastReportMs) ? 2 : 0;
+    return 2;
+  };
   const visibleLessons = [...visibleUnordered].sort((a, b) => {
     const ga = displayGroup(a), gb = displayGroup(b);
     if (ga !== gb) return ga - gb;
