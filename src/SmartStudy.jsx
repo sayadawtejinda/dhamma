@@ -1766,7 +1766,7 @@ const BirdRescueGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
   };
 
   return (
-    <div className="h-full relative overflow-hidden text-white" style={{ background: 'linear-gradient(180deg,#7dd3fc 0%,#bae6fd 55%,#86efac 100%)' }}>
+    <div className="relative overflow-hidden text-white" style={{ height: '100vh', minHeight: 420, background: 'linear-gradient(180deg,#7dd3fc 0%,#bae6fd 55%,#86efac 100%)' }}>
       <style>{`
         @keyframes cagePop { 0% { transform: scale(0) } 70% { transform: scale(1.15) } 100% { transform: scale(1) } }
         @keyframes birdHop { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-6px) } }
