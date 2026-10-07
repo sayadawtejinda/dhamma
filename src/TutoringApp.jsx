@@ -415,6 +415,16 @@ const sanitizePoemsKey = (key) => (key || 'unknown').replace(/[.$#/\[\]]/g, '_')
 const isMyanmarPoemsUrl = (link) =>
   link === 'myanmarpoems://' ||
   (groupSchemeOfLink(link) === 'speakingmyanmar://' && extractGroupPartKey(link) === 'myanmarpoems');
+// What the Report shows as "completed" for Poems: the poems the teacher's
+// trophies already cover (2 per trophy) plus the poems this student has
+// recited since that are NOT yet covered by a trophy (poem number at or past
+// that point). Counting every stored poem id instead -- which is what this
+// used to do -- gave a small number (e.g. 6) that was always below what they
+// had already been paid for (e.g. 30), so new poems never earned a trophy.
+const poemUnitsForReport = (ids, poemTrophies) => {
+  const floor = Math.max(0, Math.floor(poemTrophies || 0)) * 2;
+  return floor + (ids || []).filter(i => Number.isInteger(i) && i >= floor).length;
+};
 // Same idea for Myanmar Number Learning -- standalone (numberlearning://) or
 // as Speaking Myanmar's Part 2. Its own roster doc's completedLevels is what
 // the Report auto-fill reads.
@@ -8795,9 +8805,10 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       const stuName = studentProfile?.name;
       if (stuName) {
         try {
-          const rosterSnap = await readAppRoster(MYANMAR_POEMS_APP_ID, studentUid, sanitizePoemsKey, stuName);
-          const completedPoemIds = rosterSnap.exists() && Array.isArray(rosterSnap.data().completedPoemIds) ? rosterSnap.data().completedPoemIds : [];
-          if (completedPoemIds.length > 0) handleCompletedUnitChange(String(completedPoemIds.length));
+          poemUnitsRef.current = null;
+          const poemUnits = await fetchPoemUnits(activeSession);
+          poemUnitsRef.current = poemUnits;
+          if (poemUnits > 0) handleCompletedUnitChange(String(poemUnits));
         } catch (e) { console.error('Myanmar Poems progress fetch:', e); }
       }
     }
@@ -8945,9 +8956,10 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       const stuName = studentProfile?.name;
       if (stuName) {
         try {
-          const rosterSnap = await readAppRoster(MYANMAR_POEMS_APP_ID, studentUid, sanitizePoemsKey, stuName);
-          const completedPoemIds = rosterSnap.exists() && Array.isArray(rosterSnap.data().completedPoemIds) ? rosterSnap.data().completedPoemIds : [];
-          if (completedPoemIds.length > 0) handleCompletedUnitChange(String(completedPoemIds.length));
+          poemUnitsRef.current = null;
+          const poemUnits = await fetchPoemUnits(session);
+          poemUnitsRef.current = poemUnits;
+          if (poemUnits > 0) handleCompletedUnitChange(String(poemUnits));
         } catch (e) { console.error('Myanmar Poems redo fetch:', e); }
       }
     }
@@ -9048,6 +9060,18 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     }
   };
   
+  // Poems: the number the Report should show as "completed" (see poemUnitsForReport).
+  const poemUnitsRef = useRef(null); // null until the Report form has worked it out
+  const fetchPoemUnits = async (session) => {
+    const stuName = studentProfile?.name;
+    if (!stuName) return 0;
+    const rosterSnap = await readAppRoster(MYANMAR_POEMS_APP_ID, studentUid, sanitizePoemsKey, stuName);
+    const ids = rosterSnap.exists() && Array.isArray(rosterSnap.data().completedPoemIds) ? rosterSnap.data().completedPoemIds : [];
+    const et = studentProfile?.earnedTrophies || {};
+    const lk = computeLessonKey(session.lessonTitle, session.lessonLink);
+    return poemUnitsForReport(ids, Math.max(et['Poem'] || 0, et[lk] || 0));
+  };
+
   const handleSubmitFeedback = async (e) => {
     e.preventDefault();
     const targetSession = redoSession || activeSession;
@@ -9068,7 +9092,13 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     // Myanmar Reader progress is the trophies recognised so far, never a typed
     // number (see readerProgress.js).
     const isReaderReport = !!(MYANMAR_READER_APP_URL && targetSession.lessonLink?.startsWith(MYANMAR_READER_APP_URL));
-    const enteredUnit = isReaderReport ? previousHighestUnit : (parseFloat(completedUnitInput) || 0);
+    // Poems: if the form's background load had not finished (slow connection),
+    // work the number out now so the trophy is not lost.
+    let poemUnitsNow = 0;
+    if (isMyanmarPoemsUrl(targetSession.lessonLink) && poemUnitsRef.current === null) {
+      try { poemUnitsNow = await fetchPoemUnits(targetSession); } catch (err) { console.error('Poems progress at submit:', err); }
+    }
+    const enteredUnit = isReaderReport ? previousHighestUnit : Math.max(parseFloat(completedUnitInput) || 0, poemUnitsNow);
     const newHighestUnit = Math.max(previousHighestUnit, enteredUnit);
 
     // Myanmar Reader: the sheets needing a trophy are normally ready by now (the
@@ -9179,7 +9209,10 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         const unitCount = targetSession.lessonUnitCount || 0;
         if (unitCount > 0 && maxAvailable > 0) {
           const deservedSoFar = Math.min(maxAvailable, Math.floor((newHighestUnit * maxAvailable) / unitCount));
-          const autoAmount = Math.max(0, deservedSoFar - previouslyEarned);
+          let autoAmount = Math.max(0, deservedSoFar - previouslyEarned);
+          // Poems: one trophy per report, however many new poems were recited; any
+          // others still waiting come with the next report (they stay counted).
+          if (isMyanmarPoemsUrl(targetSession.lessonLink)) autoAmount = Math.min(1, autoAmount);
           if (autoAmount > 0) {
             studentUpdateData.trophyRequested = true;
             studentUpdateData.requestedTrophyAmount = autoAmount;
