@@ -1,3 +1,4 @@
+import { getAttendedWeeks } from './studentWeekly';
 import React, { useEffect, useRef, useState } from 'react';
 import { collection, query, where, getDocs, doc, getDoc, getDocFromServer, setDoc, updateDoc, deleteDoc, serverTimestamp, increment, runTransaction } from 'firebase/firestore';
 import { db } from './firebase';
@@ -1206,21 +1207,27 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
         // exactly the cache-prone read this is avoiding, so on a genuine
         // failure (e.g. actually offline) this falls through to the catch
         // block below instead of silently risking the same bug.
+        // Weeks attended: from the static weekly file (see studentWeekly.js) -- only
+        // if that is missing is the student's whole schedule/session history read.
+        const savedWeeks = await getAttendedWeeks(studentUid);
         const [rosterSnap, scheduleSnap, sessionsSnap] = await Promise.all([
           rosterRef ? getDocFromServer(rosterRef) : Promise.resolve(null),
-          getDocs(query(collection(db, `${publicDataPath}/teacherSchedule`), where('studentUid', '==', studentUid))),
-          getDocs(query(collection(db, `${publicDataPath}/studySessions`), where('studentUid', '==', studentUid))),
+          savedWeeks != null ? Promise.resolve(null) : getDocs(query(collection(db, `${publicDataPath}/teacherSchedule`), where('studentUid', '==', studentUid))),
+          savedWeeks != null ? Promise.resolve(null) : getDocs(query(collection(db, `${publicDataPath}/studySessions`), where('studentUid', '==', studentUid))),
         ]);
 
-        const schedule = scheduleSnap.docs.map(d => d.data());
-        const sessions = sessionsSnap.docs.map(d => d.data());
-        const now = new Date();
-        const attendedWeeks = new Set(
-          schedule
-            .filter(e => e.endTime?.toDate?.() < now && getAttendanceStatus(e, sessions) === 'attended')
-            .map(e => getWeekKey(e.startTime.toDate()))
-        );
-        if (isMounted) { setBodhiStageIndex(getBodhiStageIndex(attendedWeeks.size * 7)); setBodhiWeeksGrown(attendedWeeks.size); }
+        let weeksGrown = savedWeeks;
+        if (weeksGrown == null) {
+          const schedule = scheduleSnap.docs.map(d => d.data());
+          const sessions = sessionsSnap.docs.map(d => d.data());
+          const now = new Date();
+          weeksGrown = new Set(
+            schedule
+              .filter(e => e.endTime?.toDate?.() < now && getAttendanceStatus(e, sessions) === 'attended')
+              .map(e => getWeekKey(e.startTime.toDate()))
+          ).size;
+        }
+        if (isMounted) { setBodhiStageIndex(getBodhiStageIndex(weeksGrown * 7)); setBodhiWeeksGrown(weeksGrown); }
 
         if (rosterSnap && rosterSnap.exists()) {
           const data = rosterSnap.data();

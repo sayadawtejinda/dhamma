@@ -206,6 +206,67 @@ async function main() {
   for (const [cid, reflections] of Object.entries(reflByClass)) {
     writeFileSync(join(CLASS_DIR, 'smartstudy-reflections', `${encodeURIComponent(cid)}.json`), JSON.stringify({ generatedAt, reflections }));
   }
+  // ---- Per-student "weeks attended" (all time), for the Bodhi Tree and Shrine Room ----
+  // Both used to read a student's whole schedule + whole session history every time
+  // they were opened. One small static file replaces that (up to a week old).
+  const [allSchedSnap, allSessSnap] = await Promise.all([
+    getDocs(collection(db, `${publicDataPath}/teacherSchedule`)),
+    getDocs(collection(db, `${publicDataPath}/studySessions`)),
+  ]);
+  const allRealSchedule = allSchedSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const allSessions = allSessSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const allSchedule = [...allRealSchedule, ...synthesizeOccurrencesFromRecurringSchedule(recurringSlots, allRealSchedule, startOfYear, now)];
+  const weekKeyOf = (date) => {
+    const day = date.getDay();
+    const monday = new Date(date.getFullYear(), date.getMonth(), date.getDate() + ((day === 0 ? -6 : 1) - day));
+    return monday.toISOString().slice(0, 10);
+  };
+  const sessionDays = new Set(allSessions.filter(s => s.startTime && s.studentUid).map(s => { const d = s.startTime.toDate(); return `${s.studentUid}_${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`; }));
+  const weeksByUid = {};
+  allSchedule.forEach(e => {
+    if (!e.studentUid || e.studentUid === 'offline' || !e.endTime || !e.startTime) return;
+    if (e.endTime.toDate() >= now) return;
+    const d = e.startTime.toDate();
+    const attended = e.overrideStatus === 'attended' || (e.overrideStatus !== 'absent' && sessionDays.has(`${e.studentUid}_${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`));
+    if (!attended) return;
+    (weeksByUid[e.studentUid] = weeksByUid[e.studentUid] || new Set()).add(weekKeyOf(d));
+  });
+  const attendedWeeks = {};
+  Object.entries(weeksByUid).forEach(([uid, set]) => { attendedWeeks[uid] = set.size; });
+  writeFileSync(join(__dirname, '..', 'public', 'studentWeekly.json'), JSON.stringify({ generatedAt, attendedWeeks }));
+
+  // ---- "Who was active this week" for every app's online pill ----
+  // Each app's pill used to read that app's whole roster collection (about 90
+  // docs) whenever it was opened. Now a student's pill reads one of these static
+  // files (the docs active in the last 14 days; the pill itself only lists the last
+  // 7 days). The shared file name is the collection path with / turned into __ .
+  const rosterTargets = [
+    ...['animal-sound-app', 'shrine-room-app', 'bodhi-tree-app', 'burmese-consonant-game-app', 'burmese-learning-games-app', 'consonant-practice-app',
+      'interactive-learning-quiz-app', 'myanmar-consonant-endings-app', 'myanmar-number-learning-app', 'myanmar-part1a-app', 'myanmar-part1and2-app',
+      'myanmar-part1b-app', 'myanmar-part2a-app', 'myanmar-part2b-app', 'myanmar-poems-app', 'myanmar-reader-app', 'myanmar-sound-practice-app',
+      'myanmar-spelling-app', 'myanmar-vowels-learning-app', 'reading-myanmar-app', 'speaking-myanmar-app', 'time-and-calendar-app',
+      'watch-and-learn-app', 'myanmar-speaking-app'].map(a => ({ path: `artifacts/${a}/public/data/roster`, field: 'lastSeen' })),
+    { path: `artifacts/${appId}/public/data/classRoster`, field: 'lastSeen' },
+    { path: 'artifacts/lesson-translator-app-v6/public/data/classRoster', field: 'lastSeen' },
+    { path: 'artifacts/dhammaschool-app/public/data/presence', field: 'lastActive' },
+  ];
+  const plain = (v) => {
+    if (v && typeof v.toMillis === 'function') return v.toMillis();
+    if (Array.isArray(v)) return v.map(plain);
+    if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, plain(x)]));
+    return v;
+  };
+  const msOf = (v) => (v && typeof v.toMillis === 'function') ? v.toMillis() : (typeof v === 'number' ? v : (v && typeof v.seconds === 'number' ? v.seconds * 1000 : 0));
+  const ROSTER_DIR = join(__dirname, '..', 'public', 'rosterSnapshots');
+  mkdirSync(ROSTER_DIR, { recursive: true });
+  const rosterCutoff = Date.now() - 14 * 24 * 60 * 60 * 1000;
+  for (const target of rosterTargets) {
+    try {
+      const snap = await getDocs(collection(db, target.path));
+      const docs = snap.docs.filter(d => msOf(d.data()[target.field]) > rosterCutoff).map(d => ({ id: d.id, ...plain(d.data()) }));
+      writeFileSync(join(ROSTER_DIR, `${target.path.replace(/\//g, '__')}.json`), JSON.stringify({ generatedAt, docs }));
+    } catch (e) { console.error('Roster snapshot failed for', target.path, e.message); }
+  }
   const ABHI = 'artifacts/lesson-translator-app-v6/public/data';
   const [abhiScoresSnap, abhiClassesSnap] = await Promise.all([
     getDocs(collection(db, `${ABHI}/global_scores`)),

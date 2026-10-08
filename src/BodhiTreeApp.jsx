@@ -1,3 +1,4 @@
+import { getAttendedWeeks } from './studentWeekly';
 import React, { useEffect, useRef, useState } from 'react';
 import { collection, query, where, getDocs, doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase';
@@ -732,6 +733,10 @@ export default function BodhiTreeApp({ entryRequest, onExit }) {
     setVisitingAgeDays(null);
     setVisitLoading(true);
     try {
+      const savedWeeks = await getAttendedWeeks(targetUid);
+      if (savedWeeks != null) {
+        setVisitingAgeDays(savedWeeks * 7);
+      } else {
       const [scheduleSnap, sessionsSnap] = await Promise.all([
         getDocs(query(collection(db, `${publicDataPath}/teacherSchedule`), where('studentUid', '==', targetUid))),
         getDocs(query(collection(db, `${publicDataPath}/studySessions`), where('studentUid', '==', targetUid))),
@@ -745,6 +750,7 @@ export default function BodhiTreeApp({ entryRequest, onExit }) {
           .map(e => getWeekKey(e.startTime.toDate()))
       );
       setVisitingAgeDays(attendedWeeks.size * 7);
+      }
       if (studentName) {
         const targetRef = rosterDocRefByUid(db, BODHI_ROSTER_PATH, targetUid);
         const targetSnap = await getDoc(targetRef);
@@ -789,6 +795,10 @@ export default function BodhiTreeApp({ entryRequest, onExit }) {
     let isMounted = true;
     (async () => {
       try {
+        const savedWeeks = await getAttendedWeeks(studentUid);
+        if (savedWeeks != null) {
+          if (isMounted) { setTreeAgeDays(savedWeeks * 7); ageComputedRef.current = true; }
+        } else {
         const [scheduleSnap, sessionsSnap] = await Promise.all([
           getDocs(query(collection(db, `${publicDataPath}/teacherSchedule`), where('studentUid', '==', studentUid))),
           getDocs(query(collection(db, `${publicDataPath}/studySessions`), where('studentUid', '==', studentUid))),
@@ -802,6 +812,7 @@ export default function BodhiTreeApp({ entryRequest, onExit }) {
             .map(e => getWeekKey(e.startTime.toDate()))
         );
         if (isMounted) { setTreeAgeDays(attendedWeeks.size * 7); ageComputedRef.current = true; }
+        }
       } catch (e) {
         console.error('Error loading Bodhi tree data:', e);
       }

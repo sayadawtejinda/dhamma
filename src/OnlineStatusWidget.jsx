@@ -38,16 +38,40 @@ function toMillis(ts) {
 // not-yet-approved students, which shouldn't count as "online" at all.
 // `lastSeenField` lets a roster that names its heartbeat field something
 // other than `lastSeen` (e.g. Dhammaschool's `lastActive`) plug in unchanged.
+// A student's pill reads a static file instead (see scripts/generate-weekly-snapshot.mjs):
+// "who was active this week" as of the last weekly refresh, with no Firestore read.
+// Outside that, i.e. for the teacher, during the Sunday class window (when live "online"
+// dots matter) and for any roster without a file, it reads the roster collection as before.
+const rosterSnapshotCache = new Map();
+const loadRosterSnapshot = (rosterPath) => {
+  if (!rosterSnapshotCache.has(rosterPath)) {
+    rosterSnapshotCache.set(rosterPath, fetch(`${import.meta.env.BASE_URL}rosterSnapshots/${rosterPath.replace(/\//g, '__')}.json`)
+      .then(r => (r.ok ? r.json() : null)).then(j => (j && j.docs) || null).catch(() => null));
+  }
+  return rosterSnapshotCache.get(rosterPath);
+};
+
 export function useOnlineRoster(rosterPath, filterDocs, lastSeenField = 'lastSeen', isTeacherMode = false) {
   const [rosterDocs, setRosterDocs] = useState([]);
   const [nowTick, setNowTick] = useState(Date.now());
 
   useEffect(() => {
     if (!rosterPath) return;
-    const unsub = listenLiveOrOnce(collection(db, rosterPath), (snap) => {
-      setRosterDocs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (e) => console.error('Online roster listen error:', e), isTeacherMode);
-    return () => unsub();
+    let unsub = () => {};
+    let cancelled = false;
+    const readLive = () => {
+      unsub = listenLiveOrOnce(collection(db, rosterPath), (snap) => {
+        setRosterDocs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      }, (e) => console.error('Online roster listen error:', e), isTeacherMode);
+    };
+    if (isTeacherMode || isOnlineStatusDay()) { readLive(); }
+    else {
+      loadRosterSnapshot(rosterPath).then(docs => {
+        if (cancelled) return;
+        if (docs) setRosterDocs(docs); else readLive();
+      });
+    }
+    return () => { cancelled = true; unsub(); };
   }, [rosterPath, isTeacherMode]);
 
   useEffect(() => {
