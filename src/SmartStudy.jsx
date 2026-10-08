@@ -1928,14 +1928,16 @@ const QuizView = React.memo(({ quiz, questionNumber, totalQuestions, timerValue,
 
 // How often a student's open tab re-reads the class-wide leaderboards.
 const CLASS_POLL_MS = 20 * 60 * 1000;
-// The activity bell shows only the latest 100 completions, so a student's screen asks
+// The activity bell shows only the latest 20 completions, so a student's screen asks
 // for just those (needs a one-time Firestore index on classId + timestamp). Until that
 // index exists the query is refused for free and the old full read is used instead.
 let completionsIndexMissing = false;
+// classId -> that class's reflections from the weekly static file (or null if none)
+const reflectionSnapshotCache = new Map();
 const loadCompletionsForClass = async (classId, studentOnly) => {
   if (studentOnly && !completionsIndexMissing) {
     try {
-      return await getDocs(query(getCompletionsCollectionRef(), where("classId", "==", classId), orderBy("timestamp", "desc"), limit(100)));
+      return await getDocs(query(getCompletionsCollectionRef(), where("classId", "==", classId), orderBy("timestamp", "desc"), limit(20)));
     } catch (e) {
       if (e?.code === 'failed-precondition') { completionsIndexMissing = true; console.warn('Completions index missing -- using the full read:', e.message); }
       else throw e;
@@ -2143,7 +2145,7 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
         setHeartCounts(hearts);
         if (reflSnap) setAllReflections(reflSnap.docs.map(d => ({ id: d.id, ...d.data() })));
         if (rosterSnap) setClassRoster(rosterSnap.docs.map(d => d.data()));
-        setCompletionsList(compSnap.docs.map(d => d.data()).sort((a, b) => b.timestamp - a.timestamp).slice(0, 100));
+        setCompletionsList(compSnap.docs.map(d => d.data()).sort((a, b) => b.timestamp - a.timestamp).slice(0, studentOnly ? 20 : 100));
       } catch (e) { console.error("Error loading class data:", e); }
     };
     load();
@@ -2157,20 +2159,40 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
     document.addEventListener('visibilitychange', onVisible);
     return () => { cancelled = true; clearInterval(timer); document.removeEventListener('visibilitychange', onVisible); };
   }, [isAuthReady, classId, teacherLive, classRefreshKey, entryRequest?.mode]);
-  // A student reading a lesson sees classmates' reflections for THAT lesson: fetch
-  // just those (class + lesson), when the lesson is opened.
+  // A student reading a lesson sees classmates' reflections for THAT lesson. The older
+  // ones come from the weekly static file (no Firestore read; classmates' newer ones
+  // appear after the next weekly refresh), and the student's OWN reflections for the
+  // lesson are read live (0-2 docs) so they are never asked to write one again.
+  // If the class has no static file yet, that lesson's reflections are read from
+  // Firestore instead.
   useEffect(() => {
     if (entryRequest?.mode !== 'student' || view !== 'studentReadLesson' || !isAuthReady || !classId || !activeLessonId) return;
     let cancelled = false;
-    getDocs(query(getReflectionsCollectionRef(), where("classId", "==", classId), where("lessonId", "==", activeLessonId)))
-      .then(snap => {
+    (async () => {
+      try {
+        if (!reflectionSnapshotCache.has(classId)) {
+          reflectionSnapshotCache.set(classId, fetch(`${import.meta.env.BASE_URL}classSnapshots/smartstudy-reflections/${encodeURIComponent(classId)}.json`)
+            .then(r => (r.ok ? r.json() : null)).then(j => (j && j.reflections) || null).catch(() => null));
+        }
+        const fromFile = await reflectionSnapshotCache.get(classId);
+        let lessonReflections;
+        if (fromFile) {
+          lessonReflections = fromFile.filter(r => r.lessonId === activeLessonId);
+          if (userName) {
+            const mine = await getDocs(query(getReflectionsCollectionRef(), where("classId", "==", classId), where("lessonId", "==", activeLessonId), where("studentName", "==", userName)));
+            const seen = new Set(lessonReflections.map(r => r.id));
+            mine.docs.forEach(d => { if (!seen.has(d.id)) lessonReflections.push({ id: d.id, ...d.data() }); });
+          }
+        } else {
+          const snap = await getDocs(query(getReflectionsCollectionRef(), where("classId", "==", classId), where("lessonId", "==", activeLessonId)));
+          lessonReflections = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        }
         if (cancelled) return;
-        const fresh = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        setAllReflections(prev => [...prev.filter(r => r.lessonId !== activeLessonId), ...fresh]);
-      })
-      .catch(e => console.error('Error loading lesson reflections:', e));
+        setAllReflections(prev => [...prev.filter(r => r.lessonId !== activeLessonId), ...lessonReflections]);
+      } catch (e) { console.error('Error loading lesson reflections:', e); }
+    })();
     return () => { cancelled = true; };
-  }, [view, classId, activeLessonId, isAuthReady, entryRequest?.mode, classRefreshKey]);
+  }, [view, classId, activeLessonId, isAuthReady, entryRequest?.mode, userName]);
   // allScores = the class-wide base, with THIS student's own live scores
   // laid over it when the base came from the (up to a week old) snapshot, so
   // their own row/rank is always current.

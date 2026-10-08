@@ -192,6 +192,20 @@ async function main() {
   for (const [cid, scores] of Object.entries(ssByClass)) {
     writeFileSync(join(CLASS_DIR, 'smartstudy', `${encodeURIComponent(cid)}.json`), JSON.stringify({ generatedAt, scores }));
   }
+  // Students' reflections, one static file per class, so a student reading a lesson
+  // sees classmates' older reflections without any Firestore read (newer ones show
+  // after the next weekly refresh; the student's own are always read live).
+  mkdirSync(join(CLASS_DIR, 'smartstudy-reflections'), { recursive: true });
+  const ssReflSnap = await getDocs(collection(db, `${publicDataPath}/reflections`));
+  const reflByClass = {};
+  ssReflSnap.docs.forEach(d => {
+    const r = d.data();
+    if (!r.classId || !r.lessonId || !r.text) return;
+    (reflByClass[r.classId] = reflByClass[r.classId] || []).push({ id: d.id, classId: r.classId, lessonId: r.lessonId, studentName: r.studentName, text: r.text, timestamp: r.timestamp });
+  });
+  for (const [cid, reflections] of Object.entries(reflByClass)) {
+    writeFileSync(join(CLASS_DIR, 'smartstudy-reflections', `${encodeURIComponent(cid)}.json`), JSON.stringify({ generatedAt, reflections }));
+  }
   const ABHI = 'artifacts/lesson-translator-app-v6/public/data';
   const [abhiScoresSnap, abhiClassesSnap] = await Promise.all([
     getDocs(collection(db, `${ABHI}/global_scores`)),
