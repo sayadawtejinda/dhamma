@@ -1417,7 +1417,26 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
   const [groups, setGroups] = useState([]); 
   const [viewMode, setViewMode] = useState('send'); 
   const [reportTab, setReportTab] = useState('feedback'); 
-  const [showAllReports, setShowAllReports] = useState(false); 
+  // Feedback Reports: the last 7 days come from the sessions already loaded live; every
+  // earlier week is read from Firestore only when the teacher asks for it (one week at a time).
+  const [olderReportWeeks, setOlderReportWeeks] = useState([]); // [{ label, list }]
+  const [loadingReportWeek, setLoadingReportWeek] = useState(false);
+  const loadPreviousReportWeek = async () => {
+    setLoadingReportWeek(true);
+    try {
+      const k = olderReportWeeks.length + 1;
+      const DAY = 24 * 60 * 60 * 1000;
+      const to = new Date(Date.now() - 7 * k * DAY);
+      const from = new Date(Date.now() - 7 * (k + 1) * DAY);
+      const snap = await getDocs(query(sessionsCollection, where('startTime', '>=', Timestamp.fromDate(from)), where('startTime', '<', Timestamp.fromDate(to))));
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        .filter(x => x.endTime && x.startTime)
+        .sort((a, b) => b.endTime.toDate() - a.endTime.toDate());
+      const fmt = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      setOlderReportWeeks(prev => [...prev, { label: `${fmt(from)} – ${fmt(to)}`, list }]);
+    } catch (e) { alert('Could not load that week: ' + (e.message || e)); }
+    setLoadingReportWeek(false);
+  };
   const [teacherConfigData, setTeacherConfigData] = useState(null);
   const [recoveryPasscodeInput, setRecoveryPasscodeInput] = useState('');
   const [recoveryPasscodeSaving, setRecoveryPasscodeSaving] = useState(false);
@@ -6754,22 +6773,24 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
           </div>
 
           {reportTab === 'feedback' && (() => {
-            const oneMonthAgo = new Date();
-            oneMonthAgo.setDate(oneMonthAgo.getDate() - 30);
-            const recentSessions = showAllReports
-              ? completedSessions
-              : completedSessions.filter(s => s.endTime.toDate() >= oneMonthAgo);
-            const hiddenCount = completedSessions.length - recentSessions.length;
+            const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+            const recentSessions = completedSessions.filter(s => s.endTime.toDate() >= weekAgo);
+            const loadedIds = new Set(recentSessions.map(x => x.id));
+            const reportGroups = [
+              { label: 'Last 7 days', list: recentSessions },
+              ...olderReportWeeks.map(w => ({ label: w.label, list: w.list.filter(x => !loadedIds.has(x.id)) })),
+            ];
 
             return (
               <div className="bg-amber-50/70 backdrop-blur-sm p-6 rounded-xl shadow-lg border border-amber-200">
                 <h3 className="text-xl font-semibold mb-4 text-gray-800">Student Feedback Reports</h3>
-                {!showAllReports && (
-                  <p className="text-sm text-gray-600 mb-4">Showing reports from the last 30 days.</p>
-                )}
+                <p className="text-sm text-gray-600 mb-4">Showing the last 7 days. Earlier weeks are loaded one at a time, only when you ask.</p>
                 <div className="space-y-4 max-h-[600px] overflow-y-auto">
-                  {recentSessions.length === 0 ? <p className="text-gray-500 font-medium">No feedback yet.</p> :
-                    recentSessions.map(session => {
+                  {reportGroups.map((group, gi) => (
+                    <div key={gi} className="space-y-4">
+                      <p className="text-sm font-bold text-amber-800 border-b border-amber-200 pb-1">{group.label}</p>
+                  {group.list.length === 0 ? <p className="text-gray-500 font-medium">No feedback.</p> :
+                    group.list.map(session => {
                       const student = students.find(s => s.id === session.studentUid);
                       return (
                         <div key={session.id} className="bg-white p-4 rounded-lg border border-gray-200">
@@ -6809,21 +6830,22 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
                       )
                     })
                   }
+                    </div>
+                  ))}
                 </div>
-                {!showAllReports && hiddenCount > 0 && (
+                <button
+                  onClick={loadPreviousReportWeek}
+                  disabled={loadingReportWeek}
+                  className="mt-4 w-full bg-amber-500 text-white p-3 rounded-lg font-semibold hover:bg-amber-600 shadow-md disabled:opacity-50"
+                >
+                  {loadingReportWeek ? 'Loading…' : 'Load the previous week'}
+                </button>
+                {olderReportWeeks.length > 0 && (
                   <button
-                    onClick={() => setShowAllReports(true)}
-                    className="mt-4 w-full bg-amber-500 text-white p-3 rounded-lg font-semibold hover:bg-amber-600 shadow-md"
+                    onClick={() => setOlderReportWeeks([])}
+                    className="mt-2 w-full bg-gray-300 text-gray-800 p-3 rounded-lg font-semibold hover:bg-gray-400 shadow-md"
                   >
-                    Show Older Reports ({hiddenCount} more)
-                  </button>
-                )}
-                {showAllReports && (
-                  <button
-                    onClick={() => setShowAllReports(false)}
-                    className="mt-4 w-full bg-gray-300 text-gray-800 p-3 rounded-lg font-semibold hover:bg-gray-400 shadow-md"
-                  >
-                    Show Only Last 30 Days
+                    Back to the last 7 days only
                   </button>
                 )}
               </div>
@@ -7503,6 +7525,7 @@ function StudentDashboard({ user, studentProfile, studentUid, announcements, onO
   // behind a button, so a page students open often stays short and quick.
   const [showOlderLessons, setShowOlderLessons] = useState(false);
   const [showSessionHistory, setShowSessionHistory] = useState(false);
+  const [historyMonths, setHistoryMonths] = useState(1); // how many months back the history reaches
   // The house-illustration background needs landscape width to show
   // everything (shrine/reading/play/dining rooms and the buttons over
   // them) without cropping -- on a phone held upright there isn't enough
@@ -9319,6 +9342,10 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     ? visibleLessons
     : visibleLessons.filter(l => activityMs(l) >= monthAgoMs || (activeSession && activeSession.lessonId === l.id));
   const hiddenOlderLessonCount = visibleLessons.length - shownLessons.length;
+  // Completed Session History reaches back one month at a time.
+  const historyCutoffMs = Date.now() - historyMonths * 30 * 24 * 60 * 60 * 1000;
+  const historySessionsShown = completedSessions.filter(x => (x.endTime?.toDate?.()?.getTime?.() ?? 0) >= historyCutoffMs);
+  const historySessionsHiddenCount = completedSessions.length - historySessionsShown.length;
   // Highlights the 📖 Latest Lesson button the moment the teacher assigns a
   // lesson the student hasn't opened yet (status stays 'pending' until
   // they start it) or while one is actively in progress, so it's obvious
@@ -10037,12 +10064,12 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           <h3 className="text-xl font-semibold mb-1 text-gray-800">Completed Session History</h3>
           <button onClick={() => setShowSessionHistory(false)} className="text-sm text-gray-500 hover:text-gray-800 underline">Hide</button>
         </div>
-        <p className="text-sm text-gray-500 mb-4">All your completed sessions this year.</p>
+        <p className="text-sm text-gray-500 mb-4">{historyMonths === 1 ? 'Showing the last month.' : `Showing the last ${historyMonths} months.`}</p>
         <div className="space-y-3 max-h-96 overflow-y-auto">
-          {completedSessions.length === 0 ? (
-            <p className="text-gray-500">No completed sessions yet.</p>
+          {historySessionsShown.length === 0 ? (
+            <p className="text-gray-500">No completed sessions in this time.</p>
           ) : (
-            completedSessions.map(session => (
+            historySessionsShown.map(session => (
               <div key={session.id} className="bg-emerald-50 p-4 rounded-lg">
                 <p className="font-semibold text-gray-900">{session.lessonTitle}</p>
                 <p className="text-sm text-gray-600">Started: {formatTimestamp(session.startTime)}</p>
@@ -10064,6 +10091,11 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
             ))
           )}
         </div>
+        {historySessionsHiddenCount > 0 && (
+          <button onClick={() => setHistoryMonths(m => m + 1)} className="mt-4 w-full bg-gray-100 border border-gray-300 text-gray-800 p-3 rounded-lg font-semibold hover:bg-gray-200">
+            Show the month before ({historySessionsHiddenCount} more)
+          </button>
+        )}
       </div>
       )}
         </div>
