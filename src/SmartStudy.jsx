@@ -3483,7 +3483,10 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
     };
     if (idx < quizRoundEnd) { goTo(idx + 1, quizRound, quizRoundStart, quizRoundEnd); return; }
     // End of a round of 5: bird game first (coins), then on.
-    if (!fromBreak && quizCoinsEligibleRef.current) { setView('quizBreak'); return; }
+    // No bird game once the quiz is passed: it is played after round 1, and after any
+    // later round that has NOT reached the pass mark (so a pass goes straight to the result).
+    const passedNow = idx >= origLen - 1 && Object.values(quizMasteryRef.current).filter(Boolean).length >= Math.floor(origLen * 0.8);
+    if (!fromBreak && quizCoinsEligibleRef.current && !passedNow) { setView('quizBreak'); return; }
     if (idx < origLen - 1) {
       goTo(idx + 1, quizRound + 1, idx + 1, Math.min(idx + QUIZ_ROUND_SIZE, origLen - 1));
       return;
@@ -3602,7 +3605,7 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
         const quizOrigLen = quizOriginalRef.current.length || quizQuestions.length;
         const inPractice = currentQuestionIndex >= quizOrigLen;
         const roundLast = currentQuestionIndex === quizRoundEnd;
-        return <QuizView quiz={quizQuestions[currentQuestionIndex]} questionNumber={currentQuestionIndex + 1} totalQuestions={quizOrigLen} timerValue={timerValue} feedback={showFeedback} onAnswerSelect={handleAnswerSubmit} onNext={handleNextQuestion} isLastQuestion={roundLast && currentQuestionIndex >= quizOrigLen - 1} totalScore={currentQuizScore} userName={userName} activeLesson={currentLesson} showPreview={showPreview} isSavingScore={isSavingScore} competitors={inPractice ? [] : quizCompetitors} roundNumber={quizRound} roundQuestionNumber={currentQuestionIndex - quizRoundStart + 1} roundTotal={quizRoundEnd - quizRoundStart + 1} isPractice={inPractice} nextLabel={roundLast ? (quizCoinsEligibleRef.current ? 'Bird game 🐦' : (currentQuestionIndex >= quizOrigLen - 1 ? 'Finish' : 'Continue')) : 'Next'} />;
+        return <QuizView quiz={quizQuestions[currentQuestionIndex]} questionNumber={currentQuestionIndex + 1} totalQuestions={quizOrigLen} timerValue={timerValue} feedback={showFeedback} onAnswerSelect={handleAnswerSubmit} onNext={handleNextQuestion} isLastQuestion={roundLast && currentQuestionIndex >= quizOrigLen - 1} totalScore={currentQuizScore} userName={userName} activeLesson={currentLesson} showPreview={showPreview} isSavingScore={isSavingScore} competitors={inPractice ? [] : quizCompetitors} roundNumber={quizRound} roundQuestionNumber={currentQuestionIndex - quizRoundStart + 1} roundTotal={quizRoundEnd - quizRoundStart + 1} isPractice={inPractice} nextLabel={roundLast ? ((quizCoinsEligibleRef.current && !(currentQuestionIndex >= quizOrigLen - 1 && Object.values(quizMasteryRef.current).filter(Boolean).length >= Math.floor(quizOrigLen * 0.8))) ? 'Bird game 🐦' : (currentQuestionIndex >= quizOrigLen - 1 ? 'Finish' : 'Continue')) : 'Next'} />;
       case 'quizBreak':
         return <BirdRescueGame key={quizRound} coinsLeft={birdCoinsLeft} onDone={handleBirdGameDone} />;
       case 'studentProfile': return <StudentProfileView allScores={allScores} selectedName={selectedName} handleSetView={handleSetView} setSelectedLessonId={setSelectedLessonId} playClickSound={playClickSound} setSelectedAgeLevel={setSelectedAgeLevel} previousView={previousView} userName={userName} globalLeaderboardScores={globalLeaderboardScores} heartCounts={heartCounts} myTotalLessonsCompletedAllClasses={myTotalLessonsCompletedAllClasses}/>;
