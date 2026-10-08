@@ -235,6 +235,23 @@ async function main() {
   Object.entries(weeksByUid).forEach(([uid, set]) => { attendedWeeks[uid] = set.size; });
   writeFileSync(join(__dirname, '..', 'public', 'studentWeekly.json'), JSON.stringify({ generatedAt, attendedWeeks }));
 
+  // ---- Each student's schedule + sessions for this year (their login used to read all of it) ----
+  const serialize = (v) => {
+    if (v && typeof v.toMillis === 'function') return { _ms: v.toMillis() };
+    if (Array.isArray(v)) return v.map(serialize);
+    if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, serialize(x)]));
+    return v;
+  };
+  const HISTORY_DIR = join(__dirname, '..', 'public', 'studentHistory');
+  mkdirSync(HISTORY_DIR, { recursive: true });
+  const inYear = (e) => e.startTime && typeof e.startTime.toDate === 'function' && e.startTime.toDate() >= startOfYear;
+  const histByUid = {};
+  allSessions.filter(inYear).forEach(sx => { if (sx.studentUid) (histByUid[sx.studentUid] = histByUid[sx.studentUid] || { sessions: [], schedule: [] }).sessions.push(serialize(sx)); });
+  allRealSchedule.filter(inYear).forEach(e => { if (e.studentUid && e.studentUid !== 'offline') (histByUid[e.studentUid] = histByUid[e.studentUid] || { sessions: [], schedule: [] }).schedule.push(serialize(e)); });
+  for (const [uid, h] of Object.entries(histByUid)) {
+    writeFileSync(join(HISTORY_DIR, `${encodeURIComponent(uid)}.json`), JSON.stringify({ generatedAtMs: Date.now(), ...h }));
+  }
+
   // ---- "Who was active this week" for every app's online pill ----
   // Each app's pill used to read that app's whole roster collection (about 90
   // docs) whenever it was opened. Now a student's pill reads one of these static

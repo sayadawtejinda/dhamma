@@ -4,11 +4,11 @@ name: Weekly snapshot
 # "🏆 Trophies" boards, plus the SmartStudy/Abhidhamma class leaderboards in
 # public/classSnapshots, see scripts/generate-weekly-snapshot.mjs for why
 # this exists as a static file instead of a live Firestore read). Runs
-# every Monday at 09:00 UTC and can also be triggered by hand from the
+# every Monday and every Tuesday at 09:00 UTC (twice, so Monday classes are in by Tuesday) and can also be triggered by hand from the
 # Actions tab.
 on:
   schedule:
-    - cron: "0 9 * * 1"
+    - cron: "0 9 * * 1,2"
   workflow_dispatch:
 
 permissions:
@@ -37,7 +37,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add public/weeklySnapshot.json public/classSnapshots public/studentWeekly.json public/rosterSnapshots
+          git add public/weeklySnapshot.json public/classSnapshots public/studentWeekly.json public/rosterSnapshots public/studentHistory
           if git diff --cached --quiet; then
             echo "No change -- nothing to commit."
           else

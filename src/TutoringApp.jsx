@@ -1,3 +1,4 @@
+import { listenWithHistory } from './studentHistory';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import FestivalBanners from './FestivalBanner';
 import { STAR_MAX_LIVE, STAR_RUN_DAYS } from './starAnnouncementConfig';
@@ -7910,20 +7911,17 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     // (startTime >=) in Firestore requires a composite index. To avoid the
     // query failing silently when that index is missing, we query by
     // studentUid only and filter the date range on the client.
-    const recentQ = query(
-      sessionsCollection,
-      where("studentUid", "==", studentUid)
-    );
-    const unsubRecent = onSnapshot(recentQ, (snapshot) => {
-      // Use start of year so the attendance count matches the teacher's view
-      const startOfYear = new Date(new Date().getFullYear(), 0, 1).getTime();
-      const sessionList = snapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() }))
-        .filter(s => s.endTime && s.startTime && typeof s.startTime.toDate === 'function' && s.startTime.toDate().getTime() >= startOfYear)
-        .map(withCurrentSessionCounts);
-      setMySessions(sessionList);
-    }, (error) => {
-      console.error("Error fetching recent sessions:", error);
+    // Older sessions come from the static weekly file, only the recent ones are read
+    // live (see studentHistory.js).
+    const unsubRecent = listenWithHistory({
+      collectionRef: sessionsCollection, studentUid, kind: 'sessions',
+      onList: (all) => {
+        // Use start of year so the attendance count matches the teacher's view
+        const startOfYear = new Date(new Date().getFullYear(), 0, 1).getTime();
+        setMySessions(all
+          .filter(s => s.endTime && s.startTime && typeof s.startTime.toDate === 'function' && s.startTime.toDate().getTime() >= startOfYear)
+          .map(withCurrentSessionCounts));
+      },
     });
 
     return () => {
@@ -8043,14 +8041,9 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
 
   useEffect(() => {
     if (!studentUid) return;
-    const q = query(teacherScheduleCollection, where("studentUid", "==", studentUid));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const scheduleList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setMySchedule(scheduleList);
-    }, (error) => {
-      console.error("Error fetching student schedule:", error);
-    });
-    return () => unsubscribe();
+    // Older weeks come from the static weekly file, only the recent ones are read live
+    // (see studentHistory.js).
+    return listenWithHistory({ collectionRef: teacherScheduleCollection, studentUid, kind: 'schedule', onList: setMySchedule });
   }, [studentUid]);
 
   // This student's own standing weekly slot(s) -- see recurringScheduleCollection.
