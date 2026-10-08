@@ -14,6 +14,7 @@ import {
   addDoc,
   deleteDoc,
   limit,
+  orderBy,
   runTransaction,
   writeBatch,
   increment
@@ -1927,6 +1928,21 @@ const QuizView = React.memo(({ quiz, questionNumber, totalQuestions, timerValue,
 
 // How often a student's open tab re-reads the class-wide leaderboards.
 const CLASS_POLL_MS = 20 * 60 * 1000;
+// The activity bell shows only the latest 100 completions, so a student's screen asks
+// for just those (needs a one-time Firestore index on classId + timestamp). Until that
+// index exists the query is refused for free and the old full read is used instead.
+let completionsIndexMissing = false;
+const loadCompletionsForClass = async (classId, studentOnly) => {
+  if (studentOnly && !completionsIndexMissing) {
+    try {
+      return await getDocs(query(getCompletionsCollectionRef(), where("classId", "==", classId), orderBy("timestamp", "desc"), limit(100)));
+    } catch (e) {
+      if (e?.code === 'failed-precondition') { completionsIndexMissing = true; console.warn('Completions index missing -- using the full read:', e.message); }
+      else throw e;
+    }
+  }
+  return getDocs(query(getCompletionsCollectionRef(), where("classId", "==", classId)));
+};
 
 const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
   const [currentUserId, setCurrentUserId] = useState(null);
@@ -2117,7 +2133,7 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
           getDocs(query(getStudentHeartsCollectionRef(), where("classId", "==", classId))),
           studentOnly ? Promise.resolve(null) : getDocs(query(getReflectionsCollectionRef(), where("classId", "==", classId))),
           studentOnly ? Promise.resolve(null) : getDocs(query(getRosterCollectionRef(), where("classId", "==", classId))),
-          getDocs(query(getCompletionsCollectionRef(), where("classId", "==", classId))),
+          loadCompletionsForClass(classId, studentOnly),
         ]);
         if (cancelled) return;
         if (snapshotScores) { setScoresBase(snapshotScores); setScoresBaseIsSnapshot(true); }
