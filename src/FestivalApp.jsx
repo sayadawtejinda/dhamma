@@ -388,6 +388,113 @@ function PasukulaPanel({ festival, studentUid, studentName, isTeacherPreview, fo
   );
 }
 
+// Tazaungdaing's scene: the Buddha seated in a big, quiet forest on the Tazaungmon full
+// moon night (the day of the Samannaphala Sutta), monks sitting around Him listening in
+// stillness. `glow` (0-1, how many balloons have gone up today) brightens His halo.
+function Monk({ x, y, s = 1, tone = '#d9741c' }) {
+  return (
+    <g transform={`translate(${x} ${y}) scale(${s})`}>
+      <ellipse cx="0" cy="3" rx="12" ry="3" fill="rgba(0,0,0,.35)" />
+      <path d="M-11 2 Q-11 -13 0 -15 Q11 -13 11 2 Z" fill={tone} />
+      <path d="M-11 2 Q0 7 11 2 Q0 0 -11 2 Z" fill="#a8500f" />
+      <path d="M-4 -14 L7 -3" stroke="#b4560f" strokeWidth="1.2" fill="none" />
+      <ellipse cx="0" cy="-6" rx="3.4" ry="2" fill="#e9b684" />
+      <circle cx="0.8" cy="-18.5" r="4.7" fill="#e9b684" />
+      <path d="M-3.6 -21 Q0.8 -24.6 5 -21" fill="none" stroke="#c99061" strokeWidth="0.8" />
+    </g>
+  );
+}
+
+function ForestScene({ glow }) {
+  const crowns = [-10, 30, 70, 112, 150, 196, 240, 282, 322, 364, 410];
+  const monks = [
+    { x: 146, y: 206, s: 0.95 }, { x: 254, y: 206, s: 0.95 },
+    { x: 108, y: 220, s: 1.05 }, { x: 292, y: 220, s: 1.05 },
+    { x: 70, y: 234, s: 1.15 }, { x: 330, y: 234, s: 1.15 },
+    { x: 168, y: 236, s: 1.12 }, { x: 232, y: 236, s: 1.12 },
+    { x: 30, y: 246, s: 1.22 }, { x: 370, y: 246, s: 1.22 },
+    { x: 120, y: 250, s: 1.25 }, { x: 280, y: 250, s: 1.25 },
+  ];
+  const haloOpacity = 0.45 + glow * 0.5;
+  return (
+    <svg viewBox="0 0 400 270" preserveAspectRatio="xMidYMax meet" className="absolute inset-0 w-full h-full" aria-hidden="true">
+      <defs>
+        <radialGradient id="tzHalo" cx="50%" cy="50%" r="50%">
+          <stop offset="0" stopColor="#fff6c8" stopOpacity="1" />
+          <stop offset="0.45" stopColor="#ffd15c" stopOpacity="0.55" />
+          <stop offset="1" stopColor="#ffb300" stopOpacity="0" />
+        </radialGradient>
+        <linearGradient id="tzGround" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#1f6b4a" />
+          <stop offset="1" stopColor="#0b3a2a" />
+        </linearGradient>
+        <linearGradient id="tzBeam" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#fff2b8" stopOpacity="0.5" />
+          <stop offset="1" stopColor="#fff2b8" stopOpacity="0" />
+        </linearGradient>
+        <linearGradient id="tzTrunk" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stopColor="#3a2a1a" />
+          <stop offset="0.5" stopColor="#5b4128" />
+          <stop offset="1" stopColor="#2c2013" />
+        </linearGradient>
+      </defs>
+
+      {/* far tree line: soft dark crowns across the top */}
+      {crowns.map((cx, i) => (
+        <g key={i} opacity={0.9}>
+          <ellipse cx={cx} cy={22 + (i % 3) * 8} rx={34 + (i % 2) * 8} ry={26 + (i % 3) * 5} fill={i % 2 ? '#0a3025' : '#0d3b2d'} />
+          <ellipse cx={cx + 12} cy={46 + (i % 2) * 8} rx={30} ry={22} fill="#0b3328" />
+        </g>
+      ))}
+      {/* two great trunks framing the scene */}
+      <rect x="-6" y="30" width="34" height="230" fill="url(#tzTrunk)" />
+      <rect x="372" y="30" width="34" height="230" fill="url(#tzTrunk)" />
+      <ellipse cx="12" cy="40" rx="62" ry="36" fill="#0b3a2b" />
+      <ellipse cx="388" cy="40" rx="62" ry="36" fill="#0b3a2b" />
+      <ellipse cx="40" cy="78" rx="40" ry="24" fill="#0e4430" />
+      <ellipse cx="360" cy="78" rx="40" ry="24" fill="#0e4430" />
+      {/* slender trees behind */}
+      {[64, 98, 302, 336].map((tx, i) => (
+        <g key={tx}>
+          <rect x={tx} y={70 + (i % 2) * 6} width="7" height="150" fill="#33261a" opacity="0.85" />
+          <ellipse cx={tx + 3.5} cy={66 + (i % 2) * 6} rx="26" ry="20" fill="#0c3a2b" opacity="0.95" />
+        </g>
+      ))}
+
+      {/* the ground, and a soft light falling on the Buddha from above */}
+      <path d="M0 196 Q200 168 400 196 L400 270 L0 270 Z" fill="url(#tzGround)" />
+      <path d="M170 0 L230 0 L292 200 L108 200 Z" fill="url(#tzBeam)" opacity={0.35 + glow * 0.4} />
+
+      {/* the monks, listening */}
+      {monks.map((m, i) => <Monk key={i} x={m.x} y={m.y} s={m.s} tone={i % 3 === 0 ? '#c8641a' : '#d9741c'} />)}
+
+      {/* the Buddha, seated in the middle on a lotus */}
+      <g transform="translate(200 196)">
+        <circle cx="0" cy="-48" r="44" fill="url(#tzHalo)" opacity={haloOpacity}>
+          <animate attributeName="r" values="42;47;42" dur="5s" repeatCount="indefinite" />
+        </circle>
+        <ellipse cx="0" cy="5" rx="44" ry="8" fill="rgba(0,0,0,.35)" />
+        {[-30, -15, 0, 15, 30].map((px, i) => (
+          <ellipse key={px} cx={px} cy={2 + Math.abs(px) * 0.05} rx="11" ry="6" fill={i % 2 ? '#fbd0e0' : '#fff0f5'} stroke="#e7a3bd" strokeWidth="0.6" />
+        ))}
+        <ellipse cx="0" cy="-3" rx="34" ry="8" fill="#e08a12" />
+        <path d="M-22 -3 Q-24 -40 0 -46 Q24 -40 22 -3 Z" fill="#f0a020" />
+        <path d="M-6 -44 L12 -10" stroke="#c9770b" strokeWidth="1.4" fill="none" />
+        <ellipse cx="0" cy="-11" rx="10" ry="4" fill="#eebb86" />
+        <circle cx="0" cy="-55" r="8.4" fill="#eebb86" />
+        <path d="M-3 -63 Q0 -73 3 -63 Z" fill="#eebb86" />
+        <path d="M-5 -56.4 Q-2.6 -55 -1 -56.4 M1 -56.4 Q2.6 -55 5 -56.4" stroke="#7a4b24" strokeWidth="0.8" fill="none" strokeLinecap="round" />
+        <path d="M-2 -52 Q0 -50.6 2 -52" stroke="#9a5a30" strokeWidth="0.7" fill="none" strokeLinecap="round" />
+      </g>
+
+      {/* a few fireflies */}
+      {[[60, 150], [130, 120], [270, 130], [335, 160], [200, 100], [95, 190], [305, 185]].map(([fx, fy], i) => (
+        <circle key={i} cx={fx} cy={fy} r="1.6" fill="#f6ff9a" style={{ animation: `fsTwinkle ${2.4 + (i % 4) * 0.7}s ease-in-out ${i * 0.4}s infinite` }} />
+      ))}
+    </svg>
+  );
+}
+
 export default function FestivalApp({ entryRequest, onExit }) {
   const isTeacherPreview = !entryRequest?.studentUid;
   const studentUid = entryRequest?.studentUid;
@@ -646,7 +753,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
   const kadawDoneCount = festival.kadaw.recipients.filter(r => kadawToday.has(r.id)).length;
 
   return (
-    <div className="relative min-h-screen flex flex-col overflow-hidden text-white" style={{ background: 'linear-gradient(180deg,#070b22 0%,#17104a 45%,#3a1b5c 78%,#5a2a52 100%)' }}>
+    <div className="relative min-h-screen flex flex-col overflow-hidden text-white" style={{ background: festival.scene === 'balloons-night' ? 'linear-gradient(180deg,#04141f 0%,#07302d 40%,#0d4a3a 72%,#0a3024 100%)' : 'linear-gradient(180deg,#070b22 0%,#17104a 45%,#3a1b5c 78%,#5a2a52 100%)' }}>
       <style>{`
         @keyframes fsTwinkle { 0%,100% { opacity: .25 } 50% { opacity: 1 } }
         @keyframes fsFlicker { 0%,100% { transform: translate(-50%,-50%) scale(1); opacity: .85 } 35% { transform: translate(-50%,-50%) scale(1.12); opacity: 1 } 70% { transform: translate(-50%,-50%) scale(.94); opacity: .75 } }
@@ -711,10 +818,16 @@ export default function FestivalApp({ entryRequest, onExit }) {
 
       {/* Scene */}
       <div className="relative z-10 flex-1" style={{ minHeight: 380 }}>
-        <div className="absolute left-1/2 -translate-x-1/2" style={{ top: '4%', height: '88%' }}>
-          <Pagoda glow={glow} />
-        </div>
-        <div className="absolute inset-x-0 bottom-0 h-[18%] pointer-events-none" style={{ background: 'linear-gradient(180deg,transparent,rgba(20,8,40,.75))' }} />
+        {festival.scene === 'balloons-night' ? (
+          <ForestScene glow={glow} />
+        ) : (
+          <>
+            <div className="absolute left-1/2 -translate-x-1/2" style={{ top: '4%', height: '88%' }}>
+              <Pagoda glow={glow} />
+            </div>
+            <div className="absolute inset-x-0 bottom-0 h-[18%] pointer-events-none" style={{ background: 'linear-gradient(180deg,transparent,rgba(20,8,40,.75))' }} />
+          </>
+        )}
         {festival.lamps.style !== 'balloon' && LAMP_SPOTS.slice(0, festival.lamps.perDay).map((spot, i) => (i >= 10 ? (
           <div key={`post-${i}`} className="absolute pointer-events-none rounded-sm" style={{ left: `${spot.x}%`, top: `${spot.y}%`, bottom: '6%', width: 4, marginLeft: -2, marginTop: 18, background: 'linear-gradient(180deg,#8d6e63,#3e2723)' }} />
         ) : null))}
