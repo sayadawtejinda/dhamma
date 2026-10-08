@@ -1324,85 +1324,33 @@ function StarAnnouncementModal({ isOpen, onClose, students, onSend }) {
 }
 
 function AttendanceReports({ students }) {
-  const [period, setPeriod] = useState('monthly'); 
-  // The dashboard only keeps the last two weeks live (cost control -- the
-  // full year is ~13,000 docs), so this report reads the year once, on demand.
-  const [full, setFull] = useState(null);
-  const [loadingFull, setLoadingFull] = useState(false);
-  const loadFull = async () => {
-    setLoadingFull(true);
-    try {
-      const startOfYear = Timestamp.fromDate(new Date(new Date().getFullYear(), 0, 1));
-      const [schedSnap, sessSnap] = await Promise.all([
-        getDocs(query(teacherScheduleCollection, where('startTime', '>=', startOfYear))),
-        getDocs(query(sessionsCollection, where('startTime', '>=', startOfYear))),
-      ]);
-      setFull({ schedule: schedSnap.docs.map(d => ({ id: d.id, ...d.data() })), sessions: sessSnap.docs.map(d => ({ id: d.id, ...d.data() })) });
-    } catch (e) { alert('Could not load the report: ' + (e.message || e)); }
-    setLoadingFull(false);
-  };
-  const teacherSchedule = full?.schedule || [];
-  const sessions = full?.sessions || [];
+  const [period, setPeriod] = useState('monthly');
+  // Per-student month and year totals come from the weekly static snapshot
+  // (weeklySnapshot.json, rewritten every Monday and Tuesday by the snapshot job),
+  // so this report costs no Firestore reads at all and shows itself on its own.
+  // It is as of the last snapshot, not live.
+  const [snapshot, setSnapshot] = useState(null); // null = loading, false = could not load
+  useEffect(() => {
+    let cancelled = false;
+    fetchWeeklySnapshot().then(d => { if (!cancelled) setSnapshot(d || false); }).catch(() => { if (!cancelled) setSnapshot(false); });
+    return () => { cancelled = true; };
+  }, []);
 
   const reportData = useMemo(() => {
-    const now = new Date();
-    let startDate = new Date();
-    if (period === 'monthly') {
-      startDate.setDate(1);
-      startDate.setHours(0, 0, 0, 0);
-    } else {
-      startDate.setMonth(0, 1);
-      startDate.setHours(0, 0, 0, 0);
-    }
+    const list = period === 'monthly' ? snapshot?.attendanceMonthlyRankedList : snapshot?.attendanceRankedList;
+    if (!list) return [];
+    const activeIds = new Set(students.filter(s => s.isActive).map(s => s.id));
+    return list
+      .filter(r => r.total > 0 && (activeIds.size === 0 || activeIds.has(r.id)))
+      .map(r => ({ name: r.name, displayId: r.isOffline ? 'Offline' : r.id, total: r.total, attended: r.attended, absent: r.absent }))
+      .sort((a, b) => (b.attended / b.total) - (a.attended / a.total));
+  }, [period, students, snapshot]);
 
-    const pastSchedules = teacherSchedule.filter(s => {
-      const d = s.startTime.toDate();
-      return d >= startDate && d <= now;
-    });
-
-    const offlineNames = [...new Set(pastSchedules.filter(s => s.studentUid === 'offline').map(s => s.studentName))];
-    const offlineStudents = offlineNames.map(name => ({ id: 'offline', name: name, displayId: 'Offline' }));
-    const allStudentsToReport = [...students.filter(s => s.isActive), ...offlineStudents];
-
-    const report = allStudentsToReport.map(student => {
-      const studentSchedules = pastSchedules.filter(s => s.studentUid === student.id || (s.studentUid === 'offline' && s.studentName === student.name));
-      let attended = 0;
-      let absent = 0;
-
-      studentSchedules.forEach(entry => {
-        if (entry.overrideStatus === 'attended') {
-          attended++;
-        } else if (entry.overrideStatus === 'absent') {
-          absent++;
-        } else if (entry.studentUid !== 'offline') {
-          const entryDate = entry.startTime.toDate();
-          const startOfDay = new Date(entryDate.getFullYear(), entryDate.getMonth(), entryDate.getDate(), 0, 0, 0);
-          const endOfDay = new Date(entryDate.getFullYear(), entryDate.getMonth(), entryDate.getDate(), 23, 59, 59);
-          const didAttend = sessions.some(s => s.studentUid === student.id && s.startTime.toDate() >= startOfDay && s.startTime.toDate() <= endOfDay);
-          if (didAttend) attended++;
-          else absent++;
-        } else {
-          absent++; 
-        }
-      });
-
-      return {
-        name: student.name,
-        displayId: student.displayId,
-        total: studentSchedules.length,
-        attended,
-        absent
-      };
-    });
-
-    return report.filter(r => r.total > 0).sort((a, b) => (b.attended / b.total) - (a.attended / a.total));
-  }, [period, students, teacherSchedule, sessions]);
-
-  if (!full) {
+  if (snapshot === null || snapshot === false || (period === 'monthly' && !snapshot.attendanceMonthlyRankedList)) {
     return (
       <div className="bg-white/90 backdrop-blur-sm p-6 rounded-xl shadow-lg border border-indigo-200 mt-6 text-center">
         <h3 className="text-xl font-semibold text-indigo-800 mb-3">Attendance Overview</h3>
-        <button onClick={loadFull} disabled={loadingFull} className="px-5 py-3 rounded-xl bg-indigo-600 text-white font-bold disabled:opacity-50">{loadingFull ? 'Loading...' : 'Load this year report'}</button>
+        <p className="text-gray-500">{snapshot === null ? 'Loading…' : 'The weekly report file is not ready yet. It is refreshed every Monday and Tuesday.'}</p>
       </div>
     );
   }
@@ -1410,7 +1358,10 @@ function AttendanceReports({ students }) {
   return (
     <div className="bg-white/90 backdrop-blur-sm p-6 rounded-xl shadow-lg border border-indigo-200 mt-6">
       <div className="flex justify-between items-center mb-6">
-        <h3 className="text-xl font-semibold text-indigo-800">Attendance Overview</h3>
+        <div>
+          <h3 className="text-xl font-semibold text-indigo-800">Attendance Overview</h3>
+          <p className="text-xs text-gray-500">As of {snapshot.generatedAt ? new Date(snapshot.generatedAt).toLocaleString() : 'the last weekly refresh'} (refreshed every Monday and Tuesday)</p>
+        </div>
         <div className="flex rounded-lg bg-gray-100 p-1 shadow-inner">
           <button onClick={() => setPeriod('monthly')} className={`px-4 py-2 rounded-lg font-semibold text-sm transition-colors ${period === 'monthly' ? 'bg-white shadow text-indigo-600' : 'text-gray-600 hover:text-indigo-600'}`}>This Month</button>
           <button onClick={() => setPeriod('yearly')} className={`px-4 py-2 rounded-lg font-semibold text-sm transition-colors ${period === 'yearly' ? 'bg-white shadow text-indigo-600' : 'text-gray-600 hover:text-indigo-600'}`}>This Year</button>
@@ -2950,7 +2901,9 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
     const studentDoc = doc(db, `${publicDataPath}/students`, studentId);
     try {
       await updateDoc(studentDoc, {
-        isActive: !currentStatus 
+        isActive: !currentStatus,
+        // Re-activating starts a fresh count: the weekly job only deactivates after 10 more missed weeks.
+        ...(!currentStatus ? { reactivatedAt: Date.now(), autoDeactivatedAt: null } : {})
       });
     } catch (error) {
       console.error("Error changing student status:", error);

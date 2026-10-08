@@ -19,7 +19,7 @@
 // the DISPLAYED counts are the once-a-week snapshot.)
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously } from 'firebase/auth';
-import { getFirestore, collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
+import { getFirestore, collection, query, where, getDocs, Timestamp, doc, updateDoc } from 'firebase/firestore';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -114,6 +114,42 @@ async function main() {
   const synthetic = synthesizeOccurrencesFromRecurringSchedule(recurringSlots, realSchedule, startOfYear, now);
   const schedule = [...realSchedule, ...synthetic];
 
+  // ---- Automatic deactivation ----
+  // A student who has missed their last 10 scheduled WEEKS in a row (a week counts as
+  // attended if any class that week was) is switched to inactive; the teacher can switch
+  // them back on from the student list, which starts a fresh count (reactivatedAt).
+  // Safety: nothing is changed if it would deactivate more than a quarter of the class
+  // (that would be a data problem, not absences).
+  const MISSED_WEEKS_LIMIT = 10;
+  const dayKey = (d) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  const mondayOf = (d) => { const day = d.getDay(); return new Date(d.getFullYear(), d.getMonth(), d.getDate() + ((day === 0 ? -6 : 1) - day)).toISOString().slice(0, 10); };
+  const sessionDayKeys = new Set(sessions.filter(s => s.studentUid && s.startTime).map(s => `${s.studentUid}_${dayKey(s.startTime.toDate())}`));
+  const toMs = (v) => (v && typeof v.toMillis === 'function') ? v.toMillis() : (typeof v === 'number' ? v : 0);
+  const toDeactivate = [];
+  students.filter(s => s.isActive === true).forEach(s => {
+    const since = toMs(s.reactivatedAt);
+    const weeks = {};
+    schedule.forEach(e => {
+      if (e.studentUid !== s.id || !e.endTime || !e.startTime || e.endTime.toDate() >= now) return;
+      if (since && e.startTime.toDate().getTime() <= since) return;
+      const attended = e.overrideStatus === 'attended' || (e.overrideStatus !== 'absent' && sessionDayKeys.has(`${s.id}_${dayKey(e.startTime.toDate())}`));
+      const k = mondayOf(e.startTime.toDate());
+      weeks[k] = weeks[k] || attended;
+    });
+    const last = Object.keys(weeks).sort().reverse().slice(0, MISSED_WEEKS_LIMIT);
+    if (last.length === MISSED_WEEKS_LIMIT && last.every(k => !weeks[k])) toDeactivate.push(s);
+  });
+  const activeCount = students.filter(s => s.isActive === true).length;
+  if (toDeactivate.length > 0 && toDeactivate.length <= activeCount * 0.25) {
+    for (const s of toDeactivate) {
+      await updateDoc(doc(db, `${publicDataPath}/students`, s.id), { isActive: false, autoDeactivatedAt: Date.now(), autoDeactivatedReason: `Missed ${MISSED_WEEKS_LIMIT} scheduled weeks in a row` });
+      s.isActive = false;
+    }
+    console.log(`Auto-deactivated ${toDeactivate.length}: ${toDeactivate.map(s => s.name).join(', ')}`);
+  } else if (toDeactivate.length > 0) {
+    console.warn(`Skipped auto-deactivation: ${toDeactivate.length} of ${activeCount} would be deactivated (more than a quarter).`);
+  }
+
   // Offline students are no longer counted in attendance at all (per the
   // teacher) -- they still appear in the live Today/This Week schedule view
   // in the app, just excluded from every tally here.
@@ -121,7 +157,8 @@ async function main() {
   const allEntries = onlineEntries;
 
   const computed = allEntries.map(entry => {
-    let attended = 0, absent = 0;
+    let attended = 0, absent = 0, monthAttended = 0, monthAbsent = 0;
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     schedule.forEach(sched => {
       const entryDate = sched.startTime.toDate();
       if (entryDate > now || entryDate < startOfYear) return;
@@ -131,8 +168,9 @@ async function main() {
       if (!isMatch) return;
       const status = getStudentAttendanceForEntry(sched, entry.id, sessions);
       if (status === 'attended') attended++; else absent++;
+      if (entryDate >= monthStart) { if (status === 'attended') monthAttended++; else monthAbsent++; }
     });
-    return { id: entry.id, name: entry.name, isOffline: entry.isOffline, attended, absent, total: attended + absent };
+    return { id: entry.id, name: entry.name, isOffline: entry.isOffline, attended, absent, total: attended + absent, monthAttended, monthAbsent };
   });
 
   // "This Year's Attendance" board -- only students/classes with at least
@@ -171,7 +209,13 @@ async function main() {
     if (d >= startOfMonth) attendanceTotals.month[key]++;
   });
 
-  const snapshot = { generatedAt: new Date().toISOString(), attendanceRankedList, trophyList, attendanceTotals };
+  // This month's per-student totals, for the teacher's Attendance Reports.
+  const attendanceMonthlyRankedList = computed
+    .filter(e => e.monthAttended + e.monthAbsent > 0)
+    .map(e => ({ id: e.id, name: e.name, isOffline: e.isOffline, attended: e.monthAttended, absent: e.monthAbsent, total: e.monthAttended + e.monthAbsent }))
+    .sort((a, b) => b.attended - a.attended);
+
+  const snapshot = { generatedAt: new Date().toISOString(), attendanceRankedList, attendanceMonthlyRankedList, trophyList, attendanceTotals };
   writeFileSync(OUT_PATH, JSON.stringify(snapshot, null, 2));
 
   // ---- Class leaderboards for SmartStudy / Abhidhamma ----
