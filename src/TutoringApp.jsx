@@ -7499,6 +7499,10 @@ function StudentDashboard({ user, studentProfile, studentUid, announcements, onO
   // the button row as the only thing still visible on top of it. Exact
   // button positions are a first pass, to be tuned together afterward.
   const [showLessonsPanel, setShowLessonsPanel] = useState(false);
+  // The 📚 panel opens showing only the last month's lessons and hides the session history
+  // behind a button, so a page students open often stays short and quick.
+  const [showOlderLessons, setShowOlderLessons] = useState(false);
+  const [showSessionHistory, setShowSessionHistory] = useState(false);
   // The house-illustration background needs landscape width to show
   // everything (shrine/reading/play/dining rooms and the buttons over
   // them) without cropping -- on a phone held upright there isn't enough
@@ -9307,6 +9311,14 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     if (ga !== gb) return ga - gb;
     return activityMs(b) - activityMs(a);
   });
+  // Only the last month's lessons show at first (by report time, or send time if not
+  // reported); older ones come with the "Show older lessons" button. The lesson being
+  // studied right now always shows.
+  const monthAgoMs = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const shownLessons = showOlderLessons
+    ? visibleLessons
+    : visibleLessons.filter(l => activityMs(l) >= monthAgoMs || (activeSession && activeSession.lessonId === l.id));
+  const hiddenOlderLessonCount = visibleLessons.length - shownLessons.length;
   // Highlights the 📖 Latest Lesson button the moment the teacher assigns a
   // lesson the student hasn't opened yet (status stays 'pending' until
   // they start it) or while one is actively in progress, so it's obvious
@@ -9843,7 +9855,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                 stale/gray, older sends, all of it, exactly like always.
                 Only a not-yet-its-turn 🔜 Pre-send lesson stays out of sight
                 (see visibleLessons above). */}
-            {visibleLessons.map((lesson, index) => {
+            {shownLessons.map((lesson, index) => {
               // A pending (never-opened) lesson reads as "stale" once it's
               // sat unopened past the day AFTER the student's own study
               // time -- not "24 hours after it was sent", so a lesson the
@@ -10005,9 +10017,27 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         )}
       </div>
 
+      {(hiddenOlderLessonCount > 0 || showOlderLessons) && visibleLessons.length > 0 && (
+        <div className="mb-8 text-center">
+          <button onClick={() => setShowOlderLessons(v => !v)} className="px-5 py-2 rounded-lg bg-white/90 border border-gray-300 text-gray-700 font-semibold hover:bg-white shadow-sm">
+            {showOlderLessons ? 'Hide older lessons' : `Show older lessons (${hiddenOlderLessonCount})`}
+          </button>
+        </div>
+      )}
+
+      {!showSessionHistory ? (
+        <div className="text-center">
+          <button onClick={() => setShowSessionHistory(true)} className="px-5 py-3 rounded-xl bg-white/90 border border-gray-300 text-gray-800 font-semibold hover:bg-white shadow-sm">
+            📜 Show Completed Session History
+          </button>
+        </div>
+      ) : (
       <div className="bg-white/90 backdrop-blur-sm p-6 rounded-xl shadow-lg border border-gray-200">
-        <h3 className="text-xl font-semibold mb-1 text-gray-800">Completed Session History</h3>
-        <p className="text-sm text-gray-500 mb-4">Showing the last 30 days.</p>
+        <div className="flex justify-between items-start">
+          <h3 className="text-xl font-semibold mb-1 text-gray-800">Completed Session History</h3>
+          <button onClick={() => setShowSessionHistory(false)} className="text-sm text-gray-500 hover:text-gray-800 underline">Hide</button>
+        </div>
+        <p className="text-sm text-gray-500 mb-4">All your completed sessions this year.</p>
         <div className="space-y-3 max-h-96 overflow-y-auto">
           {completedSessions.length === 0 ? (
             <p className="text-gray-500">No completed sessions yet.</p>
@@ -10035,6 +10065,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           )}
         </div>
       </div>
+      )}
         </div>
       </div>
       )}
