@@ -38,7 +38,7 @@ import {
     Lock
 } from 'lucide-react';
 import { appId } from './firebaseConfig';
-import { isOnlineStatusDay } from './presenceDay';
+import { isOnlineStatusDay, presenceIntervalMs } from './presenceDay';
 import OnlineStatusWidget from './OnlineStatusWidget';
 import { auth, db } from './firebase';
 
@@ -1730,7 +1730,7 @@ const LoadingView = React.memo(() => (
 
 // Between the two halves of a quiz: cages with little birds pop up here and there.
 // Tap one to open it -- the bird says thank you and drops 2 or 3 coins.
-const BIRD_CAGES = 10;
+const BIRD_CAGES = 7;
 const BIRD_FIRST_MS = 800;
 const BIRD_EVERY_MS = 1500;
 const BIRD_VISIBLE_MS = 3200;
@@ -1926,7 +1926,7 @@ const QuizView = React.memo(({ quiz, questionNumber, totalQuestions, timerValue,
 // --- Core App Component ---
 
 // How often a student's open tab re-reads the class-wide leaderboards.
-const CLASS_POLL_MS = 10 * 60 * 1000;
+const CLASS_POLL_MS = 20 * 60 * 1000;
 
 const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
   const [currentUserId, setCurrentUserId] = useState(null);
@@ -2107,11 +2107,16 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
             if (r.ok) snapshotScores = (await r.json()).scores || [];
           } catch (e) { /* fall through to Firestore */ }
         }
+        // A student's screen never uses the class roster, and shows classmates'
+        // reflections for ONE lesson at a time (loaded when that lesson opens, see
+        // below) -- so only the teacher loads those two in full. For a class of 50
+        // that is hundreds of reads saved on every load and every refresh.
+        const studentOnly = entryRequest?.mode === 'student';
         const [scoresSnap, heartsSnap, reflSnap, rosterSnap, compSnap] = await Promise.all([
           snapshotScores ? Promise.resolve(null) : getDocs(query(getScoresCollectionRef(), where("classId", "==", classId))),
           getDocs(query(getStudentHeartsCollectionRef(), where("classId", "==", classId))),
-          getDocs(query(getReflectionsCollectionRef(), where("classId", "==", classId))),
-          getDocs(query(getRosterCollectionRef(), where("classId", "==", classId))),
+          studentOnly ? Promise.resolve(null) : getDocs(query(getReflectionsCollectionRef(), where("classId", "==", classId))),
+          studentOnly ? Promise.resolve(null) : getDocs(query(getRosterCollectionRef(), where("classId", "==", classId))),
           getDocs(query(getCompletionsCollectionRef(), where("classId", "==", classId))),
         ]);
         if (cancelled) return;
@@ -2120,8 +2125,8 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
         const hearts = {};
         heartsSnap.forEach((d) => { const data = d.data(); hearts[data.studentName] = { hearts: data.hearts || 0, heartsGiven: data.heartsGiven || 0, pointsSpent: data.pointsSpent || 0 }; });
         setHeartCounts(hearts);
-        setAllReflections(reflSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-        setClassRoster(rosterSnap.docs.map(d => d.data()));
+        if (reflSnap) setAllReflections(reflSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+        if (rosterSnap) setClassRoster(rosterSnap.docs.map(d => d.data()));
         setCompletionsList(compSnap.docs.map(d => d.data()).sort((a, b) => b.timestamp - a.timestamp).slice(0, 100));
       } catch (e) { console.error("Error loading class data:", e); }
     };
@@ -2135,7 +2140,21 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
     };
     document.addEventListener('visibilitychange', onVisible);
     return () => { cancelled = true; clearInterval(timer); document.removeEventListener('visibilitychange', onVisible); };
-  }, [isAuthReady, classId, teacherLive, classRefreshKey]);
+  }, [isAuthReady, classId, teacherLive, classRefreshKey, entryRequest?.mode]);
+  // A student reading a lesson sees classmates' reflections for THAT lesson: fetch
+  // just those (class + lesson), when the lesson is opened.
+  useEffect(() => {
+    if (entryRequest?.mode !== 'student' || view !== 'studentReadLesson' || !isAuthReady || !classId || !activeLessonId) return;
+    let cancelled = false;
+    getDocs(query(getReflectionsCollectionRef(), where("classId", "==", classId), where("lessonId", "==", activeLessonId)))
+      .then(snap => {
+        if (cancelled) return;
+        const fresh = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        setAllReflections(prev => [...prev.filter(r => r.lessonId !== activeLessonId), ...fresh]);
+      })
+      .catch(e => console.error('Error loading lesson reflections:', e));
+    return () => { cancelled = true; };
+  }, [view, classId, activeLessonId, isAuthReady, entryRequest?.mode, classRefreshKey]);
   // allScores = the class-wide base, with THIS student's own live scores
   // laid over it when the base came from the (up to a week old) snapshot, so
   // their own row/rank is always current.
@@ -2273,6 +2292,10 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
 
   useEffect(() => {
     if (!isAuthReady || !classId) return;
+    // These pop-ups only matter to people online together (they are shown only if
+    // under 10 seconds old), and opening the listener re-reads every announcement
+    // ever sent to the class -- so it is only opened while the class meets.
+    if (!isOnlineStatusDay()) return;
     const q = query(getGlobalAnnouncementsCollectionRef(), where("classId", "==", classId));
     const unsub = onSnapshot(q, (snapshot) => {
       snapshot.docChanges().forEach((change) => {
@@ -2311,8 +2334,8 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
         updateDoc(getRosterDocRef(classId, userName), { lastSeen: Date.now(), currentLessonId: currentLesson }).catch(e => console.error("Heartbeat error", e));
       };
       updateOnlineStatus();
-      const interval = setInterval(updateOnlineStatus, 60000);
-      return () => clearInterval(interval);
+      const interval = presenceIntervalMs(60000) ? setInterval(updateOnlineStatus, 60000) : null;
+      return () => { if (interval) clearInterval(interval); };
     }
     // This app never unmounts once opened (App.jsx's KEEP_ALIVE_APPS --
     // it just gets hidden behind the dashboard), so `view` staying on a
