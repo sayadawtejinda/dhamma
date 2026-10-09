@@ -1,0 +1,33 @@
+name: Close open Watch & Learn sessions
+
+# A student who closes the app (or the phone) while watching never reports, and nothing on
+# their device can close the session afterwards. Every 15 minutes this closes any Watch &
+# Learn session that has run past the end of the student's class + 15 minutes (or 45 minutes
+# in all), so its coins stop counting there. See scripts/close-open-sessions.mjs.
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: close-open-sessions
+  cancel-in-progress: false
+
+jobs:
+  close:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Close open sessions
+        run: node scripts/close-open-sessions.mjs
