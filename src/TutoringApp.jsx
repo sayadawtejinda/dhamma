@@ -8570,22 +8570,17 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     }
   };
 
-  const handleEndSession = async () => {
-    if (!activeSession) return;
-    setRedoSession(null);
-    setFeedbackNotes('');
-    setScore('');
-    setCompletedUnitInput('');
-    setTodayCompletedInput('');
-    setTrophyTapCount(0);
-    setShowFeedbackModal(true);
+  // Works out, from each app's own records, the score and the "completed up to" number a
+  // report should carry. `sink` receives them: the Report form fills its fields with them,
+  // and the automatic report (see handleAutoSubmitSession) uses them to request trophies.
+  const autoFillReport = async (session, sink) => {
 
     // Auto-fetch SmartStudy Score and Lesson completed so the feedback modal
     // is pre-filled. Works both when the session link has a classId
     // (e.g. smartstudy://BUDDHA — fetches that class only) AND when it doesn't
     // (smartstudy:// — fetches across all classes, same as myTotalLessonsCompletedAllClasses).
-    if (activeSession.lessonLink?.startsWith('smartstudy://')) {
-      const ssClassId = extractSmartStudyClassId(activeSession.lessonLink) || null;
+    if (session.lessonLink?.startsWith('smartstudy://')) {
+      const ssClassId = extractSmartStudyClassId(session.lessonLink) || null;
       const ssName = studentProfile?.name;
       if (ssName) {
         try {
@@ -8607,9 +8602,9 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
               if (lId) completedLessonIds.add(ssClassId ? lId : `${cId}-${lId}`);
             });
           }
-          if (totalPts > 0) setScore(`${totalPts.toLocaleString()} pts`);
+          if (totalPts > 0) sink.setScore(`${totalPts.toLocaleString()} pts`);
           if (completedLessonIds.size > 0) {
-            handleCompletedUnitChange(String(completedLessonIds.size));
+            sink.setCompleted(String(completedLessonIds.size));
           }
         } catch (e) {
           console.error('Error fetching SmartStudy score/completions for report modal:', e);
@@ -8617,8 +8612,8 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       }
     }
     // Dhammaschool app: fetch total score + completed-lesson count across the whole class for auto-fill
-    if (activeSession.lessonLink?.startsWith('dhammaschool://')) {
-      const dhammaschoolClassId = activeSession.lessonLink.replace('dhammaschool://', '');
+    if (session.lessonLink?.startsWith('dhammaschool://')) {
+      const dhammaschoolClassId = session.lessonLink.replace('dhammaschool://', '');
       const stuName = studentProfile?.name;
       if (stuName && dhammaschoolClassId) {
         try {
@@ -8654,7 +8649,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
               totalScore += best;
             } catch (e) {}
           }));
-          if (totalScore > 0) setScore(`${totalScore.toLocaleString()} pts`);
+          if (totalScore > 0) sink.setScore(`${totalScore.toLocaleString()} pts`);
           if (classCompletions.length > 0) {
             // lesson_completions only captures completions recorded through
             // Dhammaschool's own per-lesson tracking -- a student whose
@@ -8676,20 +8671,20 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
             // trophy got requested again on every single open. Falls back
             // to a 3-hour lookback only when there's no prior submitted
             // session at all for this lesson yet (a genuine first report).
-            const dhammaschoolLessonKey = computeLessonKey(activeSession.lessonTitle, activeSession.lessonLink);
-            const dhammaschoolPreviousUnit = getEffectivePreviousUnit(dhammaschoolLessonKey, activeSession);
+            const dhammaschoolLessonKey = computeLessonKey(session.lessonTitle, session.lessonLink);
+            const dhammaschoolPreviousUnit = getEffectivePreviousUnit(dhammaschoolLessonKey, session);
             const priorSubmittedEndTimes = (mySessions || [])
-              .filter(s => s.id !== activeSession.id && s.lessonLink === activeSession.lessonLink && s.endTime?.toDate)
+              .filter(s => s.id !== session.id && s.lessonLink === session.lessonLink && s.endTime?.toDate)
               .map(s => s.endTime.toDate().getTime());
             const cutoffMs = priorSubmittedEndTimes.length > 0
               ? Math.max(...priorSubmittedEndTimes)
-              : (Math.min(activeSession.startTime?.toDate?.()?.getTime?.() || Date.now(), Date.now()) - 3 * 60 * 60 * 1000);
+              : (Math.min(session.startTime?.toDate?.()?.getTime?.() || Date.now(), Date.now()) - 3 * 60 * 60 * 1000);
             const newCompletionsCount = classCompletions.filter(dt => {
               const completedMs = dt.completedAt ? new Date(dt.completedAt).getTime() : 0;
               return completedMs > cutoffMs;
             }).length;
             if (newCompletionsCount > 0) {
-              handleCompletedUnitChange(String(dhammaschoolPreviousUnit + newCompletionsCount));
+              sink.setCompleted(String(dhammaschoolPreviousUnit + newCompletionsCount));
             }
           }
         } catch (e) { console.error('Dhammaschool score fetch:', e); }
@@ -8698,12 +8693,12 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
 
     // Abhidhamma: fetch score + lesson count from global_scores
     // Handles both new format (has classId) and old AbhidhammaApp5 format (no classId)
-    if (activeSession.lessonLink?.startsWith('abhidhamma://')) {
-      const abhiClassId = activeSession.lessonLink.replace('abhidhamma://', '');
+    if (session.lessonLink?.startsWith('abhidhamma://')) {
+      const abhiClassId = session.lessonLink.replace('abhidhamma://', '');
       try {
         const { totalPoints, doneLessonIds } = await fetchAbhidhammaProgress(studentUid, abhiClassId);
-        if(totalPoints>0) setScore(`${totalPoints.toLocaleString()} pts`);
-        if(doneLessonIds.size>0) handleCompletedUnitChange(String(doneLessonIds.size));
+        if(totalPoints>0) sink.setScore(`${totalPoints.toLocaleString()} pts`);
+        if(doneLessonIds.size>0) sink.setCompleted(String(doneLessonIds.size));
       } catch(e) { console.error('Abhi score fetch:', e); }
     }
 
@@ -8711,7 +8706,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     // myanmar-speaking-app.jsx as the student uses it) and drop it straight
     // into "Today completed" — there's no chapter/unit structure here, so
     // minutes studied today is what the teacher reviews before awarding a trophy.
-    if (isMyanmarSpeakingUrl(activeSession.lessonLink)) {
+    if (isMyanmarSpeakingUrl(session.lessonLink)) {
       const stuName = studentProfile?.name;
       if (stuName) {
         try {
@@ -8735,108 +8730,120 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     // "completed" -- same "2 trophies per unit" ratio as everywhere else,
     // just driven by the Lesson Bank's Total Number/Unit Name for this
     // lesson (16 / "Level") instead of a live class lesson count.
-    if (isSoundPracticeUrl(activeSession.lessonLink)) {
+    if (isSoundPracticeUrl(session.lessonLink)) {
       const stuName = studentProfile?.name;
       if (stuName) {
         try {
           const rosterSnap = await readAppRoster(MYANMAR_SOUND_PRACTICE_APP_ID, studentUid, sanitizeSoundPracticeKey, stuName);
           const passedLevels = rosterSnap.exists() && Array.isArray(rosterSnap.data().passedLevels) ? rosterSnap.data().passedLevels : [];
-          if (passedLevels.length > 0) handleCompletedUnitChange(String(passedLevels.length));
+          if (passedLevels.length > 0) sink.setCompleted(String(passedLevels.length));
         } catch (e) { console.error('Myanmar Sound Practice progress fetch:', e); }
       }
     }
 
     // Burmese Consonant Game: fetch total completed games (Picture Game
     // levels + per-group Pick/Click games) and drop the count into "completed".
-    if (isBurmeseGameUrl(activeSession.lessonLink)) {
+    if (isBurmeseGameUrl(session.lessonLink)) {
       const stuName = studentProfile?.name;
       if (stuName) {
         try {
           const rosterSnap = await readAppRoster(BURMESE_GAME_APP_ID, studentUid, sanitizeBurmeseGameKey, stuName);
           const completedGames = rosterSnap.exists() && Array.isArray(rosterSnap.data().completedGames) ? rosterSnap.data().completedGames : [];
-          if (completedGames.length > 0) handleCompletedUnitChange(String(completedGames.length));
+          if (completedGames.length > 0) sink.setCompleted(String(completedGames.length));
         } catch (e) { console.error('Burmese Consonant Game progress fetch:', e); }
       }
     }
 
     // Myanmar Vowels Learning: fetch total completed Listen & Match / Click
     // Sequence levels (Basic + Pro) and drop the count into "completed".
-    if (isVowelsLearningUrl(activeSession.lessonLink)) {
+    if (isVowelsLearningUrl(session.lessonLink)) {
       const stuName = studentProfile?.name;
       if (stuName) {
         try {
           const rosterSnap = await readAppRoster(MYANMAR_VOWELS_APP_ID, studentUid, sanitizeVowelsKey, stuName);
           const completedGames = rosterSnap.exists() && Array.isArray(rosterSnap.data().completedGames) ? rosterSnap.data().completedGames : [];
-          if (completedGames.length > 0) handleCompletedUnitChange(String(completedGames.length));
+          if (completedGames.length > 0) sink.setCompleted(String(completedGames.length));
         } catch (e) { console.error('Myanmar Vowels Learning progress fetch:', e); }
       }
     }
 
     // Myanmar Poems: fetch total poems the student has confirmed reciting
     // themselves and drop the count into "completed".
-    if (isMyanmarPoemsUrl(activeSession.lessonLink)) {
+    if (isMyanmarPoemsUrl(session.lessonLink)) {
       const stuName = studentProfile?.name;
       if (stuName) {
         try {
           poemUnitsRef.current = null;
-          const poemUnits = await fetchPoemUnits(activeSession);
+          const poemUnits = await fetchPoemUnits(session);
           poemUnitsRef.current = poemUnits;
-          if (poemUnits > 0) handleCompletedUnitChange(String(poemUnits));
+          if (poemUnits > 0) sink.setCompleted(String(poemUnits));
         } catch (e) { console.error('Myanmar Poems progress fetch:', e); }
       }
     }
 
     // Myanmar Number Learning: fetch total place-value levels completed
     // (units/tens/hundreds/thousands) and drop the count into "completed".
-    if (isNumberLearningUrl(activeSession.lessonLink)) {
+    if (isNumberLearningUrl(session.lessonLink)) {
       const stuName = studentProfile?.name;
       if (stuName) {
         try {
           const rosterSnap = await readAppRoster(MYANMAR_NUMBER_LEARNING_APP_ID, studentUid, sanitizeNumberLearningKey, stuName);
           const completedLevels = rosterSnap.exists() && Array.isArray(rosterSnap.data().completedLevels) ? rosterSnap.data().completedLevels : [];
-          if (completedLevels.length > 0) handleCompletedUnitChange(String(completedLevels.length));
+          if (completedLevels.length > 0) sink.setCompleted(String(completedLevels.length));
         } catch (e) { console.error('Myanmar Number Learning progress fetch:', e); }
       }
     }
 
     // Animal Sound Quiz: fetch trophy-worthy wins (capped at 5) and drop
     // the count into "completed".
-    if (isAnimalSoundUrl(activeSession.lessonLink)) {
+    if (isAnimalSoundUrl(session.lessonLink)) {
       const stuName = studentProfile?.name;
       if (stuName) {
         try {
           const rosterSnap = await readAppRoster(ANIMAL_SOUND_APP_ID, studentUid, sanitizeAnimalSoundKey, stuName);
           const trophyWins = rosterSnap.exists() ? (rosterSnap.data().trophyWins || 0) : 0;
-          if (trophyWins > 0) handleCompletedUnitChange(String(trophyWins));
+          if (trophyWins > 0) sink.setCompleted(String(trophyWins));
         } catch (e) { console.error('Animal Sound Quiz progress fetch:', e); }
       }
     }
 
     // Burmese Learning Games: fetch trophy units (capped at 20, 1 per 30
     // round-wins across its 4 mini-games) and drop the count into "completed".
-    if (isBurmeseLearningGamesUrl(activeSession.lessonLink)) {
+    if (isBurmeseLearningGamesUrl(session.lessonLink)) {
       const stuName = studentProfile?.name;
       if (stuName) {
         try {
           const rosterSnap = await readAppRoster(BURMESE_LEARNING_GAMES_APP_ID, studentUid, sanitizeBurmeseLearningGamesKey, stuName);
           const trophyUnits = rosterSnap.exists() ? (rosterSnap.data().trophyUnits || 0) : 0;
-          if (trophyUnits > 0) handleCompletedUnitChange(String(trophyUnits));
+          if (trophyUnits > 0) sink.setCompleted(String(trophyUnits));
         } catch (e) { console.error('Burmese Learning Games progress fetch:', e); }
       }
     }
 
     // Interactive Learning Quiz: fetch completedPhases count (capped at 5,
     // 1 per mastered Phase) and drop the count into "completed".
-    if (isInteractiveQuizUrl(activeSession.lessonLink)) {
+    if (isInteractiveQuizUrl(session.lessonLink)) {
       const stuName = studentProfile?.name;
       if (stuName) {
         try {
           const rosterSnap = await readAppRoster(INTERACTIVE_QUIZ_APP_ID, studentUid, sanitizeInteractiveQuizKey, stuName);
           const completedPhases = rosterSnap.exists() && Array.isArray(rosterSnap.data().completedPhases) ? rosterSnap.data().completedPhases.length : 0;
-          if (completedPhases > 0) handleCompletedUnitChange(String(completedPhases));
+          if (completedPhases > 0) sink.setCompleted(String(completedPhases));
         } catch (e) { console.error('Interactive Learning Quiz progress fetch:', e); }
       }
     }
+  };
+
+  const handleEndSession = async () => {
+    if (!activeSession) return;
+    setRedoSession(null);
+    setFeedbackNotes('');
+    setScore('');
+    setCompletedUnitInput('');
+    setTodayCompletedInput('');
+    setTrophyTapCount(0);
+    setShowFeedbackModal(true);
+    await autoFillReport(activeSession, { setScore, setCompleted: handleCompletedUnitChange });
   };
 
   const handleOpenRedoReport = async (session) => {
@@ -8982,6 +8989,73 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     }
   };
 
+  // The automatic report (student forgot to report, closed the app, or the time ran out)
+  // does the same trophy work as a manual report: it reads what the student actually
+  // finished from each app's own records, saves that on the session and the student, and
+  // asks the teacher for the trophies earned. If a trophy request is already waiting for the
+  // teacher, nothing is added to it (it would be overwritten); the progress still counts, so
+  // the next report asks for what is owed.
+  const requestEarnedTrophiesForAutoReport = async (session) => {
+    if (!studentUid || !studentProfile) return;
+    const got = { score: '', completed: 0 };
+    try {
+      await autoFillReport(session, { setScore: (v) => { got.score = v; }, setCompleted: (v) => { got.completed = parseFloat(v) || 0; } });
+    } catch (e) { console.error('Auto report progress fetch:', e); }
+
+    const lessonKey = computeLessonKey(session.lessonTitle, session.lessonLink);
+    const previouslyEarned = (studentProfile.earnedTrophies || {})[lessonKey] || 0;
+    const maxAvailable = session.lessonTrophyLimit || 0;
+    const remainingTrophies = Math.max(0, maxAvailable - previouslyEarned);
+    const previousHighestUnit = getEffectivePreviousUnit(lessonKey, session);
+    const isReader = !!(MYANMAR_READER_APP_URL && session.lessonLink?.startsWith(MYANMAR_READER_APP_URL));
+
+    let readerPending = [];
+    if (isReader && studentProfile.name) {
+      try {
+        const snap = await getDocs(query(collection(db, 'artifacts', 'myanmar-reader-app', 'public', 'data', 'scores'), where('studentName', '==', studentProfile.name)));
+        readerPending = readerSheetsNeedingTrophy(snap.docs.map(d => ({ id: d.id, ...d.data() })), readerTrophyCount(studentProfile.earnedTrophies, [lessonKey]));
+      } catch (e) { console.error('Auto report Myanmar Reader scores:', e); }
+    }
+
+    const enteredUnit = isReader ? previousHighestUnit : got.completed;
+    const newHighestUnit = Math.max(previousHighestUnit, enteredUnit);
+
+    const sessionPatch = { completedUnit: enteredUnit, previousCompletedUnit: previousHighestUnit, lessonUnitLabel: session.lessonUnitLabel || 'Chapter' };
+    if (got.score) sessionPatch.score = got.score;
+    await updateDoc(doc(db, `${publicDataPath}/studySessions`, session.id), sessionPatch);
+
+    const upd = {};
+    if (enteredUnit > 0) upd[`completedUnits.${lessonKey}`] = newHighestUnit;
+    let amount = 0;
+    if (isReader) {
+      amount = Math.min(readerPending.length, remainingTrophies);
+    } else {
+      const unitCount = session.lessonUnitCount || 0;
+      if (unitCount > 0 && maxAvailable > 0) {
+        const deservedSoFar = Math.min(maxAvailable, Math.floor((newHighestUnit * maxAvailable) / unitCount));
+        amount = Math.max(0, deservedSoFar - previouslyEarned);
+        if (isMyanmarPoemsUrl(session.lessonLink)) amount = Math.min(1, amount);
+      }
+    }
+    const requestWaiting = studentProfile.trophyRequested === true;
+    if (amount > 0 && !requestWaiting) {
+      upd.trophyRequested = true;
+      upd.requestedTrophyAmount = amount;
+      upd.requestedTrophyLessonId = session.lessonId;
+      upd.requestedTrophyLessonTitle = session.lessonTitle;
+      upd.requestedTrophyLessonLink = session.lessonLink || null;
+      upd.requestedTrophySessionId = session.id;
+    }
+    if (isReader && readerPending.length > 0 && !requestWaiting) {
+      try {
+        const batch = writeBatch(db);
+        readerPending.forEach(sheet => sheet.docs.forEach(d => batch.update(doc(db, 'artifacts', 'myanmar-reader-app', 'public', 'data', 'scores', d.id), { trophyRequested: true })));
+        await batch.commit();
+      } catch (e) { console.error('Auto report: marking Myanmar Reader trophies as requested:', e); }
+    }
+    if (Object.keys(upd).length > 0) await updateDoc(doc(db, `${publicDataPath}/students`, studentUid), upd);
+  };
+
   const handleAutoSubmitSession = async (sessionToSubmit, calculatedEndTime) => {
     if (!sessionToSubmit || !sessionToSubmit.id) return; 
     
@@ -9027,6 +9101,15 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
             }, { merge: true });
           } catch (e) { console.error('Error awarding Watch & Learn coins (auto-submit):', e); }
         }
+      }
+      // Every other lesson: the same as a manual report -- the lesson counts as reported,
+      // and the trophies the student has earned are asked for.
+      if (!isWatchAndLearnSession) {
+        if (sessionToSubmit.lessonId) {
+          updateDoc(doc(db, `${publicDataPath}/lessons`, sessionToSubmit.lessonId), { status: 'reported', reportedAt: serverTimestamp() }).catch(() => {});
+        }
+        try { await requestEarnedTrophiesForAutoReport(sessionToSubmit); }
+        catch (e) { console.error('Error requesting trophies in the automatic report:', e); }
       }
     } catch (error) {
       console.error("Error auto-submitting session:", error);
