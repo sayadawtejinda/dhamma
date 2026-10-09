@@ -988,12 +988,12 @@ export default function AbhidhammaApp({ entryRequest, onExit, isActive }) {
     try{
       const snap=await getDocs(abhiLessonsRef(classId));
       const docs=snap.docs.map(d=>({ref:d.ref,...d.data()})).sort((a,b)=>(a.createdAt?.seconds||0)-(b.createdAt?.seconds||0));
-      const IMG_RE=/\b(\d{6})\.(?:png|jpg|jpeg)\b/gi;
+      const IMG_RE=/\b(\d{4,6})\.(?:png|jpg|jpeg)\b/gi;
       let maxNum=0;
       if(startNum!=null){
         maxNum=startNum-1;
       }else{
-        docs.forEach(l=>{for(const m of String(l.burmeseContent||'').matchAll(IMG_RE))maxNum=Math.max(maxNum,parseInt(m[1],10));});
+        docs.forEach(l=>{for(const m of String(l.burmeseContent||'').matchAll(IMG_RE))if(m[1].length===6)maxNum=Math.max(maxNum,parseInt(m[1],10));});
       }
       const batch=writeBatch(db);
       let changed=0;
@@ -1033,7 +1033,7 @@ export default function AbhidhammaApp({ entryRequest, onExit, isActive }) {
     try{
       const snap=await getDocs(abhiLessonsRef(classId));
       const docs=snap.docs.map(d=>({ref:d.ref,...d.data()}));
-      const IMG_RE=/\b(\d{6})\.(?:png|jpg|jpeg)\b/gi;
+      const IMG_RE=/\b(\d{4,6})\.(?:png|jpg|jpeg)\b/gi;
       // Pulls any of this lesson's own image filenames back out as bare
       // lines (from a previous plain-append sync, or a stray duplicate)
       // before redistributing them, so re-running this is safe/idempotent
