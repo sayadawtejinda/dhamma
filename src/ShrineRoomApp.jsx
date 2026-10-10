@@ -998,6 +998,9 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   // here (see the activity-tracking effect below).
   const [lotusCount, setLotusCount] = useState(0);
   const [fullAltarBonusAwarded, setFullAltarBonusAwarded] = useState(false);
+  // The day the full-altar lotus bonus was last paid: it is paid at most once a day, so taking
+  // an offering off and filling the altar again the same day earns nothing more.
+  const fullAltarBonusDateRef = useRef(null);
   const chantSessionLotusRef = useRef(0);
   const meditationSessionLotusRef = useRef(0);
   // Daily lotus cap across every source combined (chanting, meditation,
@@ -1075,7 +1078,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     }, 60000);
     return () => clearInterval(interval);
   }, [studentUid, chantingOpen, chantingIdle, meditatingMinutes != null]);
-  // +5 lotus EVERY time the 6 altar slots all become filled. The Golden
+  // +5 lotus when the 6 altar slots all become filled -- once a day at most. The Golden
   // Umbrellas and Bell are NOT required (umbrellas now cost 2500 each, so
   // requiring them meant almost no one could ever earn this). The 6 slots
   // run out over time (see the expiry check below), so filling them again
@@ -1091,8 +1094,16 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     if (altarWasCompleteRef.current === null) { altarWasCompleteRef.current = complete; return; }
     if (complete && !altarWasCompleteRef.current) {
       setShopOpen(false); // done shopping -- get the panel out of the way
-      const granted = awardLotus(5);
-      if (granted > 0) showToast(`🪷 Full altar bonus! +${granted} lotus flowers`);
+      if (fullAltarBonusDateRef.current === todayKey()) {
+        showToast('🪷 The full altar bonus is once a day, and you already received it today.');
+      } else {
+        const granted = awardLotus(5);
+        if (granted > 0) {
+          fullAltarBonusDateRef.current = todayKey();
+          persist({ fullAltarBonusDate: todayKey() });
+          showToast(`🪷 Full altar bonus! +${granted} lotus flowers`);
+        }
+      }
     }
     altarWasCompleteRef.current = complete;
   }, [placedItems, loading, studentUid]);
@@ -1114,6 +1125,8 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   // which friends have already given me theirs (once each).
   const [giftOfferings, setGiftOfferings] = useState([]);
   const [giftFriends, setGiftFriends] = useState([]);
+  // Every friend whose altar I have visited (a gift or not), so the list can mark them done.
+  const [visitedFriends, setVisitedFriends] = useState([]);
   const [visitGiftNote, setVisitGiftNote] = useState(null);
 
   const rosterRef = studentUid ? doc(db, SHRINE_ROSTER_PATH, sanitizeShrineKey(studentName)) : null;
@@ -1139,7 +1152,14 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
       const snap = await getDoc(targetRef);
       const data = snap.exists() ? snap.data() : {};
       setVisitingData(data);
-      if (!isTeacherPreview) collectVisitGifts(targetName, data);
+      if (!isTeacherPreview) {
+        collectVisitGifts(targetName, data);
+        if (!visitedFriends.includes(targetName)) {
+          const nextVisited = [...visitedFriends, targetName].slice(-300);
+          setVisitedFriends(nextVisited);
+          persist({ shrineVisitedFriends: nextVisited });
+        }
+      }
       if (studentName) {
         const others = (data.recentVisitors || []).filter(v => v.name !== studentName);
         const nextVisitors = [{ name: studentName, visitedAt: Date.now() }, ...others].slice(0, 10);
@@ -1245,12 +1265,14 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
             setTotalMeditationMinutes(data.totalMeditationMinutes || 0);
             setLotusCount(data.lotusCount || 0);
             setFullAltarBonusAwarded(!!data.fullAltarBonusAwarded);
+            fullAltarBonusDateRef.current = data.fullAltarBonusDate || null;
             setQuickChantLotusDates(data.quickChantLotusDates || {});
             setLotusDailyDate(data.lotusDailyDate || null);
             setLotusDailyCount(data.lotusDailyCount || 0);
             setRecentVisitors(data.recentVisitors || []);
             setGiftOfferings(data.shrineGifts || []);
             setGiftFriends(data.shrineGiftFriends || []);
+            setVisitedFriends(data.shrineVisitedFriends || []);
           }
           if (data.coinBalance == null) persist({ coinBalance: STARTER_COINS });
         } else {
@@ -1725,9 +1747,9 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
               <>
                 {/* A friend gives their gift only once, so a friend already
                     visited is marked -- visit someone new for the next gift. */}
-                {giftFriends.includes(s.studentName) ? (
+                {(giftFriends.includes(s.studentName) || visitedFriends.includes(s.studentName)) ? (
                   <>
-                    <span className="text-xs font-bold text-white bg-emerald-600 rounded-full px-2 py-0.5" title="You already received a gift from this friend. Visit someone new to get more!">✅ Visited</span>
+                    <span className="text-xs font-bold text-white bg-emerald-600 rounded-full px-2 py-0.5" title={giftFriends.includes(s.studentName) ? "You visited and already received the gift from this friend. Visit someone new to get more!" : "You have visited this friend. Visit someone new!"}>{giftFriends.includes(s.studentName) ? '✅ Visited · 🎁 Gift got' : '✅ Visited'}</span>
                     <button
                       onClick={(e) => { e.stopPropagation(); handleVisitStudent(s.studentName); }}
                       className="text-xs font-semibold text-gray-500 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-full px-2 py-0.5"
