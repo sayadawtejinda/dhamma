@@ -105,8 +105,8 @@ function readNestedWithLegacyFallback(data, prefix) {
   return result;
 }
 
-// A festival gift can be sold back for this many coins (frees room in the wardrobe).
-const FESTIVAL_SELL_COINS = 50;
+// A festival gift can be sold back for coins (frees room in the wardrobe): outfits 200, accessories 50.
+const sellPriceFor = (categoryKey) => (categoryKey === 'outfit' ? 200 : 50);
 const DEFAULT_CONFIG = { skin: 'light', hair: 'short-black', outfit: 'blue', accessory: 'none', bg: 'sky', homeBackground: 'default' };
 const CATEGORIES = [
   { key: 'hair', label: '💇 Hair', options: HAIR_OPTIONS },
@@ -353,19 +353,20 @@ export default function AvatarApp({ entryRequest, onExit }) {
   const handleSell = (categoryKey, option) => {
     if (isTeacherPreview) { showToast('Preview mode -- nothing is sold.'); return; }
     if (!isOwned(categoryKey, option.id)) return;
-    if (!window.confirm(`Sell "${option.name}" for ${FESTIVAL_SELL_COINS} coins?`)) return;
+    const price = sellPriceFor(categoryKey);
+    if (!window.confirm(`Sell "${option.name}" for ${price} coins?`)) return;
     const remaining = (owned[categoryKey] || []).filter(id => id !== option.id);
     const wasWorn = config[categoryKey] === option.id;
     const fallback = DEFAULT_CONFIG[categoryKey];
     setOwned(prev => ({ ...prev, [categoryKey]: remaining }));
-    setCoinBalance(prev => prev + FESTIVAL_SELL_COINS);
+    setCoinBalance(prev => prev + price);
     if (wasWorn) setConfig(prev => ({ ...prev, [categoryKey]: fallback }));
     persist({
-      coinBalance: increment(FESTIVAL_SELL_COINS),
+      coinBalance: increment(price),
       ...(wasWorn ? { avatar: { [categoryKey]: fallback } } : {}),
       avatarOwned: { [categoryKey]: remaining },
     });
-    showToast(`Sold ${option.name} for ${FESTIVAL_SELL_COINS} 🪙`);
+    showToast(`Sold ${option.name} for ${price} 🪙`);
   };
 
   const handleSkinChange = (skinId) => {
@@ -675,7 +676,7 @@ export default function AvatarApp({ entryRequest, onExit }) {
             </button>
             {option.festival && owns && !isTeacherPreview && (
               <button onClick={() => handleSell(activeCategory, option)} className="text-xs font-bold text-amber-700 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded-full py-1">
-                💰 Sell for {FESTIVAL_SELL_COINS} 🪙
+                💰 Sell for {sellPriceFor(activeCategory)} 🪙
               </button>
             )}
             </div>

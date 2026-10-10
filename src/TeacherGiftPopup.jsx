@@ -3,6 +3,8 @@ import { collection, query, where, getDocs, doc, getDoc, deleteDoc, runTransacti
 import { db } from './firebase';
 import { spawnFlyingCoins } from './flyingCoins';
 import { GiftBoxSvg } from './TeacherGiftBox';
+import { CharacterSvg } from './AvatarCharacter';
+import { FESTIVAL_AVATAR_ITEMS, ownedAfterGift } from './festivals';
 
 // A present from the teacher that appears ON TOP of whatever the student is
 // doing -- same idea as the trophy celebration, so it no longer waits for them
@@ -99,7 +101,11 @@ export default function TeacherGiftPopup({ studentUid, studentName, onClose }) {
         const snap = await tx.get(giftRef);
         if (!snap.exists()) return false;
         const g = snap.data();
-        if ((g.coins || 0) > 0) tx.set(rosterRef, { studentName, coinBalance: increment(g.coins) }, { merge: true });
+        const rSnap = g.itemId ? await tx.get(rosterRef) : null;
+        const patch = { studentName };
+        if ((g.coins || 0) > 0) patch.coinBalance = increment(g.coins);
+        if (g.itemId) patch.avatarOwned = { [g.itemCategory]: ownedAfterGift(rSnap.exists() ? rSnap.data() : {}, g.itemCategory, g.itemId) };
+        if (patch.coinBalance || patch.avatarOwned) tx.set(rosterRef, patch, { merge: true });
         tx.delete(giftRef);
         return true;
       });
@@ -182,6 +188,19 @@ export default function TeacherGiftPopup({ studentUid, studentName, onClose }) {
             {(gift.coins || 0) > 0 && (
               <p className="mt-4 text-5xl font-black text-amber-300 drop-shadow-lg" style={{ animation: 'tgPop .6s ease-out .2s both' }}>+{shownCoins} 🪙</p>
             )}
+            {gift.itemId && (() => {
+              const it = (FESTIVAL_AVATAR_ITEMS[gift.itemCategory] || []).find(x => x.id === gift.itemId);
+              if (!it) return null;
+              return (
+                <div className="mt-4" style={{ animation: 'tgPop .6s ease-out .2s both' }}>
+                  <div className="mx-auto w-40 h-40 rounded-2xl" style={{ background: 'linear-gradient(180deg,#1b1245,#3a1b5c)' }}>
+                    <CharacterSvg skinColor="#FFE0B2" hair={{ style: 'short', color: '#3E2723' }} outfitColor={gift.itemCategory === 'outfit' ? it.color : '#42A5F5'} outfitPattern={gift.itemCategory === 'outfit' ? it.pattern : undefined} accessory={gift.itemCategory === 'accessory' ? it : { kind: 'none', color: null }} className="w-40 h-40" />
+                  </div>
+                  <p className="mt-2 text-xl font-black text-amber-200">{it.name}</p>
+                  <p className="text-sm text-white">It is now in your Avatar wardrobe. Wear it!</p>
+                </div>
+              );
+            })()}
             {gift.message && <p className="mt-3 max-w-xs text-lg font-bold text-white drop-shadow">{gift.message}</p>}
             <button onClick={next} className="mt-6 px-8 py-3 rounded-full bg-amber-400 hover:bg-amber-300 text-indigo-950 font-black shadow-lg" style={{ animation: 'tgPop .5s ease-out 2.4s both' }}>
               {left > 0 ? `Next gift (${left} more)` : 'Thank you, teacher!'}

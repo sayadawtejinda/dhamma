@@ -792,6 +792,26 @@ export function festivalStatus(f, now = new Date()) {
 export const getActiveFestivals = (settings, now = new Date()) =>
   getFestivalList(settings).filter(f => festivalStatus(f, now) === 'open');
 
+// Special Avatar items the teacher can give to outstanding students (from the gift box form
+// in Send / Gifts). They are not tied to any festival: hidden in the wardrobe until owned.
+export const SPECIAL_AWARD_ITEMS = [
+  { category: 'outfit', item: { id: 'festival-special-champion', name: '🏆 Dhamma Champion Robe', color: '#FFB300', swatch: 'linear-gradient(135deg,#FFF59D,#FFB300 55%,#E65100)', pattern: 'lights', cost: 0, festival: true } },
+  { category: 'outfit', item: { id: 'festival-special-scholar', name: '📜 Star Scholar Robe', color: '#3949AB', swatch: 'linear-gradient(135deg,#9FA8DA,#3949AB 55%,#FFD54F)', pattern: 'night', cost: 0, festival: true } },
+  { category: 'outfit', item: { id: 'festival-special-lotus', name: '🪷 Golden Lotus Robe', color: '#EC407A', swatch: 'linear-gradient(135deg,#FCE4EC,#EC407A 55%,#FFC107)', pattern: 'lotus', cost: 0, festival: true } },
+  { category: 'outfit', item: { id: 'festival-special-royal', name: '👑 Royal Purple Robe', color: '#6A1B9A', swatch: 'linear-gradient(135deg,#CE93D8,#6A1B9A 55%,#FFD54F)', pattern: 'checks', cost: 0, festival: true } },
+  { category: 'outfit', item: { id: 'festival-special-diamond', name: '💎 Diamond Wisdom Robe', color: '#00ACC1', swatch: 'linear-gradient(135deg,#E0F7FA,#00ACC1 55%,#1A237E)', pattern: 'lights', cost: 0, festival: true } },
+  { category: 'outfit', item: { id: 'festival-special-rainbow', name: '🌈 Rainbow Sage Robe', color: '#43A047', swatch: 'linear-gradient(135deg,#FF8A80,#FFD740 30%,#69F0AE 60%,#40C4FF)', pattern: 'checks', cost: 0, festival: true } },
+  { category: 'accessory', item: { id: 'festival-special-crown', name: '👑 Golden Crown Glasses', kind: 'starglasses', color: '#FFC107', cost: 0, festival: true } },
+  { category: 'accessory', item: { id: 'festival-special-wisdom', name: '💡 Wisdom Lantern', kind: 'lantern', color: '#FFEB3B', cost: 0, festival: true } },
+  { category: 'accessory', item: { id: 'festival-special-star', name: '🌟 Shining Star Lantern', kind: 'skylantern', color: '#FFD54F', cost: 0, festival: true } },
+];
+
+// What a student's roster doc holds for one category after a gift item is added.
+export const ownedAfterGift = (data, category, id) => {
+  const now = (data && (data.avatarOwned?.[category] || data[`avatarOwned.${category}`])) || [];
+  return Array.from(new Set([...now, id]));
+};
+
 // Every limited-edition Avatar item across all festivals, by category, so
 // AvatarApp can draw (and list, once owned) items from festivals that have
 // already closed.
@@ -800,3 +820,4 @@ export const FESTIVAL_AVATAR_ITEMS = FESTIVALS.reduce((acc, f) => {
   (f.dailyGift?.pool || []).forEach(r => { (acc[r.category] = acc[r.category] || []).push(r.item); });
   return acc;
 }, {});
+SPECIAL_AWARD_ITEMS.forEach(r => { (FESTIVAL_AVATAR_ITEMS[r.category] = FESTIVAL_AVATAR_ITEMS[r.category] || []).push(r.item); });

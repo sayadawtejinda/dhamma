@@ -6,6 +6,7 @@ import { presenceIntervalMs } from './presenceDay';
 import { appId } from './firebaseConfig';
 import OnlineStatusWidget from './OnlineStatusWidget';
 import TeacherGiftBox from './TeacherGiftBox';
+import { ownedAfterGift } from './festivals';
 import { spawnFlyingCoins, trackLastClickPoint } from './flyingCoins';
 import bigBellSound from '../audio/big-bellburmese.mp3';
 import windChimesSound from '../audio/wind-chimes.mp3';
@@ -1338,7 +1339,11 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
         const snap = await tx.get(giftRef);
         if (!snap.exists()) return false; // already opened somewhere else
         const g = snap.data();
-        if ((g.coins || 0) > 0) tx.set(rosterRef, { studentName, coinBalance: increment(g.coins) }, { merge: true });
+        const rSnap = g.itemId ? await tx.get(rosterRef) : null;
+        const patch = { studentName };
+        if ((g.coins || 0) > 0) patch.coinBalance = increment(g.coins);
+        if (g.itemId) patch.avatarOwned = { [g.itemCategory]: ownedAfterGift(rSnap.exists() ? rSnap.data() : {}, g.itemCategory, g.itemId) };
+        if (patch.coinBalance || patch.avatarOwned) tx.set(rosterRef, patch, { merge: true });
         tx.delete(giftRef);
         return true;
       });

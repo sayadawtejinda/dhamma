@@ -1,4 +1,5 @@
 import { listenWithHistory } from './studentHistory';
+import { SPECIAL_AWARD_ITEMS } from './festivals';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import FestivalBanners from './FestivalBanner';
 import { STAR_MAX_LIVE, STAR_RUN_DAYS } from './starAnnouncementConfig';
@@ -1481,6 +1482,7 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
   const [giftCoins, setGiftCoins] = useState('50');
   const [giftMessage, setGiftMessage] = useState('');
   const [isSendingGift, setIsSendingGift] = useState(false);
+  const [giftItemId, setGiftItemId] = useState(''); // an optional special Avatar item inside the gift box
   const [giftKind, setGiftKind] = useState('coin'); // 'coin' | 'visit'
   const [selectedStudentUid, setSelectedStudentUid] = useState('');
   const [selectedBankLessonId, setSelectedBankLessonId] = useState('');
@@ -2724,10 +2726,11 @@ const handleUndoTrophyAward = async () => {
     e.preventDefault();
     if (isSendingGift) return;
     const coins = Math.max(0, Math.floor(Number(giftCoins) || 0));
-    if (coins === 0) { alert('Enter how many coins to give.'); return; }
+    const special = SPECIAL_AWARD_ITEMS.find(x => x.item.id === giftItemId);
+    if (coins === 0 && !special) { alert('Enter how many coins to give, or choose a special outfit.'); return; }
     const { recipients, targetText } = resolveGiftRecipients();
     if (recipients.length === 0) { alert('Please choose who to send to.'); return; }
-    if (!window.confirm(`Send a gift of ${coins} coins to ${targetText}?
+    if (!window.confirm(`Send a gift of ${coins} coins${special ? ` and the ${special.item.name}` : ''} to ${targetText}?
 
 Each one will see the gift pop up on their screen right away (or when they next open the app).`)) return;
     setIsSendingGift(true);
@@ -2741,7 +2744,7 @@ Each one will see the gift pop up on their screen right away (or when they next 
       for (let i = 0; i < recipients.length; i += 200) {
         const batch = writeBatch(db);
         recipients.slice(i, i + 200).forEach(s => {
-          batch.set(doc(col), { studentUid: s.id, studentName: s.name || '', coins, message: giftMessage.trim().slice(0, 80), createdAt: serverTimestamp(), expiresAt });
+          batch.set(doc(col), { studentUid: s.id, studentName: s.name || '', coins, ...(special ? { itemCategory: special.category, itemId: special.item.id } : {}), message: giftMessage.trim().slice(0, 80), createdAt: serverTimestamp(), expiresAt });
           // Also flag the student's profile: their open app is already
           // listening to it, so the gift pops up on their screen right away
           // wherever they are (see TeacherGiftPopup), at no extra read cost.
@@ -2751,6 +2754,7 @@ Each one will see the gift pop up on their screen right away (or when they next 
       }
       alert(`🎁 Gift sent to ${recipients.length} student(s).`);
       setGiftMessage('');
+      setGiftItemId('');
     } catch (err) {
       console.error('Error sending gift:', err);
       alert('Could not send the gift. Please try again.');
@@ -5518,13 +5522,19 @@ ${toSend.map(l => '• ' + l.title).join(', ')}`
           {sendActionType === 'gift' && (
             <div className="mb-4 p-4 rounded-xl bg-pink-50 border border-pink-200 space-y-3">
               <div className="flex rounded-lg bg-white border border-pink-200 p-1">
-                <button type="button" onClick={() => setGiftKind('coin')} className={`flex-1 p-2 rounded-lg font-semibold text-sm ${giftKind === 'coin' ? 'bg-pink-500 text-white shadow' : 'text-gray-600'}`}>🪙 Coin gift box</button>
+                <button type="button" onClick={() => setGiftKind('coin')} className={`flex-1 p-2 rounded-lg font-semibold text-sm ${giftKind === 'coin' ? 'bg-pink-500 text-white shadow' : 'text-gray-600'}`}>🎁 Gift box (coins / outfit)</button>
                 <button type="button" onClick={() => setGiftKind('visit')} className={`flex-1 p-2 rounded-lg font-semibold text-sm ${giftKind === 'visit' ? 'bg-pink-500 text-white shadow' : 'text-gray-600'}`}>👣 Visit (Nature World)</button>
               </div>
               {giftKind === 'coin' ? (
                 <>
                   <label className="block text-sm font-semibold text-gray-700">🪙 Coins inside the gift box
-                    <input type="number" min="1" value={giftCoins} onChange={(e) => setGiftCoins(e.target.value)} className="mt-1 w-full p-2 border rounded-lg text-center font-bold" />
+                    <input type="number" min="0" value={giftCoins} onChange={(e) => setGiftCoins(e.target.value)} className="mt-1 w-full p-2 border rounded-lg text-center font-bold" />
+                  </label>
+                  <label className="block text-sm font-semibold text-gray-700">🏆 Special outfit for an outstanding student (optional; coins can then be 0)
+                    <select value={giftItemId} onChange={(e) => setGiftItemId(e.target.value)} className="mt-1 w-full p-2 border rounded-lg bg-white">
+                      <option value="">-- No outfit, coins only --</option>
+                      {SPECIAL_AWARD_ITEMS.map(x => <option key={x.item.id} value={x.item.id}>{x.item.name} ({x.category === 'outfit' ? 'outfit' : 'accessory'})</option>)}
+                    </select>
                   </label>
                   <label className="block text-sm font-semibold text-gray-700">Short message (optional)
                     <input type="text" maxLength={80} value={giftMessage} onChange={(e) => setGiftMessage(e.target.value)} placeholder="e.g. Well done this week!" className="mt-1 w-full p-2 border rounded-lg" />
