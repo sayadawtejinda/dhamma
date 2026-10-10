@@ -351,7 +351,7 @@ export const FESTIVALS = [
     // up to `perDay` friends a day (each friend once), `coins` for each. The friend gets
     // `receiverCoins` coins and is told who gave it.
     lamps: {
-      perDay: 10, coins: 5, allLitBonus: 0, style: 'share', icon: '🍲', noun: 'plate',
+      perDay: 10, coins: 5, allLitBonus: 0, style: 'share', stir: true, icon: '🍲', noun: 'plate',
       button: '🍲 Share Htamane', panelTitle: '🍲 Share Htamane with Friends',
       panelIntro: 'Give a plate of warm htamane to your friends. Each friend once a day, up to 10 friends.',
       rowButton: '🍲 Give', rowDone: '✅ Given', doneAll: 'All 10 plates shared today. Come back tomorrow! 🌸',
@@ -401,6 +401,273 @@ export const FESTIVALS = [
         { category: 'outfit', item: { id: 'festival-htamane-2027-moon', name: '🌕 Tabodwe Full Moon Robe', color: '#37474F', swatch: 'linear-gradient(135deg,#78909C,#263238 65%,#FFF59D)', pattern: 'night', cost: 0, festival: true } },
         { category: 'accessory', item: { id: 'festival-htamane-2027-paddle', name: '🥄 Paddle Lantern', kind: 'skylantern', color: '#A1887F', cost: 0, festival: true } },
         { category: 'outfit', item: { id: 'festival-htamane-2027-warm', name: '🧣 Warm Season Robe', color: '#C62828', swatch: 'linear-gradient(135deg,#FFCDD2,#C62828 60%,#FFC107)', pattern: 'lotus', cost: 0, festival: true } },
+      ],
+    },
+  },
+  // ---- Western festivals for students who live in the West -----------------------------
+  // No religious teaching other than Dhamma: kindness, loving-kindness, gratitude, giving.
+  {
+    id: 'halloween-2026',
+    enabled: true,
+    scene: 'halloween-night',
+    icon: '🎃',
+    title: 'Happy Halloween',
+    tagline: 'Be kind to the shy little ghosts, send loving-kindness, and share treats with your friends!',
+    // Default dates -- the teacher sets the real ones on the "Festival apps" screen.
+    start: '2026-10-28',
+    end: '2026-10-31',
+    // Ten shy ghosts: tap one and send it a kind thought -- it smiles and becomes a glowing pumpkin.
+    // Then "Trick or Treat": give treats to up to 10 friends a day (each friend once).
+    lamps: {
+      perDay: 10, coins: 5, allLitBonus: 20, style: 'tap', icon: '👻', noun: 'ghost',
+      emoji: '👻', doneEmoji: '🎃',
+      rewardText: 'Cheer up {n} little ghosts in total',
+    },
+    kadaw: {
+      coins: 20,
+      lotus: 1,
+      title: 'Kind Thoughts',
+      button: '💛 Kind Thoughts',
+      actionLabel: '💛 I Send This Kind Thought',
+      doneWord: 'Kind Thoughts',
+      recipients: [
+        {
+          id: 'metta-all', emoji: '💛', name: 'Loving-Kindness to Everyone',
+          prayer: 'May all beings be happy. May all beings be safe. May all beings be free from fear. I send my loving-kindness to my family, my friends, the ghosts in the stories, and every living being.',
+          blessing: 'Loving-kindness makes the night bright and friendly. May you be happy and well. Sadhu! Sadhu! Sadhu!',
+        },
+        {
+          id: 'brave', emoji: '🦁', name: 'A Brave and Calm Mind',
+          prayer: 'Ghosts in stories cannot hurt me. When I feel scared, I breathe in and out slowly and I stay calm. A calm mind is the bravest mind. I make a firm resolution to keep my mind calm.',
+          blessing: 'Well done! A calm mind is never afraid for long. May you always be brave and kind.',
+        },
+        {
+          id: 'safe', emoji: '🔦', name: 'Be Safe and Kind on Halloween Night',
+          prayer: 'When I go out for treats I stay with my family, I look both ways before I cross, and I say "thank you" at every door. I will not scare or tease anyone in a way that hurts.',
+          blessing: 'Kind and careful children make every night happy. May you be safe!',
+        },
+        {
+          id: 'share-candy', emoji: '🍬', name: 'Sharing My Treats',
+          prayer: 'Sharing makes the sweet things even sweeter. I make a firm resolution to share my treats with others and to think of children who have none.',
+          blessing: 'A generous heart is the best treat of all. Sadhu! Sadhu! Sadhu!',
+        },
+      ],
+    },
+    rewards: [
+      {
+        id: 'halloween-2026-robe',
+        category: 'outfit',
+        requires: { type: 'lamps', count: 40 },
+        item: { id: 'festival-halloween-2026-robe', name: '🎃 Pumpkin Robe', color: '#EF6C00', swatch: 'linear-gradient(135deg,#FFCC80,#EF6C00 60%,#4E342E)', pattern: 'lights', cost: 0, festival: true },
+      },
+    ],
+    dailyGift: {
+      bonusCoins: 50,
+      pool: [
+        { category: 'accessory', item: { id: 'festival-halloween-2026-ghostglasses', name: '👻 Friendly Ghost Glasses', kind: 'starglasses', color: '#E1BEE7', cost: 0, festival: true } },
+        { category: 'outfit', item: { id: 'festival-halloween-2026-night', name: '🦇 Midnight Bat Robe', color: '#4A148C', swatch: 'linear-gradient(135deg,#7B1FA2,#311B92 65%,#FFB300)', pattern: 'night', cost: 0, festival: true } },
+        { category: 'accessory', item: { id: 'festival-halloween-2026-lantern', name: '🎃 Jack-o-Lantern', kind: 'lantern', color: '#FB8C00', cost: 0, festival: true } },
+        { category: 'outfit', item: { id: 'festival-halloween-2026-checks', name: '🟧 Orange and Black Robe', color: '#212121', swatch: 'linear-gradient(135deg,#FB8C00 50%,#212121 50%)', pattern: 'checks', cost: 0, festival: true } },
+        { category: 'accessory', item: { id: 'festival-halloween-2026-moon', name: '🌕 Harvest Moon Lantern', kind: 'skylantern', color: '#FFE082', cost: 0, festival: true } },
+        { category: 'outfit', item: { id: 'festival-halloween-2026-candy', name: '🍬 Candy Robe', color: '#EC407A', swatch: 'linear-gradient(135deg,#F8BBD0,#EC407A 60%,#7B1FA2)', pattern: 'lotus', cost: 0, festival: true } },
+      ],
+    },
+  },
+  {
+    id: 'thanksgiving-2026',
+    enabled: true,
+    scene: 'thanksgiving-table',
+    icon: '🦃',
+    title: 'Thanksgiving: Day of Gratitude',
+    tagline: 'Put your thanks on the table, say thank you to the people who help you, and send thank-you cards to friends!',
+    // Fourth Thursday of November 2026 is 26 November.
+    start: '2026-11-23',
+    end: '2026-11-26',
+    lamps: {
+      perDay: 10, coins: 5, allLitBonus: 20, style: 'tap', icon: '🍂', noun: 'thank-you',
+      emoji: '🍂', doneEmoji: ['🍎', '🌽', '🥧', '🍠', '🍇'],
+      rewardText: 'Put {n} thank-yous on the table in total',
+    },
+    kadaw: {
+      coins: 20,
+      lotus: 1,
+      title: 'Say Thank You',
+      button: '💛 Say Thank You',
+      actionLabel: '💛 I Say Thank You',
+      doneWord: 'Thank-yous',
+      recipients: [
+        {
+          id: 'parents', emoji: '👨‍👩‍👧', name: 'Mother and Father',
+          prayer: 'Dear Mother and Father, thank you for my home, my food and your love. I am grateful for everything you do for me. I will help you and make you proud.',
+          blessing: 'May you be healthy and happy, and may your kind child bring you joy.',
+        },
+        {
+          id: 'farmers', emoji: '🌾', name: 'Everyone Who Made My Food',
+          prayer: 'Many people worked to bring this food to my table: farmers, drivers, shop workers and cooks. Thank you all. I will never waste my food and I will eat with a grateful heart.',
+          blessing: 'A grateful heart makes every meal taste better. May no one go hungry.',
+        },
+        {
+          id: 'teachers', emoji: '🧑‍🏫', name: 'Teachers',
+          prayer: 'Dear teachers, thank you for teaching me with patience. Because of you I can read, think and learn the Dhamma. I bow to you with respect.',
+          blessing: 'May your wisdom grow, and may your heart stay kind.',
+        },
+        {
+          id: 'friends', emoji: '🧒', name: 'My Friends',
+          prayer: 'Dear friends, thank you for playing with me, for helping me and for sharing. A good friend is a great blessing. I will be a good friend to you too.',
+          blessing: 'May you always have true, kind friends. Sadhu! Sadhu! Sadhu!',
+        },
+      ],
+    },
+    rewards: [
+      {
+        id: 'thanksgiving-2026-robe',
+        category: 'outfit',
+        requires: { type: 'lamps', count: 40 },
+        item: { id: 'festival-thanksgiving-2026-robe', name: '🍂 Autumn Leaves Robe', color: '#D84315', swatch: 'linear-gradient(135deg,#FFE0B2,#E65100 55%,#5D4037)', pattern: 'lotus', cost: 0, festival: true },
+      },
+    ],
+    dailyGift: {
+      bonusCoins: 50,
+      pool: [
+        { category: 'accessory', item: { id: 'festival-thanksgiving-2026-cornglasses', name: '🌽 Harvest Glasses', kind: 'starglasses', color: '#FDD835', cost: 0, festival: true } },
+        { category: 'outfit', item: { id: 'festival-thanksgiving-2026-harvest', name: '🍎 Harvest Robe', color: '#C62828', swatch: 'linear-gradient(135deg,#FFCDD2,#C62828 60%,#FFA000)', pattern: 'checks', cost: 0, festival: true } },
+        { category: 'accessory', item: { id: 'festival-thanksgiving-2026-lantern', name: '🕯️ Table Candle Lantern', kind: 'lantern', color: '#FFB74D', cost: 0, festival: true } },
+        { category: 'outfit', item: { id: 'festival-thanksgiving-2026-gold', name: '🍁 Golden Maple Robe', color: '#EF6C00', swatch: 'linear-gradient(135deg,#FFE082,#EF6C00 60%,#BF360C)', pattern: 'lights', cost: 0, festival: true } },
+        { category: 'accessory', item: { id: 'festival-thanksgiving-2026-leaf', name: '🍂 Falling Leaf Lantern', kind: 'skylantern', color: '#FF8A65', cost: 0, festival: true } },
+        { category: 'outfit', item: { id: 'festival-thanksgiving-2026-pie', name: '🥧 Pumpkin Pie Robe', color: '#F9A825', swatch: 'linear-gradient(135deg,#FFF59D,#F9A825 60%,#8D6E63)', pattern: 'night', cost: 0, festival: true } },
+      ],
+    },
+  },
+  {
+    id: 'winter-2026',
+    enabled: true,
+    scene: 'winter-snow',
+    icon: '⛄',
+    title: 'Winter Festival of Giving',
+    tagline: 'Light the tree of kindness, give gifts of love to your friends, and share with those in need!',
+    start: '2026-12-21',
+    end: '2026-12-25',
+    // Ten gift boxes: tap one to light a bulb on the tree. Then give a gift to up to 10 friends a day.
+    lamps: {
+      perDay: 10, coins: 5, allLitBonus: 20, style: 'share', icon: '🎁', noun: 'gift',
+      button: '🎁 Give a Gift', panelTitle: '🎁 Give a Gift to Friends',
+      panelIntro: 'Give a gift of kindness to your friends. Each friend once a day, up to 10 friends.',
+      rowButton: '🎁 Give', rowDone: '✅ Given', doneAll: 'All 10 gifts given today. Come back tomorrow! ❄️',
+      receiveTitle: 'You received a gift!', receiveText: 'gave you a gift of kindness. Happy winter holidays! ⛄', receiverCoins: 2,
+    },
+    kadaw: {
+      coins: 20,
+      lotus: 1,
+      title: 'Gifts of Kindness',
+      button: '💝 Kind Deeds',
+      actionLabel: '💝 I Promise This Kind Deed',
+      doneWord: 'Kind Deeds',
+      recipients: [
+        {
+          id: 'family', emoji: '🏠', name: 'Be Kind to My Family',
+          prayer: 'The best gift for my family is my help and my kind words. I make a firm resolution: today I will help at home without being asked and I will speak gently.',
+          blessing: 'A kind child makes the whole house warm in winter. Sadhu! Sadhu! Sadhu!',
+        },
+        {
+          id: 'needy', emoji: '🧣', name: 'Share With Those in Need',
+          prayer: 'Winter is cold and some people have no warm coat or no warm meal. I make a firm resolution to share what I can: a coin, a toy, a coat or a kind word.',
+          blessing: 'Giving is the beginning of all merit. May your gifts warm many hearts.',
+        },
+        {
+          id: 'birds', emoji: '🐦', name: 'Care for Birds and Animals',
+          prayer: 'Birds and animals find little food in the snow. I make a firm resolution to be kind to every animal, to feed the birds and never to hurt any living being.',
+          blessing: 'May all animals be safe, warm and well fed.',
+        },
+        {
+          id: 'lonely', emoji: '🤝', name: 'A Friend for the Lonely',
+          prayer: 'Some children feel lonely. I make a firm resolution to smile, to say hello and to invite someone who is alone to play with me.',
+          blessing: 'One kind hello can change a whole day. Sadhu! Sadhu! Sadhu!',
+        },
+      ],
+    },
+    rewards: [
+      {
+        id: 'winter-2026-robe',
+        category: 'outfit',
+        requires: { type: 'lamps', count: 40 },
+        item: { id: 'festival-winter-2026-robe', name: '⛄ Snowman Robe', color: '#1E88E5', swatch: 'linear-gradient(135deg,#FFFFFF,#90CAF9 55%,#1565C0)', pattern: 'lights', cost: 0, festival: true },
+      },
+    ],
+    dailyGift: {
+      bonusCoins: 50,
+      pool: [
+        { category: 'accessory', item: { id: 'festival-winter-2026-snowglasses', name: '❄️ Snowflake Glasses', kind: 'starglasses', color: '#81D4FA', cost: 0, festival: true } },
+        { category: 'outfit', item: { id: 'festival-winter-2026-tree', name: '🎄 Tree of Lights Robe', color: '#2E7D32', swatch: 'linear-gradient(135deg,#A5D6A7,#2E7D32 60%,#FFC107)', pattern: 'lights', cost: 0, festival: true } },
+        { category: 'accessory', item: { id: 'festival-winter-2026-lantern', name: '🕯️ Winter Candle Lantern', kind: 'lantern', color: '#FFCA28', cost: 0, festival: true } },
+        { category: 'outfit', item: { id: 'festival-winter-2026-scarf', name: '🧣 Cozy Scarf Robe', color: '#C62828', swatch: 'linear-gradient(135deg,#FFFFFF 50%,#C62828 50%)', pattern: 'checks', cost: 0, festival: true } },
+        { category: 'accessory', item: { id: 'festival-winter-2026-star', name: '⭐ Winter Star Lantern', kind: 'skylantern', color: '#FFF176', cost: 0, festival: true } },
+        { category: 'outfit', item: { id: 'festival-winter-2026-night', name: '🌌 Snowy Night Robe', color: '#283593', swatch: 'linear-gradient(135deg,#5C6BC0,#1A237E 65%,#E3F2FD)', pattern: 'night', cost: 0, festival: true } },
+      ],
+    },
+  },
+  {
+    id: 'newyear-2027',
+    enabled: true,
+    scene: 'newyear-fireworks',
+    icon: '🎆',
+    title: 'Happy New Year',
+    tagline: 'Launch the fireworks, make good resolutions for the new year, and send good wishes to your friends!',
+    start: '2026-12-29',
+    end: '2027-01-02',
+    lamps: {
+      perDay: 10, coins: 5, allLitBonus: 20, style: 'share', icon: '🎆', noun: 'wish',
+      button: '🎉 Send Good Wishes', panelTitle: '🎉 Send Good Wishes to Friends',
+      panelIntro: 'Send a New Year wish to your friends. Each friend once a day, up to 10 friends.',
+      rowButton: '🎉 Send', rowDone: '✅ Sent', doneAll: 'All 10 wishes sent today. Come back tomorrow! 🎆',
+      receiveTitle: 'A New Year wish for you!', receiveText: 'sent you a good wish for the new year. Happy New Year! 🎆', receiverCoins: 2,
+    },
+    kadaw: {
+      coins: 20,
+      lotus: 1,
+      title: 'New Year Resolutions',
+      button: '🌟 Resolutions',
+      actionLabel: '🌟 I Make This Resolution',
+      doneWord: 'Resolutions',
+      recipients: [
+        {
+          id: 'kind', emoji: '💛', name: 'I Will Be Kind',
+          prayer: 'In the new year I make a firm resolution: I will speak kindly, I will help others and I will send loving-kindness to everyone, even to people who are hard to love.',
+          blessing: 'May your kindness grow bigger every day. Sadhu! Sadhu! Sadhu!',
+        },
+        {
+          id: 'learn', emoji: '📚', name: 'I Will Keep Learning',
+          prayer: 'In the new year I make a firm resolution: I will study with all my heart, I will learn the Dhamma and I will finish my lessons every week.',
+          blessing: 'May your wisdom grow like a bright new light.',
+        },
+        {
+          id: 'meditate', emoji: '🧘', name: 'I Will Meditate',
+          prayer: 'In the new year I make a firm resolution: I will sit quietly and watch my breath every day, even for a few minutes, so that my mind becomes calm and clear.',
+          blessing: 'A calm mind makes the whole year peaceful. Sadhu! Sadhu! Sadhu!',
+        },
+        {
+          id: 'grateful', emoji: '🙏', name: 'I Will Be Grateful',
+          prayer: 'In the new year I make a firm resolution: I will say thank you every day to my parents, my teachers and my friends, and I will remember how lucky I am.',
+          blessing: 'A grateful heart finds happiness everywhere.',
+        },
+      ],
+    },
+    rewards: [
+      {
+        id: 'newyear-2027-robe',
+        category: 'outfit',
+        requires: { type: 'lamps', count: 40 },
+        item: { id: 'festival-newyear-2027-robe', name: '🎆 Fireworks Robe', color: '#4527A0', swatch: 'linear-gradient(135deg,#7E57C2,#1A1055 55%,#FFD54F)', pattern: 'night', cost: 0, festival: true },
+      },
+    ],
+    dailyGift: {
+      bonusCoins: 50,
+      pool: [
+        { category: 'accessory', item: { id: 'festival-newyear-2027-glasses', name: '🎉 Party Glasses', kind: 'starglasses', color: '#FF4081', cost: 0, festival: true } },
+        { category: 'outfit', item: { id: 'festival-newyear-2027-gold', name: '✨ Midnight Gold Robe', color: '#F9A825', swatch: 'linear-gradient(135deg,#FFF59D,#F9A825 60%,#1A1055)', pattern: 'lights', cost: 0, festival: true } },
+        { category: 'accessory', item: { id: 'festival-newyear-2027-lantern', name: '🎇 Sparkler Lantern', kind: 'lantern', color: '#FFD740', cost: 0, festival: true } },
+        { category: 'outfit', item: { id: 'festival-newyear-2027-confetti', name: '🎊 Confetti Robe', color: '#00ACC1', swatch: 'linear-gradient(135deg,#FF8A80 33%,#FFD740 33% 66%,#40C4FF 66%)', pattern: 'checks', cost: 0, festival: true } },
+        { category: 'accessory', item: { id: 'festival-newyear-2027-sky', name: '🚀 Rocket Lantern', kind: 'skylantern', color: '#EF5350', cost: 0, festival: true } },
+        { category: 'outfit', item: { id: 'festival-newyear-2027-clock', name: '🕛 Midnight Clock Robe', color: '#263238', swatch: 'linear-gradient(135deg,#78909C,#263238 65%,#FFD740)', pattern: 'lotus', cost: 0, festival: true } },
       ],
     },
   },

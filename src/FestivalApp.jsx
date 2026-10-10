@@ -46,6 +46,12 @@ const FLOWER_SPOTS = [
   { x: 92, y: 62 }, { x: 78, y: 54 }, { x: 64, y: 66 }, { x: 86, y: 80 }, { x: 72, y: 90 },
 ];
 
+// Friendly things to tap in the Western festivals, spread around the scene (% of the scene).
+const TAP_SPOTS = [
+  { x: 9, y: 22 }, { x: 27, y: 12 }, { x: 73, y: 12 }, { x: 91, y: 22 }, { x: 10, y: 50 },
+  { x: 90, y: 50 }, { x: 22, y: 74 }, { x: 78, y: 74 }, { x: 8, y: 88 }, { x: 92, y: 88 },
+];
+
 // Water pots standing on the ground, left and right of the Bodhi tree (% of the scene).
 const POT_SPOTS = [
   { x: 8, y: 80 }, { x: 19, y: 88 }, { x: 30, y: 82 }, { x: 14, y: 70 }, { x: 28, y: 94 },
@@ -758,6 +764,143 @@ function ThingyanScene({ glow }) {
   );
 }
 
+// ---- Western festivals (Halloween, Thanksgiving, Winter giving, New Year) ----------------
+// Each scene is a simple friendly picture; `glow` (0-1, how many of today's items are done)
+// makes the main light brighter.
+const NEW_SCENE_BG = {
+  'halloween-night': 'linear-gradient(180deg,#120a24 0%,#2a1450 45%,#5a2a6a 75%,#2b1536 100%)',
+  'thanksgiving-table': 'linear-gradient(180deg,#f7b267 0%,#fbd38d 38%,#e9a45a 70%,#a2602b 100%)',
+  'winter-snow': 'linear-gradient(180deg,#0a1a3a 0%,#18386b 45%,#4a78a8 78%,#cfe3f3 100%)',
+  'newyear-fireworks': 'linear-gradient(180deg,#02030f 0%,#0b1040 50%,#2a1a5a 82%,#3b1f55 100%)',
+};
+
+function HalloweenScene({ glow }) {
+  const g = 0.45 + glow * 0.55;
+  return (
+    <svg viewBox="0 0 400 270" preserveAspectRatio="xMidYMax meet" className="absolute inset-0 w-full h-full" aria-hidden="true">
+      <defs><radialGradient id="hwGlow" cx="50%" cy="50%" r="50%"><stop offset="0" stopColor="#ffb300" stopOpacity=".8" /><stop offset="1" stopColor="#ff6d00" stopOpacity="0" /></radialGradient></defs>
+      {/* hills */}
+      <path d="M0 210 Q70 170 150 200 T300 195 T400 205 L400 270 L0 270 Z" fill="#1a0f26" />
+      <path d="M0 238 Q100 214 200 236 T400 232 L400 270 L0 270 Z" fill="#241433" />
+      {/* friendly little house with glowing windows */}
+      <g transform="translate(40 150)">
+        <rect x="0" y="22" width="64" height="48" fill="#3a2352" />
+        <path d="M-6 24 L32 -6 L70 24 Z" fill="#2a1840" />
+        <rect x="12" y="34" width="12" height="14" rx="2" fill="#ffca28" opacity={g} /><rect x="40" y="34" width="12" height="14" rx="2" fill="#ffca28" opacity={g} />
+        <rect x="26" y="50" width="12" height="20" rx="6" fill="#1a0f26" />
+      </g>
+      {/* bare tree with swinging bats */}
+      <g stroke="#120a1c" strokeWidth="4" fill="none" strokeLinecap="round"><path d="M340 215 L340 130" /><path d="M340 160 L312 130" /><path d="M340 148 L366 120" /><path d="M340 135 L330 108" /></g>
+      {[[320, 128], [372, 118]].map(([bx, by], i) => (
+        <g key={i} transform={`translate(${bx} ${by})`}><g style={{ animation: `fsSwing ${2 + i * 0.6}s ease-in-out infinite`, transformOrigin: '0px -8px' }}>
+          <path d="M0 -8 L0 0" stroke="#120a1c" strokeWidth="1" /><path d="M-9 4 Q-4 -3 0 2 Q4 -3 9 4 Q4 3 0 8 Q-4 3 -9 4 Z" fill="#2b1a3d" stroke="#6a4a8c" strokeWidth=".6" /><circle cx="-1.6" cy="3.4" r=".8" fill="#ffeb3b" /><circle cx="1.6" cy="3.4" r=".8" fill="#ffeb3b" />
+        </g></g>
+      ))}
+      {/* the big smiling pumpkin */}
+      <circle cx="205" cy="200" r="64" fill="url(#hwGlow)" opacity={0.25 + glow * 0.7} />
+      <ellipse cx="205" cy="212" rx="58" ry="46" fill="#f57c00" stroke="#c75b00" strokeWidth="2" />
+      <ellipse cx="180" cy="212" rx="26" ry="46" fill="none" stroke="#c75b00" strokeWidth="2" /><ellipse cx="230" cy="212" rx="26" ry="46" fill="none" stroke="#c75b00" strokeWidth="2" />
+      <rect x="200" y="160" width="10" height="16" rx="3" fill="#4e7d2a" />
+      <path d="M185 200 L195 188 L203 200 Z" fill="#ffd54f" opacity={g} /><path d="M208 200 L216 188 L226 200 Z" fill="#ffd54f" opacity={g} />
+      <path d="M180 222 Q205 248 230 222 Q218 238 205 232 Q192 238 180 222 Z" fill="#ffd54f" opacity={g} />
+      {/* kind little ghosts */}
+      {[[110, 120, 1], [292, 96, 0.8], [170, 60, 0.7]].map(([gx, gy, s], i) => (
+        <g key={i} transform={`translate(${gx} ${gy}) scale(${s})`}><g style={{ animation: `fsBob ${2.6 + i * 0.5}s ease-in-out ${i * 0.4}s infinite` }}>
+          <path d="M-16 20 L-16 -4 Q-16 -22 0 -22 Q16 -22 16 -4 L16 20 L10 14 L5 20 L0 14 L-5 20 L-10 14 Z" fill="#f4f1ff" opacity=".95" />
+          <circle cx="-5.5" cy="-6" r="2.4" fill="#2a1450" /><circle cx="5.5" cy="-6" r="2.4" fill="#2a1450" /><path d="M-5 2 Q0 8 5 2" stroke="#2a1450" strokeWidth="1.6" fill="none" strokeLinecap="round" />
+        </g></g>
+      ))}
+    </svg>
+  );
+}
+
+function ThanksgivingScene({ glow }) {
+  const g = 0.35 + glow * 0.65;
+  return (
+    <svg viewBox="0 0 400 270" preserveAspectRatio="xMidYMax meet" className="absolute inset-0 w-full h-full" aria-hidden="true">
+      <defs><radialGradient id="tgGlow" cx="50%" cy="50%" r="50%"><stop offset="0" stopColor="#fff3b0" stopOpacity=".9" /><stop offset="1" stopColor="#fff3b0" stopOpacity="0" /></radialGradient></defs>
+      {/* autumn tree */}
+      <rect x="40" y="110" width="16" height="110" fill="#6d4524" />
+      {[[48, 90, 38, '#e65100'], [24, 112, 26, '#f57c00'], [74, 110, 28, '#ef6c00'], [48, 70, 24, '#fb8c00'], [30, 80, 20, '#d84315']].map(([x, y, r, c], i) => <circle key={i} cx={x} cy={y} r={r} fill={c} />)}
+      {/* falling leaves */}
+      {[[100, 40, '#e65100'], [150, 20, '#f9a825'], [250, 30, '#d84315'], [320, 50, '#ef6c00'], [200, 10, '#fb8c00']].map(([x, y, c], i) => (
+        <ellipse key={i} cx={x} cy={y} rx="6" ry="3.2" fill={c} style={{ animation: `fsBob ${3 + i * 0.4}s ease-in-out ${i * 0.3}s infinite` }} />
+      ))}
+      {/* ground */}
+      <path d="M0 226 L400 226 L400 270 L0 270 Z" fill="#8a5a2b" />
+      {/* the big table with a red cloth */}
+      <rect x="62" y="176" width="276" height="14" rx="4" fill="#b71c1c" /><path d="M62 190 L338 190 L326 214 L74 214 Z" fill="#c62828" />
+      <rect x="82" y="214" width="9" height="24" fill="#5d3a1a" /><rect x="309" y="214" width="9" height="24" fill="#5d3a1a" />
+      <circle cx="200" cy="160" r="70" fill="url(#tgGlow)" opacity={g * 0.6} />
+      {/* turkey */}
+      <ellipse cx="200" cy="164" rx="34" ry="20" fill="#a1581c" stroke="#7b3f10" strokeWidth="1.5" />
+      <ellipse cx="184" cy="155" rx="12" ry="6" fill="#c9792f" opacity=".7" />
+      <path d="M172 174 Q160 188 170 192 Q176 186 180 178 Z" fill="#c9792f" stroke="#7b3f10" strokeWidth="1" /><path d="M228 174 Q240 188 230 192 Q224 186 220 178 Z" fill="#c9792f" stroke="#7b3f10" strokeWidth="1" />
+      {/* pie, corn, apples, candles */}
+      <ellipse cx="116" cy="172" rx="22" ry="7" fill="#e0a458" stroke="#a9702a" strokeWidth="1.2" /><path d="M96 172 Q116 160 136 172" fill="#f2c27a" />
+      <ellipse cx="288" cy="170" rx="24" ry="6" fill="#d7ccc8" /><path d="M268 168 Q288 150 308 168 Z" fill="#fdd835" /><path d="M276 164 L300 164 M274 158 L302 158" stroke="#c9a400" strokeWidth="1" />
+      {[[150, 172], [252, 172], [166, 176]].map(([x, y], i) => <circle key={i} cx={x} cy={y} r="5.5" fill={['#d32f2f', '#e53935', '#c62828'][i]} />)}
+      {[[78, 172], [322, 172]].map(([x, y], i) => (
+        <g key={i}><rect x={x - 3} y={y - 16} width="6" height="16" fill="#fff8e1" /><ellipse cx={x} cy={y - 21} rx="3" ry="6" fill="#ffb300" opacity={g} style={{ animation: 'fsFlicker2 .9s ease-in-out infinite', transformOrigin: `${x}px ${y - 16}px` }} /></g>
+      ))}
+    </svg>
+  );
+}
+
+function WinterScene({ glow }) {
+  const g = 0.3 + glow * 0.7;
+  const bulbs = [[200, 78], [186, 104], [214, 100], [172, 130], [200, 126], [228, 130], [158, 160], [188, 156], [214, 154], [244, 160]];
+  return (
+    <svg viewBox="0 0 400 270" preserveAspectRatio="xMidYMax meet" className="absolute inset-0 w-full h-full" aria-hidden="true">
+      {/* snowy hills */}
+      <path d="M0 210 Q90 188 190 210 T400 204 L400 270 L0 270 Z" fill="#e8f1fa" />
+      <path d="M0 240 Q120 222 230 242 T400 236 L400 270 L0 270 Z" fill="#fff" />
+      {/* the tree of lights */}
+      <rect x="194" y="196" width="12" height="22" fill="#6d4524" />
+      <path d="M200 60 L158 120 L176 118 L148 168 L178 164 L140 204 L260 204 L222 164 L252 168 L224 118 L242 120 Z" fill="#1b6b3a" stroke="#0f4a26" strokeWidth="1.5" />
+      <path d="M200 48 l4 10 11 1-8 7 3 11-10-6-10 6 3-11-8-7 11-1z" fill="#ffd54f" opacity={0.5 + g * 0.5} />
+      {bulbs.map(([x, y], i) => <circle key={i} cx={x} cy={y} r="3.6" fill={['#ff5252', '#ffd740', '#40c4ff', '#ff80ab', '#b2ff59'][i % 5]} opacity={i / bulbs.length < g ? 1 : 0.2} style={{ animation: i / bulbs.length < g ? `fsTwinkle ${1.2 + (i % 3) * 0.4}s ease-in-out infinite` : 'none' }} />)}
+      {/* gifts under the tree */}
+      {[[140, 210, 24, 18, '#e53935'], [168, 214, 20, 14, '#1e88e5'], [232, 212, 26, 16, '#8e24aa'], [264, 216, 18, 12, '#fb8c00']].map(([x, y, w, h, c], i) => (
+        <g key={i}><rect x={x} y={y} width={w} height={h} fill={c} /><rect x={x + w / 2 - 2} y={y} width="4" height={h} fill="#ffe082" /><rect x={x} y={y + h / 2 - 2} width={w} height="4" fill="#ffe082" /></g>
+      ))}
+      {/* a friendly snowman with a scarf */}
+      <g transform="translate(70 168)">
+        <circle cx="0" cy="40" r="26" fill="#fff" stroke="#cfd8dc" strokeWidth="1.2" /><circle cx="0" cy="8" r="19" fill="#fff" stroke="#cfd8dc" strokeWidth="1.2" /><circle cx="0" cy="-20" r="14" fill="#fff" stroke="#cfd8dc" strokeWidth="1.2" />
+        <circle cx="-5" cy="-23" r="1.8" fill="#263238" /><circle cx="5" cy="-23" r="1.8" fill="#263238" /><path d="M0 -19 L11 -17 L0 -15 Z" fill="#fb8c00" /><path d="M-6 -13 Q0 -9 6 -13" stroke="#263238" strokeWidth="1.2" fill="none" />
+        <path d="M-15 -8 Q0 -2 15 -8 L15 -2 Q0 4 -15 -2 Z" fill="#e53935" /><path d="M10 -3 L16 14 L8 14 Z" fill="#c62828" />
+        <rect x="-10" y="-36" width="20" height="12" fill="#37474f" /><rect x="-15" y="-26" width="30" height="4" fill="#37474f" />
+      </g>
+      {/* falling snow */}
+      {Array.from({ length: 22 }).map((_, i) => <circle key={i} cx={(i * 47) % 400} cy="-4" r={1.4 + (i % 3) * 0.7} fill="#fff" style={{ animation: `fsSnow ${5 + (i % 5)}s linear ${(i % 7) * 0.8}s infinite` }} />)}
+    </svg>
+  );
+}
+
+function NewYearScene({ glow }) {
+  const bursts = [[80, 70, '#ff5252'], [200, 46, '#ffd740'], [320, 76, '#40c4ff'], [140, 118, '#b388ff'], [262, 116, '#69f0ae']];
+  const rays = Array.from({ length: 14 }, (_, i) => i * (360 / 14));
+  return (
+    <svg viewBox="0 0 400 270" preserveAspectRatio="xMidYMax meet" className="absolute inset-0 w-full h-full" aria-hidden="true">
+      {bursts.map(([bx, by, c], i) => (
+        <g key={i} transform={`translate(${bx} ${by})`}><g style={{ animation: `fsBurst ${2.6 + (i % 3) * 0.4}s ease-out ${i * 0.55}s infinite`, transformBox: 'fill-box', transformOrigin: 'center' }}>
+          {rays.map(a => <line key={a} x1="8" y1="0" x2="30" y2="0" stroke={c} strokeWidth="2.4" strokeLinecap="round" transform={`rotate(${a})`} />)}
+          {rays.map(a => <circle key={`d${a}`} cx="38" cy="0" r="1.8" fill={c} transform={`rotate(${a + 12})`} />)}
+        </g></g>
+      ))}
+      {/* skyline */}
+      <g fill="#0a0820">{[[0, 190, 40, 80], [36, 170, 34, 100], [68, 200, 30, 70], [96, 180, 38, 90], [300, 184, 36, 86], [334, 164, 30, 106], [362, 196, 40, 74]].map(([x, y, w, h], i) => <rect key={i} x={x} y={y} width={w} height={h} />)}</g>
+      <g fill="#ffd54f" opacity=".7">{[[10, 200], [20, 216], [44, 184], [52, 204], [76, 214], [108, 194], [120, 212], [310, 196], [322, 214], [342, 178], [352, 198], [372, 208], [384, 224]].map(([x, y], i) => <rect key={i} x={x} y={y} width="5" height="6" />)}</g>
+      {/* the big clock at midnight */}
+      <circle cx="200" cy="198" r="52" fill="#ffd54f" opacity={0.08 + glow * 0.3} />
+      <circle cx="200" cy="198" r="38" fill="#fff8e1" stroke="#ffb300" strokeWidth="5" />
+      {Array.from({ length: 12 }).map((_, i) => <line key={i} x1="200" y1="164" x2="200" y2={i % 3 === 0 ? 172 : 168} stroke="#5d4037" strokeWidth={i % 3 === 0 ? 2.4 : 1.2} transform={`rotate(${i * 30} 200 198)`} />)}
+      <path d="M200 198 L200 170" stroke="#3e2723" strokeWidth="3" strokeLinecap="round" /><path d="M200 198 L200 176" stroke="#3e2723" strokeWidth="2" strokeLinecap="round" transform="rotate(4 200 198)" /><circle cx="200" cy="198" r="3" fill="#d32f2f" />
+      <rect x="150" y="240" width="100" height="30" rx="4" fill="#1a1440" /><text x="200" y="260" textAnchor="middle" fontSize="15" fontWeight="900" fill="#ffd54f">HAPPY NEW YEAR</text>
+    </svg>
+  );
+}
+
 // The panel for sprinkling water on friends: who was active this week, from the same
 // static weekly file the other online pills use (no Firestore read).
 const SHRINE_ROSTER_FILE = `${SHRINE_ROSTER_PATH.replace(/\//g, '__')}.json`;
@@ -1137,7 +1280,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
     setFloaters(prev => [...prev, { id: fid, x: point.x, y: point.y, text: `+${festival.lamps.coins}` }]);
     setTimeout(() => setFloaters(prev => prev.filter(f => f.id !== fid)), 1100);
     if (completesAll) {
-      if (!['splash', 'share'].includes(festival.lamps.style)) releaseLanterns();
+      if (!['splash', 'share', 'tap'].includes(festival.lamps.style)) releaseLanterns();
       if (festival.lamps.allLitBonus > 0) showToast(`${festival.lamps.icon || '🏮'} All ${festival.lamps.noun || 'lamp'}s done! Bonus +${festival.lamps.allLitBonus} 🪙`);
     }
     pendingRef.current.lamps.add(i);
@@ -1244,7 +1387,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
   const lightScene = festival.scene === 'bodhi-water' || festival.scene === 'thingyan-water';
 
   return (
-    <div className="relative min-h-screen flex flex-col overflow-hidden text-white" style={{ background: festival.scene === 'htamane-fire' ? 'linear-gradient(180deg,#0b1026 0%,#1d2447 40%,#4a2a2a 78%,#6d3a1f 100%)' : festival.scene === 'thingyan-water' ? 'linear-gradient(180deg,#8fd3ff 0%,#d6f0ff 42%,#fff0b8 100%)' : festival.scene === 'deer-park' ? 'linear-gradient(180deg,#24153f 0%,#6b3358 30%,#e8964f 60%,#2d5e34 100%)' : festival.scene === 'bodhi-water' ? 'linear-gradient(180deg,#ffd9a0 0%,#fff0c8 30%,#cfe9d6 62%,#9ccc9c 100%)' : festival.scene === 'balloons-night' ? 'linear-gradient(180deg,#04141f 0%,#07302d 40%,#0d4a3a 72%,#0a3024 100%)' : 'linear-gradient(180deg,#070b22 0%,#17104a 45%,#3a1b5c 78%,#5a2a52 100%)' }}>
+    <div className="relative min-h-screen flex flex-col overflow-hidden text-white" style={{ background: NEW_SCENE_BG[festival.scene] ? NEW_SCENE_BG[festival.scene] : festival.scene === 'htamane-fire' ? 'linear-gradient(180deg,#0b1026 0%,#1d2447 40%,#4a2a2a 78%,#6d3a1f 100%)' : festival.scene === 'thingyan-water' ? 'linear-gradient(180deg,#8fd3ff 0%,#d6f0ff 42%,#fff0b8 100%)' : festival.scene === 'deer-park' ? 'linear-gradient(180deg,#24153f 0%,#6b3358 30%,#e8964f 60%,#2d5e34 100%)' : festival.scene === 'bodhi-water' ? 'linear-gradient(180deg,#ffd9a0 0%,#fff0c8 30%,#cfe9d6 62%,#9ccc9c 100%)' : festival.scene === 'balloons-night' ? 'linear-gradient(180deg,#04141f 0%,#07302d 40%,#0d4a3a 72%,#0a3024 100%)' : 'linear-gradient(180deg,#070b22 0%,#17104a 45%,#3a1b5c 78%,#5a2a52 100%)' }}>
       <style>{`
         @keyframes fsTwinkle { 0%,100% { opacity: .25 } 50% { opacity: 1 } }
         @keyframes fsFlicker { 0%,100% { transform: translate(-50%,-50%) scale(1); opacity: .85 } 35% { transform: translate(-50%,-50%) scale(1.12); opacity: 1 } 70% { transform: translate(-50%,-50%) scale(.94); opacity: .75 } }
@@ -1263,6 +1406,8 @@ export default function FestivalApp({ entryRequest, onExit }) {
         @keyframes fsBob { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-10px) } }
         @keyframes fsRiseAway { 0% { transform: translate(-50%,-50%) scale(1); opacity: 1 } 100% { transform: translate(-50%,-115vh) scale(.5); opacity: 0 } }
         @keyframes fsSpark { 0% { transform: rotate(var(--angle)) translateX(0) scale(1); opacity: 1 } 100% { transform: rotate(var(--angle)) translateX(80px) scale(.2); opacity: 0 } }
+        @keyframes fsSnow { 0% { transform: translateY(0); opacity: 0 } 10% { opacity: .9 } 100% { transform: translateY(275px); opacity: .2 } }
+        @keyframes fsBurst { 0% { transform: scale(.1); opacity: 0 } 15% { opacity: 1 } 70% { opacity: 1 } 100% { transform: scale(1.5); opacity: 0 } }
         .fs-star { position: absolute; border-radius: 9999px; background: #fff; animation: fsTwinkle 3s ease-in-out infinite; }
       `}</style>
 
@@ -1315,7 +1460,15 @@ export default function FestivalApp({ entryRequest, onExit }) {
 
       {/* Scene */}
       <div className="relative z-10 flex-1" style={{ minHeight: 380 }}>
-        {festival.scene === 'htamane-fire' ? (
+        {festival.scene === 'halloween-night' ? (
+          <HalloweenScene glow={glow} />
+        ) : festival.scene === 'thanksgiving-table' ? (
+          <ThanksgivingScene glow={glow} />
+        ) : festival.scene === 'winter-snow' ? (
+          <WinterScene glow={glow} />
+        ) : festival.scene === 'newyear-fireworks' ? (
+          <NewYearScene glow={glow} />
+        ) : festival.scene === 'htamane-fire' ? (
           <>
             <HtamaneScene progress={stirProgress} stirring={stirKey > 0} stirKey={stirKey} />
             {stirProgress < 1 && <div className="absolute inset-0 z-10 cursor-pointer" onClick={handleStir} aria-label="Tap to stir the htamane" />}
@@ -1340,13 +1493,22 @@ export default function FestivalApp({ entryRequest, onExit }) {
         {festival.lamps.style === 'lamp' || !festival.lamps.style ? LAMP_SPOTS.slice(0, festival.lamps.perDay).map((spot, i) => (i >= 10 ? (
           <div key={`post-${i}`} className="absolute pointer-events-none rounded-sm" style={{ left: `${spot.x}%`, top: `${spot.y}%`, bottom: '6%', width: 4, marginLeft: -2, marginTop: 18, background: 'linear-gradient(180deg,#8d6e63,#3e2723)' }} />
         ) : null)) : null}
-        {(['splash', 'share'].includes(festival.lamps.style) ? [] : festival.lamps.style === 'flower' ? FLOWER_SPOTS : festival.lamps.style === 'pot' ? POT_SPOTS : festival.lamps.style === 'balloon' ? BALLOON_SPOTS : LAMP_SPOTS).slice(0, festival.lamps.perDay).map((spot, i) => {
+        {(['splash', 'share'].includes(festival.lamps.style) ? [] : festival.lamps.style === 'flower' ? FLOWER_SPOTS : festival.lamps.style === 'pot' ? POT_SPOTS : festival.lamps.style === 'balloon' ? BALLOON_SPOTS : festival.lamps.style === 'tap' ? TAP_SPOTS : LAMP_SPOTS).slice(0, festival.lamps.perDay).map((spot, i) => {
           const isLit = lit.has(i);
           if (festival.lamps.style === 'balloon') {
             if (isLit) return null;
             return (
               <button key={i} onClick={(e) => handleLamp(i, e)} aria-label="Send up this fire balloon" className="absolute z-20 flex items-center justify-center" style={{ left: `${spot.x}%`, top: `${spot.y}%`, width: 84, height: 112, marginLeft: -42, marginTop: -56, animation: `fsBob ${2.6 + (i % 4) * 0.4}s ease-in-out ${(i % 5) * 0.3}s infinite` }}>
                 <HotAirBalloon palette={i} />
+              </button>
+            );
+          }
+          if (festival.lamps.style === 'tap') {
+            const pick = (v) => (Array.isArray(v) ? v[i % v.length] : v);
+            return (
+              <button key={i} onClick={(e) => handleLamp(i, e)} disabled={isLit} aria-label={isLit ? 'Done' : festival.lamps.noun || 'Tap me'} className="absolute z-20 flex items-center justify-center rounded-full" style={{ left: `${spot.x}%`, top: `${spot.y}%`, width: 56, height: 56, marginLeft: -28, marginTop: -28, animation: isLit ? 'none' : `fsBob ${2.4 + (i % 4) * 0.35}s ease-in-out ${(i % 5) * 0.25}s infinite` }}>
+                {isLit && <span className="absolute pointer-events-none rounded-full" style={{ inset: -14, background: 'radial-gradient(circle,rgba(255,226,120,.6),transparent 70%)', animation: `fsFlicker2 ${1.6 + (i % 4) * 0.3}s ease-in-out infinite` }} />}
+                <span className="relative text-4xl select-none" style={isLit ? { filter: 'drop-shadow(0 0 6px rgba(255,220,120,.9))' } : { filter: 'drop-shadow(0 2px 3px rgba(0,0,0,.5))' }}>{pick(isLit ? festival.lamps.doneEmoji : festival.lamps.emoji)}</span>
               </button>
             );
           }
@@ -1412,7 +1574,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
           {festival.kadaw.button || '🙏 Pay Respect'}
         </button>
         {['splash', 'share'].includes(festival.lamps.style) && (
-          festival.lamps.style === 'share' && stirProgress < 1 ? (
+          festival.lamps.stir && stirProgress < 1 ? (
             <button onClick={handleStir} className="flex-1 max-w-[200px] bg-orange-400 hover:bg-orange-300 text-orange-950 font-black rounded-2xl py-3 shadow-lg" style={{ animation: 'fsPulse 1.6s ease-in-out infinite' }}>
               🥄 Stir Htamane {Math.round(stirProgress * 100)}%
             </button>
@@ -1543,7 +1705,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
                       <div className="flex-1 min-w-0">
                         <div className="font-bold text-sm">{rw.item.name}</div>
                         <div className="text-xs text-indigo-200">
-                          {req.type === 'lamps' ? (festival.lamps.style === 'balloon' ? `Send up ${req.count} fire balloons in total` : `Light ${req.count} lamps in total`) : `Complete all ${festival.kadaw.recipients.length}`}
+                          {req.type === 'lamps' ? (festival.lamps.rewardText ? festival.lamps.rewardText.replace('{n}', req.count) : festival.lamps.style === 'balloon' ? `Send up ${req.count} fire balloons in total` : `Light ${req.count} lamps in total`) : `Complete all ${festival.kadaw.recipients.length}`}
                         </div>
                       </div>
                     </div>
