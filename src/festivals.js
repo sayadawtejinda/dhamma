@@ -277,6 +277,59 @@ export const FESTIVALS = [
       ],
     },
   },
+  {
+    id: 'thingyan-2027',
+    enabled: true,
+    scene: 'thingyan-water',
+    icon: '💦',
+    title: 'Thingyan Water Festival',
+    tagline: 'Gently sprinkle water on your friends, pay respect to your elders, and meditate for the new year!',
+    // Default dates -- the teacher sets the real ones on the "Festival apps" screen.
+    start: '2027-04-13',
+    end: '2027-04-17',
+    // Sprinkling water on friends with a silver bowl and a thabyay twig: up to `perDay` friends
+    // a day (each friend once), `coins` for each. The friend is told who sprinkled them.
+    lamps: { perDay: 10, coins: 5, allLitBonus: 0, style: 'splash', icon: '💦', noun: 'splash' },
+    // Two things to do once a day: pay respect to grandparents and elders, and sit in
+    // meditation for 5 minutes (more coins and lotus, since it takes real time).
+    kadaw: {
+      coins: 20,
+      lotus: 1,
+      title: 'Pay Respect and Meditate',
+      doneWord: 'Respects',
+      recipients: [
+        {
+          id: 'elders', emoji: '👵', name: 'Pay Respect to Grandparents and Elders',
+          prayer: 'At Thingyan I bow down to my grandparents and all my elders, who have cared for me and taught me. I ask their forgiveness for anything I did wrong in the past year.',
+          blessing: 'May you be healthy and happy, and may your kind heart bring joy to your whole family. Sadhu! Sadhu! Sadhu!',
+        },
+        {
+          id: 'meditation', emoji: '🧘', name: 'Meditate for 5 Minutes', coins: 80, lotus: 4, sitMinutes: 5,
+          prayer: 'Sit comfortably with your back straight and your hands resting in your lap. Close your eyes gently. Breathe in and out naturally and know: "breathing in... breathing out...". Stay with your breath for 5 minutes. When your mind wanders, kindly bring it back to the breath. Keep this page open while you sit.',
+          blessing: 'Well done! You sat for 5 whole minutes and made your mind calm and clear for the new year. Sadhu! Sadhu! Sadhu!',
+        },
+      ],
+    },
+    rewards: [
+      {
+        id: 'thingyan-2027-robe',
+        category: 'outfit',
+        requires: { type: 'lamps', count: 40 },
+        item: { id: 'festival-thingyan-2027-robe', name: '💦 Thingyan Splash Robe', color: '#039BE5', swatch: 'linear-gradient(135deg,#B3E5FC,#039BE5 60%,#01579B)', pattern: 'checks', cost: 0, festival: true },
+      },
+    ],
+    dailyGift: {
+      bonusCoins: 50,
+      pool: [
+        { category: 'accessory', item: { id: 'festival-thingyan-2027-thabyay', name: '🌿 Thabyay Glasses', kind: 'starglasses', color: '#43A047', cost: 0, festival: true } },
+        { category: 'outfit', item: { id: 'festival-thingyan-2027-padauk', name: '🌼 Padauk Flower Robe', color: '#F9A825', swatch: 'linear-gradient(135deg,#FFF59D,#F9A825 60%,#E65100)', pattern: 'lotus', cost: 0, festival: true } },
+        { category: 'accessory', item: { id: 'festival-thingyan-2027-silverbowl', name: '🥣 Silver Bowl Lantern', kind: 'lantern', color: '#B0BEC5', cost: 0, festival: true } },
+        { category: 'outfit', item: { id: 'festival-thingyan-2027-water', name: '🌊 Water Festival Robe', color: '#0277BD', swatch: 'linear-gradient(135deg,#81D4FA,#0277BD 65%,#01579B)', pattern: 'lights', cost: 0, festival: true } },
+        { category: 'accessory', item: { id: 'festival-thingyan-2027-sprinkle', name: '💧 Sprinkle Lantern', kind: 'skylantern', color: '#4FC3F7', cost: 0, festival: true } },
+        { category: 'outfit', item: { id: 'festival-thingyan-2027-newyear', name: '🎊 New Year Robe', color: '#E53935', swatch: 'linear-gradient(135deg,#FFCDD2,#E53935 60%,#FFC107)', pattern: 'night', cost: 0, festival: true } },
+      ],
+    },
+  },
 ];
 
 import { useEffect, useState } from 'react';

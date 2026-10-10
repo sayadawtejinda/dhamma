@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { doc, getDoc, runTransaction, serverTimestamp, increment } from 'firebase/firestore';
+import { doc, getDoc, runTransaction, serverTimestamp, increment, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { db } from './firebase';
 import { spawnFlyingCoins } from './flyingCoins';
 import { localDateKey, festivalStatus, loadFestivalSettings, getFestivalList } from './festivals';
@@ -147,7 +147,7 @@ const requirementMet = (req, festival, state) => {
 // Saves everything queued since the last save, once, atomically. Anything
 // already counted (same lamp/person today, from another tab or device) is
 // ignored here, so the coins can never be claimed twice.
-async function saveFestivalProgress({ festival, studentUid, studentName, lampIdxs, kadawIds }) {
+async function saveFestivalProgress({ festival, studentUid, studentName, lampIdxs, kadawIds, splashNames = [] }) {
   const dateKey = localDateKey();
   const progRef = doc(db, PROGRESS_PATH, `${festival.id}_${studentUid}`);
   const rosterRef = doc(db, SHRINE_ROSTER_PATH, sanitizeShrineKey(studentName));
@@ -167,10 +167,12 @@ async function saveFestivalProgress({ festival, studentUid, studentName, lampIdx
     const newKadaw = kadawIds.filter(id => recipientIds.includes(id) && !kadawToday.has(id));
     newKadaw.forEach(id => kadawToday.add(id));
 
-    let coins = newLamps.length * festival.lamps.coins + newKadaw.length * festival.kadaw.coins;
+    const recipientOf = (id) => festival.kadaw.recipients.find(x => x.id === id) || {};
+    let coins = newLamps.length * festival.lamps.coins + newKadaw.reduce((sum, id) => sum + (recipientOf(id).coins ?? festival.kadaw.coins), 0);
     // Each new respect also earns lotus flowers. These are the festival's own
     // -- Shrine Room's separate daily lotus limit does not apply to them.
-    const lotus = newKadaw.length * (festival.kadaw.lotus || 0);
+    const lotus = newKadaw.reduce((sum, id) => sum + (recipientOf(id).lotus ?? (festival.kadaw.lotus || 0)), 0);
+    const splashedToday = Array.from(new Set([...(p.splashNames?.[dateKey] || []), ...splashNames]));
     const allLitBonus = !wasAllLit && litToday.size >= festival.lamps.perDay;
     if (allLitBonus) coins += festival.lamps.allLitBonus;
 
@@ -205,7 +207,7 @@ async function saveFestivalProgress({ festival, studentUid, studentName, lampIdx
       }
     }
 
-    if (newLamps.length === 0 && newKadaw.length === 0 && newlyUnlocked.length === 0 && !dailyGift) {
+    if (newLamps.length === 0 && newKadaw.length === 0 && newlyUnlocked.length === 0 && !dailyGift && splashNames.length === 0) {
       return { balance: r.coinBalance ?? SHRINE_STARTER_COINS, coins: 0, lotus: 0, newlyUnlocked: [], dailyGift: null, lampsTotal: state.lampsTotal, kadawEver: state.kadawEver };
     }
 
@@ -213,6 +215,7 @@ async function saveFestivalProgress({ festival, studentUid, studentName, lampIdx
       studentUid, studentName, festivalId: festival.id,
       lamps: { [dateKey]: Array.from(litToday) },
       kadaw: { [dateKey]: Array.from(kadawToday) },
+      ...(festival.lamps.style === 'splash' ? { splashNames: { [dateKey]: splashedToday } } : {}),
       lampsTotal: state.lampsTotal,
       kadawEver: state.kadawEver,
       unlocked: [...alreadyUnlocked, ...newlyUnlocked.map(rw => rw.id)],
@@ -606,6 +609,124 @@ function DeerParkScene({ glow }) {
   );
 }
 
+// Thingyan: a festive pavilion with a big silver bowl and a thabyay twig, padauk blossoms
+// hanging from the roof and fresh water. `glow` (0-1, friends splashed today) makes the bowl
+// shine and the fountain taller.
+function ThingyanScene({ glow }) {
+  const garland = [30, 60, 90, 120, 150, 180, 220, 250, 280, 310, 340, 370];
+  const jets = [-28, -14, 0, 14, 28];
+  return (
+    <svg viewBox="0 0 400 270" preserveAspectRatio="xMidYMax meet" className="absolute inset-0 w-full h-full" aria-hidden="true">
+      <defs>
+        <linearGradient id="thFloor" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#f6d58a" /><stop offset="1" stopColor="#d8a94a" /></linearGradient>
+        <linearGradient id="thRoof" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#ffd54f" /><stop offset="1" stopColor="#e09a1b" /></linearGradient>
+        <linearGradient id="thSilver" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#fafafa" /><stop offset=".5" stopColor="#cfd8dc" /><stop offset="1" stopColor="#90a4ae" /></linearGradient>
+        <radialGradient id="thShine" cx="50%" cy="50%" r="50%"><stop offset="0" stopColor="#fff" stopOpacity=".9" /><stop offset="1" stopColor="#fff" stopOpacity="0" /></radialGradient>
+      </defs>
+      {/* pavilion roof (three golden tiers) and pillars */}
+      <path d="M60 78 L200 20 L340 78 Z" fill="url(#thRoof)" stroke="#b9770e" strokeWidth="1.5" />
+      <path d="M85 98 L200 54 L315 98 Z" fill="url(#thRoof)" stroke="#b9770e" strokeWidth="1.5" />
+      <path d="M45 124 L200 82 L355 124 Z" fill="url(#thRoof)" stroke="#b9770e" strokeWidth="1.5" />
+      <path d="M200 8 L200 24" stroke="#b9770e" strokeWidth="2.5" /><circle cx="200" cy="7" r="3" fill="#ffd54f" />
+      {[70, 150, 250, 330].map(x => <rect key={x} x={x - 5} y="124" width="10" height="92" fill="#8d4b1f" />)}
+      <rect x="55" y="120" width="290" height="8" rx="3" fill="#b9651f" />
+      {/* hanging padauk blossoms */}
+      {garland.map((gx, i) => (
+        <g key={gx} transform={`translate(${gx} 130)`}>
+          <g style={{ animation: `fsSwing ${2.6 + (i % 4) * 0.4}s ease-in-out ${i * 0.2}s infinite`, transformOrigin: '0px 0px' }}>
+            <path d="M0 0 L0 12" stroke="#6d8f2a" strokeWidth="1" />
+            {[[-4, 16], [4, 16], [0, 21], [-5, 25], [5, 25], [0, 30]].map(([dx, dy], k) => <circle key={k} cx={dx} cy={dy} r="3.3" fill="#ffc400" stroke="#f59e0b" strokeWidth="0.4" />)}
+          </g>
+        </g>
+      ))}
+      {/* the floor of the pavilion */}
+      <path d="M30 216 L370 216 L392 262 L8 262 Z" fill="url(#thFloor)" stroke="#c28b2c" strokeWidth="1" />
+      {/* the table with the silver bowl */}
+      <rect x="150" y="200" width="100" height="10" rx="3" fill="#9a5b2a" />
+      <rect x="158" y="210" width="8" height="30" fill="#7d4720" /><rect x="234" y="210" width="8" height="30" fill="#7d4720" />
+      <circle cx="200" cy="168" r="46" fill="url(#thShine)" opacity={0.2 + glow * 0.7} />
+      <path d="M156 168 Q158 206 200 208 Q242 206 244 168 Z" fill="url(#thSilver)" stroke="#78909c" strokeWidth="1.2" />
+      <ellipse cx="200" cy="168" rx="44" ry="10" fill="#b0bec5" stroke="#78909c" strokeWidth="1.2" />
+      <ellipse cx="200" cy="169" rx="38" ry="7" fill="#6ec6ee" />
+      <path d="M170 184 Q200 196 230 184" stroke="#fff" strokeWidth="1.4" fill="none" opacity=".7" strokeDasharray="3 3" />
+      {/* the thabyay twig in the bowl */}
+      <path d="M200 170 C205 150 218 132 236 120" stroke="#5d7d23" strokeWidth="2.6" fill="none" strokeLinecap="round" />
+      {[[206, 154, 20], [214, 144, -10], [224, 134, 25], [232, 124, -5], [210, 160, -40], [220, 150, 45]].map(([lx, ly, rot], i) => (
+        <ellipse key={i} cx={lx} cy={ly} rx="9" ry="3.6" fill={i % 2 ? '#7cb342' : '#9ccc65'} transform={`rotate(${rot} ${lx} ${ly})`} />
+      ))}
+      {/* drops springing from the water */}
+      {jets.map((dx, i) => (
+        <circle key={i} cx={200 + dx} cy="168" r="2.2" fill="#81d4fa" style={{ animation: `fsDrop2 ${1.3 + (i % 3) * 0.3}s ease-out ${i * 0.2}s infinite`, ['--rise']: `${-(22 + glow * 24)}px` }} />
+      ))}
+      {/* a few flowers on the floor */}
+      {[[60, 240], [100, 252], [300, 244], [345, 254]].map(([fx, fy], i) => (
+        <g key={i} transform={`translate(${fx} ${fy})`}><circle r="3.4" fill={['#ffc400', '#ffffff', '#ff8a65'][i % 3]} /><circle r="1.2" fill="#e65100" /></g>
+      ))}
+    </svg>
+  );
+}
+
+// The panel for sprinkling water on friends: who was active this week, from the same
+// static weekly file the other online pills use (no Firestore read).
+const SHRINE_ROSTER_FILE = `${SHRINE_ROSTER_PATH.replace(/\//g, '__')}.json`;
+function SplashPanel({ festival, studentName, isTeacherPreview, splashed, splashLeft, onSplash, onClose }) {
+  const [friends, setFriends] = useState(null);
+  const [search, setSearch] = useState('');
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${import.meta.env.BASE_URL}rosterSnapshots/${SHRINE_ROSTER_FILE}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(j => {
+        if (cancelled) return;
+        const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+        const ms = (v) => (typeof v === 'number' ? v : v?.seconds ? v.seconds * 1000 : 0);
+        const list = (j?.docs || [])
+          .filter(d => (d.studentName || d.name) && (d.studentName || d.name) !== studentName && ms(d.lastSeen) > weekAgo)
+          .map(d => d.studentName || d.name)
+          .sort((a, b) => a.localeCompare(b));
+        setFriends(Array.from(new Set(list)));
+      })
+      .catch(() => { if (!cancelled) setFriends([]); });
+    return () => { cancelled = true; };
+  }, [studentName]);
+  const shown = (friends || []).filter(n => n.toLowerCase().includes(search.trim().toLowerCase()));
+  return (
+    <div className="fixed inset-0 z-[9970] bg-black/60 flex items-end sm:items-center justify-center" onClick={onClose}>
+      <div className="w-full max-w-md bg-sky-950 border border-sky-300/50 rounded-t-3xl sm:rounded-3xl p-5 max-h-[90vh] overflow-y-auto text-white" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-lg font-black text-sky-200 text-center">💦 Sprinkle Water on Friends</h2>
+        <p className="text-xs text-sky-200 text-center mb-1">Gently sprinkle water with your silver bowl. Each friend once a day, up to {festival.lamps.perDay} friends.</p>
+        <p className="text-sm font-bold text-amber-300 text-center mb-3">{festival.lamps.perDay - splashLeft} / {festival.lamps.perDay} today · 🪙 {festival.lamps.coins} each</p>
+        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Find a friend..." className="w-full mb-3 px-3 py-2 rounded-xl text-sky-950 font-semibold" />
+        {friends === null && <p className="text-center text-sky-200 py-6">Loading friends…</p>}
+        {friends !== null && shown.length === 0 && <p className="text-center text-sky-200 py-6">{friends.length === 0 ? 'No friends were active this week yet.' : 'Nobody with that name.'}</p>}
+        <div className="space-y-2">
+          {shown.map(name => {
+            const done = splashed.has(name);
+            return (
+              <div key={name} className={`flex items-center justify-between rounded-xl px-3 py-2 border ${done ? 'bg-emerald-500/10 border-emerald-400/50' : 'bg-white/5 border-white/15'}`}>
+                <span className="font-bold truncate mr-2">{name}</span>
+                {done ? (
+                  <span className="text-xs font-bold text-white bg-emerald-600 rounded-full px-2 py-1 whitespace-nowrap">✅ Splashed</span>
+                ) : (
+                  <button
+                    onClick={(e) => onSplash(name, e)}
+                    disabled={splashLeft <= 0}
+                    className="text-sm font-black text-sky-950 bg-sky-300 hover:bg-sky-200 rounded-full px-3 py-1 whitespace-nowrap disabled:opacity-40"
+                  >
+                    💦 Splash
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        {splashLeft <= 0 && <p className="mt-3 text-center text-sm font-bold text-emerald-300">All {festival.lamps.perDay} splashes done today. Come back tomorrow! 🌸</p>}
+        <button onClick={onClose} className="mt-4 w-full py-2 rounded-xl bg-white/10 hover:bg-white/20 font-semibold">Close</button>
+      </div>
+    </div>
+  );
+}
+
 // Tazaungdaing's scene: the Buddha seated in a big, quiet forest on the Tazaungmon full
 // moon night (the day of the Samannaphala Sutta), monks sitting around Him listening in
 // stillness. `glow` (0-1, how many balloons have gone up today) brightens His halo.
@@ -748,12 +869,16 @@ export default function FestivalApp({ entryRequest, onExit }) {
   const [ownedFestivalIds, setOwnedFestivalIds] = useState([]);
   const [respectWait, setRespectWait] = useState(0);
   const [risers, setRisers] = useState([]);
+  const [splashedNames, setSplashedNames] = useState(() => new Set()); // friends sprinkled today
+  const [splashFx, setSplashFx] = useState(null);                      // the water-splash animation, while it plays
+  const [incomingSplashes, setIncomingSplashes] = useState([]);        // friends who sprinkled water on me
+  const [meditationTick, setMeditationTick] = useState(0);
   const [pourPhase, setPourPhase] = useState({}); // water pots on their way to the tree: { index: 'walk' | 'pour' }
   const [pasukulaFoundMap, setPasukulaFoundMap] = useState({}); // winning packets opened today: { packetNumber: coins }
   const [pasukulaThrown, setPasukulaThrown] = useState(false);
   const [toast, setToast] = useState(null);
 
-  const pendingRef = useRef({ lamps: new Set(), kadaw: new Set() });
+  const pendingRef = useRef({ lamps: new Set(), kadaw: new Set(), splash: new Set() });
   const flushTimerRef = useRef(null);
   const retriesRef = useRef(0);
   const bellRef = useRef(null);
@@ -799,6 +924,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
         const p = pSnap.exists() ? pSnap.data() : {};
         setLit(new Set(p.lamps?.[dateKey] || []));
         setKadawToday(new Set(p.kadaw?.[dateKey] || []));
+        setSplashedNames(new Set(p.splashNames?.[dateKey] || []));
         setLampsTotal(p.lampsTotal || 0);
         setKadawEver(p.kadawEver || []);
         setUnlockedIds(p.unlocked || []);
@@ -806,6 +932,12 @@ export default function FestivalApp({ entryRequest, onExit }) {
         setPasukulaFoundMap(pasukulaFound(p, dateKey));
         setPasukulaThrown(p.pasukulaThrown?.[dateKey] !== undefined);
         const rd = rSnap.exists() ? rSnap.data() : {};
+        // Friends who sprinkled water on me since I was last here: shown once, then cleared.
+        const mine = (rd.festivalSplashes || []).filter(x => x && x.fid === festival.id);
+        if (mine.length > 0) {
+          setIncomingSplashes(mine);
+          updateDoc(doc(db, SHRINE_ROSTER_PATH, sanitizeShrineKey(studentName)), { festivalSplashes: arrayRemove(...mine) }).catch(() => {});
+        }
         setOwnedFestivalIds(['outfit', 'accessory'].flatMap(cat => rd.avatarOwned?.[cat] || rd[`avatarOwned.${cat}`] || []).filter(id => String(id).startsWith('festival-')));
         setCoinBalance(rSnap.exists() ? (rd.coinBalance ?? SHRINE_STARTER_COINS) : SHRINE_STARTER_COINS);
       } catch (e) {
@@ -822,10 +954,11 @@ export default function FestivalApp({ entryRequest, onExit }) {
     flushTimerRef.current = null;
     const lampIdxs = Array.from(pendingRef.current.lamps);
     const kadawIds = Array.from(pendingRef.current.kadaw);
-    if (isTeacherPreview || !festival || (lampIdxs.length === 0 && kadawIds.length === 0)) return;
-    pendingRef.current = { lamps: new Set(), kadaw: new Set() };
+    const splashNames = Array.from(pendingRef.current.splash);
+    if (isTeacherPreview || !festival || (lampIdxs.length === 0 && kadawIds.length === 0 && splashNames.length === 0)) return;
+    pendingRef.current = { lamps: new Set(), kadaw: new Set(), splash: new Set() };
     try {
-      const res = await saveFestivalProgress({ festival, studentUid, studentName, lampIdxs, kadawIds });
+      const res = await saveFestivalProgress({ festival, studentUid, studentName, lampIdxs, kadawIds, splashNames });
       retriesRef.current = 0;
       if (!mountedRef.current) return;
       setCoinBalance(res.balance);
@@ -847,6 +980,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
       // Put it back and try again shortly rather than silently dropping coins.
       lampIdxs.forEach(i => pendingRef.current.lamps.add(i));
       kadawIds.forEach(id => pendingRef.current.kadaw.add(id));
+      splashNames.forEach(n => pendingRef.current.splash.add(n));
       if (retriesRef.current < 3 && mountedRef.current) {
         retriesRef.current += 1;
         showToast('Saving… check your internet connection.');
@@ -908,24 +1042,52 @@ export default function FestivalApp({ entryRequest, onExit }) {
     setFloaters(prev => [...prev, { id: fid, x: point.x, y: point.y, text: `+${festival.lamps.coins}` }]);
     setTimeout(() => setFloaters(prev => prev.filter(f => f.id !== fid)), 1100);
     if (completesAll) {
-      releaseLanterns();
+      if (festival.lamps.style !== 'splash') releaseLanterns();
       if (festival.lamps.allLitBonus > 0) showToast(`${festival.lamps.icon || '🏮'} All ${festival.lamps.noun || 'lamp'}s done! Bonus +${festival.lamps.allLitBonus} 🪙`);
     }
     pendingRef.current.lamps.add(i);
     scheduleFlush();
   };
 
+  // Sprinkles water on a friend: counted as the next free "lamp" of the day (coins, the
+  // 40-total reward and the once-a-day limit all work as for every other festival), the
+  // name is remembered so that friend can only be done once a day, and the friend is told.
+  const handleSplash = (friendName, e) => {
+    const perDay = festival.lamps.perDay;
+    if (splashedNames.has(friendName) || lit.size >= perDay) return;
+    let idx = 0;
+    while (lit.has(idx)) idx += 1;
+    handleLamp(idx, e);
+    setSplashedNames(prev => new Set(prev).add(friendName));
+    pendingRef.current.splash.add(friendName);
+    const fx = Date.now();
+    setSplashFx(fx);
+    setTimeout(() => setSplashFx(cur => (cur === fx ? null : cur)), 1900);
+    if (!isTeacherPreview) {
+      updateDoc(doc(db, SHRINE_ROSTER_PATH, sanitizeShrineKey(friendName)), { festivalSplashes: arrayUnion({ from: studentName, at: fx, fid: festival.id }) }).catch(() => {});
+    }
+  };
+
   const openKadaw = (recipient) => {
     setKadawTarget(recipient);
     setKadawStage('pray');
-    setRespectWait(kadawToday.has(recipient.id) ? 0 : RESPECT_WAIT_SECONDS);
+    setRespectWait(kadawToday.has(recipient.id) ? 0 : (recipient.sitMinutes ? recipient.sitMinutes * 60 : RESPECT_WAIT_SECONDS));
   };
   // The button stays locked while this counts down.
   useEffect(() => {
     if (respectWait <= 0) return;
-    const t = setTimeout(() => setRespectWait(w => w - 1), 1000);
+    // A 5-minute sit only counts while this page is on screen (the tick still repeats, so it
+    // carries on the moment the student comes back).
+    const t = setTimeout(() => { setRespectWait(w => (document.hidden && kadawTarget?.sitMinutes ? w : w - 1)); setMeditationTick(n => n + 1); }, 1000);
     return () => clearTimeout(t);
-  }, [respectWait]);
+  }, [respectWait, meditationTick]);
+  // Keep the screen awake while sitting (best effort).
+  useEffect(() => {
+    if (!kadawTarget?.sitMinutes || respectWait <= 0) return;
+    let lock = null;
+    try { navigator.wakeLock?.request('screen').then(l => { lock = l; }).catch(() => {}); } catch (err) { /* optional */ }
+    return () => { try { lock?.release(); } catch (err) { /* ignore */ } };
+  }, [kadawTarget?.id, respectWait <= 0]);
 
   const handleKadaw = (e) => {
     const r = kadawTarget;
@@ -939,8 +1101,8 @@ export default function FestivalApp({ entryRequest, onExit }) {
     setKadawStage('blessed');
     setKadawToday(prev => new Set(prev).add(r.id));
     setKadawEver(prev => (prev.includes(r.id) ? prev : [...prev, r.id]));
-    gainCoins(festival.kadaw.coins);
-    if (!isTeacherPreview) spawnFlyingCoins({ x: e.clientX, y: e.clientY }, 6, '🪙', false);
+    gainCoins(r.coins ?? festival.kadaw.coins);
+    if (!isTeacherPreview) spawnFlyingCoins({ x: e.clientX, y: e.clientY }, r.sitMinutes ? 14 : 6, '🪙', false);
     pendingRef.current.kadaw.add(r.id);
     // The fifth respect of the day brings the gift box -- save at once so it
     // drops in straight away instead of after the usual short delay.
@@ -975,9 +1137,10 @@ export default function FestivalApp({ entryRequest, onExit }) {
   const daysLeft = Math.max(0, Math.round((new Date(`${festival.end}T23:59:59`) - new Date()) / 86400000));
   const rewardState = { lampsTotal, kadawEver };
   const kadawDoneCount = festival.kadaw.recipients.filter(r => kadawToday.has(r.id)).length;
+  const lightScene = festival.scene === 'bodhi-water' || festival.scene === 'thingyan-water';
 
   return (
-    <div className="relative min-h-screen flex flex-col overflow-hidden text-white" style={{ background: festival.scene === 'deer-park' ? 'linear-gradient(180deg,#24153f 0%,#6b3358 30%,#e8964f 60%,#2d5e34 100%)' : festival.scene === 'bodhi-water' ? 'linear-gradient(180deg,#ffd9a0 0%,#fff0c8 30%,#cfe9d6 62%,#9ccc9c 100%)' : festival.scene === 'balloons-night' ? 'linear-gradient(180deg,#04141f 0%,#07302d 40%,#0d4a3a 72%,#0a3024 100%)' : 'linear-gradient(180deg,#070b22 0%,#17104a 45%,#3a1b5c 78%,#5a2a52 100%)' }}>
+    <div className="relative min-h-screen flex flex-col overflow-hidden text-white" style={{ background: festival.scene === 'thingyan-water' ? 'linear-gradient(180deg,#8fd3ff 0%,#d6f0ff 42%,#fff0b8 100%)' : festival.scene === 'deer-park' ? 'linear-gradient(180deg,#24153f 0%,#6b3358 30%,#e8964f 60%,#2d5e34 100%)' : festival.scene === 'bodhi-water' ? 'linear-gradient(180deg,#ffd9a0 0%,#fff0c8 30%,#cfe9d6 62%,#9ccc9c 100%)' : festival.scene === 'balloons-night' ? 'linear-gradient(180deg,#04141f 0%,#07302d 40%,#0d4a3a 72%,#0a3024 100%)' : 'linear-gradient(180deg,#070b22 0%,#17104a 45%,#3a1b5c 78%,#5a2a52 100%)' }}>
       <style>{`
         @keyframes fsTwinkle { 0%,100% { opacity: .25 } 50% { opacity: 1 } }
         @keyframes fsFlicker { 0%,100% { transform: translate(-50%,-50%) scale(1); opacity: .85 } 35% { transform: translate(-50%,-50%) scale(1.12); opacity: 1 } 70% { transform: translate(-50%,-50%) scale(.94); opacity: .75 } }
@@ -989,6 +1152,9 @@ export default function FestivalApp({ entryRequest, onExit }) {
         @keyframes fsPop { 0% { transform: scale(.6); opacity: 0 } 100% { transform: scale(1); opacity: 1 } }
         @keyframes fsFlicker2 { 0%,100% { transform: scaleY(1) scaleX(1) } 50% { transform: scaleY(1.25) scaleX(.85) } }
         @keyframes fsDrip { 0% { transform: translateY(0); opacity: 0 } 15% { opacity: 1 } 100% { transform: translateY(70px); opacity: 0 } }
+        @keyframes fsDrop2 { 0% { transform: translateY(0); opacity: 0 } 20% { opacity: 1 } 60% { transform: translateY(var(--rise)); opacity: 1 } 100% { transform: translateY(0); opacity: 0 } }
+        @keyframes fsSplashFly { 0% { transform: translate(-50%, 0) scale(.4); opacity: 0 } 15% { opacity: 1 } 100% { transform: translate(var(--dx), var(--dy)) scale(1.1); opacity: 0 } }
+        @keyframes fsSwing { 0%,100% { transform: rotate(-4deg) } 50% { transform: rotate(4deg) } }
         @keyframes fsBob { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-10px) } }
         @keyframes fsRiseAway { 0% { transform: translate(-50%,-50%) scale(1); opacity: 1 } 100% { transform: translate(-50%,-115vh) scale(.5); opacity: 0 } }
         @keyframes fsSpark { 0% { transform: rotate(var(--angle)) translateX(0) scale(1); opacity: 1 } 100% { transform: rotate(var(--angle)) translateX(80px) scale(.2); opacity: 0 } }
@@ -1020,7 +1186,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
 
       {/* Sky */}
       <div className="absolute inset-0 pointer-events-none">
-        {festival.scene !== 'bodhi-water' && stars.map(s => (
+        {!lightScene && stars.map(s => (
           <span key={s.id} className="fs-star" style={{ left: `${s.x}%`, top: `${s.y}%`, width: s.size, height: s.size, animationDelay: `${s.delay}s` }} />
         ))}
         <div className="absolute rounded-full" style={{ right: '12%', top: '9%', width: 74, height: 74, background: 'radial-gradient(circle at 35% 35%,#fffbe6,#ffe9a8 60%,#f3cf6a)', boxShadow: '0 0 60px 22px rgba(255,233,168,.35)' }} />
@@ -1028,15 +1194,15 @@ export default function FestivalApp({ entryRequest, onExit }) {
 
       {/* Header */}
       <div className="relative z-10 pt-14 px-4 text-center">
-        <h1 className={`text-xl sm:text-2xl font-black drop-shadow ${festival.scene === 'bodhi-water' ? 'text-emerald-900' : 'text-amber-200'}`}>{festival.icon} {festival.title}</h1>
-        <p className={`text-xs sm:text-sm ${festival.scene === 'bodhi-water' ? 'text-emerald-800 font-semibold' : 'text-indigo-200'}`}>{festival.tagline}{!isTeacherPreview && daysLeft >= 0 ? ` · ${daysLeft + 1} day${daysLeft === 0 ? '' : 's'} left` : ''}</p>
-        <div className={`mt-2 inline-flex items-center gap-3 rounded-full px-4 py-1.5 text-sm font-semibold ${festival.scene === 'bodhi-water' ? 'bg-white/70 text-emerald-900' : 'bg-black/30'}`}>
+        <h1 className={`text-xl sm:text-2xl font-black drop-shadow ${lightScene ? 'text-emerald-900' : 'text-amber-200'}`}>{festival.icon} {festival.title}</h1>
+        <p className={`text-xs sm:text-sm ${lightScene ? 'text-emerald-800 font-semibold' : 'text-indigo-200'}`}>{festival.tagline}{!isTeacherPreview && daysLeft >= 0 ? ` · ${daysLeft + 1} day${daysLeft === 0 ? '' : 's'} left` : ''}</p>
+        <div className={`mt-2 inline-flex items-center gap-3 rounded-full px-4 py-1.5 text-sm font-semibold ${lightScene ? 'bg-white/70 text-emerald-900' : 'bg-black/30'}`}>
           <span>{festival.lamps.icon || '🪔'} {litCount}/{festival.lamps.perDay} today</span>
           <span className="opacity-40">|</span>
           <span>🙏 {kadawDoneCount}/{festival.kadaw.recipients.length}</span>
         </div>
         {isTeacherPreview && (
-          <p className={`mt-2 mx-auto max-w-md text-xs rounded-lg px-3 py-1.5 border ${festival.scene === 'bodhi-water' ? 'text-amber-900 bg-amber-100 border-amber-300' : 'text-amber-100 bg-amber-500/20 border-amber-300/40'}`}>
+          <p className={`mt-2 mx-auto max-w-md text-xs rounded-lg px-3 py-1.5 border ${lightScene ? 'text-amber-900 bg-amber-100 border-amber-300' : 'text-amber-100 bg-amber-500/20 border-amber-300/40'}`}>
             👀 Teacher preview — nothing is saved. Students see this from {festival.start} to {festival.end}.
           </p>
         )}
@@ -1044,7 +1210,9 @@ export default function FestivalApp({ entryRequest, onExit }) {
 
       {/* Scene */}
       <div className="relative z-10 flex-1" style={{ minHeight: 380 }}>
-        {festival.scene === 'deer-park' ? (
+        {festival.scene === 'thingyan-water' ? (
+          <ThingyanScene glow={glow} />
+        ) : festival.scene === 'deer-park' ? (
           <DeerParkScene glow={glow} />
         ) : festival.scene === 'bodhi-water' ? (
           <BodhiScene glow={glow} />
@@ -1061,7 +1229,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
         {festival.lamps.style === 'lamp' || !festival.lamps.style ? LAMP_SPOTS.slice(0, festival.lamps.perDay).map((spot, i) => (i >= 10 ? (
           <div key={`post-${i}`} className="absolute pointer-events-none rounded-sm" style={{ left: `${spot.x}%`, top: `${spot.y}%`, bottom: '6%', width: 4, marginLeft: -2, marginTop: 18, background: 'linear-gradient(180deg,#8d6e63,#3e2723)' }} />
         ) : null)) : null}
-        {(festival.lamps.style === 'flower' ? FLOWER_SPOTS : festival.lamps.style === 'pot' ? POT_SPOTS : festival.lamps.style === 'balloon' ? BALLOON_SPOTS : LAMP_SPOTS).slice(0, festival.lamps.perDay).map((spot, i) => {
+        {(festival.lamps.style === 'splash' ? [] : festival.lamps.style === 'flower' ? FLOWER_SPOTS : festival.lamps.style === 'pot' ? POT_SPOTS : festival.lamps.style === 'balloon' ? BALLOON_SPOTS : LAMP_SPOTS).slice(0, festival.lamps.perDay).map((spot, i) => {
           const isLit = lit.has(i);
           if (festival.lamps.style === 'balloon') {
             if (isLit) return null;
@@ -1132,12 +1300,17 @@ export default function FestivalApp({ entryRequest, onExit }) {
         <button onClick={() => setPanel('kadaw')} className="flex-1 max-w-[200px] bg-amber-400 hover:bg-amber-300 text-indigo-950 font-black rounded-2xl py-3 shadow-lg" style={{ animation: kadawDoneCount === 0 ? 'fsPulse 2.2s ease-in-out infinite' : 'none' }}>
           {festival.kadaw.button || '🙏 Pay Respect'}
         </button>
+        {festival.lamps.style === 'splash' && (
+          <button onClick={() => setPanel('splash')} className="flex-1 max-w-[200px] bg-sky-400 hover:bg-sky-300 text-sky-950 font-black rounded-2xl py-3 shadow-lg" style={{ animation: lit.size === 0 ? 'fsPulse 2.2s ease-in-out infinite' : 'none' }}>
+            💦 Splash Water
+          </button>
+        )}
         {festival.pasukula && (
           <button onClick={() => setPanel('pasukula')} className="flex-1 max-w-[200px] bg-red-500 hover:bg-red-400 text-white font-black rounded-2xl py-3 shadow-lg" style={{ animation: Object.keys(pasukulaFoundMap).length === 0 ? 'fsPulse 2.2s ease-in-out infinite' : 'none' }}>
             🧧 Pasukula
           </button>
         )}
-        <button onClick={() => setPanel('rewards')} className={`flex-1 max-w-[200px] font-bold rounded-2xl py-3 border ${festival.scene === 'bodhi-water' ? 'bg-white/80 hover:bg-white text-emerald-900 border-emerald-300' : 'bg-white/15 hover:bg-white/25 border-white/30'}`}>
+        <button onClick={() => setPanel('rewards')} className={`flex-1 max-w-[200px] font-bold rounded-2xl py-3 border ${lightScene ? 'bg-white/80 hover:bg-white text-emerald-900 border-emerald-300' : 'bg-white/15 hover:bg-white/25 border-white/30'}`}>
           🎁 Rewards
         </button>
       </div>
@@ -1170,7 +1343,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
                   <button key={r.id} onClick={() => openKadaw(r)} className={`rounded-2xl border-2 p-3 text-center transition ${done ? 'border-emerald-400/60 bg-emerald-500/10' : 'border-amber-300/50 bg-white/5 hover:bg-white/10'}`}>
                     <div className="text-4xl">{r.emoji}</div>
                     <div className="text-sm font-bold mt-1">{r.name}</div>
-                    <div className={`text-xs font-bold mt-1 ${done ? 'text-emerald-300' : 'text-amber-300'}`}>{done ? '✅ Done today' : `🪙 +${festival.kadaw.coins}  🪷 +${festival.kadaw.lotus}`}</div>
+                    <div className={`text-xs font-bold mt-1 ${done ? 'text-emerald-300' : 'text-amber-300'}`}>{done ? '✅ Done today' : `🪙 +${r.coins ?? festival.kadaw.coins}  🪷 +${r.lotus ?? festival.kadaw.lotus}`}</div>
                   </button>
                 );
               })}
@@ -1189,9 +1362,9 @@ export default function FestivalApp({ entryRequest, onExit }) {
             {kadawStage === 'pray' ? (
               <>
                 <p className="mt-3 text-base leading-relaxed">{kadawTarget.prayer}</p>
-                <p className="mt-3 text-xs text-indigo-300">Read it slowly and say it quietly in your heart, with your hands together.</p>
+                <p className="mt-3 text-xs text-indigo-300">{kadawTarget.sitMinutes ? "The timer only counts while this page is on screen. If you close this window, you start again." : "Read it slowly and say it quietly in your heart, with your hands together."}</p>
                 <button onClick={handleKadaw} disabled={respectWait > 0} className="mt-4 w-full py-3 rounded-2xl bg-amber-400 hover:bg-amber-300 text-indigo-950 font-black disabled:opacity-50 disabled:cursor-not-allowed">
-                  {respectWait > 0 ? `🙏 Take a quiet moment… ${respectWait}` : (festival.kadaw.actionLabel || '🙏 I Pay Respect')}
+                  {respectWait > 0 ? (kadawTarget.sitMinutes ? `🧘 Sitting… ${String(Math.floor(respectWait / 60)).padStart(2, '0')}:${String(respectWait % 60).padStart(2, '0')}` : `🙏 Take a quiet moment… ${respectWait}`) : (kadawTarget.sitMinutes ? '🧘 I finished meditating' : (festival.kadaw.actionLabel || '🙏 I Pay Respect'))}
                 </button>
               </>
             ) : (
@@ -1200,7 +1373,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
                 <p className="mt-3 text-sm font-bold text-emerald-300">
                   {kadawStage === 'blessedAgain'
                     ? 'You already did this today 🌸 Come back tomorrow.'
-                    : isTeacherPreview ? `🪙 +${festival.kadaw.coins}  🪷 +${festival.kadaw.lotus} (preview)` : `🪙 +${festival.kadaw.coins}  🪷 +${festival.kadaw.lotus} — thank you for being grateful.`}
+                    : isTeacherPreview ? `🪙 +${kadawTarget.coins ?? festival.kadaw.coins}  🪷 +${kadawTarget.lotus ?? festival.kadaw.lotus} (preview)` : `🪙 +${kadawTarget.coins ?? festival.kadaw.coins}  🪷 +${kadawTarget.lotus ?? festival.kadaw.lotus} — thank you for being grateful.`}
                 </p>
                 <button onClick={() => setKadawTarget(null)} className="mt-4 w-full py-2.5 rounded-2xl bg-white/15 hover:bg-white/25 font-bold">Sadhu 🙏</button>
               </>
@@ -1335,6 +1508,38 @@ export default function FestivalApp({ entryRequest, onExit }) {
             ))}
             <p className="mt-2 text-sm text-indigo-200">Find it in 🧑‍🎨 Avatar and wear it.</p>
             <button onClick={() => setCelebration(null)} className="mt-4 w-full py-2.5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-indigo-950 font-black">Sadhu!</button>
+          </div>
+        </div>
+      )}
+
+      {panel === 'splash' && festival.lamps.style === 'splash' && (
+        <SplashPanel
+          festival={festival}
+          studentName={studentName}
+          isTeacherPreview={isTeacherPreview}
+          splashed={splashedNames}
+          splashLeft={festival.lamps.perDay - lit.size}
+          onSplash={handleSplash}
+          onClose={() => setPanel(null)}
+        />
+      )}
+
+      {splashFx && (
+        <div className="fixed inset-0 z-[9992] pointer-events-none overflow-hidden" aria-hidden="true">
+          {Array.from({ length: 34 }).map((_, i) => (
+            <span key={i} className="absolute rounded-full" style={{ left: '50%', top: '62%', width: 7 + (i % 4) * 3, height: 10 + (i % 4) * 4, background: i % 3 ? '#4fc3f7' : '#b3e5fc', '--dx': `${(Math.cos(i * 2.4) * 46).toFixed(0)}vw`, '--dy': `${(-20 - ((i * 37) % 60))}vh`, animation: `fsSplashFly 1.5s ease-out ${(i % 6) * 0.05}s forwards`, opacity: 0 }} />
+          ))}
+          <div className="absolute left-1/2 top-[36%] -translate-x-1/2 text-6xl" style={{ animation: 'fsPop .4s ease-out both' }}>💦</div>
+        </div>
+      )}
+
+      {incomingSplashes.length > 0 && (
+        <div className="fixed inset-0 z-[9996] bg-black/60 flex items-center justify-center px-4" onClick={() => setIncomingSplashes([])}>
+          <div className="w-full max-w-sm bg-sky-950 border-2 border-sky-300 rounded-3xl p-6 text-center text-white" onClick={(e) => e.stopPropagation()}>
+            <div className="text-6xl" style={{ animation: 'fsPulse 1.4s ease-in-out infinite' }}>💦</div>
+            <h3 className="mt-2 text-xl font-black text-sky-200">You were splashed!</h3>
+            <p className="mt-2 text-sm text-sky-100">{Array.from(new Set(incomingSplashes.map(x => x.from))).join(', ')} gently sprinkled water on you. Happy Thingyan! 🌸</p>
+            <button onClick={() => setIncomingSplashes([])} className="mt-4 w-full py-2.5 rounded-2xl bg-sky-300 hover:bg-sky-200 text-sky-950 font-black">Thank you! 💧</button>
           </div>
         </div>
       )}
