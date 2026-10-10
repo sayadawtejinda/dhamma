@@ -105,6 +105,8 @@ function readNestedWithLegacyFallback(data, prefix) {
   return result;
 }
 
+// A festival gift can be sold back for this many coins (frees room in the wardrobe).
+const FESTIVAL_SELL_COINS = 50;
 const DEFAULT_CONFIG = { skin: 'light', hair: 'short-black', outfit: 'blue', accessory: 'none', bg: 'sky', homeBackground: 'default' };
 const CATEGORIES = [
   { key: 'hair', label: '💇 Hair', options: HAIR_OPTIONS },
@@ -345,6 +347,25 @@ export default function AvatarApp({ entryRequest, onExit }) {
       avatarOwned: { [categoryKey]: [...(owned[categoryKey] || []), option.id] },
     });
     showToast(`${option.name} equipped!`);
+  };
+
+  // Sell a festival gift back for coins. If it was being worn, the default look comes back.
+  const handleSell = (categoryKey, option) => {
+    if (isTeacherPreview) { showToast('Preview mode -- nothing is sold.'); return; }
+    if (!isOwned(categoryKey, option.id)) return;
+    if (!window.confirm(`Sell "${option.name}" for ${FESTIVAL_SELL_COINS} coins?`)) return;
+    const remaining = (owned[categoryKey] || []).filter(id => id !== option.id);
+    const wasWorn = config[categoryKey] === option.id;
+    const fallback = DEFAULT_CONFIG[categoryKey];
+    setOwned(prev => ({ ...prev, [categoryKey]: remaining }));
+    setCoinBalance(prev => prev + FESTIVAL_SELL_COINS);
+    if (wasWorn) setConfig(prev => ({ ...prev, [categoryKey]: fallback }));
+    persist({
+      coinBalance: increment(FESTIVAL_SELL_COINS),
+      ...(wasWorn ? { avatar: { [categoryKey]: fallback } } : {}),
+      avatarOwned: { [categoryKey]: remaining },
+    });
+    showToast(`Sold ${option.name} for ${FESTIVAL_SELL_COINS} 🪙`);
   };
 
   const handleSkinChange = (skinId) => {
@@ -631,8 +652,8 @@ export default function AvatarApp({ entryRequest, onExit }) {
           const equipped = config[activeCategory] === option.id;
           const swatchColor = option.swatch || option.color || '#CFD8DC';
           return (
+            <div key={option.id} className="flex flex-col gap-1">
             <button
-              key={option.id}
               onClick={() => handleEquip(activeCategory, option)}
               className={`p-3 rounded-2xl border-2 flex flex-col items-center gap-2 transition ${
                 equipped ? 'border-indigo-600 bg-indigo-50' : 'border-gray-200 bg-white hover:border-indigo-300'
@@ -652,6 +673,12 @@ export default function AvatarApp({ entryRequest, onExit }) {
                 <span className="text-xs font-bold text-amber-600">🪙 {option.cost}</span>
               )}
             </button>
+            {option.festival && owns && !isTeacherPreview && (
+              <button onClick={() => handleSell(activeCategory, option)} className="text-xs font-bold text-amber-700 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded-full py-1">
+                💰 Sell for {FESTIVAL_SELL_COINS} 🪙
+              </button>
+            )}
+            </div>
           );
         })}
       </div>
