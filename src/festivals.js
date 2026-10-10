@@ -289,7 +289,13 @@ export const FESTIVALS = [
     end: '2027-04-17',
     // Sprinkling water on friends with a silver bowl and a thabyay twig: up to `perDay` friends
     // a day (each friend once), `coins` for each. The friend is told who sprinkled them.
-    lamps: { perDay: 10, coins: 5, allLitBonus: 0, style: 'splash', icon: '💦', noun: 'splash' },
+    lamps: {
+      perDay: 10, coins: 5, allLitBonus: 0, style: 'splash', icon: '💦', noun: 'splash',
+      button: '💦 Splash Water', panelTitle: '💦 Sprinkle Water on Friends',
+      panelIntro: 'Gently sprinkle water with your silver bowl. Each friend once a day, up to 10 friends.',
+      rowButton: '💦 Splash', rowDone: '✅ Splashed', doneAll: 'All 10 splashes done today. Come back tomorrow! 🌸',
+      receiveTitle: 'You were splashed!', receiveText: 'gently sprinkled water on you. Happy Thingyan! 🌸', receiverCoins: 2,
+    },
     // Two things to do once a day: pay respect to grandparents and elders, and sit in
     // meditation for 5 minutes (more coins and lotus, since it takes real time).
     kadaw: {
@@ -327,6 +333,74 @@ export const FESTIVALS = [
         { category: 'outfit', item: { id: 'festival-thingyan-2027-water', name: '🌊 Water Festival Robe', color: '#0277BD', swatch: 'linear-gradient(135deg,#81D4FA,#0277BD 65%,#01579B)', pattern: 'lights', cost: 0, festival: true } },
         { category: 'accessory', item: { id: 'festival-thingyan-2027-sprinkle', name: '💧 Sprinkle Lantern', kind: 'skylantern', color: '#4FC3F7', cost: 0, festival: true } },
         { category: 'outfit', item: { id: 'festival-thingyan-2027-newyear', name: '🎊 New Year Robe', color: '#E53935', swatch: 'linear-gradient(135deg,#FFCDD2,#E53935 60%,#FFC107)', pattern: 'night', cost: 0, festival: true } },
+      ],
+    },
+  },
+  {
+    id: 'htamane-2027',
+    enabled: true,
+    scene: 'htamane-fire',
+    icon: '🍲',
+    title: 'Htamane Festival',
+    tagline: 'Stir the great pot of htamane, share it with 10 friends, and make three good resolutions!',
+    // Default dates -- the teacher sets the real ones on the "Festival apps" screen.
+    // Full moon of Tabodwe 2027 is taken as 21 January.
+    start: '2027-01-19',
+    end: '2027-01-23',
+    // First stir the htamane in the big pot (tap it until it is ready), then give a plate to
+    // up to `perDay` friends a day (each friend once), `coins` for each. The friend gets
+    // `receiverCoins` coins and is told who gave it.
+    lamps: {
+      perDay: 10, coins: 5, allLitBonus: 0, style: 'share', icon: '🍲', noun: 'plate',
+      button: '🍲 Share Htamane', panelTitle: '🍲 Share Htamane with Friends',
+      panelIntro: 'Give a plate of warm htamane to your friends. Each friend once a day, up to 10 friends.',
+      rowButton: '🍲 Give', rowDone: '✅ Given', doneAll: 'All 10 plates shared today. Come back tomorrow! 🌸',
+      receiveTitle: 'You were given htamane!', receiveText: 'shared a plate of htamane with you. Happy Htamane Festival! 🍲', receiverCoins: 2,
+    },
+    // Three resolutions from the Ovada Patimokkha, which the Buddha taught on the full moon of
+    // Tabodwe to 1,250 arahants. Once each per day.
+    kadaw: {
+      coins: 20,
+      lotus: 1,
+      title: 'Make Resolutions',
+      button: '🙏 Make Resolutions',
+      actionLabel: '🙏 I Make This Resolution',
+      doneWord: 'Resolutions',
+      recipients: [
+        {
+          id: 'avoid-evil', emoji: '🚫', name: 'I Will Not Do Evil',
+          prayer: 'On the full moon of Tabodwe, 1,250 arahants came together around the Buddha, and He taught the Ovada Patimokkha. The first teaching is: "Not to do any evil." I make a firm resolution: I will not do bad deeds with my body, my words or my mind.',
+          blessing: 'May you stay far from every bad deed and always be safe. Sadhu! Sadhu! Sadhu!',
+        },
+        {
+          id: 'do-good', emoji: '🌱', name: 'I Will Do Good Deeds',
+          prayer: 'The second teaching of the Ovada Patimokkha is: "To do good." I make a firm resolution: I will do good deeds every day, share with others, and help anyone who needs help.',
+          blessing: 'May every good deed you do come back to you as happiness. Sadhu! Sadhu! Sadhu!',
+        },
+        {
+          id: 'pure-mind', emoji: '🤍', name: 'I Will Keep My Mind Pure',
+          prayer: 'The third teaching of the Ovada Patimokkha is: "To purify the mind." I make a firm resolution: I will keep my mind clean and white, free from anger, greed and jealousy.',
+          blessing: 'May your mind be as clear and white as the full moon. Sadhu! Sadhu! Sadhu!',
+        },
+      ],
+    },
+    rewards: [
+      {
+        id: 'htamane-2027-robe',
+        category: 'outfit',
+        requires: { type: 'lamps', count: 40 },
+        item: { id: 'festival-htamane-2027-robe', name: '🍲 Htamane Robe', color: '#E65100', swatch: 'linear-gradient(135deg,#FFE0B2,#E65100 60%,#6D4C41)', pattern: 'lights', cost: 0, festival: true },
+      },
+    ],
+    dailyGift: {
+      bonusCoins: 50,
+      pool: [
+        { category: 'accessory', item: { id: 'festival-htamane-2027-sesame', name: '🥜 Sesame Glasses', kind: 'starglasses', color: '#FFB74D', cost: 0, festival: true } },
+        { category: 'outfit', item: { id: 'festival-htamane-2027-golden', name: '🟧 Golden Htamane Robe', color: '#EF6C00', swatch: 'linear-gradient(135deg,#FFE082 50%,#EF6C00 50%)', pattern: 'checks', cost: 0, festival: true } },
+        { category: 'accessory', item: { id: 'festival-htamane-2027-bonfire', name: '🔥 Bonfire Lantern', kind: 'lantern', color: '#FF7043', cost: 0, festival: true } },
+        { category: 'outfit', item: { id: 'festival-htamane-2027-moon', name: '🌕 Tabodwe Full Moon Robe', color: '#37474F', swatch: 'linear-gradient(135deg,#78909C,#263238 65%,#FFF59D)', pattern: 'night', cost: 0, festival: true } },
+        { category: 'accessory', item: { id: 'festival-htamane-2027-paddle', name: '🥄 Paddle Lantern', kind: 'skylantern', color: '#A1887F', cost: 0, festival: true } },
+        { category: 'outfit', item: { id: 'festival-htamane-2027-warm', name: '🧣 Warm Season Robe', color: '#C62828', swatch: 'linear-gradient(135deg,#FFCDD2,#C62828 60%,#FFC107)', pattern: 'lotus', cost: 0, festival: true } },
       ],
     },
   },

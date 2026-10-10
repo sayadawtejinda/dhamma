@@ -215,7 +215,7 @@ async function saveFestivalProgress({ festival, studentUid, studentName, lampIdx
       studentUid, studentName, festivalId: festival.id,
       lamps: { [dateKey]: Array.from(litToday) },
       kadaw: { [dateKey]: Array.from(kadawToday) },
-      ...(festival.lamps.style === 'splash' ? { splashNames: { [dateKey]: splashedToday } } : {}),
+      ...(['splash', 'share'].includes(festival.lamps.style) ? { splashNames: { [dateKey]: splashedToday } } : {}),
       lampsTotal: state.lampsTotal,
       kadawEver: state.kadawEver,
       unlocked: [...alreadyUnlocked, ...newlyUnlocked.map(rw => rw.id)],
@@ -501,6 +501,98 @@ function BodhiScene({ glow }) {
   );
 }
 
+// Htamane: the great pot on the fire, on the full moon night of Tabodwe. Two cooks lean on
+// huge paddles and stir with all their strength; the third stands behind the pot holding
+// both paddles, one in each hand, pressing the htamane down. `progress` (0-1) turns the pale
+// rice into golden htamane, and `stirring` swings the paddles for a moment.
+function Cook({ x, y, s = 1, shirt, longyi }) {
+  return (
+    <g transform={`translate(${x} ${y}) scale(${s})`}>
+      <ellipse cx="0" cy="2" rx="16" ry="3" fill="rgba(0,0,0,.4)" />
+      <path d="M-12 0 L12 0 L10 -26 L-10 -26 Z" fill={longyi} />
+      <rect x="-10" y="-50" width="20" height="27" rx="6" fill={shirt} />
+      <rect x="-3" y="-55" width="6" height="7" fill="#d9a074" />
+      <circle cx="0" cy="-62" r="8.5" fill="#e0b088" />
+      <path d="M-9 -64 Q0 -76 9 -64 Q4 -68 -9 -64 Z" fill="#1c1410" />
+      <circle cx="-2.8" cy="-62" r="0.9" fill="#2b1b10" /><circle cx="2.8" cy="-62" r="0.9" fill="#2b1b10" />
+      <path d="M-2.5 -58.6 Q0 -56.8 2.5 -58.6" stroke="#8a4a2a" strokeWidth="0.9" fill="none" strokeLinecap="round" />
+    </g>
+  );
+}
+
+function HtamaneScene({ progress, stirring, stirKey }) {
+  const rnd = seeded(23);
+  const spots = Array.from({ length: 56 }, () => { const a = rnd() * Math.PI * 2, r = Math.sqrt(rnd()); return { x: 200 + Math.cos(a) * 82 * r, y: 196 + Math.sin(a) * 17 * r, k: Math.floor(rnd() * 3) }; });
+  const shown = Math.floor(progress * spots.length);
+  const T = { L: [38, 172], R: [362, 172] }, B = { L: [182, 196], R: [218, 196] };
+  const lerp = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+  const sides = ['L', 'R'].map(side => {
+    const t = T[side], b = B[side];
+    return { side, t, b, p: lerp(t, b, 0.37), q: lerp(t, b, 0.78), dir: side === 'L' ? 1 : -1 };
+  });
+  const rot = (pt, pivot, deg) => { const r = deg * Math.PI / 180; const dx = pt[0] - pivot[0], dy = pt[1] - pivot[1]; return [pivot[0] + dx * Math.cos(r) - dy * Math.sin(r), pivot[1] + dx * Math.sin(r) + dy * Math.cos(r)]; };
+  const swing = [0, -9, 9, -9, 0];
+  const anim = (side, q, p) => swing.map(d => rot(q, p, side === 'L' ? d : -d));
+  const dur = '0.9s';
+  const toppingColors = ['#fff8e1', '#3e2723', '#8d5a2b'];
+  return (
+    <svg viewBox="0 0 400 270" preserveAspectRatio="xMidYMax meet" className="absolute inset-0 w-full h-full" aria-hidden="true">
+      <defs>
+        <radialGradient id="htFire" cx="50%" cy="50%" r="50%"><stop offset="0" stopColor="#ffb74d" stopOpacity=".9" /><stop offset="1" stopColor="#ff6d00" stopOpacity="0" /></radialGradient>
+        <linearGradient id="htWok" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#3a3a3a" /><stop offset="1" stopColor="#141414" /></linearGradient>
+      </defs>
+      <path d="M0 214 Q200 200 400 214 L400 270 L0 270 Z" fill="#3b2a1d" />
+      <circle cx="200" cy="236" r="90" fill="url(#htFire)" opacity=".75" />
+      {/* the cook in the middle, behind the pot, holding both paddles */}
+      <Cook x={200} y={208} s={1.05} shirt="#1e88e5" longyi="#6a1b9a" />
+      {sides.map(({ side, q }) => {
+        const hand = stirring ? anim(side, q, sides.find(z => z.side === side).p) : [q];
+        return (
+          <g key={`arm${side}`}>
+            <line x1={side === 'L' ? 192 : 208} y1="160" x2={hand[0][0]} y2={hand[0][1]} stroke="#e0b088" strokeWidth="4.5" strokeLinecap="round">
+              {stirring && <animate key={`ax${stirKey}`} attributeName="x2" values={hand.map(h => h[0]).join(';')} dur={dur} repeatCount="1" />}
+              {stirring && <animate key={`ay${stirKey}`} attributeName="y2" values={hand.map(h => h[1]).join(';')} dur={dur} repeatCount="1" />}
+            </line>
+          </g>
+        );
+      })}
+      {/* the fire and the stones under the pot */}
+      {[[150, 246], [200, 250], [250, 246]].map(([fx, fy], i) => (
+        <path key={i} d={`M${fx - 12} ${fy} Q${fx - 6} ${fy - 24} ${fx} ${fy - 34} Q${fx + 6} ${fy - 24} ${fx + 12} ${fy} Z`} fill={i === 1 ? '#ffb300' : '#ff7043'} style={{ transformOrigin: `${fx}px ${fy}px`, animation: `fsFlicker2 ${0.5 + i * 0.13}s ease-in-out infinite` }} />
+      ))}
+      {[[118, 250], [282, 250], [162, 256], [238, 256]].map(([sx, sy], i) => <ellipse key={i} cx={sx} cy={sy} rx="16" ry="8" fill="#5d4a3a" stroke="#3a2a1d" />)}
+      {/* the great pot */}
+      <path d="M100 196 Q108 242 200 246 Q292 242 300 196 Z" fill="url(#htWok)" />
+      <ellipse cx="200" cy="196" rx="100" ry="26" fill="#1c1c1c" stroke="#555" strokeWidth="2" />
+      <ellipse cx="200" cy="197" rx="92" ry="21" fill="#2a2a2a" />
+      <ellipse cx="200" cy="197" rx="86" ry="18" fill="#efe3b5" />
+      <ellipse cx="200" cy="197" rx="86" ry="18" fill="#c47f20" opacity={progress * 0.95} />
+      {spots.slice(0, shown).map((sp, i) => <circle key={i} cx={sp.x} cy={sp.y} r={sp.k === 2 ? 2.3 : 1.5} fill={toppingColors[sp.k]} />)}
+      {/* steam */}
+      {[170, 200, 232].map((sx, i) => (
+        <circle key={i} cx={sx} cy="176" r={7 + i} fill="#fff" opacity="0" style={{ animation: `fsSteam ${2.4 + i * 0.5}s ease-out ${i * 0.7}s infinite` }} />
+      ))}
+      {/* the two paddles: they pivot where the cooks hold them */}
+      {sides.map(({ side, t, b, p, dir }) => (
+        <g key={`pad${side}`}>
+          <g>
+            {stirring && <animateTransform key={`pt${side}${stirKey}`} attributeName="transform" type="rotate" values={swing.map(d => `${side === 'L' ? d : -d} ${p[0]} ${p[1]}`).join(';')} dur={dur} repeatCount="1" />}
+            <line x1={t[0]} y1={t[1]} x2={b[0]} y2={b[1]} stroke="#8d5a2b" strokeWidth="5.5" strokeLinecap="round" />
+            <ellipse cx={b[0] + dir * 6} cy={b[1] + 1} rx="20" ry="6" fill="#a8702f" stroke="#6d4520" strokeWidth="1" transform={`rotate(${dir * 8} ${b[0]} ${b[1]})`} />
+          </g>
+          <circle cx={p[0]} cy={p[1]} r="4.4" fill="#e0b088" />
+        </g>
+      ))}
+      {/* the two cooks stirring, leaning in */}
+      <Cook x={62} y={252} s={1.18} shirt="#e53935" longyi="#00695c" />
+      <Cook x={338} y={252} s={1.18} shirt="#fdd835" longyi="#4527a0" />
+      {sides.map(({ side, p }) => (
+        <line key={`ao${side}`} x1={side === 'L' ? 70 : 330} y1="196" x2={p[0]} y2={p[1]} stroke="#e0b088" strokeWidth="5" strokeLinecap="round" />
+      ))}
+    </svg>
+  );
+}
+
 // A bunch of Waso flowers (golden blossoms on a green stem) to offer to the Buddha.
 function WasoFlower() {
   const blossoms = [[25, 12, 7], [14, 20, 6], [36, 20, 6], [19, 31, 5.5], [31, 31, 5.5], [25, 24, 6]];
@@ -693,8 +785,8 @@ function SplashPanel({ festival, studentName, isTeacherPreview, splashed, splash
   return (
     <div className="fixed inset-0 z-[9970] bg-black/60 flex items-end sm:items-center justify-center" onClick={onClose}>
       <div className="w-full max-w-md bg-sky-950 border border-sky-300/50 rounded-t-3xl sm:rounded-3xl p-5 max-h-[90vh] overflow-y-auto text-white" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-lg font-black text-sky-200 text-center">💦 Sprinkle Water on Friends</h2>
-        <p className="text-xs text-sky-200 text-center mb-1">Gently sprinkle water with your silver bowl. Each friend once a day, up to {festival.lamps.perDay} friends.</p>
+        <h2 className="text-lg font-black text-sky-200 text-center">{festival.lamps.panelTitle}</h2>
+        <p className="text-xs text-sky-200 text-center mb-1">{festival.lamps.panelIntro}</p>
         <p className="text-sm font-bold text-amber-300 text-center mb-3">{festival.lamps.perDay - splashLeft} / {festival.lamps.perDay} today · 🪙 {festival.lamps.coins} each</p>
         <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Find a friend..." className="w-full mb-3 px-3 py-2 rounded-xl text-sky-950 font-semibold" />
         {friends === null && <p className="text-center text-sky-200 py-6">Loading friends…</p>}
@@ -706,21 +798,21 @@ function SplashPanel({ festival, studentName, isTeacherPreview, splashed, splash
               <div key={name} className={`flex items-center justify-between rounded-xl px-3 py-2 border ${done ? 'bg-emerald-500/10 border-emerald-400/50' : 'bg-white/5 border-white/15'}`}>
                 <span className="font-bold truncate mr-2">{name}</span>
                 {done ? (
-                  <span className="text-xs font-bold text-white bg-emerald-600 rounded-full px-2 py-1 whitespace-nowrap">✅ Splashed</span>
+                  <span className="text-xs font-bold text-white bg-emerald-600 rounded-full px-2 py-1 whitespace-nowrap">{festival.lamps.rowDone}</span>
                 ) : (
                   <button
                     onClick={(e) => onSplash(name, e)}
                     disabled={splashLeft <= 0}
                     className="text-sm font-black text-sky-950 bg-sky-300 hover:bg-sky-200 rounded-full px-3 py-1 whitespace-nowrap disabled:opacity-40"
                   >
-                    💦 Splash
+                    {festival.lamps.rowButton}
                   </button>
                 )}
               </div>
             );
           })}
         </div>
-        {splashLeft <= 0 && <p className="mt-3 text-center text-sm font-bold text-emerald-300">All {festival.lamps.perDay} splashes done today. Come back tomorrow! 🌸</p>}
+        {splashLeft <= 0 && <p className="mt-3 text-center text-sm font-bold text-emerald-300">{festival.lamps.doneAll}</p>}
         <button onClick={onClose} className="mt-4 w-full py-2 rounded-xl bg-white/10 hover:bg-white/20 font-semibold">Close</button>
       </div>
     </div>
@@ -873,6 +965,8 @@ export default function FestivalApp({ entryRequest, onExit }) {
   const [splashFx, setSplashFx] = useState(null);                      // the water-splash animation, while it plays
   const [incomingSplashes, setIncomingSplashes] = useState([]);        // friends who sprinkled water on me
   const [meditationTick, setMeditationTick] = useState(0);
+  const [stirProgress, setStirProgress] = useState(0); // the htamane festival: 0 to 1, tap the pot to stir
+  const [stirKey, setStirKey] = useState(0);
   const [pourPhase, setPourPhase] = useState({}); // water pots on their way to the tree: { index: 'walk' | 'pour' }
   const [pasukulaFoundMap, setPasukulaFoundMap] = useState({}); // winning packets opened today: { packetNumber: coins }
   const [pasukulaThrown, setPasukulaThrown] = useState(false);
@@ -925,6 +1019,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
         setLit(new Set(p.lamps?.[dateKey] || []));
         setKadawToday(new Set(p.kadaw?.[dateKey] || []));
         setSplashedNames(new Set(p.splashNames?.[dateKey] || []));
+        if ((p.lamps?.[dateKey] || []).length > 0) setStirProgress(1); // already stirred and shared today
         setLampsTotal(p.lampsTotal || 0);
         setKadawEver(p.kadawEver || []);
         setUnlockedIds(p.unlocked || []);
@@ -1042,7 +1137,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
     setFloaters(prev => [...prev, { id: fid, x: point.x, y: point.y, text: `+${festival.lamps.coins}` }]);
     setTimeout(() => setFloaters(prev => prev.filter(f => f.id !== fid)), 1100);
     if (completesAll) {
-      if (festival.lamps.style !== 'splash') releaseLanterns();
+      if (!['splash', 'share'].includes(festival.lamps.style)) releaseLanterns();
       if (festival.lamps.allLitBonus > 0) showToast(`${festival.lamps.icon || '🏮'} All ${festival.lamps.noun || 'lamp'}s done! Bonus +${festival.lamps.allLitBonus} 🪙`);
     }
     pendingRef.current.lamps.add(i);
@@ -1064,9 +1159,18 @@ export default function FestivalApp({ entryRequest, onExit }) {
     setSplashFx(fx);
     setTimeout(() => setSplashFx(cur => (cur === fx ? null : cur)), 1900);
     if (!isTeacherPreview) {
-      updateDoc(doc(db, SHRINE_ROSTER_PATH, sanitizeShrineKey(friendName)), { festivalSplashes: arrayUnion({ from: studentName, at: fx, fid: festival.id }) }).catch(() => {});
+      updateDoc(doc(db, SHRINE_ROSTER_PATH, sanitizeShrineKey(friendName)), { festivalSplashes: arrayUnion({ from: studentName, at: fx, fid: festival.id, coins: festival.lamps.receiverCoins || 0 }), ...(festival.lamps.receiverCoins ? { coinBalance: increment(festival.lamps.receiverCoins) } : {}) }).catch(() => {});
     }
   };
+
+  // The htamane festival: each tap stirs; at 20 taps the htamane is ready to share.
+  const handleStir = () => {
+    setStirProgress(p => (p >= 1 ? 1 : Math.min(1, +(p + 0.05).toFixed(2))));
+    setStirKey(k => k + 1);
+  };
+  useEffect(() => {
+    if (stirProgress >= 1 && stirKey > 0) showToast('🍲 The htamane is ready! Share it with your friends.');
+  }, [stirProgress >= 1]);
 
   const openKadaw = (recipient) => {
     setKadawTarget(recipient);
@@ -1140,7 +1244,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
   const lightScene = festival.scene === 'bodhi-water' || festival.scene === 'thingyan-water';
 
   return (
-    <div className="relative min-h-screen flex flex-col overflow-hidden text-white" style={{ background: festival.scene === 'thingyan-water' ? 'linear-gradient(180deg,#8fd3ff 0%,#d6f0ff 42%,#fff0b8 100%)' : festival.scene === 'deer-park' ? 'linear-gradient(180deg,#24153f 0%,#6b3358 30%,#e8964f 60%,#2d5e34 100%)' : festival.scene === 'bodhi-water' ? 'linear-gradient(180deg,#ffd9a0 0%,#fff0c8 30%,#cfe9d6 62%,#9ccc9c 100%)' : festival.scene === 'balloons-night' ? 'linear-gradient(180deg,#04141f 0%,#07302d 40%,#0d4a3a 72%,#0a3024 100%)' : 'linear-gradient(180deg,#070b22 0%,#17104a 45%,#3a1b5c 78%,#5a2a52 100%)' }}>
+    <div className="relative min-h-screen flex flex-col overflow-hidden text-white" style={{ background: festival.scene === 'htamane-fire' ? 'linear-gradient(180deg,#0b1026 0%,#1d2447 40%,#4a2a2a 78%,#6d3a1f 100%)' : festival.scene === 'thingyan-water' ? 'linear-gradient(180deg,#8fd3ff 0%,#d6f0ff 42%,#fff0b8 100%)' : festival.scene === 'deer-park' ? 'linear-gradient(180deg,#24153f 0%,#6b3358 30%,#e8964f 60%,#2d5e34 100%)' : festival.scene === 'bodhi-water' ? 'linear-gradient(180deg,#ffd9a0 0%,#fff0c8 30%,#cfe9d6 62%,#9ccc9c 100%)' : festival.scene === 'balloons-night' ? 'linear-gradient(180deg,#04141f 0%,#07302d 40%,#0d4a3a 72%,#0a3024 100%)' : 'linear-gradient(180deg,#070b22 0%,#17104a 45%,#3a1b5c 78%,#5a2a52 100%)' }}>
       <style>{`
         @keyframes fsTwinkle { 0%,100% { opacity: .25 } 50% { opacity: 1 } }
         @keyframes fsFlicker { 0%,100% { transform: translate(-50%,-50%) scale(1); opacity: .85 } 35% { transform: translate(-50%,-50%) scale(1.12); opacity: 1 } 70% { transform: translate(-50%,-50%) scale(.94); opacity: .75 } }
@@ -1155,6 +1259,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
         @keyframes fsDrop2 { 0% { transform: translateY(0); opacity: 0 } 20% { opacity: 1 } 60% { transform: translateY(var(--rise)); opacity: 1 } 100% { transform: translateY(0); opacity: 0 } }
         @keyframes fsSplashFly { 0% { transform: translate(-50%, 0) scale(.4); opacity: 0 } 15% { opacity: 1 } 100% { transform: translate(var(--dx), var(--dy)) scale(1.1); opacity: 0 } }
         @keyframes fsSwing { 0%,100% { transform: rotate(-4deg) } 50% { transform: rotate(4deg) } }
+        @keyframes fsSteam { 0% { transform: translateY(0) scale(.6); opacity: 0 } 25% { opacity: .5 } 100% { transform: translateY(-46px) scale(1.6); opacity: 0 } }
         @keyframes fsBob { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-10px) } }
         @keyframes fsRiseAway { 0% { transform: translate(-50%,-50%) scale(1); opacity: 1 } 100% { transform: translate(-50%,-115vh) scale(.5); opacity: 0 } }
         @keyframes fsSpark { 0% { transform: rotate(var(--angle)) translateX(0) scale(1); opacity: 1 } 100% { transform: rotate(var(--angle)) translateX(80px) scale(.2); opacity: 0 } }
@@ -1210,7 +1315,13 @@ export default function FestivalApp({ entryRequest, onExit }) {
 
       {/* Scene */}
       <div className="relative z-10 flex-1" style={{ minHeight: 380 }}>
-        {festival.scene === 'thingyan-water' ? (
+        {festival.scene === 'htamane-fire' ? (
+          <>
+            <HtamaneScene progress={stirProgress} stirring={stirKey > 0} stirKey={stirKey} />
+            {stirProgress < 1 && <div className="absolute inset-0 z-10 cursor-pointer" onClick={handleStir} aria-label="Tap to stir the htamane" />}
+            {stirProgress < 1 && <div className="absolute left-1/2 -translate-x-1/2 top-2 z-20 pointer-events-none text-center"><div className="text-sm font-black text-amber-200 drop-shadow">🥄 Tap the pot to stir!</div><div className="mt-1 w-48 h-3 rounded-full bg-black/40 overflow-hidden border border-amber-200/50"><div className="h-full bg-gradient-to-r from-amber-300 to-orange-500" style={{ width: `${Math.round(stirProgress * 100)}%`, transition: 'width .3s' }} /></div></div>}
+          </>
+        ) : festival.scene === 'thingyan-water' ? (
           <ThingyanScene glow={glow} />
         ) : festival.scene === 'deer-park' ? (
           <DeerParkScene glow={glow} />
@@ -1229,7 +1340,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
         {festival.lamps.style === 'lamp' || !festival.lamps.style ? LAMP_SPOTS.slice(0, festival.lamps.perDay).map((spot, i) => (i >= 10 ? (
           <div key={`post-${i}`} className="absolute pointer-events-none rounded-sm" style={{ left: `${spot.x}%`, top: `${spot.y}%`, bottom: '6%', width: 4, marginLeft: -2, marginTop: 18, background: 'linear-gradient(180deg,#8d6e63,#3e2723)' }} />
         ) : null)) : null}
-        {(festival.lamps.style === 'splash' ? [] : festival.lamps.style === 'flower' ? FLOWER_SPOTS : festival.lamps.style === 'pot' ? POT_SPOTS : festival.lamps.style === 'balloon' ? BALLOON_SPOTS : LAMP_SPOTS).slice(0, festival.lamps.perDay).map((spot, i) => {
+        {(['splash', 'share'].includes(festival.lamps.style) ? [] : festival.lamps.style === 'flower' ? FLOWER_SPOTS : festival.lamps.style === 'pot' ? POT_SPOTS : festival.lamps.style === 'balloon' ? BALLOON_SPOTS : LAMP_SPOTS).slice(0, festival.lamps.perDay).map((spot, i) => {
           const isLit = lit.has(i);
           if (festival.lamps.style === 'balloon') {
             if (isLit) return null;
@@ -1300,10 +1411,16 @@ export default function FestivalApp({ entryRequest, onExit }) {
         <button onClick={() => setPanel('kadaw')} className="flex-1 max-w-[200px] bg-amber-400 hover:bg-amber-300 text-indigo-950 font-black rounded-2xl py-3 shadow-lg" style={{ animation: kadawDoneCount === 0 ? 'fsPulse 2.2s ease-in-out infinite' : 'none' }}>
           {festival.kadaw.button || '🙏 Pay Respect'}
         </button>
-        {festival.lamps.style === 'splash' && (
-          <button onClick={() => setPanel('splash')} className="flex-1 max-w-[200px] bg-sky-400 hover:bg-sky-300 text-sky-950 font-black rounded-2xl py-3 shadow-lg" style={{ animation: lit.size === 0 ? 'fsPulse 2.2s ease-in-out infinite' : 'none' }}>
-            💦 Splash Water
-          </button>
+        {['splash', 'share'].includes(festival.lamps.style) && (
+          festival.lamps.style === 'share' && stirProgress < 1 ? (
+            <button onClick={handleStir} className="flex-1 max-w-[200px] bg-orange-400 hover:bg-orange-300 text-orange-950 font-black rounded-2xl py-3 shadow-lg" style={{ animation: 'fsPulse 1.6s ease-in-out infinite' }}>
+              🥄 Stir Htamane {Math.round(stirProgress * 100)}%
+            </button>
+          ) : (
+            <button onClick={() => setPanel('splash')} className="flex-1 max-w-[200px] bg-sky-400 hover:bg-sky-300 text-sky-950 font-black rounded-2xl py-3 shadow-lg" style={{ animation: lit.size === 0 ? 'fsPulse 2.2s ease-in-out infinite' : 'none' }}>
+              {festival.lamps.button}
+            </button>
+          )
         )}
         {festival.pasukula && (
           <button onClick={() => setPanel('pasukula')} className="flex-1 max-w-[200px] bg-red-500 hover:bg-red-400 text-white font-black rounded-2xl py-3 shadow-lg" style={{ animation: Object.keys(pasukulaFoundMap).length === 0 ? 'fsPulse 2.2s ease-in-out infinite' : 'none' }}>
@@ -1512,7 +1629,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
         </div>
       )}
 
-      {panel === 'splash' && festival.lamps.style === 'splash' && (
+      {panel === 'splash' && ['splash', 'share'].includes(festival.lamps.style) && (
         <SplashPanel
           festival={festival}
           studentName={studentName}
@@ -1536,9 +1653,10 @@ export default function FestivalApp({ entryRequest, onExit }) {
       {incomingSplashes.length > 0 && (
         <div className="fixed inset-0 z-[9996] bg-black/60 flex items-center justify-center px-4" onClick={() => setIncomingSplashes([])}>
           <div className="w-full max-w-sm bg-sky-950 border-2 border-sky-300 rounded-3xl p-6 text-center text-white" onClick={(e) => e.stopPropagation()}>
-            <div className="text-6xl" style={{ animation: 'fsPulse 1.4s ease-in-out infinite' }}>💦</div>
-            <h3 className="mt-2 text-xl font-black text-sky-200">You were splashed!</h3>
-            <p className="mt-2 text-sm text-sky-100">{Array.from(new Set(incomingSplashes.map(x => x.from))).join(', ')} gently sprinkled water on you. Happy Thingyan! 🌸</p>
+            <div className="text-6xl" style={{ animation: 'fsPulse 1.4s ease-in-out infinite' }}>{festival.lamps.icon}</div>
+            <h3 className="mt-2 text-xl font-black text-sky-200">{festival.lamps.receiveTitle}</h3>
+            <p className="mt-2 text-sm text-sky-100">{Array.from(new Set(incomingSplashes.map(x => x.from))).join(', ')} {festival.lamps.receiveText}</p>
+            {incomingSplashes.reduce((n, x) => n + (x.coins || 0), 0) > 0 && <p className="mt-2 text-lg font-black text-amber-300">+{incomingSplashes.reduce((n, x) => n + (x.coins || 0), 0)} 🪙</p>}
             <button onClick={() => setIncomingSplashes([])} className="mt-4 w-full py-2.5 rounded-2xl bg-sky-300 hover:bg-sky-200 text-sky-950 font-black">Thank you! 💧</button>
           </div>
         </div>
