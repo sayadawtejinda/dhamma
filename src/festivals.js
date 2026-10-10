@@ -86,7 +86,7 @@ export const FESTIVALS = [
     id: 'tazaungdaing-2026',
     enabled: true,
     scene: 'balloons-night',
-    icon: '🎈',
+    icon: '🏮',
     title: 'Tazaungdaing Festival of Fire Balloons',
     tagline: 'Send up the fire balloons, offer robes, and share pasukula!',
     // Default dates -- the teacher sets the real ones on the "Festival apps"
@@ -95,7 +95,7 @@ export const FESTIVALS = [
     end: '2026-11-27',
     // Fire balloons drifting in the sky -- tap one and it floats up and away.
     // Same `perDay` balloons again every new day, `coins` each.
-    lamps: { perDay: 10, coins: 5, allLitBonus: 0, style: 'balloon', icon: '🎈', noun: 'balloon' },
+    lamps: { perDay: 10, coins: 5, allLitBonus: 0, style: 'balloon', icon: '🏮', noun: 'balloon' },
     // Three offerings, once each per day (same rhythm as Thadingyut's respects).
     kadaw: {
       coins: 20,
@@ -135,18 +135,86 @@ export const FESTIVALS = [
         id: 'tazaungdaing-2026-robe',
         category: 'outfit',
         requires: { type: 'lamps', count: 40 },
-        item: { id: 'festival-tazaungdaing-2026-robe', name: '🎈 Fire Balloon Robe', color: '#D81B60', swatch: 'linear-gradient(135deg,#FF8A65,#D81B60 55%,#4A148C)', pattern: 'lights', cost: 0, festival: true },
+        item: { id: 'festival-tazaungdaing-2026-robe', name: '🏮 Fire Balloon Robe', color: '#D81B60', swatch: 'linear-gradient(135deg,#FF8A65,#D81B60 55%,#4A148C)', pattern: 'lights', cost: 0, festival: true },
       },
     ],
     dailyGift: {
       bonusCoins: 50,
       pool: [
-        { category: 'accessory', item: { id: 'festival-tazaungdaing-2026-balloon', name: '🎈 Fire Balloon', kind: 'skylantern', color: '#E91E63', cost: 0, festival: true } },
+        { category: 'accessory', item: { id: 'festival-tazaungdaing-2026-balloon', name: '🏮 Fire Balloon', kind: 'skylantern', color: '#E91E63', cost: 0, festival: true } },
         { category: 'outfit', item: { id: 'festival-tazaungdaing-2026-kathina', name: '🧡 Kathina Robe', color: '#EF6C00', swatch: 'linear-gradient(135deg,#FFB74D,#EF6C00 60%,#8D3B00)', pattern: 'checks', cost: 0, festival: true } },
         { category: 'accessory', item: { id: 'festival-tazaungdaing-2026-glasses', name: '🎆 Balloon Glasses', kind: 'starglasses', color: '#FF7043', cost: 0, festival: true } },
         { category: 'outfit', item: { id: 'festival-tazaungdaing-2026-mathoe', name: '🧵 Weaving-Night Robe', color: '#6D4C41', swatch: 'linear-gradient(135deg,#A1887F,#6D4C41 60%,#FFE082)', pattern: 'lotus', cost: 0, festival: true } },
         { category: 'accessory', item: { id: 'festival-tazaungdaing-2026-lantern', name: '🏮 Tazaungdaing Lantern', kind: 'lantern', color: '#FF8F00', cost: 0, festival: true } },
         { category: 'outfit', item: { id: 'festival-tazaungdaing-2026-midnight', name: '🌌 Midnight Balloon Robe', color: '#283593', swatch: 'linear-gradient(135deg,#3949AB,#1A1055 65%,#FF8A65)', pattern: 'night', cost: 0, festival: true } },
+      ],
+    },
+  },
+  {
+    id: 'nyaungyay-2027',
+    enabled: true,
+    scene: 'bodhi-water',
+    icon: '🌳',
+    title: 'Nyaung-yay Thwin: Watering the Bodhi Tree',
+    tagline: 'Carry the water pots to the Bodhi tree, pour water on its roots, and pay respect at the five holy places!',
+    // Default dates -- the teacher sets the real ones on the "Festival apps" screen.
+    // Full moon of Kason 2027 is taken as 20 May.
+    start: '2027-05-17',
+    end: '2027-05-23',
+    // Clay water pots stand on the ground. Tap one: it is carried to the Bodhi tree and
+    // the water is poured over the roots. The same pots again every new day.
+    lamps: { perDay: 10, coins: 5, allLitBonus: 0, style: 'pot', icon: '🏺', noun: 'water pot' },
+    // Paying respect to the five places of the Buddha's life, once each per day.
+    kadaw: {
+      coins: 20,
+      lotus: 1,
+      title: 'Pay Respect',
+      doneWord: 'Respects',
+      recipients: [
+        {
+          id: 'born', emoji: '🌸', name: 'Born: Lumbini Garden',
+          prayer: 'I pay my respect to the place where the Bodhisatta was born in Lumbini Garden, for the good of the whole world.',
+          blessing: 'May your heart be as pure and gentle as a newborn lotus. Sadhu! Sadhu! Sadhu!',
+        },
+        {
+          id: 'saw', emoji: '🌙', name: 'Seeing the Four Signs and Leaving Home',
+          prayer: 'I pay my respect to the Bodhisatta, who saw old age, sickness and death, and left his palace to find the way out of suffering.',
+          blessing: 'May you see the truth of life clearly and keep a brave heart. Sadhu! Sadhu! Sadhu!',
+        },
+        {
+          id: 'awakened', emoji: '🌳', name: 'Awakened: the Bodhi Tree',
+          prayer: 'I pay my respect to the Bodhi tree, where the Buddha became fully awakened and found the end of suffering.',
+          blessing: 'May your wisdom grow like the great Bodhi tree. Sadhu! Sadhu! Sadhu!',
+        },
+        {
+          id: 'passed', emoji: '🪷', name: 'Passed Away: Kusinara',
+          prayer: 'I pay my respect to the place where the Buddha passed away, and left us the Dhamma to be our guide.',
+          blessing: 'May you remember the Dhamma every day and be mindful. Sadhu! Sadhu! Sadhu!',
+        },
+        {
+          id: 'prophecy', emoji: '✨', name: 'Receiving the Prophecy of Buddha Dipankara',
+          prayer: 'I pay my respect to the young hermit Sumedha, who received the prophecy from Buddha Dipankara that he would one day become a Buddha.',
+          blessing: 'May every good wish you make with a pure heart come true. Sadhu! Sadhu! Sadhu!',
+        },
+      ],
+    },
+    rewards: [
+      {
+        id: 'nyaungyay-2027-robe',
+        category: 'outfit',
+        requires: { type: 'lamps', count: 40 },
+        item: { id: 'festival-nyaungyay-2027-robe', name: '🏺 Water Pot Robe', color: '#2E7D32', swatch: 'linear-gradient(135deg,#A5D6A7,#2E7D32 60%,#8D6E63)', pattern: 'lotus', cost: 0, festival: true },
+      },
+    ],
+    dailyGift: {
+      bonusCoins: 50,
+      pool: [
+        { category: 'accessory', item: { id: 'festival-nyaungyay-2027-leafglasses', name: '🍃 Bodhi Leaf Glasses', kind: 'starglasses', color: '#43A047', cost: 0, festival: true } },
+        { category: 'outfit', item: { id: 'festival-nyaungyay-2027-bodhi', name: '🌳 Bodhi Tree Robe', color: '#558B2F', swatch: 'linear-gradient(135deg,#9CCC65,#33691E 60%,#FFD54F)', pattern: 'lights', cost: 0, festival: true } },
+        { category: 'accessory', item: { id: 'festival-nyaungyay-2027-lantern', name: '💧 Water Lantern', kind: 'lantern', color: '#29B6F6', cost: 0, festival: true } },
+        { category: 'outfit', item: { id: 'festival-nyaungyay-2027-dawn', name: '🌅 Dawn Water Robe', color: '#0288D1', swatch: 'linear-gradient(135deg,#FFCC80,#0288D1 65%,#01579B)', pattern: 'night', cost: 0, festival: true } },
+        { category: 'accessory', item: { id: 'festival-nyaungyay-2027-skylantern', name: '🪷 Lotus Lantern', kind: 'skylantern', color: '#F48FB1', cost: 0, festival: true } },
+        { category: 'outfit', item: { id: 'festival-nyaungyay-2027-gold', name: '🟨 Golden Bodhi Robe', color: '#F9A825', swatch: 'linear-gradient(135deg,#FFE082 50%,#F9A825 50%)', pattern: 'checks', cost: 0, festival: true } },
       ],
     },
   },

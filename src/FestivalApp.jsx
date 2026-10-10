@@ -40,6 +40,12 @@ const BALLOON_SPOTS = [
   { x: 90, y: 16 }, { x: 16, y: 54 }, { x: 36, y: 62 }, { x: 64, y: 56 }, { x: 84, y: 50 },
 ];
 
+// Water pots standing on the ground, left and right of the Bodhi tree (% of the scene).
+const POT_SPOTS = [
+  { x: 8, y: 80 }, { x: 19, y: 88 }, { x: 30, y: 82 }, { x: 14, y: 70 }, { x: 28, y: 94 },
+  { x: 92, y: 80 }, { x: 81, y: 88 }, { x: 70, y: 82 }, { x: 86, y: 70 }, { x: 72, y: 94 },
+];
+
 // ---- Pasukula tree ----------------------------------------------------------
 // Every student has their own 10 packets each day (which two win is decided by
 // a fixed shuffle from their id and the date, so it cannot be re-rolled by
@@ -388,6 +394,104 @@ function PasukulaPanel({ festival, studentUid, studentName, isTeacherPreview, fo
   );
 }
 
+// A fire balloon: a real hot-air balloon (striped envelope, ropes, basket and a flame),
+// big enough that no student mistakes it for a small party balloon.
+const BALLOON_PALETTES = [
+  ['#e53935', '#ffca28'], ['#fb8c00', '#fff176'], ['#8e24aa', '#ffb300'], ['#d81b60', '#ffe082'], ['#039be5', '#ffee58'],
+];
+function HotAirBalloon({ palette = 0, size = 78 }) {
+  const [c1, c2] = BALLOON_PALETTES[palette % BALLOON_PALETTES.length];
+  const clip = `hab${palette}`;
+  const stripes = [0, 1, 2, 3, 4, 5];
+  return (
+    <svg viewBox="0 0 60 84" width={size} height={size * 1.4} style={{ overflow: 'visible', filter: 'drop-shadow(0 0 12px rgba(255,170,60,.9))' }} aria-hidden="true">
+      <defs>
+        <clipPath id={clip}><path d="M30 2 C6 2 2 26 11 40 C15 47 21 52 23 56 L37 56 C39 52 45 47 49 40 C58 26 54 2 30 2 Z" /></clipPath>
+        <radialGradient id={`${clip}g`} cx="35%" cy="30%" r="80%"><stop offset="0" stopColor="#fff" stopOpacity=".55" /><stop offset="1" stopColor="#000" stopOpacity=".18" /></radialGradient>
+      </defs>
+      <g clipPath={`url(#${clip})`}>
+        {stripes.map(i => <rect key={i} x={2 + i * 9.4} y="0" width="9.6" height="60" fill={i % 2 ? c2 : c1} />)}
+        <rect x="0" y="0" width="60" height="60" fill={`url(#${clip}g)`} />
+      </g>
+      <path d="M23 56 L37 56 L35 59 L25 59 Z" fill="#6d4c41" />
+      <line x1="25" y1="59" x2="26.5" y2="68" stroke="#5d4037" strokeWidth="0.8" />
+      <line x1="35" y1="59" x2="33.5" y2="68" stroke="#5d4037" strokeWidth="0.8" />
+      <rect x="24" y="68" width="12" height="9" rx="1.5" fill="#a1672f" stroke="#6d4c41" strokeWidth="0.8" />
+      <path d="M24 71.5 H36 M24 74.5 H36" stroke="#6d4c41" strokeWidth="0.5" />
+      <ellipse cx="30" cy="61" rx="3" ry="4.2" fill="#ffd54f" opacity=".95" style={{ animation: 'fsFlicker2 .5s ease-in-out infinite', transformOrigin: '30px 61px' }} />
+      <ellipse cx="30" cy="61.5" rx="1.5" ry="2.6" fill="#fff8e1" />
+    </svg>
+  );
+}
+
+// A clay water pot for pouring water on the Bodhi tree's roots.
+function WaterPot() {
+  return (
+    <svg viewBox="0 0 50 56" width="58" height="64" aria-hidden="true">
+      <defs>
+        <linearGradient id="potBody" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stopColor="#b9602c" /><stop offset=".45" stopColor="#e08a4a" /><stop offset="1" stopColor="#9a4a20" /></linearGradient>
+      </defs>
+      <ellipse cx="25" cy="53" rx="15" ry="3" fill="rgba(0,0,0,.25)" />
+      <path d="M13 20 C5 29 8 48 25 52 C42 48 45 29 37 20 Z" fill="url(#potBody)" />
+      <path d="M10 33 Q25 38 40 33" stroke="#6d3412" strokeWidth="1.4" fill="none" />
+      <path d="M12 40 Q25 45 38 40" stroke="#f5c27a" strokeWidth="1" fill="none" strokeDasharray="2 2" />
+      <rect x="18" y="12" width="14" height="10" rx="2" fill="#c4672f" />
+      <ellipse cx="25" cy="12" rx="9" ry="3.2" fill="#8e3f1b" />
+      <ellipse cx="25" cy="12" rx="7" ry="2.2" fill="#6ec6ee" />
+      <path d="M16 26 Q14 34 17 42" stroke="rgba(255,255,255,.4)" strokeWidth="1.6" fill="none" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+// Tiny deterministic random, so the tree is drawn the same way every render.
+const seeded = (seed) => () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
+
+// Nyaung-yay Thwin: the great Bodhi tree in the morning light, its roots on a low brick
+// terrace, and a pool of water that grows as pots are poured (`glow`, 0-1).
+function BodhiScene({ glow }) {
+  const rnd = seeded(7);
+  const leaves = Array.from({ length: 150 }, () => {
+    const a = rnd() * Math.PI * 2, r = Math.sqrt(rnd());
+    return { x: 200 + Math.cos(a) * 128 * r, y: 82 + Math.sin(a) * 66 * r, s: 0.55 + rnd() * 0.7, rot: (rnd() - 0.5) * 120, tone: Math.floor(rnd() * 4) };
+  });
+  const tones = ['#2e7d32', '#388e3c', '#4caf50', '#66bb6a'];
+  return (
+    <svg viewBox="0 0 400 270" preserveAspectRatio="xMidYMax meet" className="absolute inset-0 w-full h-full" aria-hidden="true">
+      <defs>
+        <radialGradient id="bdSun" cx="50%" cy="50%" r="50%"><stop offset="0" stopColor="#fff3b0" stopOpacity=".95" /><stop offset="1" stopColor="#ffd54f" stopOpacity="0" /></radialGradient>
+        <linearGradient id="bdGround" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#8bc34a" /><stop offset="1" stopColor="#558b2f" /></linearGradient>
+        <linearGradient id="bdTrunk" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stopColor="#4e342e" /><stop offset=".5" stopColor="#795548" /><stop offset="1" stopColor="#3e2723" /></linearGradient>
+      </defs>
+      {/* morning light behind the tree, stronger as the tree is watered */}
+      <circle cx="200" cy="90" r="130" fill="url(#bdSun)" opacity={0.35 + glow * 0.55} />
+      {/* far hills */}
+      <path d="M0 170 Q60 130 130 160 T260 150 T400 165 L400 270 L0 270 Z" fill="#a5d6a7" opacity=".7" />
+      <path d="M0 190 Q90 160 180 185 T400 180 L400 270 L0 270 Z" fill="#81c784" opacity=".8" />
+      {/* ground */}
+      <path d="M0 200 Q200 176 400 200 L400 270 L0 270 Z" fill="url(#bdGround)" />
+      {/* the trunk and roots */}
+      <path d="M176 200 C182 150 188 120 190 86 L212 86 C214 120 220 150 226 200 C216 196 208 190 201 190 C194 190 186 196 176 200 Z" fill="url(#bdTrunk)" />
+      <path d="M172 204 C184 196 190 188 198 192 M230 204 C218 196 212 188 204 192" stroke="#4e342e" strokeWidth="5" fill="none" strokeLinecap="round" />
+      {/* the canopy of heart-shaped Bodhi leaves */}
+      {leaves.map((l, i) => (
+        <path key={i} d="M0 -5 C-7 -11 -12 -1 -3 5 L0 15 L3 5 C12 -1 7 -11 0 -5 Z" fill={tones[l.tone]} opacity={0.92} transform={`translate(${l.x} ${l.y}) rotate(${l.rot}) scale(${l.s})`} />
+      ))}
+      {/* low brick terrace around the roots, and the water poured onto it */}
+      <ellipse cx="201" cy="206" rx="64" ry="13" fill="#a1887f" />
+      <ellipse cx="201" cy="203" rx="60" ry="11" fill="#bcaaa4" />
+      <ellipse cx="201" cy="204" rx="50" ry="8.5" fill="#6ec6ee" opacity={0.15 + glow * 0.7} />
+      <ellipse cx="201" cy="204" rx="30" ry="4" fill="#fff" opacity={glow * 0.35} />
+      {/* a few prayer flags and flowers on the ground */}
+      {[[40, 232], [80, 246], [320, 238], [362, 228], [150, 250], [250, 252]].map(([fx, fy], i) => (
+        <g key={i} transform={`translate(${fx} ${fy})`}>
+          <circle r="3.2" fill={['#f8bbd0', '#fff59d', '#ffffff'][i % 3]} />
+          <circle r="1.2" fill="#f9a825" />
+        </g>
+      ))}
+    </svg>
+  );
+}
+
 // Tazaungdaing's scene: the Buddha seated in a big, quiet forest on the Tazaungmon full
 // moon night (the day of the Samannaphala Sutta), monks sitting around Him listening in
 // stillness. `glow` (0-1, how many balloons have gone up today) brightens His halo.
@@ -530,6 +634,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
   const [ownedFestivalIds, setOwnedFestivalIds] = useState([]);
   const [respectWait, setRespectWait] = useState(0);
   const [risers, setRisers] = useState([]);
+  const [pourPhase, setPourPhase] = useState({}); // water pots on their way to the tree: { index: 'walk' | 'pour' }
   const [pasukulaFoundMap, setPasukulaFoundMap] = useState({}); // winning packets opened today: { packetNumber: coins }
   const [pasukulaThrown, setPasukulaThrown] = useState(false);
   const [toast, setToast] = useState(null);
@@ -677,6 +782,11 @@ export default function FestivalApp({ entryRequest, onExit }) {
     gainCoins(earned);
     if (!isTeacherPreview) spawnFlyingCoins(point, 6, '🪙', true);
     const fid = `${Date.now()}-${i}`;
+    if (festival.lamps.style === 'pot') {
+      setPourPhase(prev => ({ ...prev, [i]: 'walk' }));
+      setTimeout(() => setPourPhase(prev => ({ ...prev, [i]: 'pour' })), 1000);
+      setTimeout(() => setPourPhase(prev => { const n = { ...prev }; delete n[i]; return n; }), 3400);
+    }
     if (festival.lamps.style === 'balloon') {
       setRisers(prev => [...prev, { id: fid, x: point.x, y: point.y }]);
       setTimeout(() => setRisers(prev => prev.filter(r => r.id !== fid)), 3200);
@@ -753,7 +863,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
   const kadawDoneCount = festival.kadaw.recipients.filter(r => kadawToday.has(r.id)).length;
 
   return (
-    <div className="relative min-h-screen flex flex-col overflow-hidden text-white" style={{ background: festival.scene === 'balloons-night' ? 'linear-gradient(180deg,#04141f 0%,#07302d 40%,#0d4a3a 72%,#0a3024 100%)' : 'linear-gradient(180deg,#070b22 0%,#17104a 45%,#3a1b5c 78%,#5a2a52 100%)' }}>
+    <div className="relative min-h-screen flex flex-col overflow-hidden text-white" style={{ background: festival.scene === 'bodhi-water' ? 'linear-gradient(180deg,#ffd9a0 0%,#fff0c8 30%,#cfe9d6 62%,#9ccc9c 100%)' : festival.scene === 'balloons-night' ? 'linear-gradient(180deg,#04141f 0%,#07302d 40%,#0d4a3a 72%,#0a3024 100%)' : 'linear-gradient(180deg,#070b22 0%,#17104a 45%,#3a1b5c 78%,#5a2a52 100%)' }}>
       <style>{`
         @keyframes fsTwinkle { 0%,100% { opacity: .25 } 50% { opacity: 1 } }
         @keyframes fsFlicker { 0%,100% { transform: translate(-50%,-50%) scale(1); opacity: .85 } 35% { transform: translate(-50%,-50%) scale(1.12); opacity: 1 } 70% { transform: translate(-50%,-50%) scale(.94); opacity: .75 } }
@@ -763,6 +873,8 @@ export default function FestivalApp({ entryRequest, onExit }) {
         @keyframes fsPulse { 0%,100% { transform: scale(1) } 50% { transform: scale(1.12) } }
         @keyframes fsDrop { 0% { transform: translateY(-110vh) rotate(-10deg) } 100% { transform: translateY(0) rotate(0) } }
         @keyframes fsPop { 0% { transform: scale(.6); opacity: 0 } 100% { transform: scale(1); opacity: 1 } }
+        @keyframes fsFlicker2 { 0%,100% { transform: scaleY(1) scaleX(1) } 50% { transform: scaleY(1.25) scaleX(.85) } }
+        @keyframes fsDrip { 0% { transform: translateY(0); opacity: 0 } 15% { opacity: 1 } 100% { transform: translateY(70px); opacity: 0 } }
         @keyframes fsBob { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-10px) } }
         @keyframes fsRiseAway { 0% { transform: translate(-50%,-50%) scale(1); opacity: 1 } 100% { transform: translate(-50%,-115vh) scale(.5); opacity: 0 } }
         @keyframes fsSpark { 0% { transform: rotate(var(--angle)) translateX(0) scale(1); opacity: 1 } 100% { transform: rotate(var(--angle)) translateX(80px) scale(.2); opacity: 0 } }
@@ -794,7 +906,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
 
       {/* Sky */}
       <div className="absolute inset-0 pointer-events-none">
-        {stars.map(s => (
+        {festival.scene !== 'bodhi-water' && stars.map(s => (
           <span key={s.id} className="fs-star" style={{ left: `${s.x}%`, top: `${s.y}%`, width: s.size, height: s.size, animationDelay: `${s.delay}s` }} />
         ))}
         <div className="absolute rounded-full" style={{ right: '12%', top: '9%', width: 74, height: 74, background: 'radial-gradient(circle at 35% 35%,#fffbe6,#ffe9a8 60%,#f3cf6a)', boxShadow: '0 0 60px 22px rgba(255,233,168,.35)' }} />
@@ -802,15 +914,15 @@ export default function FestivalApp({ entryRequest, onExit }) {
 
       {/* Header */}
       <div className="relative z-10 pt-14 px-4 text-center">
-        <h1 className="text-xl sm:text-2xl font-black text-amber-200 drop-shadow">{festival.icon} {festival.title}</h1>
-        <p className="text-xs sm:text-sm text-indigo-200">{festival.tagline}{!isTeacherPreview && daysLeft >= 0 ? ` · ${daysLeft + 1} day${daysLeft === 0 ? '' : 's'} left` : ''}</p>
-        <div className="mt-2 inline-flex items-center gap-3 bg-black/30 rounded-full px-4 py-1.5 text-sm font-semibold">
+        <h1 className={`text-xl sm:text-2xl font-black drop-shadow ${festival.scene === 'bodhi-water' ? 'text-emerald-900' : 'text-amber-200'}`}>{festival.icon} {festival.title}</h1>
+        <p className={`text-xs sm:text-sm ${festival.scene === 'bodhi-water' ? 'text-emerald-800 font-semibold' : 'text-indigo-200'}`}>{festival.tagline}{!isTeacherPreview && daysLeft >= 0 ? ` · ${daysLeft + 1} day${daysLeft === 0 ? '' : 's'} left` : ''}</p>
+        <div className={`mt-2 inline-flex items-center gap-3 rounded-full px-4 py-1.5 text-sm font-semibold ${festival.scene === 'bodhi-water' ? 'bg-white/70 text-emerald-900' : 'bg-black/30'}`}>
           <span>{festival.lamps.icon || '🪔'} {litCount}/{festival.lamps.perDay} today</span>
           <span className="opacity-40">|</span>
           <span>🙏 {kadawDoneCount}/{festival.kadaw.recipients.length}</span>
         </div>
         {isTeacherPreview && (
-          <p className="mt-2 mx-auto max-w-md text-xs text-amber-100 bg-amber-500/20 border border-amber-300/40 rounded-lg px-3 py-1.5">
+          <p className={`mt-2 mx-auto max-w-md text-xs rounded-lg px-3 py-1.5 border ${festival.scene === 'bodhi-water' ? 'text-amber-900 bg-amber-100 border-amber-300' : 'text-amber-100 bg-amber-500/20 border-amber-300/40'}`}>
             👀 Teacher preview — nothing is saved. Students see this from {festival.start} to {festival.end}.
           </p>
         )}
@@ -818,7 +930,9 @@ export default function FestivalApp({ entryRequest, onExit }) {
 
       {/* Scene */}
       <div className="relative z-10 flex-1" style={{ minHeight: 380 }}>
-        {festival.scene === 'balloons-night' ? (
+        {festival.scene === 'bodhi-water' ? (
+          <BodhiScene glow={glow} />
+        ) : festival.scene === 'balloons-night' ? (
           <ForestScene glow={glow} />
         ) : (
           <>
@@ -828,17 +942,36 @@ export default function FestivalApp({ entryRequest, onExit }) {
             <div className="absolute inset-x-0 bottom-0 h-[18%] pointer-events-none" style={{ background: 'linear-gradient(180deg,transparent,rgba(20,8,40,.75))' }} />
           </>
         )}
-        {festival.lamps.style !== 'balloon' && LAMP_SPOTS.slice(0, festival.lamps.perDay).map((spot, i) => (i >= 10 ? (
+        {festival.lamps.style === 'lamp' || !festival.lamps.style ? LAMP_SPOTS.slice(0, festival.lamps.perDay).map((spot, i) => (i >= 10 ? (
           <div key={`post-${i}`} className="absolute pointer-events-none rounded-sm" style={{ left: `${spot.x}%`, top: `${spot.y}%`, bottom: '6%', width: 4, marginLeft: -2, marginTop: 18, background: 'linear-gradient(180deg,#8d6e63,#3e2723)' }} />
-        ) : null))}
-        {(festival.lamps.style === 'balloon' ? BALLOON_SPOTS : LAMP_SPOTS).slice(0, festival.lamps.perDay).map((spot, i) => {
+        ) : null)) : null}
+        {(festival.lamps.style === 'pot' ? POT_SPOTS : festival.lamps.style === 'balloon' ? BALLOON_SPOTS : LAMP_SPOTS).slice(0, festival.lamps.perDay).map((spot, i) => {
           const isLit = lit.has(i);
           if (festival.lamps.style === 'balloon') {
             if (isLit) return null;
             return (
-              <button key={i} onClick={(e) => handleLamp(i, e)} aria-label="Send up this fire balloon" className="absolute z-20 flex items-center justify-center" style={{ left: `${spot.x}%`, top: `${spot.y}%`, width: 64, height: 72, marginLeft: -32, marginTop: -36, animation: `fsBob ${2.6 + (i % 4) * 0.4}s ease-in-out ${(i % 5) * 0.3}s infinite` }}>
-                <span className="text-5xl select-none" style={{ filter: 'drop-shadow(0 0 10px rgba(255,170,60,.95))' }}>🎈</span>
+              <button key={i} onClick={(e) => handleLamp(i, e)} aria-label="Send up this fire balloon" className="absolute z-20 flex items-center justify-center" style={{ left: `${spot.x}%`, top: `${spot.y}%`, width: 84, height: 112, marginLeft: -42, marginTop: -56, animation: `fsBob ${2.6 + (i % 4) * 0.4}s ease-in-out ${(i % 5) * 0.3}s infinite` }}>
+                <HotAirBalloon palette={i} />
               </button>
+            );
+          }
+          if (festival.lamps.style === 'pot') {
+            const phase = pourPhase[i];
+            if (isLit && !phase) return null;
+            const toLeft = spot.x < 50;
+            const atTree = phase === 'walk' || phase === 'pour';
+            const left = atTree ? (toLeft ? 38 : 62) : spot.x;
+            const top = atTree ? 70 : spot.y;
+            return (
+              <div key={i} className="absolute z-20" style={{ left: `${left}%`, top: `${top}%`, width: 64, height: 70, marginLeft: -32, marginTop: -35, transition: 'left 0.95s ease-in-out, top 0.95s ease-in-out' }}>
+                <button onClick={(e) => handleLamp(i, e)} disabled={isLit} aria-label="Carry this pot to the Bodhi tree and pour the water" className="relative block w-full h-full"
+                  style={{ transform: phase === 'pour' ? `rotate(${toLeft ? 62 : -62}deg)` : 'none', transition: 'transform 0.6s ease-in-out', transformOrigin: '50% 30%', animation: !isLit ? `fsBob ${2.4 + (i % 4) * 0.3}s ease-in-out ${(i % 5) * 0.25}s infinite` : 'none' }}>
+                  <WaterPot />
+                </button>
+                {phase === 'pour' && [0, 1, 2, 3, 4].map(k => (
+                  <span key={k} className="absolute pointer-events-none rounded-full" style={{ left: toLeft ? 58 + k * 2 : 4 - k * 2, top: 20, width: 5, height: 9, background: '#4fc3f7', animation: `fsDrip 0.8s ease-in ${k * 0.15}s infinite` }} />
+                ))}
+              </div>
             );
           }
           return (
@@ -876,7 +1009,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
             🧧 Pasukula
           </button>
         )}
-        <button onClick={() => setPanel('rewards')} className="flex-1 max-w-[200px] bg-white/15 hover:bg-white/25 border border-white/30 font-bold rounded-2xl py-3">
+        <button onClick={() => setPanel('rewards')} className={`flex-1 max-w-[200px] font-bold rounded-2xl py-3 border ${festival.scene === 'bodhi-water' ? 'bg-white/80 hover:bg-white text-emerald-900 border-emerald-300' : 'bg-white/15 hover:bg-white/25 border-white/30'}`}>
           🎁 Rewards
         </button>
       </div>
@@ -888,7 +1021,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
 
       {/* A fire balloon floating up and away */}
       {risers.map(r => (
-        <div key={r.id} className="fixed z-[9985] pointer-events-none text-5xl" style={{ left: r.x, top: r.y, animation: 'fsRiseAway 3s ease-in forwards', filter: 'drop-shadow(0 0 12px rgba(255,170,60,1))' }}>🎈</div>
+        <div key={r.id} className="fixed z-[9985] pointer-events-none" style={{ left: r.x, top: r.y, animation: 'fsRiseAway 3s ease-in forwards' }}><HotAirBalloon palette={Math.abs(Math.floor(r.x)) % 5} size={72} /></div>
       ))}
 
       {/* Sky lanterns when every lamp is lit */}
