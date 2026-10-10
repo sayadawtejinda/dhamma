@@ -639,22 +639,33 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
         coinIcon="🪙"
         panelTitle="🌿 Students"
         weeklyLabel={(n) => <>visit {n} 👥</>}
+        panelNote="You can send each friend a gift only once. ✅ means you have already sent one to them, so go and visit someone new!"
         teacherLabel="🧑‍🏫 Teacher"
         showInactiveWarning={false}
         renderActivity={(s) => !isTeacherPreview && s.studentName !== studentName && (
           <span className="flex items-center gap-2 justify-end">
             {/* A friend only ever receives one gift from me, so one already
                 visited is marked -- visit someone new to send another. */}
-            {(world.giftedFriends || []).includes(s.studentName) && (
-              <span className="text-xs font-bold text-emerald-700" title="You already sent this friend a gift. Visit someone new to send another!">✓ Visited</span>
+            {(world.giftedFriends || []).includes(s.studentName) ? (
+              <>
+                <span className="text-xs font-bold text-white bg-emerald-600 rounded-full px-2 py-0.5" title="You already sent this friend a gift. Visit someone new to send another!">✅ Sent</span>
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleVisitStudent(s.studentName); }}
+                  className="text-xs font-semibold text-gray-500 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-full px-2 py-0.5"
+                  title="Your gift is already sent, but you can look at their Nature World again"
+                >
+                  👀 Look again
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={(e) => { e.stopPropagation(); handleVisitStudent(s.studentName); }}
+                className="text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-full px-2 py-0.5"
+                title="Visit their Nature World and leave them a surprise gift"
+              >
+                📦 Send
+              </button>
             )}
-            <button
-              onClick={(e) => { e.stopPropagation(); handleVisitStudent(s.studentName); }}
-              className="text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-full px-2 py-0.5"
-              title="Visit their Nature World and leave them a surprise gift"
-            >
-              📦 Send
-            </button>
           </span>
         )}
       />

@@ -135,6 +135,8 @@ export default function OnlineStatusWidget({
   // How the "active students" count reads on the pill (e.g. Nature World
   // shows it as "visit 46 👥" since tapping it lists who to visit).
   weeklyLabel = (n) => <>👥 {n} this week</>,
+  // A line under the list's heading (e.g. what the ✅ marks mean).
+  panelNote,
 }) {
   const { weeklyRosterList, onlineCount, warningCount: rawWarningCount } = useOnlineRoster(rosterPath, filterDocs, lastSeenField, isTeacherMode);
   const warningCount = showInactiveWarning ? rawWarningCount : 0;
@@ -188,6 +190,7 @@ export default function OnlineStatusWidget({
               <button onClick={() => setShowPanel(false)} className="w-9 h-9 flex-shrink-0 flex items-center justify-center rounded-full bg-red-600 hover:bg-red-700 text-white" aria-label="Close"><X size={20} /></button>
             </div>
             <p className="text-xs text-gray-400 mb-3">Showing everyone active in the last 7 days.</p>
+            {panelNote && <p className="text-sm font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg p-2 mb-3">{panelNote}</p>}
             <div className="space-y-2">
               {weeklyRosterList.map(s => {
                 const isWarning = showInactiveWarning && s._isWarning;

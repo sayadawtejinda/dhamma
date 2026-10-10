@@ -1115,6 +1115,32 @@ const StudentLessonView = React.memo(({
   );
 });
 
+// A reflection should be the student's own words. One short copied line is fine; whole
+// paragraphs of the lesson are not. Paste is blocked when it brings in more than a line, and
+// a finished reflection is also checked against the lesson text: any run of 6+ words that
+// is word-for-word in the lesson counts as copied, and more than MAX_COPIED_WORDS copied
+// words in all is refused.
+const MAX_PASTE_CHARS = 200;
+const MAX_COPIED_WORDS = 25;
+const COPY_RUN_WORDS = 6;
+const COPY_MESSAGE = "Please write in your own words. You can copy one short line from the lesson, but not whole paragraphs.";
+const wordsOf = (t) => String(t || '').toLowerCase().replace(/\b[\w-]+\.(png|jpe?g|gif|mp3)\b/g, ' ').replace(/[*_=#`>"“”‘’']/g, ' ').replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(Boolean);
+const countCopiedWords = (reflection, lesson) => {
+  const mine = wordsOf(reflection);
+  if (mine.length < COPY_RUN_WORDS) return 0;
+  const sources = [lesson?.content, lesson?.formattedContent].flatMap(c => (c && typeof c === 'object' ? Object.values(c) : [c]));
+  const runs = new Set();
+  sources.forEach(src => {
+    const w = wordsOf(src);
+    for (let i = 0; i + COPY_RUN_WORDS <= w.length; i++) runs.add(w.slice(i, i + COPY_RUN_WORDS).join(' '));
+  });
+  const covered = new Array(mine.length).fill(false);
+  for (let i = 0; i + COPY_RUN_WORDS <= mine.length; i++) {
+    if (runs.has(mine.slice(i, i + COPY_RUN_WORDS).join(' '))) for (let k = i; k < i + COPY_RUN_WORDS; k++) covered[k] = true;
+  }
+  return covered.filter(Boolean).length;
+};
+
 const StudentReadLessonView = React.memo(({
   lessons, activeLessonId, globalLeaderboardScores, userName, 
   setSelectedName, handleSetView, setQuizConfirmation,
@@ -1122,12 +1148,13 @@ const StudentReadLessonView = React.memo(({
 }) => {
   const lesson = lessons.find(l => l.lessonId === activeLessonId);
   const [reflectionText, setReflectionText] = useState('');
+  const [copyWarning, setCopyWarning] = useState('');
   const [aiFeedback, setAiFeedback] = useState('');
   const [isChecking, setIsChecking] = useState(false);
   const [reflectionCompleted, setReflectionCompleted] = useState(false);
   const [showQuizButton, setShowQuizButton] = useState(false); 
 
-  useEffect(() => { setReflectionText(''); setAiFeedback(''); setIsChecking(false); setReflectionCompleted(false); setShowQuizButton(false); }, [activeLessonId]);
+  useEffect(() => { setReflectionText(''); setCopyWarning(''); setAiFeedback(''); setIsChecking(false); setReflectionCompleted(false); setShowQuizButton(false); }, [activeLessonId]);
 
   const lessonReflections = useMemo(() => allReflections.filter(r => r.lessonId === activeLessonId).sort((a, b) => b.timestamp - a.timestamp), [allReflections, activeLessonId]);
   const previousReflection = useMemo(() => lessonReflections.find(r => r.studentName === userName), [lessonReflections, userName]);
@@ -1144,6 +1171,8 @@ const StudentReadLessonView = React.memo(({
 
     const handleCheckReflection = async () => {
       if (!reflectionText.trim()) return;
+      if (countCopiedWords(reflectionText, lesson) > MAX_COPIED_WORDS) { setCopyWarning(COPY_MESSAGE); return; }
+      setCopyWarning('');
       playClickSound?.(); setIsChecking(true);
       // Reflection ကို အရင်ဆုံး save လုပ်မယ် — AI feedback fail ဖြစ်လည်း reflection ပျောက်မသွားအောင်
       try {
@@ -1190,7 +1219,12 @@ const StudentReadLessonView = React.memo(({
                           <>
                              <h3 className="text-2xl font-bold text-blue-800 mb-4 flex items-center"><Sparkles className="w-6 h-6 mr-2 text-blue-500" />Let's write a quick reflection</h3>
                              <p className="text-gray-700 mb-4">Before taking the quiz, write down one thing you learned from this lesson below.</p>
-                             <textarea rows="3" value={reflectionText} onChange={(e) => setReflectionText(e.target.value)} placeholder="Write here..." className="w-full p-4 border-2 border-blue-300 rounded-xl focus:ring-blue-500 focus:border-blue-500 transition-colors resize-none mb-4 text-lg" />
+                             <textarea rows="3" value={reflectionText}
+                               onChange={(e) => { const v = e.target.value; if (v.length - reflectionText.length > MAX_PASTE_CHARS) { setCopyWarning(COPY_MESSAGE); return; } setCopyWarning(''); setReflectionText(v); }}
+                               onPaste={(e) => { const t = e.clipboardData?.getData('text') || ''; if (t.length > MAX_PASTE_CHARS || /\n/.test(t.trim())) { e.preventDefault(); setCopyWarning(COPY_MESSAGE); } }}
+                               onDrop={(e) => { const t = e.dataTransfer?.getData('text') || ''; if (t.length > MAX_PASTE_CHARS || /\n/.test(t.trim())) { e.preventDefault(); setCopyWarning(COPY_MESSAGE); } }}
+                               placeholder="Write here..." className="w-full p-4 border-2 border-blue-300 rounded-xl focus:ring-blue-500 focus:border-blue-500 transition-colors resize-none mb-4 text-lg" />
+                             {copyWarning && <p className="mb-4 text-sm font-bold text-red-600 bg-red-50 border border-red-200 rounded-lg p-3">✋ {copyWarning}</p>}
                              {(studentAgeLevel === 'storyteller' || studentAgeLevel === 'explorer') && (
                                  <div className="mb-4">
                                      <p className="text-sm text-gray-500 mb-2">If you don't know what to write, click the sentence below.</p>
