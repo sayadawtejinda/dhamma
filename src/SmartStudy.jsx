@@ -636,6 +636,90 @@ const Leaderboard = React.memo(({ globalLeaderboardScores, setSelectedName, hand
   );
 });
 
+// ---- 2-week contest -----------------------------------------------------------------
+// The teacher starts it for a class; the prizes are paid automatically when the two weeks end
+// (scripts/pay-contest-prizes.mjs, every 15 minutes). The students read the contest from the
+// class doc they already read, so showing it costs nothing extra.
+const CONTEST_PRIZES = [5000, 4000, 3000, 2000, 2000, 1000, 1000, 1000];
+const CONTEST_DAYS = 14;
+const fmtContestDate = (ms) => new Date(ms).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+const ordinalWord = (n) => `${n}${['th', 'st', 'nd', 'rd'][(n % 100 >= 11 && n % 100 <= 13) ? 0 : Math.min(n % 10, 4) % 4] || 'th'}`;
+
+const ContestCard = ({ classId, contest }) => {
+  const [busy, setBusy] = useState(false);
+  const running = contest && contest.status === 'active';
+  const ended = running && contest.endsAt <= Date.now();
+  const startContest = async () => {
+    if (busy) return;
+    if (!window.confirm(`Start a ${CONTEST_DAYS}-day contest for ${classId} now?\n\nEveryone's quiz points from now on count. When the ${CONTEST_DAYS} days end, the prizes are paid automatically: ${CONTEST_PRIZES.map((c, i) => `${ordinalWord(i + 1)} ${c}`).join(', ')} coins.`)) return;
+    setBusy(true);
+    try {
+      const startedAt = Date.now();
+      const endsAt = startedAt + CONTEST_DAYS * 24 * 60 * 60 * 1000;
+      const id = `${classId}_${startedAt}`;
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'smartStudyContests', id), { classId, startedAt, endsAt, prizes: CONTEST_PRIZES, status: 'active' });
+      await updateDoc(getClassDocRef(classId), { contest: { id, startedAt, endsAt, prizes: CONTEST_PRIZES, status: 'active' } });
+    } catch (e) { console.error(e); alert('Could not start the contest. Please try again.'); }
+    setBusy(false);
+  };
+  const cancelContest = async () => {
+    if (busy || !running) return;
+    if (!window.confirm('Cancel this contest? No prizes will be paid.')) return;
+    setBusy(true);
+    try {
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'smartStudyContests', contest.id), { status: 'cancelled' });
+      await updateDoc(getClassDocRef(classId), { contest: null });
+    } catch (e) { console.error(e); alert('Could not cancel. Please try again.'); }
+    setBusy(false);
+  };
+  return (
+    <div className="mb-4 p-4 rounded-xl border-2 border-amber-300 bg-amber-50">
+      <h3 className="font-extrabold text-amber-800 text-lg">🏆 {CONTEST_DAYS}-Day Contest</h3>
+      {running ? (
+        <>
+          <p className="text-sm text-amber-900 mt-1">Running: started {fmtContestDate(contest.startedAt)} · ends <b>{fmtContestDate(contest.endsAt)}</b>.</p>
+          <p className="text-sm text-amber-900">{ended ? 'The time is up. The prizes will be paid automatically within about 15 minutes.' : 'The prizes are paid automatically a few minutes after it ends.'}</p>
+          <p className="text-xs text-amber-800 mt-1">Prizes: {(contest.prizes || []).map((c, i) => `${ordinalWord(i + 1)} ${c}`).join(' · ')}</p>
+          {!ended && <button onClick={cancelContest} disabled={busy} className="mt-2 px-3 py-1 text-sm font-bold bg-white text-red-600 border border-red-300 rounded-lg hover:bg-red-50">Cancel contest</button>}
+        </>
+      ) : (
+        <>
+          {contest && contest.status === 'paid' && (
+            <div className="mt-1 text-sm text-amber-900">
+              <p>Last contest was paid on {fmtContestDate(contest.paidAt)}:</p>
+              <ol className="mt-1 space-y-0.5">{(contest.winners || []).map(w => <li key={w.rank}>{ordinalWord(w.rank)} — <b>{w.name}</b> · {w.total} pts · {w.coins} 🪙</li>)}</ol>
+              {(contest.winners || []).length === 0 && <p>Nobody scored.</p>}
+            </div>
+          )}
+          <button onClick={startContest} disabled={busy} className="mt-2 px-4 py-2 font-bold bg-amber-500 text-white rounded-lg hover:bg-amber-600 shadow">{busy ? 'Starting…' : `▶ Start ${CONTEST_DAYS}-day contest`}</button>
+        </>
+      )}
+    </div>
+  );
+};
+
+const ContestBanner = ({ contest }) => {
+  if (!contest) return null;
+  if (contest.status === 'paid') {
+    if (Date.now() - (contest.paidAt || 0) > 7 * 24 * 60 * 60 * 1000) return null;
+    return (
+      <div className="mb-4 p-3 rounded-xl bg-amber-50 border-2 border-amber-300 text-sm text-amber-900">
+        <p className="font-extrabold">🏆 Contest results</p>
+        <ol className="mt-1 space-y-0.5">{(contest.winners || []).map(w => <li key={w.rank}>{ordinalWord(w.rank)} — <b>{w.name}</b> · {w.total} pts · {w.coins} 🪙</li>)}</ol>
+      </div>
+    );
+  }
+  if (contest.status !== 'active') return null;
+  const over = contest.endsAt <= Date.now();
+  return (
+    <div className="mb-4 p-3 rounded-xl bg-gradient-to-r from-amber-100 to-yellow-100 border-2 border-amber-400 text-sm text-amber-900">
+      <p className="font-extrabold text-base">🏆 {over ? 'Contest finished! Prizes are coming soon.' : 'Contest on! Earn the most points to win coins!'}</p>
+      <p className="mt-1">{over ? 'Winners will find a gift box when they open the app.' : <>Ends <b>{fmtContestDate(contest.endsAt)}</b>. Prizes are given out automatically after it ends.</>}</p>
+      <p className="mt-1 font-semibold">{(contest.prizes || []).map((c, i) => `${ordinalWord(i + 1)}: ${c} 🪙`).join('  ·  ')}</p>
+    </div>
+  );
+};
+
 const TeacherDashboard = React.memo(({
   classId, newLesson, setNewLesson, lessons, isLoading, 
   handleSaveLesson, handleFormatLesson, generateQuestions, 
@@ -648,7 +732,7 @@ const TeacherDashboard = React.memo(({
   classRoster, handleApproveStudent, handleDeleteStudent, setClassRefreshKey,
   allScores, studentsWithCompletionsNotApproved, onApproveStudentsWithCompletions,
   autoApprove, handleToggleAutoApprove,
-  completionsList, onLinkStudent, onUnlinkStudent
+  completionsList, onLinkStudent, onUnlinkStudent, contest
 }) => {
   const [activeTab, setActiveTab] = useState('lessons'); 
   const [linkPickerFor, setLinkPickerFor] = useState(null);
@@ -756,6 +840,7 @@ const TeacherDashboard = React.memo(({
         </div>
       </div>
       
+      <div className="px-4 md:px-8"><ContestCard classId={classId} contest={contest} /></div>
       {activeTab === 'lessons' && (
         <div className="flex flex-col lg:flex-row gap-8 flex-1 overflow-hidden animate-fade-in-up">
           <Card className="w-full lg:w-1/2 overflow-y-auto">
@@ -1058,7 +1143,7 @@ const StudentLessonView = React.memo(({
   userName, classId, lessons, globalLeaderboardScores, 
   setSelectedName, handleSetView, setActiveLessonId, setSelectedLessonId,
   playClickSound, studentAgeLevel, heartCounts, handleHeartClick, setSelectedAgeLevel, 
-  mySpendableCredits, handleBuyAirplaneConfirmation, completionsList, allScores, myTotalLessonsCompletedAllClasses
+  mySpendableCredits, handleBuyAirplaneConfirmation, completionsList, allScores, myTotalLessonsCompletedAllClasses, contest
 }) => {
   const [showWelcome, setShowWelcome] = useState(true);
   useEffect(() => { const timer = setTimeout(() => setShowWelcome(false), 3000); return () => clearTimeout(timer); }, []);
@@ -1068,6 +1153,7 @@ const StudentLessonView = React.memo(({
 
   return (
     <div className="p-4 md:p-8 h-full flex flex-col">
+      <ContestBanner contest={contest} />
       <div className="flex justify-between items-start mb-8">
         <div className={`transition-all duration-700 ease-in-out overflow-hidden ${showWelcome ? 'max-h-60 opacity-100' : 'max-h-0 opacity-0'}`}>
           <h1 className="text-4xl font-extrabold text-green-700">Welcome, {userName}!</h1>
@@ -3635,11 +3721,11 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
       case 'studentWaiting': return <StudentWaitingView handleSetView={handleSetView} userName={userName} isRejected={isRejected} />;
       case 'teacherDashboard':
         if (!classData) return <ClassCreateView classId={classId} handleTeacherCreateClass={handleTeacherCreateClass} isLoading={isLoading} handleSetView={handleSetView} />;
-        return <TeacherDashboard classId={classId} setClassRefreshKey={setClassRefreshKey} newLesson={newLesson} setNewLesson={setNewLesson} lessons={lessons} isLoading={isLoading} handleSaveLesson={handleSaveLesson} handleFormatLesson={handleFormatLesson} generateQuestions={generateQuestions} handleGenerateAllLevels={handleGenerateAllLevels} handleRegenerateLevel={handleRegenerateLevel} handleEditLesson={handleEditLesson} handleDeleteLesson={handleDeleteLesson} globalLeaderboardScores={globalLeaderboardScores} setSelectedName={setSelectedName} handleSetView={handleSetView} playClickSound={playClickSound} handleDownloadLessons={handleDownloadLessons} handleUploadLessons={handleUploadLessons} fileInputRef={fileInputRef} handleDownloadLessonsOnly={handleDownloadLessonsOnly} handleUploadLessonsOnly={handleUploadLessonsOnly} fileInputRefLessonsOnly={fileInputRefLessonsOnly} heartCounts={heartCounts} setSelectedAgeLevel={setSelectedAgeLevel} classRoster={classRoster} handleApproveStudent={handleApproveStudent} handleDeleteStudent={handleDeleteStudent} autoApprove={classData?.autoApprove || false} handleToggleAutoApprove={handleToggleAutoApprove} completionsList={completionsList} onLinkStudent={handleLinkStudentToTutoring} onUnlinkStudent={handleUnlinkStudent} allScores={allScores} studentsWithCompletionsNotApproved={studentsWithCompletionsNotApproved} onApproveStudentsWithCompletions={handleApproveStudentsWithCompletions} />;
+        return <TeacherDashboard classId={classId} setClassRefreshKey={setClassRefreshKey} newLesson={newLesson} setNewLesson={setNewLesson} lessons={lessons} isLoading={isLoading} handleSaveLesson={handleSaveLesson} handleFormatLesson={handleFormatLesson} generateQuestions={generateQuestions} handleGenerateAllLevels={handleGenerateAllLevels} handleRegenerateLevel={handleRegenerateLevel} handleEditLesson={handleEditLesson} handleDeleteLesson={handleDeleteLesson} globalLeaderboardScores={globalLeaderboardScores} setSelectedName={setSelectedName} handleSetView={handleSetView} playClickSound={playClickSound} handleDownloadLessons={handleDownloadLessons} handleUploadLessons={handleUploadLessons} fileInputRef={fileInputRef} handleDownloadLessonsOnly={handleDownloadLessonsOnly} handleUploadLessonsOnly={handleUploadLessonsOnly} fileInputRefLessonsOnly={fileInputRefLessonsOnly} heartCounts={heartCounts} setSelectedAgeLevel={setSelectedAgeLevel} classRoster={classRoster} handleApproveStudent={handleApproveStudent} handleDeleteStudent={handleDeleteStudent} autoApprove={classData?.autoApprove || false} handleToggleAutoApprove={handleToggleAutoApprove} completionsList={completionsList} onLinkStudent={handleLinkStudentToTutoring} onUnlinkStudent={handleUnlinkStudent} allScores={allScores} studentsWithCompletionsNotApproved={studentsWithCompletionsNotApproved} onApproveStudentsWithCompletions={handleApproveStudentsWithCompletions} contest={classData?.contest || null} />;
       case 'studentLesson':
         if (!classDataLoaded) return <LoadingView />;
         if (!classData) return <ClassErrorView classId={classId} handleSetView={handleSetView} />;
-        return <StudentLessonView userName={userName} classId={classId} lessons={lessons} globalLeaderboardScores={globalLeaderboardScores} setSelectedName={setSelectedName} handleSetView={handleSetView} setActiveLessonId={setActiveLessonId} setSelectedLessonId={setSelectedLessonId} playClickSound={playClickSound} studentAgeLevel={studentAgeLevel} heartCounts={heartCounts} handleHeartClick={handleHeartClick} setSelectedAgeLevel={setSelectedAgeLevel} mySpendableCredits={mySpendableCredits} handleBuyAirplaneConfirmation={handleBuyAirplaneConfirmation} completionsList={completionsList} allScores={allScores} myTotalLessonsCompletedAllClasses={myTotalLessonsCompletedAllClasses} />;
+        return <StudentLessonView userName={userName} classId={classId} lessons={lessons} globalLeaderboardScores={globalLeaderboardScores} setSelectedName={setSelectedName} handleSetView={handleSetView} setActiveLessonId={setActiveLessonId} setSelectedLessonId={setSelectedLessonId} playClickSound={playClickSound} studentAgeLevel={studentAgeLevel} heartCounts={heartCounts} handleHeartClick={handleHeartClick} setSelectedAgeLevel={setSelectedAgeLevel} mySpendableCredits={mySpendableCredits} handleBuyAirplaneConfirmation={handleBuyAirplaneConfirmation} completionsList={completionsList} allScores={allScores} myTotalLessonsCompletedAllClasses={myTotalLessonsCompletedAllClasses} contest={classData?.contest || null} />;
       case 'studentReadLesson': return <StudentReadLessonView lessons={lessons} activeLessonId={activeLessonId} globalLeaderboardScores={globalLeaderboardScores} userName={userName} setSelectedName={setSelectedName} handleSetView={handleSetView} setQuizConfirmation={setQuizConfirmation} playClickSound={playClickSound} studentAgeLevel={studentAgeLevel} heartCounts={heartCounts} handleHeartClick={handleHeartClick} setSelectedAgeLevel={setSelectedAgeLevel} allReflections={allReflections} classId={classId} completionsList={completionsList} allScores={allScores} />;
       case 'quiz':
         const quizQuestions = quizRun.length ? quizRun : ((currentLesson && currentLesson.questions && currentLesson.questions[studentAgeLevel]) ? currentLesson.questions[studentAgeLevel] : []);

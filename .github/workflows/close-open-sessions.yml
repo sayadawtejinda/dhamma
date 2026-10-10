@@ -31,3 +31,6 @@ jobs:
 
       - name: Close open sessions
         run: node scripts/close-open-sessions.mjs
+
+      - name: Pay SmartStudy contest prizes that are due
+        run: node scripts/pay-contest-prizes.mjs
