@@ -213,6 +213,70 @@ export const FESTIVALS = [
       ],
     },
   },
+  {
+    id: 'waso-2027',
+    enabled: true,
+    scene: 'deer-park',
+    icon: '☸️',
+    title: 'Waso Festival: the Day of the First Sermon',
+    tagline: 'Offer Waso flowers to the Buddha and pay respect to the Triple Gem!',
+    // Default dates -- the teacher sets the real ones on the "Festival apps" screen.
+    // Full moon of Waso 2027 is taken as 18 July.
+    start: '2027-07-15',
+    end: '2027-07-21',
+    // Waso flowers to offer to the Buddha. Tap one: it floats to the Buddha and is offered.
+    // The same flowers again every new day.
+    lamps: { perDay: 10, coins: 5, allLitBonus: 0, style: 'flower', icon: '🌼', noun: 'flower' },
+    // The great things that happened on the Waso full moon, and the Triple Gem, who all
+    // come together on this day. Once each per day.
+    kadaw: {
+      coins: 20,
+      lotus: 1,
+      title: 'Pay Respect',
+      doneWord: 'Respects',
+      recipients: [
+        {
+          id: 'conception', emoji: '🤰', name: 'The Day of Conception',
+          prayer: 'I pay my respect to the day the Bodhisatta, in the Tusita heaven, took rebirth in the womb of Queen Maha Maya, the beginning of his last life.',
+          blessing: 'May your good deeds carry you towards a bright and noble life. Sadhu! Sadhu! Sadhu!',
+        },
+        {
+          id: 'renunciation', emoji: '🌲', name: 'The Day of Leaving Home',
+          prayer: 'I pay my respect to the day the Bodhisatta left his palace and went to the forest, to find the way out of suffering for all beings.',
+          blessing: 'May you have courage to choose what is good, even when it is hard. Sadhu! Sadhu! Sadhu!',
+        },
+        {
+          id: 'first-sermon', emoji: '☸️', name: 'The Day of the First Sermon',
+          prayer: 'I pay my respect to the day the Buddha taught the Dhammacakkappavattana Sutta to the five ascetics at Isipatana, setting the Wheel of the Dhamma in motion.',
+          blessing: 'May the Wheel of the Dhamma turn in your heart, and may you walk the Middle Way. Sadhu! Sadhu! Sadhu!',
+        },
+        {
+          id: 'triple-gem', emoji: '🛕', name: 'The Triple Gem',
+          prayer: 'On this day the Buddha, the Dhamma and the Sangha came together for the first time. I pay my respect to the Buddha, the Dhamma and the Sangha, the Triple Gem. Namo Buddhassa, Namo Dhammassa, Namo Sanghassa.',
+          blessing: 'May the Triple Gem protect you and may your good deeds keep growing every day. Sadhu! Sadhu! Sadhu!',
+        },
+      ],
+    },
+    rewards: [
+      {
+        id: 'waso-2027-robe',
+        category: 'outfit',
+        requires: { type: 'lamps', count: 40 },
+        item: { id: 'festival-waso-2027-robe', name: '🌼 Waso Flower Robe', color: '#F9A825', swatch: 'linear-gradient(135deg,#FFF59D,#F9A825 60%,#E65100)', pattern: 'lotus', cost: 0, festival: true },
+      },
+    ],
+    dailyGift: {
+      bonusCoins: 50,
+      pool: [
+        { category: 'accessory', item: { id: 'festival-waso-2027-wheelglasses', name: '☸️ Dhamma Wheel Glasses', kind: 'starglasses', color: '#FBC02D', cost: 0, festival: true } },
+        { category: 'outfit', item: { id: 'festival-waso-2027-wheel', name: '☸️ Dhamma Wheel Robe', color: '#F57F17', swatch: 'linear-gradient(135deg,#FFE082 50%,#F57F17 50%)', pattern: 'checks', cost: 0, festival: true } },
+        { category: 'accessory', item: { id: 'festival-waso-2027-lantern', name: '🌼 Waso Flower Lantern', kind: 'lantern', color: '#FDD835', cost: 0, festival: true } },
+        { category: 'outfit', item: { id: 'festival-waso-2027-deerpark', name: '🦌 Deer Park Robe', color: '#558B2F', swatch: 'linear-gradient(135deg,#C5E1A5,#33691E 60%,#FFD54F)', pattern: 'lights', cost: 0, festival: true } },
+        { category: 'accessory', item: { id: 'festival-waso-2027-moonlantern', name: '🌕 Full Moon Lantern', kind: 'skylantern', color: '#FFF176', cost: 0, festival: true } },
+        { category: 'outfit', item: { id: 'festival-waso-2027-moon', name: '🌕 Waso Full Moon Robe', color: '#4527A0', swatch: 'linear-gradient(135deg,#7E57C2,#311B92 65%,#FFF59D)', pattern: 'night', cost: 0, festival: true } },
+      ],
+    },
+  },
 ];
 
 import { useEffect, useState } from 'react';

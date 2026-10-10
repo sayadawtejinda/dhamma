@@ -40,6 +40,12 @@ const BALLOON_SPOTS = [
   { x: 90, y: 16 }, { x: 16, y: 54 }, { x: 36, y: 62 }, { x: 64, y: 56 }, { x: 84, y: 50 },
 ];
 
+// Waso flowers growing around the Deer Park (% of the scene).
+const FLOWER_SPOTS = [
+  { x: 8, y: 62 }, { x: 22, y: 54 }, { x: 36, y: 66 }, { x: 14, y: 80 }, { x: 28, y: 90 },
+  { x: 92, y: 62 }, { x: 78, y: 54 }, { x: 64, y: 66 }, { x: 86, y: 80 }, { x: 72, y: 90 },
+];
+
 // Water pots standing on the ground, left and right of the Bodhi tree (% of the scene).
 const POT_SPOTS = [
   { x: 8, y: 80 }, { x: 19, y: 88 }, { x: 30, y: 82 }, { x: 14, y: 70 }, { x: 28, y: 94 },
@@ -492,6 +498,114 @@ function BodhiScene({ glow }) {
   );
 }
 
+// A bunch of Waso flowers (golden blossoms on a green stem) to offer to the Buddha.
+function WasoFlower() {
+  const blossoms = [[25, 12, 7], [14, 20, 6], [36, 20, 6], [19, 31, 5.5], [31, 31, 5.5], [25, 24, 6]];
+  return (
+    <svg viewBox="0 0 50 66" width="56" height="74" style={{ overflow: 'visible', filter: 'drop-shadow(0 0 8px rgba(255,214,70,.9))' }} aria-hidden="true">
+      <path d="M25 62 C24 50 25 42 25 30 M25 44 C18 40 14 36 14 28 M25 44 C32 40 36 36 36 28" stroke="#558b2f" strokeWidth="2.2" fill="none" strokeLinecap="round" />
+      <ellipse cx="18" cy="52" rx="7" ry="3" fill="#7cb342" transform="rotate(-25 18 52)" />
+      <ellipse cx="32" cy="54" rx="7" ry="3" fill="#7cb342" transform="rotate(25 32 54)" />
+      {blossoms.map(([x, y, r], i) => (
+        <g key={i} transform={`translate(${x} ${y})`}>
+          {[0, 72, 144, 216, 288].map(a => <ellipse key={a} cx="0" cy={-r * 0.75} rx={r * 0.55} ry={r * 0.8} fill="#ffd600" stroke="#f9a825" strokeWidth="0.5" transform={`rotate(${a})`} />)}
+          <circle r={r * 0.32} fill="#ef6c00" />
+        </g>
+      ))}
+    </svg>
+  );
+}
+
+function Ascetic({ x, y, s = 1 }) {
+  return (
+    <g transform={`translate(${x} ${y}) scale(${s})`}>
+      <ellipse cx="0" cy="3" rx="12" ry="3" fill="rgba(0,0,0,.35)" />
+      <path d="M-11 2 Q-11 -13 0 -15 Q11 -13 11 2 Z" fill="#a9825a" />
+      <path d="M-11 2 Q0 7 11 2 Q0 0 -11 2 Z" fill="#7d5a38" />
+      <ellipse cx="0" cy="-8" rx="3.4" ry="2" fill="#e0b088" />
+      <circle cx="0.8" cy="-18.5" r="4.7" fill="#e0b088" />
+      <path d="M-4.6 -20 Q0.8 -29 6 -20 Z" fill="#3a2a1a" />
+      <circle cx="0.8" cy="-26" r="2.6" fill="#3a2a1a" />
+    </g>
+  );
+}
+
+function Deer({ x, y, s = 1, flip = false }) {
+  return (
+    <g transform={`translate(${x} ${y}) scale(${flip ? -s : s} ${s})`}>
+      <ellipse cx="0" cy="3" rx="16" ry="3" fill="rgba(0,0,0,.3)" />
+      <ellipse cx="0" cy="-12" rx="14" ry="8" fill="#b9793a" />
+      <path d="M-9 -8 L-9 3 M-4 -6 L-4 3 M5 -6 L5 3 M10 -8 L10 3" stroke="#8d5a28" strokeWidth="2" strokeLinecap="round" />
+      <path d="M9 -17 Q16 -26 17 -29" stroke="#b9793a" strokeWidth="5" fill="none" strokeLinecap="round" />
+      <ellipse cx="19" cy="-30" rx="5.6" ry="4" fill="#c88a4a" />
+      <circle cx="21" cy="-31" r="0.9" fill="#222" />
+      <path d="M17 -34 Q14 -42 11 -40 M17 -34 Q19 -43 22 -42 M16 -37 Q12 -38 9 -36" stroke="#6d4c41" strokeWidth="1.2" fill="none" strokeLinecap="round" />
+      <circle cx="-3" cy="-14" r="1" fill="#f5deb3" /><circle cx="3" cy="-11" r="1" fill="#f5deb3" /><circle cx="-7" cy="-10" r="1" fill="#f5deb3" />
+    </g>
+  );
+}
+
+// The Deer Park at Isipatana at dusk on the Waso full moon: the Buddha teaching the first
+// sermon to the five ascetics, the golden Wheel of the Dhamma turning in front of Him, deer
+// resting nearby. `glow` (0-1, flowers offered today) brightens the halo and the wheel.
+function DeerParkScene({ glow }) {
+  const rnd = seeded(11);
+  const trees = [-6, 52, 110, 290, 348, 406].map((x, i) => ({ x, h: 60 + (i % 3) * 14, w: 30 + (i % 2) * 8 }));
+  const spokes = Array.from({ length: 8 }, (_, i) => i * 45);
+  return (
+    <svg viewBox="0 0 400 270" preserveAspectRatio="xMidYMax meet" className="absolute inset-0 w-full h-full" aria-hidden="true">
+      <defs>
+        <radialGradient id="dpHalo" cx="50%" cy="50%" r="50%"><stop offset="0" stopColor="#fff6c8" /><stop offset=".5" stopColor="#ffd15c" stopOpacity=".55" /><stop offset="1" stopColor="#ffb300" stopOpacity="0" /></radialGradient>
+        <linearGradient id="dpGround" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#3f7d3a" /><stop offset="1" stopColor="#1d4a22" /></linearGradient>
+        <linearGradient id="dpTrunk" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stopColor="#3a2a1a" /><stop offset=".5" stopColor="#5b4128" /><stop offset="1" stopColor="#2c2013" /></linearGradient>
+      </defs>
+      {trees.map((t, i) => (
+        <g key={i}>
+          <rect x={t.x} y={t.h} width="16" height={200 - t.h} fill="url(#dpTrunk)" />
+          <ellipse cx={t.x + 8} cy={t.h - 8} rx={t.w + 22} ry="40" fill={i % 2 ? '#1e5a2c' : '#17491f'} />
+          <ellipse cx={t.x + 22} cy={t.h + 18} rx={t.w + 6} ry="28" fill="#206a30" opacity=".9" />
+        </g>
+      ))}
+      <path d="M0 196 Q200 170 400 196 L400 270 L0 270 Z" fill="url(#dpGround)" />
+      {/* the five ascetics, listening */}
+      {[{ x: 122, y: 220, s: 1 }, { x: 278, y: 220, s: 1 }, { x: 84, y: 240, s: 1.1 }, { x: 316, y: 240, s: 1.1 }, { x: 200, y: 264, s: 1.1 }].map((m, i) => <Ascetic key={i} {...m} />)}
+      <Deer x={40} y={226} s={0.9} />
+      <Deer x={364} y={230} s={0.9} flip />
+      {/* the Buddha, seated, teaching */}
+      <g transform="translate(200 172)">
+        <circle cx="0" cy="-46" r="42" fill="url(#dpHalo)" opacity={0.45 + glow * 0.5}>
+          <animate attributeName="r" values="40;45;40" dur="5s" repeatCount="indefinite" />
+        </circle>
+        <ellipse cx="0" cy="5" rx="40" ry="7" fill="rgba(0,0,0,.35)" />
+        {[-28, -14, 0, 14, 28].map((px, i) => <ellipse key={px} cx={px} cy={2} rx="10" ry="5.5" fill={i % 2 ? '#fbd0e0' : '#fff0f5'} stroke="#e7a3bd" strokeWidth="0.6" />)}
+        <ellipse cx="0" cy="-3" rx="32" ry="7.5" fill="#e08a12" />
+        <path d="M-21 -3 Q-23 -38 0 -44 Q23 -38 21 -3 Z" fill="#f0a020" />
+        <path d="M-6 -42 L11 -10" stroke="#c9770b" strokeWidth="1.4" fill="none" />
+        <ellipse cx="-5" cy="-24" rx="3.4" ry="2.4" fill="#eebb86" /><ellipse cx="5" cy="-24" rx="3.4" ry="2.4" fill="#eebb86" />
+        <circle cx="0" cy="-53" r="8" fill="#eebb86" />
+        <path d="M-3 -60.5 Q0 -70 3 -60.5 Z" fill="#eebb86" />
+        <path d="M-5 -54.4 Q-2.6 -53 -1 -54.4 M1 -54.4 Q2.6 -53 5 -54.4" stroke="#7a4b24" strokeWidth="0.8" fill="none" strokeLinecap="round" />
+        <path d="M-2 -50 Q0 -48.6 2 -50" stroke="#9a5a30" strokeWidth="0.7" fill="none" strokeLinecap="round" />
+      </g>
+      {/* the golden Wheel of the Dhamma in front of the Buddha */}
+      <g transform="translate(200 224) scale(0.72)" opacity={0.8 + glow * 0.2}>
+        <ellipse cx="0" cy="6" rx="26" ry="5" fill="rgba(0,0,0,.35)" />
+        <g style={{ transformOrigin: '0px -16px' }}>
+          <animateTransform attributeName="transform" type="rotate" from="0 0 -16" to="360 0 -16" dur="24s" repeatCount="indefinite" />
+          <circle cx="0" cy="-16" r="19" fill="none" stroke="#ffc400" strokeWidth="4" />
+          <circle cx="0" cy="-16" r="13" fill="none" stroke="#ffd95a" strokeWidth="1.5" />
+          <circle cx="0" cy="-16" r="4.5" fill="#ffb300" stroke="#ff8f00" strokeWidth="1" />
+          {spokes.map(a => <line key={a} x1="0" y1="-16" x2="0" y2="-34" stroke="#ffc400" strokeWidth="2.4" strokeLinecap="round" transform={`rotate(${a} 0 -16)`} />)}
+          {spokes.map(a => <circle key={`r${a}`} cx="0" cy="-35" r="1.8" fill="#ffd95a" transform={`rotate(${a + 22.5} 0 -16)`} />)}
+        </g>
+      </g>
+      {[[60, 150], [130, 120], [270, 130], [335, 160], [200, 100], [95, 190], [305, 185]].map(([fx, fy], i) => (
+        <circle key={i} cx={fx} cy={fy} r="1.5" fill="#fff59d" style={{ animation: `fsTwinkle ${2.4 + (i % 4) * 0.7}s ease-in-out ${i * 0.4}s infinite` }} />
+      ))}
+    </svg>
+  );
+}
+
 // Tazaungdaing's scene: the Buddha seated in a big, quiet forest on the Tazaungmon full
 // moon night (the day of the Samannaphala Sutta), monks sitting around Him listening in
 // stillness. `glow` (0-1, how many balloons have gone up today) brightens His halo.
@@ -782,7 +896,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
     gainCoins(earned);
     if (!isTeacherPreview) spawnFlyingCoins(point, 6, '🪙', true);
     const fid = `${Date.now()}-${i}`;
-    if (festival.lamps.style === 'pot') {
+    if (festival.lamps.style === 'pot' || festival.lamps.style === 'flower') {
       setPourPhase(prev => ({ ...prev, [i]: 'walk' }));
       setTimeout(() => setPourPhase(prev => ({ ...prev, [i]: 'pour' })), 1000);
       setTimeout(() => setPourPhase(prev => { const n = { ...prev }; delete n[i]; return n; }), 3400);
@@ -863,7 +977,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
   const kadawDoneCount = festival.kadaw.recipients.filter(r => kadawToday.has(r.id)).length;
 
   return (
-    <div className="relative min-h-screen flex flex-col overflow-hidden text-white" style={{ background: festival.scene === 'bodhi-water' ? 'linear-gradient(180deg,#ffd9a0 0%,#fff0c8 30%,#cfe9d6 62%,#9ccc9c 100%)' : festival.scene === 'balloons-night' ? 'linear-gradient(180deg,#04141f 0%,#07302d 40%,#0d4a3a 72%,#0a3024 100%)' : 'linear-gradient(180deg,#070b22 0%,#17104a 45%,#3a1b5c 78%,#5a2a52 100%)' }}>
+    <div className="relative min-h-screen flex flex-col overflow-hidden text-white" style={{ background: festival.scene === 'deer-park' ? 'linear-gradient(180deg,#24153f 0%,#6b3358 30%,#e8964f 60%,#2d5e34 100%)' : festival.scene === 'bodhi-water' ? 'linear-gradient(180deg,#ffd9a0 0%,#fff0c8 30%,#cfe9d6 62%,#9ccc9c 100%)' : festival.scene === 'balloons-night' ? 'linear-gradient(180deg,#04141f 0%,#07302d 40%,#0d4a3a 72%,#0a3024 100%)' : 'linear-gradient(180deg,#070b22 0%,#17104a 45%,#3a1b5c 78%,#5a2a52 100%)' }}>
       <style>{`
         @keyframes fsTwinkle { 0%,100% { opacity: .25 } 50% { opacity: 1 } }
         @keyframes fsFlicker { 0%,100% { transform: translate(-50%,-50%) scale(1); opacity: .85 } 35% { transform: translate(-50%,-50%) scale(1.12); opacity: 1 } 70% { transform: translate(-50%,-50%) scale(.94); opacity: .75 } }
@@ -930,7 +1044,9 @@ export default function FestivalApp({ entryRequest, onExit }) {
 
       {/* Scene */}
       <div className="relative z-10 flex-1" style={{ minHeight: 380 }}>
-        {festival.scene === 'bodhi-water' ? (
+        {festival.scene === 'deer-park' ? (
+          <DeerParkScene glow={glow} />
+        ) : festival.scene === 'bodhi-water' ? (
           <BodhiScene glow={glow} />
         ) : festival.scene === 'balloons-night' ? (
           <ForestScene glow={glow} />
@@ -945,7 +1061,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
         {festival.lamps.style === 'lamp' || !festival.lamps.style ? LAMP_SPOTS.slice(0, festival.lamps.perDay).map((spot, i) => (i >= 10 ? (
           <div key={`post-${i}`} className="absolute pointer-events-none rounded-sm" style={{ left: `${spot.x}%`, top: `${spot.y}%`, bottom: '6%', width: 4, marginLeft: -2, marginTop: 18, background: 'linear-gradient(180deg,#8d6e63,#3e2723)' }} />
         ) : null)) : null}
-        {(festival.lamps.style === 'pot' ? POT_SPOTS : festival.lamps.style === 'balloon' ? BALLOON_SPOTS : LAMP_SPOTS).slice(0, festival.lamps.perDay).map((spot, i) => {
+        {(festival.lamps.style === 'flower' ? FLOWER_SPOTS : festival.lamps.style === 'pot' ? POT_SPOTS : festival.lamps.style === 'balloon' ? BALLOON_SPOTS : LAMP_SPOTS).slice(0, festival.lamps.perDay).map((spot, i) => {
           const isLit = lit.has(i);
           if (festival.lamps.style === 'balloon') {
             if (isLit) return null;
@@ -953,6 +1069,18 @@ export default function FestivalApp({ entryRequest, onExit }) {
               <button key={i} onClick={(e) => handleLamp(i, e)} aria-label="Send up this fire balloon" className="absolute z-20 flex items-center justify-center" style={{ left: `${spot.x}%`, top: `${spot.y}%`, width: 84, height: 112, marginLeft: -42, marginTop: -56, animation: `fsBob ${2.6 + (i % 4) * 0.4}s ease-in-out ${(i % 5) * 0.3}s infinite` }}>
                 <HotAirBalloon palette={i} />
               </button>
+            );
+          }
+          if (festival.lamps.style === 'flower') {
+            const phase = pourPhase[i];
+            if (isLit && !phase) return null;
+            const flying = phase === 'walk' || phase === 'pour';
+            return (
+              <div key={i} className="absolute z-20" style={{ left: `${flying ? 50 : spot.x}%`, top: `${flying ? 62 : spot.y}%`, width: 60, height: 78, marginLeft: -30, marginTop: -39, transition: 'left 1s ease-in-out, top 1s ease-in-out, opacity 0.9s, transform 0.9s', opacity: phase === 'pour' ? 0 : 1, transform: phase === 'pour' ? 'scale(0.3)' : 'scale(1)' }}>
+                <button onClick={(e) => handleLamp(i, e)} disabled={isLit} aria-label="Offer this Waso flower to the Buddha" className="relative block w-full h-full" style={{ animation: !isLit ? `fsBob ${2.4 + (i % 4) * 0.3}s ease-in-out ${(i % 5) * 0.25}s infinite` : 'none' }}>
+                  <WasoFlower />
+                </button>
+              </div>
             );
           }
           if (festival.lamps.style === 'pot') {
