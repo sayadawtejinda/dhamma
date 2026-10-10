@@ -156,7 +156,7 @@ export const FESTIVALS = [
     scene: 'bodhi-water',
     icon: '🌳',
     title: 'Nyaung-yay Thwin: Watering the Bodhi Tree',
-    tagline: 'Carry the water pots to the Bodhi tree, pour water on its roots, and pay respect at the five holy places!',
+    tagline: 'Carry the water pots to the Bodhi tree, pour water on its roots, and pay respect on the four great days of the Buddha!',
     // Default dates -- the teacher sets the real ones on the "Festival apps" screen.
     // Full moon of Kason 2027 is taken as 20 May.
     start: '2027-05-17',
@@ -164,7 +164,7 @@ export const FESTIVALS = [
     // Clay water pots stand on the ground. Tap one: it is carried to the Bodhi tree and
     // the water is poured over the roots. The same pots again every new day.
     lamps: { perDay: 10, coins: 5, allLitBonus: 0, style: 'pot', icon: '🏺', noun: 'water pot' },
-    // Paying respect to the five places of the Buddha's life, once each per day.
+    // Paying respect to the four great days of the Buddha's life (birth, enlightenment, passing away, and the prophecy), once each per day.
     kadaw: {
       coins: 20,
       lotus: 1,
@@ -172,28 +172,23 @@ export const FESTIVALS = [
       doneWord: 'Respects',
       recipients: [
         {
-          id: 'born', emoji: '🌸', name: 'Born: Lumbini Garden',
-          prayer: 'I pay my respect to the place where the Bodhisatta was born in Lumbini Garden, for the good of the whole world.',
+          id: 'born', emoji: '🌸', name: 'The Day He Was Born',
+          prayer: 'I pay my respect to the day the Bodhisatta was born in Lumbini Garden, for the good of the whole world.',
           blessing: 'May your heart be as pure and gentle as a newborn lotus. Sadhu! Sadhu! Sadhu!',
         },
         {
-          id: 'saw', emoji: '🌙', name: 'Seeing the Four Signs and Leaving Home',
-          prayer: 'I pay my respect to the Bodhisatta, who saw old age, sickness and death, and left his palace to find the way out of suffering.',
-          blessing: 'May you see the truth of life clearly and keep a brave heart. Sadhu! Sadhu! Sadhu!',
-        },
-        {
-          id: 'awakened', emoji: '🌳', name: 'Awakened: the Bodhi Tree',
-          prayer: 'I pay my respect to the Bodhi tree, where the Buddha became fully awakened and found the end of suffering.',
+          id: 'awakened', emoji: '🌳', name: 'The Day He Became the Buddha',
+          prayer: 'I pay my respect to the day the Buddha became fully awakened under the Bodhi tree and found the end of suffering.',
           blessing: 'May your wisdom grow like the great Bodhi tree. Sadhu! Sadhu! Sadhu!',
         },
         {
-          id: 'passed', emoji: '🪷', name: 'Passed Away: Kusinara',
-          prayer: 'I pay my respect to the place where the Buddha passed away, and left us the Dhamma to be our guide.',
+          id: 'passed', emoji: '🪷', name: 'The Day He Passed Away',
+          prayer: 'I pay my respect to the day the Buddha passed away at Kusinara, and left us the Dhamma to be our guide.',
           blessing: 'May you remember the Dhamma every day and be mindful. Sadhu! Sadhu! Sadhu!',
         },
         {
-          id: 'prophecy', emoji: '✨', name: 'Receiving the Prophecy of Buddha Dipankara',
-          prayer: 'I pay my respect to the young hermit Sumedha, who received the prophecy from Buddha Dipankara that he would one day become a Buddha.',
+          id: 'prophecy', emoji: '✨', name: 'The Day He Received the Prophecy',
+          prayer: 'I pay my respect to the day the young hermit Sumedha received the prophecy from Buddha Dipankara that he would one day become a Buddha.',
           blessing: 'May every good wish you make with a pure heart come true. Sadhu! Sadhu! Sadhu!',
         },
       ],
