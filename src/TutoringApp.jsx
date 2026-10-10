@@ -3059,37 +3059,42 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
             try {
               await handleToggleStudentInGroup(paramiGroup.id, studentId, true);
 
+              // Everything sent to the group's members in the last 24 hours. This reads by
+              // send time only (no index needed) and picks the group's members out here; the
+              // old version asked Firestore for "members AND sent since", which needs an index
+              // that never existed, so it failed quietly and nothing was ever forwarded.
               const cutoff = Timestamp.fromDate(new Date(Date.now() - 24 * 60 * 60 * 1000));
-              const memberUids = (paramiGroup.studentUids || []).filter(uid => uid !== studentId);
-              let recentLesson = null;
-              for (let i = 0; i < memberUids.length; i += 30) {
-                const chunk = memberUids.slice(i, i + 30);
-                if (chunk.length === 0) continue;
-                const q = query(lessonsCollection, where('studentUid', 'in', chunk), where('sentAt', '>=', cutoff));
-                const snap = await getDocs(q);
-                snap.docs.forEach(d => {
-                  const lessonData = d.data();
-                  if (!lessonData.sentAt) return;
-                  if (!recentLesson || lessonData.sentAt.toMillis() > recentLesson.sentAt.toMillis()) {
-                    recentLesson = lessonData;
-                  }
-                });
-              }
-
-              if (recentLesson) {
+              const memberSet = new Set((paramiGroup.studentUids || []).filter(uid => uid !== studentId));
+              const recentSnap = await getDocs(query(lessonsCollection, where('sentAt', '>=', cutoff)));
+              // one copy of each distinct lesson (same title + link), oldest first so the
+              // new student's queue is in the same order as the group's
+              const distinct = new Map();
+              recentSnap.docs
+                .map(d => d.data())
+                .filter(l => memberSet.has(l.studentUid) && l.sentAt)
+                .sort((x, y) => x.sentAt.toMillis() - y.sentAt.toMillis())
+                .forEach(l => { distinct.set(`${l.title}|${l.link}`, l); });
+              const toSend = Array.from(distinct.values());
+              for (const lesson of toSend) {
                 await addDoc(lessonsCollection, {
                   studentUid: studentId,
-                  teacherUid: recentLesson.teacherUid,
-                  title: recentLesson.title,
-                  link: recentLesson.link,
-                  details: recentLesson.details,
-                  trophyLimit: recentLesson.trophyLimit,
-                  unitLabel: recentLesson.unitLabel || 'Chapter',
-                  unitCount: recentLesson.unitCount,
+                  teacherUid: lesson.teacherUid,
+                  title: lesson.title,
+                  link: lesson.link,
+                  details: lesson.details,
+                  trophyLimit: lesson.trophyLimit,
+                  unitLabel: lesson.unitLabel || 'Chapter',
+                  unitCount: lesson.unitCount,
                   status: 'pending',
+                  isPreSend: lesson.isPreSend === true,
                   sentAt: serverTimestamp()
                 });
               }
+              alert(toSend.length > 0
+                ? `${studentData?.name || 'The student'} was added to Parami and sent ${toSend.length} lesson${toSend.length === 1 ? '' : 's'} from the last 24 hours:
+
+${toSend.map(l => '• ' + l.title).join(', ')}`
+                : `${studentData?.name || 'The student'} was added to Parami. No lesson was sent to the group in the last 24 hours, so there was nothing to forward.`);
             } catch (e) {
               console.error('Error adding approved student to Parami group:', e);
             }
