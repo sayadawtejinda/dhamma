@@ -632,7 +632,7 @@ const Leaderboard = React.memo(({ globalLeaderboardScores, setSelectedName, hand
               return (
                   <li key={index} ref={isMe ? myRef : null} id={isMe ? 'my-leaderboard-rank' : undefined} className={`p-2 sm:p-3 rounded-xl border-2 cursor-pointer transition-all duration-150 flex justify-between items-center font-bold ${colorClass}`}>
                       <span className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-extrabold border-2 ${index === 0 ? 'bg-yellow-300 border-yellow-500 text-yellow-900' : index === 1 ? 'bg-gray-200 border-gray-400 text-gray-700' : index === 2 ? 'bg-orange-300 border-orange-500 text-orange-900' : 'bg-blue-50 border-blue-200 text-blue-700'}`}>{index + 1}</span>
-                      <span className="flex-1 ml-2 sm:ml-4 truncate text-sm sm:text-base">
+                      <span className="flex-1 ml-1.5 truncate text-sm sm:text-base">
                           <span className="hover:underline" onClick={() => { playClickSound?.(); setSelectedName(score.studentName); handleSetView('studentProfile'); }}>
                             <ContestMark name={score.studentName} />{score.studentName}{isMe && <span className="ml-2 text-[10px] sm:text-xs bg-pink-500 text-white px-1.5 py-0.5 rounded-full shadow-sm">(You)</span>}
                           </span>
@@ -663,7 +663,7 @@ const Leaderboard = React.memo(({ globalLeaderboardScores, setSelectedName, hand
 // The teacher starts it for a class; the prizes are paid automatically when the two weeks end
 // (scripts/pay-contest-prizes.mjs, every 15 minutes). The students read the contest from the
 // class doc they already read, so showing it costs nothing extra.
-const CONTEST_PRIZES = [5000, 4000, 3000, 2000, 2000, 1000, 1000, 1000];
+const CONTEST_PRIZES = [7000, 5000, 4000, 4000, 3000, 3000, 2000, 2000, 1000, 1000];
 const CONTEST_DAYS = 14;
 const fmtContestDate = (ms) => new Date(ms).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
 const ordinalWord = (n) => `${n}${['th', 'st', 'nd', 'rd'][(n % 100 >= 11 && n % 100 <= 13) ? 0 : Math.min(n % 10, 4) % 4] || 'th'}`;
@@ -1471,7 +1471,7 @@ const LessonLeaderboardView = React.memo(({ allScores, selectedLessonId, handleS
                           return (
                               <li key={index} className={`p-2 sm:p-3 rounded-xl border-2 cursor-pointer transition-all duration-150 flex justify-between items-center font-bold ${colorClass}`}>
                                   <span className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-extrabold border-2 ${index === 0 ? 'bg-yellow-300 border-yellow-500 text-yellow-900' : index === 1 ? 'bg-gray-200 border-gray-400 text-gray-700' : index === 2 ? 'bg-orange-300 border-orange-500 text-orange-900' : 'bg-blue-50 border-blue-200 text-blue-700'}`}>{index + 1}</span>
-                                  <span className="flex-1 ml-2 sm:ml-4 truncate text-sm sm:text-base">
+                                  <span className="flex-1 ml-1.5 truncate text-sm sm:text-base">
                                       <span className="hover:underline" onClick={() => { playClickSound?.(); setSelectedName(score.studentName); handleSetView('studentProfile'); }}><ContestMark name={score.studentName} />{score.studentName}{isMe && <span className="ml-2 text-[10px] sm:text-xs bg-pink-500 text-white px-1.5 py-0.5 rounded-full shadow-sm">(You)</span>}</span>
                                       <span className="ml-1 text-blue-600 bg-blue-100 px-1 rounded cursor-pointer hover:underline text-[10px]" onClick={(e) => { e.stopPropagation(); playClickSound?.(); setSelectedAgeLevel(score.studentAgeLevel); handleSetView('ageGroupLeaderboard'); }}>({AGE_LEVELS[score.studentAgeLevel] ? AGE_LEVELS[score.studentAgeLevel].split('(')[0].trim() : (score.studentAgeLevel || 'default')})</span>
                                   </span>
@@ -1507,7 +1507,7 @@ const GlobalLeaderboardView = React.memo(({ globalLeaderboardScores, handleSetVi
                           return (
                               <li key={index} ref={isMe ? myRef : null} className={`p-2 sm:p-3 rounded-xl border-2 cursor-pointer transition-all duration-150 flex justify-between items-center font-bold ${colorClass}`}>
                                   <span className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-extrabold border-2 ${index === 0 ? 'bg-yellow-300 border-yellow-500 text-yellow-900' : index === 1 ? 'bg-gray-200 border-gray-400 text-gray-700' : index === 2 ? 'bg-orange-300 border-orange-500 text-orange-900' : 'bg-blue-50 border-blue-200 text-blue-700'}`}>{index + 1}</span>
-                                  <span className="flex-1 ml-2 sm:ml-4 truncate text-sm sm:text-base">
+                                  <span className="flex-1 ml-1.5 truncate text-sm sm:text-base">
                                       <span className="hover:underline" onClick={() => { playClickSound?.(); setSelectedName(score.studentName); handleSetView('studentProfile'); }}><ContestMark name={score.studentName} />{score.studentName}{isMe && <span className="ml-2 text-[10px] sm:text-xs bg-pink-500 text-white px-1.5 py-0.5 rounded-full shadow-sm">(You)</span>}</span>
                                       <span className="ml-1 text-blue-600 bg-blue-100 px-1 rounded cursor-pointer hover:underline text-[10px]" onClick={(e) => { e.stopPropagation(); playClickSound?.(); setSelectedAgeLevel(score.studentAgeLevel); handleSetView('ageGroupLeaderboard'); }}>({AGE_LEVELS[score.studentAgeLevel] ? AGE_LEVELS[score.studentAgeLevel].split('(')[0].trim() : (score.studentAgeLevel || 'default')})</span>
                                   </span>
@@ -1562,7 +1562,7 @@ const AgeGroupLeaderboardView = React.memo(({ allScores, selectedAgeLevel, handl
                           return (
                               <li key={index} className={`p-2 sm:p-3 rounded-xl border-2 cursor-pointer transition-all duration-150 flex justify-between items-center font-bold ${colorClass}`}>
                                   <span className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-extrabold border-2 ${index === 0 ? 'bg-yellow-300 border-yellow-500 text-yellow-900' : index === 1 ? 'bg-gray-200 border-gray-400 text-gray-700' : index === 2 ? 'bg-orange-300 border-orange-500 text-orange-900' : 'bg-blue-50 border-blue-200 text-blue-700'}`}>{index + 1}</span>
-                                  <span className="flex-1 ml-2 sm:ml-4 truncate text-sm sm:text-base">
+                                  <span className="flex-1 ml-1.5 truncate text-sm sm:text-base">
                                       <span className="hover:underline" onClick={() => { playClickSound?.(); setSelectedName(score.studentName); handleSetView('studentProfile'); }}><ContestMark name={score.studentName} />{score.studentName}{isMe && <span className="ml-2 text-[10px] sm:text-xs bg-pink-500 text-white px-1.5 py-0.5 rounded-full shadow-sm">(You)</span>}</span>
                                       <span className="ml-1 text-blue-600 bg-blue-100 px-1 rounded cursor-pointer hover:underline text-[10px]" onClick={(e) => { e.stopPropagation(); playClickSound?.(); setSelectedAgeLevel(score.studentAgeLevel); handleSetView('ageGroupLeaderboard'); }}>({AGE_LEVELS[score.studentAgeLevel] ? AGE_LEVELS[score.studentAgeLevel].split('(')[0].trim() : (score.studentAgeLevel || 'default')})</span>
                                   </span>
