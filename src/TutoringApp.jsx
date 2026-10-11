@@ -8041,6 +8041,29 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     return listenWithHistory({ collectionRef: teacherScheduleCollection, studentUid, kind: 'schedule', onList: setMySchedule });
   }, [studentUid]);
 
+  // A lesson whose study session has been closed -- reported, or closed automatically after 45
+  // minutes / at the end of class -- but which was left as 'started' (lessons auto-closed before
+  // the automatic report marked them), would hold back every queued lesson behind it. Mark it
+  // reported (time of its last session's end) so the queue moves on. Only lessons that really
+  // have a finished session and no open one are touched.
+  const repairedLessonsRef = useRef(new Set());
+  useEffect(() => {
+    if (!studentUid || myLessons.length === 0 || mySessions.length === 0) return;
+    const lastEnd = {};
+    mySessions.forEach(x => {
+      if (!x.lessonId || !x.endTime?.toDate) return;
+      const t = x.endTime.toDate().getTime();
+      if (!lastEnd[x.lessonId] || t > lastEnd[x.lessonId]) lastEnd[x.lessonId] = t;
+    });
+    myLessons.forEach(l => {
+      if (l.status !== 'started' || !lastEnd[l.id] || repairedLessonsRef.current.has(l.id)) return;
+      if (activeSession && activeSession.lessonId === l.id) return;
+      if (Date.now() - lastEnd[l.id] < 2 * 60 * 1000) return;
+      repairedLessonsRef.current.add(l.id);
+      updateDoc(doc(db, `${publicDataPath}/lessons`, l.id), { status: 'reported', reportedAt: Timestamp.fromMillis(lastEnd[l.id]) }).catch(() => {});
+    });
+  }, [studentUid, myLessons, mySessions, activeSession]);
+
   // This student's own standing weekly slot(s) -- see recurringScheduleCollection.
   // Used below to fill in weeks that no longer get a dated teacherSchedule
   // doc, so the attendance bar keeps showing a chip for every week without
