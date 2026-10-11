@@ -103,6 +103,41 @@ const MEDITATION_GUIDE = [
   { en: 'Keep that cool, gentle quietness inside your heart all day long.', my: 'ရင်ထဲက အေးနေတာကို မပျောက်စေနဲ့။' },
 ];
 
+// A second reading for the same sit (the "2" button in the duration picker). The first one above is always
+// the one shown unless the student taps 2. An audio version of these lines is planned.
+const MEDITATION_GUIDE_2 = [
+  { en: 'I want to be a peaceful person.', my: 'ငါ အေးချမ်းတဲ့သူတစ်ယောက် ဖြစ်ချင်တယ်။' },
+  { en: 'Only a calm mind brings peace.', my: 'စိတ်လေး ငြိမ်မှပဲ အေးချမ်းမှာပါ။' },
+  { en: 'To be calm, we need to relax our mind.', my: 'စိတ်ငြိမ်ဖို့အတွက် စိတ်ကို အနားပေး ဖြေလျော့ဖို့ လိုတယ်။' },
+  { en: 'We should relax our body, too.', my: 'ခန္ဓာကိုယ်နဲ့ ကြွက်သားတွေကိုလည်း လျော့ပေးရမယ်။' },
+  { en: 'No one else can make my mind calm.', my: 'ငါ့စိတ်ငြိမ်အောင် တခြားသူက လုပ်ပေးလို့ မရဘူး။' },
+  { en: 'I am responsible for my own peace.', my: 'ငါ အေးချမ်းဖို့အတွက် ငါ့မှာပဲ တာဝန်ရှိတယ်။' },
+  { en: 'I follow the Buddha because I want to be peaceful like Him.', my: 'ဘုရားရှင်လို အေးချမ်းချင်လို့ ဘုရားကို ကိုးကွယ်တာပါ။' },
+  { en: 'The Buddha’s mind is calm and peaceful.', my: 'ဘုရားရှင်ရဲ့ စိတ်တော်က တည်ငြိမ်ပြီး အေးချမ်းတယ်။' },
+  { en: 'Watching our breath can help us stay calm.', my: 'ဝင်လေထွက်လေကို သတိထားကြည့်ရင် စိတ်တည်ငြိမ်လာမယ်။' },
+  { en: 'We need to watch our breath for a longer time.', my: 'ဝင်လေထွက်လေကို ကြာကြာလေး စိုက်ကြည့်ပေးဖို့ လိုတယ်။' },
+  { en: 'We should avoid getting distracted by other thoughts.', my: 'တခြားအတွေးတွေ ရောမလာအောင် ဂရုစိုက်ရမယ်။' },
+  { en: 'A calm mind is gentle.', my: 'တည်ငြိမ်နေတဲ့ စိတ်လေးက နူးညံ့တယ်။' },
+  { en: 'A calm mind is peaceful.', my: 'တည်ငြိမ်နေတဲ့ စိတ်လေးက အေးချမ်းတယ်။' },
+  { en: 'Wise people say we must train our own mind.', my: 'ပညာရှိတွေက ကိုယ့်စိတ်ကို ကိုယ်တိုင် ဆုံးမရမယ်လို့ ပြောကြတယ်။' },
+  { en: 'Making our mind calm is training our mind.', my: 'စိတ်ငြိမ်အောင် ကျင့်ယူနေတာဟာ စိတ်ကို ဆုံးမနေတာပါပဲ။' },
+  { en: 'We learn not just to earn money.', my: 'ပညာသင်တာ ပိုက်ဆံရှာဖို့ တစ်ခုတည်းအတွက် မဟုတ်ပါဘူး။' },
+  { en: 'It is also to find inner happiness.', my: 'စိတ်ချမ်းသာမှု ရဖို့လည်း ပါတာပေါ့။' },
+  { en: 'Even when we grow up, we must care for our happiness.', my: 'လူကြီးဖြစ်လာရင်လည်း စိတ်ချမ်းသာအောင် ဆက်ကျင့်ရဦးမှာပဲ။' },
+  { en: 'Happiness is a lifelong process.', my: 'စိတ်ချမ်းသာမှုဆိုတာ အမြဲမပြတ် ကြိုးစားရမယ့် အလုပ်ပါ။' },
+  { en: 'A calm person is a brave person.', my: 'စိတ်ငြိမ်တဲ့သူဆိုတာ သတ္တိရှိတဲ့သူပါပဲ။' },
+  { en: 'A calm person is a respectful person.', my: 'စိတ်ငြိမ်တဲ့သူဆိုတာ ဂုဏ်သိက္ခာရှိတဲ့သူပါပဲ။' },
+  { en: 'Trying to keep the mind calm feels rewarding.', my: 'စိတ်ငြိမ်အောင် ကြိုးစားရတာ တကယ်ပဲ ကျေနပ်ဖို့ကောင်းပါတယ်။' },
+  { en: 'When our mind is calm, we can sit for a longer time.', my: 'စိတ်ငြိမ်နေရင် အကြာကြီး ထိုင်နိုင်လာလိမ့်မယ်။' },
+  { en: 'Being still is a form of rest.', my: 'ငြိမ်ငြိမ်လေး နေတတ်တာဟာ အနားယူနေတာပါပဲ။' },
+  { en: 'Resting recharges our energy.', my: 'အနားယူမှ ခွန်အားတွေ ပြန်ပြည့်လာတာပါ။' },
+  { en: 'Sleeping is also called resting.', my: 'အိပ်စက်နေတဲ့အချိန်ကိုလည်း အနားယူတယ်လို့ ခေါ်တာပါပဲ။' },
+  { en: 'But we are not aware while sleeping.', my: 'ဒါပေမဲ့ အိပ်နေတဲ့အချိန်မှာ သတိမရှိလှဘူး။' },
+  { en: 'Meditating is resting with full awareness.', my: 'အခုလို တရားထိုင်မှ သတိရှိရှိနဲ့ အနားယူတာလို့ ခေါ်ပါတယ်။' },
+  { en: 'Knowing our breath is being mindful.', my: 'ဝင်လေထွက်လေကို သိနေတာကို သတိရှိတယ်လို့ ခေါ်တာပါ။' },
+  { en: 'A mindful person deserves respect.', my: 'သတိရှိနေတဲ့သူဟာ လေးစားထိုက်သူပါပဲ။' },
+];
+
 // --- Chanting text, from the teacher's Chanting.md, in the 3 formats it
 // was supplied in (Myanmar words spelled with English letters, Myanmar
 // script, and an English meaning-translation). Order follows the
@@ -962,14 +997,18 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   // picker (see MEDITATION_GUIDE above), defaults to English.
   const [meditationLanguage, setMeditationLanguage] = useState('en');
   const [meditationLineIndex, setMeditationLineIndex] = useState(0);
+  // 1 = the usual guide (always the default); 2 = the second reading, only if the student taps 2.
+  const [meditationVersion, setMeditationVersion] = useState(1);
+  const activeGuide = meditationVersion === 2 ? MEDITATION_GUIDE_2 : MEDITATION_GUIDE;
+  useEffect(() => { if (meditatingMinutes == null && !meditationPickerOpen) setMeditationVersion(1); }, [meditatingMinutes, meditationPickerOpen]);
   useEffect(() => {
     if (meditatingMinutes == null) return;
     setMeditationLineIndex(0);
     const interval = setInterval(() => {
-      setMeditationLineIndex(i => (i + 1) % MEDITATION_GUIDE.length);
+      setMeditationLineIndex(i => (i + 1) % activeGuide.length);
     }, 9000);
     return () => clearInterval(interval);
-  }, [meditatingMinutes]);
+  }, [meditatingMinutes, meditationVersion]);
   // Keeps the screen from auto-locking while a meditation countdown is
   // running, so the student doesn't lose their place mid-sit -- degrades
   // silently on browsers without the Wake Lock API (e.g. older Safari)
@@ -1852,6 +1891,16 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
               >
                 မြန်မာ
               </button>
+              {[1, 2].map(v => (
+                <button
+                  key={v}
+                  onClick={() => setMeditationVersion(v)}
+                  title={v === 1 ? 'Guided lines (usual)' : 'Second reading'}
+                  className={`text-xs font-bold w-6 h-6 rounded-full border ${meditationVersion === v ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white text-emerald-600 border-emerald-300'}`}
+                >
+                  {v}
+                </button>
+              ))}
             </div>
             <p className="text-sm text-gray-500 mb-4">How many minutes will you meditate?</p>
             <input
@@ -2118,7 +2167,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
                     className="text-sm font-semibold text-emerald-900/80 leading-snug"
                     style={{ animation: 'shrineGuideLineFade 9s ease-in-out' }}
                   >
-                    {MEDITATION_GUIDE[meditationLineIndex][meditationLanguage]}
+                    {(activeGuide[meditationLineIndex % activeGuide.length] || activeGuide[0])[meditationLanguage]}
                   </p>
                 </div>
               )}
