@@ -2079,6 +2079,8 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
   const [userName, setUserName] = useState(() => localStorage.getItem('lastUserName') || '');
   const [studentAgeLevel, setStudentAgeLevel] = useState(''); 
   const [view, setView] = useState('home');
+  const viewRef = useRef('home');
+  useEffect(() => { viewRef.current = view; }, [view]);
   const [classId, setClassId] = useState('');
   const [targetClassId, setTargetClassId] = useState(() => localStorage.getItem('lastClassId') || '');
   const [classData, setClassData] = useState(null);
@@ -3354,7 +3356,13 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
   useEffect(() => {
     if (!entryRequest) return;
     const signature = JSON.stringify({ mode: entryRequest.mode, classId: entryRequest.classId, studentName: entryRequest.studentName, ageLevel: entryRequest.ageLevel });
-    if (signature === lastHandledEntryRequestRef.current) return;
+    // Opening Smart Study again with the same request used to be ignored, so a student who had
+    // wandered back to the Teacher/Student choice (or the teacher screens) was shown that again
+    // instead of their own lessons. Only a request that leaves the app on the wrong screen is
+    // applied again; otherwise the student stays where they were.
+    const teacherViews = ['home', 'teacherPasscode', 'teacherLogin', 'teacherDashboard'];
+    const onWrongScreen = entryRequest.mode === 'student' ? teacherViews.includes(viewRef.current) : (entryRequest.mode === 'teacher' && viewRef.current === 'home');
+    if (signature === lastHandledEntryRequestRef.current && !onWrongScreen) return;
     lastHandledEntryRequestRef.current = signature;
 
     if (entryRequest.mode === 'teacher') {
