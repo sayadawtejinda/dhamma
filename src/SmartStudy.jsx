@@ -645,17 +645,21 @@ const CONTEST_DAYS = 14;
 const fmtContestDate = (ms) => new Date(ms).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
 const ordinalWord = (n) => `${n}${['th', 'st', 'nd', 'rd'][(n % 100 >= 11 && n % 100 <= 13) ? 0 : Math.min(n % 10, 4) % 4] || 'th'}`;
 
+const toLocalInput = (ms) => { const d = new Date(ms); const z = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}T${z(d.getHours())}:${z(d.getMinutes())}`; };
+
 const ContestCard = ({ classId, contest }) => {
   const [busy, setBusy] = useState(false);
+  const [endInput, setEndInput] = useState(() => toLocalInput(Date.now() + CONTEST_DAYS * 24 * 60 * 60 * 1000));
   const running = contest && contest.status === 'active';
   const ended = running && contest.endsAt <= Date.now();
   const startContest = async () => {
     if (busy) return;
-    if (!window.confirm(`Start a ${CONTEST_DAYS}-day contest for ${classId} now?\n\nEveryone's quiz points from now on count. When the ${CONTEST_DAYS} days end, the prizes are paid automatically: ${CONTEST_PRIZES.map((c, i) => `${ordinalWord(i + 1)} ${c}`).join(', ')} coins.`)) return;
+    const endsAt = new Date(endInput).getTime();
+    if (!endsAt || endsAt <= Date.now() + 5 * 60 * 1000) { alert('Please choose an end time that is later than now.'); return; }
+    if (!window.confirm(`Start a contest for ${classId} now, ending ${fmtContestDate(endsAt)}?\n\nEveryone's quiz points from now on count. When it ends, the prizes are paid automatically: ${CONTEST_PRIZES.map((c, i) => `${ordinalWord(i + 1)} ${c}`).join(', ')} coins.`)) return;
     setBusy(true);
     try {
       const startedAt = Date.now();
-      const endsAt = startedAt + CONTEST_DAYS * 24 * 60 * 60 * 1000;
       const id = `${classId}_${startedAt}`;
       await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'smartStudyContests', id), { classId, startedAt, endsAt, prizes: CONTEST_PRIZES, status: 'active' });
       await updateDoc(getClassDocRef(classId), { contest: { id, startedAt, endsAt, prizes: CONTEST_PRIZES, status: 'active' } });
@@ -674,7 +678,7 @@ const ContestCard = ({ classId, contest }) => {
   };
   return (
     <div className="mb-4 p-4 rounded-xl border-2 border-amber-300 bg-amber-50">
-      <h3 className="font-extrabold text-amber-800 text-lg">🏆 {CONTEST_DAYS}-Day Contest</h3>
+      <h3 className="font-extrabold text-amber-800 text-lg">🏆 Contest</h3>
       {running ? (
         <>
           <p className="text-sm text-amber-900 mt-1">Running: started {fmtContestDate(contest.startedAt)} · ends <b>{fmtContestDate(contest.endsAt)}</b>.</p>
@@ -691,7 +695,10 @@ const ContestCard = ({ classId, contest }) => {
               {(contest.winners || []).length === 0 && <p>Nobody scored.</p>}
             </div>
           )}
-          <button onClick={startContest} disabled={busy} className="mt-2 px-4 py-2 font-bold bg-amber-500 text-white rounded-lg hover:bg-amber-600 shadow">{busy ? 'Starting…' : `▶ Start ${CONTEST_DAYS}-day contest`}</button>
+          <label className="block mt-2 text-sm font-semibold text-amber-900">Contest ends (your time)
+            <input type="datetime-local" value={endInput} onChange={(e) => setEndInput(e.target.value)} className="ml-2 p-1 border rounded-lg bg-white" />
+          </label>
+          <button onClick={startContest} disabled={busy} className="mt-2 px-4 py-2 font-bold bg-amber-500 text-white rounded-lg hover:bg-amber-600 shadow">{busy ? 'Starting…' : '▶ Start contest now'}</button>
         </>
       )}
     </div>
@@ -704,18 +711,25 @@ const ContestBanner = ({ contest }) => {
     if (Date.now() - (contest.paidAt || 0) > 7 * 24 * 60 * 60 * 1000) return null;
     return (
       <div className="mb-4 p-3 rounded-xl bg-amber-50 border-2 border-amber-300 text-sm text-amber-900">
-        <p className="font-extrabold">🏆 Contest results</p>
-        <ol className="mt-1 space-y-0.5">{(contest.winners || []).map(w => <li key={w.rank}>{ordinalWord(w.rank)} — <b>{w.name}</b> · {w.total} pts · {w.coins} 🪙</li>)}</ol>
+        <p className="font-extrabold">🏆 Contest finished! Winners</p>
+        <ol className="mt-1 space-y-0.5">{(contest.winners || []).map(w => <li key={w.rank}>{ordinalWord(w.rank)} — <b>{w.name}</b></li>)}</ol>
+        <p className="mt-1 text-xs">The winners' gift boxes are waiting in the app. 🎁</p>
       </div>
     );
   }
   if (contest.status !== 'active') return null;
   const over = contest.endsAt <= Date.now();
   return (
-    <div className="mb-4 p-3 rounded-xl bg-gradient-to-r from-amber-100 to-yellow-100 border-2 border-amber-400 text-sm text-amber-900">
-      <p className="font-extrabold text-base">🏆 {over ? 'Contest finished! Prizes are coming soon.' : 'Contest on! Earn the most points to win coins!'}</p>
-      <p className="mt-1">{over ? 'Winners will find a gift box when they open the app.' : <>Ends <b>{fmtContestDate(contest.endsAt)}</b>. Prizes are given out automatically after it ends.</>}</p>
-      <p className="mt-1 font-semibold">{(contest.prizes || []).map((c, i) => `${ordinalWord(i + 1)}: ${c} 🪙`).join('  ·  ')}</p>
+    <div className="mb-4 p-3 rounded-xl bg-gradient-to-r from-amber-100 to-yellow-100 border-2 border-amber-400 text-amber-900 text-center">
+      <p className="text-lg font-extrabold">🏆 {over ? 'Contest finished!' : <>Contest ends <span className="text-red-600">{fmtContestDate(contest.endsAt)}</span></>}</p>
+      <div className="mt-2 flex justify-center gap-1 sm:gap-2" aria-label="Prizes for 1st to 8th place">
+        {(contest.prizes || []).map((c, i) => (
+          <div key={i} className="flex flex-col items-center">
+            <span className="text-2xl sm:text-3xl" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,.3))' }}>🎁</span>
+            <span className="text-xs font-extrabold">{i + 1}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 };
