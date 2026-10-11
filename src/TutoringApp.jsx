@@ -9401,9 +9401,20 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
   // lessons listener above, which already keeps them grouped together in
   // send order). A normal send, a legacy lesson, or anything already
   // reported is always visible -- nothing about those is ever hidden.
-  const firstUnresolvedPreSendId = myLessons.find(l => l.isPreSend === true && l.status !== 'reported')?.id;
+  // A queued lesson the student never reported would otherwise hide every lesson queued behind
+  // it for ever (students often leave without reporting). So the queue only waits for a lesson
+  // for 5 days after it was sent: an older unreported one stays visible but no longer blocks,
+  // and the next queued lesson is shown too -- still just one new lesson at a time.
+  const QUEUE_WAIT_MS = 5 * 24 * 60 * 60 * 1000;
+  const preSendVisibleIds = new Set();
+  for (const l of myLessons) {
+    if (l.isPreSend !== true || l.status === 'reported') continue;
+    preSendVisibleIds.add(l.id);
+    const sentMs = l.sentAt?.toDate ? l.sentAt.toDate().getTime() : null;
+    if (sentMs == null || Date.now() - sentMs < QUEUE_WAIT_MS) break;
+  }
   const visibleUnordered = availableLessons.filter(l =>
-    l.status === 'reported' || l.isPreSend !== true || l.id === firstUnresolvedPreSendId
+    l.status === 'reported' || l.isPreSend !== true || preSendVisibleIds.has(l.id)
   );
   // DISPLAY order (separate from the tier order above, which only decides
   // what counts as "the current lesson"): a fresh normal send first (newest
