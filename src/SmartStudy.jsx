@@ -593,12 +593,35 @@ const DraggableRankBadge = ({ myRank, myLessonsCompleted, lessons, allScores, us
   );
 };
 
+// While a contest runs: its info, and the names currently in the prize places (worked out from the scores
+// the student's app already holds, so it costs no extra read; others' scores are as fresh as the weekly file).
+const ContestContext = React.createContext({ contest: null, top: null });
+const ContestTimer = () => {
+  const { contest } = React.useContext(ContestContext);
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 30000); return () => clearInterval(t); }, []);
+  if (!contest || contest.status !== 'active' || contest.endsAt <= now) return null;
+  const left = contest.endsAt - now;
+  const d = Math.floor(left / 86400000), h = Math.floor((left % 86400000) / 3600000), m = Math.floor((left % 3600000) / 60000);
+  const text = d > 0 ? `${d}d ${h}h` : `${h}h ${String(m).padStart(2, '0')}m`;
+  return (
+    <span className="inline-flex items-center gap-1 text-xs sm:text-sm font-extrabold text-amber-900 bg-amber-100 border-2 border-amber-400 rounded-full px-2 py-0.5 whitespace-nowrap" title={`Contest ends ${fmtContestDate(contest.endsAt)}`}>
+      <style>{'@keyframes ssHourglass{0%,45%{transform:rotate(0)}55%,100%{transform:rotate(180deg)}}'}</style>
+      <span className="inline-block" style={{ animation: 'ssHourglass 2.4s ease-in-out infinite' }}>⏳</span>{text}
+    </span>
+  );
+};
+const ContestMark = ({ name }) => {
+  const { top } = React.useContext(ContestContext);
+  return top && top.has(name) ? <span className="mr-1" title="In a prize place">🎁</span> : null;
+};
+
 const Leaderboard = React.memo(({ globalLeaderboardScores, setSelectedName, handleSetView, playClickSound, heartCounts, handleHeartClick, setSelectedAgeLevel, userName }) => {
   const myRef = useRef(null);
   return (
     <Card className="flex-1 min-w-80 h-full overflow-y-auto">
       <h3 className="text-2xl font-black text-blue-800 mb-6 flex items-center justify-between">
-        <span className="flex items-center"><Award className="w-6 h-6 mr-3 text-yellow-500 fill-yellow-500" />Global Leaderboard</span>
+        <span className="flex items-center flex-wrap gap-2"><span className="flex items-center"><Award className="w-6 h-6 mr-3 text-yellow-500 fill-yellow-500" />Global Leaderboard</span><ContestTimer /></span>
         <button onClick={() => { playClickSound?.(); handleSetView('globalLeaderboard'); }} className="p-2 bg-blue-100 text-blue-600 rounded-full hover:bg-blue-200 transition-all lg:hidden"><Users className="w-5 h-5" /></button>
       </h3>
       {globalLeaderboardScores.length === 0 ? (<p className="text-gray-500 italic">No scores yet. Be the first!</p>) : (
@@ -611,7 +634,7 @@ const Leaderboard = React.memo(({ globalLeaderboardScores, setSelectedName, hand
                       <span className={`text-lg sm:text-xl font-extrabold w-7 sm:w-8 text-center ${index < 3 ? 'text-red-500' : ''}`}>#{index + 1}</span>
                       <span className="flex-1 ml-2 sm:ml-4 truncate text-sm sm:text-base">
                           <span className="hover:underline" onClick={() => { playClickSound?.(); setSelectedName(score.studentName); handleSetView('studentProfile'); }}>
-                            <User className="w-4 h-4 inline-block mr-2" />{score.studentName}{isMe && <span className="ml-2 text-[10px] sm:text-xs bg-pink-500 text-white px-1.5 py-0.5 rounded-full shadow-sm">(You)</span>}
+                            <ContestMark name={score.studentName} /><User className="w-4 h-4 inline-block mr-2" />{score.studentName}{isMe && <span className="ml-2 text-[10px] sm:text-xs bg-pink-500 text-white px-1.5 py-0.5 rounded-full shadow-sm">(You)</span>}
                           </span>
                           <span className="ml-1 text-blue-600 bg-blue-200 px-1.5 py-0.5 rounded cursor-pointer hover:underline text-xs" onClick={(e) => { e.stopPropagation(); playClickSound?.(); setSelectedAgeLevel(score.studentAgeLevel); handleSetView('ageGroupLeaderboard'); }}>
                             ({AGE_LEVELS[score.studentAgeLevel] ? AGE_LEVELS[score.studentAgeLevel].split('(')[0].trim() : (score.studentAgeLevel || 'default')})
@@ -706,30 +729,13 @@ const ContestCard = ({ classId, contest }) => {
 };
 
 const ContestBanner = ({ contest }) => {
-  if (!contest) return null;
-  if (contest.status === 'paid') {
-    if (Date.now() - (contest.paidAt || 0) > 7 * 24 * 60 * 60 * 1000) return null;
-    return (
-      <div className="mb-4 p-3 rounded-xl bg-amber-50 border-2 border-amber-300 text-sm text-amber-900">
-        <p className="font-extrabold">🏆 Contest finished! Winners</p>
-        <ol className="mt-1 space-y-0.5">{(contest.winners || []).map(w => <li key={w.rank}>{ordinalWord(w.rank)} — <b>{w.name}</b></li>)}</ol>
-        <p className="mt-1 text-xs">The winners' gift boxes are waiting in the app. 🎁</p>
-      </div>
-    );
-  }
-  if (contest.status !== 'active') return null;
-  const over = contest.endsAt <= Date.now();
+  if (!contest || contest.status !== 'paid') return null;
+  if (Date.now() - (contest.paidAt || 0) > 7 * 24 * 60 * 60 * 1000) return null;
   return (
-    <div className="mb-4 p-3 rounded-xl bg-gradient-to-r from-amber-100 to-yellow-100 border-2 border-amber-400 text-amber-900 text-center">
-      <p className="text-lg font-extrabold">🏆 {over ? 'Contest finished!' : <>Contest ends <span className="text-red-600">{fmtContestDate(contest.endsAt)}</span></>}</p>
-      <div className="mt-2 flex justify-center gap-1 sm:gap-2" aria-label="Prizes for 1st to 8th place">
-        {(contest.prizes || []).map((c, i) => (
-          <div key={i} className="flex flex-col items-center">
-            <span className="text-2xl sm:text-3xl" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,.3))' }}>🎁</span>
-            <span className="text-xs font-extrabold">{i + 1}</span>
-          </div>
-        ))}
-      </div>
+    <div className="mb-4 p-3 rounded-xl bg-amber-50 border-2 border-amber-300 text-sm text-amber-900">
+      <p className="font-extrabold">🏆 Contest finished! Winners</p>
+      <ol className="mt-1 space-y-0.5">{(contest.winners || []).map(w => <li key={w.rank}>{ordinalWord(w.rank)} — <b>{w.name}</b></li>)}</ol>
+      <p className="mt-1 text-xs">The winners' gift boxes are waiting in the app. 🎁</p>
     </div>
   );
 };
@@ -1466,7 +1472,7 @@ const LessonLeaderboardView = React.memo(({ allScores, selectedLessonId, handleS
                               <li key={index} className={`p-2 sm:p-3 rounded-xl border-2 cursor-pointer transition-all duration-150 flex justify-between items-center font-bold ${colorClass}`}>
                                   <span className={`text-lg sm:text-xl font-extrabold w-7 sm:w-8 text-center ${index < 3 ? 'text-red-500' : ''}`}>#{index + 1}</span>
                                   <span className="flex-1 ml-2 sm:ml-4 truncate text-sm sm:text-base">
-                                      <span className="hover:underline" onClick={() => { playClickSound?.(); setSelectedName(score.studentName); handleSetView('studentProfile'); }}><User className="w-4 h-4 inline-block mr-2" />{score.studentName}{isMe && <span className="ml-2 text-[10px] sm:text-xs bg-pink-500 text-white px-1.5 py-0.5 rounded-full shadow-sm">(You)</span>}</span>
+                                      <span className="hover:underline" onClick={() => { playClickSound?.(); setSelectedName(score.studentName); handleSetView('studentProfile'); }}><ContestMark name={score.studentName} /><User className="w-4 h-4 inline-block mr-2" />{score.studentName}{isMe && <span className="ml-2 text-[10px] sm:text-xs bg-pink-500 text-white px-1.5 py-0.5 rounded-full shadow-sm">(You)</span>}</span>
                                       <span className="ml-1 text-blue-600 bg-blue-200 px-1.5 py-0.5 rounded cursor-pointer hover:underline text-xs" onClick={(e) => { e.stopPropagation(); playClickSound?.(); setSelectedAgeLevel(score.studentAgeLevel); handleSetView('ageGroupLeaderboard'); }}>({AGE_LEVELS[score.studentAgeLevel] ? AGE_LEVELS[score.studentAgeLevel].split('(')[0].trim() : (score.studentAgeLevel || 'default')})</span>
                                   </span>
                                   <span className="text-xl sm:text-3xl font-black text-teal-600 ml-2">{score.score} pts</span>
@@ -1487,7 +1493,7 @@ const GlobalLeaderboardView = React.memo(({ globalLeaderboardScores, handleSetVi
   return (
       <div className="p-4 md:p-8 space-y-8 h-full flex flex-col">
           <div className="flex justify-between items-center">
-              <h1 className="text-3xl md:text-4xl font-extrabold text-blue-700"><Award className="w-6 h-6 inline-block mr-3" />Global Leaderboard Score</h1>
+              <h1 className="text-3xl md:text-4xl font-extrabold text-blue-700 flex items-center flex-wrap gap-3"><span><Award className="w-6 h-6 inline-block mr-3" />Global Leaderboard Score</span><ContestTimer /></h1>
               <div className="fixed bottom-6 left-6 z-50">
               <button onClick={() => { playClickSound?.(); handleSetView(previousView); setTimeout(() => { const el = document.getElementById('lesson-list-top'); if(el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 100); }} className="p-4 bg-gray-700 text-white rounded-full shadow-2xl hover:bg-gray-800 transition-all hover:scale-110 active:scale-95 border-2 border-white"><ArrowLeft className="w-6 h-6" /></button>
               </div>
@@ -1502,7 +1508,7 @@ const GlobalLeaderboardView = React.memo(({ globalLeaderboardScores, handleSetVi
                               <li key={index} ref={isMe ? myRef : null} className={`p-2 sm:p-3 rounded-xl border-2 cursor-pointer transition-all duration-150 flex justify-between items-center font-bold ${colorClass}`}>
                                   <span className={`text-lg sm:text-xl font-extrabold w-7 sm:w-8 text-center ${index < 3 ? 'text-red-500' : ''}`}>#{index + 1}</span>
                                   <span className="flex-1 ml-2 sm:ml-4 truncate text-sm sm:text-base">
-                                      <span className="hover:underline" onClick={() => { playClickSound?.(); setSelectedName(score.studentName); handleSetView('studentProfile'); }}><User className="w-4 h-4 inline-block mr-2" />{score.studentName}{isMe && <span className="ml-2 text-[10px] sm:text-xs bg-pink-500 text-white px-1.5 py-0.5 rounded-full shadow-sm">(You)</span>}</span>
+                                      <span className="hover:underline" onClick={() => { playClickSound?.(); setSelectedName(score.studentName); handleSetView('studentProfile'); }}><ContestMark name={score.studentName} /><User className="w-4 h-4 inline-block mr-2" />{score.studentName}{isMe && <span className="ml-2 text-[10px] sm:text-xs bg-pink-500 text-white px-1.5 py-0.5 rounded-full shadow-sm">(You)</span>}</span>
                                       <span className="ml-1 text-blue-600 bg-blue-200 px-1.5 py-0.5 rounded cursor-pointer hover:underline text-xs" onClick={(e) => { e.stopPropagation(); playClickSound?.(); setSelectedAgeLevel(score.studentAgeLevel); handleSetView('ageGroupLeaderboard'); }}>({AGE_LEVELS[score.studentAgeLevel] ? AGE_LEVELS[score.studentAgeLevel].split('(')[0].trim() : (score.studentAgeLevel || 'default')})</span>
                                   </span>
                                   <span className="text-lg sm:text-xl font-black ml-2">{score.totalScore} pts</span>
@@ -1557,7 +1563,7 @@ const AgeGroupLeaderboardView = React.memo(({ allScores, selectedAgeLevel, handl
                               <li key={index} className={`p-2 sm:p-3 rounded-xl border-2 cursor-pointer transition-all duration-150 flex justify-between items-center font-bold ${colorClass}`}>
                                   <span className={`text-lg sm:text-xl font-extrabold w-7 sm:w-8 text-center ${index < 3 ? 'text-red-500' : ''}`}>#{index + 1}</span>
                                   <span className="flex-1 ml-2 sm:ml-4 truncate text-sm sm:text-base">
-                                      <span className="hover:underline" onClick={() => { playClickSound?.(); setSelectedName(score.studentName); handleSetView('studentProfile'); }}><User className="w-4 h-4 inline-block mr-2" />{score.studentName}{isMe && <span className="ml-2 text-[10px] sm:text-xs bg-pink-500 text-white px-1.5 py-0.5 rounded-full shadow-sm">(You)</span>}</span>
+                                      <span className="hover:underline" onClick={() => { playClickSound?.(); setSelectedName(score.studentName); handleSetView('studentProfile'); }}><ContestMark name={score.studentName} /><User className="w-4 h-4 inline-block mr-2" />{score.studentName}{isMe && <span className="ml-2 text-[10px] sm:text-xs bg-pink-500 text-white px-1.5 py-0.5 rounded-full shadow-sm">(You)</span>}</span>
                                       <span className="ml-1 text-blue-600 bg-blue-200 px-1.5 py-0.5 rounded cursor-pointer hover:underline text-xs" onClick={(e) => { e.stopPropagation(); playClickSound?.(); setSelectedAgeLevel(score.studentAgeLevel); handleSetView('ageGroupLeaderboard'); }}>({AGE_LEVELS[score.studentAgeLevel] ? AGE_LEVELS[score.studentAgeLevel].split('(')[0].trim() : (score.studentAgeLevel || 'default')})</span>
                                   </span>
                                   <span className="text-lg sm:text-xl font-black ml-2">{score.totalScore} pts</span>
@@ -2583,6 +2589,23 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
     const finalLeaderboard = Object.values(studentTotals).map(s => ({ studentName: s.studentName, studentAgeLevel: s.studentAgeLevel, totalScore: s.totalScore }));
     finalLeaderboard.sort((a, b) => b.totalScore - a.totalScore); return finalLeaderboard;
   }, [allScores]);
+
+  const contestValue = useMemo(() => {
+    const contest = classData?.contest || null;
+    if (!contest || contest.status !== 'active') return { contest: null, top: null };
+    const first = new Map();
+    (allScores || []).forEach(sc => {
+      const t = typeof sc.timestamp === 'number' ? sc.timestamp : Date.parse(sc.timestamp) || 0;
+      if (!sc.studentName || t < contest.startedAt || t > contest.endsAt) return;
+      const k = `${sc.studentName}|${sc.lessonId}`;
+      const cur = first.get(k);
+      if (!cur || t < cur.t) first.set(k, { name: sc.studentName, score: Number(sc.score) || 0, t });
+    });
+    const totals = new Map();
+    first.forEach(({ name, score, t }) => { const c = totals.get(name) || { name, total: 0, last: 0 }; c.total += score; c.last = Math.max(c.last, t); totals.set(name, c); });
+    const ranked = Array.from(totals.values()).filter(x => x.total > 0).sort((a, b) => b.total - a.total || a.last - b.last);
+    return { contest, top: new Set(ranked.slice(0, (contest.prizes || []).length).map(x => x.name)) };
+  }, [classData?.contest, allScores]);
 
   const mySpendableCredits = useMemo(() => {
     if (!userName) return 0;
@@ -3799,7 +3822,7 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
           />
         ) : null
       )}
-      <div className="min-h-screen">{renderView()}</div>
+      <ContestContext.Provider value={contestValue}><div className="min-h-screen">{renderView()}</div></ContestContext.Provider>
       <GlobalScoreAnnouncement announcement={globalAnnouncement} onClose={() => setGlobalAnnouncement(null)} />
       <div className="fixed inset-0 w-full h-full pointer-events-none z-[100] overflow-hidden">
         {floatingHearts.map(heart => ( <div key={heart.id} className="absolute bottom-0" style={{ left: `${heart.x}%`, animation: `floatUp ${heart.duration}s ease-out forwards` }}><Heart className="w-8 h-8 text-pink-500 fill-pink-500" /></div> ))}
