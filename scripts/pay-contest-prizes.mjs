@@ -4,8 +4,8 @@
 //   smartStudyContests/{classId}_{startMs} = { classId, startedAt, endsAt, prizes: [coins...], status: 'active' }
 // and a summary `contest` on the class doc (which the students already read, so showing the
 // banner costs them nothing). This runs every 15 minutes (close-open-sessions.yml): for each
-// active contest whose end has passed it adds up each student's quiz scores earned inside the
-// window (first attempt of each lesson in the window), ranks them, and gives each winner a
+// active contest whose end has passed it takes the class's Global Leaderboard (each student's
+// first attempt at every lesson, added up) and ranks it, and gives each winner a
 // teacher gift box holding the prize coins (the same box the teacher's own gifts use, so the
 // student sees it pop up and opens it), then marks the contest paid and writes the winners on
 // the class doc so students can see the results.
@@ -28,26 +28,30 @@ const sanitize = (k) => (k || 'unknown').trim().replace(/[.$#/\[\]]/g, '_');
 const ms = (v) => (typeof v === 'number' ? v : v?.toMillis ? v.toMillis() : v?.seconds ? v.seconds * 1000 : Date.parse(v) || 0);
 const ordinal = (n) => `${n}${['th', 'st', 'nd', 'rd'][(n % 100 >= 11 && n % 100 <= 13) ? 0 : Math.min(n % 10, 4) % 4] || 'th'}`;
 
+// The Global Leaderboard the students see: every student's first attempt at each lesson, added up
+// (so a retake never counts), highest total first.
 async function standings(contest) {
   const snap = await getDocs(query(collection(db, `${P}/scores`), where('classId', '==', contest.classId)));
-  const firstPerLesson = new Map(); // `${student}|${lesson}` -> earliest score in the window
+  const first = new Map(); // student|age|lesson -> earliest score
   snap.docs.forEach(d => {
     const s = d.data();
+    if (!s.studentName) return;
     const t = ms(s.timestamp);
-    if (!s.studentName || t < contest.startedAt || t > contest.endsAt) return;
-    const k = `${s.studentName}|${s.lessonId}`;
-    const cur = firstPerLesson.get(k);
-    if (!cur || t < cur.t) firstPerLesson.set(k, { name: s.studentName, score: Number(s.score) || 0, t });
+    const k = `${s.studentName}|${s.studentAgeLevel || 'default'}|${s.lessonId}`;
+    const cur = first.get(k);
+    if (!cur || t < cur.t) first.set(k, { name: s.studentName, age: s.studentAgeLevel || 'default', score: Number(s.score) || 0, t });
   });
-  const byStudent = new Map();
-  firstPerLesson.forEach(({ name, score, t }) => {
-    const cur = byStudent.get(name) || { name, total: 0, last: 0 };
+  const totals = new Map();
+  first.forEach(({ name, age, score, t }) => {
+    const k = `${name}|${age}`;
+    const cur = totals.get(k) || { name, total: 0, last: 0 };
     cur.total += score;
     cur.last = Math.max(cur.last, t);
-    byStudent.set(name, cur);
+    totals.set(k, cur);
   });
-  // highest total first; on a tie, whoever got there first
-  return Array.from(byStudent.values()).filter(s => s.total > 0).sort((a, b) => b.total - a.total || a.last - b.last);
+  // highest first; on a tie whoever got there first; a name only wins one place
+  const seen = new Set();
+  return Array.from(totals.values()).filter(s => s.total > 0).sort((a, b) => b.total - a.total || a.last - b.last).filter(s => !seen.has(s.name) && seen.add(s.name));
 }
 
 async function findTutoringUid(classId, name) {

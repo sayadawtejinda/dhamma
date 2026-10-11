@@ -679,7 +679,7 @@ const ContestCard = ({ classId, contest }) => {
     if (busy) return;
     const endsAt = new Date(endInput).getTime();
     if (!endsAt || endsAt <= Date.now() + 5 * 60 * 1000) { alert('Please choose an end time that is later than now.'); return; }
-    if (!window.confirm(`Start a contest for ${classId} now, ending ${fmtContestDate(endsAt)}?\n\nEveryone's quiz points from now on count. When it ends, the prizes are paid automatically: ${CONTEST_PRIZES.map((c, i) => `${ordinalWord(i + 1)} ${c}`).join(', ')} coins.`)) return;
+    if (!window.confirm(`Start a contest for ${classId} now, ending ${fmtContestDate(endsAt)}?\n\nWhen it ends, the first places of the Global Leaderboard (total quiz points) win. The prizes are paid automatically: ${CONTEST_PRIZES.map((c, i) => `${ordinalWord(i + 1)} ${c}`).join(', ')} coins.`)) return;
     setBusy(true);
     try {
       const startedAt = Date.now();
@@ -2590,22 +2590,21 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
     finalLeaderboard.sort((a, b) => b.totalScore - a.totalScore); return finalLeaderboard;
   }, [allScores]);
 
+  // While a contest runs, the prize places are the first places of the Global Leaderboard itself
+  // (the same list the students see), so the gift marks sit on the first rows of that list.
   const contestValue = useMemo(() => {
     const contest = classData?.contest || null;
     if (!contest || contest.status !== 'active') return { contest: null, top: null };
-    const first = new Map();
-    (allScores || []).forEach(sc => {
-      const t = typeof sc.timestamp === 'number' ? sc.timestamp : Date.parse(sc.timestamp) || 0;
-      if (!sc.studentName || t < contest.startedAt || t > contest.endsAt) return;
-      const k = `${sc.studentName}|${sc.lessonId}`;
-      const cur = first.get(k);
-      if (!cur || t < cur.t) first.set(k, { name: sc.studentName, score: Number(sc.score) || 0, t });
-    });
-    const totals = new Map();
-    first.forEach(({ name, score, t }) => { const c = totals.get(name) || { name, total: 0, last: 0 }; c.total += score; c.last = Math.max(c.last, t); totals.set(name, c); });
-    const ranked = Array.from(totals.values()).filter(x => x.total > 0).sort((a, b) => b.total - a.total || a.last - b.last);
-    return { contest, top: new Set(ranked.slice(0, (contest.prizes || []).length).map(x => x.name)) };
-  }, [classData?.contest, allScores]);
+    const seen = new Set();
+    const names = [];
+    for (const row of globalLeaderboardScores) {
+      if (seen.has(row.studentName)) continue;
+      seen.add(row.studentName);
+      names.push(row.studentName);
+      if (names.length >= (contest.prizes || []).length) break;
+    }
+    return { contest, top: new Set(names) };
+  }, [classData?.contest, globalLeaderboardScores]);
 
   const mySpendableCredits = useMemo(() => {
     if (!userName) return 0;

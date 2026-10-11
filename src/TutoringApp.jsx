@@ -8064,6 +8064,37 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     });
   }, [studentUid, myLessons, mySessions, activeSession]);
 
+  // A session that was closed automatically (45 minutes / end of class) without asking for the
+  // trophies it earned -- every one closed before the automatic report did that -- gets them
+  // requested now, once a day at most. The worked-out progress is the same one the automatic report
+  // uses, and nothing is requested while a request is already waiting or when nothing more is
+  // owed, so this can never ask twice for the same trophy.
+  useEffect(() => {
+    if (!studentUid || !studentProfile?.name || mySessions.length === 0) return;
+    if (studentProfile.trophyRequested === true) return;
+    const dayKey = `autoTrophyCatchUp_${studentUid}`;
+    const today = new Date().toDateString();
+    try { if (localStorage.getItem(dayKey) === today) return; } catch (e) { /* no storage: just runs */ }
+    const cutoff = Date.now() - 21 * 24 * 60 * 60 * 1000;
+    const latest = new Map();
+    mySessions.forEach(x => {
+      if (!x.lessonId || !x.lessonLink || x.lessonLink.startsWith('watchandlearn://')) return;
+      if (!String(x.feedbackNotes || '').startsWith('Automatically submitted')) return;
+      const end = x.endTime?.toDate ? x.endTime.toDate().getTime() : 0;
+      if (end < cutoff) return;
+      const key = computeLessonKey(x.lessonTitle, x.lessonLink);
+      if (!latest.has(key) || end > latest.get(key).end) latest.set(key, { end, session: x });
+    });
+    if (latest.size === 0) return;
+    try { localStorage.setItem(dayKey, today); } catch (e) { /* ignore */ }
+    (async () => {
+      for (const { session } of latest.values()) {
+        try { if (await requestEarnedTrophiesForAutoReport(session)) break; }
+        catch (e) { console.error('Trophy catch-up:', e); }
+      }
+    })();
+  }, [studentUid, studentProfile?.name, studentProfile?.trophyRequested, mySessions]);
+
   // This student's own standing weekly slot(s) -- see recurringScheduleCollection.
   // Used below to fill in weeks that no longer get a dated teacherSchedule
   // doc, so the attendance bar keeps showing a chip for every week without
@@ -9092,6 +9123,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       } catch (e) { console.error('Auto report: marking Myanmar Reader trophies as requested:', e); }
     }
     if (Object.keys(upd).length > 0) await updateDoc(doc(db, `${publicDataPath}/students`, studentUid), upd);
+    return upd.trophyRequested === true;
   };
 
   const handleAutoSubmitSession = async (sessionToSubmit, calculatedEndTime) => {
