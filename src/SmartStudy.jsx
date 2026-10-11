@@ -398,7 +398,16 @@ const MarkdownText = ({ markdown, imageUrls = [] }) => {
     return <div className="font-sans">{processMarkdown(markdown)}</div>;
 };
 
-const NotificationBell = ({ completionsList, userName, classId, onViewProfile }) => {
+// One entry per student: only their newest activity is listed, so many students fit in the list.
+const latestPerStudent = (list) => {
+  const seen = new Set();
+  return [...(list || [])]
+    .sort((a, b) => (b.timestamp > 1e12 ? b.timestamp : b.timestamp * 1000) - (a.timestamp > 1e12 ? a.timestamp : a.timestamp * 1000))
+    .filter(c => !seen.has(c.studentName) && seen.add(c.studentName));
+};
+
+const NotificationBell = ({ completionsList: allCompletions, userName, classId, onViewProfile }) => {
+  const completionsList = latestPerStudent(allCompletions);
   const storageKey = `bell_last_read_${classId}_${userName}`;
   const [lastRead, setLastRead] = useState(() => {
     const stored = localStorage.getItem(storageKey);
@@ -447,7 +456,8 @@ const NotificationBell = ({ completionsList, userName, classId, onViewProfile })
   );
 };
 
-const TeacherNotificationBell = ({ completionsList }) => {
+const TeacherNotificationBell = ({ completionsList: allCompletions }) => {
+  const completionsList = latestPerStudent(allCompletions);
   const [isOpen, setIsOpen] = useState(false);
   const storageKey = `teacher_bell_last_read`;
   const [lastRead, setLastRead] = useState(() => {
@@ -1180,7 +1190,7 @@ const StudentLessonView = React.memo(({
           <p className="text-xl text-gray-600">Select a lesson to begin your journey.</p>
         </div>
         <div className="flex items-center space-x-2 flex-shrink-0">
-
+          <button onClick={() => { playClickSound?.(); handleSetView('classPicker'); }} className="p-2 bg-blue-100 text-blue-700 rounded-full shadow-md hover:bg-blue-200 transition-colors" title="Choose a Different Class"><LayoutGrid className="w-6 h-6" /></button>
           {myRank > 0 && (
             <DraggableRankBadge myRank={myRank} myLessonsCompleted={myLessonsCompleted} lessons={lessons} allScores={allScores} userName={userName} studentAgeLevel={studentAgeLevel} handleSetView={handleSetView} setActiveLessonId={setActiveLessonId} playClickSound={playClickSound} myTotalLessonsCompletedAllClasses={myTotalLessonsCompletedAllClasses} />
           )}
