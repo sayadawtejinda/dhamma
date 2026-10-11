@@ -506,7 +506,7 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
             setVisitGiftNote(`🎁 Your gift is on its way to ${targetName}! (${nextGiven.length}/${GIFTS_SENT_PER_WEEK} gifts this week)`);
           } else {
             withGift = false;
-            setVisitGiftNote(`You have already sent gifts to ${GIFTS_SENT_PER_WEEK} friends this week, so this visit comes without a gift. New gifts next week!`);
+            setVisitGiftNote(`🎁 ${GIFTS_SENT_PER_WEEK}/${GIFTS_SENT_PER_WEEK} ✅  See you next week! 🌸`);
           }
         }
         // Remember every friend this visit brought (or already brought) a gift
@@ -639,7 +639,7 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
         coinIcon="🪙"
         panelTitle="🌿 Students"
         weeklyLabel={(n) => <>visit {n} 👥</>}
-        panelNote="You can send each friend a gift only once. ✅ means you have already sent one to them, so go and visit someone new!"
+        panelNote="🎁 1 gift per friend · ✅ = done · 👋 Visit a new friend!"
         teacherLabel="🧑‍🏫 Teacher"
         showInactiveWarning={false}
         renderActivity={(s) => !isTeacherPreview && s.studentName !== studentName && (

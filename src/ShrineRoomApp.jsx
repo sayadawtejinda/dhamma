@@ -1187,7 +1187,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
       .filter(id => id !== 'umbrella' && id !== 'bell' && findOffering(id) && !heldIds.has(id));
     if (candidates.length === 0) return;
     if (room <= 0) {
-      setVisitGiftNote(`🎁 You already hold ${SHRINE_GIFT_MAX} gifts -- use one in the Merit Shop to receive more.`);
+      setVisitGiftNote(`🎁 ${SHRINE_GIFT_MAX}/${SHRINE_GIFT_MAX} 🛍️ Use one in the Merit Shop!`);
       return;
     }
     for (let i = candidates.length - 1; i > 0; i--) {
@@ -1200,7 +1200,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     setGiftOfferings(nextGifts);
     setGiftFriends(nextFriends);
     persist({ shrineGifts: nextGifts, shrineGiftFriends: nextFriends });
-    setVisitGiftNote(`🎁 A gift from ${targetName}'s altar: ${picks.map(id => `${findOffering(id).emoji || ''} ${findOffering(id).name}`).join(' and ')}. Your next purchase of ${picks.length > 1 ? 'each' : 'it'} in the Merit Shop is free!`);
+    setVisitGiftNote(`🎁 ${picks.map(id => `${findOffering(id).emoji || ''} ${findOffering(id).name}`).join(' + ')} → 🛍️ FREE!`);
   }
   // A gift is used up the moment the free purchase is made.
   const takeGift = (offeringId) => {
@@ -1742,7 +1742,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
         secondaryIcon="🪙"
         panelTitle="🛕 Students"
         weeklyLabel={(n) => <>visit {n} 👥</>}
-        panelNote="Each friend gives you a gift only once. ✅ means you have already visited them, so go and visit someone new!"
+        panelNote="🎁 1 gift per friend · ✅ = done · 👋 Visit a new friend!"
         teacherLabel="🧑‍🏫 Teacher"
         showInactiveWarning={false}
         renderActivity={(s) => (
