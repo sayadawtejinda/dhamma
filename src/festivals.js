@@ -61,7 +61,7 @@ export const FESTIVALS = [
       {
         id: 'thadingyut-2026-robe',
         category: 'outfit',
-        requires: { type: 'lamps', count: 40 },
+        requires: { type: 'lamps', count: 30 },
         item: { id: 'festival-thadingyut-2026-robe', name: '🪔 Festival Lights Robe', color: '#F97316', swatch: 'linear-gradient(135deg,#FFC107,#FB8C00 55%,#7B1FA2)', pattern: 'lights', cost: 0, festival: true },
       },
     ],
@@ -134,7 +134,7 @@ export const FESTIVALS = [
       {
         id: 'tazaungdaing-2026-robe',
         category: 'outfit',
-        requires: { type: 'lamps', count: 40 },
+        requires: { type: 'lamps', count: 30 },
         item: { id: 'festival-tazaungdaing-2026-robe', name: '🏮 Fire Balloon Robe', color: '#D81B60', swatch: 'linear-gradient(135deg,#FF8A65,#D81B60 55%,#4A148C)', pattern: 'lights', cost: 0, festival: true },
       },
     ],
@@ -197,7 +197,7 @@ export const FESTIVALS = [
       {
         id: 'nyaungyay-2027-robe',
         category: 'outfit',
-        requires: { type: 'lamps', count: 40 },
+        requires: { type: 'lamps', count: 30 },
         item: { id: 'festival-nyaungyay-2027-robe', name: '🏺 Water Pot Robe', color: '#2E7D32', swatch: 'linear-gradient(135deg,#A5D6A7,#2E7D32 60%,#8D6E63)', pattern: 'lotus', cost: 0, festival: true },
       },
     ],
@@ -261,7 +261,7 @@ export const FESTIVALS = [
       {
         id: 'waso-2027-robe',
         category: 'outfit',
-        requires: { type: 'lamps', count: 40 },
+        requires: { type: 'lamps', count: 30 },
         item: { id: 'festival-waso-2027-robe', name: '🌼 Waso Flower Robe', color: '#F9A825', swatch: 'linear-gradient(135deg,#FFF59D,#F9A825 60%,#E65100)', pattern: 'lotus', cost: 0, festival: true },
       },
     ],
@@ -320,7 +320,7 @@ export const FESTIVALS = [
       {
         id: 'thingyan-2027-robe',
         category: 'outfit',
-        requires: { type: 'lamps', count: 40 },
+        requires: { type: 'lamps', count: 30 },
         item: { id: 'festival-thingyan-2027-robe', name: '💦 Thingyan Splash Robe', color: '#039BE5', swatch: 'linear-gradient(135deg,#B3E5FC,#039BE5 60%,#01579B)', pattern: 'checks', cost: 0, festival: true },
       },
     ],
@@ -388,7 +388,7 @@ export const FESTIVALS = [
       {
         id: 'htamane-2027-robe',
         category: 'outfit',
-        requires: { type: 'lamps', count: 40 },
+        requires: { type: 'lamps', count: 30 },
         item: { id: 'festival-htamane-2027-robe', name: '🍲 Htamane Robe', color: '#E65100', swatch: 'linear-gradient(135deg,#FFE0B2,#E65100 60%,#6D4C41)', pattern: 'lights', cost: 0, festival: true },
       },
     ],
@@ -455,7 +455,7 @@ export const FESTIVALS = [
       {
         id: 'wagaung-2027-robe',
         category: 'outfit',
-        requires: { type: 'lamps', count: 40 },
+        requires: { type: 'lamps', count: 30 },
         item: { id: 'festival-wagaung-2027-robe', name: '🌿 Forest Metta Robe', color: '#2E7D32', swatch: 'linear-gradient(135deg,#C8E6C9,#2E7D32 55%,#FFC107)', pattern: 'lotus', cost: 0, festival: true },
       },
     ],
@@ -520,7 +520,7 @@ export const FESTIVALS = [
       {
         id: 'nayon-2027-robe',
         category: 'outfit',
-        requires: { type: 'lamps', count: 40 },
+        requires: { type: 'lamps', count: 30 },
         item: { id: 'festival-nayon-2027-robe', name: '🕊️ Peace Robe', color: '#0288D1', swatch: 'linear-gradient(135deg,#E1F5FE,#0288D1 55%,#FFFFFF)', pattern: 'lights', cost: 0, festival: true },
       },
     ],
@@ -589,7 +589,7 @@ export const FESTIVALS = [
       {
         id: 'halloween-2026-robe',
         category: 'outfit',
-        requires: { type: 'lamps', count: 40 },
+        requires: { type: 'lamps', count: 30 },
         item: { id: 'festival-halloween-2026-robe', name: '🎃 Pumpkin Robe', color: '#EF6C00', swatch: 'linear-gradient(135deg,#FFCC80,#EF6C00 60%,#4E342E)', pattern: 'lights', cost: 0, festival: true },
       },
     ],
@@ -654,7 +654,7 @@ export const FESTIVALS = [
       {
         id: 'thanksgiving-2026-robe',
         category: 'outfit',
-        requires: { type: 'lamps', count: 40 },
+        requires: { type: 'lamps', count: 30 },
         item: { id: 'festival-thanksgiving-2026-robe', name: '🍂 Autumn Leaves Robe', color: '#D84315', swatch: 'linear-gradient(135deg,#FFE0B2,#E65100 55%,#5D4037)', pattern: 'lotus', cost: 0, festival: true },
       },
     ],
@@ -721,7 +721,7 @@ export const FESTIVALS = [
       {
         id: 'winter-2026-robe',
         category: 'outfit',
-        requires: { type: 'lamps', count: 40 },
+        requires: { type: 'lamps', count: 30 },
         item: { id: 'festival-winter-2026-robe', name: '⛄ Snowman Robe', color: '#1E88E5', swatch: 'linear-gradient(135deg,#FFFFFF,#90CAF9 55%,#1565C0)', pattern: 'lights', cost: 0, festival: true },
       },
     ],
@@ -787,7 +787,7 @@ export const FESTIVALS = [
       {
         id: 'newyear-2027-robe',
         category: 'outfit',
-        requires: { type: 'lamps', count: 40 },
+        requires: { type: 'lamps', count: 30 },
         item: { id: 'festival-newyear-2027-robe', name: '🎆 Fireworks Robe', color: '#4527A0', swatch: 'linear-gradient(135deg,#7E57C2,#1A1055 55%,#FFD54F)', pattern: 'night', cost: 0, festival: true },
       },
     ],
