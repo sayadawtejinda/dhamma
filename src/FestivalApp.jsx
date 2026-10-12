@@ -772,6 +772,7 @@ const NEW_SCENE_BG = {
   'thanksgiving-table': 'linear-gradient(180deg,#f7b267 0%,#fbd38d 38%,#e9a45a 70%,#a2602b 100%)',
   'winter-snow': 'linear-gradient(180deg,#0a1a3a 0%,#18386b 45%,#4a78a8 78%,#cfe3f3 100%)',
   'newyear-fireworks': 'linear-gradient(180deg,#02030f 0%,#0b1040 50%,#2a1a5a 82%,#3b1f55 100%)',
+  'forest-monks': 'linear-gradient(180deg,#04120d 0%,#0a2c20 40%,#14492f 75%,#1d5a38 100%)',
 };
 
 function HalloweenScene({ glow }) {
@@ -897,6 +898,62 @@ function NewYearScene({ glow }) {
       {Array.from({ length: 12 }).map((_, i) => <line key={i} x1="200" y1="164" x2="200" y2={i % 3 === 0 ? 172 : 168} stroke="#5d4037" strokeWidth={i % 3 === 0 ? 2.4 : 1.2} transform={`rotate(${i * 30} 200 198)`} />)}
       <path d="M200 198 L200 170" stroke="#3e2723" strokeWidth="3" strokeLinecap="round" /><path d="M200 198 L200 176" stroke="#3e2723" strokeWidth="2" strokeLinecap="round" transform="rotate(4 200 198)" /><circle cx="200" cy="198" r="3" fill="#d32f2f" />
       <rect x="150" y="240" width="100" height="30" rx="4" fill="#1a1440" /><text x="200" y="260" textAnchor="middle" fontSize="15" fontWeight="900" fill="#ffd54f">HAPPY NEW YEAR</text>
+    </svg>
+  );
+}
+
+// Wagaung (Metta day): ten monks meditating in the forest (the five hundred are the faint figures
+// behind them). Tap a monk: a child walks over, bows, and the monk glows. `lit` = monks already
+// paid respect today, `phase` = the walking/bowing child of each monk right now.
+const MONK_SPOTS = [
+  [50, 168], [125, 168], [200, 168], [275, 168], [350, 168],
+  [40, 232], [120, 232], [200, 232], [280, 232], [360, 232],
+];
+function ForestMonksScene({ lit, phase, onTap }) {
+  const crowd = Array.from({ length: 34 }, (_, i) => [8 + ((i * 37) % 384), 112 + ((i * 53) % 34), 0.45 + (i % 3) * 0.08]);
+  return (
+    <svg viewBox="0 0 400 270" preserveAspectRatio="xMidYMax meet" className="absolute inset-0 w-full h-full" aria-hidden="false">
+      <defs><radialGradient id="fmGlow" cx="50%" cy="50%" r="50%"><stop offset="0" stopColor="#ffe082" stopOpacity=".85" /><stop offset="1" stopColor="#ffb300" stopOpacity="0" /></radialGradient></defs>
+      {/* tall forest trees */}
+      {[12, 70, 140, 262, 330, 388].map((x, i) => (
+        <g key={x}><rect x={x - 6} y="20" width="12" height="150" fill={i % 2 ? '#2a3b25' : '#33452c'} /><ellipse cx={x} cy="30" rx={34 + (i % 3) * 6} ry="34" fill={i % 2 ? '#14452a' : '#1b5e3a'} opacity=".95" /></g>
+      ))}
+      <path d="M0 150 Q100 132 200 148 T400 140 L400 270 L0 270 Z" fill="#183d25" />
+      <path d="M0 196 Q120 180 220 196 T400 190 L400 270 L0 270 Z" fill="#245a35" />
+      {/* the five hundred, far away */}
+      <g opacity=".5">{crowd.map(([x, y, s], i) => <g key={i} transform={`translate(${x} ${y}) scale(${s})`}><path d="M-10 2 Q-10 -12 0 -14 Q10 -12 10 2 Z" fill="#b5651d" /><circle cx="0" cy="-18" r="4.4" fill="#d9a974" /></g>)}</g>
+      <path d="M0 215 Q120 204 220 216 T400 212 L400 270 L0 270 Z" fill="#2f6e3f" />
+      {/* the ten monks */}
+      {MONK_SPOTS.map(([x, y], i) => {
+        const isLit = lit.has(i);
+        const ph = phase[i];
+        return (
+          <g key={i} onClick={(e) => { if (!isLit) onTap(i, e); }} style={{ cursor: isLit ? 'default' : 'pointer' }} role="button" aria-label={isLit ? 'Respect paid' : 'Pay respect to this monk'}>
+            {isLit && <circle cx={x} cy={y - 10} r="34" fill="url(#fmGlow)" style={{ animation: `fsFlicker2 ${2.2 + (i % 3) * 0.4}s ease-in-out infinite`, transformOrigin: `${x}px ${y - 10}px` }} />}
+            <g transform={`translate(${x} ${y}) scale(${i < 5 ? 1.15 : 1.35})`}>
+              <ellipse cx="0" cy="3" rx="13" ry="3.4" fill="rgba(0,0,0,.35)" />
+              <path d="M-12 3 Q-12 -14 0 -16 Q12 -14 12 3 Z" fill="#d9741c" /><path d="M-12 3 Q0 8 12 3 Q0 1 -12 3 Z" fill="#a8500f" />
+              <path d="M-4 -15 L8 -3" stroke="#b4560f" strokeWidth="1.2" fill="none" />
+              <ellipse cx="0" cy="-6" rx="4" ry="2.2" fill="#e9b684" /><circle cx="0.8" cy="-20" r="5" fill="#e9b684" />
+              <path d="M-3.6 -22.5 Q0.8 -26.5 5 -22.5" fill="none" stroke="#c99061" strokeWidth="0.8" />
+            </g>
+            <circle cx={x} cy={y - 14} r="24" fill="transparent" />
+            {!isLit && <text x={x} y={y - 38} textAnchor="middle" fontSize="15" style={{ animation: `fsBob ${2.2 + (i % 4) * 0.35}s ease-in-out ${(i % 5) * 0.2}s infinite` }}>🙏</text>}
+            {isLit && <text x={x + 18} y={y + 6} textAnchor="middle" fontSize="12">🌸</text>}
+            {ph && (
+              <g transform="translate(200 262)" style={{ pointerEvents: 'none' }}>
+                <g style={{ animation: 'fsWalkBow 3.4s ease-in-out forwards', ['--dx']: `${x - 200}px`, ['--dy']: `${y + 14 - 262}px` }}>
+                  <g transform="scale(1.7)">
+                  <path d="M-5 -2 L-4 -16 L4 -16 L5 -2 Z" fill="#ef5350" /><rect x="-4.6" y="-3" width="3.6" height="5" fill="#1e3a8a" /><rect x="1" y="-3" width="3.6" height="5" fill="#1e3a8a" />
+                  <circle cx="0" cy="-22" r="5.4" fill="#f5cba7" /><path d="M-5.4 -23 Q0 -30 5.4 -23 Q0 -26 -5.4 -23 Z" fill="#3e2723" />
+                  <path d="M-1 -14 L0 -18 L1 -14 Z" fill="#f5cba7" /><path d="M-2.2 -13 L0 -19 L2.2 -13" stroke="#f5cba7" strokeWidth="1.6" fill="none" />
+                  </g>
+                </g>
+              </g>
+            )}
+          </g>
+        );
+      })}
     </svg>
   );
 }
@@ -1268,7 +1325,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
     gainCoins(earned);
     if (!isTeacherPreview) spawnFlyingCoins(point, 6, '🪙', true);
     const fid = `${Date.now()}-${i}`;
-    if (festival.lamps.style === 'pot' || festival.lamps.style === 'flower') {
+    if (festival.lamps.style === 'pot' || festival.lamps.style === 'flower' || festival.lamps.style === 'monk') {
       setPourPhase(prev => ({ ...prev, [i]: 'walk' }));
       setTimeout(() => setPourPhase(prev => ({ ...prev, [i]: 'pour' })), 1000);
       setTimeout(() => setPourPhase(prev => { const n = { ...prev }; delete n[i]; return n; }), 3400);
@@ -1280,7 +1337,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
     setFloaters(prev => [...prev, { id: fid, x: point.x, y: point.y, text: `+${festival.lamps.coins}` }]);
     setTimeout(() => setFloaters(prev => prev.filter(f => f.id !== fid)), 1100);
     if (completesAll) {
-      if (!['splash', 'share', 'tap'].includes(festival.lamps.style)) releaseLanterns();
+      if (!['splash', 'share', 'tap', 'monk'].includes(festival.lamps.style)) releaseLanterns();
       if (festival.lamps.allLitBonus > 0) showToast(`${festival.lamps.icon || '🏮'} All ${festival.lamps.noun || 'lamp'}s done! Bonus +${festival.lamps.allLitBonus} 🪙`);
     }
     pendingRef.current.lamps.add(i);
@@ -1406,6 +1463,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
         @keyframes fsBob { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-10px) } }
         @keyframes fsRiseAway { 0% { transform: translate(-50%,-50%) scale(1); opacity: 1 } 100% { transform: translate(-50%,-115vh) scale(.5); opacity: 0 } }
         @keyframes fsSpark { 0% { transform: rotate(var(--angle)) translateX(0) scale(1); opacity: 1 } 100% { transform: rotate(var(--angle)) translateX(80px) scale(.2); opacity: 0 } }
+        @keyframes fsWalkBow { 0% { transform: translate(0,0) rotate(0); opacity: 0 } 8% { opacity: 1 } 40% { transform: translate(var(--dx),var(--dy)) rotate(0) } 52% { transform: translate(var(--dx),var(--dy)) rotate(32deg) } 74% { transform: translate(var(--dx),var(--dy)) rotate(32deg) } 86% { transform: translate(var(--dx),var(--dy)) rotate(0); opacity: 1 } 100% { transform: translate(var(--dx),var(--dy)) rotate(0); opacity: 0 } }
         @keyframes fsSnow { 0% { transform: translateY(0); opacity: 0 } 10% { opacity: .9 } 100% { transform: translateY(275px); opacity: .2 } }
         @keyframes fsBurst { 0% { transform: scale(.1); opacity: 0 } 15% { opacity: 1 } 70% { opacity: 1 } 100% { transform: scale(1.5); opacity: 0 } }
         .fs-star { position: absolute; border-radius: 9999px; background: #fff; animation: fsTwinkle 3s ease-in-out infinite; }
@@ -1460,7 +1518,9 @@ export default function FestivalApp({ entryRequest, onExit }) {
 
       {/* Scene */}
       <div className="relative z-10 flex-1" style={{ minHeight: 380 }}>
-        {festival.scene === 'halloween-night' ? (
+        {festival.scene === 'forest-monks' ? (
+          <ForestMonksScene lit={lit} phase={pourPhase} onTap={handleLamp} />
+        ) : festival.scene === 'halloween-night' ? (
           <HalloweenScene glow={glow} />
         ) : festival.scene === 'thanksgiving-table' ? (
           <ThanksgivingScene glow={glow} />
@@ -1493,7 +1553,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
         {festival.lamps.style === 'lamp' || !festival.lamps.style ? LAMP_SPOTS.slice(0, festival.lamps.perDay).map((spot, i) => (i >= 10 ? (
           <div key={`post-${i}`} className="absolute pointer-events-none rounded-sm" style={{ left: `${spot.x}%`, top: `${spot.y}%`, bottom: '6%', width: 4, marginLeft: -2, marginTop: 18, background: 'linear-gradient(180deg,#8d6e63,#3e2723)' }} />
         ) : null)) : null}
-        {(['splash', 'share'].includes(festival.lamps.style) ? [] : festival.lamps.style === 'flower' ? FLOWER_SPOTS : festival.lamps.style === 'pot' ? POT_SPOTS : festival.lamps.style === 'balloon' ? BALLOON_SPOTS : festival.lamps.style === 'tap' ? TAP_SPOTS : LAMP_SPOTS).slice(0, festival.lamps.perDay).map((spot, i) => {
+        {(['splash', 'share', 'monk'].includes(festival.lamps.style) ? [] : festival.lamps.style === 'flower' ? FLOWER_SPOTS : festival.lamps.style === 'pot' ? POT_SPOTS : festival.lamps.style === 'balloon' ? BALLOON_SPOTS : festival.lamps.style === 'tap' ? TAP_SPOTS : LAMP_SPOTS).slice(0, festival.lamps.perDay).map((spot, i) => {
           const isLit = lit.has(i);
           if (festival.lamps.style === 'balloon') {
             if (isLit) return null;

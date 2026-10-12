@@ -404,6 +404,73 @@ export const FESTIVALS = [
       ],
     },
   },
+  {
+    id: 'wagaung-2027',
+    enabled: true,
+    scene: 'forest-monks',
+    icon: '🌿',
+    title: 'Wagaung: Day of Loving-Kindness',
+    tagline: 'In the forest, five hundred monks sit in meditation. Pay respect to each monk and send loving-kindness to all beings!',
+    // Default dates -- the teacher sets the real ones on the "Festival apps" screen.
+    // Full moon of Wagaung 2027 is taken as 17 August.
+    start: '2027-08-14',
+    end: '2027-08-18',
+    // Ten monks in the forest: tap one and walk over to bow to him (5 coins each, once a day).
+    lamps: {
+      perDay: 10, coins: 5, allLitBonus: 20, style: 'monk', icon: '🙏', noun: 'monk',
+      rewardText: 'Pay respect to {n} monks in total',
+    },
+    // The four wishes of loving-kindness, 5 seconds of quiet each.
+    kadaw: {
+      coins: 20,
+      lotus: 1,
+      title: 'Send Loving-Kindness',
+      button: '💛 Send Metta',
+      actionLabel: '💛 I Send Loving-Kindness',
+      doneWord: 'Metta',
+      recipients: [
+        {
+          id: 'metta-danger', emoji: '🛡️', name: 'Free from Danger',
+          prayer: 'In the Metta Sutta the Buddha taught five hundred monks in the forest to send loving-kindness. I send it now with all my heart: May all beings be free from danger. May all beings be safe.',
+          blessing: 'May you and all beings be safe and free from danger. Sadhu! Sadhu! Sadhu!',
+        },
+        {
+          id: 'metta-mind', emoji: '💗', name: 'Free from Mental Suffering',
+          prayer: 'May all beings be free from mental suffering. May all beings be free from worry, fear and sadness. May their hearts be peaceful.',
+          blessing: 'May every heart be calm and light. Sadhu! Sadhu! Sadhu!',
+        },
+        {
+          id: 'metta-body', emoji: '🌿', name: 'Free from Physical Suffering',
+          prayer: 'May all beings be free from physical suffering. May all beings be free from pain and illness. May their bodies be healthy and strong.',
+          blessing: 'May every body be healthy and strong. Sadhu! Sadhu! Sadhu!',
+        },
+        {
+          id: 'metta-happy', emoji: '😊', name: 'May All Beings Be Well and Happy',
+          prayer: 'May all beings be well and happy. May they live with ease. May all beings, near and far, big and small, be happy.',
+          blessing: 'May all beings be well and happy, and may your kind heart bring joy to the world. Sadhu! Sadhu! Sadhu!',
+        },
+      ],
+    },
+    rewards: [
+      {
+        id: 'wagaung-2027-robe',
+        category: 'outfit',
+        requires: { type: 'lamps', count: 40 },
+        item: { id: 'festival-wagaung-2027-robe', name: '🌿 Forest Metta Robe', color: '#2E7D32', swatch: 'linear-gradient(135deg,#C8E6C9,#2E7D32 55%,#FFC107)', pattern: 'lotus', cost: 0, festival: true },
+      },
+    ],
+    dailyGift: {
+      bonusCoins: 50,
+      pool: [
+        { category: 'accessory', item: { id: 'festival-wagaung-2027-glasses', name: '💛 Metta Glasses', kind: 'starglasses', color: '#FDD835', cost: 0, festival: true } },
+        { category: 'outfit', item: { id: 'festival-wagaung-2027-monk', name: '🧡 Monk Robe Colour', color: '#E65100', swatch: 'linear-gradient(135deg,#FFCC80,#E65100 60%,#8D6E63)', pattern: 'checks', cost: 0, festival: true } },
+        { category: 'accessory', item: { id: 'festival-wagaung-2027-lantern', name: '🕯️ Forest Candle Lantern', kind: 'lantern', color: '#FFCA28', cost: 0, festival: true } },
+        { category: 'outfit', item: { id: 'festival-wagaung-2027-green', name: '🌳 Deep Forest Robe', color: '#1B5E20', swatch: 'linear-gradient(135deg,#81C784,#1B5E20 65%,#FFEB3B)', pattern: 'lights', cost: 0, festival: true } },
+        { category: 'accessory', item: { id: 'festival-wagaung-2027-moon', name: '🌕 Metta Moon Lantern', kind: 'skylantern', color: '#FFF59D', cost: 0, festival: true } },
+        { category: 'outfit', item: { id: 'festival-wagaung-2027-night', name: '🌌 Quiet Night Robe', color: '#1A237E', swatch: 'linear-gradient(135deg,#5C6BC0,#1A237E 65%,#FFF59D)', pattern: 'night', cost: 0, festival: true } },
+      ],
+    },
+  },
   // ---- Western festivals for students who live in the West -----------------------------
   // No religious teaching other than Dhamma: kindness, loving-kindness, gratitude, giving.
   {
