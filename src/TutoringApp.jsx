@@ -1,4 +1,5 @@
 import { listenWithHistory } from './studentHistory';
+import { isOnlineStatusDay } from './presenceDay';
 import { SPECIAL_AWARD_ITEMS } from './festivals';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import FestivalBanners from './FestivalBanner';
@@ -7030,6 +7031,7 @@ ${toSend.map(l => '• ' + l.title).join(', ')}`
             </div>
           )}
 
+          <NewAccountsSwitch />
           {pendingStudents.length > 0 && (
             <div className="mb-8">
               <h3 className="text-xl font-semibold mb-4 text-gray-800">
@@ -11246,11 +11248,49 @@ function TrophyBoard({ role, targetStudentUid, studentProfile }) {
   );
 }
 
+// ---- Opening new student accounts: the teacher's switch ---------------------------------------
+// Stored in one small doc, config/accountSettings = { newAccountsMode: 'auto' | 'open' | 'closed' }.
+// 'auto' (the default) keeps new accounts closed during the Parami group class (Sunday 12:30-4:00 PM
+// Pacific, see presenceDay.js) and open the rest of the time. Students' login screen hides the
+// "New Student" side completely while it is closed.
+const accountSettingsRef = () => doc(db, `${publicDataPath}/config`, 'accountSettings');
+const newAccountsClosed = (mode) => mode === 'closed' || (mode !== 'open' && isOnlineStatusDay());
+
+function NewAccountsSwitch() {
+  const [mode, setMode] = useState('auto');
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => {
+    getDoc(accountSettingsRef()).then(snap => { if (snap.exists() && snap.data().newAccountsMode) setMode(snap.data().newAccountsMode); }).catch(() => {}).finally(() => setLoaded(true));
+  }, []);
+  const choose = async (m) => {
+    setMode(m);
+    try { await setDoc(accountSettingsRef(), { newAccountsMode: m }, { merge: true }); }
+    catch (e) { console.error('Could not save the new-accounts setting:', e); alert('Could not save. Please try again.'); }
+  };
+  const closedNow = newAccountsClosed(mode);
+  const opt = (m, label) => (
+    <button type="button" onClick={() => choose(m)} className={`flex-1 px-3 py-2 rounded-lg text-sm font-bold border-2 ${mode === m ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-indigo-700 border-indigo-200 hover:bg-indigo-50'}`}>{label}</button>
+  );
+  return (
+    <div className={`mb-6 p-4 rounded-xl border-2 ${closedNow ? 'bg-red-50 border-red-300' : 'bg-emerald-50 border-emerald-300'}`}>
+      <h3 className="font-bold text-gray-800">🆕 New student accounts: {loaded ? (closedNow ? '🔒 CLOSED now' : '✅ OPEN now') : '…'}</h3>
+      <div className="mt-2 flex gap-2">{opt('auto', 'Auto')}{opt('open', 'Always open')}{opt('closed', 'Always closed')}</div>
+      <p className="mt-2 text-xs text-gray-600">Auto = closed during the Parami class (Sunday 12:30–4:00 PM Pacific), open the rest of the time. While closed, students only see "Existing Account" login.</p>
+    </div>
+  );
+}
+
 function RoleSelection({ user, onSelectRole, onStudentLogin, teacherUid, onRecoverTeacher }) {
   const [studentName, setStudentName] = useState('');
   const [studentIdLogin, setStudentIdLogin] = useState('');
   const [formError, setFormError] = useState(''); 
   const [view, setView] = useState('new'); 
+  const [accountMode, setAccountMode] = useState(null); // null until the teacher's switch has been read
+  const accountsClosed = accountMode !== null && newAccountsClosed(accountMode);
+  useEffect(() => {
+    getDoc(accountSettingsRef()).then(snap => setAccountMode(snap.exists() && snap.data().newAccountsMode ? snap.data().newAccountsMode : 'auto')).catch(() => setAccountMode('auto'));
+  }, []);
+  useEffect(() => { if (accountsClosed) setView('existing'); }, [accountsClosed]);
   const [showRecovery, setShowRecovery] = useState(false);
   const [recoveryPasscode, setRecoveryPasscode] = useState('');
   const [recoverySubmitting, setRecoverySubmitting] = useState(false);
@@ -11315,15 +11355,19 @@ function RoleSelection({ user, onSelectRole, onStudentLogin, teacherUid, onRecov
     return () => { cancelled = true; };
   }, [user?.uid]);
 
-  const handleSelectStudent = (e) => {
+  const handleSelectStudent = async (e) => {
     e.preventDefault();
     setFormError('');
     if (deviceAccountCheck.exists) return;
-    if (studentName.trim()) {
-      onSelectRole('student', studentName.trim(), setFormError);
-    } else {
-      setFormError('Please enter your name.');
-    }
+    if (!studentName.trim()) { setFormError('Please enter your name.'); return; }
+    // Checked again right now (the screen may have been open for a while): new accounts can be closed.
+    try {
+      const snap = await getDoc(accountSettingsRef());
+      const mode = snap.exists() && snap.data().newAccountsMode ? snap.data().newAccountsMode : 'auto';
+      setAccountMode(mode);
+      if (newAccountsClosed(mode)) { setView('existing'); return; }
+    } catch (err) { /* cannot read the switch: do not lock a new student out */ }
+    onSelectRole('student', studentName.trim(), setFormError);
   };
   
   const handleStudentLogin = (e) => {
@@ -11394,12 +11438,12 @@ function RoleSelection({ user, onSelectRole, onStudentLogin, teacherUid, onRecov
         )}
 
         <div>
-          <div className="flex mb-4 rounded-lg bg-gray-100 p-1">
+          {!accountsClosed && <div className="flex mb-4 rounded-lg bg-gray-100 p-1">
             <button onClick={() => setView('new')} className={`w-1/2 p-2 rounded-lg font-semibold ${view === 'new' ? 'bg-white shadow text-emerald-600' : 'text-gray-600'}`}>New Student</button>
             <button onClick={() => setView('existing')} className={`w-1/2 p-2 rounded-lg font-semibold ${view === 'existing' ? 'bg-white shadow text-emerald-600' : 'text-gray-600'}`}>Existing Account</button>
-          </div>
+          </div>}
           
-          {view === 'new' && (
+          {view === 'new' && !accountsClosed && (
             <form onSubmit={handleSelectStudent}>
               <h3 className="text-lg font-semibold text-gray-700 mb-4">Create New Student Account</h3>
               {deviceAccountCheck.checked && deviceAccountCheck.exists ? (
