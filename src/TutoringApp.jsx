@@ -4855,6 +4855,7 @@ ${toSend.map(l => '• ' + l.title).join(', ')}`
       await updateDoc(doc(db, `${publicDataPath}/starAnnouncements`, ann.id), {
         status: 'approved',
         approvedAt: serverTimestamp(),
+        flashAt: serverTimestamp(), // every open screen shows it once right now (see StarTicker)
         startsAt: Timestamp.fromMillis(startMs),
         expiresAt: Timestamp.fromMillis(startMs + runMs),
       });

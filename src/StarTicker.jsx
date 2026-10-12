@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { collection, getDocs, limit, orderBy, query, Timestamp, where } from 'firebase/firestore';
+import { collection, getDocs, limit, onSnapshot, orderBy, query, Timestamp, where } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, db } from './firebase';
 import { appId } from './firebaseConfig';
@@ -17,6 +17,10 @@ const FIRST_DELAY_MS = 10 * 1000;
 const CHECK_EVERY_MS = 20 * 1000;
 const REFETCH_EVERY_MS = 30 * 60 * 1000;
 const STORE_KEY = 'starTickerState_v1';
+const FLASHED_KEY = 'starTickerFlashed_v1';
+const FLASH_WINDOW_MS = 2 * 60 * 1000;
+const loadFlashed = () => { try { return JSON.parse(localStorage.getItem(FLASHED_KEY) || '[]'); } catch (e) { return []; } };
+const saveFlashed = (ids) => { try { localStorage.setItem(FLASHED_KEY, JSON.stringify(ids.slice(-40))); } catch (e) { /* ignore */ } };
 
 const todayKey = () => {
   const d = new Date();
@@ -32,6 +36,7 @@ const saveState = (s) => { try { localStorage.setItem(STORE_KEY, JSON.stringify(
 
 export default function StarTicker() {
   const [current, setCurrent] = useState(null);
+  const [flashQueue, setFlashQueue] = useState([]);
   const listRef = useRef([]);
   const [authReady, setAuthReady] = useState(false);
 
@@ -39,6 +44,40 @@ export default function StarTicker() {
     const unsub = onAuthStateChanged(auth, (u) => { if (u) setAuthReady(true); });
     return () => unsub();
   }, []);
+
+  // The moment the teacher approves an announcement it is shown once on every screen that is
+  // open (the writer's too), straight away -- not waiting for the 5-minute gap or the daily
+  // limit. A tiny listener: it only ever receives the one or two announcements approved in
+  // the last couple of minutes. Its normal turn (when its slot starts) is not affected.
+  useEffect(() => {
+    if (!authReady) return;
+    const since = Timestamp.fromMillis(Date.now() - FLASH_WINDOW_MS);
+    const unsub = onSnapshot(query(collection(db, STAR_PATH), where('flashAt', '>', since)), (snap) => {
+      snap.docChanges().forEach(ch => {
+        if (ch.type === 'removed') return;
+        const a = { id: ch.doc.id, ...ch.doc.data() };
+        if (a.status !== 'approved' || !a.message) return;
+        const flashedAt = a.flashAt?.toMillis ? a.flashAt.toMillis() : Date.now();
+        if (Date.now() - flashedAt > FLASH_WINDOW_MS) return;
+        const flashed = loadFlashed();
+        if (flashed.includes(a.id)) return;
+        saveFlashed([...flashed, a.id]);
+        // already running now: the normal ticker must not repeat it today
+        const startsMs = a.startsAt?.toMillis ? a.startsAt.toMillis() : 0;
+        if (startsMs <= Date.now()) {
+          const st = loadState();
+          if (st.date === todayKey() && !st.shownToday.includes(a.id)) saveState({ ...st, shownToday: [...st.shownToday, a.id] });
+        }
+        setFlashQueue(q => [...q, a]);
+      });
+    }, (e) => console.error('Announcement flash listener:', e));
+    return () => unsub();
+  }, [authReady]);
+  useEffect(() => {
+    if (current || flashQueue.length === 0) return;
+    setCurrent(flashQueue[0]);
+    setFlashQueue(q => q.slice(1));
+  }, [current, flashQueue]);
 
   // A plain read now and then (not a live listener) -- announcements change
   // rarely, and this runs on every open device.
