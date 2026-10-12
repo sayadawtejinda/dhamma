@@ -9656,13 +9656,15 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         // box (which now lives inside that panel) used to leave this
         // Feedback form rendering underneath it, invisible even though it
         // was open.
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex justify-center items-center z-[9950]">
-          <form onSubmit={handleSubmitFeedback} className="bg-white p-6 rounded-xl shadow-2xl w-full max-w-lg mx-4">
+        // The overlay scrolls: on a phone (keyboard open, or a small screen) the form is taller than what
+        // is left of the screen, and the Submit button used to sit below the edge with no way to reach it.
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex justify-center items-start sm:items-center overflow-y-auto z-[9950] py-3">
+          <form onSubmit={handleSubmitFeedback} className="bg-white p-4 sm:p-6 rounded-xl shadow-2xl w-full max-w-lg mx-3 my-auto">
             <h3 className="text-xl font-semibold mb-4">Lesson Feedback</h3>
             <div className="mb-4">
               <label className="block text-gray-700 mb-2">What did you study? (Optional)</label>
               <textarea
-                value={feedbackNotes} onChange={(e) => setFeedbackNotes(e.target.value)} rows="4"
+                value={feedbackNotes} onChange={(e) => setFeedbackNotes(e.target.value)} rows="3"
                 className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="e.g., I finished Algebra Chapter 1."
               ></textarea>
             </div>
@@ -9751,10 +9753,10 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                 )}
               </div>
               <div className="flex space-x-3 ml-auto">
-                <button type="button" onClick={() => { setShowFeedbackModal(false); setRedoSession(null); }} className="px-5 py-2 rounded-lg bg-gray-200 text-gray-800 hover:bg-gray-300">
+                <button type="button" onClick={() => { setShowFeedbackModal(false); setRedoSession(null); }} className="px-5 py-3 rounded-lg bg-gray-200 text-gray-800 hover:bg-gray-300">
                   Cancel
                 </button>
-                <button type="submit" className="px-5 py-2 rounded-lg bg-emerald-500 text-white font-semibold hover:bg-emerald-600 shadow-md">
+                <button type="submit" className="px-5 py-3 rounded-lg bg-emerald-500 text-white font-semibold hover:bg-emerald-600 shadow-md">
                   Submit Report
                 </button>
               </div>
