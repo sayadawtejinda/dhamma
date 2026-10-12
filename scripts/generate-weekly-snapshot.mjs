@@ -150,6 +150,18 @@ async function main() {
     console.warn(`Skipped auto-deactivation: ${toDeactivate.length} of ${activeCount} would be deactivated (more than a quarter).`);
   }
 
+  // Keep every weekly slot's studentInactive flag in step with its student, so the Weekly Schedule
+  // can hide the slots of students who are off without reading the whole students list.
+  const activeById = new Map(students.map(st => [st.id, st.isActive === true]));
+  let flagged = 0;
+  for (const r of recurringSnap.docs) {
+    const d = r.data();
+    if (d.studentUid === 'offline' || !activeById.has(d.studentUid)) continue;
+    const inactive = !activeById.get(d.studentUid);
+    if (!!d.studentInactive !== inactive) { await updateDoc(r.ref, { studentInactive: inactive }); flagged += 1; }
+  }
+  if (flagged > 0) console.log(`Updated the studentInactive flag on ${flagged} weekly slot(s).`);
+
   // Offline students are no longer counted in attendance at all (per the
   // teacher) -- they still appear in the live Today/This Week schedule view
   // in the app, just excluded from every tally here.

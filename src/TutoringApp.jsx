@@ -2832,16 +2832,23 @@ Each one will see the Teacher in their Visitors list, with a gift waiting to ope
       // nothing else needs to know groups exist at all. Snapshot membership
       // now; it changing later shouldn't retroactively change who this
       // occurrence's entries belong to.
+      // Active members only, and nobody who already has this exact day and start time (adding the
+      // same group slot twice used to put every student in the list twice).
       groupMembers = group.studentUids
         .map(uid => students.find(s => s.id === uid))
-        .filter(Boolean)
+        .filter(s => s && s.isActive === true)
+        .filter(s => !recurringSchedule.some(r => r.studentUid === s.id && r.dayOfWeek === Number(scheduleDayOfWeek) && r.startTime === manualStartTime))
         .map(s => ({ id: s.id, name: s.name }));
-      if (groupMembers.length === 0) return;
+      if (groupMembers.length === 0) { alert('Every active member of this group already has this slot, so nothing was added.'); return; }
       studentName = group.groupName; // only used for the confirm dialog text below
     } else {
       if (!manualStudentName) return;
       studentUid = 'offline';
       studentName = manualStudentName;
+    }
+    if (studentUid && scheduleDayOfWeek !== '' && recurringSchedule.some(r => r.studentUid === studentUid && (studentUid !== 'offline' || (r.studentName || '').trim().toLowerCase() === (studentName || '').trim().toLowerCase()) && r.dayOfWeek === Number(scheduleDayOfWeek) && r.startTime === manualStartTime)) {
+      alert(`${studentName} already has a ${DAY_NAMES[scheduleDayOfWeek]} ${manualStartTime} slot.`);
+      return;
     }
 
     if (scheduleDayOfWeek === '' || scheduleDayOfWeek == null || !manualStartTime || !manualEndTime) return;
@@ -2929,6 +2936,13 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
         // Re-activating starts a fresh count: the weekly job only deactivates after 10 more missed weeks.
         ...(!currentStatus ? { reactivatedAt: Date.now(), autoDeactivatedAt: null } : {})
       });
+      // Their weekly slots follow: hidden from the Weekly Schedule while the student is off, back when on.
+      try {
+        const slotSnap = await getDocs(query(recurringScheduleCollection, where('studentUid', '==', studentId)));
+        const batch = writeBatch(db);
+        slotSnap.docs.forEach(d => batch.update(d.ref, { studentInactive: !!currentStatus }));
+        if (!slotSnap.empty) await batch.commit();
+      } catch (slotError) { console.error('Could not update the weekly slots of this student:', slotError); }
     } catch (error) {
       console.error("Error changing student status:", error);
     }
@@ -3062,41 +3076,10 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
           onConfirm: async () => {
             setShowConfirmModal({ isOpen: false });
             try {
-              await handleToggleStudentInGroup(paramiGroup.id, studentId, true);
-
-              // Everything sent to the group's members in the last 24 hours. This reads by
-              // send time only (no index needed) and picks the group's members out here; the
-              // old version asked Firestore for "members AND sent since", which needs an index
-              // that never existed, so it failed quietly and nothing was ever forwarded.
-              const cutoff = Timestamp.fromDate(new Date(Date.now() - 24 * 60 * 60 * 1000));
-              const memberSet = new Set((paramiGroup.studentUids || []).filter(uid => uid !== studentId));
-              const recentSnap = await getDocs(query(lessonsCollection, where('sentAt', '>=', cutoff)));
-              // one copy of each distinct lesson (same title + link), oldest first so the
-              // new student's queue is in the same order as the group's
-              const distinct = new Map();
-              recentSnap.docs
-                .map(d => d.data())
-                .filter(l => memberSet.has(l.studentUid) && l.sentAt)
-                .sort((x, y) => x.sentAt.toMillis() - y.sentAt.toMillis())
-                .forEach(l => { distinct.set(`${l.title}|${l.link}`, l); });
-              const toSend = Array.from(distinct.values());
-              for (const lesson of toSend) {
-                await addDoc(lessonsCollection, {
-                  studentUid: studentId,
-                  teacherUid: lesson.teacherUid,
-                  title: lesson.title,
-                  link: lesson.link,
-                  details: lesson.details,
-                  trophyLimit: lesson.trophyLimit,
-                  unitLabel: lesson.unitLabel || 'Chapter',
-                  unitCount: lesson.unitCount,
-                  status: 'pending',
-                  isPreSend: lesson.isPreSend === true,
-                  sentAt: serverTimestamp()
-                });
-              }
+              const slotsAdded = await handleToggleStudentInGroup(paramiGroup.id, studentId, true, { forward: false });
+              const toSend = await forwardRecentParamiLessons(paramiGroup, studentId);
               alert(toSend.length > 0
-                ? `${studentData?.name || 'The student'} was added to Parami and sent ${toSend.length} lesson${toSend.length === 1 ? '' : 's'} from the last 24 hours:
+                ? `${studentData?.name || 'The student'} was added to Parami${slotsAdded ? ' (and its weekly slot)' : ''} and sent ${toSend.length} lesson${toSend.length === 1 ? '' : 's'} from the last 24 hours:
 
 ${toSend.map(l => '• ' + l.title).join(', ')}`
                 : `${studentData?.name || 'The student'} was added to Parami. No lesson was sent to the group in the last 24 hours, so there was nothing to forward.`);
@@ -3438,12 +3421,69 @@ ${toSend.map(l => '• ' + l.title).join(', ')}`
   // close together used to both read the same stale studentUids array, and
   // whichever write finished last silently clobbered the other's addition,
   // leaving that student missing from the group despite "Add" having run.
-  const handleToggleStudentInGroup = async (groupId, studentId, isChecked) => {
+  // Everything sent to the Parami group's members in the last 24 hours, copied (one per distinct
+  // lesson) to a student who has just joined. Reads by send time only (no index needed).
+  const forwardRecentParamiLessons = async (paramiGroup, studentId) => {
+    const cutoff = Timestamp.fromDate(new Date(Date.now() - 24 * 60 * 60 * 1000));
+    const memberSet = new Set((paramiGroup.studentUids || []).filter(uid => uid !== studentId));
+    const recentSnap = await getDocs(query(lessonsCollection, where('sentAt', '>=', cutoff)));
+    const distinct = new Map();
+    recentSnap.docs
+      .map(d => d.data())
+      .filter(l => memberSet.has(l.studentUid) && l.sentAt)
+      .sort((x, y) => x.sentAt.toMillis() - y.sentAt.toMillis())
+      .forEach(l => { distinct.set(`${l.title}|${l.link}`, l); });
+    const toSend = Array.from(distinct.values());
+    for (const lesson of toSend) {
+      await addDoc(lessonsCollection, {
+        studentUid: studentId,
+        teacherUid: lesson.teacherUid,
+        title: lesson.title,
+        link: lesson.link,
+        details: lesson.details,
+        trophyLimit: lesson.trophyLimit,
+        unitLabel: lesson.unitLabel || 'Chapter',
+        unitCount: lesson.unitCount,
+        status: 'pending',
+        isPreSend: lesson.isPreSend === true,
+        sentAt: serverTimestamp()
+      });
+    }
+    return toSend;
+  };
+
+  // A student joining a group gets the group's weekly slot(s) too: the same day and time the
+  // other (active) members have, unless they already have it.
+  const addGroupSlotsForStudent = async (groupId, studentId, studentName) => {
+    const templates = new Map();
+    recurringSchedule.filter(r => r.groupId === groupId && r.studentUid !== studentId && !r.studentInactive).forEach(r => {
+      templates.set(`${r.dayOfWeek}|${r.startTime}|${r.endTime}`, { dayOfWeek: r.dayOfWeek, startTime: r.startTime, endTime: r.endTime });
+    });
+    let added = 0;
+    for (const t of templates.values()) {
+      if (recurringSchedule.some(r => r.studentUid === studentId && r.dayOfWeek === t.dayOfWeek && r.startTime === t.startTime)) continue;
+      await addDoc(recurringScheduleCollection, { teacherUid: user.uid, studentUid: studentId, studentName, groupId, ...t, createdAt: Timestamp.now(), updatedAt: Timestamp.now() });
+      added += 1;
+    }
+    return added;
+  };
+
+  const handleToggleStudentInGroup = async (groupId, studentId, isChecked, opts = {}) => {
     try {
       const groupDocRef = doc(db, `${publicDataPath}/studentGroups`, groupId);
       await updateDoc(groupDocRef, {
         studentUids: isChecked ? arrayUnion(studentId) : arrayRemove(studentId)
       });
+      if (!isChecked) return;
+      const student = students.find(x => x.id === studentId);
+      const slotsAdded = await addGroupSlotsForStudent(groupId, studentId, student?.name || 'Student');
+      const group = groups.find(g => g.id === groupId);
+      const isParami = (group?.groupName || '').trim().toLowerCase() === 'parami';
+      if (isParami && opts.forward !== false) {
+        const sent = await forwardRecentParamiLessons(group, studentId);
+        alert(`${student?.name || 'The student'} was added to Parami${slotsAdded ? ' and its weekly slot' : ''}. ${sent.length > 0 ? `Sent ${sent.length} lesson${sent.length === 1 ? '' : 's'} from the last 24 hours: ${sent.map(l => l.title).join(', ')}` : 'No lesson was sent to the group in the last 24 hours.'}`);
+      }
+      return slotsAdded;
     } catch (error) {
       console.error("Error updating group members:", error);
     }
@@ -10567,9 +10607,12 @@ function WeeklySchedule({ role, targetStudentUid }) {
   const displaySchedule = useMemo(() => {
     const weekEndDate = new Date(weekStartDate);
     weekEndDate.setDate(weekEndDate.getDate() + 7);
-    const synthetic = synthesizeScheduleOccurrences(recurringSlots, schedule, weekStartDate, weekEndDate);
+    // A deactivated student's standing slot is not shown for this week or later (past weeks keep it
+    // as the record it is).
+    const liveSlots = weekOffset >= 0 ? recurringSlots.filter(r => !r.studentInactive) : recurringSlots;
+    const synthetic = synthesizeScheduleOccurrences(liveSlots, schedule, weekStartDate, weekEndDate);
     return [...schedule, ...synthetic].sort((a, b) => a.startTime.toDate() - b.startTime.toDate());
-  }, [schedule, recurringSlots, weekStartDate]);
+  }, [schedule, recurringSlots, weekStartDate, weekOffset]);
 
   useEffect(() => {
     if (hasScrolledToMineRef.current || !targetStudentUid) return;
