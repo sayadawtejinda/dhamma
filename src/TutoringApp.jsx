@@ -26,6 +26,7 @@ import {
   arrayUnion,
   arrayRemove,
   increment,
+  runTransaction,
   deleteField
 } from 'firebase/firestore';
 import { appId } from './firebaseConfig';
@@ -1412,6 +1413,7 @@ function AttendanceReports({ students }) {
 
 function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenConsonantPractice, onOpenBurmeseGame, onOpenMyanmarSpeaking, onOpenNumberLearning, onOpenVowelsLearning, onOpenAnimalSound, onOpenBurmeseLearningGames, onOpenInteractiveQuiz, onOpenMyanmarPoems, onOpenConsonantEndings, onOpenTimeAndCalendar, onOpenMyanmarSpelling, onOpenMyanmarSoundPractice, onOpenReadingMyanmar, onOpenSpeakingMyanmar, onOpenMyanmarPart1And2, onOpenWatchAndLearn, onOpenFestival, onOpenBodhiTree, onOpenShrineRoom, onNavigate }) {
   const [students, setStudents] = useState([]);
+  const approvingTrophyRef = useRef(new Set());
   const [lessonBank, setLessonBank] = useState([]); 
   const [sessions, setSessions] = useState([]); 
   const [teacherSchedule, setTeacherSchedule] = useState([]);
@@ -3096,7 +3098,15 @@ ${toSend.map(l => '• ' + l.title).join(', ')}`
     }
   };
 
+  // Approving can be triggered twice in a row (a double tap, a slow connection and a second tap). Each
+  // call used to read the student's trophy total before the other had written, so both added the
+  // full amount: one student got 4 trophies for a lesson worth 2. Now a second call while one is
+  // running is ignored, and the credit itself is one transaction that checks the request is still
+  // waiting and reads the totals fresh, so it can never be paid twice.
   const handleApproveTrophy = async (studentId, studentName, amount = 1, lessonTitle = null, sessionId = null, lessonLink = null) => {
+    if (approvingTrophyRef.current.has(studentId)) return;
+    approvingTrophyRef.current.add(studentId);
+    setTimeout(() => approvingTrophyRef.current.delete(studentId), 4000);
     try {
       const studentDocRef = doc(db, `${publicDataPath}/students`, studentId);
 
@@ -3147,43 +3157,45 @@ ${toSend.map(l => '• ' + l.title).join(', ')}`
       // matter what the request asked for. Reads both values fresh (not
       // whatever the caller had in memory) since either could be stale by
       // the time the teacher clicks Approve.
-      let cappedAmount = amount;
-      if (sessionId && lessonKey) {
-        try {
-          const [sessionSnap, studentSnap] = await Promise.all([
-            getDoc(doc(db, `${publicDataPath}/studySessions`, sessionId)),
-            getDoc(studentDocRef),
-          ]);
+      const sessionRefForCap = sessionId ? doc(db, `${publicDataPath}/studySessions`, sessionId) : null;
+      const credit = await runTransaction(db, async (tx) => {
+        const studentSnap = await tx.get(studentDocRef);
+        if (!studentSnap.exists()) return { capped: 0, skipped: true };
+        const sd = studentSnap.data();
+        // The request is not waiting any more: someone (this teacher, a moment ago) already dealt with it.
+        if (sd.trophyRequested !== true) return { capped: 0, skipped: true };
+        let capped = amount;
+        if (sessionRefForCap && lessonKey) {
+          const sessionSnap = await tx.get(sessionRefForCap);
           if (sessionSnap.exists()) {
             const sessionData = sessionSnap.data();
             const maxAvailable = (sessionData.lessonLink?.startsWith('smartstudy://') && sessionData.lessonUnitCount > 0)
               ? computeClassTrophyMax(sessionData.lessonUnitCount)
               : (sessionData.lessonTrophyLimit || 0);
             if (maxAvailable > 0) {
-              const alreadyEarned = studentSnap.exists() ? (studentSnap.data().earnedTrophies?.[lessonKey] || 0) : 0;
-              cappedAmount = Math.max(0, Math.min(amount, maxAvailable - alreadyEarned));
+              const alreadyEarned = sd.earnedTrophies?.[lessonKey] || 0;
+              capped = Math.max(0, Math.min(amount, maxAvailable - alreadyEarned));
             }
           }
-        } catch (e) {
-          console.error('Error checking trophy cap before approving:', e);
         }
-      }
-
-      const updateData = {
-        trophyRequested: false,
-        requestedTrophyAmount: 0,
-        requestedTrophyLessonId: null,
-        requestedTrophyLessonTitle: null,
-        requestedTrophyLessonLink: null,
-        requestedTrophySessionId: null
-      };
-      if (cappedAmount > 0) {
-        updateData.trophyCount = increment(cappedAmount);
-        updateData.justEarnedTrophy = true;
-        if (lessonKey) updateData[`earnedTrophies.${lessonKey}`] = increment(cappedAmount);
-      }
-
-      await updateDoc(studentDocRef, updateData);
+        const updateData = {
+          trophyRequested: false,
+          requestedTrophyAmount: 0,
+          requestedTrophyLessonId: null,
+          requestedTrophyLessonTitle: null,
+          requestedTrophyLessonLink: null,
+          requestedTrophySessionId: null
+        };
+        if (capped > 0) {
+          updateData.trophyCount = increment(capped);
+          updateData.justEarnedTrophy = true;
+          if (lessonKey) updateData[`earnedTrophies.${lessonKey}`] = increment(capped);
+        }
+        tx.update(studentDocRef, updateData);
+        return { capped, skipped: false };
+      });
+      const cappedAmount = credit.capped;
+      if (credit.skipped) return;
 
       if (sessionId && cappedAmount > 0) {
         const sessionRef = doc(db, `${publicDataPath}/studySessions`, sessionId);
