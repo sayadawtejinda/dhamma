@@ -471,6 +471,71 @@ export const FESTIVALS = [
       ],
     },
   },
+  {
+    id: 'nayon-2027',
+    enabled: true,
+    scene: 'rohini-river',
+    icon: '🕊️',
+    title: 'Nayon: Day of Peace',
+    tagline: 'The Buddha stops a war! Ask every soldier to put down his weapon, and pay respect to the noble ones.',
+    // Default dates -- the teacher sets the real ones on the "Festival apps" screen.
+    // Full moon of Nayon 2027 is taken as 18 June.
+    start: '2027-06-16',
+    end: '2027-06-19',
+    // Ten soldiers stand on the two banks of the river Rohini: tap one and he puts his weapon down.
+    lamps: {
+      perDay: 10, coins: 5, allLitBonus: 20, style: 'soldier', icon: '🕊️', noun: 'soldier',
+      rewardText: 'Make {n} soldiers put down their weapons in total',
+    },
+    // Four noble persons; on the day of the Maha Samaya Sutta a great many became noble ones.
+    kadaw: {
+      coins: 20,
+      lotus: 1,
+      title: 'Pay Respect to the Noble Ones',
+      doneWord: 'Noble ones',
+      recipients: [
+        {
+          id: 'sotapanna', emoji: '🌊', name: 'The Stream-enterer (Sotapanna)',
+          prayer: 'I pay respect to the Stream-enterer, who has entered the stream that leads to Nibbana and will never fall into the lower worlds. On the day of the Maha Samaya Sutta, a great many became noble ones.',
+          blessing: 'May you also step into the stream of the Dhamma. Sadhu! Sadhu! Sadhu!',
+        },
+        {
+          id: 'sakadagami', emoji: '🌅', name: 'The Once-returner (Sakadagami)',
+          prayer: 'I pay respect to the Once-returner, whose greed, hatred and delusion have become very thin. May I also make my mind lighter and lighter.',
+          blessing: 'May your mind grow lighter every day. Sadhu! Sadhu! Sadhu!',
+        },
+        {
+          id: 'anagami', emoji: '🌕', name: 'The Non-returner (Anagami)',
+          prayer: 'I pay respect to the Non-returner, who has let go of sensual desire and ill will. May I also learn to let go of anger.',
+          blessing: 'May your heart be free from anger and ill will. Sadhu! Sadhu! Sadhu!',
+        },
+        {
+          id: 'arahant', emoji: '☀️', name: 'The Arahant',
+          prayer: 'I pay respect to the Arahant, who has ended all greed, hatred and delusion and is completely at peace. I bow down to the noble ones with all my heart.',
+          blessing: 'May peace be with you and with all beings. Sadhu! Sadhu! Sadhu!',
+        },
+      ],
+    },
+    rewards: [
+      {
+        id: 'nayon-2027-robe',
+        category: 'outfit',
+        requires: { type: 'lamps', count: 40 },
+        item: { id: 'festival-nayon-2027-robe', name: '🕊️ Peace Robe', color: '#0288D1', swatch: 'linear-gradient(135deg,#E1F5FE,#0288D1 55%,#FFFFFF)', pattern: 'lights', cost: 0, festival: true },
+      },
+    ],
+    dailyGift: {
+      bonusCoins: 50,
+      pool: [
+        { category: 'accessory', item: { id: 'festival-nayon-2027-dove', name: '🕊️ Peace Dove Glasses', kind: 'starglasses', color: '#E3F2FD', cost: 0, festival: true } },
+        { category: 'outfit', item: { id: 'festival-nayon-2027-river', name: '🌊 Rohini River Robe', color: '#1976D2', swatch: 'linear-gradient(135deg,#BBDEFB,#1976D2 60%,#0D47A1)', pattern: 'lotus', cost: 0, festival: true } },
+        { category: 'accessory', item: { id: 'festival-nayon-2027-lantern', name: '🕯️ Peace Lantern', kind: 'lantern', color: '#FFF59D', cost: 0, festival: true } },
+        { category: 'outfit', item: { id: 'festival-nayon-2027-golden', name: '☀️ Noble One Golden Robe', color: '#F9A825', swatch: 'linear-gradient(135deg,#FFF9C4,#F9A825 60%,#E65100)', pattern: 'checks', cost: 0, festival: true } },
+        { category: 'accessory', item: { id: 'festival-nayon-2027-sky', name: '☁️ Sky Teaching Lantern', kind: 'skylantern', color: '#B3E5FC', cost: 0, festival: true } },
+        { category: 'outfit', item: { id: 'festival-nayon-2027-white', name: '🤍 White Flag Robe', color: '#ECEFF1', swatch: 'linear-gradient(135deg,#FFFFFF,#CFD8DC 65%,#90A4AE)', pattern: 'night', cost: 0, festival: true } },
+      ],
+    },
+  },
   // ---- Western festivals for students who live in the West -----------------------------
   // No religious teaching other than Dhamma: kindness, loving-kindness, gratitude, giving.
   {

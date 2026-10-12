@@ -73,6 +73,20 @@ export default function StarTicker() {
     }, (e) => console.error('Announcement flash listener:', e));
     return () => unsub();
   }, [authReady]);
+  // The writer's own announcement, handed over by their dashboard when it was approved while
+  // they were away.
+  useEffect(() => {
+    const onFlash = (e) => {
+      const a = e.detail;
+      if (!a || !a.id || !a.message) return;
+      const flashed = loadFlashed();
+      if (flashed.includes(a.id)) return;
+      saveFlashed([...flashed, a.id]);
+      setFlashQueue(q => [...q, a]);
+    };
+    window.addEventListener('dhamma-star-flash', onFlash);
+    return () => window.removeEventListener('dhamma-star-flash', onFlash);
+  }, []);
   useEffect(() => {
     if (current || flashQueue.length === 0) return;
     setCurrent(flashQueue[0]);

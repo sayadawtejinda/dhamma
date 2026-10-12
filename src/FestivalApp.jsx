@@ -773,6 +773,7 @@ const NEW_SCENE_BG = {
   'winter-snow': 'linear-gradient(180deg,#0a1a3a 0%,#18386b 45%,#4a78a8 78%,#cfe3f3 100%)',
   'newyear-fireworks': 'linear-gradient(180deg,#02030f 0%,#0b1040 50%,#2a1a5a 82%,#3b1f55 100%)',
   'forest-monks': 'linear-gradient(180deg,#04120d 0%,#0a2c20 40%,#14492f 75%,#1d5a38 100%)',
+  'rohini-river': 'linear-gradient(180deg,#6fc0f2 0%,#b9e3ff 36%,#fbe9b7 64%,#86b872 100%)',
 };
 
 function HalloweenScene({ glow }) {
@@ -951,6 +952,80 @@ function ForestMonksScene({ lit, phase, onTap }) {
                 </g>
               </g>
             )}
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+// ---- Nayon: Peace Day ---------------------------------------------------------------------
+// The Buddha, seated in the sky above the river Rohini, stops the Sakya and Koliya armies who
+// stand on its two banks with their weapons. Tap a soldier: he lowers his weapon.
+function SeatedBuddha({ x, y, scale, halo }) {
+  return (
+    <g transform={`translate(${x} ${y}) scale(${scale})`}>
+      <circle cx="0" cy="-48" r="44" fill="url(#rsHalo)" opacity={halo}>
+        <animate attributeName="r" values="42;47;42" dur="5s" repeatCount="indefinite" />
+      </circle>
+      <ellipse cx="0" cy="5" rx="44" ry="8" fill="rgba(0,0,0,.35)" />
+      {[-30, -15, 0, 15, 30].map((px, i) => (
+        <ellipse key={px} cx={px} cy={2 + Math.abs(px) * 0.05} rx="11" ry="6" fill={i % 2 ? '#fbd0e0' : '#fff0f5'} stroke="#e7a3bd" strokeWidth="0.6" />
+      ))}
+      <ellipse cx="0" cy="-3" rx="34" ry="8" fill="#e08a12" />
+      <path d="M-22 -3 Q-24 -40 0 -46 Q24 -40 22 -3 Z" fill="#f0a020" />
+      <path d="M-6 -44 L12 -10" stroke="#c9770b" strokeWidth="1.4" fill="none" />
+      <ellipse cx="0" cy="-11" rx="10" ry="4" fill="#eebb86" />
+      <circle cx="0" cy="-55" r="8.4" fill="#eebb86" />
+      <path d="M-3 -63 Q0 -73 3 -63 Z" fill="#eebb86" />
+      <path d="M-5 -56.4 Q-2.6 -55 -1 -56.4 M1 -56.4 Q2.6 -55 5 -56.4" stroke="#7a4b24" strokeWidth="0.8" fill="none" strokeLinecap="round" />
+      <path d="M-2 -52 Q0 -50.6 2 -52" stroke="#9a5a30" strokeWidth="0.7" fill="none" strokeLinecap="round" />
+    </g>
+  );
+}
+
+const SOLDIER_SPOTS = [
+  [46, 150], [88, 170], [44, 192], [92, 212], [50, 236],
+  [354, 150], [312, 170], [356, 192], [308, 212], [350, 236],
+];
+function RohiniScene({ lit, onTap, glow }) {
+  return (
+    <svg viewBox="0 0 400 270" preserveAspectRatio="xMidYMax meet" className="absolute inset-0 w-full h-full" aria-hidden="false">
+      <defs>
+        <radialGradient id="rsHalo" cx="50%" cy="50%" r="50%"><stop offset="0" stopColor="#fff6c8" stopOpacity="1" /><stop offset="0.45" stopColor="#ffd15c" stopOpacity="0.55" /><stop offset="1" stopColor="#ffb300" stopOpacity="0" /></radialGradient>
+        <linearGradient id="rsRiver" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#8fd3ff" /><stop offset="1" stopColor="#2f8fd6" /></linearGradient>
+      </defs>
+      {/* clouds */}
+      {[[60, 40, 1], [330, 30, 1.1], [120, 90, 0.8], [290, 84, 0.9]].map(([cx, cy, s], i) => <g key={i} opacity=".9"><ellipse cx={cx} cy={cy} rx={30 * s} ry={10 * s} fill="#fff" /><ellipse cx={cx + 14 * s} cy={cy - 6 * s} rx={20 * s} ry={9 * s} fill="#fff" /></g>)}
+      {/* the two banks and the river between them */}
+      <path d="M0 126 L168 126 L110 270 L0 270 Z" fill="#7cb06a" /><path d="M400 126 L232 126 L290 270 L400 270 Z" fill="#7cb06a" />
+      <path d="M168 126 L232 126 L290 270 L110 270 Z" fill="url(#rsRiver)" />
+      {[150, 176, 202, 230, 256].map((wy, i) => <path key={wy} d={`M${196 - (wy - 120) * 0.42 + 6} ${wy} q10 -5 20 0 t20 0`} stroke="#e8f6ff" strokeWidth="1.6" fill="none" opacity=".8" style={{ animation: `fsBob ${2.2 + i * 0.3}s ease-in-out infinite` }} />)}
+      {/* the Buddha in the sky, teaching */}
+      <SeatedBuddha x={200} y={104} scale={0.95} halo={0.5 + glow * 0.5} />
+      {/* soldiers: left bank in red, right bank in blue */}
+      {SOLDIER_SPOTS.map(([x, y], i) => {
+        const isLit = lit.has(i);
+        const left = i < 5;
+        const cloth = left ? '#c62828' : '#1565c0';
+        return (
+          <g key={i} onClick={(e) => { if (!isLit) onTap(i, e); }} style={{ cursor: isLit ? 'default' : 'pointer' }} role="button" aria-label={isLit ? 'Weapon put down' : 'Ask this soldier to put his weapon down'}>
+            <g transform={`translate(${x} ${y})`}>
+              <ellipse cx="0" cy="2" rx="11" ry="3" fill="rgba(0,0,0,.28)" />
+              <rect x="-6" y="-9" width="4.4" height="10" fill="#4e342e" /><rect x="1.6" y="-9" width="4.4" height="10" fill="#4e342e" />
+              <rect x="-7.5" y="-24" width="15" height="16" rx="3" fill={cloth} />
+              <circle cx="0" cy="-30" r="5.6" fill="#e6b98c" />
+              <path d="M-6.4 -31 Q0 -40 6.4 -31 L6.4 -29 L-6.4 -29 Z" fill="#78909c" />
+              <ellipse cx={left ? 9 : -9} cy="-16" rx="4.4" ry="7" fill="#ffb300" stroke="#b27a00" strokeWidth=".8" />
+              <g transform={`translate(${left ? -8 : 8} -16)`}>
+                <g style={{ transform: `rotate(${isLit ? (left ? -168 : 168) : 0}deg)`, transition: 'transform .9s ease-in-out', transformOrigin: '0px 0px' }}>
+                  <line x1="0" y1="10" x2="0" y2="-30" stroke="#8d6e63" strokeWidth="1.8" strokeLinecap="round" />
+                  <path d="M-2.6 -29 L0 -37 L2.6 -29 Z" fill="#cfd8dc" />
+                </g>
+              </g>
+              <circle cx="0" cy="-20" r="20" fill="transparent" />
+              {isLit ? <text x="0" y="-42" textAnchor="middle" fontSize="12">💗</text> : <text x="0" y="-45" textAnchor="middle" fontSize="12" style={{ animation: `fsBob ${2 + (i % 4) * 0.3}s ease-in-out infinite` }}>🖐️</text>}
+            </g>
           </g>
         );
       })}
@@ -1337,7 +1412,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
     setFloaters(prev => [...prev, { id: fid, x: point.x, y: point.y, text: `+${festival.lamps.coins}` }]);
     setTimeout(() => setFloaters(prev => prev.filter(f => f.id !== fid)), 1100);
     if (completesAll) {
-      if (!['splash', 'share', 'tap', 'monk'].includes(festival.lamps.style)) releaseLanterns();
+      if (!['splash', 'share', 'tap', 'monk', 'soldier'].includes(festival.lamps.style)) releaseLanterns();
       if (festival.lamps.allLitBonus > 0) showToast(`${festival.lamps.icon || '🏮'} All ${festival.lamps.noun || 'lamp'}s done! Bonus +${festival.lamps.allLitBonus} 🪙`);
     }
     pendingRef.current.lamps.add(i);
@@ -1441,7 +1516,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
   const daysLeft = Math.max(0, Math.round((new Date(`${festival.end}T23:59:59`) - new Date()) / 86400000));
   const rewardState = { lampsTotal, kadawEver };
   const kadawDoneCount = festival.kadaw.recipients.filter(r => kadawToday.has(r.id)).length;
-  const lightScene = festival.scene === 'bodhi-water' || festival.scene === 'thingyan-water';
+  const lightScene = festival.scene === 'bodhi-water' || festival.scene === 'thingyan-water' || festival.scene === 'rohini-river';
 
   return (
     <div className="relative min-h-screen flex flex-col overflow-hidden text-white" style={{ background: NEW_SCENE_BG[festival.scene] ? NEW_SCENE_BG[festival.scene] : festival.scene === 'htamane-fire' ? 'linear-gradient(180deg,#0b1026 0%,#1d2447 40%,#4a2a2a 78%,#6d3a1f 100%)' : festival.scene === 'thingyan-water' ? 'linear-gradient(180deg,#8fd3ff 0%,#d6f0ff 42%,#fff0b8 100%)' : festival.scene === 'deer-park' ? 'linear-gradient(180deg,#24153f 0%,#6b3358 30%,#e8964f 60%,#2d5e34 100%)' : festival.scene === 'bodhi-water' ? 'linear-gradient(180deg,#ffd9a0 0%,#fff0c8 30%,#cfe9d6 62%,#9ccc9c 100%)' : festival.scene === 'balloons-night' ? 'linear-gradient(180deg,#04141f 0%,#07302d 40%,#0d4a3a 72%,#0a3024 100%)' : 'linear-gradient(180deg,#070b22 0%,#17104a 45%,#3a1b5c 78%,#5a2a52 100%)' }}>
@@ -1518,7 +1593,9 @@ export default function FestivalApp({ entryRequest, onExit }) {
 
       {/* Scene */}
       <div className="relative z-10 flex-1" style={{ minHeight: 380 }}>
-        {festival.scene === 'forest-monks' ? (
+        {festival.scene === 'rohini-river' ? (
+          <RohiniScene lit={lit} onTap={handleLamp} glow={glow} />
+        ) : festival.scene === 'forest-monks' ? (
           <ForestMonksScene lit={lit} phase={pourPhase} onTap={handleLamp} />
         ) : festival.scene === 'halloween-night' ? (
           <HalloweenScene glow={glow} />
@@ -1553,7 +1630,7 @@ export default function FestivalApp({ entryRequest, onExit }) {
         {festival.lamps.style === 'lamp' || !festival.lamps.style ? LAMP_SPOTS.slice(0, festival.lamps.perDay).map((spot, i) => (i >= 10 ? (
           <div key={`post-${i}`} className="absolute pointer-events-none rounded-sm" style={{ left: `${spot.x}%`, top: `${spot.y}%`, bottom: '6%', width: 4, marginLeft: -2, marginTop: 18, background: 'linear-gradient(180deg,#8d6e63,#3e2723)' }} />
         ) : null)) : null}
-        {(['splash', 'share', 'monk'].includes(festival.lamps.style) ? [] : festival.lamps.style === 'flower' ? FLOWER_SPOTS : festival.lamps.style === 'pot' ? POT_SPOTS : festival.lamps.style === 'balloon' ? BALLOON_SPOTS : festival.lamps.style === 'tap' ? TAP_SPOTS : LAMP_SPOTS).slice(0, festival.lamps.perDay).map((spot, i) => {
+        {(['splash', 'share', 'monk', 'soldier'].includes(festival.lamps.style) ? [] : festival.lamps.style === 'flower' ? FLOWER_SPOTS : festival.lamps.style === 'pot' ? POT_SPOTS : festival.lamps.style === 'balloon' ? BALLOON_SPOTS : festival.lamps.style === 'tap' ? TAP_SPOTS : LAMP_SPOTS).slice(0, festival.lamps.perDay).map((spot, i) => {
           const isLit = lit.has(i);
           if (festival.lamps.style === 'balloon') {
             if (isLit) return null;
