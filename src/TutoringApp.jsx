@@ -1630,15 +1630,6 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
     setVisibleAnnouncements(recent);
   }, [announcements, teacherConfigData]);
   const unreadAnnouncementCount = visibleAnnouncements.filter(a => a._unseen).length;
-  // The announcement this student wrote was approved while their app was closed: show it to
-  // them once now (StarTicker does the showing), then clear the note. Costs no extra read --
-  // it comes with the profile the app already listens to.
-  useEffect(() => {
-    const f = studentProfile?.starApprovedFlash;
-    if (!f || !studentUid || !f.id) return;
-    if (Date.now() - (f.at || 0) < 14 * 24 * 60 * 60 * 1000) window.dispatchEvent(new CustomEvent('dhamma-star-flash', { detail: f }));
-    updateDoc(doc(db, `${publicDataPath}/students`, studentUid), { starApprovedFlash: deleteField() }).catch(() => {});
-  }, [studentProfile?.starApprovedFlash?.id, studentUid]);
   const dismissAnnouncement = async (id) => {
     try { await setDoc(teacherConfigDoc, { seenAnnouncements: arrayUnion(id) }, { merge: true }); }
     catch (error) { console.error("Error dismissing announcement:", error); }
@@ -7966,6 +7957,15 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     }
   }, [announcements, studentProfile]);
   const unreadAnnouncementCount = visibleAnnouncements.filter(a => a._unseen).length;
+  // The announcement this student wrote was approved while their app was closed: show it to
+  // them once now (StarTicker does the showing), then clear the note. Costs no extra read --
+  // it comes with the profile the app already listens to.
+  useEffect(() => {
+    const f = studentProfile?.starApprovedFlash;
+    if (!f || !studentUid || !f.id) return;
+    if (Date.now() - (f.at || 0) < 14 * 24 * 60 * 60 * 1000) window.dispatchEvent(new CustomEvent('dhamma-star-flash', { detail: f }));
+    updateDoc(doc(db, `${publicDataPath}/students`, studentUid), { starApprovedFlash: deleteField() }).catch(() => {});
+  }, [studentProfile?.starApprovedFlash?.id, studentUid]);
 
   useEffect(() => {
     if (autoSubmitTimerRef.current) clearTimeout(autoSubmitTimerRef.current);
