@@ -197,7 +197,7 @@ export default function TeacherGiftPopup({ studentUid, studentName, onClose }) {
                     <CharacterSvg skinColor="#FFE0B2" hair={{ style: 'short', color: '#3E2723' }} outfitColor={gift.itemCategory === 'outfit' ? it.color : '#42A5F5'} outfitPattern={gift.itemCategory === 'outfit' ? it.pattern : undefined} accessory={gift.itemCategory === 'accessory' ? it : { kind: 'none', color: null }} className="w-40 h-40" />
                   </div>
                   <p className="mt-2 text-xl font-black text-amber-200">{it.name}</p>
-                  <p className="text-sm text-white">It is now in your Avatar wardrobe. Wear it!</p>
+                  <p className="text-sm text-white">👉 Avatar → {gift.itemCategory === 'outfit' ? '👘 Outfit' : '✨ Accessory'}: it is the first one, with a 🎁</p>
                 </div>
               );
             })()}

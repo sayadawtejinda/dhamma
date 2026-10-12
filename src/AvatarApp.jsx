@@ -648,12 +648,13 @@ export default function AvatarApp({ entryRequest, onExit }) {
 
       {/* Shop grid for the active category */}
       <div className="w-full max-w-2xl grid grid-cols-2 sm:grid-cols-3 gap-3">
-        {activeCat.options.filter(o => !o.festival || isTeacherPreview || isOwned(activeCategory, o.id)).map(option => {
+        {activeCat.options.filter(o => !o.festival || isTeacherPreview || isOwned(activeCategory, o.id)).sort((a, b) => (b.festival ? 1 : 0) - (a.festival ? 1 : 0)).map(option => {
           const owns = isTeacherPreview || isOwned(activeCategory, option.id);
           const equipped = config[activeCategory] === option.id;
           const swatchColor = option.swatch || option.color || '#CFD8DC';
           return (
-            <div key={option.id} className="flex flex-col gap-1">
+            <div key={option.id} className="flex flex-col gap-1 relative">
+            {option.festival && <span className="absolute top-1 right-1 z-10 text-base pointer-events-none" title="A gift">🎁</span>}
             <button
               onClick={() => handleEquip(activeCategory, option)}
               className={`p-3 rounded-2xl border-2 flex flex-col items-center gap-2 transition ${
