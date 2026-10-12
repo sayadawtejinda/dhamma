@@ -1414,6 +1414,7 @@ function AttendanceReports({ students }) {
 function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenConsonantPractice, onOpenBurmeseGame, onOpenMyanmarSpeaking, onOpenNumberLearning, onOpenVowelsLearning, onOpenAnimalSound, onOpenBurmeseLearningGames, onOpenInteractiveQuiz, onOpenMyanmarPoems, onOpenConsonantEndings, onOpenTimeAndCalendar, onOpenMyanmarSpelling, onOpenMyanmarSoundPractice, onOpenReadingMyanmar, onOpenSpeakingMyanmar, onOpenMyanmarPart1And2, onOpenWatchAndLearn, onOpenFestival, onOpenBodhiTree, onOpenShrineRoom, onNavigate }) {
   const [students, setStudents] = useState([]);
   const approvingTrophyRef = useRef(new Set());
+  const awardingTrophyRef = useRef(false);
   const [lessonBank, setLessonBank] = useState([]); 
   const [sessions, setSessions] = useState([]); 
   const [teacherSchedule, setTeacherSchedule] = useState([]);
@@ -2608,34 +2609,53 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
     }
 
     const executeAward = async () => {
+        // A second press while the first is still being saved is ignored (see handleApproveTrophy).
+        if (awardingTrophyRef.current) return;
+        awardingTrophyRef.current = true;
+        setTimeout(() => { awardingTrophyRef.current = false; }, 4000);
         try {
             const studentDocRef = doc(db, `${publicDataPath}/students`, student.id);
-            const newTotalEarned = previouslyEarned + amountToAward;
-            const prevCompletedUnit = student.completedUnits?.[lessonKey] || 0;
             const unitCount = getClassSpecificTrophyInfo(lesson).unitCount;
-            let newCompletedUnit = prevCompletedUnit;
-
-            const updateData = {
-                trophyCount: increment(amountToAward),
-                justEarnedTrophy: true
-            };
-            updateData[`earnedTrophies.${lessonKey}`] = increment(amountToAward);
-
-            if (MYANMAR_READER_APP_URL && lesson.link?.startsWith(MYANMAR_READER_APP_URL)) {
-                // Reader progress is simply the trophy count laid out in reading order.
-                updateData[`completedUnits.${lessonKey}`] = readerProgressFromTrophies(newTotalEarned);
-            } else if (unitCount > 0 && maxAvailable > 0) {
-                newCompletedUnit = Math.min(unitCount, Math.ceil((newTotalEarned * unitCount) / maxAvailable));
-                if (newCompletedUnit > prevCompletedUnit) {
-                    updateData[`completedUnits.${lessonKey}`] = newCompletedUnit;
+            // Worked out inside one transaction from the student's CURRENT totals, never from this
+            // screen's copy, and never past the lesson's maximum -- so a repeated press or a stale
+            // screen cannot give more than the lesson is worth.
+            let awarded = 0;
+            let prevCompletedUnit = 0;
+            let newCompletedUnit = 0;
+            await runTransaction(db, async (tx) => {
+                const snap = await tx.get(studentDocRef);
+                const sd = snap.exists() ? snap.data() : {};
+                const earnedNow = sd.earnedTrophies?.[lessonKey] || 0;
+                const room = Math.max(0, maxAvailable - earnedNow);
+                awarded = Math.min(amountToAward, room);
+                prevCompletedUnit = sd.completedUnits?.[lessonKey] || 0;
+                newCompletedUnit = prevCompletedUnit;
+                if (awarded <= 0) return;
+                const newTotalEarned = earnedNow + awarded;
+                const updateData = {
+                    trophyCount: increment(awarded),
+                    justEarnedTrophy: true
+                };
+                updateData[`earnedTrophies.${lessonKey}`] = increment(awarded);
+                if (MYANMAR_READER_APP_URL && lesson.link?.startsWith(MYANMAR_READER_APP_URL)) {
+                    // Reader progress is simply the trophy count laid out in reading order.
+                    updateData[`completedUnits.${lessonKey}`] = readerProgressFromTrophies(newTotalEarned);
+                } else if (unitCount > 0 && maxAvailable > 0) {
+                    newCompletedUnit = Math.min(unitCount, Math.ceil((newTotalEarned * unitCount) / maxAvailable));
+                    if (newCompletedUnit > prevCompletedUnit) {
+                        updateData[`completedUnits.${lessonKey}`] = newCompletedUnit;
+                    }
                 }
+                tx.update(studentDocRef, updateData);
+            });
+            if (awarded <= 0) {
+                alert(`${student.name} already has every trophy this lesson can give, so nothing was added.`);
+                return;
             }
-
-            await updateDoc(studentDocRef, updateData);
 
             const expires = new Date();
             expires.setDate(expires.getDate() + 1);
-            const newTotal = (student.trophyCount || 0) + amountToAward;
+            const newTotal = ((await getDoc(studentDocRef)).data()?.trophyCount) || ((student.trophyCount || 0) + awarded);
 
             const announcementRef = await addDoc(announcementsCollection, {
                 studentName: student.name,
@@ -2646,14 +2666,14 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
             });
 
             playSound(2); 
-            alert(`Successfully awarded ${amountToAward} trophies to ${student.name}.`);
+            alert(`Successfully awarded ${awarded} trophies to ${student.name}.`);
             setDirectTrophyAmount(1);
 
             if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
             setLastTrophyAward({
                 studentId: student.id,
                 studentName: student.name,
-                amount: amountToAward,
+                amount: awarded,
                 lessonKey: lessonKey,
                 announcementId: announcementRef.id,
                 prevCompletedUnit: prevCompletedUnit,
