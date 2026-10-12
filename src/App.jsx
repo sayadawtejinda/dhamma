@@ -22,7 +22,18 @@ function lazyLoad(importer) {
       let cancelled = false;
       importer()
         .then((mod) => { if (!cancelled) setComp(() => mod.default); })
-        .catch((err) => { if (!cancelled) setError(err); });
+        .catch((err) => {
+          // A part of the app that no longer exists on the server (the site was updated while this
+          // page was open or cached): load the new page once instead of showing an error.
+          try {
+            if (/dynamically imported module|Failed to fetch|Loading chunk|Importing a module script failed/i.test(String(err && (err.message || err))) && sessionStorage.getItem('dhamma_chunk_reload') !== '1') {
+              sessionStorage.setItem('dhamma_chunk_reload', '1');
+              window.location.reload();
+              return;
+            }
+          } catch (e) { /* no storage */ }
+          if (!cancelled) setError(err);
+        });
       return () => { cancelled = true; };
     }, []);
     if (error) throw error;
