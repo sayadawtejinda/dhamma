@@ -1793,7 +1793,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
         secondaryIcon="🪙"
         panelTitle="🛕 Students"
         weeklyLabel={(n) => <>visit {n} 👥</>}
-        panelNote="👣 Visit a friend's Shrine Room and you get a 🎁 gift from their altar (one gift from each friend). ✅ = you already got it. Visit a new friend for a new gift!"
+        panelNote="👣 ➜ 🛕 ➜ 🎁   ✅"
         teacherLabel="🧑‍🏫 Teacher"
         showInactiveWarning={false}
         renderActivity={(s) => (
@@ -1940,9 +1940,9 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
           <button onClick={() => setShowVisitorsPanel(false)} className="fixed top-3 right-3 z-[10002] w-11 h-11 rounded-full bg-red-600 hover:bg-red-700 text-white text-2xl font-bold shadow-lg flex items-center justify-center" aria-label="Close">×</button>
           <div className="bg-white rounded-2xl shadow-2xl max-w-xs w-full p-6 text-center max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-bold text-emerald-800 mb-1">👣 Visitors</h2>
-            <p className="text-xs text-gray-400 mb-4">Friends who visited your Shrine Room (updated once a week)</p>
+            <p className="text-xs text-gray-400 mb-4">🛕 ➜ 👣</p>
             {visitorNames.length === 0 ? (
-              <p className="text-sm text-gray-400 mb-4">No visitors yet.</p>
+              <p className="text-3xl mb-4">👣 ❌</p>
             ) : (
               <div className="space-y-2 mb-4 max-h-64 overflow-y-auto text-left">
                 {visitorNames.map(n => (
@@ -1978,7 +1978,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
               <p className="mb-4 text-sm font-semibold text-amber-800 bg-amber-50 border border-amber-300 rounded-xl px-3 py-2">{visitGiftNote}</p>
             )}
             {!visitGiftNote && !isTeacherPreview && (
-              <p className="mb-3 text-xs text-gray-500">🎁 Visiting a friend gives you a gift from their altar (one from each friend).</p>
+              <p className="mb-3 text-2xl">🎁</p>
             )}
             {visitLoading ? (
               <p className="text-sm text-gray-400 py-8">Opening...</p>

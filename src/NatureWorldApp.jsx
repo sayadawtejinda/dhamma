@@ -359,7 +359,7 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
     const already = hasOpenedGiftFrom(world.giftsOpened, visit);
     if (!already) {
       const bag = world.giftBag || [];
-      if (bag.length >= GIFT_BAG_MAX) { showToast('Your gift bag is full -- plant some first!'); return; }
+      if (bag.length >= GIFT_BAG_MAX) { showToast('🎁 30/30 🌱'); return; }
       const gift = giftForVisit(key);
       const nextBag = [...bag, { id: gift.id, from: visit.name, key }];
       const nextOpened = [...(world.giftsOpened || []), key].slice(-300);
@@ -521,9 +521,9 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
             const nextGifted = [...gifted, targetName].slice(-300);
             setWorld(prev => ({ ...prev, giftWeekKey: weekKey, giftWeekGiven: nextGiven, giftedFriends: nextGifted }));
             persist({ natureWorld: { giftWeekKey: weekKey, giftWeekGiven: nextGiven, giftedFriends: nextGifted } });
-            setVisitGiftNote(`🎁 Your gift is on its way to ${targetName}! (${nextGiven.length}/${GIFTS_SENT_PER_WEEK} gifts this week)`);
+            setVisitGiftNote(`📦 ➜ ${targetName} 🎁 (${nextGiven.length}/${GIFTS_SENT_PER_WEEK})`);
           } else {
-            setVisitGiftNote(`🎁 ${GIFTS_SENT_PER_WEEK}/${GIFTS_SENT_PER_WEEK} ✅  See you next week! 🌸`);
+            setVisitGiftNote(`🎁 ${GIFTS_SENT_PER_WEEK}/${GIFTS_SENT_PER_WEEK} ✅ 🌸`);
           }
         }
       }
@@ -642,7 +642,7 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
         coinIcon="🪙"
         panelTitle="🌿 Students"
         weeklyLabel={(n) => <>visit {n} 👥</>}
-        panelNote="📦 Visit a friend's Nature World and your 🎁 gift goes to them (it reaches them within a week; 1 gift per friend). ✅ = already sent."
+        panelNote="👣 ➜ 🌿 ➜ 📦 ➜ 🎁   ✅"
         teacherLabel="🧑‍🏫 Teacher"
         showInactiveWarning={false}
         renderActivity={(s) => !isTeacherPreview && s.studentName !== studentName && (
@@ -800,9 +800,9 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
           <button onClick={() => setShowVisitorsPanel(false)} className="fixed top-3 right-3 z-[10002] w-11 h-11 rounded-full bg-red-600 hover:bg-red-700 text-white text-2xl font-bold shadow-lg flex items-center justify-center" aria-label="Close">×</button>
           <div className="bg-white rounded-2xl shadow-2xl max-w-xs w-full p-6 text-center max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-bold text-emerald-800 mb-1">🎁 Your gifts</h2>
-            <p className="text-xs text-gray-400 mb-4">From friends (updated once a week) and from the teacher</p>
+            <p className="text-xs text-gray-400 mb-4">🎁</p>
             {recentVisitors.length === 0 ? (
-              <p className="text-sm text-gray-400 mb-4">No gifts yet.</p>
+              <p className="text-3xl mb-4">🎁 ❌</p>
             ) : (
               <div className="space-y-2 mb-4 max-h-64 overflow-y-auto text-left">
                 {recentVisitors.map((v, i) => {
