@@ -34,6 +34,29 @@ const APP_SETTINGS_DOC_PATH = `artifacts/${appId}/public/data/app_settings/roles
 // never changes, so students keep a copy in localStorage for a week and only
 // hit Firestore on the first open (or after it expires). Teacher stays live.
 const CONTENT_CACHE_MS = 7 * 24 * 60 * 60 * 1000;
+// The course content as one static file (see scripts/content-snapshots.mjs): students read it with no
+// Firestore read at all; if the file cannot be loaded the old cached Firestore read is used instead.
+let speakingStaticPromise = null;
+function loadSpeakingStatic() {
+    if (!speakingStaticPromise) {
+        speakingStaticPromise = fetch(`${import.meta.env.BASE_URL}contentSnapshots/myanmar-speaking.json`, { cache: 'no-cache' })
+            .then(r => (r.ok ? r.json() : null))
+            .catch(() => null)
+            .then(j => { if (!j) speakingStaticPromise = null; return j; });
+    }
+    return speakingStaticPromise;
+}
+const staticQuerySnap = (arr) => ({ docs: arr.map(d => ({ id: d.id, data: () => d.data })), forEach(fn) { this.docs.forEach(fn); } });
+function listenContentStatic(key, name, ref, onNext) {
+    let off = false;
+    let inner = () => {};
+    loadSpeakingStatic().then(f => {
+        if (off) return;
+        if (f && Array.isArray(f[key])) onNext(staticQuerySnap(f[key]));
+        else inner = listenContentCached(name, ref, onNext);
+    });
+    return () => { off = true; inner(); };
+}
 function listenContentCached(name, ref, onNext) {
     const key = 'msaContentCache_' + name;
     try {
@@ -3127,7 +3150,7 @@ const handleAudioToggle = () => {
                     <h3 className="text-2xl font-bold text-rose-700">{poem.title}</h3>
                     {poem.audioUrl && (
                         <button
-                            onClick={handleAudioToggle}
+                            onClick={(ev) => { pressForLessonCoins(ev); handleAudioToggle(); }}
                             className={`p-2 rounded-full transition shadow ${isPlaying ? 'bg-red-500 text-white animate-pulse' : 'bg-rose-100 text-rose-600 hover:bg-rose-200'}`}
                             title="Play Audio"
                         >
@@ -3156,7 +3179,7 @@ const handleAudioToggle = () => {
                             )}
                             <div className="flex items-center gap-2">
                                 <div
-                                    onClick={() => handleLineClick(i)}
+                                    onClick={(ev) => { pressForLessonCoins(ev); handleLineClick(i); }}
                                     className="text-lg font-bold text-gray-800 cursor-pointer hover:text-rose-600 transition flex-1"
                                 >
                                     {hasTemplate ? (() => {
@@ -3177,6 +3200,7 @@ const handleAudioToggle = () => {
                                                             className="text-purple-600 underline cursor-pointer"
                                                             onClick={(e) => {
                                                 e.stopPropagation();
+                                                pressForLessonCoins(e);
                                                 setFloatingEnglish(floatingEnglish === tooltipKey ? null : tooltipKey);
                                                 if (floatingEnglish !== tooltipKey) {
                                                     setTimeout(() => setFloatingEnglish(curr => curr === tooltipKey ? null : curr), 3000);
@@ -3205,7 +3229,7 @@ const handleAudioToggle = () => {
                                 </div>
                                 {hasTemplate && (
                                     <button
-                                        onClick={(e) => { e.stopPropagation(); handleCycleTemplateWord(line, i); }}
+                                        onClick={(e) => { e.stopPropagation(); pressForLessonCoins(e); handleCycleTemplateWord(line, i); }}
                                         disabled={isChangingWords || i !== activeLineIndex}
                                         className={`relative p-1.5 rounded-full bg-purple-100 text-purple-600 hover:bg-purple-200 transition shadow flex-shrink-0 ${(isChangingWords || i !== activeLineIndex) ? 'opacity-40 cursor-not-allowed' : ''} ${isChangingWords && i === activeLineIndex ? 'animate-pulse' : ''}`}
                                         title={i === activeLineIndex ? "Change words" : "အရင်စာကြောင်းရဲ့ စာလုံးများ ပြီးအောင် အရင်နှိပ်ပါ"}
@@ -3345,13 +3369,14 @@ const StudentMatchingGame = ({ game, showRomanization }) => {
         }
     };
 
-    const handleQuizAnswer = async (selectedOption) => {
+    const handleQuizAnswer = async (selectedOption, clickEvent) => {
         if (feedback || isQuestionPlaying) return; 
 
         setIsQuestionPlaying(true); 
         setSelectedAnswerId(selectedOption.id); 
         const currentQuestion = quizQuestions[currentQuestionIndex];
         const isCorrect = selectedOption.id === currentQuestion.question.id;
+        answerForLessonCoins(isCorrect, clickEvent);
 
         await playSequence([selectedOption.left.text, selectedOption.right.text]);
 
@@ -3401,7 +3426,7 @@ const StudentMatchingGame = ({ game, showRomanization }) => {
         setHighlightedCardId(null);
     };
 
-    const handleMatchAttempt = (side, item) => {
+    const handleMatchAttempt = (side, item, clickEvent) => {
         playComplexText(item.data.text);
         if (matchedIds.includes(item.id)) return;
         if (tempMatchedId) return; 
@@ -3418,6 +3443,7 @@ const StudentMatchingGame = ({ game, showRomanization }) => {
             );
 
             if (isContentMatch) {
+                answerForLessonCoins(true, clickEvent);
                 setSelectedLeft(newLeft);
                 setSelectedRight(newRight);
                 
@@ -3439,6 +3465,7 @@ const StudentMatchingGame = ({ game, showRomanization }) => {
                     setMatchTranslation(null);
                 }, 1000);
             } else {
+                answerForLessonCoins(false, clickEvent);
                 setSelectedLeft(newLeft);
                 setSelectedRight(newRight);
                 setTimeout(() => {
@@ -3468,7 +3495,7 @@ const StudentMatchingGame = ({ game, showRomanization }) => {
                             return (
                                 <div 
                                     key={item.id} 
-                                    onClick={() => handleMatchAttempt('left', item)} 
+                                    onClick={(ev) => handleMatchAttempt('left', item, ev)} 
                                     className={`p-4 rounded-xl text-center cursor-pointer transition-all duration-200 border-2 font-bold text-lg shadow-sm 
                                         ${isTempMatched ? 'bg-green-200 border-green-500 scale-105 ring-4 ring-green-300' : 
                                           isSelected ? 'bg-blue-100 border-blue-500 scale-105' : 
@@ -3489,7 +3516,7 @@ const StudentMatchingGame = ({ game, showRomanization }) => {
                             return (
                                 <div 
                                     key={item.id} 
-                                    onClick={() => handleMatchAttempt('right', item)} 
+                                    onClick={(ev) => handleMatchAttempt('right', item, ev)} 
                                     className={`relative p-4 rounded-xl text-center cursor-pointer transition-all duration-200 border-2 font-bold text-lg shadow-sm 
                                         ${isTempMatched ? 'bg-green-200 border-green-500 scale-105 ring-4 ring-green-300' : 
                                           isSelected ? 'bg-blue-100 border-blue-500 scale-105' : 
@@ -3562,7 +3589,7 @@ const StudentMatchingGame = ({ game, showRomanization }) => {
                         return (
                             <div 
                                 key={option.id}
-                                onClick={() => handleQuizAnswer(option)}
+                                onClick={(ev) => handleQuizAnswer(option, ev)}
                                 className={`p-4 rounded-xl cursor-pointer transition-all duration-300 border-4 bg-white shadow-sm ${borderClass} ${feedback || isQuestionPlaying ? 'pointer-events-none' : ''}`}
                             >
                                 <AutoImage 
@@ -3626,7 +3653,7 @@ const StudentMatchingGame = ({ game, showRomanization }) => {
                         return (
                             <div 
                                 key={option.id}
-                                onClick={() => handleQuizAnswer(option)}
+                                onClick={(ev) => handleQuizAnswer(option, ev)}
                                 className={`p-4 rounded-xl cursor-pointer transition-all duration-300 border-2 font-bold text-lg shadow-sm text-center ${buttonClass} ${feedback || isQuestionPlaying ? 'pointer-events-none' : ''}`}
                             >
                                 <RenderColoredText text={option.left.text} roman={option.left.roman} pos={option.left.pos} showRomanization={showRomanization} />
@@ -3786,7 +3813,8 @@ const TripleSetQuiz = ({ lesson, onExit, showRomanization, dictionary, matchingG
         }
     }, [currentIndex, lesson]);
 
-    const handleAnswer = async (option) => {
+    const handleAnswer = async (option, clickEvent) => {
+        if (!selectedOption && !isQuestionPlaying) answerForLessonCoins(true, clickEvent); // either set is a right answer here
         if (selectedOption || isQuestionPlaying) return; 
         
         setIsQuestionPlaying(true); 
@@ -3867,7 +3895,7 @@ const TripleSetQuiz = ({ lesson, onExit, showRomanization, dictionary, matchingG
                     return (
                         <button
                             key={idx}
-                            onClick={() => handleAnswer(opt)}
+                            onClick={(ev) => handleAnswer(opt, ev)}
                             disabled={isQuestionPlaying || selectedOption}
                             className={`p-4 rounded-xl border-2 text-xl font-bold transition-all duration-200 shadow-sm flex items-center justify-center space-x-2 disabled:cursor-not-allowed
                                 ${isSelected 
@@ -3907,14 +3935,17 @@ const TripleSetQuiz = ({ lesson, onExit, showRomanization, dictionary, matchingG
 
 // --- Student Dashboard ---
 
-// ---- Coins for pressing the lesson buttons ---------------------------------------------------
-// Pressing the lesson's read button, or a line of the lesson, pays 9 coins into the student's Shrine Room
-// wallet. Nothing is written per press: presses are added up here and saved together a few seconds later
-// (and when the page is hidden or left). Two guards: presses closer than 2 seconds apart do not count,
-// and a student can earn at most 1000 of these coins a day.
+// ---- Coins earned in the lessons, poems, games and quizzes ------------------------------------
+// Pressing a lesson / poem button pays 9 coins; a right answer in a game or quiz pays 14; a wrong answer
+// takes 1 coin back (never below 0). Nothing is written per press: the amounts are added up here and saved
+// together a few seconds later (and when the page is hidden or left). Guards: button presses closer than 2
+// seconds apart do not count, and a student can earn at most 1500 coins a day this way (coins taken back
+// for wrong answers do not count against that).
 const SHRINE_ROSTER_PATH = 'artifacts/shrine-room-app/public/data/roster';
 const LESSON_PRESS_COINS = 9;
-const LESSON_DAILY_COIN_CAP = 1000;
+const RIGHT_ANSWER_COINS = 14;
+const WRONG_ANSWER_COINS = -1;
+const LESSON_DAILY_COIN_CAP = 1500;
 const LESSON_MIN_GAP_MS = 2000;
 let lessonCoinStudent = '';
 let lessonCoinPending = 0;
@@ -3927,7 +3958,7 @@ async function flushLessonCoins() {
     if (lessonCoinTimer) { clearTimeout(lessonCoinTimer); lessonCoinTimer = null; }
     const name = lessonCoinStudent;
     const amount = lessonCoinPending;
-    if (!name || amount <= 0) return;
+    if (!name || amount === 0) return;
     lessonCoinPending = 0;
     try {
         const ref = doc(db, SHRINE_ROSTER_PATH, shrineKeyOf(name));
@@ -3936,42 +3967,67 @@ async function flushLessonCoins() {
             const d = snap.exists() ? snap.data() : {};
             const today = lessonTodayKey();
             const used = d.lessonCoinsDay === today ? (d.lessonCoinsToday || 0) : 0;
-            const allowed = Math.max(0, Math.min(amount, LESSON_DAILY_COIN_CAP - used));
-            if (allowed <= 0) return 0;
+            const change = amount > 0 ? Math.max(0, Math.min(amount, LESSON_DAILY_COIN_CAP - used)) : amount;
+            if (change === 0) return 0;
             const hadBalance = d.coinBalance != null;
-            tx.set(ref, { studentName: name, coinBalance: hadBalance ? increment(allowed) : 20 + allowed, lessonCoinsDay: today, lessonCoinsToday: used + allowed }, { merge: true });
-            return allowed;
+            if (!hadBalance && change < 0) return 0;
+            const next = Math.max(0, (hadBalance ? d.coinBalance : 20) + change);
+            tx.set(ref, { studentName: name, coinBalance: next, lessonCoinsDay: today, lessonCoinsToday: used + Math.max(0, change) }, { merge: true });
+            return change;
         });
-        if (paid < amount) lessonCoinUsed = LESSON_DAILY_COIN_CAP; // the day's limit is reached
+        if (amount > 0 && paid < amount) lessonCoinUsed = LESSON_DAILY_COIN_CAP; // the day's limit is reached
     } catch (e) {
         console.error('Could not save the lesson coins:', e);
-        lessonCoinPending += amount; // try again with the next press
+        lessonCoinPending += amount; // try again with the next one
     }
 }
 if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', () => { if (document.hidden) flushLessonCoins(); });
     window.addEventListener('pagehide', () => { flushLessonCoins(); });
 }
-// Called with the click event of a lesson button. Returns true if it earned coins.
-function pressForLessonCoins(e) {
-    const name = lessonCoinStudent;
-    if (!name) return false;
-    const now = Date.now();
-    if (now - lessonCoinLastPress < LESSON_MIN_GAP_MS) return false;
-    if (lessonCoinUsed === null) {
-        lessonCoinUsed = 0;
-        getDoc(doc(db, SHRINE_ROSTER_PATH, shrineKeyOf(name))).then(snap => {
-            const d = snap.exists() ? snap.data() : {};
-            const used = d.lessonCoinsDay === lessonTodayKey() ? (d.lessonCoinsToday || 0) : 0;
-            lessonCoinUsed = Math.max(lessonCoinUsed || 0, used);
-        }).catch(() => {});
-    }
-    if (lessonCoinUsed + lessonCoinPending + LESSON_PRESS_COINS > LESSON_DAILY_COIN_CAP) return false;
-    lessonCoinLastPress = now;
-    lessonCoinPending += LESSON_PRESS_COINS;
-    try { if (e && e.clientX != null) spawnFlyingCoins({ x: e.clientX, y: e.clientY }, 3, '🪙', true); } catch (err) { /* cosmetic only */ }
+const floatCoinText = (e, text, color) => {
+    try {
+        if (!e || e.clientX == null) return;
+        const el = document.createElement('span');
+        el.textContent = text;
+        el.style.cssText = `position:fixed;left:${e.clientX}px;top:${e.clientY - 20}px;z-index:99999;font-weight:900;font-size:18px;color:${color};pointer-events:none;transition:transform .9s ease-out,opacity .9s ease-out;`;
+        document.body.appendChild(el);
+        requestAnimationFrame(() => { el.style.transform = 'translateY(-40px)'; el.style.opacity = '0'; });
+        setTimeout(() => el.remove(), 1000);
+    } catch (err) { /* cosmetic only */ }
+};
+function ensureLessonCoinsLoaded() {
+    if (lessonCoinUsed !== null) return;
+    lessonCoinUsed = 0;
+    getDoc(doc(db, SHRINE_ROSTER_PATH, shrineKeyOf(lessonCoinStudent))).then(snap => {
+        const d = snap.exists() ? snap.data() : {};
+        const used = d.lessonCoinsDay === lessonTodayKey() ? (d.lessonCoinsToday || 0) : 0;
+        lessonCoinUsed = Math.max(lessonCoinUsed || 0, used);
+    }).catch(() => {});
+}
+function queueLessonCoins(amount, e) {
+    if (amount > 0 && lessonCoinUsed + lessonCoinPending + amount > LESSON_DAILY_COIN_CAP) return false;
+    lessonCoinPending += amount;
+    if (amount > 0) { try { if (e && e.clientX != null) spawnFlyingCoins({ x: e.clientX, y: e.clientY }, amount >= 14 ? 5 : 3, '🪙', true); } catch (err) { /* cosmetic only */ } }
+    else floatCoinText(e, `${amount} 🪙`, '#dc2626');
     if (!lessonCoinTimer) lessonCoinTimer = setTimeout(flushLessonCoins, 8000);
     return true;
+}
+// A button press in a lesson or poem: 9 coins (at most one every 2 seconds).
+function pressForLessonCoins(e) {
+    if (!lessonCoinStudent) return false;
+    const now = Date.now();
+    if (now - lessonCoinLastPress < LESSON_MIN_GAP_MS) return false;
+    ensureLessonCoinsLoaded();
+    if (!queueLessonCoins(LESSON_PRESS_COINS, e)) return false;
+    lessonCoinLastPress = now;
+    return true;
+}
+// An answer in a game or quiz: 14 coins if right, 1 taken back if wrong.
+function answerForLessonCoins(isCorrect, e) {
+    if (!lessonCoinStudent) return false;
+    ensureLessonCoinsLoaded();
+    return queueLessonCoins(isCorrect ? RIGHT_ANSWER_COINS : WRONG_ANSWER_COINS, e);
 }
 
 const StudentLessonCard = ({ lesson, showRomanization, onStartQuiz }) => {
@@ -4233,7 +4289,7 @@ const StudentDashboard = ({ lessons, matchingGames, showRomanization, setShowRom
 const [poems, setPoems] = useState([]);
 
 useEffect(() => {
-    const unsubscribe = listenContentCached('poems', query(collection(db, POEMS_COLLECTION_PATH)), (snapshot) => {
+    const unsubscribe = listenContentStatic('poems', 'poems', query(collection(db, POEMS_COLLECTION_PATH)), (snapshot) => {
         setPoems(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
     return unsubscribe;
@@ -5092,10 +5148,15 @@ export default function MyanmarSpeakingApp({ entryRequest, onExit, isActive }) {
         // Cost control: only the teacher (who edits this content) keeps live
         // listeners; students read once per open.
         const teacherLive = activeRole === 'teacher';
-        const listenContent = (name, ref, cb) => teacherLive ? onSnapshot(ref, cb) : listenContentCached(name, ref, cb);
-        const listenDocContent = (ref, cb) => {
+        const listenContent = (name, ref, cb) => teacherLive ? onSnapshot(ref, cb) : listenContentStatic(name === 'games' ? 'games' : name, name, ref, cb);
+        const listenDocContent = (ref, cb, staticKey) => {
             if (teacherLive) return onSnapshot(ref, cb);
-            let off = false; getDoc(ref).then(sn => { if (!off) cb(sn); }).catch(() => {});
+            let off = false;
+            loadSpeakingStatic().then(f => {
+                if (off) return;
+                if (f && staticKey && f[staticKey] !== undefined) { const v = f[staticKey]; cb({ exists: () => v !== null, data: () => v }); return; }
+                getDoc(ref).then(sn => { if (!off) cb(sn); }).catch(() => {});
+            });
             return () => { off = true; };
         };
         const qDictionary = query(collection(db, DICTIONARY_COLLECTION_PATH));
@@ -5128,12 +5189,12 @@ export default function MyanmarSpeakingApp({ entryRequest, onExit, isActive }) {
         });
         const unsubscribeWelcomeQuestions = listenDocContent(doc(db, WELCOME_QUESTIONS_DOC_PATH), (docSnap) => {
             setWelcomeQuestions(docSnap.exists() && Array.isArray(docSnap.data().questions) ? docSnap.data().questions : []);
-        });
+        }, 'welcome');
         const unsubscribeAudioSettings = listenDocContent(doc(db, AUDIO_SETTINGS_DOC_PATH), (docSnap) => {
             if (docSnap.exists() && typeof docSnap.data().rate === 'number') {
                 setAudioPlaybackRate(docSnap.data().rate);
             }
-        });
+        }, 'audio');
         return () => {
             unsubscribeDictionary();
             unsubscribeCategories();

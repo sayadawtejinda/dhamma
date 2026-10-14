@@ -138,6 +138,9 @@ export default function OnlineStatusWidget({
   weeklyLabel = (n) => <>👥 {n} this week</>,
   // A line under the list's heading (e.g. what the ✅ marks mean).
   panelNote,
+  // true: the pill sits at the top centre instead of the top right corner (SmartStudy, where the
+  // buttons of the lesson list already fill the right corner).
+  centered = false,
 }) {
   const { weeklyRosterList, onlineCount, warningCount: rawWarningCount } = useOnlineRoster(rosterPath, filterDocs, lastSeenField, isTeacherMode);
   const warningCount = showInactiveWarning ? rawWarningCount : 0;
@@ -147,7 +150,7 @@ export default function OnlineStatusWidget({
 
   return (
     <>
-      <div className="fixed top-2 right-2 z-[9800] flex items-center gap-2 bg-white/90 backdrop-blur-sm px-3 py-2 rounded-2xl shadow-lg border border-gray-200 text-sm">
+      <div className={`fixed top-2 ${centered ? 'left-1/2 -translate-x-1/2 max-w-[calc(100vw-9rem)] flex-wrap justify-center' : 'right-2'} z-[9800] flex items-center gap-2 bg-white/90 backdrop-blur-sm px-3 py-2 rounded-2xl shadow-lg border border-gray-200 text-sm`}>
         {isTeacherMode ? (
           <span className="font-bold text-indigo-600">{teacherLabel}</span>
         ) : (

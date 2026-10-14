@@ -3886,6 +3886,7 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
       {!['home', 'teacherPasscode'].includes(view) && (
         ['teacherLogin', 'teacherDashboard'].includes(view) ? (
           <OnlineStatusWidget
+            centered
             rosterPath={getRosterCollectionRef().path}
             isTeacherMode={true}
             filterDocs={(d) => d.status === 'approved'}
@@ -3893,6 +3894,7 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
           />
         ) : userName ? (
           <OnlineStatusWidget
+            centered
             rosterPath={getRosterCollectionRef().path}
             studentName={userName}
             coinBalance={depositLedgerLoaded ? Math.max(0, goldCoinsForScore(computeStudentTotalScore(allMyScoresGlobal, userName)) - smartStudyCoinsTransferredOut) : 0}

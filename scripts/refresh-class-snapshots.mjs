@@ -6,8 +6,11 @@ import { getAuth, signInAnonymously } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { firebaseConfig, appId } from '../src/firebaseConfig.js';
 import { refreshClassSnapshots } from './class-snapshots.mjs';
+import { refreshContentSnapshots } from './content-snapshots.mjs';
 
 const app = initializeApp(firebaseConfig);
 await signInAnonymously(getAuth(app));
-await refreshClassSnapshots(getFirestore(app), appId, { full: process.argv.includes('--full') });
+const db = getFirestore(app);
+await refreshClassSnapshots(db, appId, { full: process.argv.includes('--full') });
+await refreshContentSnapshots(db);
 process.exit(0);
