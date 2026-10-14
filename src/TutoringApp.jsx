@@ -1,5 +1,6 @@
-import { listenWithHistory } from './studentHistory';
-import { isOnlineStatusDay } from './presenceDay';
+import { listenWithHistory, listenLessonsWithHistory } from './studentHistory';
+import { isOnlineStatusDay, isParamiClassTime } from './presenceDay';
+import { startLiveWatchListener, setLiveWatch, useLiveWatch, liveWatchUntilMs } from './liveWatch';
 import { SPECIAL_AWARD_ITEMS } from './festivals';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import FestivalBanners from './FestivalBanner';
@@ -7114,6 +7115,7 @@ ${toSend.map(l => '• ' + l.title).join(', ')}`
             </div>
           )}
 
+          <LiveWatchSwitch />
           <NewAccountsSwitch />
           {pendingStudents.length > 0 && (
             <div className="mb-8">
@@ -7940,14 +7942,14 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     if (!studentUid) return;
     // Query by studentUid only and filter status on the client, so no
     // composite index is required (see note on the sessions query above).
-    const q = query(lessonsCollection, where("studentUid", "==", studentUid));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    // The open lessons are read live; the reported ones come from the weekly static file plus a short live
+    // window (see listenLessonsWithHistory in studentHistory.js).
+    const unsubscribe = listenLessonsWithHistory({ collectionRef: lessonsCollection, studentUid, onList: (allLessonDocs) => {
       // Reported lessons stay in this list too now (see below) -- once
       // reported, a lesson keeps showing here forever (yellow, same as a
       // "started" one), exactly like it always used to, instead of vanishing
       // the moment its report is submitted.
-      const lessonList = snapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() }))
+      const lessonList = allLessonDocs
         .filter(l => l.status === 'pending' || l.status === 'started' || l.status === 'reported');
 
       const unresolvedCount = lessonList.filter(l => l.status !== 'reported').length;
@@ -7982,9 +7984,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       });
 
       setMyLessons(lessonList.map(withCurrentLessonCounts));
-    }, (error) => {
-      console.error("Error fetching student lessons: ", error);
-    });
+    } });
     return () => unsubscribe();
   }, [studentUid]);
 
@@ -11331,7 +11331,7 @@ function TrophyBoard({ role, targetStudentUid, studentProfile }) {
 // Pacific, see presenceDay.js) and open the rest of the time. Students' login screen hides the
 // "New Student" side completely while it is closed.
 const accountSettingsRef = () => doc(db, `${publicDataPath}/config`, 'accountSettings');
-const newAccountsClosed = (mode) => mode === 'closed' || (mode !== 'open' && isOnlineStatusDay());
+const newAccountsClosed = (mode) => mode === 'closed' || (mode !== 'open' && isParamiClassTime());
 
 function NewAccountsSwitch() {
   const [mode, setMode] = useState('auto');
@@ -11353,6 +11353,31 @@ function NewAccountsSwitch() {
       <h3 className="font-bold text-gray-800">🆕 New student accounts: {loaded ? (closedNow ? '🔒 CLOSED now' : '✅ OPEN now') : '…'}</h3>
       <div className="mt-2 flex gap-2">{opt('auto', 'Auto')}{opt('open', 'Always open')}{opt('closed', 'Always closed')}</div>
       <p className="mt-2 text-xs text-gray-600">Auto = closed during the Parami class (Sunday 12:30–4:00 PM Pacific), open the rest of the time. While closed, students only see "Existing Account" login.</p>
+    </div>
+  );
+}
+
+// ---- The teacher's "Live view" switch -------------------------------------------------------------
+// Off by default: no repeating "I am online" writes and no live listeners anywhere. On for 3 hours when the
+// teacher wants to watch a class (see liveWatch.js). Apps opened from then on send their heartbeat.
+function LiveWatchSwitch() {
+  const on = useLiveWatch();
+  const [busy, setBusy] = useState(false);
+  const toggle = async () => {
+    if (busy) return;
+    setBusy(true);
+    try { await setLiveWatch(db, appId, !on, 3); }
+    catch (e) { console.error('Could not change the live view:', e); alert('Could not change it. Please try again.'); }
+    setBusy(false);
+  };
+  const until = on ? new Date(liveWatchUntilMs()).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '';
+  return (
+    <div className={`mb-6 p-4 rounded-xl border-2 flex items-center justify-between gap-3 flex-wrap ${on ? 'bg-emerald-50 border-emerald-300' : 'bg-gray-50 border-gray-200'}`}>
+      <div>
+        <h3 className="font-bold text-gray-800">👁️ Live view of who is online: {on ? `ON until ${until}` : 'OFF'}</h3>
+        <p className="text-xs text-gray-600 mt-1">{on ? 'Students who open an app now send their online signal and you see them live. It switches itself off.' : 'Nothing is sent or listened to live. Turn it on a little before a class (students already inside an app only join after they reopen it).'}</p>
+      </div>
+      <button onClick={toggle} disabled={busy} className={`px-4 py-2 rounded-lg font-bold text-white shadow ${on ? 'bg-red-500 hover:bg-red-600' : 'bg-emerald-600 hover:bg-emerald-700'}`}>{busy ? '…' : on ? 'Turn off' : 'Turn on (3 hours)'}</button>
     </div>
   );
 }
@@ -11587,6 +11612,7 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpen
   const [user, setUser] = useState(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [role, setRole] = useState(null); 
+  useEffect(() => { if (isAuthReady) startLiveWatchListener(db, appId); }, [isAuthReady]);
   const [studentProfile, setStudentProfile] = useState(null);
   const [teacherUid, setTeacherUid] = useState(null); 
   const [targetStudentUid, setTargetStudentUid] = useState(null); 

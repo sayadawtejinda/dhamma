@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { collection } from 'firebase/firestore';
 import { listenLiveOrOnce, isOnlineStatusDay } from './presenceDay';
+import { useLiveWatch } from './liveWatch';
 import { X } from 'lucide-react';
 import { db } from './firebase';
 
@@ -52,6 +53,7 @@ const loadRosterSnapshot = (rosterPath) => {
 };
 
 export function useOnlineRoster(rosterPath, filterDocs, lastSeenField = 'lastSeen', isTeacherMode = false) {
+  const liveWatchOn = useLiveWatch();
   const [rosterDocs, setRosterDocs] = useState([]);
   const [nowTick, setNowTick] = useState(Date.now());
 
@@ -64,8 +66,9 @@ export function useOnlineRoster(rosterPath, filterDocs, lastSeenField = 'lastSee
         setRosterDocs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
       }, (e) => console.error('Online roster listen error:', e), isTeacherMode);
     };
-    // Only the teacher gets the live picture; students see who was active this week from the weekly file.
-    if (isTeacherMode) { readLive(); }
+    // Only the teacher gets the live picture, and only while his Live view switch is on; otherwise (and for
+    // students) it is the weekly file, which costs no read.
+    if (isTeacherMode && liveWatchOn) { readLive(); }
     else {
       loadRosterSnapshot(rosterPath).then(docs => {
         if (cancelled) return;
@@ -73,7 +76,7 @@ export function useOnlineRoster(rosterPath, filterDocs, lastSeenField = 'lastSee
       });
     }
     return () => { cancelled = true; unsub(); };
-  }, [rosterPath, isTeacherMode]);
+  }, [rosterPath, isTeacherMode, liveWatchOn]);
 
   useEffect(() => {
     const interval = setInterval(() => setNowTick(Date.now()), 30000);
@@ -142,6 +145,7 @@ export default function OnlineStatusWidget({
   // buttons of the lesson list already fill the right corner).
   centered = false,
 }) {
+  const liveWatchOn = useLiveWatch();
   const { weeklyRosterList, onlineCount, warningCount: rawWarningCount } = useOnlineRoster(rosterPath, filterDocs, lastSeenField, isTeacherMode);
   const warningCount = showInactiveWarning ? rawWarningCount : 0;
   const [showPanel, setShowPanel] = useState(false);
@@ -178,7 +182,7 @@ export default function OnlineStatusWidget({
           </span>
         )}
         <button onClick={() => setShowPanel(true)} className="flex items-center gap-1 text-emerald-600 font-bold hover:underline">
-          {(isTeacherMode && isOnlineStatusDay())
+          {(isTeacherMode && liveWatchOn)
             ? <><span className="w-2 h-2 bg-emerald-500 rounded-full inline-block"></span>{onlineCount} online</>
             : weeklyLabel(weeklyRosterList.length)}
           {warningCount > 0 && (

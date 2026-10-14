@@ -1,4 +1,5 @@
 import { getDocs, onSnapshot } from 'firebase/firestore';
+import { isLiveWatchOn } from './liveWatch';
 
 // "Who's online" only matters while the Parami group meets: Sunday 2-3 PM
 // California time (with a buffer on both sides for early/late joiners).
@@ -12,7 +13,9 @@ const CLASS_DAY = 'Sun';
 const LIVE_FROM_MINUTES = 12 * 60 + 30; // 12:30 PM
 const LIVE_UNTIL_MINUTES = 16 * 60;     // 4:00 PM
 
-export const isOnlineStatusDay = () => {
+// Is it the Parami class time right now (Sunday 12:30-4:00 PM California)? Used for the rule that keeps new
+// student accounts closed during the class.
+export const isParamiClassTime = () => {
   try {
     const parts = new Intl.DateTimeFormat('en-US', { timeZone: CLASS_TIME_ZONE, weekday: 'short', hour: 'numeric', minute: 'numeric', hour12: false }).formatToParts(new Date());
     const get = (type) => parts.find(p => p.type === type)?.value;
@@ -22,6 +25,10 @@ export const isOnlineStatusDay = () => {
     return false;
   }
 };
+
+// "Show live online status / send the repeating heartbeat now?" -- only while the teacher has his
+// "👁️ Live view" switch on (see liveWatch.js). Off by default, so presence costs nothing unless wanted.
+export const isOnlineStatusDay = () => isLiveWatchOn();
 
 // Heartbeat interval for a `setInterval(ping, ms)`: the normal interval during
 // class time, otherwise 0 (callers skip the interval and just ping

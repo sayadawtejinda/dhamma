@@ -28,7 +28,7 @@ export function loadStudentHistory(studentUid) {
   if (!historyCache.has(studentUid)) {
     historyCache.set(studentUid, fetch(`${import.meta.env.BASE_URL}studentHistory/${encodeURIComponent(studentUid)}.json`)
       .then(r => (r.ok ? r.json() : null))
-      .then(j => (j && typeof j.generatedAtMs === 'number' ? { generatedAtMs: j.generatedAtMs, sessions: revive(j.sessions || []), schedule: revive(j.schedule || []) } : null))
+      .then(j => (j && typeof j.generatedAtMs === 'number' ? { generatedAtMs: j.generatedAtMs, sessions: revive(j.sessions || []), schedule: revive(j.schedule || []), lessons: Array.isArray(j.lessons) ? revive(j.lessons) : null } : null))
       .catch(() => null));
   }
   return historyCache.get(studentUid);
@@ -39,6 +39,42 @@ const mergeById = (older, live) => {
   live.forEach(x => byId.set(x.id, x));
   return Array.from(byId.values());
 };
+
+// A student's lessons: everything already REPORTED up to the last weekly snapshot comes from the static
+// file; live are only the lessons still open (pending/started, any age) and the ones reported since about a
+// week before the snapshot. The student's open lessons are what matters day to day, the long tail of
+// finished ones does not need a read every time the home page opens.
+// The live part needs a Firestore index on studentUid + reportedAt (and the existing studentUid + status).
+// Until the index exists, or if the file has no lessons yet, the old full read is used instead.
+export function listenLessonsWithHistory({ collectionRef, studentUid, onList }) {
+  let cancelled = false;
+  let unsubs = [];
+  const toList = (snap) => snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const readAll = () => {
+    unsubs = [onSnapshot(query(collectionRef, where('studentUid', '==', studentUid)), (snap) => onList(toList(snap)), (e) => console.error('Error fetching student lessons:', e))];
+  };
+  (async () => {
+    const hist = await loadStudentHistory(studentUid);
+    if (cancelled) return;
+    if (!hist || !hist.lessons) { readAll(); return; }
+    const since = Timestamp.fromMillis(hist.generatedAtMs - 8 * DAY_MS);
+    let open = [], recent = [], gotOpen = false, gotRecent = false, failed = false;
+    const emit = () => { if (gotOpen && gotRecent && !cancelled) onList(mergeById(mergeById(hist.lessons, recent), open)); };
+    const fail = (e) => {
+      if (failed) return;
+      failed = true;
+      if (e && e.code === 'failed-precondition') console.warn('Index for lessons missing -- reading everything:', e.message);
+      else console.error('Error fetching student lessons:', e);
+      unsubs.forEach(u => u());
+      if (!cancelled) readAll();
+    };
+    unsubs = [
+      onSnapshot(query(collectionRef, where('studentUid', '==', studentUid), where('status', 'in', ['pending', 'started'])), (snap) => { open = toList(snap); gotOpen = true; emit(); }, fail),
+      onSnapshot(query(collectionRef, where('studentUid', '==', studentUid), where('reportedAt', '>=', since)), (snap) => { recent = toList(snap); gotRecent = true; emit(); }, fail),
+    ];
+  })();
+  return () => { cancelled = true; unsubs.forEach(u => u()); };
+}
 
 // kind: 'sessions' | 'schedule'. onList gets the full merged list on every change.
 export function listenWithHistory({ collectionRef, studentUid, kind, onList }) {

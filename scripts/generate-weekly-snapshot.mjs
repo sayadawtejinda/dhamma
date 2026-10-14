@@ -284,9 +284,17 @@ async function main() {
   const inYear = (e) => e.startTime && typeof e.startTime.toDate === 'function' && e.startTime.toDate() >= startOfYear;
   const histByUid = {};
   allSessions.filter(inYear).forEach(sx => { if (sx.studentUid) (histByUid[sx.studentUid] = histByUid[sx.studentUid] || { sessions: [], schedule: [] }).sessions.push(serialize(sx)); });
+  // Lessons already reported, kept as a static list too (the live part of a student's lesson list is then only the open ones).
+  const lessonsSnapAll = await getDocs(collection(db, `${publicDataPath}/lessons`));
+  lessonsSnapAll.docs.forEach(d => {
+    const l = d.data();
+    if (!l.studentUid || l.status !== 'reported') return;
+    const h = (histByUid[l.studentUid] = histByUid[l.studentUid] || { sessions: [], schedule: [] });
+    (h.lessons = h.lessons || []).push(serialize({ id: d.id, ...l }));
+  });
   allRealSchedule.filter(inYear).forEach(e => { if (e.studentUid && e.studentUid !== 'offline') (histByUid[e.studentUid] = histByUid[e.studentUid] || { sessions: [], schedule: [] }).schedule.push(serialize(e)); });
   for (const [uid, h] of Object.entries(histByUid)) {
-    writeFileSync(join(HISTORY_DIR, `${encodeURIComponent(uid)}.json`), JSON.stringify({ generatedAtMs: Date.now(), ...h }));
+    writeFileSync(join(HISTORY_DIR, `${encodeURIComponent(uid)}.json`), JSON.stringify({ generatedAtMs: Date.now(), lessons: [], ...h }));
   }
 
   // ---- "Who was active this week" for every app's online pill ----
