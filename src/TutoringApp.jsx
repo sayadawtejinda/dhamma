@@ -11704,25 +11704,39 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpen
     }
   }, [role, targetStudentUid]); 
   
+  // The trophy announcements behind the 🔔: the teacher's bell stays live; a student gets last week's list
+  // from one static file (rewritten by the weekly job, see scripts/content-snapshots.mjs), so a student
+  // opening the home page reads nothing here and nothing is pushed to every open device whenever a trophy
+  // is approved. If the file cannot be loaded, the old live read is used.
   useEffect(() => {
     if (!db || !isAuthReady) return; 
-    
-    const q = query(
-      announcementsCollection, 
-      where("expiresAt", ">", Timestamp.now()), 
-      orderBy("expiresAt", "desc"), 
-      limit(5)
-    );
-      
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const annList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setAnnouncements(annList);
-    }, (error) => {
-      console.error("Error fetching announcements:", error);
-    });
-    
-    return () => unsubscribe();
-  }, [isAuthReady]); 
+    let cancelled = false;
+    let unsubscribe = () => {};
+    const goLive = () => {
+      const q = query(
+        announcementsCollection, 
+        where("expiresAt", ">", Timestamp.now()), 
+        orderBy("expiresAt", "desc"), 
+        limit(5)
+      );
+      unsubscribe = onSnapshot(q, (snapshot) => {
+        const annList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setAnnouncements(annList);
+      }, (error) => {
+        console.error("Error fetching announcements:", error);
+      });
+    };
+    if (role === 'teacher') { goLive(); return () => unsubscribe(); }
+    fetch(`${import.meta.env.BASE_URL}announcementsSnapshot.json`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(j => {
+        if (cancelled) return;
+        if (j && Array.isArray(j.announcements)) setAnnouncements(j.announcements.map(a => ({ id: a.id, studentName: a.studentName, trophyCount: a.trophyCount, createdAt: { seconds: Math.floor(a.createdAtMs / 1000) } })));
+        else goLive();
+      })
+      .catch(() => { if (!cancelled) goLive(); });
+    return () => { cancelled = true; unsubscribe(); };
+  }, [isAuthReady, role]); 
 
   const checkUserRole = async (uid) => {
     console.log('[DIAG] checkUserRole called. uid:', uid, 'current targetStudentUid:', targetStudentUid, 'current view:', view);

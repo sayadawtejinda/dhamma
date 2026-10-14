@@ -25,7 +25,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { firebaseConfig, appId } from '../src/firebaseConfig.js';
 import { refreshClassSnapshots, CLASS_DIR } from './class-snapshots.mjs';
-import { refreshContentSnapshots } from './content-snapshots.mjs';
+import { refreshContentSnapshots, refreshAnnouncementsSnapshot } from './content-snapshots.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const OUT_PATH = join(__dirname, '..', 'public', 'weeklySnapshot.json');
@@ -242,6 +242,7 @@ async function main() {
   const generatedAt = new Date().toISOString();
   await refreshClassSnapshots(db, appId, { full: process.argv.includes('--full') });
   await refreshContentSnapshots(db);
+  await refreshAnnouncementsSnapshot(db, appId);
   // ---- Per-student "weeks attended" (all time), for the Bodhi Tree and Shrine Room ----
   // Both used to read a student's whole schedule + whole session history every time
   // they were opened. One small static file replaces that (up to a week old).

@@ -47,3 +47,23 @@ export async function refreshContentSnapshots(db) {
   console.log(`Myanmar Speaker content: written (${content.dictionary.length} words, ${content.lessons.length} lessons, ${content.poems.length} poems)`);
   return true;
 }
+
+// "Who earned a trophy" for the bell on every student's home page: the last 7 days of trophy
+// announcements as one static file (public/announcementsSnapshot.json), so students read nothing live.
+// The teacher's own bell stays live. Rewritten only when the list is different.
+import { query, where, Timestamp } from 'firebase/firestore';
+export async function refreshAnnouncementsSnapshot(db, appId) {
+  const since = Timestamp.fromMillis(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const snap = await getDocs(query(collection(db, `artifacts/${appId}/public/data/announcements`), where('createdAt', '>=', since)));
+  const list = snap.docs
+    .map(d => { const a = d.data(); return { id: d.id, studentName: a.studentName, trophyCount: a.trophyCount, createdAtMs: a.createdAt && a.createdAt.toMillis ? a.createdAt.toMillis() : 0 }; })
+    .filter(a => a.studentName && a.createdAtMs)
+    .sort((x, y) => y.createdAtMs - x.createdAtMs || (x.id < y.id ? -1 : 1));
+  const file = join(__dirname, '..', 'public', 'announcementsSnapshot.json');
+  let old = null;
+  try { old = JSON.stringify(JSON.parse(readFileSync(file, 'utf8')).announcements); } catch (e) { /* none yet */ }
+  if (old === JSON.stringify(list)) { console.log('Trophy announcements: unchanged, nothing written'); return false; }
+  writeFileSync(file, JSON.stringify({ generatedAt: new Date().toISOString(), announcements: list }));
+  console.log(`Trophy announcements: ${list.length} from the last 7 days written`);
+  return true;
+}
