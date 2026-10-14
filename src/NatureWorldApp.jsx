@@ -651,6 +651,7 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
         panelNote="👣 ➜ 🌿 ➜ 📦 ➜ 🎁   ✅"
         teacherLabel="🧑‍🏫 Teacher"
         showInactiveWarning={false}
+        guideKey="nature"
         renderActivity={(s) => !isTeacherPreview && s.studentName !== studentName && (
           <span className="flex items-center gap-2 justify-end">
             {/* A friend only ever receives one gift from me, so one already

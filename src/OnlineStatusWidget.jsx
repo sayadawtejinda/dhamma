@@ -147,12 +147,26 @@ export default function OnlineStatusWidget({
   centered = false,
   // true: only the name and wallet, no "this week" / online list button (the Avatar room)
   hideRoster = false,
+  // A pointing finger for beginners: on the list button, then (inside the list) at the first friend's button.
+  // Shown for the first 3 times the student opens this app, then never again (remembered on this device).
+  guideKey = null,
 }) {
   const liveWatchOn = useLiveWatch();
   const { weeklyRosterList, onlineCount, warningCount: rawWarningCount } = useOnlineRoster(rosterPath, filterDocs, lastSeenField, isTeacherMode);
   const warningCount = showInactiveWarning ? rawWarningCount : 0;
   const [showPanel, setShowPanel] = useState(false);
   const [peekName, setPeekName] = useState(null);
+  const [guideOn] = useState(() => {
+    if (!guideKey || isTeacherMode || !studentName) return false;
+    try {
+      const k = `visitGuide_${guideKey}_${studentName}`;
+      const n = parseInt(localStorage.getItem(k) || '0', 10) || 0;
+      if (n >= 3) return false;
+      localStorage.setItem(k, String(n + 1));
+      return true;
+    } catch (e) { return false; }
+  });
+  const firstFriendId = guideOn ? (weeklyRosterList.find(s => (s.studentName || s.name) !== studentName) || {}).id : null;
 
   if (hidden || (!isTeacherMode && !studentName)) return null;
 
@@ -185,14 +199,16 @@ export default function OnlineStatusWidget({
             <span>{secondaryIcon}</span>{secondaryBalance}
           </span>
         )}
-        {!hideRoster && <button onClick={() => setShowPanel(true)} className="flex items-center gap-1 text-emerald-600 font-bold hover:underline">
+        {!hideRoster && <span className="relative">
+          {guideOn && !showPanel && <span aria-hidden="true" className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-full -mt-1 text-4xl leading-none drop-shadow-lg animate-bounce z-[9999]">👆</span>}
+          <button onClick={() => setShowPanel(true)} className="flex items-center gap-1 text-emerald-600 font-bold hover:underline">
           {(isTeacherMode && liveWatchOn)
             ? <><span className="w-2 h-2 bg-emerald-500 rounded-full inline-block"></span>{onlineCount} online</>
             : weeklyLabel(weeklyRosterList.length)}
           {warningCount > 0 && (
             <span className="text-xs font-bold text-red-600 bg-red-100 border border-red-300 px-1.5 py-0.5 rounded-full ml-1">{warningCount} inactive</span>
           )}
-        </button>}
+        </button></span>}
       </div>
       <AvatarPeekModal name={peekName} onClose={() => setPeekName(null)} />
       {showPanel && (
@@ -213,7 +229,8 @@ export default function OnlineStatusWidget({
                     <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${s._isOnlineNow ? 'bg-emerald-500' : isWarning ? 'bg-red-500' : 'bg-gray-300'}`}></span>
                     <button type="button" className="font-bold text-gray-800 hover:underline text-left" title="See their Avatar" onClick={(e) => { e.stopPropagation(); setPeekName(s.studentName || s.name); }}>{s.studentName || s.name}</button>
                   </div>
-                  <div className="text-right text-sm">
+                  <div className="text-right text-sm flex items-center justify-end gap-1">
+                    {s.id === firstFriendId && <span aria-hidden="true" className="text-3xl leading-none animate-bounce">👉</span>}
                     {isWarning ? (
                       <span className="text-red-600 font-bold text-xs">Inactive (please warn student)</span>
                     ) : renderActivity ? (

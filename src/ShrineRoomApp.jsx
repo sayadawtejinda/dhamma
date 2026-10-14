@@ -1796,6 +1796,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
         panelNote="👣 ➜ 🛕 ➜ 🎁   ✅"
         teacherLabel="🧑‍🏫 Teacher"
         showInactiveWarning={false}
+        guideKey="shrine"
         renderActivity={(s) => (
           <span className="flex items-center gap-2 justify-end">
             <span className="text-amber-600 font-semibold">🪷 {s.lotusCount || 0}</span>
