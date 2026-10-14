@@ -1,0 +1,4 @@
+{
+  "_note": "studentUid: minimum number of attended weeks for the Bodhi Tree. 50 weeks = the biggest tree (Bodhi Master). Applied by generate-weekly-snapshot.mjs when it writes studentWeekly.json.",
+  "j5t7WPInJ3WWSMl7MgaD4adOrDS2": 50
+}

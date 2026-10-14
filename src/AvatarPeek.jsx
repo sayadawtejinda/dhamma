@@ -43,6 +43,17 @@ export function AvatarThumb({ name, size = 72, className = '' }) {
   );
 }
 
+// A name you can tap to see that student's Avatar: <PeekName name="Aaron" className="font-bold" />
+export function PeekName({ name, children, className = '' }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <span className={`cursor-pointer hover:underline ${className}`} title="See their Avatar" onClick={(e) => { e.stopPropagation(); setOpen(true); }}>{children ?? name}</span>
+      {open && <AvatarPeekModal name={name} onClose={() => setOpen(false)} />}
+    </>
+  );
+}
+
 // A small pop-up with a bigger Avatar and the name.
 export function AvatarPeekModal({ name, onClose }) {
   if (!name) return null;

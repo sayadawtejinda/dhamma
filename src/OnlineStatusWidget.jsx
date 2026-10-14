@@ -145,6 +145,8 @@ export default function OnlineStatusWidget({
   // true: the pill sits at the top centre instead of the top right corner (SmartStudy, where the
   // buttons of the lesson list already fill the right corner).
   centered = false,
+  // true: only the name and wallet, no "this week" / online list button (the Avatar room)
+  hideRoster = false,
 }) {
   const liveWatchOn = useLiveWatch();
   const { weeklyRosterList, onlineCount, warningCount: rawWarningCount } = useOnlineRoster(rosterPath, filterDocs, lastSeenField, isTeacherMode);
@@ -183,14 +185,14 @@ export default function OnlineStatusWidget({
             <span>{secondaryIcon}</span>{secondaryBalance}
           </span>
         )}
-        <button onClick={() => setShowPanel(true)} className="flex items-center gap-1 text-emerald-600 font-bold hover:underline">
+        {!hideRoster && <button onClick={() => setShowPanel(true)} className="flex items-center gap-1 text-emerald-600 font-bold hover:underline">
           {(isTeacherMode && liveWatchOn)
             ? <><span className="w-2 h-2 bg-emerald-500 rounded-full inline-block"></span>{onlineCount} online</>
             : weeklyLabel(weeklyRosterList.length)}
           {warningCount > 0 && (
             <span className="text-xs font-bold text-red-600 bg-red-100 border border-red-300 px-1.5 py-0.5 rounded-full ml-1">{warningCount} inactive</span>
           )}
-        </button>
+        </button>}
       </div>
       <AvatarPeekModal name={peekName} onClose={() => setPeekName(null)} />
       {showPanel && (

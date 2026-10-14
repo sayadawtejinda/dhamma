@@ -20,7 +20,7 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously } from 'firebase/auth';
 import { getFirestore, collection, query, where, getDocs, Timestamp, doc, updateDoc } from 'firebase/firestore';
-import { writeFileSync, mkdirSync } from 'node:fs';
+import { writeFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { firebaseConfig, appId } from '../src/firebaseConfig.js';
@@ -271,6 +271,11 @@ async function main() {
   });
   const attendedWeeks = {};
   Object.entries(weeksByUid).forEach(([uid, set]) => { attendedWeeks[uid] = set.size; });
+  // The teacher's own tree grants (scripts/treeOverrides.json): a minimum number of weeks for a student.
+  try {
+    const grants = JSON.parse(readFileSync(join(__dirname, 'treeOverrides.json'), 'utf8'));
+    Object.entries(grants).forEach(([uid, weeks]) => { if (typeof weeks === 'number') attendedWeeks[uid] = Math.max(attendedWeeks[uid] || 0, weeks); });
+  } catch (e) { /* no grants file */ }
   writeFileSync(join(__dirname, '..', 'public', 'studentWeekly.json'), JSON.stringify({ generatedAt, attendedWeeks }));
 
   // ---- Each student's schedule + sessions for this year (their login used to read all of it) ----

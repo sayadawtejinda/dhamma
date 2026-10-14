@@ -1,5 +1,6 @@
 import { listenWithHistory, listenLessonsWithHistory } from './studentHistory';
 import { isOnlineStatusDay, isParamiClassTime } from './presenceDay';
+import { PeekName } from './AvatarPeek';
 import { startLiveWatchListener, setLiveWatch, useLiveWatch, liveWatchUntilMs } from './liveWatch';
 import { SPECIAL_AWARD_ITEMS } from './festivals';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
@@ -1392,7 +1393,7 @@ function AttendanceReports({ students }) {
                 return (
                   <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                     <td className="p-3 font-medium text-gray-800">
-                      {row.name} 
+                      <PeekName name={row.name} /> 
                       {row.displayId === 'Offline' && <span className="ml-2 text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full">Offline</span>}
                     </td>
                     <td className="p-3 text-center font-bold text-gray-700">{row.total}</td>
@@ -11149,7 +11150,7 @@ function YearAttendanceBoard({ role, targetStudentUid }) {
                 <span className="text-xl font-bold text-indigo-400 w-8">{idx + 1}</span>
                 <div className="w-3 h-3 rounded-full mx-3 flex-shrink-0" style={{ backgroundColor: stringToColor(entry.name) }}></div>
                 <div>
-                  <p className="font-semibold text-gray-900">{entry.name} {isMine && <span className="ml-2 text-xs font-bold text-indigo-600">(You)</span>} {entry.isOffline && <span className="ml-2 text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full">Offline</span>}</p>
+                  <p className="font-semibold text-gray-900"><PeekName name={entry.name} /> {isMine && <span className="ml-2 text-xs font-bold text-indigo-600">(You)</span>} {entry.isOffline && <span className="ml-2 text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full">Offline</span>}</p>
                   <p className="text-sm text-gray-600">Attended {entry.attended} / {entry.total}</p>
                 </div>
               </div>
@@ -11288,7 +11289,7 @@ function TrophyBoard({ role, targetStudentUid, studentProfile }) {
                     <span className="text-xl font-bold text-yellow-400 w-8 flex-shrink-0">{idx + 1}</span>
                     <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: stringToColor(student.name) }}></div>
                     <p className="font-semibold text-gray-900 truncate">
-                      {student.name} {isSelf && <span className="ml-1 text-xs font-bold text-indigo-600">(You)</span>}
+                      <PeekName name={student.name} /> {isSelf && <span className="ml-1 text-xs font-bold text-indigo-600">(You)</span>}
                     </p>
                     <span className="text-lg font-extrabold text-yellow-600 flex-shrink-0 whitespace-nowrap">🏆 {student.trophyCount}</span>
                   </div>

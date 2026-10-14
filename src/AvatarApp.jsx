@@ -377,6 +377,7 @@ export default function AvatarApp({ entryRequest, onExit }) {
         panelTitle="🧑‍🎨 Students"
         teacherLabel="🧑‍🏫 Teacher"
         showInactiveWarning={false}
+        hideRoster
       />
 
       <h1 className="text-2xl font-bold text-indigo-800 mb-1 flex items-center justify-center gap-2">
