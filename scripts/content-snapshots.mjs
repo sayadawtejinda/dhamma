@@ -67,3 +67,31 @@ export async function refreshAnnouncementsSnapshot(db, appId) {
   console.log(`Trophy announcements: ${list.length} from the last 7 days written`);
   return true;
 }
+
+// Every student's Avatar look (skin, hair, outfit, accessory, background) as ONE static file
+// (public/avatarSnapshot.json), so tapping a name in a leaderboard / profile can show that student's Avatar
+// without reading anything from Firestore. About one read per student, once a week; rewritten only when
+// a look changed. (The old "visit" inside the Avatar room is gone.)
+export async function refreshAvatarSnapshot(db) {
+  const snap = await getDocs(collection(db, 'artifacts/shrine-room-app/public/data/roster'));
+  const KEYS = ['skin', 'hair', 'outfit', 'accessory', 'bg'];
+  const avatars = {};
+  snap.docs.forEach(d => {
+    const data = d.data();
+    const name = data.studentName;
+    if (!name) return;
+    const a = { ...(data.avatar || {}) };
+    KEYS.forEach(k => { if (a[k] === undefined && data[`avatar.${k}`] !== undefined) a[k] = data[`avatar.${k}`]; });
+    const look = {};
+    KEYS.forEach(k => { if (a[k]) look[k] = a[k]; });
+    if (Object.keys(look).length) avatars[name] = look;
+  });
+  const sorted = Object.fromEntries(Object.entries(avatars).sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0)));
+  const file = join(__dirname, '..', 'public', 'avatarSnapshot.json');
+  let old = null;
+  try { old = JSON.stringify(JSON.parse(readFileSync(file, 'utf8')).avatars); } catch (e) { /* none yet */ }
+  if (old === JSON.stringify(sorted)) { console.log('Avatar looks: unchanged, nothing written'); return false; }
+  writeFileSync(file, JSON.stringify({ generatedAt: new Date().toISOString(), avatars: sorted }));
+  console.log(`Avatar looks: ${Object.keys(sorted).length} students written`);
+  return true;
+}

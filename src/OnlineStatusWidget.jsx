@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { collection } from 'firebase/firestore';
 import { listenLiveOrOnce, isOnlineStatusDay } from './presenceDay';
 import { useLiveWatch } from './liveWatch';
+import { AvatarPeekModal } from './AvatarPeek';
 import { X } from 'lucide-react';
 import { db } from './firebase';
 
@@ -149,6 +150,7 @@ export default function OnlineStatusWidget({
   const { weeklyRosterList, onlineCount, warningCount: rawWarningCount } = useOnlineRoster(rosterPath, filterDocs, lastSeenField, isTeacherMode);
   const warningCount = showInactiveWarning ? rawWarningCount : 0;
   const [showPanel, setShowPanel] = useState(false);
+  const [peekName, setPeekName] = useState(null);
 
   if (hidden || (!isTeacherMode && !studentName)) return null;
 
@@ -190,6 +192,7 @@ export default function OnlineStatusWidget({
           )}
         </button>
       </div>
+      <AvatarPeekModal name={peekName} onClose={() => setPeekName(null)} />
       {showPanel && (
         <div className="fixed inset-0 z-[9950] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowPanel(false)}>
           <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full max-h-[80vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
@@ -206,7 +209,7 @@ export default function OnlineStatusWidget({
                 <div key={s.id} className={`flex items-center justify-between p-3 rounded-xl border ${isWarning ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-100'}`}>
                   <div className="flex items-center gap-2">
                     <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${s._isOnlineNow ? 'bg-emerald-500' : isWarning ? 'bg-red-500' : 'bg-gray-300'}`}></span>
-                    <span className="font-bold text-gray-800">{s.studentName || s.name}</span>
+                    <button type="button" className="font-bold text-gray-800 hover:underline text-left" title="See their Avatar" onClick={(e) => { e.stopPropagation(); setPeekName(s.studentName || s.name); }}>{s.studentName || s.name}</button>
                   </div>
                   <div className="text-right text-sm">
                     {isWarning ? (

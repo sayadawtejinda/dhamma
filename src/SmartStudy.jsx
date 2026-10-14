@@ -1461,6 +1461,7 @@ const StudentReadLessonView = React.memo(({
   );
 });
 
+import { AvatarThumb, AvatarPeekModal } from './AvatarPeek';
 const StudentProfileView = React.memo(({ allScores, selectedName, handleSetView, setSelectedLessonId, playClickSound, setSelectedAgeLevel, previousView, userName, globalLeaderboardScores, heartCounts, myTotalLessonsCompletedAllClasses }) => {
   const studentScores = allScores.filter(score => score.studentName === selectedName).sort((a, b) => b.timestamp - a.timestamp);
   const colorClass = selectedName ? nameToColorClass(selectedName) : '';
@@ -1477,7 +1478,10 @@ const StudentProfileView = React.memo(({ allScores, selectedName, handleSetView,
   return (
     <div className="p-8 space-y-8 h-full flex flex-col">
       <div className="flex justify-between items-center">
-          <h1 className={`text-4xl font-extrabold p-3 rounded-xl border-2 ${colorClass}`}><User className="w-6 h-6 inline-block mr-3" />Student History: {selectedName}</h1>
+          <div className="flex items-center gap-3">
+            <AvatarThumb name={selectedName} size={84} />
+            <h1 className={`text-4xl font-extrabold p-3 rounded-xl border-2 ${colorClass}`}><User className="w-6 h-6 inline-block mr-3" />Student History: {selectedName}</h1>
+          </div>
           <div className="fixed bottom-6 left-6 z-50 group">
           <button onClick={() => { playClickSound?.(); handleSetView(previousView || 'studentLesson'); }} className="p-4 bg-gray-700 text-white rounded-full shadow-2xl hover:bg-gray-800 transition-all hover:scale-110 active:scale-95 border-2 border-white" aria-label="Back to previous view"><ArrowLeft className="w-6 h-6" /></button>
           </div>

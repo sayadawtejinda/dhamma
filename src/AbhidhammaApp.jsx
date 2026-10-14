@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { auth, db } from './firebase';
 import { presenceIntervalMs, isOnlineStatusDay } from './presenceDay';
+import { AvatarPeekModal } from './AvatarPeek';
 import OnlineStatusWidget from './OnlineStatusWidget';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -535,6 +536,7 @@ const AbhiFloatingStats = ({ rank, totalLessons }) => {
 // ─── Global & Class Leaderboard Modal ────────────────────────────────────────
 const AbhiLeaderboardModal = ({ classId, studentName, userId, onClose }) => {
   const [classData,setClassData]=useState(null);
+  const [peek,setPeek]=useState(null);
   const meRef=useRef(null);
 
   useEffect(()=>{
@@ -571,7 +573,7 @@ const AbhiLeaderboardModal = ({ classId, studentName, userId, onClose }) => {
             <div key={idx} ref={isMe?meRef:null} className={`flex items-center gap-3 p-3 rounded-xl ${isMe?'bg-amber-900/40 border border-amber-500':'bg-gray-700/50 border border-gray-600/30'}`}>
               <span className="w-8 text-center font-black text-lg">{medals[idx]||`#${idx+1}`}</span>
               <div className="flex-1">
-                <p className="font-bold text-white text-sm">{e.name}{isMe&&<span className="text-[10px] bg-amber-500 text-black px-1.5 py-0.5 rounded-full font-bold ml-2">YOU</span>}</p>
+                <p className="font-bold text-white text-sm cursor-pointer hover:underline" title="See their Avatar" onClick={()=>setPeek(e.name)}>{e.name}{isMe&&<span className="text-[10px] bg-amber-500 text-black px-1.5 py-0.5 rounded-full font-bold ml-2">YOU</span>}</p>
                 <p className="text-xs text-gray-400">{e.count} lesson{e.count!==1?'s':''} • {e.totalScore.toLocaleString()} pts</p>
               </div>
               <span className="text-yellow-400 font-bold text-sm">{e.count} 📚</span>
@@ -584,6 +586,7 @@ const AbhiLeaderboardModal = ({ classId, studentName, userId, onClose }) => {
 
   return(
     <div className="fixed inset-0 bg-gray-900/95 z-50 flex items-center justify-center p-4">
+      <AvatarPeekModal name={peek} onClose={()=>setPeek(null)} />
       <div className="bg-gray-800 w-full max-w-lg rounded-2xl shadow-2xl border border-gray-700">
         <div className="p-5 border-b border-gray-700 flex justify-between items-center">
           <h2 className="text-xl font-black text-white flex items-center gap-2"><Trophy className="w-6 h-6 text-yellow-400"/> Champions Board</h2>

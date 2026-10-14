@@ -534,7 +534,7 @@ const ACCESSORY_ART = {
   ),
 };
 
-export function CharacterSvg({ skinColor, hair, outfitColor, outfitPattern, accessory, className }) {
+export function CharacterSvg({ skinColor, hair, outfitColor, outfitPattern, accessory, className, style }) {
   const hairPath = hair.style === 'short'
     ? <path d="M58,72 Q58,24 100,24 Q142,24 142,72 L142,54 Q100,32 58,54 Z" fill={hair.color} />
     : hair.style === 'long'
@@ -615,7 +615,7 @@ export function CharacterSvg({ skinColor, hair, outfitColor, outfitPattern, acce
   }
 
   return (
-    <svg viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg" className={className}>
+    <svg viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg" className={className} style={style}>
       <ellipse cx="100" cy="224" rx="58" ry="9" fill="#00000022" />
       <path d={BODY_PATH} fill={(ROBE_PATTERNS[outfitPattern] && ROBE_PATTERNS[outfitPattern][0]) || outfitColor} />
       {ROBE_PATTERNS[outfitPattern] && React.createElement(ROBE_PATTERNS[outfitPattern][1], { color: outfitColor })}
