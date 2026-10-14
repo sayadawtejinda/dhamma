@@ -307,7 +307,7 @@ async function main() {
     if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, plain(x)]));
     return v;
   };
-  const msOf = (v) => (v && typeof v.toMillis === 'function') ? v.toMillis() : (typeof v === 'number' ? v : (v && typeof v.seconds === 'number' ? v.seconds * 1000 : 0));
+  const msOf = (v) => (v && typeof v.toMillis === 'function') ? v.toMillis() : (typeof v === 'number' ? v : (typeof v === 'string' ? (Date.parse(v) || 0) : (v && typeof v.seconds === 'number' ? v.seconds * 1000 : 0)));
   const ROSTER_DIR = join(__dirname, '..', 'public', 'rosterSnapshots');
   mkdirSync(ROSTER_DIR, { recursive: true });
   const rosterCutoff = Date.now() - 14 * 24 * 60 * 60 * 1000;

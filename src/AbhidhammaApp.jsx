@@ -224,7 +224,7 @@ const AbhiClassRoster = ({ userId, classId }) => {
       if(!cancelled)setStudentStats(stats);
     };
     (async()=>{
-      if(!isOnlineStatusDay()){
+      if(true){ // the weekly file for everyone; no live reading on the student side
         try{
           const r=await fetch(`${import.meta.env.BASE_URL}classSnapshots/abhidhamma.json`);
           if(r.ok){const j=await r.json();const st=j.classes?.[classId]?.students;if(st){applyCounts(st);return;}}
@@ -1141,7 +1141,7 @@ export default function AbhidhammaApp({ entryRequest, onExit, isActive }) {
       // Outside the Sunday Parami window, classmates' standings come from the
       // weekly static snapshot (zero Firestore reads) with MY OWN live count
       // laid over it; during the window they're read live like before.
-      if(!isOnlineStatusDay()){
+      if(!isTeacher||!isOnlineStatusDay()){
         try{
           const r=await fetch(`${import.meta.env.BASE_URL}classSnapshots/abhidhamma.json`);
           if(r.ok){

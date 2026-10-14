@@ -1578,6 +1578,26 @@ let bilingualMode = false;
 
         function setupPresenceListener() {
             if (presenceUnsub) presenceUnsub();
+            if (!isTeacher) {
+                // A student sees who was active this week from the static weekly file (no Firestore read);
+                // only the teacher has the live view.
+                let cancelled = false;
+                let fallback = null;
+                const useLive = () => {
+                    if (cancelled || fallback) return;
+                    fallback = listenLiveOrOnce(collection(db, PATHS.presence), (snap) => {
+                        allPresenceRecords = [];
+                        snap.forEach(d => allPresenceRecords.push({ id: d.id, ...d.data() }));
+                        renderOnlineWidget();
+                    }, undefined, false);
+                };
+                fetch(`${import.meta.env.BASE_URL}rosterSnapshots/artifacts__dhammaschool-app__public__data__presence.json`)
+                    .then(r => (r.ok ? r.json() : null))
+                    .then(j => { if (cancelled) return; if (j && Array.isArray(j.docs)) { allPresenceRecords = j.docs; renderOnlineWidget(); } else useLive(); })
+                    .catch(() => useLive());
+                presenceUnsub = () => { cancelled = true; if (fallback) fallback(); };
+                return;
+            }
             presenceUnsub = listenLiveOrOnce(collection(db, PATHS.presence), (snap) => {
                 allPresenceRecords = [];
                 snap.forEach(d => allPresenceRecords.push({ id: d.id, ...d.data() }));
@@ -1716,8 +1736,7 @@ let bilingualMode = false;
             allStudentAnswers = [];
             allScores = [];
             if (!lid) return;
-            const unsubAnswers = onSnapshot(query(collection(db, PATHS.answers), where('lessonId', '==', lid)), (snap) => {
-                allStudentAnswers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            const onAnswersChanged = () => {
 
                 // If teacher is viewing this lesson, update the view
                 if (isTeacher && currentLessonId === lid) {
@@ -1734,7 +1753,43 @@ let bilingualMode = false;
                         }
                     }
                 }
-            });
+            };
+            // The teacher keeps the live view of every answer. A student gets classmates' answers from
+            // the weekly static file for this lesson (no Firestore read), plus their OWN answers live,
+            // so what they write appears at once. If the file cannot be loaded, the old live listener.
+            let unsubAnswers;
+            if (isTeacher) {
+                unsubAnswers = onSnapshot(query(collection(db, PATHS.answers), where('lessonId', '==', lid)), (snap) => {
+                    allStudentAnswers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    onAnswersChanged();
+                });
+            } else {
+                let cancelled = false;
+                let base = null;
+                let own = [];
+                let liveFallback = null;
+                const recompute = () => {
+                    const ownIds = new Set(own.map(a => a.id));
+                    allStudentAnswers = [...(base || []).filter(a => !ownIds.has(a.id)), ...own];
+                    onAnswersChanged();
+                };
+                const goLive = () => {
+                    if (cancelled || liveFallback) return;
+                    liveFallback = onSnapshot(query(collection(db, PATHS.answers), where('lessonId', '==', lid)), (snap) => {
+                        allStudentAnswers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                        onAnswersChanged();
+                    });
+                };
+                fetch(`${import.meta.env.BASE_URL}classSnapshots/dhammaschool/${encodeURIComponent(lid)}.json`)
+                    .then(r => (r.ok ? r.json() : null))
+                    .then(j => { if (cancelled) return; if (j && Array.isArray(j.answers)) { base = j.answers; recompute(); } else if (j === null) { base = []; recompute(); } })
+                    .catch(() => goLive());
+                const unsubOwn = onSnapshot(query(collection(db, PATHS.answers), where('lessonId', '==', lid), where('studentName', '==', studentName)), (snap) => {
+                    own = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    if (base !== null) recompute();
+                });
+                unsubAnswers = () => { cancelled = true; unsubOwn(); if (liveFallback) liveFallback(); };
+            }
             const unsubScores = listenLiveOrOnce(query(collection(db, PATHS.scores), where('lessonId', '==', lid)), (snap) => {
                 allScores = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                 if (isTeacher && currentLessonId === lid) renderTeacherScores(lid);

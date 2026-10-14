@@ -64,7 +64,8 @@ export function useOnlineRoster(rosterPath, filterDocs, lastSeenField = 'lastSee
         setRosterDocs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
       }, (e) => console.error('Online roster listen error:', e), isTeacherMode);
     };
-    if (isTeacherMode || isOnlineStatusDay()) { readLive(); }
+    // Only the teacher gets the live picture; students see who was active this week from the weekly file.
+    if (isTeacherMode) { readLive(); }
     else {
       loadRosterSnapshot(rosterPath).then(docs => {
         if (cancelled) return;

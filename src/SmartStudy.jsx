@@ -2320,7 +2320,8 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
         // static snapshot (zero Firestore reads); during the window, live from
         // Firestore like before. Falls back to Firestore if the file's missing.
         let snapshotScores = null;
-        if (!isOnlineStatusDay()) {
+        // Students always use the weekly file; only the teacher's screen reads live during the class window.
+        if (entryRequest?.mode === 'student' || !isOnlineStatusDay()) {
           try {
             const r = await fetch(`${import.meta.env.BASE_URL}classSnapshots/smartstudy/${encodeURIComponent(classId)}.json`);
             if (r.ok) snapshotScores = (await r.json()).scores || [];
@@ -2534,7 +2535,8 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
     // These pop-ups only matter to people online together (they are shown only if
     // under 10 seconds old), and opening the listener re-reads every announcement
     // ever sent to the class -- so it is only opened while the class meets.
-    if (!isOnlineStatusDay()) return;
+    // Teacher only: students no longer get these live pop-ups.
+    if (entryRequest?.mode === 'student' || !isOnlineStatusDay()) return;
     const q = query(getGlobalAnnouncementsCollectionRef(), where("classId", "==", classId));
     const unsub = onSnapshot(q, (snapshot) => {
       snapshot.docChanges().forEach((change) => {
@@ -3484,7 +3486,7 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
             // for every student, on every open of this screen).
             const byName = {};
             let gotSnapshot = false;
-            if (!isOnlineStatusDay()) {
+            if (entryRequest?.mode === 'student' || !isOnlineStatusDay()) {
               try {
                 const r = await fetch(`${import.meta.env.BASE_URL}classSnapshots/smartstudy/${encodeURIComponent(cId)}.json`);
                 if (r.ok) {

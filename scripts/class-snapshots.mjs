@@ -98,10 +98,25 @@ export async function refreshClassSnapshots(db, appId, { full = false } = {}) {
   try { oldAbhi = JSON.stringify(JSON.parse(readFileSync(join(CLASS_DIR, 'abhidhamma.json'), 'utf8')).classes); } catch (e) { /* none yet */ }
   if (FULL || oldAbhi !== JSON.stringify(abhiSorted)) { writeFileSync(join(CLASS_DIR, 'abhidhamma.json'), JSON.stringify({ generatedAt, classes: abhiSorted })); filesWritten += 1; }
 
+  // Dhammaschool: classmates' answers, one file per lesson (a student opening a lesson reads just that file).
+  // Answer timestamps are ISO strings, so the incremental read compares strings.
+  const DS = 'artifacts/dhammaschool-app/public/data';
+  mkdirSync(join(CLASS_DIR, 'dhammaschool'), { recursive: true });
+  const dsSnap = (FULL || !state.dsSince)
+    ? await getDocs(collection(db, `${DS}/answers`))
+    : await getDocs(query(collection(db, `${DS}/answers`), where('timestamp', '>', state.dsSince)));
+  const dsByLesson = {};
+  dsSnap.docs.forEach(d => {
+    const a = d.data();
+    if (!a.lessonId) return;
+    (dsByLesson[a.lessonId] = dsByLesson[a.lessonId] || []).push({ id: d.id, lessonId: a.lessonId, studentName: a.studentName, userId: a.userId, questionIndex: a.questionIndex, answerContent: a.answerContent, likes: a.likes || [], timestamp: a.timestamp });
+  });
+  mergeInto(dsByLesson, 'dhammaschool', 'answers');
+
   // Remember where this run got to -- only when something was read, so a quiet week changes nothing at all.
-  if (FULL || scoresSnap.size > 0 || reflSnap.size > 0 || abhiScoresSnap.size > 0) {
-    writeFileSync(STATE_PATH, JSON.stringify({ since: runStartedMs - 10 * 60 * 1000, fullAt: FULL ? runStartedMs : state.fullAt, abhiSets: Object.fromEntries(Object.entries(abhiSets).map(([k, v]) => [k, Array.from(v)])) }));
+  if (FULL || scoresSnap.size > 0 || reflSnap.size > 0 || abhiScoresSnap.size > 0 || dsSnap.size > 0) {
+    writeFileSync(STATE_PATH, JSON.stringify({ since: runStartedMs - 10 * 60 * 1000, dsSince: new Date(runStartedMs - 10 * 60 * 1000).toISOString(), fullAt: FULL ? runStartedMs : state.fullAt, abhiSets: Object.fromEntries(Object.entries(abhiSets).map(([k, v]) => [k, Array.from(v)])) }));
   }
-  console.log(`Class snapshots (${FULL ? 'full rebuild' : 'incremental'}): ${scoresSnap.size} SmartStudy score(s), ${reflSnap.size} reflection(s), ${abhiScoresSnap.size} Abhidhamma score(s) read; ${filesWritten} file(s) written`);
-  return { full: FULL, read: scoresSnap.size + reflSnap.size + abhiScoresSnap.size, filesWritten };
+  console.log(`Class snapshots (${FULL ? 'full rebuild' : 'incremental'}): ${scoresSnap.size} SmartStudy score(s), ${reflSnap.size} reflection(s), ${abhiScoresSnap.size} Abhidhamma score(s), ${dsSnap.size} Dhammaschool answer(s) read; ${filesWritten} file(s) written`);
+  return { full: FULL, read: scoresSnap.size + reflSnap.size + abhiScoresSnap.size + dsSnap.size, filesWritten };
 }
