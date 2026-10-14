@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { doc, getDoc, setDoc, increment, deleteField } from 'firebase/firestore';
 import { db } from './firebase';
-import OnlineStatusWidget from './OnlineStatusWidget';
+import OnlineStatusWidget, { loadRosterSnapshot } from './OnlineStatusWidget';
+import { AvatarThumb } from './AvatarPeek';
 
 // A student's own growing "nature world" -- buy land plots, then plant
 // trees on them one at a time, all paid for with coins earned from
@@ -72,7 +73,7 @@ const GIFT_OPTIONS = [
   { id: 'gift-rose', name: 'Rose', emoji: '🌹', kind: 'gift' },
 ];
 const GIFT_BAG_MAX = 30;
-// A student can send gifts (by visiting) to this many different friends a week.
+// A student receives a gift from this many different friends' worlds a week (by visiting them).
 const GIFTS_SENT_PER_WEEK = 2;
 // One gift per visiting friend, ever -- keyed by the visitor's name, so
 // coming back again doesn't bring another. (Older keys were name + visit
@@ -379,7 +380,8 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
           if (isMounted) {
             setCoinBalance(data.coinBalance ?? 0);
             setWorld({ ...DEFAULT_WORLD, ...(data.natureWorld || {}) });
-            setRecentVisitors(data.natureWorldRecentVisitors || []);
+            // Only the gifts the TEACHER sent are kept here; visits between students no longer write anything.
+            setRecentVisitors((data.natureWorldRecentVisitors || []).filter(v => v.teacher));
           }
         }
       } catch (e) {
@@ -475,8 +477,9 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
     persist({ natureWorld: { placedTrees: { [slotIndex]: deleteField() } } });
   };
 
-  // Fetches another student's world read-only and records the visit on
-  // their own roster doc -- same pattern as Shrine Room/Avatar/Bodhi Tree.
+  // Shows another student's world as it was in the weekly static roster file (no Firestore read, and nothing is
+  // written to THEIR doc). Visiting a friend is also how I get a gift: one from each friend ever, and from at
+  // most GIFTS_SENT_PER_WEEK different friends a week; it lands in my own gift bag.
   const handleVisitStudent = async (targetName) => {
     if (!targetName || targetName === studentName) return;
     setVisitingStudentName(targetName);
@@ -484,45 +487,34 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
     setVisitGiftNote(null);
     setVisitLoading(true);
     try {
-      const targetRef = doc(db, SHRINE_ROSTER_PATH, sanitizeShrineKey(targetName));
-      const snap = await getDoc(targetRef);
-      const data = snap.exists() ? snap.data() : {};
-      setVisitingWorld(snap.exists() ? { ...DEFAULT_WORLD, ...(data.natureWorld || {}) } : null);
-      if (studentName) {
-        // A visit is also the gift: only GIFTS_SENT_PER_WEEK different
-        // friends a week actually receive one from me. Beyond that I can
-        // still look around, it just comes without a gift. Visiting someone
-        // I already gifted this week (or who already opened my gift) costs
-        // nothing more.
-        const weekKey = currentWeekKey();
-        const given = world.giftWeekKey === weekKey ? (world.giftWeekGiven || []) : [];
-        const noExtraCost = given.includes(targetName) || hasOpenedGiftFrom(data.natureWorld?.giftsOpened, { name: studentName });
-        let withGift = true;
-        if (!noExtraCost) {
-          if (given.length < GIFTS_SENT_PER_WEEK) {
-            const nextGiven = [...given, targetName];
-            setWorld(prev => ({ ...prev, giftWeekKey: weekKey, giftWeekGiven: nextGiven }));
-            persist({ natureWorld: { giftWeekKey: weekKey, giftWeekGiven: nextGiven } });
-            setVisitGiftNote(`🎁 Your gift is on its way to ${targetName}! (${nextGiven.length}/${GIFTS_SENT_PER_WEEK} gifts this week)`);
-          } else {
-            withGift = false;
+      const docs = await loadRosterSnapshot(SHRINE_ROSTER_PATH);
+      let data = docs ? docs.find(d => d.studentName === targetName || d.id === sanitizeShrineKey(targetName)) : null;
+      if (docs == null) {
+        const snap = await getDoc(doc(db, SHRINE_ROSTER_PATH, sanitizeShrineKey(targetName)));
+        data = snap.exists() ? snap.data() : null;
+      }
+      setVisitingWorld(data ? { ...DEFAULT_WORLD, ...(data.natureWorld || {}) } : null);
+      if (studentName && !isTeacherPreview) {
+        const gifted = world.gotGiftFriends || [];
+        if (!gifted.includes(targetName)) {
+          const weekKey = currentWeekKey();
+          const given = world.giftWeekKey === weekKey ? (world.giftWeekGot || []) : [];
+          const bag = world.giftBag || [];
+          if (given.length >= GIFTS_SENT_PER_WEEK) {
             setVisitGiftNote(`🎁 ${GIFTS_SENT_PER_WEEK}/${GIFTS_SENT_PER_WEEK} ✅  See you next week! 🌸`);
-          }
-        }
-        // Remember every friend this visit brought (or already brought) a gift
-        // to, so the students list can mark them "Visited" -- a friend only ever
-        // gets one gift from me, so visiting them again achieves nothing.
-        if (withGift) {
-          const gifted = world.giftedFriends || [];
-          if (!gifted.includes(targetName)) {
+          } else if (bag.length >= GIFT_BAG_MAX) {
+            setVisitGiftNote('🎁 Your gift bag is full -- plant some first!');
+          } else {
+            const key = giftKeyFor({ name: targetName });
+            const gift = giftForVisit(key);
+            const nextBag = [...bag, { id: gift.id, from: targetName, key }];
+            const nextGiven = [...given, targetName];
             const nextGifted = [...gifted, targetName].slice(-300);
-            setWorld(prev => ({ ...prev, giftedFriends: nextGifted }));
-            persist({ natureWorld: { giftedFriends: nextGifted } });
+            setWorld(prev => ({ ...prev, giftBag: nextBag, giftWeekKey: weekKey, giftWeekGot: nextGiven, gotGiftFriends: nextGifted }));
+            persist({ natureWorld: { giftBag: nextBag, giftWeekKey: weekKey, giftWeekGot: nextGiven, gotGiftFriends: nextGifted } });
+            setVisitGiftNote(`🎁 ${gift.emoji} ${gift.name} from ${targetName} -- it's in your gift bag! (${nextGiven.length}/${GIFTS_SENT_PER_WEEK} gifts this week)`);
           }
         }
-        const others = (data.natureWorldRecentVisitors || []).filter(v => v.name !== studentName);
-        const nextVisitors = [{ name: studentName, visitedAt: Date.now(), gift: withGift }, ...others].slice(0, 10);
-        setDoc(targetRef, { natureWorldRecentVisitors: nextVisitors }, { merge: true }).catch(() => {});
       }
     } catch (e) {
       console.error('Error visiting Nature World:', e);
@@ -646,13 +638,13 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
           <span className="flex items-center gap-2 justify-end">
             {/* A friend only ever receives one gift from me, so one already
                 visited is marked -- visit someone new to send another. */}
-            {(world.giftedFriends || []).includes(s.studentName) ? (
+            {(world.gotGiftFriends || []).includes(s.studentName) ? (
               <>
-                <span className="text-xs font-bold text-white bg-emerald-600 rounded-full px-2 py-0.5" title="You already sent this friend a gift. Visit someone new to send another!">✅ Sent</span>
+                <span className="text-xs font-bold text-white bg-emerald-600 rounded-full px-2 py-0.5" title="You already got this friend's gift. Visit someone new for another!">✅ Done</span>
                 <button
                   onClick={(e) => { e.stopPropagation(); handleVisitStudent(s.studentName); }}
                   className="text-xs font-semibold text-gray-500 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-full px-2 py-0.5"
-                  title="Your gift is already sent, but you can look at their Nature World again"
+                  title="You already got this friend's gift, but you can look at their Nature World again"
                 >
                   👀 Look again
                 </button>
@@ -661,21 +653,21 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
               <button
                 onClick={(e) => { e.stopPropagation(); handleVisitStudent(s.studentName); }}
                 className="text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-full px-2 py-0.5"
-                title="Visit their Nature World and leave them a surprise gift"
+                title="Visit their Nature World and get a gift"
               >
-                📦 Send
+                👣 Visit
               </button>
             )}
           </span>
         )}
       />
 
-      {!isTeacherPreview && (
+      {!isTeacherPreview && recentVisitors.length > 0 && (
         <button
           onClick={() => setShowVisitorsPanel(true)}
           className="fixed top-16 right-3 z-50 flex items-center gap-1 bg-white hover:bg-emerald-50 text-emerald-700 text-sm font-semibold px-3 py-2 rounded-full shadow-lg border-2 border-emerald-300"
         >
-          👣 Visitors{recentVisitors.length > 0 ? ` (${recentVisitors.length})` : ''}
+          🎁 Gifts from teacher ({recentVisitors.length})
         </button>
       )}
 
@@ -796,9 +788,9 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
         <div className="fixed inset-0 z-[10001] bg-black/50 flex items-center justify-center p-4" onClick={() => setShowVisitorsPanel(false)}>
           <button onClick={() => setShowVisitorsPanel(false)} className="fixed top-3 right-3 z-[10002] w-11 h-11 rounded-full bg-red-600 hover:bg-red-700 text-white text-2xl font-bold shadow-lg flex items-center justify-center" aria-label="Close">×</button>
           <div className="bg-white rounded-2xl shadow-2xl max-w-xs w-full p-6 text-center max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-bold text-emerald-800 mb-4">👣 Recent Visitors</h2>
+            <h2 className="text-lg font-bold text-emerald-800 mb-4">🎁 Gifts from the teacher</h2>
             {recentVisitors.length === 0 ? (
-              <p className="text-sm text-gray-400 mb-4">No one has visited your world yet.</p>
+              <p className="text-sm text-gray-400 mb-4">No gifts yet.</p>
             ) : (
               <div className="space-y-2 mb-4 max-h-64 overflow-y-auto text-left">
                 {recentVisitors.map((v, i) => {
@@ -814,19 +806,6 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
                         <span className="text-xs text-gray-400">{new Date(v.visitedAt).toLocaleString()}</span>
                       </div>
                       {isOpened && v.gift !== false && <span className="text-2xl" title={gift.name}>{gift.emoji}</span>}
-                      {/* Send a gift back to whoever visited -- same visit
-                          action as the online-students list, just reachable
-                          from here too, since a visitor isn't always still
-                          online/active to show up in that list. */}
-                      {!v.teacher && (
-                        <button
-                          onClick={() => { setShowVisitorsPanel(false); handleVisitStudent(v.name); }}
-                          className="flex-shrink-0 text-xs font-semibold text-emerald-700 bg-white hover:bg-emerald-100 border border-emerald-300 rounded-full px-2 py-1"
-                          title={`Visit ${v.name}'s Nature World and send them a gift back`}
-                        >
-                          📦 Send back
-                        </button>
-                      )}
                     </div>
                   );
                 })}
@@ -844,7 +823,8 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
         <div className="fixed inset-0 z-[10001] bg-black/60 flex items-center justify-center p-4" onClick={closeVisit}>
           <button onClick={closeVisit} className="fixed top-3 right-3 z-[10002] w-11 h-11 rounded-full bg-red-600 hover:bg-red-700 text-white text-2xl font-bold shadow-lg flex items-center justify-center" aria-label="Close">×</button>
           <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 text-center max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-bold text-emerald-800 mb-4">🌿 {visitingStudentName}'s Nature World</h2>
+            <h2 className="text-lg font-bold text-emerald-800 mb-2">🌿 {visitingStudentName}'s Nature World</h2>
+            <div className="flex justify-center mb-3"><AvatarThumb name={visitingStudentName} size={72} /></div>
             {visitGiftNote && (
               <p className="mb-4 text-sm font-semibold text-emerald-800 bg-emerald-50 border border-emerald-300 rounded-xl px-3 py-2">{visitGiftNote}</p>
             )}
