@@ -1,15 +1,21 @@
 name: Weekly snapshot
 
-# Refreshes public/weeklySnapshot.json (the "This Year's Attendance" and
-# "🏆 Trophies" boards, plus the SmartStudy/Abhidhamma class leaderboards in
-# public/classSnapshots, see scripts/generate-weekly-snapshot.mjs for why
-# this exists as a static file instead of a live Firestore read). Runs
-# every Monday and every Tuesday at 09:00 UTC (twice, so Monday classes are in by Tuesday) and can also be triggered by hand from the
-# Actions tab.
+# Refreshes the static files the apps read instead of Firestore (see scripts/generate-weekly-snapshot.mjs).
+# The work is spread over four days so Firebase is never read all at once (09:00 UTC = early morning in California):
+#   Monday    classes  -- SmartStudy / Abhidhamma / Dhammaschool boards + trophy announcements (the Sunday class is in)
+#   Tuesday   core     -- attendance, trophies, weeks attended, each student's history (Monday classes are in)
+#   Wednesday content  -- Myanmar Speaker content + every student's Avatar look
+#   Thursday  roster   -- the "active this week" lists, Shrine Room and Nature World pictures
+# Run it by hand from the Actions tab: pick a part, or leave it empty to refresh everything.
 on:
   schedule:
-    - cron: "0 9 * * 1,2"
+    - cron: "0 9 * * 1,2,3,4"
   workflow_dispatch:
+    inputs:
+      part:
+        description: "classes, core, content or roster (empty = everything)"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -31,7 +37,21 @@ jobs:
         run: npm install
 
       - name: Regenerate snapshot
-        run: npm run snapshot:weekly
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            case "$(date -u +%u)" in
+              1) P=classes;;
+              2) P=core;;
+              3) P=content;;
+              4) P=roster;;
+            esac
+          else
+            P="${{ github.event.inputs.part }}"
+          fi
+          ARG=""
+          if [ -n "$P" ]; then ARG="--only=$P"; fi
+          echo "Part: ${P:-everything}"
+          node scripts/generate-weekly-snapshot.mjs $ARG
 
       - name: Commit and push if changed
         run: |
@@ -42,5 +62,6 @@ jobs:
             echo "No change -- nothing to commit."
           else
             git commit -m "Weekly snapshot refresh"
+            git pull --rebase origin main
             git push
           fi

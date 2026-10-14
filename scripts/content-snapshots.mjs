@@ -74,7 +74,7 @@ export async function refreshAnnouncementsSnapshot(db, appId) {
 // a look changed. (The old "visit" inside the Avatar room is gone.)
 export async function refreshAvatarSnapshot(db) {
   const snap = await getDocs(collection(db, 'artifacts/shrine-room-app/public/data/roster'));
-  const KEYS = ['skin', 'hair', 'outfit', 'accessory', 'bg'];
+  const KEYS = ['skin', 'hair', 'outfit', 'accessory', 'bg', 'homeBackground'];
   const avatars = {};
   snap.docs.forEach(d => {
     const data = d.data();

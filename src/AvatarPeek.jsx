@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { CharacterSvg } from './AvatarCharacter';
+import { getHomeBackground } from './homeBackgrounds';
 import { SKIN_OPTIONS, HAIR_OPTIONS, BG_OPTIONS, ALL_OUTFITS, ALL_ACCESSORIES, AVATAR_DEFAULT_CONFIG, findAvatarOption } from './AvatarApp';
 
 // Tap a student's name anywhere -> see their Avatar. The looks come from ONE static file written by the
@@ -24,8 +25,10 @@ export function useAvatarLook(name) {
 }
 
 // The drawn Avatar on its coloured square.
-export function AvatarThumb({ name, size = 72, className = '' }) {
-  const cfg = useAvatarLook(name);
+export function AvatarThumb({ name, size = 72, className = '', look = null }) {
+  const weekly = useAvatarLook(name);
+  // `look`: the student's own, always-fresh look (kept on their profile); everyone else's comes from the weekly file
+  const cfg = look && Object.keys(look).length ? { ...AVATAR_DEFAULT_CONFIG, ...look } : weekly;
   if (!cfg) return <div style={{ width: size, height: size }} className={className} />;
   const outfit = findAvatarOption(ALL_OUTFITS, cfg.outfit);
   return (
@@ -54,15 +57,47 @@ export function PeekName({ name, children, className = '' }) {
   );
 }
 
-// A small pop-up with a bigger Avatar and the name.
+// Trophies and weeks of attendance for the visited home, from two static weekly files (cached after the first look).
+let extrasPromise = null;
+const loadExtras = () => {
+  if (!extrasPromise) {
+    const base = import.meta.env.BASE_URL;
+    extrasPromise = Promise.all([
+      fetch(`${base}weeklySnapshot.json`).then(r => (r.ok ? r.json() : null)).catch(() => null),
+      fetch(`${base}studentWeekly.json`).then(r => (r.ok ? r.json() : null)).catch(() => null),
+    ]).then(([snap, weekly]) => {
+      const byName = {};
+      ((snap && snap.trophyList) || []).forEach(e => { if (e.name) byName[e.name] = { id: e.id, trophies: e.trophyCount || 0 }; });
+      return { byName, weeks: (weekly && weekly.attendedWeeks) || {} };
+    });
+  }
+  return extrasPromise;
+};
+
+// Visiting a student's home page: their home picture, Avatar, name, trophies and tree -- as it was last week
+// (all from static weekly files, nothing is read from Firestore).
 export function AvatarPeekModal({ name, onClose }) {
+  const cfg = useAvatarLook(name || '');
+  const [extras, setExtras] = useState(null);
+  useEffect(() => { if (name) loadExtras().then(setExtras); }, [name]);
   if (!name) return null;
+  const e = extras && extras.byName[name];
+  const weeks = e ? extras.weeks[e.id] : null;
+  const bg = getHomeBackground(cfg && cfg.homeBackground).image;
   return (
-    <div className="fixed inset-0 z-[10050] bg-black/60 flex items-center justify-center p-4" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-[10050] flex flex-col items-start p-6"
+      style={{ backgroundImage: `url(${import.meta.env.BASE_URL}${bg})`, backgroundSize: 'cover', backgroundPosition: 'center top' }}
+      onClick={onClose}
+    >
       <button onClick={onClose} className="fixed top-3 right-3 z-[10051] w-11 h-11 rounded-full bg-red-600 hover:bg-red-700 text-white text-2xl font-bold shadow-lg flex items-center justify-center" aria-label="Close">×</button>
-      <div className="bg-white rounded-2xl shadow-2xl max-w-xs w-full p-6 text-center" onClick={(e) => e.stopPropagation()}>
-        <div className="flex justify-center"><AvatarThumb name={name} size={180} /></div>
-        <h2 className="text-lg font-bold text-indigo-800 mt-4">🧑‍🎨 {name}</h2>
+      <div className="flex flex-col items-center w-32" onClick={(ev) => ev.stopPropagation()}>
+        <AvatarThumb name={name} size={110} />
+        <span className="mt-1 text-sm font-bold text-emerald-700 bg-white/85 backdrop-blur-sm px-2 py-0.5 rounded-xl shadow-sm text-center break-words max-w-full">{name} 🏡</span>
+        <span className="mt-2 flex gap-2 text-sm font-bold">
+          <span className="bg-white/85 px-2 py-0.5 rounded-full shadow-sm">🏆 {e ? e.trophies : 0}</span>
+          <span className="bg-white/85 px-2 py-0.5 rounded-full shadow-sm">🌳 {weeks != null ? weeks : 0}</span>
+        </span>
       </div>
     </div>
   );

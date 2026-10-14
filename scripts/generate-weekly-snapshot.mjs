@@ -99,6 +99,17 @@ function synthesizeOccurrencesFromRecurringSchedule(recurringSlots, realSchedule
 async function main() {
   await signInAnonymously(auth);
 
+  // The weekly refresh is split over the week so Firebase is not read all at once:
+  //   --only=core     (Monday)    attendance, trophies, weeks attended, each student's history
+  //   --only=classes  (Tuesday)   SmartStudy / Abhidhamma / Dhammaschool class boards + trophy announcements
+  //   --only=content  (Wednesday) Myanmar Speaker content + every student's Avatar look
+  //   --only=roster   (Thursday)  the "active this week" lists / Shrine Room / Nature World pictures
+  // No flag = everything (running it by hand).
+  const ONLY = (process.argv.find(a => a.startsWith('--only=')) || '').slice(7);
+  const want = (part) => !ONLY || ONLY === part;
+  const generatedAt = new Date().toISOString();
+
+  if (want('core')) {
   const startOfYear = new Date(new Date().getFullYear(), 0, 1);
   const [studentsSnap, scheduleSnap, sessionsSnap, recurringSnap] = await Promise.all([
     getDocs(collection(db, `${publicDataPath}/students`)),
@@ -232,18 +243,6 @@ async function main() {
   const snapshot = { generatedAt: new Date().toISOString(), attendanceRankedList, attendanceMonthlyRankedList, trophyList, attendanceTotals };
   writeFileSync(OUT_PATH, JSON.stringify(snapshot, null, 2));
 
-  // ---- Class leaderboards for SmartStudy / Abhidhamma ----
-  // Each class's scores, so a student's tab can show classmates' standings
-  // from a static file (weekly) instead of reading every score live; the
-  // student's OWN scores are still read live by the app and merged in. On
-  // the Sunday Parami window the app reads Firestore directly instead.
-  // The class leaderboards (SmartStudy scores and reflections, Abhidhamma): see class-snapshots.mjs --
-  // only what is new is read, and a quiet week changes nothing.
-  const generatedAt = new Date().toISOString();
-  await refreshClassSnapshots(db, appId, { full: process.argv.includes('--full') });
-  await refreshContentSnapshots(db);
-  await refreshAnnouncementsSnapshot(db, appId);
-  await refreshAvatarSnapshot(db);
   // ---- Per-student "weeks attended" (all time), for the Bodhi Tree and Shrine Room ----
   // Both used to read a student's whole schedule + whole session history every time
   // they were opened. One small static file replaces that (up to a week old).
@@ -303,6 +302,21 @@ async function main() {
     writeFileSync(join(HISTORY_DIR, `${encodeURIComponent(uid)}.json`), JSON.stringify({ generatedAtMs: Date.now(), lessons: [], ...h }));
   }
 
+  console.log(`Wrote ${attendanceRankedList.length} attendance rows and ${trophyList.length} trophy rows to ${OUT_PATH}`);
+  }
+
+  if (want('classes')) {
+    // Each class's scores, so a student's tab can show classmates' standings from a static file instead of reading
+    // every score live (see class-snapshots.mjs: only what is new is read, and a quiet week changes nothing).
+    await refreshClassSnapshots(db, appId, { full: process.argv.includes('--full') });
+    await refreshAnnouncementsSnapshot(db, appId);
+  }
+  if (want('content')) {
+    await refreshContentSnapshots(db);
+    await refreshAvatarSnapshot(db);
+  }
+
+  if (want('roster')) {
   // ---- "Who was active this week" for every app's online pill ----
   // Each app's pill used to read that app's whole roster collection (about 90
   // docs) whenever it was opened. Now a student's pill reads one of these static
@@ -335,7 +349,7 @@ async function main() {
       writeFileSync(join(ROSTER_DIR, `${target.path.replace(/\//g, '__')}.json`), JSON.stringify({ generatedAt, docs }));
     } catch (e) { console.error('Roster snapshot failed for', target.path, e.message); }
   }
-  console.log(`Wrote ${attendanceRankedList.length} attendance rows and ${trophyList.length} trophy rows to ${OUT_PATH}`);
+  }
   process.exit(0);
 }
 

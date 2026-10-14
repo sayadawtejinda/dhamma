@@ -1,6 +1,6 @@
 import { listenWithHistory, listenLessonsWithHistory } from './studentHistory';
 import { isOnlineStatusDay, isParamiClassTime } from './presenceDay';
-import { PeekName } from './AvatarPeek';
+import { PeekName, AvatarThumb } from './AvatarPeek';
 import { startLiveWatchListener, setLiveWatch, useLiveWatch, liveWatchUntilMs } from './liveWatch';
 import { SPECIAL_AWARD_ITEMS } from './festivals';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
@@ -9922,25 +9922,21 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         )}
       </div>
 
-      <h2 className="text-3xl font-bold mb-6 text-emerald-700 flex items-end flex-wrap gap-3">
-        {/* Background-independent pill (not just a text color) -- the home
-            background image is swappable now (see Avatar Shop), so this
-            can't rely on any particular image being dark/light enough
-            behind it to stay readable. */}
-        <span className="bg-white/85 backdrop-blur-sm px-3 py-1 rounded-xl shadow-sm">{studentProfile?.name}'s 🏡</span>
-        {(attendanceSummary.yearAttended > 0 || attendanceSummary.yearAbsent > 0) && (
-          <span className="flex flex-col items-start gap-1">
-            <span className="flex items-center gap-2 text-lg" title="Days attended / absent this year">
-              <span className="font-bold text-emerald-600">{attendanceSummary.yearAttended}</span>
-              <span className="font-bold text-red-600">{attendanceSummary.yearAbsent}</span>
-            </span>
-            <AttendanceBar entries={attendanceSummary.yearEntries} />
-          </span>
-        )}
-      </h2>
 
       <div className="py-6 mb-8 relative flex flex-col md:flex-row justify-between items-start md:items-center">
             <div className="w-full">
+                <div className="flex items-start gap-3 mb-2">
+                <div className="flex flex-col items-center flex-shrink-0 w-28">
+                  <button
+                    onClick={() => onOpenAvatar && onOpenAvatar({ studentUid, studentName: studentProfile?.name || '' })}
+                    className="rounded-2xl hover:scale-105 transition-transform"
+                    title="My Avatar"
+                  >
+                    <AvatarThumb name={studentProfile?.name} look={studentProfile?.avatarLook} size={96} />
+                  </button>
+                  <span className="mt-1 text-sm font-bold text-emerald-700 bg-white/85 backdrop-blur-sm px-2 py-0.5 rounded-xl shadow-sm text-center break-words max-w-full">{studentProfile?.name} 🏡</span>
+                </div>
+                  <div>
                 <div className="flex items-center flex-wrap gap-3 mb-2">
                   {onOpenBodhiTree && (
                     <button
@@ -9960,15 +9956,6 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                       🛕
                     </button>
                   )}
-                  {onOpenAvatar && (
-                    <button
-                      onClick={() => onOpenAvatar({ studentUid, studentName: studentProfile?.name || '' })}
-                      className="flex items-center justify-center text-2xl bg-indigo-50 hover:bg-indigo-100 w-11 h-11 rounded-lg transition-colors border border-indigo-200 flex-shrink-0"
-                      title="My Avatar"
-                    >
-                      🧑‍🎨
-                    </button>
-                  )}
                   {onOpenNatureWorld && (
                     <button
                       onClick={() => onOpenNatureWorld({ studentUid, studentName: studentProfile?.name || '' })}
@@ -9978,6 +9965,13 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                       🌿
                     </button>
                   )}
+                  <button
+                    onClick={() => onNavigate && onNavigate('trophies')}
+                    className="flex items-center justify-center text-2xl bg-yellow-50 hover:bg-yellow-100 w-11 h-11 rounded-lg transition-colors border border-yellow-200 flex-shrink-0"
+                    title="Trophies Awarded"
+                  >
+                    🏆
+                  </button>
                 </div>
                 <div className="flex items-center flex-wrap gap-3 mb-2">
                   <button
@@ -10002,13 +9996,6 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                     📊
                   </button>
                   <button
-                    onClick={() => onNavigate && onNavigate('trophies')}
-                    className="flex items-center justify-center text-2xl bg-yellow-50 hover:bg-yellow-100 w-11 h-11 rounded-lg transition-colors border border-yellow-200 flex-shrink-0"
-                    title="Trophies Awarded"
-                  >
-                    🏆
-                  </button>
-                  <button
                     onClick={() => setShowLogoutConfirm(true)}
                     className="flex items-center justify-center text-gray-500 hover:text-red-700 bg-gray-50 hover:bg-red-50 w-11 h-11 rounded-lg transition-colors border border-gray-200 flex-shrink-0"
                     title="Log out of this device (e.g. borrowed/shared device)"
@@ -10018,6 +10005,19 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                       <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 001 1h6a1 1 0 100-2H4V5h5a1 1 0 000-2H3zm10.293 4.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L14.586 11H7a1 1 0 110-2h7.586l-1.293-1.293a1 1 0 010-1.414z" clipRule="evenodd" />
                     </svg>
                   </button>
+                </div>
+                <div className="mt-1">
+        {(attendanceSummary.yearAttended > 0 || attendanceSummary.yearAbsent > 0) && (
+          <span className="flex flex-col items-start gap-1">
+            <span className="flex items-center gap-2 text-lg" title="Days attended / absent this year">
+              <span className="font-bold text-emerald-600">{attendanceSummary.yearAttended}</span>
+              <span className="font-bold text-red-600">{attendanceSummary.yearAbsent}</span>
+            </span>
+            <AttendanceBar entries={attendanceSummary.yearEntries} />
+          </span>
+        )}
+                </div>
+                  </div>
                 </div>
                 {!studentProfile?.hideFromGroupRoster && (
                   // Same background-independent pill as the name badge above --

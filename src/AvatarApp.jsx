@@ -196,6 +196,13 @@ export default function AvatarApp({ entryRequest, onExit }) {
   const persist = (patch) => {
     if (!rosterRef) return;
     setDoc(rosterRef, { studentName, ...patch }, { merge: true }).catch(() => {});
+    // The student's home page shows their Avatar, so the look is also kept on their own profile (free to read there).
+    if (patch.avatar && studentUid) {
+      const full = { ...config, ...patch.avatar };
+      const look = {};
+      ['skin', 'hair', 'outfit', 'accessory', 'bg', 'homeBackground'].forEach(k => { if (full[k]) look[k] = full[k]; });
+      setDoc(doc(db, STUDENTS_COLLECTION_PATH, studentUid), { avatarLook: look }, { merge: true }).catch(() => {});
+    }
   };
 
   // Home Wallpaper is the one category the Tutoring home page itself needs
