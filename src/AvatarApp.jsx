@@ -321,7 +321,14 @@ export default function AvatarApp({ entryRequest, onExit }) {
 
   // A teacher gift opened in the popup over this screen pays into the same wallet.
   useEffect(() => {
-    const onGift = (e) => { setCoinBalance(b => b + (e.detail?.coins || 0)); };
+    const onGift = (e) => {
+      setCoinBalance(b => b + (e.detail?.coins || 0));
+      // A gifted outfit/accessory opened while this screen is open: add it to the wardrobe now.
+      // Without this the screen kept its old list, did not show the new item, and the next purchase
+      // saved that old list over it.
+      const { itemCategory, itemId } = e.detail || {};
+      if (itemId && itemCategory) setOwned(prev => ({ ...prev, [itemCategory]: Array.from(new Set([...(prev[itemCategory] || []), itemId])) }));
+    };
     window.addEventListener('dhamma-wallet-gift', onGift);
     return () => window.removeEventListener('dhamma-wallet-gift', onGift);
   }, []);

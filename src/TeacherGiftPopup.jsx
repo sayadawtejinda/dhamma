@@ -122,9 +122,10 @@ export default function TeacherGiftPopup({ studentUid, studentName, onClose }) {
     if (coins > 0) {
       later(() => spawnFlyingCoins(boxRef.current, Math.min(14, 6 + Math.round(coins / 40)), '🪙', true, badgeRef.current), 900);
       later(() => setBalance(b => (b ?? 0) + coins), 2300);
-      // Wallets already on screen in the app underneath catch up too.
-      window.dispatchEvent(new CustomEvent('dhamma-wallet-gift', { detail: { coins, giftId: gift.id } }));
     }
+    // Wallets and the wardrobe already on screen in the app underneath catch up too (an outfit-only
+    // gift has no coins, but the Avatar screen still has to learn about the new item).
+    window.dispatchEvent(new CustomEvent('dhamma-wallet-gift', { detail: { coins, giftId: gift.id, itemCategory: gift.itemCategory || null, itemId: gift.itemId || null } }));
   };
 
   const next = () => {
