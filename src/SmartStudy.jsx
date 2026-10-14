@@ -17,7 +17,8 @@ import {
   orderBy,
   runTransaction,
   writeBatch,
-  increment
+  increment,
+  serverTimestamp
 } from 'firebase/firestore';
 import { 
     BookOpen, Users, Award, Sparkles, Loader2, RefreshCw, 
@@ -699,6 +700,65 @@ const ContestCard = ({ classId, contest }) => {
     } catch (e) { console.error(e); alert('Could not start the contest. Please try again.'); }
     setBusy(false);
   };
+  // The same payout the 15-minute job does (scripts/pay-contest-prizes.mjs), but started from here, so the
+  // prizes never depend on GitHub running that job on time. Whichever runs first claims the contest;
+  // the other then finds it already taken and does nothing, so nobody is paid twice.
+  const payNow = async () => {
+    if (busy || !running) return;
+    if (contest.endsAt > Date.now()) { alert('The contest has not ended yet.'); return; }
+    if (!window.confirm('Pay the prizes now?\n\nThe top places of the Global Leaderboard (total points) each get a gift box with their coins. This is also done automatically; this button just makes it happen right away.')) return;
+    setBusy(true);
+    try {
+      const base = ['artifacts', appId, 'public', 'data'];
+      const contestRef = doc(db, ...base, 'smartStudyContests', contest.id);
+      const claimed = await runTransaction(db, async (tx) => {
+        const snap = await tx.get(contestRef);
+        if (!snap.exists() || snap.data().status !== 'active') return false;
+        tx.update(contestRef, { status: 'paying' });
+        return true;
+      });
+      if (!claimed) { alert('This contest is already being paid or has been paid.'); setBusy(false); return; }
+      const scoresSnap = await getDocs(query(getScoresCollectionRef(), where('classId', '==', classId)));
+      const toMs = (v) => (typeof v === 'number' ? v : Date.parse(v) || 0);
+      const first = new Map();
+      scoresSnap.docs.forEach(d => {
+        const sc = d.data();
+        if (!sc.studentName) return;
+        const t = toMs(sc.timestamp);
+        const k = `${sc.studentName}|${sc.studentAgeLevel || 'default'}|${sc.lessonId}`;
+        const cur = first.get(k);
+        if (!cur || t < cur.t) first.set(k, { name: sc.studentName, age: sc.studentAgeLevel || 'default', score: Number(sc.score) || 0, t });
+      });
+      const totals = new Map();
+      first.forEach(({ name, age, score, t }) => {
+        const k = `${name}|${age}`;
+        const cur = totals.get(k) || { name, total: 0, last: 0 };
+        cur.total += score; cur.last = Math.max(cur.last, t);
+        totals.set(k, cur);
+      });
+      const seen = new Set();
+      const ranked = Array.from(totals.values()).filter(x => x.total > 0).sort((a, b) => b.total - a.total || a.last - b.last).filter(x => !seen.has(x.name) && seen.add(x.name));
+      const prizes = contest.prizes || [];
+      const winners = ranked.slice(0, prizes.length).map((w, i) => ({ rank: i + 1, name: w.name, total: w.total, coins: prizes[i] }));
+      for (const w of winners) {
+        let uid = null;
+        const rosterSnap = await getDoc(doc(db, ...base, 'classRoster', `${classId}_${encodeURIComponent(w.name)}`));
+        if (rosterSnap.exists() && rosterSnap.data().tutoringStudentUid) uid = rosterSnap.data().tutoringStudentUid;
+        if (!uid) { const q = await getDocs(query(collection(db, ...base, 'students'), where('name', '==', w.name))); if (!q.empty) uid = q.docs[0].id; }
+        if (uid) {
+          await addDoc(collection(db, 'artifacts/shrine-room-app/public/data/teacherGifts'), { studentUid: uid, studentName: w.name, coins: w.coins, message: `🏆 ${ordinalWord(w.rank)} place in the ${classId} contest! Congratulations!`.slice(0, 80), createdAt: serverTimestamp(), expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000 });
+          await setDoc(doc(db, ...base, 'students', uid), { hasTeacherGift: true }, { merge: true });
+        } else {
+          await setDoc(doc(db, 'artifacts/shrine-room-app/public/data/roster', (w.name || 'unknown').trim().replace(/[.$#/\[\]]/g, '_')), { studentName: w.name, coinBalance: increment(w.coins) }, { merge: true });
+        }
+      }
+      const paidAt = Date.now();
+      await updateDoc(contestRef, { status: 'paid', paidAt, winners });
+      await updateDoc(getClassDocRef(classId), { contest: { id: contest.id, startedAt: contest.startedAt, endsAt: contest.endsAt, prizes, status: 'paid', paidAt, winners } });
+      alert(`Paid ${winners.length} winner(s).`);
+    } catch (e) { console.error(e); alert('Something went wrong while paying. Please check the contest card and try again.'); }
+    setBusy(false);
+  };
   const cancelContest = async () => {
     if (busy || !running) return;
     if (!window.confirm('Cancel this contest? No prizes will be paid.')) return;
@@ -717,6 +777,7 @@ const ContestCard = ({ classId, contest }) => {
           <p className="text-sm text-amber-900 mt-1">Running: started {fmtContestDate(contest.startedAt)} · ends <b>{fmtContestDate(contest.endsAt)}</b>.</p>
           <p className="text-sm text-amber-900">{ended ? 'The time is up. The prizes will be paid automatically within about 15 minutes.' : 'The prizes are paid automatically a few minutes after it ends.'}</p>
           <p className="text-xs text-amber-800 mt-1">Prizes: {(contest.prizes || []).map((c, i) => `${ordinalWord(i + 1)} ${c}`).join(' · ')}</p>
+          {ended && <button onClick={payNow} disabled={busy} className="mt-2 mr-2 px-4 py-2 font-bold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 shadow">{busy ? 'Paying…' : '💰 Pay prizes now'}</button>}
           {!ended && <button onClick={cancelContest} disabled={busy} className="mt-2 px-3 py-1 text-sm font-bold bg-white text-red-600 border border-red-300 rounded-lg hover:bg-red-50">Cancel contest</button>}
         </>
       ) : (
