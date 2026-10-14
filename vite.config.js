@@ -7,6 +7,9 @@ import { resolve } from 'path'
 export default defineConfig({
   plugins: [react()],
   base: '/dhamma/',
+  // Dev-only: honour PORT so the preview tool can assign a free port
+  // (falls back to Vite's default 5173 when PORT is not set).
+  server: { port: process.env.PORT ? Number(process.env.PORT) : 5173 },
   build: {
     rollupOptions: {
       // paramattha.html is a second, independent page (not part of the

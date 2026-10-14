@@ -15,7 +15,8 @@ const GAP_MS = 5 * 60 * 1000;
 const MAX_PER_DAY = 5;
 const FIRST_DELAY_MS = 10 * 1000;
 const CHECK_EVERY_MS = 20 * 1000;
-const REFETCH_EVERY_MS = 3 * 60 * 60 * 1000; // once when opened, then every 3 hours (new announcements arrive through the flash listener)
+const CACHE_MS = 24 * 60 * 60 * 1000; // the list is read from Firestore at most once a day per device
+const LIST_KEY = 'starTickerList_v1';
 const STORE_KEY = 'starTickerState_v1';
 const FLASHED_KEY = 'starTickerFlashed_v1';
 const FLASH_WINDOW_MS = 2 * 60 * 1000;
@@ -93,14 +94,21 @@ export default function StarTicker() {
     setFlashQueue(q => q.slice(1));
   }, [current, flashQueue]);
 
-  // A plain read now and then (not a live listener) -- announcements change
-  // rarely, and this runs on every open device.
+  // One plain read per device per day (not a live listener, not on every open): the list is kept in
+  // localStorage and reused all day. New approvals still appear at once through the flash listener above.
   useEffect(() => {
     if (!authReady) return;
     let cancelled = false;
+    const usable = (a) => a.status !== 'pending' && a.status !== 'rejected' && a.message
+      // Student-written ones only count once the teacher approved them; an approved one may be waiting
+      // for a free slot (startsAt in the future) and joins when its turn comes.
+      && (!a.startsMs || a.startsMs <= Date.now()) && (!a.expiresMs || a.expiresMs > Date.now());
+    const apply = (rows) => { listRef.current = rows.filter(usable); };
     const fetchList = async () => {
-      const st = loadState();
-      if (st.date === todayKey() && st.count >= MAX_PER_DAY) return; // nothing more to show today
+      try {
+        const c = JSON.parse(localStorage.getItem(LIST_KEY) || 'null');
+        if (c && Array.isArray(c.rows) && Date.now() - c.at < CACHE_MS && Date.now() >= c.at) { apply(c.rows); return; }
+      } catch (e) { /* no cache */ }
       try {
         const snap = await getDocs(query(
           collection(db, STAR_PATH),
@@ -109,18 +117,17 @@ export default function StarTicker() {
           limit(10)
         ));
         if (cancelled) return;
-        // Student-written ones only count once the teacher approved them.
-        listRef.current = snap.docs
-          .map(d => ({ id: d.id, ...d.data() }))
-          // An approved announcement may be waiting for a free slot (startsAt in the
-          // future -- at most 3 student ones run at a time); it joins when its turn comes.
-          .filter(a => a.status !== 'pending' && a.status !== 'rejected' && a.message
-            && (!a.startsAt || (a.startsAt.toMillis ? a.startsAt.toMillis() : 0) <= Date.now()));
+        const rows = snap.docs.map(d => {
+          const x = d.data();
+          return { id: d.id, studentName: x.studentName, message: x.message, status: x.status || null,
+            startsMs: x.startsAt?.toMillis ? x.startsAt.toMillis() : 0, expiresMs: x.expiresAt?.toMillis ? x.expiresAt.toMillis() : 0 };
+        });
+        try { localStorage.setItem(LIST_KEY, JSON.stringify({ at: Date.now(), rows })); } catch (e) { /* ignore */ }
+        apply(rows);
       } catch (e) { console.error('Could not load announcements:', e); }
     };
     fetchList();
-    const interval = setInterval(fetchList, REFETCH_EVERY_MS);
-    return () => { cancelled = true; clearInterval(interval); };
+    return () => { cancelled = true; };
   }, [authReady]);
 
   useEffect(() => {
