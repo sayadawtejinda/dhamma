@@ -73,7 +73,7 @@ const GIFT_OPTIONS = [
   { id: 'gift-rose', name: 'Rose', emoji: '🌹', kind: 'gift' },
 ];
 const GIFT_BAG_MAX = 30;
-// A student receives a gift from this many different friends' worlds a week (by visiting them).
+// A student can send gifts (by visiting) to this many different friends a week.
 const GIFTS_SENT_PER_WEEK = 2;
 // One gift per visiting friend, ever -- keyed by the visitor's name, so
 // coming back again doesn't bring another. (Older keys were name + visit
@@ -332,7 +332,23 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
     return () => { cancelled = true; clearTimeout(initialTimer); };
   }, []);
 
-  const [recentVisitors, setRecentVisitors] = useState([]);
+  // Gifts waiting for me: the teacher's (my own doc) and friends' (from the weekly static roster file: a friend who
+  // visited me saved my name in THEIR OWN doc, so nothing is ever written into another student's doc). A friend's
+  // gift can therefore arrive up to a week late.
+  const [teacherGifts, setTeacherGifts] = useState([]);
+  const [friendGifts, setFriendGifts] = useState([]);
+  const recentVisitors = useMemo(() => [...teacherGifts, ...friendGifts], [teacherGifts, friendGifts]);
+  useEffect(() => {
+    if (!studentUid || !studentName) return;
+    let off = false;
+    loadRosterSnapshot(SHRINE_ROSTER_PATH).then(docs => {
+      if (off || !docs) return;
+      setFriendGifts(docs
+        .filter(d => d.studentName && d.studentName !== studentName && (d.natureWorld?.giftedFriends || []).includes(studentName))
+        .map(d => ({ name: d.studentName, visitedAt: 0, gift: true })));
+    });
+    return () => { off = true; };
+  }, [studentUid, studentName]);
   const [showVisitorsPanel, setShowVisitorsPanel] = useState(false);
   const [heartRainId, setHeartRainId] = useState(null);
   // Opening a visitor's gift shakes out hearts, and the plant inside goes into
@@ -380,8 +396,8 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
           if (isMounted) {
             setCoinBalance(data.coinBalance ?? 0);
             setWorld({ ...DEFAULT_WORLD, ...(data.natureWorld || {}) });
-            // Only the gifts the TEACHER sent are kept here; visits between students no longer write anything.
-            setRecentVisitors((data.natureWorldRecentVisitors || []).filter(v => v.teacher));
+            // Gifts the TEACHER sent. Gifts from friends come from the weekly file (see below).
+            setTeacherGifts((data.natureWorldRecentVisitors || []).filter(v => v.teacher));
           }
         }
       } catch (e) {
@@ -477,9 +493,10 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
     persist({ natureWorld: { placedTrees: { [slotIndex]: deleteField() } } });
   };
 
-  // Shows another student's world as it was in the weekly static roster file (no Firestore read, and nothing is
-  // written to THEIR doc). Visiting a friend is also how I get a gift: one from each friend ever, and from at
-  // most GIFTS_SENT_PER_WEEK different friends a week; it lands in my own gift bag.
+  // Shows another student's world as it was in the weekly static roster file (no Firestore read). Visiting a friend
+  // is also sending them a gift: only GIFTS_SENT_PER_WEEK different friends a week, and a friend only ever gets one
+  // from me. The send is saved only in MY doc (giftedFriends); the friend finds it in their gift list once the weekly
+  // file is refreshed (so it can arrive up to a week late). Nothing is written into their doc.
   const handleVisitStudent = async (targetName) => {
     if (!targetName || targetName === studentName) return;
     setVisitingStudentName(targetName);
@@ -495,24 +512,18 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
       }
       setVisitingWorld(data ? { ...DEFAULT_WORLD, ...(data.natureWorld || {}) } : null);
       if (studentName && !isTeacherPreview) {
-        const gifted = world.gotGiftFriends || [];
-        if (!gifted.includes(targetName)) {
-          const weekKey = currentWeekKey();
-          const given = world.giftWeekKey === weekKey ? (world.giftWeekGot || []) : [];
-          const bag = world.giftBag || [];
-          if (given.length >= GIFTS_SENT_PER_WEEK) {
-            setVisitGiftNote(`🎁 ${GIFTS_SENT_PER_WEEK}/${GIFTS_SENT_PER_WEEK} ✅  See you next week! 🌸`);
-          } else if (bag.length >= GIFT_BAG_MAX) {
-            setVisitGiftNote('🎁 Your gift bag is full -- plant some first!');
-          } else {
-            const key = giftKeyFor({ name: targetName });
-            const gift = giftForVisit(key);
-            const nextBag = [...bag, { id: gift.id, from: targetName, key }];
+        const weekKey = currentWeekKey();
+        const given = world.giftWeekKey === weekKey ? (world.giftWeekGiven || []) : [];
+        const gifted = world.giftedFriends || [];
+        if (!gifted.includes(targetName) && !given.includes(targetName)) {
+          if (given.length < GIFTS_SENT_PER_WEEK) {
             const nextGiven = [...given, targetName];
             const nextGifted = [...gifted, targetName].slice(-300);
-            setWorld(prev => ({ ...prev, giftBag: nextBag, giftWeekKey: weekKey, giftWeekGot: nextGiven, gotGiftFriends: nextGifted }));
-            persist({ natureWorld: { giftBag: nextBag, giftWeekKey: weekKey, giftWeekGot: nextGiven, gotGiftFriends: nextGifted } });
-            setVisitGiftNote(`🎁 ${gift.emoji} ${gift.name} from ${targetName} -- it's in your gift bag! (${nextGiven.length}/${GIFTS_SENT_PER_WEEK} gifts this week)`);
+            setWorld(prev => ({ ...prev, giftWeekKey: weekKey, giftWeekGiven: nextGiven, giftedFriends: nextGifted }));
+            persist({ natureWorld: { giftWeekKey: weekKey, giftWeekGiven: nextGiven, giftedFriends: nextGifted } });
+            setVisitGiftNote(`🎁 Your gift is on its way to ${targetName}! (${nextGiven.length}/${GIFTS_SENT_PER_WEEK} gifts this week)`);
+          } else {
+            setVisitGiftNote(`🎁 ${GIFTS_SENT_PER_WEEK}/${GIFTS_SENT_PER_WEEK} ✅  See you next week! 🌸`);
           }
         }
       }
@@ -631,20 +642,20 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
         coinIcon="🪙"
         panelTitle="🌿 Students"
         weeklyLabel={(n) => <>visit {n} 👥</>}
-        panelNote="🎁 1 gift per friend · ✅ = done · 👋 Visit a new friend!"
+        panelNote="📦 Visit a friend's Nature World and your 🎁 gift goes to them (it reaches them within a week; 1 gift per friend). ✅ = already sent."
         teacherLabel="🧑‍🏫 Teacher"
         showInactiveWarning={false}
         renderActivity={(s) => !isTeacherPreview && s.studentName !== studentName && (
           <span className="flex items-center gap-2 justify-end">
             {/* A friend only ever receives one gift from me, so one already
                 visited is marked -- visit someone new to send another. */}
-            {(world.gotGiftFriends || []).includes(s.studentName) ? (
+            {(world.giftedFriends || []).includes(s.studentName) ? (
               <>
-                <span className="text-xs font-bold text-white bg-emerald-600 rounded-full px-2 py-0.5" title="You already got this friend's gift. Visit someone new for another!">✅ Done</span>
+                <span className="text-xs font-bold text-white bg-emerald-600 rounded-full px-2 py-0.5" title="You already sent this friend a gift. Visit someone new to send another!">✅ Sent</span>
                 <button
                   onClick={(e) => { e.stopPropagation(); handleVisitStudent(s.studentName); }}
                   className="text-xs font-semibold text-gray-500 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-full px-2 py-0.5"
-                  title="You already got this friend's gift, but you can look at their Nature World again"
+                  title="Your gift is already sent, but you can look at their Nature World again"
                 >
                   👀 Look again
                 </button>
@@ -653,9 +664,9 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
               <button
                 onClick={(e) => { e.stopPropagation(); handleVisitStudent(s.studentName); }}
                 className="text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-full px-2 py-0.5"
-                title="Visit their Nature World and get a gift"
+                title="Visit their Nature World and send them a gift"
               >
-                👣 Visit
+                📦 Send
               </button>
             )}
           </span>
@@ -667,7 +678,7 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
           onClick={() => setShowVisitorsPanel(true)}
           className="fixed top-16 right-3 z-50 flex items-center gap-1 bg-white hover:bg-emerald-50 text-emerald-700 text-sm font-semibold px-3 py-2 rounded-full shadow-lg border-2 border-emerald-300"
         >
-          🎁 Gifts from teacher ({recentVisitors.length})
+          🎁 Gifts ({recentVisitors.length})
         </button>
       )}
 
@@ -788,7 +799,8 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
         <div className="fixed inset-0 z-[10001] bg-black/50 flex items-center justify-center p-4" onClick={() => setShowVisitorsPanel(false)}>
           <button onClick={() => setShowVisitorsPanel(false)} className="fixed top-3 right-3 z-[10002] w-11 h-11 rounded-full bg-red-600 hover:bg-red-700 text-white text-2xl font-bold shadow-lg flex items-center justify-center" aria-label="Close">×</button>
           <div className="bg-white rounded-2xl shadow-2xl max-w-xs w-full p-6 text-center max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-bold text-emerald-800 mb-4">🎁 Gifts from the teacher</h2>
+            <h2 className="text-lg font-bold text-emerald-800 mb-1">🎁 Your gifts</h2>
+            <p className="text-xs text-gray-400 mb-4">From friends (updated once a week) and from the teacher</p>
             {recentVisitors.length === 0 ? (
               <p className="text-sm text-gray-400 mb-4">No gifts yet.</p>
             ) : (
@@ -803,7 +815,7 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
                         : <GiftBox opened={isOpened} onClick={() => openGift(v)} />}
                       <div className="flex-1 min-w-0">
                         <span className="font-semibold text-gray-800 block truncate">{v.name}{v.teacher ? ' 🧑‍🏫' : ''}</span>
-                        <span className="text-xs text-gray-400">{new Date(v.visitedAt).toLocaleString()}</span>
+                        {v.visitedAt ? <span className="text-xs text-gray-400">{new Date(v.visitedAt).toLocaleString()}</span> : null}
                       </div>
                       {isOpened && v.gift !== false && <span className="text-2xl" title={gift.name}>{gift.emoji}</span>}
                     </div>

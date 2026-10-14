@@ -190,7 +190,7 @@ const QuizModule = ({ classId,lessonId,lessonTitle,userId,userName,ageGroup,quiz
 // ─── NotificationBell ─────────────────────────────────────────────────────────
 const NotificationBell = ({ userId, classId }) => {
   const [n,setN]=useState([]);const [open,setOpen]=useState(false);const [lr,setLr]=useState(()=>parseInt(localStorage.getItem(`abhidhamma_notif_${userId}`))||0);
-  useEffect(()=>{if(!db||!userId)return;const q=classId?query(abhiActivityRef(),where('classId','==',classId),orderBy('timestamp','desc'),limit(15)):query(abhiActivityRef(),orderBy('timestamp','desc'),limit(15));return onSnapshot(q,snap=>setN(snap.docs.map(d=>({id:d.id,...d.data()}))));},[userId,classId]);
+  useEffect(()=>{if(!db||!userId)return;const q=classId?query(abhiActivityRef(),where('classId','==',classId),orderBy('timestamp','desc'),limit(15)):query(abhiActivityRef(),orderBy('timestamp','desc'),limit(15));let off=false;getDocs(q).then(snap=>{if(!off)setN(snap.docs.map(d=>({id:d.id,...d.data()})));}).catch(e=>console.error('Notifications:',e));return()=>{off=true;};},[userId,classId]); // one read when opened -- not a live listener that pushes every classmate's activity to every open device
   const uc=n.filter(x=>{const ts=x.timestamp?.toMillis?x.timestamp.toMillis():(x.timestamp?.seconds*1000)||0;return ts>lr;}).length;
   const toggle=()=>{if(!open){const now=Date.now();setLr(now);localStorage.setItem(`abhidhamma_notif_${userId}`,now);}setOpen(!open);};
   return(

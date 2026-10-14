@@ -1157,6 +1157,19 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   // A read-only peek at someone ELSE's altar -- fetched on demand from
   // their own roster doc, never subscribed to live, closed by just
   // clearing this back to null.
+  // Who has visited MY altar, as of last week: a visit is saved only in the visitor's own doc (shrineVisitedFriends),
+  // so the weekly roster file already tells everyone who visited whom. Nothing is written into another student's doc.
+  const [visitorNames, setVisitorNames] = useState([]);
+  const [showVisitorsPanel, setShowVisitorsPanel] = useState(false);
+  useEffect(() => {
+    if (isTeacherPreview || !studentName) return;
+    let off = false;
+    loadRosterSnapshot(SHRINE_ROSTER_PATH).then(docs => {
+      if (off || !docs) return;
+      setVisitorNames(docs.filter(d => d.studentName !== studentName && (d.shrineVisitedFriends || []).includes(studentName)).map(d => d.studentName).filter(Boolean));
+    });
+    return () => { off = true; };
+  }, [studentName]);
   const [visitingStudentName, setVisitingStudentName] = useState(null);
   const [visitingData, setVisitingData] = useState(null);
   const [visitLoading, setVisitLoading] = useState(false);
@@ -1708,7 +1721,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   // Three Refuges buttons. If they can't afford the next step, tell them to
   // earn coins from lessons instead. Not shown to a teacher previewing.
   const guideActive = !loading && !isTeacherPreview && !chantingOpen && meditatingMinutes == null
-    && !meditationPickerOpen && !visitingStudentName;
+    && !meditationPickerOpen && !showVisitorsPanel && !visitingStudentName;
   const filledSlotCount = Array.from({ length: SLOT_COUNT }).filter((_, i) => placedItems[i] && findOffering(placedItems[i].id)).length;
   const umbrellaCount = (placedUmbrellas.left ? 1 : 0) + (placedUmbrellas.right ? 1 : 0);
   const cheapestSlotOffering = OFFERING_OPTIONS
@@ -1780,7 +1793,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
         secondaryIcon="🪙"
         panelTitle="🛕 Students"
         weeklyLabel={(n) => <>visit {n} 👥</>}
-        panelNote="🎁 1 gift per friend · ✅ = done · 👋 Visit a new friend!"
+        panelNote="👣 Visit a friend's Shrine Room and you get a 🎁 gift from their altar (one gift from each friend). ✅ = you already got it. Visit a new friend for a new gift!"
         teacherLabel="🧑‍🏫 Teacher"
         showInactiveWarning={false}
         renderActivity={(s) => (
@@ -1862,7 +1875,16 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
           // While the shop is open, Chanting/Meditation move below it
           // instead of above -- keeps the shop button anchored right under
           // the coin badge, closest to where the shop panel itself opens.
-          return shopOpen ? [shopBtn, chantingBtn, meditationBtn] : [chantingBtn, meditationBtn, shopBtn];
+          const visitorsBtn = !isTeacherPreview && (
+            <button
+              key="visitors"
+              onClick={() => setShowVisitorsPanel(true)}
+              className="flex items-center gap-1 bg-white hover:bg-amber-50 text-amber-700 text-sm font-semibold px-3 py-2 rounded-full shadow-lg border-2 border-amber-300"
+            >
+              👣 Visitors{visitorNames.length > 0 ? ` (${visitorNames.length})` : ''}
+            </button>
+          );
+          return shopOpen ? [shopBtn, chantingBtn, meditationBtn, visitorsBtn] : [chantingBtn, meditationBtn, shopBtn, visitorsBtn];
         })()}
       </div>
 
@@ -1912,6 +1934,35 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
         </div>
       )}
 
+      {/* Visitors -- friends who came to my altar (as of last week). */}
+      {showVisitorsPanel && (
+        <div className="fixed inset-0 z-[10001] bg-black/50 flex items-center justify-center p-4" onClick={() => setShowVisitorsPanel(false)}>
+          <button onClick={() => setShowVisitorsPanel(false)} className="fixed top-3 right-3 z-[10002] w-11 h-11 rounded-full bg-red-600 hover:bg-red-700 text-white text-2xl font-bold shadow-lg flex items-center justify-center" aria-label="Close">×</button>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-xs w-full p-6 text-center max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-bold text-emerald-800 mb-1">👣 Visitors</h2>
+            <p className="text-xs text-gray-400 mb-4">Friends who visited your Shrine Room (updated once a week)</p>
+            {visitorNames.length === 0 ? (
+              <p className="text-sm text-gray-400 mb-4">No visitors yet.</p>
+            ) : (
+              <div className="space-y-2 mb-4 max-h-64 overflow-y-auto text-left">
+                {visitorNames.map(n => (
+                  <div key={n} className="flex items-center justify-between gap-2 bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2">
+                    <span className="font-semibold text-gray-800 truncate">{n}</span>
+                    <button
+                      onClick={() => { setShowVisitorsPanel(false); handleVisitStudent(n); }}
+                      className="flex-shrink-0 text-xs font-semibold text-emerald-700 bg-white hover:bg-emerald-100 border border-emerald-300 rounded-full px-2 py-1"
+                    >
+                      👣 Visit back
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <button onClick={() => setShowVisitorsPanel(false)} className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2.5 rounded-xl">Close</button>
+          </div>
+        </div>
+      )}
+
       {/* Visit -- a read-only peek at another student's altar (see
           handleVisitStudent). No purchasing, no chanting/meditation --
           just a look, same shapes (Buddha/offerings/umbrellas/bell) as the
@@ -1925,6 +1976,9 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
             <div className="flex justify-center mb-3"><AvatarThumb name={visitingStudentName} size={72} /></div>
             {visitGiftNote && (
               <p className="mb-4 text-sm font-semibold text-amber-800 bg-amber-50 border border-amber-300 rounded-xl px-3 py-2">{visitGiftNote}</p>
+            )}
+            {!visitGiftNote && !isTeacherPreview && (
+              <p className="mb-3 text-xs text-gray-500">🎁 Visiting a friend gives you a gift from their altar (one from each friend).</p>
             )}
             {visitLoading ? (
               <p className="text-sm text-gray-400 py-8">Opening...</p>
