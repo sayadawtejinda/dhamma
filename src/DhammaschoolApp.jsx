@@ -9,6 +9,7 @@ import {
 } from 'firebase/firestore';
 import { auth as sharedAuth, db as sharedDb } from './firebase';
 import OnlineStatusWidget from './OnlineStatusWidget';
+import { AvatarPeekModal } from './AvatarPeek';
 import { presenceIntervalMs, listenLiveOrOnce } from './presenceDay';
 
 // The vanilla script below tracks role/name/class as plain closure `let`s,
@@ -801,6 +802,16 @@ export default function DhammaschoolApp({ entryRequest, onExit, isActive }) {
   // state -- see DHAMMASCHOOL_PRESENCE_PATH above) so the shared
   // OnlineStatusWidget can render outside that closure.
   const [rosterCtx, setRosterCtx] = useState({ isTeacherMode: false, studentName: null, coinBalance: null });
+  // Tap a student's name in the lesson markup (answers, completions, scores) -> see their Avatar.
+  const [peekName, setPeekName] = useState(null);
+  useEffect(() => {
+    const onClick = (e) => {
+      const el = e.target && e.target.closest ? e.target.closest('[data-peek-name]') : null;
+      if (el) setPeekName(el.getAttribute('data-peek-name'));
+    };
+    document.addEventListener('click', onClick);
+    return () => document.removeEventListener('click', onClick);
+  }, []);
 
   // FontAwesome is used throughout Dhammaschool's markup (fa-* icon classes)
   // — load it once if it isn't already on the page (harmless / idempotent if
@@ -1862,7 +1873,7 @@ let bilingualMode = false;
                         <div class="flex items-start gap-3 p-3 bg-green-50 rounded-xl border border-green-100">
                             <div class="bg-green-500 text-white w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"><i class="fas fa-check"></i></div>
                             <div>
-                                <p class="font-bold text-slate-800">${c.studentName || 'Student'} <span class="text-slate-500 font-normal">completed</span> ${lessonName}</p>
+                                <p class="font-bold text-slate-800"><span class="cursor-pointer hover:underline" data-peek-name="${(String((c.studentName || 'Student')) || '').replace(/"/g, '&quot;')}">${(c.studentName || 'Student')}</span> <span class="text-slate-500 font-normal">completed</span> ${lessonName}</p>
                                 <p class="text-xs text-slate-400 font-bold">${timeStr}</p>
                             </div>
                         </div>`;
@@ -1915,7 +1926,7 @@ let bilingualMode = false;
                             <div class="flex justify-between items-start p-3 border-b border-slate-100 bg-white">
                                 <div class="flex-grow">
                                     <p class="text-slate-700">${ans.answerContent}</p>
-                                    <p class="text-xs font-bold text-orange-600 mt-1">${ans.studentName}</p>
+                                    <p class="text-xs font-bold text-orange-600 mt-1"><span class="cursor-pointer hover:underline" data-peek-name="${(String(ans.studentName) || '').replace(/"/g, '&quot;')}">${ans.studentName}</span></p>
                                 </div>
                                 <button onclick="likeAnswer('${ans.id}', this)" class="like-btn flex-shrink-0 ml-4 px-3 py-1 rounded-full text-xs font-bold ${isLiked ? 'liked' : ''}">
                                     <i class="fas fa-heart"></i> <span>${likeCount}</span>
@@ -1946,7 +1957,7 @@ window.renderTeacherScores = function(lessonId) {
                     <div class="flex justify-between items-center p-3 border-b border-slate-100 bg-white rounded-lg">
                         <div class="flex items-center gap-2">
                             <span class="font-black text-yellow-600 w-6 text-center">${i + 1}</span>
-                            <span class="font-bold text-slate-700">${s.studentName}</span>
+                            <span class="font-bold text-slate-700"><span class="cursor-pointer hover:underline" data-peek-name="${(String(s.studentName) || '').replace(/"/g, '&quot;')}">${s.studentName}</span></span>
                         </div>
                         <span class="font-black text-orange-600">${s.score} pts</span>
                     </div>`;
@@ -3814,7 +3825,7 @@ function renderClickableWords(text) {
                     <div class="flex justify-between items-start p-3 border-b border-slate-100 ${isMyAnswer ? 'bg-orange-50' : 'bg-white'} rounded-lg">
                         <div class="flex-grow">
                             <p class="text-slate-700">${ans.answerContent}</p>
-                            <p class="text-xs font-bold ${isMyAnswer ? 'text-orange-700' : 'text-slate-500'} mt-1">${ans.studentName} ${isMyAnswer ? '(Your Answer)' : ''}</p>
+                            <p class="text-xs font-bold ${isMyAnswer ? 'text-orange-700' : 'text-slate-500'} mt-1"><span class="cursor-pointer hover:underline" data-peek-name="${(String(ans.studentName) || '').replace(/"/g, '&quot;')}">${ans.studentName}</span> ${isMyAnswer ? '(Your Answer)' : ''}</p>
                         </div>
                         <button onclick="likeAnswer('${ans.id}', this)" class="like-btn flex-shrink-0 ml-4 px-3 py-1 rounded-full text-xs font-bold ${isLiked ? 'liked' : ''}">
                             <i class="fas fa-heart"></i> <span>${likes.length}</span>
@@ -4896,6 +4907,7 @@ function renderClickableWords(text) {
         className="dhammaschool-root p-4 md:p-6 min-h-screen text-slate-800"
         dangerouslySetInnerHTML={{ __html: DHAMMASCHOOL_BODY_HTML }}
       />
+      <AvatarPeekModal name={peekName} onClose={() => setPeekName(null)} />
       <OnlineStatusWidget
         rosterPath={DHAMMASCHOOL_PRESENCE_PATH}
         isTeacherMode={rosterCtx.isTeacherMode}
