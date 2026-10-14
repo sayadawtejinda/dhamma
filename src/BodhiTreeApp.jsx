@@ -747,7 +747,14 @@ export default function BodhiTreeApp({ entryRequest, onExit }) {
   // (a deleted account), so just closing the modal is enough; nothing
   // else in this component needs a toast.
   const showToastFallback = () => {};
-  const closeVisit = () => { setVisitingStudentName(null); setVisitingAgeDays(null); };
+  // Opened from a student's home page (🌳): go straight to that student's tree, and leave when it is closed.
+  const visitStartedRef = useRef(false);
+  useEffect(() => {
+    if (loading || visitStartedRef.current || !entryRequest?.visit) return;
+    visitStartedRef.current = true;
+    handleVisitStudent(entryRequest.visit, entryRequest.visitUid, 0);
+  }, [loading]);
+  const closeVisit = () => { setVisitingStudentName(null); setVisitingAgeDays(null); if (entryRequest?.visit && onExit) onExit(); };
 
   useEffect(() => {
     if (isTeacherMode) {

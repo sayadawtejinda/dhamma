@@ -1224,7 +1224,14 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     }
     setVisitLoading(false);
   };
-  const closeVisit = () => { setVisitingStudentName(null); setVisitingData(null); setVisitGiftNote(null); };
+  // Opened from a student's home page (🛕): go straight to that student's altar, and leave when it is closed.
+  const visitStartedRef = useRef(false);
+  useEffect(() => {
+    if (loading || visitStartedRef.current || !entryRequest?.visit) return;
+    visitStartedRef.current = true;
+    handleVisitStudent(entryRequest.visit);
+  }, [loading]);
+  const closeVisit = () => { setVisitingStudentName(null); setVisitingData(null); setVisitGiftNote(null); if (entryRequest?.visit && onExit) onExit(); };
 
   // Picks up to SHRINE_GIFTS_PER_VISIT different offerings from the altar
   // being visited as gifts (a friend only ever gives once; the Golden

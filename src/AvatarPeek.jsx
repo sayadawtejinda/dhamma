@@ -65,10 +65,11 @@ const loadExtras = () => {
     extrasPromise = Promise.all([
       fetch(`${base}weeklySnapshot.json`).then(r => (r.ok ? r.json() : null)).catch(() => null),
       fetch(`${base}studentWeekly.json`).then(r => (r.ok ? r.json() : null)).catch(() => null),
-    ]).then(([snap, weekly]) => {
+      fetch(`${base}scheduleSnapshot.json`).then(r => (r.ok ? r.json() : null)).catch(() => null),
+    ]).then(([snap, weekly, sched]) => {
       const byName = {};
       ((snap && snap.trophyList) || []).forEach(e => { if (e.name) byName[e.name] = { id: e.id, trophies: e.trophyCount || 0 }; });
-      return { byName, weeks: (weekly && weekly.attendedWeeks) || {} };
+      return { byName, weeks: (weekly && weekly.attendedWeeks) || {}, slots: (sched && sched.slots) || {} };
     });
   }
   return extrasPromise;
@@ -76,6 +77,15 @@ const loadExtras = () => {
 
 // Visiting a student's home page: their home picture, Avatar, name, trophies and tree -- as it was last week
 // (all from static weekly files, nothing is read from Firestore).
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const fmtTime = (hhmm) => {
+  const [h, m] = String(hhmm || '').split(':').map(Number);
+  if (Number.isNaN(h)) return '';
+  return `${h % 12 || 12}${m ? ':' + String(m).padStart(2, '0') : ''} ${h < 12 ? 'AM' : 'PM'}`;
+};
+// Go and look at this student's Shrine Room / Bodhi Tree / Nature World (last week's picture, from static files).
+const goVisit = (app, name, uid) => window.dispatchEvent(new CustomEvent('dhamma-visit-student', { detail: { app, name, uid } }));
+
 export function AvatarPeekModal({ name, onClose }) {
   const cfg = useAvatarLook(name || '');
   const [extras, setExtras] = useState(null);
@@ -84,6 +94,7 @@ export function AvatarPeekModal({ name, onClose }) {
   const e = extras && extras.byName[name];
   const weeks = e ? extras.weeks[e.id] : null;
   const bg = getHomeBackground(cfg && cfg.homeBackground).image;
+  const slots = (e && extras.slots[e.id]) || [];
   return (
     <div
       className="fixed inset-0 z-[10050] flex flex-col items-start p-6"
@@ -91,12 +102,22 @@ export function AvatarPeekModal({ name, onClose }) {
       onClick={onClose}
     >
       <button onClick={onClose} className="fixed top-3 right-3 z-[10051] w-11 h-11 rounded-full bg-red-600 hover:bg-red-700 text-white text-2xl font-bold shadow-lg flex items-center justify-center" aria-label="Close">×</button>
-      <div className="flex flex-col items-center w-32" onClick={(ev) => ev.stopPropagation()}>
+      <div className="flex flex-col items-center w-44" onClick={(ev) => ev.stopPropagation()}>
         <AvatarThumb name={name} size={110} />
         <span className="mt-1 text-sm font-bold text-emerald-700 bg-white/85 backdrop-blur-sm px-2 py-0.5 rounded-xl shadow-sm text-center break-words max-w-full">{name} 🏡</span>
         <span className="mt-2 flex gap-2 text-sm font-bold">
           <span className="bg-white/85 px-2 py-0.5 rounded-full shadow-sm">🏆 {e ? e.trophies : 0}</span>
           <span className="bg-white/85 px-2 py-0.5 rounded-full shadow-sm">🌳 {weeks != null ? weeks : 0}</span>
+        </span>
+        {slots.length > 0 && (
+          <span className="mt-2 text-xs font-bold bg-white/85 px-2 py-1 rounded-xl shadow-sm text-center">
+            {slots.map((x, i) => <span key={i} className="block">🗓️ {DAY_NAMES[x.d]} {fmtTime(x.s)}</span>)}
+          </span>
+        )}
+        <span className="mt-3 flex gap-2">
+          {[['shrine', '🛕'], ['bodhi', '🌳'], ['nature', '🌿']].map(([app, icon]) => (
+            <button key={app} onClick={() => { onClose && onClose(); goVisit(app, name, e && e.id); }} className="w-12 h-12 text-2xl rounded-xl bg-white/90 hover:bg-white shadow-lg border border-gray-200 flex items-center justify-center">{icon}</button>
+          ))}
         </span>
       </div>
     </div>

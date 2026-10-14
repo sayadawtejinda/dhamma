@@ -7627,6 +7627,10 @@ function SmartStudyProgressBadge({ classId, studentName, smartStudyNames, compac
 }
 
 function StudentDashboard({ user, studentProfile, studentUid, announcements, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenMyanmarSpeaking, onOpenConsonantPractice, onOpenBurmeseGame, onOpenNumberLearning, onOpenVowelsLearning, onOpenAnimalSound, onOpenBurmeseLearningGames, onOpenInteractiveQuiz, onOpenMyanmarPoems, onOpenConsonantEndings, onOpenTimeAndCalendar, onOpenMyanmarSpelling, onOpenMyanmarSoundPractice, onOpenReadingMyanmar, onOpenSpeakingMyanmar, onOpenMyanmarPart1And2, onOpenBodhiTree, onOpenShrineRoom, onOpenAvatar, onOpenNatureWorld, onOpenWatchAndLearn, onOpenFestival, onLogout, onNavigate, onTrophyEarned, onTeacherGift }) {
+  // Who is looking, for visits to a classmate's home / Shrine Room / Nature World (see AvatarPeek.jsx).
+  useEffect(() => {
+    window.__dhammaCurrentStudent = studentProfile && !studentProfile.isVisitor && studentUid ? { uid: studentUid, name: studentProfile.name } : null;
+  }, [studentUid, studentProfile?.name, studentProfile?.isVisitor]);
   const [myLessons, setMyLessons] = useState([]);
   const [ssCompletionCounts, setSsCompletionCounts] = useState({}); // classId → SmartStudy completedCount
   const [mySessions, setMySessions] = useState([]);

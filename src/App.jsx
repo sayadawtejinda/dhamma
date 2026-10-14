@@ -366,6 +366,20 @@ export default function App() {
   const [watchAndLearnRequest, setWatchAndLearnRequest] = useState(null);
   const [festivalRequest, setFestivalRequest] = useState(null);
 
+  // Tapping 🛕 / 🌳 / 🌿 on a student's home page (AvatarPeek.jsx) goes to that app and opens their picture of it.
+  useEffect(() => {
+    const onVisit = (ev) => {
+      const { app, name, uid } = ev.detail || {};
+      const me = window.__dhammaCurrentStudent || {};
+      const req = { studentUid: me.uid, studentName: me.name, visit: name, visitUid: uid };
+      if (app === 'shrine') openShrineRoom(req);
+      else if (app === 'nature') openNatureWorld(req);
+      else if (app === 'bodhi') openBodhiTree(req);
+    };
+    window.addEventListener('dhamma-visit-student', onVisit);
+    return () => window.removeEventListener('dhamma-visit-student', onVisit);
+  }, []);
+
   const openMyanmarSpelling = (request) => {
     setMyanmarSpellingRequest(request || {});
     setActiveApp('myanmarspelling');

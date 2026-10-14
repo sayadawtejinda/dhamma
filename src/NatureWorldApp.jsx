@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { doc, getDoc, setDoc, increment, deleteField } from 'firebase/firestore';
 import { db } from './firebase';
 import OnlineStatusWidget, { loadRosterSnapshot } from './OnlineStatusWidget';
@@ -540,7 +540,14 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
     }
     setVisitLoading(false);
   };
-  const closeVisit = () => { setVisitingStudentName(null); setVisitingWorld(null); setVisitGiftNote(null); };
+  // Opened from a student's home page (🌿): go straight to that student's world, and leave when it is closed.
+  const visitStartedRef = useRef(false);
+  useEffect(() => {
+    if (loading || visitStartedRef.current || !entryRequest?.visit) return;
+    visitStartedRef.current = true;
+    handleVisitStudent(entryRequest.visit);
+  }, [loading]);
+  const closeVisit = () => { setVisitingStudentName(null); setVisitingWorld(null); setVisitGiftNote(null); if (entryRequest?.visit && onExit) onExit(); };
 
   const renderGrid = (w, { interactive }) => (
     <div className="relative w-full">

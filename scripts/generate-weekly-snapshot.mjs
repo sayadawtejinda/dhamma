@@ -25,7 +25,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { firebaseConfig, appId } from '../src/firebaseConfig.js';
 import { refreshClassSnapshots, CLASS_DIR } from './class-snapshots.mjs';
-import { refreshContentSnapshots, refreshAnnouncementsSnapshot, refreshAvatarSnapshot } from './content-snapshots.mjs';
+import { refreshContentSnapshots, refreshAnnouncementsSnapshot, refreshAvatarSnapshot, refreshScheduleSnapshot } from './content-snapshots.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const OUT_PATH = join(__dirname, '..', 'public', 'weeklySnapshot.json');
@@ -317,6 +317,7 @@ async function main() {
   }
 
   if (want('roster')) {
+  await refreshScheduleSnapshot(db, appId);
   // ---- "Who was active this week" for every app's online pill ----
   // Each app's pill used to read that app's whole roster collection (about 90
   // docs) whenever it was opened. Now a student's pill reads one of these static

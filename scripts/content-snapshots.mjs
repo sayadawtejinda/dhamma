@@ -95,3 +95,25 @@ export async function refreshAvatarSnapshot(db) {
   console.log(`Avatar looks: ${Object.keys(sorted).length} students written`);
   return true;
 }
+
+// Each online student's weekly class time(s) as ONE static file (public/scheduleSnapshot.json): { uid: [{ d: day 0-6
+// (0 = Sunday), s: "HH:mm", e: "HH:mm" }] }, in the teacher's (Pacific) time. It lets a visitor to a student's home page
+// see when that student has class, without reading anything. About 100 small docs, once a week.
+export async function refreshScheduleSnapshot(db, appId) {
+  const snap = await getDocs(collection(db, `artifacts/${appId}/public/data/recurringSchedule`));
+  const bySlot = {};
+  snap.docs.forEach(d => {
+    const x = d.data();
+    if (!x.studentUid || x.studentUid === 'offline' || x.studentInactive) return;
+    (bySlot[x.studentUid] = bySlot[x.studentUid] || []).push({ d: x.dayOfWeek, s: x.startTime, e: x.endTime });
+  });
+  Object.values(bySlot).forEach(a => a.sort((p, q) => p.d - q.d || (p.s < q.s ? -1 : 1)));
+  const sorted = Object.fromEntries(Object.entries(bySlot).sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0)));
+  const file = join(__dirname, '..', 'public', 'scheduleSnapshot.json');
+  let old = null;
+  try { old = JSON.stringify(JSON.parse(readFileSync(file, 'utf8')).slots); } catch (e) { /* none yet */ }
+  if (old === JSON.stringify(sorted)) { console.log('Class times: unchanged, nothing written'); return false; }
+  writeFileSync(file, JSON.stringify({ generatedAt: new Date().toISOString(), slots: sorted }));
+  console.log(`Class times: ${Object.keys(sorted).length} students written`);
+  return true;
+}
