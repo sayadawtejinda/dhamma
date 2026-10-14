@@ -799,15 +799,25 @@ const ContestCard = ({ classId, contest }) => {
   );
 };
 
+// "🏆 Contest finished!" as a small button beside the lesson-list heading; the winners are listed only when tapped.
 const ContestBanner = ({ contest }) => {
+  const [open, setOpen] = useState(false);
   if (!contest || contest.status !== 'paid') return null;
   if (Date.now() - (contest.paidAt || 0) > 7 * 24 * 60 * 60 * 1000) return null;
   return (
-    <div className="mb-4 p-3 rounded-xl bg-amber-50 border-2 border-amber-300 text-sm text-amber-900">
-      <p className="font-extrabold">🏆 Contest finished! Winners</p>
-      <ol className="mt-1 space-y-0.5">{(contest.winners || []).map(w => <li key={w.rank}>{ordinalWord(w.rank)} — <b>{w.name}</b></li>)}</ol>
-      <p className="mt-1 text-xs">The winners' gift boxes are waiting in the app. 🎁</p>
-    </div>
+    <>
+      <button onClick={() => setOpen(true)} className="px-3 py-1.5 rounded-full bg-amber-100 hover:bg-amber-200 border-2 border-amber-300 text-amber-900 text-sm font-extrabold shadow">🏆 Contest finished!</button>
+      {open && (
+        <div className="fixed inset-0 z-[10001] bg-black/50 flex items-center justify-center p-4" onClick={() => setOpen(false)}>
+          <div className="relative bg-white rounded-2xl shadow-2xl max-w-xs w-full p-6 text-amber-900" onClick={(e) => e.stopPropagation()}>
+            <button onClick={() => setOpen(false)} className="absolute top-2 right-2 w-10 h-10 rounded-full bg-red-600 hover:bg-red-700 text-white text-2xl font-bold flex items-center justify-center" aria-label="Close">×</button>
+            <p className="font-extrabold text-lg text-center">🏆 Winners</p>
+            <ol className="mt-3 space-y-1">{(contest.winners || []).map(w => <li key={w.rank}>{ordinalWord(w.rank)} — <b>{w.name}</b></li>)}</ol>
+            <p className="mt-3 text-center text-xl">🎁</p>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 
@@ -1244,7 +1254,6 @@ const StudentLessonView = React.memo(({
 
   return (
     <div className="p-4 md:p-8 h-full flex flex-col">
-      <ContestBanner contest={contest} />
       <div className="flex justify-between items-start mb-8">
         <div className={`transition-all duration-700 ease-in-out overflow-hidden ${showWelcome ? 'max-h-60 opacity-100' : 'max-h-0 opacity-0'}`}>
           <h1 className="text-4xl font-extrabold text-green-700">Welcome, {userName}!</h1>
@@ -1261,7 +1270,10 @@ const StudentLessonView = React.memo(({
       </div>
       <div className="flex flex-col lg:flex-row gap-8 flex-1 overflow-hidden mt-2">
         <Card className="w-full lg:w-2/3 overflow-y-auto">
-          <h2 id="lesson-list-top" className="text-3xl font-bold text-blue-600 mb-6 flex items-center"><List className="w-6 h-6 mr-3" />Available Lessons ({lessons.length} total)</h2>
+          <div className="flex items-center justify-between gap-3 flex-wrap mb-6">
+            <h2 id="lesson-list-top" className="text-3xl font-bold text-blue-600 flex items-center"><List className="w-6 h-6 mr-3" />Available Lessons ({lessons.length} total)</h2>
+            <ContestBanner contest={contest} />
+          </div>
           {lessons.length === 0 ? (<p className="text-gray-500 italic">Your teacher hasn't created any lessons yet.</p>) : (
             <div className="space-y-4">
               {lessons.map(lesson => (
