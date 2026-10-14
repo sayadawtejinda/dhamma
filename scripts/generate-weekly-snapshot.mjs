@@ -24,6 +24,7 @@ import { writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { firebaseConfig, appId } from '../src/firebaseConfig.js';
+import { refreshClassSnapshots, CLASS_DIR } from './class-snapshots.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const OUT_PATH = join(__dirname, '..', 'public', 'weeklySnapshot.json');
@@ -235,33 +236,10 @@ async function main() {
   // from a static file (weekly) instead of reading every score live; the
   // student's OWN scores are still read live by the app and merged in. On
   // the Sunday Parami window the app reads Firestore directly instead.
-  const CLASS_DIR = join(__dirname, '..', 'public', 'classSnapshots');
-  mkdirSync(join(CLASS_DIR, 'smartstudy'), { recursive: true });
+  // The class leaderboards (SmartStudy scores and reflections, Abhidhamma): see class-snapshots.mjs --
+  // only what is new is read, and a quiet week changes nothing.
   const generatedAt = new Date().toISOString();
-  const ssScoresSnap = await getDocs(collection(db, `${publicDataPath}/scores`));
-  const ssByClass = {};
-  ssScoresSnap.docs.forEach(d => {
-    const s = d.data();
-    if (!s.classId) return;
-    (ssByClass[s.classId] = ssByClass[s.classId] || []).push({ id: d.id, classId: s.classId, studentName: s.studentName, studentAgeLevel: s.studentAgeLevel, lessonId: s.lessonId, score: s.score, timestamp: s.timestamp });
-  });
-  for (const [cid, scores] of Object.entries(ssByClass)) {
-    writeFileSync(join(CLASS_DIR, 'smartstudy', `${encodeURIComponent(cid)}.json`), JSON.stringify({ generatedAt, scores }));
-  }
-  // Students' reflections, one static file per class, so a student reading a lesson
-  // sees classmates' older reflections without any Firestore read (newer ones show
-  // after the next weekly refresh; the student's own are always read live).
-  mkdirSync(join(CLASS_DIR, 'smartstudy-reflections'), { recursive: true });
-  const ssReflSnap = await getDocs(collection(db, `${publicDataPath}/reflections`));
-  const reflByClass = {};
-  ssReflSnap.docs.forEach(d => {
-    const r = d.data();
-    if (!r.classId || !r.lessonId || !r.text) return;
-    (reflByClass[r.classId] = reflByClass[r.classId] || []).push({ id: d.id, classId: r.classId, lessonId: r.lessonId, studentName: r.studentName, text: r.text, timestamp: r.timestamp });
-  });
-  for (const [cid, reflections] of Object.entries(reflByClass)) {
-    writeFileSync(join(CLASS_DIR, 'smartstudy-reflections', `${encodeURIComponent(cid)}.json`), JSON.stringify({ generatedAt, reflections }));
-  }
+  await refreshClassSnapshots(db, appId, { full: process.argv.includes('--full') });
   // ---- Per-student "weeks attended" (all time), for the Bodhi Tree and Shrine Room ----
   // Both used to read a student's whole schedule + whole session history every time
   // they were opened. One small static file replaces that (up to a week old).
@@ -340,30 +318,6 @@ async function main() {
       writeFileSync(join(ROSTER_DIR, `${target.path.replace(/\//g, '__')}.json`), JSON.stringify({ generatedAt, docs }));
     } catch (e) { console.error('Roster snapshot failed for', target.path, e.message); }
   }
-  const ABHI = 'artifacts/lesson-translator-app-v6/public/data';
-  const [abhiScoresSnap, abhiClassesSnap] = await Promise.all([
-    getDocs(collection(db, `${ABHI}/global_scores`)),
-    getDocs(collection(db, `${ABHI}/classes`)),
-  ]);
-  const abhiClasses = {};
-  await Promise.all(abhiClassesSnap.docs.map(async c => {
-    const lessons = await getDocs(collection(db, `${ABHI}/classes/${c.id}/lessons`));
-    abhiClasses[c.id] = { totalLessons: lessons.size, students: {} };
-  }));
-  const abhiSets = {};
-  abhiScoresSnap.docs.forEach(d => {
-    const s = d.data();
-    const sn = s.studentName || s.name;
-    if (!s.classId || !s.lessonId || !sn || !abhiClasses[s.classId]) return;
-    const k = `${s.classId} ${sn}`;
-    (abhiSets[k] = abhiSets[k] || new Set()).add(s.lessonId);
-  });
-  Object.entries(abhiSets).forEach(([k, set]) => {
-    const [cid, sn] = k.split(' ');
-    abhiClasses[cid].students[sn] = set.size;
-  });
-  writeFileSync(join(CLASS_DIR, 'abhidhamma.json'), JSON.stringify({ generatedAt, classes: abhiClasses }));
-  console.log(`Class snapshots: ${Object.keys(ssByClass).length} SmartStudy classes, ${Object.keys(abhiClasses).length} Abhidhamma classes`);
   console.log(`Wrote ${attendanceRankedList.length} attendance rows and ${trophyList.length} trophy rows to ${OUT_PATH}`);
   process.exit(0);
 }

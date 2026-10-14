@@ -1,0 +1,107 @@
+// The class leaderboards that students read as static files instead of from Firestore:
+//   public/classSnapshots/smartstudy/{CLASS}.json             scores of every student in the class
+//   public/classSnapshots/smartstudy-reflections/{CLASS}.json classmates' reflections
+//   public/classSnapshots/abhidhamma.json                     lessons finished per student, per class
+//
+// Only what is NEW since the last run is read from Firestore and merged into these files, so a week in
+// which nobody studied costs nothing: nothing is read, nothing changes, nothing is committed. A full
+// rebuild from scratch happens once a month (or with --full) because edits and deletions are not seen by
+// the incremental read. The state of the last run is kept in public/classSnapshots/_state.json.
+import { collection, query, where, getDocs, getCountFromServer, Timestamp } from 'firebase/firestore';
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+export const CLASS_DIR = join(__dirname, '..', 'public', 'classSnapshots');
+const SEP = '|~|';
+
+export async function refreshClassSnapshots(db, appId, { full = false } = {}) {
+  const publicDataPath = `/artifacts/${appId}/public/data`;
+  mkdirSync(join(CLASS_DIR, 'smartstudy'), { recursive: true });
+  mkdirSync(join(CLASS_DIR, 'smartstudy-reflections'), { recursive: true });
+  const generatedAt = new Date().toISOString();
+  const STATE_PATH = join(CLASS_DIR, '_state.json');
+  let state = {};
+  try { state = JSON.parse(readFileSync(STATE_PATH, 'utf8')); } catch (e) { state = {}; }
+  const FULL = full || !state.fullAt || !state.since || Date.now() - state.fullAt > 30 * 24 * 60 * 60 * 1000;
+  const runStartedMs = Date.now();
+  const sinceMs = FULL ? 0 : state.since;
+
+  const readClassFile = (dir, cid, key) => {
+    try { return JSON.parse(readFileSync(join(CLASS_DIR, dir, `${encodeURIComponent(cid)}.json`), 'utf8'))[key] || []; } catch (e) { return []; }
+  };
+  let filesWritten = 0;
+  const mergeInto = (byClass, dir, key) => {
+    for (const [cid, rows] of Object.entries(byClass)) {
+      const map = new Map((FULL ? [] : readClassFile(dir, cid, key)).map(x => [x.id, x]));
+      rows.forEach(r => map.set(r.id, r));
+      writeFileSync(join(CLASS_DIR, dir, `${encodeURIComponent(cid)}.json`), JSON.stringify({ generatedAt, [key]: Array.from(map.values()) }));
+      filesWritten += 1;
+    }
+  };
+
+  // SmartStudy scores
+  const scoresSnap = FULL
+    ? await getDocs(collection(db, `${publicDataPath}/scores`))
+    : await getDocs(query(collection(db, `${publicDataPath}/scores`), where('timestamp', '>', sinceMs)));
+  const ssByClass = {};
+  scoresSnap.docs.forEach(d => {
+    const s = d.data();
+    if (!s.classId) return;
+    (ssByClass[s.classId] = ssByClass[s.classId] || []).push({ id: d.id, classId: s.classId, studentName: s.studentName, studentAgeLevel: s.studentAgeLevel, lessonId: s.lessonId, score: s.score, timestamp: s.timestamp });
+  });
+  mergeInto(ssByClass, 'smartstudy', 'scores');
+
+  // SmartStudy reflections
+  const reflSnap = FULL
+    ? await getDocs(collection(db, `${publicDataPath}/reflections`))
+    : await getDocs(query(collection(db, `${publicDataPath}/reflections`), where('timestamp', '>', sinceMs)));
+  const reflByClass = {};
+  reflSnap.docs.forEach(d => {
+    const r = d.data();
+    if (!r.classId || !r.lessonId || !r.text) return;
+    (reflByClass[r.classId] = reflByClass[r.classId] || []).push({ id: d.id, classId: r.classId, lessonId: r.lessonId, studentName: r.studentName, text: r.text, timestamp: r.timestamp });
+  });
+  mergeInto(reflByClass, 'smartstudy-reflections', 'reflections');
+
+  // Abhidhamma: lesson counts from a count query (not by reading every lesson); each student's finished
+  // lessons kept as a set in the state file, so a new score is just added to its set.
+  const ABHI = 'artifacts/lesson-translator-app-v6/public/data';
+  const abhiClassesSnap = await getDocs(collection(db, `${ABHI}/classes`));
+  const abhiClasses = {};
+  await Promise.all(abhiClassesSnap.docs.map(async c => {
+    const cnt = await getCountFromServer(collection(db, `${ABHI}/classes/${c.id}/lessons`));
+    abhiClasses[c.id] = { totalLessons: cnt.data().count, students: {} };
+  }));
+  const abhiScoresSnap = FULL
+    ? await getDocs(collection(db, `${ABHI}/global_scores`))
+    : await getDocs(query(collection(db, `${ABHI}/global_scores`), where('timestamp', '>', Timestamp.fromMillis(sinceMs))));
+  const abhiSets = FULL ? {} : Object.fromEntries(Object.entries(state.abhiSets || {}).map(([k, v]) => [k, new Set(v)]));
+  abhiScoresSnap.docs.forEach(d => {
+    const s = d.data();
+    const sn = s.studentName || s.name;
+    if (!s.classId || !s.lessonId || !sn || !abhiClasses[s.classId]) return;
+    const key = `${s.classId}${SEP}${sn}`;
+    (abhiSets[key] = abhiSets[key] || new Set()).add(s.lessonId);
+  });
+  Object.entries(abhiSets).forEach(([k, set]) => {
+    const i = k.indexOf(SEP);
+    const cid = k.slice(0, i), sn = k.slice(i + SEP.length);
+    if (abhiClasses[cid]) abhiClasses[cid].students[sn] = set.size;
+  });
+  // fixed order, so an unchanged result is recognised as unchanged
+  const byKey = (o) => Object.fromEntries(Object.entries(o).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
+  Object.keys(abhiClasses).forEach(cid => { abhiClasses[cid].students = byKey(abhiClasses[cid].students); });
+  const abhiSorted = byKey(abhiClasses);
+  let oldAbhi = null;
+  try { oldAbhi = JSON.stringify(JSON.parse(readFileSync(join(CLASS_DIR, 'abhidhamma.json'), 'utf8')).classes); } catch (e) { /* none yet */ }
+  if (FULL || oldAbhi !== JSON.stringify(abhiSorted)) { writeFileSync(join(CLASS_DIR, 'abhidhamma.json'), JSON.stringify({ generatedAt, classes: abhiSorted })); filesWritten += 1; }
+
+  // Remember where this run got to -- only when something was read, so a quiet week changes nothing at all.
+  if (FULL || scoresSnap.size > 0 || reflSnap.size > 0 || abhiScoresSnap.size > 0) {
+    writeFileSync(STATE_PATH, JSON.stringify({ since: runStartedMs - 10 * 60 * 1000, fullAt: FULL ? runStartedMs : state.fullAt, abhiSets: Object.fromEntries(Object.entries(abhiSets).map(([k, v]) => [k, Array.from(v)])) }));
+  }
+  console.log(`Class snapshots (${FULL ? 'full rebuild' : 'incremental'}): ${scoresSnap.size} SmartStudy score(s), ${reflSnap.size} reflection(s), ${abhiScoresSnap.size} Abhidhamma score(s) read; ${filesWritten} file(s) written`);
+  return { full: FULL, read: scoresSnap.size + reflSnap.size + abhiScoresSnap.size, filesWritten };
+}
