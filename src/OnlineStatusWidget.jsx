@@ -45,7 +45,7 @@ function toMillis(ts) {
 // Outside that, i.e. for the teacher, during the Sunday class window (when live "online"
 // dots matter) and for any roster without a file, it reads the roster collection as before.
 const rosterSnapshotCache = new Map();
-const loadRosterSnapshot = (rosterPath) => {
+export const loadRosterSnapshot = (rosterPath) => {
   if (!rosterSnapshotCache.has(rosterPath)) {
     rosterSnapshotCache.set(rosterPath, fetch(`${import.meta.env.BASE_URL}rosterSnapshots/${rosterPath.replace(/\//g, '__')}.json`)
       .then(r => (r.ok ? r.json() : null)).then(j => (j && j.docs) || null).catch(() => null));

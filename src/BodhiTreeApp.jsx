@@ -1,4 +1,5 @@
-import { getAttendedWeeks } from './studentWeekly';
+import { getAttendedWeeks, getAttendedWeeksMap } from './studentWeekly';
+import { AvatarThumb } from './AvatarPeek';
 import React, { useEffect, useRef, useState } from 'react';
 import { collection, query, where, getDocs, doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase';
@@ -678,8 +679,9 @@ export default function BodhiTreeApp({ entryRequest, onExit }) {
   // Visiting other students' trees + who's visited mine -- same idea as
   // Shrine Room/Avatar. treeAgeDaysRef mirrors the state so the 30s
   // heartbeat can report the CURRENT age without a stale closure.
-  const [recentVisitors, setRecentVisitors] = useState([]);
-  const [showVisitorsPanel, setShowVisitorsPanel] = useState(false);
+  // Everyone's tree age comes from the weekly static file (uid -> attended weeks), never from a live read.
+  const [weeksMap, setWeeksMap] = useState(null);
+  useEffect(() => { let off = false; getAttendedWeeksMap().then(m => { if (!off) setWeeksMap(m || {}); }); return () => { off = true; }; }, []);
   const [visitingStudentName, setVisitingStudentName] = useState(null);
   const [visitingAgeDays, setVisitingAgeDays] = useState(null);
   const [visitLoading, setVisitLoading] = useState(false);
@@ -700,12 +702,15 @@ export default function BodhiTreeApp({ entryRequest, onExit }) {
   useEffect(() => {
     if (isTeacherMode || !studentName || !studentUid) return;
     const rosterRef = rosterDocRefByUid(db, BODHI_ROSTER_PATH, studentUid);
-    migrateNameKeyedRosterDoc(db, BODHI_ROSTER_PATH, studentUid, studentName, sanitizeBodhiKey)
-      .then(carried => { if (carried) return setDoc(rosterRef, carried, { merge: true }); })
-      .catch(e => console.error('Roster migration error:', e));
-    getDoc(rosterRef).then(snap => {
-      if (snap.exists()) setRecentVisitors(snap.data().recentVisitors || []);
-    }).catch(e => console.error('Error loading Bodhi Tree visitors:', e));
+    // The one-time move of an old name-keyed roster doc: tried once per device, not on every open.
+    let migrated = false;
+    try { migrated = localStorage.getItem(`bodhiRosterMigrated_${studentUid}`) === '1'; } catch (e) { /* ignore */ }
+    if (!migrated) {
+      migrateNameKeyedRosterDoc(db, BODHI_ROSTER_PATH, studentUid, studentName, sanitizeBodhiKey)
+        .then(carried => { if (carried) return setDoc(rosterRef, carried, { merge: true }); })
+        .then(() => { try { localStorage.setItem(`bodhiRosterMigrated_${studentUid}`, '1'); } catch (e) { /* ignore */ } })
+        .catch(e => console.error('Roster migration error:', e));
+    }
     const ping = () => setDoc(rosterRef, {
       studentName, isOnline: true, lastSeen: serverTimestamp(),
       // Omit treeAgeDays entirely (rather than writing a not-yet-computed
@@ -727,43 +732,15 @@ export default function BodhiTreeApp({ entryRequest, onExit }) {
   // Fetches another student's real tree age the same way the load effect
   // above computes my own (their attendance, not a stored number), and
   // records the visit on their roster doc.
-  const handleVisitStudent = async (targetName, targetUid) => {
-    if (!targetName || targetName === studentName || !targetUid) return;
+  const handleVisitStudent = async (targetName, targetUid, storedDays = 0) => {
+    if (!targetName || targetName === studentName) return;
     setVisitingStudentName(targetName);
     setVisitingAgeDays(null);
     setVisitLoading(true);
-    try {
-      const savedWeeks = await getAttendedWeeks(targetUid);
-      if (savedWeeks != null) {
-        setVisitingAgeDays(savedWeeks * 7);
-      } else {
-      const [scheduleSnap, sessionsSnap] = await Promise.all([
-        getDocs(query(collection(db, `${publicDataPath}/teacherSchedule`), where('studentUid', '==', targetUid))),
-        getDocs(query(collection(db, `${publicDataPath}/studySessions`), where('studentUid', '==', targetUid))),
-      ]);
-      const schedule = scheduleSnap.docs.map(d => d.data());
-      const sessions = sessionsSnap.docs.map(d => d.data());
-      const now = new Date();
-      const attendedWeeks = new Set(
-        schedule
-          .filter(e => e.endTime?.toDate?.() < now && getAttendanceStatus(e, sessions) === 'attended')
-          .map(e => getWeekKey(e.startTime.toDate()))
-      );
-      setVisitingAgeDays(attendedWeeks.size * 7);
-      }
-      if (studentName) {
-        const targetRef = rosterDocRefByUid(db, BODHI_ROSTER_PATH, targetUid);
-        const targetSnap = await getDoc(targetRef);
-        const existing = targetSnap.exists() ? (targetSnap.data().recentVisitors || []) : [];
-        const others = existing.filter(v => v.name !== studentName);
-        const nextVisitors = [{ name: studentName, uid: studentUid, visitedAt: Date.now() }, ...others].slice(0, 10);
-        setDoc(targetRef, { recentVisitors: nextVisitors }, { merge: true }).catch(() => {});
-      }
-    } catch (e) {
-      console.error('Error visiting Bodhi Tree:', e);
-      showToastFallback();
-      setVisitingStudentName(null);
-    }
+    // Their tree age is their weeks of attendance from the weekly static file (a student missing from it has
+    // none yet); nothing is read or written in Firestore.
+    const map = weeksMap || (await getAttendedWeeksMap()) || {};
+    setVisitingAgeDays(map[targetUid] != null ? map[targetUid] * 7 : storedDays);
     setVisitLoading(false);
   };
   // No toast system exists in this app yet -- visiting failures are rare
@@ -795,9 +772,9 @@ export default function BodhiTreeApp({ entryRequest, onExit }) {
     let isMounted = true;
     (async () => {
       try {
-        const savedWeeks = await getAttendedWeeks(studentUid);
-        if (savedWeeks != null) {
-          if (isMounted) { setTreeAgeDays(savedWeeks * 7); ageComputedRef.current = true; }
+        const map = await getAttendedWeeksMap();
+        if (map) {
+          if (isMounted) { setTreeAgeDays((map[studentUid] ?? 0) * 7); ageComputedRef.current = true; }
         } else {
         const [scheduleSnap, sessionsSnap] = await Promise.all([
           getDocs(query(collection(db, `${publicDataPath}/teacherSchedule`), where('studentUid', '==', studentUid))),
@@ -892,10 +869,10 @@ export default function BodhiTreeApp({ entryRequest, onExit }) {
             showInactiveWarning={false}
             renderActivity={(s) => (
               <span className="flex items-center gap-2 justify-end">
-                <span className="text-emerald-600 font-semibold">{s.treeAgeDays || 0}d</span>
+                <span className="text-emerald-600 font-semibold">{weeksMap && weeksMap[s.id] != null ? weeksMap[s.id] * 7 : (s.treeAgeDays || 0)}d</span>
                 {s.studentName !== studentName && (
                   <button
-                    onClick={(e) => { e.stopPropagation(); handleVisitStudent(s.studentName, s.id); }}
+                    onClick={(e) => { e.stopPropagation(); handleVisitStudent(s.studentName, s.id, s.treeAgeDays || 0); }}
                     className="text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-full px-2 py-0.5"
                   >
                     👣 Visit
@@ -904,12 +881,6 @@ export default function BodhiTreeApp({ entryRequest, onExit }) {
               </span>
             )}
           />
-          <button
-            onClick={() => setShowVisitorsPanel(true)}
-            className="fixed top-16 right-3 z-50 flex items-center gap-1 bg-white hover:bg-emerald-50 text-emerald-700 text-sm font-semibold px-3 py-2 rounded-full shadow-lg border-2 border-emerald-300"
-          >
-            👣 Visitors{recentVisitors.length > 0 ? ` (${recentVisitors.length})` : ''}
-          </button>
         </>
       )}
 
@@ -992,45 +963,6 @@ export default function BodhiTreeApp({ entryRequest, onExit }) {
         </>
       )}
 
-      {/* Visitors -- who has come to see MY tree recently. */}
-      {showVisitorsPanel && (
-        <div className="fixed inset-0 z-[10001] bg-black/50 flex items-center justify-center p-4" onClick={() => setShowVisitorsPanel(false)}>
-          <button onClick={() => setShowVisitorsPanel(false)} className="fixed top-3 right-3 z-[10002] w-11 h-11 rounded-full bg-red-600 hover:bg-red-700 text-white text-2xl font-bold shadow-lg flex items-center justify-center" aria-label="Close">×</button>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-xs w-full p-6 text-center max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-bold text-emerald-800 mb-4">👣 Recent Visitors</h2>
-            {recentVisitors.length === 0 ? (
-              <p className="text-sm text-gray-400 mb-4">No one has visited your tree yet.</p>
-            ) : (
-              <div className="space-y-2 mb-4 max-h-64 overflow-y-auto text-left">
-                {recentVisitors.map((v, i) => (
-                  <div key={i} className="flex items-center justify-between gap-2 bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2">
-                    <div className="min-w-0">
-                      <span className="font-semibold text-gray-800 block truncate">{v.name}</span>
-                      <span className="text-xs text-gray-400">{new Date(v.visitedAt).toLocaleString()}</span>
-                    </div>
-                    {/* Visit them back -- only possible for visits recorded
-                        after this uid field was added; older entries just
-                        don't show the button. */}
-                    {v.uid && (
-                      <button
-                        onClick={() => { setShowVisitorsPanel(false); handleVisitStudent(v.name, v.uid); }}
-                        className="flex-shrink-0 text-xs font-semibold text-emerald-700 bg-white hover:bg-emerald-100 border border-emerald-300 rounded-full px-2 py-1"
-                        title={`Visit ${v.name}'s Bodhi Tree back`}
-                      >
-                        👣 Visit back
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-            <button onClick={() => setShowVisitorsPanel(false)} className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2.5 rounded-xl">
-              Close
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Visit -- a read-only peek at another student's tree, same
           TreeCanvas the real page uses but driven by their fetched real
           age instead of mine. */}
@@ -1045,6 +977,7 @@ export default function BodhiTreeApp({ entryRequest, onExit }) {
               <p className="text-sm text-gray-400 py-8">Couldn't load their tree.</p>
             ) : (
               <div>
+                <div className="flex justify-center mb-2"><AvatarThumb name={visitingStudentName} size={72} /></div>
                 <div className="w-full h-56 relative">
                   <TreeCanvas days={visitingAgeDays} />
                 </div>

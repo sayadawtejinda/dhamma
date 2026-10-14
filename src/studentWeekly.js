@@ -19,3 +19,10 @@ export async function getAttendedWeeks(studentUid) {
   const n = data?.attendedWeeks?.[studentUid];
   return typeof n === 'number' ? n : null;
 }
+
+// Every student's weeks at once (uid -> weeks), or null when the file cannot be loaded. A student who
+// is not in the file simply has no attended weeks yet, so use `?? 0` for them rather than a live read.
+export async function getAttendedWeeksMap() {
+  const data = await loadWeekly();
+  return data?.attendedWeeks || null;
+}

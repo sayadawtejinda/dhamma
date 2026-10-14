@@ -1,10 +1,11 @@
-import { getAttendedWeeks } from './studentWeekly';
+import { getAttendedWeeksMap } from './studentWeekly';
+import { AvatarThumb } from './AvatarPeek';
 import React, { useEffect, useRef, useState } from 'react';
 import { collection, query, where, getDocs, doc, getDoc, getDocFromServer, setDoc, updateDoc, deleteDoc, serverTimestamp, increment, runTransaction } from 'firebase/firestore';
 import { db } from './firebase';
 import { presenceIntervalMs } from './presenceDay';
 import { appId } from './firebaseConfig';
-import OnlineStatusWidget from './OnlineStatusWidget';
+import OnlineStatusWidget, { loadRosterSnapshot } from './OnlineStatusWidget';
 import TeacherGiftBox from './TeacherGiftBox';
 import { ownedAfterGift } from './festivals';
 import { spawnFlyingCoins, trackLastClickPoint } from './flyingCoins';
@@ -1153,8 +1154,6 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   // Who has come to see MY altar recently -- [{ name, visitedAt }], newest
   // first, capped to the last 10. Loaded from my own roster doc alongside
   // everything else (see the load effect below).
-  const [recentVisitors, setRecentVisitors] = useState([]);
-  const [showVisitorsPanel, setShowVisitorsPanel] = useState(false);
   // A read-only peek at someone ELSE's altar -- fetched on demand from
   // their own roster doc, never subscribed to live, closed by just
   // clearing this back to null.
@@ -1188,9 +1187,14 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     setVisitGiftNote(null);
     setVisitLoading(true);
     try {
-      const targetRef = doc(db, SHRINE_ROSTER_PATH, sanitizeShrineKey(targetName));
-      const snap = await getDoc(targetRef);
-      const data = snap.exists() ? snap.data() : {};
+      // Their altar is last week's picture from the weekly static roster file (no Firestore read); only if that
+      // file cannot be loaded is their roster doc read. Nothing is written to THEIR doc any more.
+      const docs = await loadRosterSnapshot(SHRINE_ROSTER_PATH);
+      let data = docs ? (docs.find(d => d.studentName === targetName || d.id === sanitizeShrineKey(targetName)) || {}) : null;
+      if (data == null) {
+        const snap = await getDoc(doc(db, SHRINE_ROSTER_PATH, sanitizeShrineKey(targetName)));
+        data = snap.exists() ? snap.data() : {};
+      }
       setVisitingData(data);
       if (!isTeacherPreview) {
         collectVisitGifts(targetName, data);
@@ -1199,11 +1203,6 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
           setVisitedFriends(nextVisited);
           persist({ shrineVisitedFriends: nextVisited });
         }
-      }
-      if (studentName) {
-        const others = (data.recentVisitors || []).filter(v => v.name !== studentName);
-        const nextVisitors = [{ name: studentName, visitedAt: Date.now() }, ...others].slice(0, 10);
-        setDoc(targetRef, { recentVisitors: nextVisitors }, { merge: true }).catch(() => {});
       }
     } catch (e) {
       console.error('Error visiting Shrine Room:', e);
@@ -1269,7 +1268,8 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
         // block below instead of silently risking the same bug.
         // Weeks attended: from the static weekly file (see studentWeekly.js) -- only
         // if that is missing is the student's whole schedule/session history read.
-        const savedWeeks = await getAttendedWeeks(studentUid);
+        const weeksMap = await getAttendedWeeksMap();
+        const savedWeeks = weeksMap ? (weeksMap[studentUid] ?? 0) : null;
         const [rosterSnap, scheduleSnap, sessionsSnap] = await Promise.all([
           rosterRef ? getDocFromServer(rosterRef) : Promise.resolve(null),
           savedWeeks != null ? Promise.resolve(null) : getDocs(query(collection(db, `${publicDataPath}/teacherSchedule`), where('studentUid', '==', studentUid))),
@@ -1309,7 +1309,6 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
             setQuickChantLotusDates(data.quickChantLotusDates || {});
             setLotusDailyDate(data.lotusDailyDate || null);
             setLotusDailyCount(data.lotusDailyCount || 0);
-            setRecentVisitors(data.recentVisitors || []);
             setGiftOfferings(data.shrineGifts || []);
             setGiftFriends(data.shrineGiftFriends || []);
             setVisitedFriends(data.shrineVisitedFriends || []);
@@ -1709,7 +1708,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   // Three Refuges buttons. If they can't afford the next step, tell them to
   // earn coins from lessons instead. Not shown to a teacher previewing.
   const guideActive = !loading && !isTeacherPreview && !chantingOpen && meditatingMinutes == null
-    && !meditationPickerOpen && !showVisitorsPanel && !visitingStudentName;
+    && !meditationPickerOpen && !visitingStudentName;
   const filledSlotCount = Array.from({ length: SLOT_COUNT }).filter((_, i) => placedItems[i] && findOffering(placedItems[i].id)).length;
   const umbrellaCount = (placedUmbrellas.left ? 1 : 0) + (placedUmbrellas.right ? 1 : 0);
   const cheapestSlotOffering = OFFERING_OPTIONS
@@ -1860,19 +1859,10 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
               {showBuyGuide && !shopOpen && <GuideHand dir="right" className="right-full mr-1 top-1/2 -translate-y-1/2" />}
             </div>
           );
-          const visitorsBtn = !isTeacherPreview && (
-            <button
-              key="visitors"
-              onClick={() => setShowVisitorsPanel(true)}
-              className="flex items-center gap-1 bg-white hover:bg-amber-50 text-amber-700 text-sm font-semibold px-3 py-2 rounded-full shadow-lg border-2 border-amber-300"
-            >
-              👣 Visitors{recentVisitors.length > 0 ? ` (${recentVisitors.length})` : ''}
-            </button>
-          );
           // While the shop is open, Chanting/Meditation move below it
           // instead of above -- keeps the shop button anchored right under
           // the coin badge, closest to where the shop panel itself opens.
-          return shopOpen ? [shopBtn, chantingBtn, meditationBtn, visitorsBtn] : [chantingBtn, meditationBtn, shopBtn, visitorsBtn];
+          return shopOpen ? [shopBtn, chantingBtn, meditationBtn] : [chantingBtn, meditationBtn, shopBtn];
         })()}
       </div>
 
@@ -1922,43 +1912,6 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
         </div>
       )}
 
-      {/* Visitors -- who has come to see MY altar recently. */}
-      {showVisitorsPanel && (
-        <div className="fixed inset-0 z-[10001] bg-black/50 flex items-center justify-center p-4" onClick={() => setShowVisitorsPanel(false)}>
-          <button onClick={() => setShowVisitorsPanel(false)} className="fixed top-3 right-3 z-[10002] w-11 h-11 rounded-full bg-red-600 hover:bg-red-700 text-white text-2xl font-bold shadow-lg flex items-center justify-center" aria-label="Close">×</button>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-xs w-full p-6 text-center max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-bold text-emerald-800 mb-4">👣 Recent Visitors</h2>
-            {recentVisitors.length === 0 ? (
-              <p className="text-sm text-gray-400 mb-4">No one has visited your Shrine Room yet.</p>
-            ) : (
-              <div className="space-y-2 mb-4 max-h-64 overflow-y-auto text-left">
-                {recentVisitors.map((v, i) => (
-                  <div key={i} className="flex items-center justify-between gap-2 bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2">
-                    <div className="min-w-0">
-                      <span className="font-semibold text-gray-800 block truncate">{v.name}</span>
-                      <span className="text-xs text-gray-400">{new Date(v.visitedAt).toLocaleString()}</span>
-                    </div>
-                    {/* Visit them back -- reachable from here since a
-                        visitor isn't always still online to find in the
-                        students list above. */}
-                    <button
-                      onClick={() => { setShowVisitorsPanel(false); handleVisitStudent(v.name); }}
-                      className="flex-shrink-0 text-xs font-semibold text-emerald-700 bg-white hover:bg-emerald-100 border border-emerald-300 rounded-full px-2 py-1"
-                      title={`Visit ${v.name}'s Shrine Room back`}
-                    >
-                      👣 Visit back
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-            <button onClick={() => setShowVisitorsPanel(false)} className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2.5 rounded-xl">
-              Close
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Visit -- a read-only peek at another student's altar (see
           handleVisitStudent). No purchasing, no chanting/meditation --
           just a look, same shapes (Buddha/offerings/umbrellas/bell) as the
@@ -1968,7 +1921,8 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
         <div className="fixed inset-0 z-[10001] bg-black/60 flex items-center justify-center p-4" onClick={closeVisit}>
           <button onClick={closeVisit} className="fixed top-3 right-3 z-[10002] w-11 h-11 rounded-full bg-red-600 hover:bg-red-700 text-white text-2xl font-bold shadow-lg flex items-center justify-center" aria-label="Close">×</button>
           <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-bold text-emerald-800 mb-4">🛕 {visitingStudentName}'s Shrine Room</h2>
+            <h2 className="text-lg font-bold text-emerald-800 mb-2">🛕 {visitingStudentName}'s Shrine Room</h2>
+            <div className="flex justify-center mb-3"><AvatarThumb name={visitingStudentName} size={72} /></div>
             {visitGiftNote && (
               <p className="mb-4 text-sm font-semibold text-amber-800 bg-amber-50 border border-amber-300 rounded-xl px-3 py-2">{visitGiftNote}</p>
             )}
