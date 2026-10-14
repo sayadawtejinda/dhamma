@@ -337,7 +337,13 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
   // gift can therefore arrive up to a week late.
   const [teacherGifts, setTeacherGifts] = useState([]);
   const [friendGifts, setFriendGifts] = useState([]);
-  const recentVisitors = useMemo(() => [...teacherGifts, ...friendGifts], [teacherGifts, friendGifts]);
+  // A gift leaves the list once it has been opened. While the gift list is open it keeps the list as it was
+  // when opened (so the gift just opened stays in view until the list is closed).
+  const [frozenOpened, setFrozenOpened] = useState(null);
+  const recentVisitors = useMemo(() => {
+    const opened = frozenOpened || world.giftsOpened || [];
+    return [...teacherGifts, ...friendGifts].filter(v => !hasOpenedGiftFrom(opened, v));
+  }, [teacherGifts, friendGifts, world.giftsOpened, frozenOpened]);
   useEffect(() => {
     if (!studentUid || !studentName) return;
     let off = false;
@@ -641,7 +647,7 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
         coinBalance={isTeacherPreview ? null : coinBalance}
         coinIcon="🪙"
         panelTitle="🌿 Students"
-        weeklyLabel={(n) => <>visit {n} 👥</>}
+        weeklyLabel={(n) => <>📦 🎁 {n} 👥</>}
         panelNote="👣 ➜ 🌿 ➜ 📦 ➜ 🎁   ✅"
         teacherLabel="🧑‍🏫 Teacher"
         showInactiveWarning={false}
@@ -657,7 +663,7 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
                   className="text-xs font-semibold text-gray-500 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-full px-2 py-0.5"
                   title="Your gift is already sent, but you can look at their Nature World again"
                 >
-                  👀 Look again
+                  👀
                 </button>
               </>
             ) : (
@@ -666,7 +672,7 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
                 className="text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-full px-2 py-0.5"
                 title="Visit their Nature World and send them a gift"
               >
-                📦 Send
+                📦 🎁
               </button>
             )}
           </span>
@@ -675,7 +681,7 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
 
       {!isTeacherPreview && recentVisitors.length > 0 && (
         <button
-          onClick={() => setShowVisitorsPanel(true)}
+          onClick={() => { setFrozenOpened(world.giftsOpened || []); setShowVisitorsPanel(true); }}
           className="fixed top-16 right-3 z-50 flex items-center gap-1 bg-white hover:bg-emerald-50 text-emerald-700 text-sm font-semibold px-3 py-2 rounded-full shadow-lg border-2 border-emerald-300"
         >
           🎁 Gifts ({recentVisitors.length})
@@ -796,9 +802,9 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
 
       {/* Visitors -- who has come to see MY world recently. */}
       {showVisitorsPanel && (
-        <div className="fixed inset-0 z-[10001] bg-black/50 flex items-center justify-center p-4" onClick={() => setShowVisitorsPanel(false)}>
-          <button onClick={() => setShowVisitorsPanel(false)} className="fixed top-3 right-3 z-[10002] w-11 h-11 rounded-full bg-red-600 hover:bg-red-700 text-white text-2xl font-bold shadow-lg flex items-center justify-center" aria-label="Close">×</button>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-xs w-full p-6 text-center max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[10001] bg-black/50 flex items-center justify-center p-4" onClick={() => { setShowVisitorsPanel(false); setFrozenOpened(null); }}>
+          <div className="relative bg-white rounded-2xl shadow-2xl max-w-xs w-full p-6 text-center max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <button onClick={() => { setShowVisitorsPanel(false); setFrozenOpened(null); }} className="absolute top-2 right-2 z-[10002] w-11 h-11 rounded-full bg-red-600 hover:bg-red-700 text-white text-2xl font-bold shadow-lg flex items-center justify-center" aria-label="Close">×</button>
             <h2 className="text-lg font-bold text-emerald-800 mb-1">🎁 Your gifts</h2>
             <p className="text-xs text-gray-400 mb-4">🎁</p>
             {recentVisitors.length === 0 ? (
@@ -823,7 +829,7 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
                 })}
               </div>
             )}
-            <button onClick={() => setShowVisitorsPanel(false)} className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2.5 rounded-xl">
+            <button onClick={() => { setShowVisitorsPanel(false); setFrozenOpened(null); }} className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2.5 rounded-xl">
               Close
             </button>
           </div>
@@ -833,8 +839,8 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
       {/* Visit -- a read-only peek at another student's world. */}
       {visitingStudentName && (
         <div className="fixed inset-0 z-[10001] bg-black/60 flex items-center justify-center p-4" onClick={closeVisit}>
-          <button onClick={closeVisit} className="fixed top-3 right-3 z-[10002] w-11 h-11 rounded-full bg-red-600 hover:bg-red-700 text-white text-2xl font-bold shadow-lg flex items-center justify-center" aria-label="Close">×</button>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 text-center max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+          <div className="relative bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 text-center max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <button onClick={closeVisit} className="absolute top-2 right-2 z-[10002] w-11 h-11 rounded-full bg-red-600 hover:bg-red-700 text-white text-2xl font-bold shadow-lg flex items-center justify-center" aria-label="Close">×</button>
             <h2 className="text-lg font-bold text-emerald-800 mb-2">🌿 {visitingStudentName}'s Nature World</h2>
             <div className="flex justify-center mb-3"><AvatarThumb name={visitingStudentName} size={72} /></div>
             {visitGiftNote && (

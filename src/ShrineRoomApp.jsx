@@ -1792,7 +1792,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
         secondaryBalance={isTeacherPreview ? null : coinBalance}
         secondaryIcon="🪙"
         panelTitle="🛕 Students"
-        weeklyLabel={(n) => <>visit {n} 👥</>}
+        weeklyLabel={(n) => <>👣 🎁 {n} 👥</>}
         panelNote="👣 ➜ 🛕 ➜ 🎁   ✅"
         teacherLabel="🧑‍🏫 Teacher"
         showInactiveWarning={false}
@@ -1811,7 +1811,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
                       className="text-xs font-semibold text-gray-500 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-full px-2 py-0.5"
                       title="No more gift from this friend, but you can look at their altar again"
                     >
-                      👀 Look again
+                      👀
                     </button>
                   </>
                 ) : (
@@ -1819,7 +1819,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
                     onClick={(e) => { e.stopPropagation(); handleVisitStudent(s.studentName); }}
                     className="text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-full px-2 py-0.5"
                   >
-                    👣 Visit
+                    👣 🎁
                   </button>
                 )}
               </>
@@ -1892,8 +1892,8 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
       {/* Meditation duration picker -- a typed number (1-60), not presets. */}
       {meditationPickerOpen && (
         <div className="fixed inset-0 z-[10001] bg-black/50 flex items-center justify-center p-4" onClick={() => setMeditationPickerOpen(false)}>
-          <button onClick={() => setMeditationPickerOpen(false)} className="fixed top-3 right-3 z-[10002] w-11 h-11 rounded-full bg-red-600 hover:bg-red-700 text-white text-2xl font-bold shadow-lg flex items-center justify-center" aria-label="Close">×</button>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-xs w-full p-6 text-center max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+          <div className="relative bg-white rounded-2xl shadow-2xl max-w-xs w-full p-6 text-center max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <button onClick={() => setMeditationPickerOpen(false)} className="absolute top-2 right-2 z-[10002] w-11 h-11 rounded-full bg-red-600 hover:bg-red-700 text-white text-2xl font-bold shadow-lg flex items-center justify-center" aria-label="Close">×</button>
             <div className="flex items-center justify-center gap-2 mb-1">
               <h2 className="text-lg font-bold text-emerald-800">🧘 Meditation</h2>
               <button
@@ -1937,8 +1937,8 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
       {/* Visitors -- friends who came to my altar (as of last week). */}
       {showVisitorsPanel && (
         <div className="fixed inset-0 z-[10001] bg-black/50 flex items-center justify-center p-4" onClick={() => setShowVisitorsPanel(false)}>
-          <button onClick={() => setShowVisitorsPanel(false)} className="fixed top-3 right-3 z-[10002] w-11 h-11 rounded-full bg-red-600 hover:bg-red-700 text-white text-2xl font-bold shadow-lg flex items-center justify-center" aria-label="Close">×</button>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-xs w-full p-6 text-center max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+          <div className="relative bg-white rounded-2xl shadow-2xl max-w-xs w-full p-6 text-center max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <button onClick={() => setShowVisitorsPanel(false)} className="absolute top-2 right-2 z-[10002] w-11 h-11 rounded-full bg-red-600 hover:bg-red-700 text-white text-2xl font-bold shadow-lg flex items-center justify-center" aria-label="Close">×</button>
             <h2 className="text-lg font-bold text-emerald-800 mb-1">👣 Visitors</h2>
             <p className="text-xs text-gray-400 mb-4">🛕 ➜ 👣</p>
             {visitorNames.length === 0 ? (
@@ -1970,8 +1970,8 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
           state. */}
       {visitingStudentName && (
         <div className="fixed inset-0 z-[10001] bg-black/60 flex items-center justify-center p-4" onClick={closeVisit}>
-          <button onClick={closeVisit} className="fixed top-3 right-3 z-[10002] w-11 h-11 rounded-full bg-red-600 hover:bg-red-700 text-white text-2xl font-bold shadow-lg flex items-center justify-center" aria-label="Close">×</button>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+          <div className="relative bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <button onClick={closeVisit} className="absolute top-2 right-2 z-[10002] w-11 h-11 rounded-full bg-red-600 hover:bg-red-700 text-white text-2xl font-bold shadow-lg flex items-center justify-center" aria-label="Close">×</button>
             <h2 className="text-lg font-bold text-emerald-800 mb-2">🛕 {visitingStudentName}'s Shrine Room</h2>
             <div className="flex justify-center mb-3"><AvatarThumb name={visitingStudentName} size={72} /></div>
             {visitGiftNote && (
