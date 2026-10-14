@@ -6,3 +6,6 @@ timetable_backup_*.json
 dist/
 Paramattha1.txt
 Paramattha2.txt
+
+# sermon audio is hosted elsewhere (12 GB) -- never commit it
+public/library/audio/

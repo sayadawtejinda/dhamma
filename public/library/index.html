@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="my">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ဖားအောက် ဓမ္မစာကြည့်တိုက်</title>
+<meta name="theme-color" content="#7a1f1f">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Myanmar:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#fff7ea;--bg2:#fdeccc;--card:#fff;--ink:#3a1e12;--mute:#8a6a52;--line:#ecd7b4;--accent:#b4381e;--accent2:#e8a21a;--accent-ink:#fff;--shadow:0 6px 22px rgba(122,52,18,.14)}
+@media (prefers-color-scheme:dark){:root{--bg:#1c1410;--bg2:#2a1c14;--card:#2c211a;--ink:#f6e8d2;--mute:#c2a888;--line:#4a372a;--accent:#e2623f;--accent2:#f2b84a;--accent-ink:#1c1410;--shadow:0 6px 22px rgba(0,0,0,.45)}}
+:root[data-theme=light]{--bg:#fff7ea;--bg2:#fdeccc;--card:#fff;--ink:#3a1e12;--mute:#8a6a52;--line:#ecd7b4;--accent:#b4381e;--accent2:#e8a21a;--accent-ink:#fff;--shadow:0 6px 22px rgba(122,52,18,.14)}
+:root[data-theme=dark]{--bg:#1c1410;--bg2:#2a1c14;--card:#2c211a;--ink:#f6e8d2;--mute:#c2a888;--line:#4a372a;--accent:#e2623f;--accent2:#f2b84a;--accent-ink:#1c1410;--shadow:0 6px 22px rgba(0,0,0,.45)}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.65 "Pyidaungsu","Noto Sans Myanmar","Myanmar Text",system-ui,sans-serif;padding-bottom:96px}
+button{font:inherit;color:inherit;cursor:pointer}
+header.hero{background:linear-gradient(135deg,#7a1f1f 0%,#b4381e 55%,#e8a21a 130%);color:#fff;padding:22px 16px 18px;position:relative;overflow:hidden}
+header.hero::after{content:"☸";position:absolute;right:-18px;top:-30px;font-size:170px;opacity:.12}
+.wrap{max-width:1100px;margin:0 auto}
+header.hero h1{margin:0;font-size:1.55rem;line-height:1.35}
+header.hero p{margin:4px 0 0;opacity:.9;font-size:.95rem}
+#theme{position:absolute;right:14px;top:12px;background:rgba(255,255,255,.2);border:0;border-radius:20px;padding:4px 10px;color:#fff;z-index:2}
+nav.tabs{position:sticky;top:0;z-index:20;background:var(--bg);border-bottom:1px solid var(--line);display:flex;justify-content:center;gap:6px;padding:8px}
+nav.tabs button{background:transparent;border:1px solid transparent;border-radius:999px;padding:7px 18px;font-weight:600;color:var(--mute)}
+nav.tabs button.on{background:var(--accent);color:var(--accent-ink);box-shadow:var(--shadow)}
+.bar{display:flex;gap:10px;flex-wrap:wrap;margin:16px 0 10px}
+.search{flex:1;min-width:220px;position:relative}
+.search input{width:100%;padding:12px 16px 12px 42px;border-radius:14px;border:2px solid var(--line);background:var(--card);color:var(--ink);font:inherit;outline:none}
+.search input:focus{border-color:var(--accent2)}
+.search::before{content:"🔍";position:absolute;left:14px;top:11px}
+select{padding:10px 12px;border-radius:12px;border:2px solid var(--line);background:var(--card);color:var(--ink);font:inherit}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 14px}
+.chip{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:4px 14px;font-size:.9rem}
+.chip.on{background:var(--accent2);color:#2a1a08;border-color:var(--accent2);font-weight:600}
+.count{color:var(--mute);font-size:.9rem;margin:4px 2px 10px}
+.list{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px 14px;display:flex;gap:12px;align-items:center;cursor:pointer;transition:transform .12s,box-shadow .12s;text-align:left;width:100%}
+.card:hover{transform:translateY(-2px);box-shadow:var(--shadow)}
+.num{flex:none;width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;display:grid;place-items:center;font-weight:700;font-size:.85rem}
+.card h3{margin:0;font-size:1.02rem;line-height:1.45}
+.card small{color:var(--mute)}
+.books{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:16px}
+.book{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;cursor:pointer;display:flex;flex-direction:column;text-align:left;padding:0;transition:transform .12s,box-shadow .12s}
+.book:hover{transform:translateY(-3px);box-shadow:var(--shadow)}
+.book .cv{aspect-ratio:3/4;background:linear-gradient(160deg,#7a1f1f,#e8a21a);display:grid;place-items:center;color:#fff;font-size:2rem;overflow:hidden}
+.book .cv img{width:100%;height:100%;object-fit:cover;display:block}
+.book h4{margin:0;padding:8px 10px 2px;font-size:.88rem;line-height:1.45;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.book small{padding:0 10px 9px;color:var(--mute);font-size:.78rem}
+dialog{border:0;border-radius:20px;padding:0;background:var(--bg);color:var(--ink);box-shadow:0 20px 60px rgba(0,0,0,.45);width:min(760px,96vw);max-height:92vh}
+dialog::backdrop{background:rgba(30,10,0,.55)}
+dialog.big{width:min(1000px,98vw);height:94vh}
+.dh{display:flex;align-items:flex-start;gap:10px;padding:16px 18px;background:linear-gradient(135deg,#7a1f1f,#b4381e);color:#fff}
+.dh h2{margin:0;font-size:1.15rem;flex:1;line-height:1.5}
+.x{background:rgba(255,255,255,.2);border:0;border-radius:50%;width:34px;height:34px;color:#fff;font-size:1.1rem}
+.db{padding:14px 18px;overflow:auto;max-height:calc(92vh - 150px)}
+.acts{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.btn{border:0;border-radius:12px;padding:9px 16px;background:var(--accent);color:var(--accent-ink);font-weight:600}
+.btn.alt{background:var(--card);color:var(--ink);border:1px solid var(--line)}
+.btn.gold{background:var(--accent2);color:#2a1a08}
+.trk{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:12px;border:1px solid var(--line);background:var(--card);margin-bottom:6px}
+.trk.now{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent) inset}
+.trk .t{flex:1;min-width:0}
+.trk .t b{display:block;font-size:.95rem}
+.trk .t small{color:var(--mute)}
+.trk button{border:0;background:var(--bg2);border-radius:50%;width:38px;height:38px}
+.trk a{color:var(--mute);text-decoration:none;padding:4px 8px}
+.pr{height:6px;background:var(--line);border-radius:6px;overflow:hidden;margin:6px 0}
+.pr i{display:block;height:100%;background:var(--accent2);width:0}
+#reader iframe{width:100%;height:calc(94vh - 130px);border:0;background:#fff}
+.rt{display:flex;gap:8px;align-items:center;padding:8px 14px;flex-wrap:wrap}
+.rt input{width:90px;padding:7px 10px;border-radius:10px;border:2px solid var(--line);background:var(--card);color:var(--ink);font:inherit}
+#player{position:fixed;left:0;right:0;bottom:0;z-index:50;background:var(--card);border-top:1px solid var(--line);box-shadow:0 -6px 22px rgba(0,0,0,.15);padding:8px 12px 10px;display:none}
+#player.on{display:block}
+#player .row{display:flex;align-items:center;gap:8px;max-width:1100px;margin:0 auto}
+#pt{flex:1;min-width:0;font-size:.9rem;line-height:1.4}
+#pt b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#pt small{color:var(--mute)}
+.pb{border:0;background:var(--bg2);border-radius:50%;width:40px;height:40px;font-size:1rem}
+.pb.main{background:var(--accent);color:var(--accent-ink);width:48px;height:48px;font-size:1.2rem}
+.pbar{max-width:1100px;margin:6px auto 0;display:flex;align-items:center;gap:8px;font-size:.8rem;color:var(--mute)}
+.pbar input[type=range]{flex:1;accent-color:var(--accent)}
+.pbar select{padding:3px 6px;font-size:.8rem}
+#toast{position:fixed;left:50%;bottom:130px;transform:translateX(-50%);background:#2a1a10;color:#fff;padding:10px 18px;border-radius:12px;z-index:99;display:none;max-width:90vw;font-size:.92rem}
+.empty{text-align:center;color:var(--mute);padding:40px 10px}
+.home{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin:18px 0}
+.tile{border-radius:18px;padding:20px;color:#fff;cursor:pointer;border:0;text-align:left;min-height:120px;box-shadow:var(--shadow)}
+.tile h3{margin:0 0 4px;font-size:1.2rem}.tile p{margin:0;opacity:.92;font-size:.92rem}
+.t1{background:linear-gradient(135deg,#b4381e,#e8741a)}.t2{background:linear-gradient(135deg,#1f6f6a,#4aa08a)}.t3{background:linear-gradient(135deg,#5b3a8a,#9a6ad0)}
+h2.sec{margin:22px 0 8px;font-size:1.1rem;color:var(--accent)}
+.hint{background:var(--bg2);border-radius:12px;padding:10px 14px;color:var(--mute);font-size:.9rem;margin:10px 0}
+</style>
+</head>
+<body>
+<header class="hero"><button id="theme" title="Light / Dark">🌓</button><div class="wrap"><h1>☸ ဖားအောက်တောရ ဓမ္မစာကြည့်တိုက်</h1><p>တရားတော်များ နာယူရန် · တရားစာအုပ်များ ဖတ်ရှုရန်</p></div></header>
+<nav class="tabs"><button data-t="home" class="on">ပင်မ</button><button data-t="sermons">🎧 တရားတော်</button><button data-t="books">📖 စာအုပ်</button></nav>
+<main class="wrap" style="padding:0 14px">
+ <section id="home"></section>
+ <section id="sermons" hidden>
+  <div class="bar"><div class="search"><input id="sq" placeholder="တရားတော်ရှာရန် … (အမည်၊ နံပါတ်)" autocomplete="off"></div><select id="ss"><option value="no">စဉ်အလိုက်</option><option value="long">အရှည်ဆုံး</option><option value="az">အမည်အလိုက်</option></select></div>
+  <div class="chips" id="schips"></div><div class="count" id="scount"></div><div class="list" id="slist"></div>
+ </section>
+ <section id="books" hidden>
+  <div class="bar"><div class="search"><input id="bq" placeholder="စာအုပ်ရှာရန် …" autocomplete="off"></div></div>
+  <div class="count" id="bcount"></div><div class="books" id="blist"></div>
+ </section>
+</main>
+
+<dialog id="dsermon"><div class="dh"><h2 id="dst"></h2><button class="x" onclick="dsermon.close()">✕</button></div><div class="db" id="dsb"></div></dialog>
+<dialog id="reader" class="big"><div class="dh"><h2 id="rtitle"></h2><button class="x" onclick="closeReader()">✕</button></div>
+ <div class="rt"><span>စာမျက်နှာ</span><input id="rpage" type="number" min="1" value="1"><button class="btn" id="rgo">သွားမည်</button><a class="btn alt" id="rdl" download style="text-decoration:none">⬇ ဒေါင်းလုပ်</a><a class="btn alt" id="rnew" target="_blank" rel="noopener" style="text-decoration:none">↗ Tab အသစ်</a><small id="rinfo" style="color:var(--mute)"></small></div>
+ <iframe id="rframe" title="book"></iframe></dialog>
+
+<div id="player"><div class="pbar" style="margin:0 auto 4px"><span id="pcur">0:00</span><input id="seek" type="range" min="0" max="1000" value="0"><span id="pdur">0:00</span></div>
+ <div class="row"><div id="pt"><b id="ptt">—</b><small id="pts"></small></div>
+ <button class="pb" id="pprev" title="Previous">⏮</button><button class="pb" id="pb15" title="-15s">↺15</button><button class="pb main" id="pplay">▶</button><button class="pb" id="pf15" title="+15s">15↻</button><button class="pb" id="pnext" title="Next">⏭</button>
+ <select id="spd" title="Speed"><option>0.75</option><option selected>1</option><option>1.25</option><option>1.5</option><option>2</option></select>
+ <select id="slp" title="Sleep timer"><option value="0">😴 —</option><option value="15">15 မိနစ်</option><option value="30">30 မိနစ်</option><option value="60">60 မိနစ်</option></select></div></div>
+<div id="toast"></div>
+<audio id="au" preload="metadata"></audio>
+
+<script src="data/config.js"></script>
+<script>
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+const CFG=Object.assign({audioBase:'audio/'},window.LIB_CONFIG||{});
+const MD='၀၁၂၃၄၅၆၇၈၉',mn=n=>String(n).replace(/\d/g,d=>MD[d]);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const store={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+const fmt=s=>{s=Math.max(0,Math.round(s||0));const h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60;return(h?h+':'+String(m).padStart(2,'0'):m)+':'+String(x).padStart(2,'0')};
+const fmtLong=s=>{const h=Math.floor(s/3600),m=Math.round(s%3600/60);return h?`${mn(h)} နာရီ ${mn(m)} မိနစ်`:`${mn(m)} မိနစ်`};
+function toast(t,ms=3500){const e=$('#toast');e.textContent=t;e.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>e.style.display='none',ms)}
+// theme
+(function(){const t=store.get('theme',null);if(t)document.documentElement.dataset.theme=t;$('#theme').onclick=()=>{const dark=matchMedia('(prefers-color-scheme:dark)').matches;const cur=document.documentElement.dataset.theme||(dark?'dark':'light');const n=cur==='dark'?'light':'dark';document.documentElement.dataset.theme=n;store.set('theme',n)}})();
+// tabs
+function tab(t){$$('nav.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));['home','sermons','books'].forEach(x=>$('#'+x).hidden=x!==t);scrollTo(0,0);if(location.hash!=='#'+t)history.replaceState(null,'','#'+t)}
+$$('nav.tabs button').forEach(b=>b.onclick=()=>tab(b.dataset.t));
+
+let S=[],B=[];
+const norm=s=>String(s).toLowerCase().replace(/[​\s]+/g,' ');
+const total=s=>s.tracks.reduce((a,t)=>a+t[2],0);
+const url=t=>CFG.audioBase+encodeURIComponent(t[1]);
+
+// ---------- Sermons
+const CATS=[['သုတ္တန်','သုတ္တန်'],['ဇာတ်','ဇာတ်'],['အပဒါန်','အပဒါန်'],['ကမ္မဋ္ဌာန်း','ကမ္မဋ္ဌာန်း'],['ဝိနည်း','ဝိနည်း'],['Retreat','Retreat'],['ပဋ္ဌာန်း','ပဋ္ဌာန်း']];
+let cat='';
+function renderChips(){const e=$('#schips');e.innerHTML='<button class="chip on" data-c="">အားလုံး</button>'+CATS.filter(c=>S.filter(s=>s.title.includes(c[0])).length>2).map(c=>`<button class="chip" data-c="${c[0]}">${c[1]}</button>`).join('');
+ e.onclick=ev=>{const b=ev.target.closest('.chip');if(!b)return;cat=b.dataset.c;$$('#schips .chip').forEach(x=>x.classList.toggle('on',x===b));renderSermons()}}
+function renderSermons(){
+ const q=norm($('#sq').value.trim()),so=$('#ss').value;
+ let l=S.filter(s=>(!cat||s.title.includes(cat))&&(!q||norm(s.title).includes(q)||norm(s.no).includes(q)||s.tracks.some(t=>norm(t[1]).includes(q))));
+ if(so==='long')l=[...l].sort((a,b)=>total(b)-total(a));if(so==='az')l=[...l].sort((a,b)=>a.title.localeCompare(b.title));
+ $('#scount').textContent=`တရားတော် ${mn(l.length)} ပုဒ်`;
+ $('#slist').innerHTML=l.length?l.map(s=>`<button class="card" data-id="${s.id}"><div class="num">${esc(s.no.replace('။','')||'＋')}</div><div><h3>${esc(s.title)}</h3><small>🎧 ${mn(s.tracks.length)} ခွေ · ${fmtLong(total(s))}</small></div></button>`).join(''):'<div class="empty">မတွေ့ပါ</div>';
+}
+$('#slist').onclick=e=>{const c=e.target.closest('.card');if(c)openSermon(+c.dataset.id)};
+$('#sq').oninput=renderSermons;$('#ss').onchange=renderSermons;
+let cache=null;const CN='lib-audio-v1';
+async function getCache(){try{return cache||(cache=await caches.open(CN))}catch(e){return null}}
+async function isSaved(t){const c=await getCache();return c?!!(await c.match(url(t))):false}
+async function openSermon(id){
+ const s=S.find(x=>x.id===id);if(!s)return;
+ $('#dst').textContent=(s.no?s.no+' ':'')+s.title;
+ const saved=await Promise.all(s.tracks.map(isSaved));
+ const miss=s.expected-s.tracks.length;
+ $('#dsb').innerHTML=`<div class="acts"><button class="btn" id="pall">▶ အားလုံးဖွင့်မည်</button><button class="btn gold" id="sv">⬇ Offline သိမ်းမည်</button></div>
+ <div class="pr" id="svp" hidden><i></i></div><small style="color:var(--mute)" id="svt">${mn(s.tracks.length)} ခွေ · ${fmtLong(total(s))}${miss>0?` · ⚠ ဖိုင် ${mn(miss)} ခု မတွေ့ပါ`:''}</small><div style="margin-top:10px">`+
+ s.tracks.map((t,i)=>`<div class="trk" data-i="${i}"><button data-p="${i}">▶</button><div class="t"><b>ခွေ ${mn(i+1)} <small>(${esc(t[1])})</small></b><small>${fmt(t[2])} · ${(t[3]/1048576).toFixed(1)} MB ${saved[i]?'· ✅ offline':''}</small></div><a href="${url(t)}" download="${esc(t[1])}" title="Download">⬇</a></div>`).join('')+'</div>';
+ $('#dsb').onclick=e=>{const p=e.target.closest('[data-p]');if(p)playQueue(s,+p.dataset.p)};
+ $('#pall').onclick=()=>playQueue(s,0);
+ $('#sv').onclick=()=>saveOffline(s);
+ dsermon.showModal();markNow();
+}
+async function saveOffline(s){
+ const c=await getCache();if(!c){toast('ဤ browser တွင် offline သိမ်း၍မရပါ');return}
+ const bar=$('#svp'),i=bar.firstElementChild;bar.hidden=false;let done=0,fail=0;
+ for(const t of s.tracks){try{if(!(await c.match(url(t)))){const r=await fetch(url(t));if(!r.ok)throw 0;await c.put(url(t),r)}}catch(e){fail++}done++;i.style.width=(done/s.tracks.length*100)+'%';$('#svt').textContent=`${mn(done)} / ${mn(s.tracks.length)}`}
+ toast(fail?`သိမ်းပြီး (မအောင်မြင်သည် ${mn(fail)} ခု)`:'Offline သိမ်းပြီးပါပြီ ✅');openSermon(s.id);
+}
+// ---------- Player
+const au=$('#au');let Q=null,QI=0,sleepT=null;
+async function srcFor(t){const c=await getCache();if(c){const r=await c.match(url(t));if(r){return URL.createObjectURL(await r.blob())}}return url(t)}
+async function playQueue(s,i){Q=s;QI=i;const t=s.tracks[i];
+ const pos=store.get('pos:'+t[1],0);
+ au.src=await srcFor(t);au.playbackRate=+$('#spd').value;
+ au.onloadedmetadata=()=>{if(pos>5&&pos<au.duration-10)au.currentTime=pos;au.onloadedmetadata=null};
+ try{await au.play()}catch(e){}
+ $('#player').classList.add('on');$('#ptt').textContent=`${s.no} ${s.title}`;$('#pts').textContent=`ခွေ ${mn(i+1)} / ${mn(s.tracks.length)}`;
+ store.set('last',{id:s.id,i});markNow();
+ if('mediaSession' in navigator){navigator.mediaSession.metadata=new MediaMetadata({title:s.title,artist:'ဖားအောက်တောရ',album:`ခွေ ${i+1}/${s.tracks.length}`});
+  navigator.mediaSession.setActionHandler('nexttrack',()=>step(1));navigator.mediaSession.setActionHandler('previoustrack',()=>step(-1));}
+}
+function step(d){if(!Q)return;const n=QI+d;if(n>=0&&n<Q.tracks.length)playQueue(Q,n)}
+function markNow(){$$('#dsb .trk').forEach(e=>e.classList.toggle('now',Q&&$('#dst').textContent.includes(Q.title)&&+e.dataset.i===QI))}
+au.onerror=()=>toast('အသံဖိုင်ကို မဖွင့်နိုင်ပါ — audio host သတ်မှတ်ချက် (data/config.js) သို့မဟုတ် အင်တာနက်ကို စစ်ပါ',6000);
+au.onplay=()=>$('#pplay').textContent='⏸';au.onpause=()=>$('#pplay').textContent='▶';
+au.onended=()=>{if(Q&&QI<Q.tracks.length-1)step(1)};
+au.ontimeupdate=()=>{if(!au.duration)return;$('#pcur').textContent=fmt(au.currentTime);$('#pdur').textContent=fmt(au.duration);if(!seeking)$('#seek').value=au.currentTime/au.duration*1000;
+ if(Q&&Math.floor(au.currentTime)%5===0)store.set('pos:'+Q.tracks[QI][1],au.currentTime)};
+let seeking=false;$('#seek').oninput=()=>{seeking=true;if(au.duration)$('#pcur').textContent=fmt($('#seek').value/1000*au.duration)};
+$('#seek').onchange=()=>{if(au.duration)au.currentTime=$('#seek').value/1000*au.duration;seeking=false};
+$('#pplay').onclick=()=>au.paused?au.play():au.pause();
+$('#pb15').onclick=()=>au.currentTime-=15;$('#pf15').onclick=()=>au.currentTime+=15;
+$('#pprev').onclick=()=>step(-1);$('#pnext').onclick=()=>step(1);
+$('#spd').onchange=()=>{au.playbackRate=+$('#spd').value;store.set('spd',$('#spd').value)};
+$('#slp').onchange=()=>{clearTimeout(sleepT);const m=+$('#slp').value;if(m){sleepT=setTimeout(()=>{au.pause();$('#slp').value=0;toast('အိပ်ချိန်သတ်မှတ်ထားသဖြင့် ရပ်လိုက်ပါပြီ')},m*60000);toast(`${mn(m)} မိနစ်အကြာတွင် ရပ်ပါမည်`)}};
+addEventListener('keydown',e=>{if(/input|select|textarea/i.test(e.target.tagName))return;if(e.code==='Space'&&Q){e.preventDefault();$('#pplay').click()}});
+{const sp=store.get('spd',null);if(sp)$('#spd').value=sp}
+
+// ---------- Books
+function renderBooks(){const q=norm($('#bq').value.trim());const l=B.filter(b=>!q||norm(b.title).includes(q));
+ $('#bcount').textContent=`စာအုပ် ${mn(l.length)} အုပ်`;
+ $('#blist').innerHTML=l.map(b=>`<button class="book" data-id="${b.id}"><div class="cv"><img loading="lazy" src="covers/${b.id}.jpg" alt="" onerror="this.replaceWith('📖')"></div><h4>${esc(b.title)}</h4><small>${b.pages?mn(b.pages)+' စာမျက်နှာ · ':''}${b.mb} MB</small></button>`).join('')||'<div class="empty">မတွေ့ပါ</div>'}
+$('#bq').oninput=renderBooks;
+$('#blist').onclick=e=>{const c=e.target.closest('.book');if(c)openBook(c.dataset.id)};
+let curBook=null;
+function openBook(id,pg){const b=B.find(x=>x.id===id);if(!b)return;curBook=b;
+ pg=pg||store.get('bk:'+id,1);$('#rtitle').textContent=b.title;$('#rpage').value=pg;$('#rpage').max=b.pages||9999;
+ $('#rdl').href=`books/${b.id}.pdf`;$('#rdl').download=b.title+'.pdf';$('#rnew').href=`books/${b.id}.pdf#page=${pg}`;$('#rinfo').textContent=b.pages?`/ ${mn(b.pages)}`:'';
+ $('#rframe').src=`books/${b.id}.pdf#page=${pg}`;reader.showModal();store.set('lastbook',id)}
+function closeReader(){reader.close();$('#rframe').src='about:blank'}
+$('#rgo').onclick=()=>{const p=Math.max(1,+$('#rpage').value||1);store.set('bk:'+curBook.id,p);$('#rnew').href=`books/${curBook.id}.pdf#page=${p}`;$('#rframe').src=`books/${curBook.id}.pdf#page=${p}`};
+$('#rpage').onkeydown=e=>{if(e.key==='Enter')$('#rgo').click()};
+
+// ---------- Home
+function renderHome(){const last=store.get('last',null),lb=store.get('lastbook',null);
+ const ls=last&&S.find(s=>s.id===last.id),bk=lb&&B.find(b=>b.id===lb);
+ $('#home').innerHTML=`<div class="home"><button class="tile t1" data-go="sermons"><h3>🎧 တရားတော်များ</h3><p>${mn(S.length)} စုံ · ${mn(S.reduce((a,s)=>a+s.tracks.length,0))} ခွေ · ${fmtLong(S.reduce((a,s)=>a+total(s),0))}</p></button>
+ <button class="tile t2" data-go="books"><h3>📖 တရားစာအုပ်များ</h3><p>${mn(B.length)} အုပ် — ရှာဖွေဖတ်ရှုရန်</p></button></div>`
+ +(ls?`<h2 class="sec">ဆက်နာမည်</h2><button class="card" data-s="${ls.id}" data-i="${last.i}"><div class="num">▶</div><div><h3>${esc(ls.title)}</h3><small>ခွေ ${mn(last.i+1)} မှ ဆက်နာရန်</small></div></button>`:'')
+ +(bk?`<h2 class="sec">နောက်ဆုံးဖတ်သည့်စာအုပ်</h2><button class="card" data-b="${bk.id}"><div class="num">📖</div><div><h3>${esc(bk.title)}</h3><small>စာမျက်နှာ ${mn(store.get('bk:'+bk.id,1))} မှ ဆက်ဖတ်ရန်</small></div></button>`:'')
+ +`<h2 class="sec">အကြံပြုချက်</h2><div class="hint">စာအုပ်ကို ဖွင့်ပြီး စာမျက်နှာနံပါတ်ရိုက်ကာ တိုက်ရိုက်သွားနိုင်ပါသည်။ တရားတော်ကို <b>Offline သိမ်းမည်</b> နှိပ်ပြီး အင်တာနက်မရှိလည်း နာနိုင်ပါသည်။ Space ခုံနှိပ်၍ ရပ်/ဖွင့်နိုင်ပါသည်။</div>`;
+ $('#home').onclick=e=>{const g=e.target.closest('[data-go]');if(g)return tab(g.dataset.go);const s=e.target.closest('[data-s]');if(s){tab('sermons');return playQueue(S.find(x=>x.id==s.dataset.s),+s.dataset.i)}const b=e.target.closest('[data-b]');if(b)openBook(b.dataset.b)}}
+
+Promise.all([fetch('data/sermons.json').then(r=>r.json()),fetch('data/books.json').then(r=>r.json())]).then(([s,b])=>{S=s;B=b;renderChips();renderSermons();renderBooks();renderHome();const h=location.hash.slice(1);if(['sermons','books'].includes(h))tab(h)})
+ .catch(()=>{$('#home').innerHTML='<div class="empty">ဒေတာဖိုင်များ မဖွင့်နိုင်ပါ</div>'});
+if('serviceWorker' in navigator&&location.protocol.startsWith('http')){/* offline audio uses Cache Storage directly; no service worker needed */}
+</script>
+</body>
+</html>
