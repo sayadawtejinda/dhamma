@@ -1803,7 +1803,10 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
     // Not scoped by teacherUid — this app's students/lessons collections
     // aren't teacher-scoped either (single-teacher deployment), so greetings
     // follow the same pattern.
-    const unsubscribe = onSnapshot(greetingsCollection, (snapshot) => {
+    // Only greetings made from now on are asked for (the collection holds ~1,000 old ones, and the old
+    // way read every one of them each time the teacher dashboard opened just to throw them away).
+    const greetingsFromNow = query(greetingsCollection, where('createdAt', '>', Timestamp.fromMillis(Date.now())));
+    const unsubscribe = onSnapshot(greetingsFromNow, (snapshot) => {
       if (!hasLoadedInitial) {
         hasLoadedInitial = true;
         return;
