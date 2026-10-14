@@ -8859,28 +8859,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       } catch(e) { console.error('Abhi score fetch:', e); }
     }
 
-    // Myanmar Speaking app: fetch today's studied minutes (written by
-    // myanmar-speaking-app.jsx as the student uses it) and drop it straight
-    // into "Today completed" — there's no chapter/unit structure here, so
-    // minutes studied today is what the teacher reviews before awarding a trophy.
-    if (isMyanmarSpeakingUrl(session.lessonLink)) {
-      const stuName = studentProfile?.name;
-      if (stuName) {
-        try {
-          const todayKey = new Date().toISOString().split('T')[0];
-          const docId = `${sanitizeMyanmarSpeakingKey(stuName)}_${todayKey}`;
-          const minutesSnap = await getDoc(doc(db, 'artifacts', MYANMAR_SPEAKING_APP_ID, 'public', 'data', 'daily_minutes', docId));
-          if (minutesSnap.exists() && typeof minutesSnap.data().minutes === 'number') {
-            // Feeds "Today, completed" through the same path as every other
-            // app (adds to the previous cumulative total, capped by the
-            // Lesson Bank's "Total Number") — this only works out to a
-            // sensible trophy calc when the teacher sets that lesson's Unit
-            // Name to "Minute", per the Lesson Bank's Unit Name dropdown.
-            handleTodayCountChange(String(minutesSnap.data().minutes));
-          }
-        } catch (e) { console.error('Myanmar Speaking minutes fetch:', e); }
-      }
-    }
+    // Myanmar Speaking app: no trophies and no studied minutes any more -- the student earns coins in the app.
 
     // Myanmar Sound Practice: fetch which Quiz Mode Levels (1-8) this
     // student has already passed, and drop the count straight into
@@ -9161,7 +9140,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
 
     const lessonKey = computeLessonKey(session.lessonTitle, session.lessonLink);
     const previouslyEarned = (studentProfile.earnedTrophies || {})[lessonKey] || 0;
-    const maxAvailable = session.lessonTrophyLimit || 0;
+    const maxAvailable = isMyanmarSpeakingUrl(session.lessonLink) ? 0 : (session.lessonTrophyLimit || 0); // Myanmar Speaker pays coins, not trophies
     const remainingTrophies = Math.max(0, maxAvailable - previouslyEarned);
     const previousHighestUnit = getEffectivePreviousUnit(lessonKey, session);
     const isReader = !!(MYANMAR_READER_APP_URL && session.lessonLink?.startsWith(MYANMAR_READER_APP_URL));
@@ -9299,7 +9278,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     const lessonKey = computeLessonKey(targetSession.lessonTitle, targetSession.lessonLink);
     const earnedTrophiesMap = studentProfile.earnedTrophies || {};
     const previouslyEarned = earnedTrophiesMap[lessonKey] || 0;
-    const maxAvailable = targetSession.lessonTrophyLimit || 0;
+    const maxAvailable = isMyanmarSpeakingUrl(targetSession.lessonLink) ? 0 : (targetSession.lessonTrophyLimit || 0); // Myanmar Speaker pays coins, not trophies
     const remainingTrophies = Math.max(0, maxAvailable - previouslyEarned);
 
     const previousHighestUnit = getEffectivePreviousUnit(lessonKey, targetSession);
@@ -9497,6 +9476,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
   const previouslyEarnedForModal = feedbackSession ? (earnedTrophiesMapForModal[activeLessonKeyForModal] || 0) : 0;
   const maxAvailableForModal = (() => {
     if (!feedbackSession) return 0;
+    if (isMyanmarSpeakingUrl(feedbackSession.lessonLink)) return 0; // coins, not trophies
     // For SmartStudy sessions, derive trophy limit from the session's unitCount
     // (set correctly when lesson was sent via effectiveLessonUnitCount).
     // floor(10 lessons / 5) = 2 trophies — no reference to TeacherDashboard state.

@@ -4,7 +4,7 @@ import {
 } from 'firebase/auth';
 import {
     getFirestore, doc, collection, onSnapshot, setDoc, updateDoc, deleteDoc,
-    query, getDocs, where, getDoc, increment, serverTimestamp
+    query, getDocs, where, getDoc, increment, serverTimestamp, runTransaction
 } from 'firebase/firestore';
 import {
     Plus, Zap, LayoutGrid, CheckSquare, Gamepad2, BookOpen, FileText, Languages,
@@ -16,7 +16,8 @@ import {
 import { app } from './firebase';
 import { rosterDocRefByUid, migrateNameKeyedRosterDoc } from './studentRosterIdentity';
 import OnlineStatusWidget from './OnlineStatusWidget';
-import { listenLiveOrOnce } from './presenceDay';
+import { listenLiveOrOnce, presenceIntervalMs } from './presenceDay';
+import { spawnFlyingCoins } from './flyingCoins';
 
 // --- Firebase Auth/DB Setup ---
 // Reuses the shared Firebase app instance from ./firebase.js instead of
@@ -3906,6 +3907,73 @@ const TripleSetQuiz = ({ lesson, onExit, showRomanization, dictionary, matchingG
 
 // --- Student Dashboard ---
 
+// ---- Coins for pressing the lesson buttons ---------------------------------------------------
+// Pressing the lesson's read button, or a line of the lesson, pays 9 coins into the student's Shrine Room
+// wallet. Nothing is written per press: presses are added up here and saved together a few seconds later
+// (and when the page is hidden or left). Two guards: presses closer than 2 seconds apart do not count,
+// and a student can earn at most 1000 of these coins a day.
+const SHRINE_ROSTER_PATH = 'artifacts/shrine-room-app/public/data/roster';
+const LESSON_PRESS_COINS = 9;
+const LESSON_DAILY_COIN_CAP = 1000;
+const LESSON_MIN_GAP_MS = 2000;
+let lessonCoinStudent = '';
+let lessonCoinPending = 0;
+let lessonCoinUsed = null; // coins already earned today, loaded once
+let lessonCoinTimer = null;
+let lessonCoinLastPress = 0;
+const lessonTodayKey = () => { const d = new Date(); return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; };
+const shrineKeyOf = (name) => (name || 'unknown').trim().replace(/[.$#/\[\]]/g, '_');
+async function flushLessonCoins() {
+    if (lessonCoinTimer) { clearTimeout(lessonCoinTimer); lessonCoinTimer = null; }
+    const name = lessonCoinStudent;
+    const amount = lessonCoinPending;
+    if (!name || amount <= 0) return;
+    lessonCoinPending = 0;
+    try {
+        const ref = doc(db, SHRINE_ROSTER_PATH, shrineKeyOf(name));
+        const paid = await runTransaction(db, async (tx) => {
+            const snap = await tx.get(ref);
+            const d = snap.exists() ? snap.data() : {};
+            const today = lessonTodayKey();
+            const used = d.lessonCoinsDay === today ? (d.lessonCoinsToday || 0) : 0;
+            const allowed = Math.max(0, Math.min(amount, LESSON_DAILY_COIN_CAP - used));
+            if (allowed <= 0) return 0;
+            const hadBalance = d.coinBalance != null;
+            tx.set(ref, { studentName: name, coinBalance: hadBalance ? increment(allowed) : 20 + allowed, lessonCoinsDay: today, lessonCoinsToday: used + allowed }, { merge: true });
+            return allowed;
+        });
+        if (paid < amount) lessonCoinUsed = LESSON_DAILY_COIN_CAP; // the day's limit is reached
+    } catch (e) {
+        console.error('Could not save the lesson coins:', e);
+        lessonCoinPending += amount; // try again with the next press
+    }
+}
+if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', () => { if (document.hidden) flushLessonCoins(); });
+    window.addEventListener('pagehide', () => { flushLessonCoins(); });
+}
+// Called with the click event of a lesson button. Returns true if it earned coins.
+function pressForLessonCoins(e) {
+    const name = lessonCoinStudent;
+    if (!name) return false;
+    const now = Date.now();
+    if (now - lessonCoinLastPress < LESSON_MIN_GAP_MS) return false;
+    if (lessonCoinUsed === null) {
+        lessonCoinUsed = 0;
+        getDoc(doc(db, SHRINE_ROSTER_PATH, shrineKeyOf(name))).then(snap => {
+            const d = snap.exists() ? snap.data() : {};
+            const used = d.lessonCoinsDay === lessonTodayKey() ? (d.lessonCoinsToday || 0) : 0;
+            lessonCoinUsed = Math.max(lessonCoinUsed || 0, used);
+        }).catch(() => {});
+    }
+    if (lessonCoinUsed + lessonCoinPending + LESSON_PRESS_COINS > LESSON_DAILY_COIN_CAP) return false;
+    lessonCoinLastPress = now;
+    lessonCoinPending += LESSON_PRESS_COINS;
+    try { if (e && e.clientX != null) spawnFlyingCoins({ x: e.clientX, y: e.clientY }, 3, '🪙', true); } catch (err) { /* cosmetic only */ }
+    if (!lessonCoinTimer) lessonCoinTimer = setTimeout(flushLessonCoins, 8000);
+    return true;
+}
+
 const StudentLessonCard = ({ lesson, showRomanization, onStartQuiz }) => {
     const [activeSet, setActiveSet] = useState('A'); 
     const [isPlaying, setIsPlaying] = useState(false);
@@ -3983,7 +4051,7 @@ const StudentLessonCard = ({ lesson, showRomanization, onStartQuiz }) => {
                 <div className="flex space-x-2 items-center">
                     {!isPlaying ? (
                         <button
-                            onClick={handleReadLesson}
+                            onClick={(e) => { pressForLessonCoins(e); handleReadLesson(); }}
                             disabled={isPlaying}
                             className="p-2 rounded-full bg-indigo-100 text-indigo-600 hover:bg-indigo-200 transition shadow"
                             title={`Read Question & Set ${activeSet}`}
@@ -4040,10 +4108,12 @@ const StudentLessonCard = ({ lesson, showRomanization, onStartQuiz }) => {
                             >
                                 <div 
                                     className="flex items-start flex-wrap gap-x-1 text-sm text-gray-500 mb-1 pl-8 italic cursor-pointer"
-                                    onClick={() => phrase.q.components
-                                        ? playSequence(phrase.q.components.map(c => c.myanmar).filter(m => m))
-                                        : playComplexText(phrase.q.myanmar)
-                                    }
+                                    onClick={(ev) => {
+                                        pressForLessonCoins(ev);
+                                        return phrase.q.components
+                                            ? playSequence(phrase.q.components.map(c => c.myanmar).filter(m => m))
+                                            : playComplexText(phrase.q.myanmar);
+                                    }}
                                 >
                                      {phrase.q.components ? (
                                          phrase.q.components.map((comp, i) => (
@@ -4081,7 +4151,8 @@ const StudentLessonCard = ({ lesson, showRomanization, onStartQuiz }) => {
                                                     roman={comp.roman} 
                                                     pos={comp.pos} 
                                                     showRomanization={showRomanization} 
-                                                    onClick={() => {
+                                                    onClick={(ev) => {
+    pressForLessonCoins(ev);
     const ap = activeSet === 'A' ? phrase.a1 : phrase.a2;
     ap?.components
         ? playSequence(ap.components.map(c => c.myanmar).filter(m => m))
@@ -4096,7 +4167,8 @@ const StudentLessonCard = ({ lesson, showRomanization, onStartQuiz }) => {
                                                 roman={(activeSet === 'A' ? phrase.a1 : phrase.a2).roman} 
                                                 pos={(activeSet === 'A' ? phrase.a1 : phrase.a2).pos} 
                                                 showRomanization={showRomanization} 
-                                                onClick={() => {
+                                                onClick={(ev) => {
+    pressForLessonCoins(ev);
     const ap = activeSet === 'A' ? phrase.a1 : phrase.a2;
     ap?.components
         ? playSequence(ap.components.map(c => c.myanmar).filter(m => m))
@@ -4117,7 +4189,7 @@ const StudentLessonCard = ({ lesson, showRomanization, onStartQuiz }) => {
                                 className={`flex items-center p-2 rounded-md transition text-lg font-bold ${isHighlighted ? 'bg-yellow-100 scale-105 shadow-md ring-2 ring-yellow-400' : 'hover:bg-white'}`}
                             >
                                 <Zap className="w-4 h-4 mr-3 text-pink-500" />
-                                <span onClick={() => playComplexText(phrase.myanmar)} className="cursor-pointer">
+                                <span onClick={(ev) => { pressForLessonCoins(ev); playComplexText(phrase.myanmar); }} className="cursor-pointer">
                                     {showRomanization ? phrase.roman : phrase.myanmar}
                                 </span>
                             </div>
@@ -4197,7 +4269,6 @@ useEffect(() => {
                 <h1 className="text-4xl font-extrabold text-gray-800">
                     <span className="text-pink-600">Student</span> Learning Hub
                 </h1>
-                <StudyTimer startTime={studySessionStart} />
             </div>
             
             <div className={`p-4 rounded-xl shadow-lg mb-8 transition duration-300 ${showRomanization ? 'bg-indigo-200' : 'bg-pink-200'}`}>
@@ -5089,11 +5160,16 @@ export default function MyanmarSpeakingApp({ entryRequest, onExit, isActive }) {
     // the tab already did. SESSION_CAP_MS separately stops a single
     // continuous open (no idle, never left) from silently racking up hours
     // of "minutes studied" that would otherwise all land in one Report.
+    // The lesson buttons pay coins to this student (see pressForLessonCoins); the pending coins are saved when
+    // the student leaves the app or changes.
+    useEffect(() => {
+        lessonCoinStudent = (activeRole === 'student' && isActive) ? studentName : '';
+        return () => { flushLessonCoins(); };
+    }, [activeRole, studentName, isActive]);
+
     useEffect(() => {
         if (activeRole !== 'student' || !studentName || !userId || !isActive) return;
         const IDLE_MS = 3 * 60 * 1000; // 3 minutes with no touch/click/key
-        const SESSION_CAP_MS = 30 * 60 * 1000; // max minutes counted per continuous visit
-        const TICK_MS = 15000;
         const rosterRef = rosterDocRefByUid(db, ROSTER_PATH, userId);
         let isIdle = false;
 
@@ -5107,16 +5183,6 @@ export default function MyanmarSpeakingApp({ entryRequest, onExit, isActive }) {
         const activityEvents = ['touchstart', 'mousedown', 'keydown', 'scroll'];
         activityEvents.forEach(evt => window.addEventListener(evt, markActivity, { passive: true }));
 
-        const flushMinutes = () => {
-            const activeMinutes = Math.floor(activeMsRef.current / 60000);
-            const delta = activeMinutes - minutesWrittenRef.current;
-            if (delta <= 0) return;
-            minutesWrittenRef.current = activeMinutes;
-            const todayKey = new Date().toISOString().split('T')[0];
-            const minutesRef = doc(db, DAILY_MINUTES_PATH, `${userId}_${todayKey}`);
-            setDoc(minutesRef, { studentName, date: todayKey, minutes: increment(delta) }, { merge: true }).catch(e => console.error('Minutes flush error:', e));
-        };
-
         const goOffline = () => { updateDoc(rosterRef, { isOnline: false, lastSeen: serverTimestamp() }).catch(() => {}); };
 
         const tick = () => {
@@ -5127,24 +5193,16 @@ export default function MyanmarSpeakingApp({ entryRequest, onExit, isActive }) {
             }
             isIdle = false;
             setDoc(rosterRef, { studentName, isOnline: true, lastSeen: serverTimestamp() }, { merge: true }).catch(() => {});
-            if (activeMsRef.current >= SESSION_CAP_MS) return; // this visit already hit the cap
-            activeMsRef.current += TICK_MS;
-            flushMinutes();
         };
         tick();
-        const interval = setInterval(tick, TICK_MS);
+        const pingMs = presenceIntervalMs(30000); // 0 outside the class time: one ping when opened, no repeating writes
+        const interval = pingMs ? setInterval(tick, pingMs) : null;
         window.addEventListener('beforeunload', goOffline);
         return () => {
-            clearInterval(interval);
+            if (interval) clearInterval(interval);
             activityEvents.forEach(evt => window.removeEventListener(evt, markActivity));
             window.removeEventListener('beforeunload', goOffline);
-            flushMinutes();
             goOffline();
-            // Leaving (🏡, idle already handled above, or closing the tab)
-            // ends this visit -- the next one starts its own fresh 30-minute
-            // allowance instead of picking up wherever this one left off.
-            activeMsRef.current = 0;
-            minutesWrittenRef.current = 0;
         };
     }, [studentName, userId, activeRole, isActive]);
 
