@@ -2990,6 +2990,23 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
       return;
     }
 
+    // The schedule keeps a copy of the student's name on every weekly slot and every dated entry; without
+    // this the Teacher's Weekly Schedule went on showing the OLD name (and, next to newer slots, the same
+    // student twice under two names) after a rename.
+    try {
+      for (const col of [recurringScheduleCollection, teacherScheduleCollection]) {
+        const snap = await getDocs(query(col, where('studentUid', '==', studentId)));
+        const stale = snap.docs.filter(d => d.data().studentName !== trimmedNew);
+        for (let i = 0; i < stale.length; i += 400) {
+          const batch = writeBatch(db);
+          stale.slice(i, i + 400).forEach(d => batch.update(d.ref, { studentName: trimmedNew }));
+          await batch.commit();
+        }
+      }
+    } catch (error) {
+      console.error("Error renaming the student in the schedule:", error);
+    }
+
     // Shrine Room / Avatar Shop's roster doc (coins, lotus flowers, avatar
     // purchases, altar items) is keyed by the student's NAME (see
     // SHRINE_ROSTER_PATH + sanitizeShrineKey in AvatarApp.jsx and
