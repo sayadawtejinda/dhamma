@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>24 Paccayas – Patthāna Slides</title>
+<style>
+:root{--bg:#1b1410;--card:#2a2019;--ink:#f5ead8;--mute:#bfae94;--gold:#e8b04a;--teal:#6cc5b8;--rose:#e58a8a;--line:#4a3a2c}
+@media (prefers-color-scheme:light){:root{--bg:#faf3e6;--card:#fff;--ink:#2b1f14;--mute:#6f5d49;--gold:#a8650a;--teal:#0f7c70;--rose:#b23b3b;--line:#e2d3b9}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.5 system-ui,"Segoe UI",sans-serif;overflow:hidden}
+#top{position:fixed;top:0;left:0;right:0;display:flex;gap:8px;align-items:center;padding:8px 16px;background:var(--bg);border-bottom:1px solid var(--line);z-index:5;flex-wrap:wrap}
+#top b{color:var(--gold)}
+#top .sp{flex:1}
+button,select{background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 12px;font:inherit;cursor:pointer}
+button.on{background:var(--gold);color:#1b1410;border-color:var(--gold)}
+#stage{position:fixed;top:52px;bottom:52px;left:0;right:0;overflow-y:auto;padding:20px 16px}
+.slide{max-width:1100px;margin:0 auto}
+h1{font-size:2.2rem;margin:.2em 0;color:var(--gold)}
+h2{font-size:1.9rem;margin:0;color:var(--gold)}
+.num{display:inline-block;background:var(--gold);color:#1b1410;border-radius:50%;width:2.2em;height:2.2em;line-height:2.2em;text-align:center;font-weight:700;margin-right:10px;font-size:.8em}
+.sub{color:var(--mute);margin:.3em 0 1em}
+.part{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin:12px 0}
+.part h3{margin:0 0 4px;font-size:1.05rem;color:var(--teal)}
+.rel{color:var(--mute);font-size:.92rem;margin-bottom:8px}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:700px){.cols{grid-template-columns:1fr}}
+.col h4{margin:0 0 4px;font-size:.85rem;text-transform:uppercase;letter-spacing:.05em}
+.col.g h4{color:var(--gold)}.col.r h4{color:var(--rose)}
+.col p{margin:0 0 6px}
+.vi{color:var(--teal)}
+body[data-lang=en] .vi,body[data-lang=vi] .en{display:none}
+.xref{color:var(--gold);font-weight:600;text-decoration:underline}
+.links{margin-top:14px;display:flex;gap:8px;flex-wrap:wrap}
+.links a{color:var(--ink);border:1px solid var(--line);background:var(--card);padding:5px 12px;border-radius:20px;text-decoration:none;font-size:.9rem}
+.links a:hover{border-color:var(--gold);color:var(--gold)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
+.grid button{text-align:left;padding:10px 12px}
+.grid small{display:block;color:var(--mute)}
+#bot{position:fixed;bottom:0;left:0;right:0;display:flex;gap:8px;justify-content:center;align-items:center;padding:8px;background:var(--bg);border-top:1px solid var(--line)}
+</style>
+</head>
+<body data-lang="both">
+<div id="top">
+  <b>24 Paccayas</b><span class="sp"></span>
+  <button data-l="en">English</button><button data-l="vi">Tiếng Việt</button><button data-l="both" class="on">EN + VI</button>
+  <button id="idx">☰ Index</button>
+</div>
+<div id="stage"></div>
+<div id="bot"><button id="prev">◀ Prev</button><span id="pos"></span><button id="next">Next ▶</button></div>
+
+<script>
+const t=(en,vi)=>({en,vi});
+const P=[
+{n:1,pali:"Hetu paccayo",en:"Root condition",vi:"Nhân Duyên",parts:[
+ {rel:t("Mind to mind and matter","Danh trợ danh và sắc"),
+  g:[t("6 hetus (roots)","6 Nhân")],
+  r:[t("71 cittas with hetu (except 18 ahetuka cittas) and 52 cetasikas (except delusion in the 2 moha-mūla cittas)","71 tâm hữu nhân (trừ 18 tâm vô nhân) và 52 tâm sở (trừ Tâm sở Si trong 2 tâm Si)"),
+     t("Matter born of mind with hetu","Sắc tâm hữu nhân"),
+     t("Kamma-born matter at the moment of rebirth consciousness with hetu","Sắc nghiệp tái tục hữu nhân")]}]},
+{n:2,pali:"Ārammaṇa paccayo",en:"Object condition",vi:"Cảnh Duyên",parts:[
+ {rel:t("Mind, matter, Nibbāna and paññatti to mind","Danh, Sắc, Niết Bàn và Chế Định trợ cho tâm"),
+  g:[t("6 objects: rūpa, sadda, gandha, rasa, phoṭṭhabba, dhamma","6 đối tượng: Sắc, Thinh, Khí, Vị, Xúc và Pháp")],
+  r:[t("89 cittas and 52 cetasikas","89 tâm và 52 tâm sở")]}]},
+{n:3,pali:"Adhipati paccayo",en:"Predominance condition",vi:"Trưởng Duyên",parts:[
+ {title:t("Sahajāta (co-nascent)","Câu sanh"),rel:t("Mind to mind and matter","Danh trợ Danh và Sắc"),
+  g:[t("One of the four predominances: chanda, vīriya, citta, vīmaṃsā","Một trong 4 trưởng: Dục, Cần, Tâm, Thẩm")],
+  r:[t("52 javana cittas with adhipati and 51 cetasikas (except vicikicchā)","52 tâm đổng lực hữu nhân hữu trưởng (55 đổng lực trừ 2 tâm si và ưng cúng vi tiếu) và 51 tâm sở (trừ Hoài Nghi)"),
+     t("Matter born of mind with adhipati","Sắc tâm hữu trưởng")]},
+ {title:t("Ārammaṇa (object) – (A)","Cảnh – (A)"),rel:t("Mind, matter and Nibbāna to mind","Tâm, sắc pháp và Niết Bàn trợ cho tâm"),
+  g:[t("76 mundane cittas (excl. 2 dosa-mūla, 2 moha-mūla, 1 dukkha kāyaviññāṇa), 47 cetasikas (excl. dosa, issā, macchariya, kukkucca, vicikicchā) and 18 desirable nipphanna matter","76 Tâm Hiệp Thế (trừ 2 tâm Si, 2 Tâm Sân và 1 Thân Thức Thọ Khổ), 47 tâm sở (trừ Sân, Tật, Lận, Hối và Hoài Nghi), và 18 Sắc rõ thành cảnh tốt")],
+  r:[t("8 lobha-mūla cittas and 22 cetasikas","8 Tâm Tham và 22 tâm sở")]},
+ {title:t("Ārammaṇa (object) – (B)","Cảnh – (B)"),rel:t("","") ,
+  g:[t("17 mundane kusala cittas","17 Tâm Thiện Hiệp Thế")],
+  r:[t("8 mahākusala cittas and 33 cetasikas (excl. 3 viratis, 2 appamaññā)","8 Đại Thiện và 33 tâm sở (trừ 3 Giới phần, 2 Vô lượng phần)")]},
+ {title:t("Ārammaṇa (object) – (C)","Cảnh – (C)"),rel:t("",""),
+  g:[t("8 lokuttara cittas and Nibbāna","8 Tâm Siêu Thế và Níp Bàn")],
+  r:[t("8 ñāṇa-sampayutta cittas: 4 kusalas and 4 kiriyas, and 33 cetasikas (excl. 3 viratis, 2 appamaññā)","8 tâm Hợp Trí: 4 Đại Thiện và 4 Đại Tố, và 33 tâm sở (trừ 3 Giới phần, 2 Vô lượng phần)")]},
+ {title:t("Ārammaṇa (object) – (D)","Cảnh – (D)"),rel:t("",""),
+  g:[t("Nibbāna","Níp Bàn")],
+  r:[t("8 lokuttara cittas and 36 cetasikas","8 Tâm Siêu Thế và 36 tâm sở")]}]},
+{n:4,pali:"Anantara paccayo",en:"Proximity condition",vi:"Vô Gián Duyên",parts:[
+ {rel:t("Mind to mind","Danh trợ cho danh"),
+  g:[t("89 cittas and 52 cetasikas that precede (without the arahat's cuti mind)","89 tâm và 52 tâm sở sanh trước (ngoại trừ tâm tử của vị A La Hán)")],
+  r:[t("89 cittas and 52 cetasikas that follow","89 tâm và 52 tâm sở sanh sau")]}]},
+{n:5,pali:"Samanantara paccayo",en:"Contiguity condition",vi:"Đẳng Vô Gián Duyên",parts:[
+ {rel:t("Mind to mind","Danh trợ danh"),
+  g:[t("89 cittas and 52 cetasikas that precede (without the arahat's cuti mind)","89 tâm và 52 tâm sở sanh trước (ngoại trừ tâm tử của vị A La Hán)")],
+  r:[t("89 cittas and 52 cetasikas that follow","89 tâm và 52 tâm sở sanh sau")]}]},
+{n:6,pali:"Sahajāta paccayo",en:"Co-nascence condition",vi:"Câu Sanh Duyên",parts:[
+ {title:t("(A) Mind to mind-matter","(A) Danh trợ danh sắc"),rel:t("","") ,
+  g:[t("89 cittas and 52 cetasikas","89 tâm và 52 tâm sở")],
+  r:[t("89 cittas and 52 cetasikas","89 tâm và 52 tâm sở"),t("Mind-born matter","Sắc do tâm sanh"),t("Kamma-born matter at rebirth-moment","Sắc nghiệp tục sinh")]},
+ {title:t("(B) Matter to matter","(B) Sắc trợ sắc"),rel:t("",""),
+  g:[t("4 mahābhūtas","Tứ đại")],
+  r:[t("4 mahābhūtas and 24 upādāya-rūpas","Tứ đại và 24 y đại sinh")]},
+ {title:t("(C) Mind to matter and vice versa","(C) Danh trợ cho sắc và ngược lại"),rel:t("",""),
+  g:[t("15 rebirth minds of those who have 5 aggregates, or heart-base at the moment of rebirth","15 tâm tục sinh của những vị có 5 uẩn hay sắc ý vật ở thời điểm tục sinh")],
+  r:[t("Heart-base at the moment of rebirth, or 15 rebirth minds of those who have 5 aggregates","Sắc ý vật ở thời điểm tục sinh hay 15 tâm tục sinh ở cõi ngũ uẩn")]}]},
+{n:7,pali:"Aññamañña paccayo",en:"Mutuality condition",vi:"Hỗ Tương Duyên",parts:[
+ {title:t("(A) Mind to mind","(A) Danh trợ cho danh"),rel:t("",""),
+  g:[t("89 cittas and 52 cetasikas","89 tâm và 52 tâm sở")],r:[t("89 cittas and 52 cetasikas","89 tâm và 52 tâm sở")]},
+ {title:t("(B) Matter to matter","(B) Sắc trợ cho sắc"),rel:t("",""),
+  g:[t("4 mahābhūtas","Tứ Đại")],r:[t("4 mahābhūtas","Tứ Đại")]},
+ {title:t("(C) Mind to matter and vice versa","(C) Danh trợ cho sắc và ngược lại"),rel:t("",""),
+  g:[t("15 rebirth minds of those who have 5 aggregates, or heart-base at the moment of rebirth","15 tâm tục sinh của những vị có 5 uẩn hay sắc ý vật ở thời điểm tục sinh")],
+  r:[t("Heart-base at the moment of rebirth, or 15 rebirth minds of those who have 5 aggregates","Sắc ý vật tục sinh hay 15 tâm tục sinh cõi ngũ uẩn")]}]},
+{n:8,pali:"Nissaya paccayo",en:"Support condition",vi:"Y Chỉ Duyên",parts:[
+ {title:t("(A) Sahajāta nissaya","(A) Câu Sanh Y"),rel:t("",""),
+  g:[t("Similar to sahajāta","Tương tự như Câu Sanh")],r:[]},
+ {title:t("(B) Purejāta nissaya","(B) Tiền Sanh Y"),rel:t("",""),
+  g:[t("Similar to vatthu-purejāta","Tương tự như Vật Tiền Sanh")],r:[]}]},
+{n:9,pali:"Upanissaya paccayo",en:"Decisive-support condition",vi:"Cận Y Duyên",parts:[
+ {title:t("(Ārammaṇa) object","(Cảnh)"),rel:t("Mind, matter, Nibbāna to mind","Danh, sắc, Níp Bàn trợ cho danh"),
+  g:[t("Similar to ārammaṇa-adhipati","Tương tợ như Cảnh Trưởng")],r:[]},
+ {title:t("(Anantara) proximity","(Vô gián)"),rel:t("Mind to mind","Danh trợ danh"),
+  g:[t("Similar to anantara","Tương tợ như Vô gián")],r:[]},
+ {title:t("(Pakatūpa) natural strong dependence","(Thường Cận)"),rel:t("Mind and paññatti to mind","Danh và Chế Định trợ cho Danh"),
+  g:[t("89 cittas, 52 cetasikas, 28 rūpa and paññatti that are strong and preceded (past, present, future)","89 tâm, 52 tâm sở, 28 sắc pháp và Chế Định mạnh mẽ và sanh trước đó (Quá khứ, hiện tại, vị lai)")],
+  r:[t("The 89 cittas and 52 cetasikas that follow (present)","89 tâm và 52 tâm sở theo sau (hiện tại)")]}]},
+{n:10,pali:"Purejāta paccayo",en:"Pre-nascence condition",vi:"Tiền Sanh Duyên",parts:[
+ {title:t("(A) Ārammaṇa purejāta","(A) Cảnh tiền sanh"),rel:t("Matter to mind","Sắc trợ danh"),
+  g:[t("18 nipphanna matters as object","18 sắc rõ làm cảnh")],
+  r:[t("54 kāma cittas, 2 abhiññā and 50 cetasikas (excl. 2 appamaññā)","54 tâm dục giới, 2 tâm thông, và 50 tâm sở (trừ 2 vô lượng phần)")]},
+ {title:t("(B) Vatthu purejāta","(B) Vật Tiền Sanh"),rel:t("Matter to mind","Sắc trợ cho danh"),
+  g:[t("6 base matters","6 vật")],
+  r:[t("85 cittas (except 4 arūpa vipākas) and 52 cetasikas","85 tâm (trừ 4 tâm quả vô sắc) và 52 tâm sở")]}]},
+{n:11,pali:"Pacchājāta paccayo",en:"Post-nascence condition",vi:"Hậu Sanh Duyên",parts:[
+ {rel:t("Mind to matter","Danh trợ sắc"),
+  g:[t("The following 85 cittas (excl. 4 arūpa vipākas) and 52 cetasikas","85 tâm sanh sau (trừ 4 tâm quả vô sắc) và 52 tâm sở")],
+  r:[t("Matters that arise together with the preceding minds","Các sắc pháp cùng sanh lên với những tâm đi trước")]}]},
+{n:12,pali:"Āsevana paccayo",en:"Repetition condition",vi:"Trùng Dụng Duyên",parts:[
+ {rel:t("Mind to mind","Danh trợ danh"),
+  g:[t("47 preceding mundane javana cittas and 52 cetasikas","47 tâm đổng lực hiệp thế là sát na trước và 52 tâm sở")],
+  r:[t("51 following javana cittas (excl. 4 phala cittas) and 52 cetasikas","51 đổng lực là sát na sau (trừ 4 tâm quả siêu thế) và 52 tâm sở")]}]},
+{n:13,pali:"Kamma paccayo",en:"Kamma condition",vi:"Nghiệp Duyên",parts:[
+ {title:t("(A) Nānākkhaṇika (different moments)","(A) Dị Thời"),rel:t("Mind to mind and matter","Danh trợ cho danh và sắc"),
+  g:[t("33 cetanās associated with kusala and akusala","33 tâm sở tư kết hợp với các tâm thiện và bất thiện")],
+  r:[t("36 vipāka cittas, 38 cetasikas and kamma-born matter","36 tâm quả, 38 tâm sở và sắc nghiệp")]},
+ {title:t("(B) Sahajāta (co-nascent)","(B) Câu Sanh"),rel:t("Mind to mind and matter","Danh trợ cho danh và sắc"),
+  g:[t("All cetanā","Tất cả các tâm sở tư")],
+  r:[t("89 cittas and 51 cetasikas (excl. cetanā)","89 tâm, 51 tâm sở (trừ tâm sở Tư)"),t("Mind-born matter","Sắc tâm"),t("Kamma-born matter at the moment of rebirth","Sắc nghiệp ở thời điểm tục sinh")]}]},
+{n:14,pali:"Vipāka paccayo",en:"Result condition",vi:"Quả Duyên",parts:[
+ {rel:t("Mind to mind and matter","Danh trợ danh và sắc"),
+  g:[t("36 resultant cittas and 38 cetasikas","36 tâm quả và 38 tâm sở")],
+  r:[t("36 resultant cittas and 38 cetasikas","36 tâm quả và 38 tâm sở"),t("Mind-born matter","Sắc tâm"),t("Kamma-born matter at the moment of rebirth","Sắc nghiệp tái tục")]}]},
+{n:15,pali:"Āhāra paccayo",en:"Nutriment condition",vi:"Vật Thực Duyên",parts:[
+ {title:t("(A) Rūpa (material)","(A) Sắc"),rel:t("Matter to matter","Sắc trợ sắc"),
+  g:[t("Ojā (nutritive essence)","Dưỡng tố")],
+  r:[t("Nutriment-born matter, or matters born of 4 conditions (kamma, citta, utu, āhāra)","Sắc vật thực, hoặc sắc sanh từ 4 nhân (nghiệp, tâm, nhiệt và vật thực)")]},
+ {title:t("(B) Nāma (mental)","(B) Danh"),rel:t("Mind to mind and matter","Danh trợ danh và sắc"),
+  g:[t("Phassa, cetanā and viññāṇa","Xúc thực, tư niệm thực và thức thực")],
+  r:[t("89 cittas and 52 cetasikas","89 tâm, 52 tâm sở"),t("Mind-born matter","Sắc tâm"),t("Kamma-born matter at the moment of rebirth","Sắc nghiệp tái tục")]}]},
+{n:16,pali:"Indriya paccayo",en:"Faculty condition",vi:"Quyền Duyên",parts:[
+ {title:t("(A) Sahajāta","(A) Câu Sanh"),rel:t("Mind to mind and matter","Danh trợ danh và sắc"),
+  g:[t("Citta, jīvita, vedanā, saddhā, vīriya, sati, ekaggatā and paññā (8)","Tâm, danh mạng quyền, thọ, tín, cần, niệm, nhất hành và trí tuệ (8)")],
+  r:[t("89 cittas and 52 cetasikas","89 tâm và 52 tâm sở"),t("Mind-born matter","Sắc tâm"),t("Kamma-born matter at the moment of rebirth","Sắc nghiệp tái tục")]},
+ {title:t("(B) Purejāta","(B) Tiền Sanh"),rel:t("Matter to mind","Sắc trợ danh"),
+  g:[t("Eye, ear, nose, tongue and body","Mắt, tai, mũi, lưỡi và thân")],
+  r:[t("10 viññāṇas and 7 cetasikas","10 thức và 7 tâm sở")]},
+ {title:t("(C) Rūpajīvita","(C) Sắc Mạng Quyền"),rel:t("Matter to matter","Sắc trợ sắc"),
+  g:[t("Material jīvita","Sắc mạng quyền")],
+  r:[t("9 kamma-born matters in the same group","9 bọn sắc nghiệp")]}]},
+{n:17,pali:"Jhāna paccayo",en:"Jhāna condition",vi:"Thiền Duyên",parts:[
+ {rel:t("Mind to mind and matter","Danh trợ danh và sắc"),
+  g:[t("7 jhāna-factors: vitakka, vicāra, pīti, sukha/dukkha-upekkhā (vedanā) and ekaggatā","7 chi thiền: tầm, tứ, hỷ, thọ và nhất hành")],
+  r:[t("79 cittas (excl. 10 viññāṇa cittas) and 52 cetasikas","79 tâm (trừ 10 thức), 52 tâm sở"),t("Mind-born matter","Sắc tâm"),t("Kamma-born matter at the moment of rebirth","Sắc nghiệp tái tục")]}]},
+{n:18,pali:"Magga paccayo",en:"Path condition",vi:"Đạo Duyên",parts:[
+ {rel:t("Mind to mind and matter","Danh trợ danh và sắc"),
+  g:[t("9 path-factors: paññā, vitakka, 3 viratis, vīriya, sati, ekaggatā and micchā-diṭṭhi","9 chi đạo: Trí tuệ, tầm, 3 giới phần, cần, niệm, nhất hành và tà kiến")],
+  r:[t("71 cittas with hetu and 52 cetasikas","71 tâm hữu nhân và 52 tâm sở"),t("Mind-born matter","Sắc tâm"),t("Kamma-born matter at the moment of rebirth","Sắc nghiệp tái tục")]}]},
+{n:19,pali:"Sampayutta paccayo",en:"Association condition",vi:"Tương Ưng Duyên",parts:[
+ {rel:t("Mind to mind","Danh trợ danh"),
+  g:[t("89 cittas and 52 cetasikas","89 tâm và 52 tâm sở")],r:[t("89 cittas and 52 cetasikas","89 tâm và 52 tâm sở")]}]},
+{n:20,pali:"Vippayutta paccayo",en:"Dissociation condition",vi:"Bất Tương Ưng Duyên",parts:[
+ {title:t("(A) Sahajāta","(A) Câu Sanh"),rel:t("Mind and matter to mind and matter","Danh và sắc trợ cho danh và sắc"),
+  g:[t("75 cittas that can produce matter and 52 cetasikas","75 tâm hữu sắc và 52 tâm sở"),t("15 rebirth minds of those who have 5 aggregates, or heart-base","15 tâm tục sinh của chúng sanh ngũ uẩn hay có sắc ý vật")],
+  r:[t("Mind-born matter","Sắc tâm"),t("Kamma-born matter at the moment of rebirth","Sắc nghiệp tục sinh"),t("Heart-base, or 15 rebirth minds of those who have 5 aggregates","Sắc ý vật hay 15 tâm tục sinh của chúng sanh ngũ uẩn")]},
+ {title:t("(B) Purejāta","(B) Tiền Sanh"),rel:t("",""),g:[t("Similar to purejāta","Tương tự như tiền sanh")],r:[]},
+ {title:t("(C) Pacchājāta","(C) Hậu Sanh"),rel:t("",""),g:[t("Similar to pacchājāta","Tương tự như hậu sanh")],r:[]}]},
+{n:21,pali:"Atthi paccayo",en:"Presence condition",vi:"Hiện Hữu Duyên",parts:[
+ {rel:t("",""),g:[t("Similar to sahajāta, purejāta, pacchājāta, āhāra and indriya","Tương tự như câu sanh, tiền sanh, hậu sanh, vật thực và quyền")],r:[]}]},
+{n:22,pali:"Natthi paccayo",en:"Absence condition",vi:"Vô Hữu Duyên",parts:[
+ {rel:t("",""),g:[t("Similar to anantara, etc.","Tương tự như vô gián v.v.")],r:[]}]},
+{n:23,pali:"Vigata paccayo",en:"Disappearance condition",vi:"Ly Khứ Duyên",parts:[
+ {rel:t("",""),g:[t("Similar to anantara, etc.","Tương tự như vô gián v.v.")],r:[]}]},
+{n:24,pali:"Avigata paccayo",en:"Non-disappearance condition",vi:"Bất Ly Duyên",parts:[
+ {rel:t("",""),g:[t("Similar to sahajāta, purejāta, pacchājāta, āhāra and indriya","Tương tự như câu sanh, tiền sanh, hậu sanh, vật thực và quyền")],r:[]}]}
+];
+
+const q=s=>encodeURIComponent(s);
+const bi=o=>`<span class="en">${o.en}</span><span class="vi">${o.vi}</span>`;
+const REF={"ārammaṇa-adhipati":3,"vatthu-purejāta":10,"sahajāta":6,"purejāta":10,"pacchājāta":11,"āhāra":15,"indriya":16,"anantara":4,
+"vật tiền sanh":10,"cảnh trưởng":3,"câu sanh":6,"tiền sanh":10,"hậu sanh":11,"vật thực":15,"quyền":16,"vô gián":4};
+const RX=new RegExp(Object.keys(REF).sort((a,b)=>b.length-a.length).join('|'),'gi');
+const link=s=>/^(Similar to|Tương tự|Tương tợ)/.test(s)?s.replace(RX,m=>`<a class="xref" href="#" onclick="go(${REF[m.toLowerCase()]+1});return false">${m} →</a>`):s;
+const bip=o=>`<p><span class="en">${link(o.en)}</span><span class="vi">${link(o.vi)}</span></p>`;
+const slides=[];
+slides.push(()=>`<div class="slide"><h1>24 Paccayas</h1>
+<p class="sub"><span class="en">The 24 conditional relations of the Paṭṭhāna — Paccaya (condition) → Paccayuppanna (conditioned)</span><span class="vi">24 Duyên trong bộ Paṭṭhāna — Paccaya (năng duyên) → Paccayuppanna (sở duyên)</span></p>
+<div class="links">
+<a target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/Patthana">Wikipedia: Paṭṭhāna</a>
+<a target="_blank" rel="noopener" href="https://www.google.com/search?q=${q('24 paccaya patthana conditional relations')}">Google (EN)</a>
+<a target="_blank" rel="noopener" href="https://www.google.com/search?q=${q('24 duyên Paṭṭhāna Vô Tỷ Pháp')}">Google (VI)</a>
+<a target="_blank" rel="noopener" href="https://suttacentral.net/search?query=${q('paccaya')}">SuttaCentral</a>
+</div><p class="sub">Use ◀ ▶ keys or the buttons. Switch language at the top.</p></div>`);
+slides.push(()=>`<div class="slide"><h2>Index · Mục lục</h2><div class="grid" style="margin-top:14px">${P.map((p,i)=>`<button onclick="go(${i+2})"><b>${p.n}. ${p.pali}</b><small>${p.en} · ${p.vi}</small></button>`).join('')}</div></div>`);
+P.forEach(p=>slides.push(()=>{
+ const e=p.pali.replace(/ paccayo/,'');
+ return `<div class="slide"><h2><span class="num">${p.n}</span>${p.pali}</h2>
+ <p class="sub"><span class="en">${p.en}</span><span class="vi">${p.vi}</span> &nbsp;|&nbsp; <span class="en">${p.vi}</span><span class="vi">${p.en}</span></p>
+ ${p.parts.map(x=>`<div class="part">${x.title?`<h3>${bi(x.title)}</h3>`:''}${x.rel&&x.rel.en?`<div class="rel">${bi(x.rel)}</div>`:''}
+ <div class="cols"><div class="col g"><h4>Paccaya · ${'<span class="en">condition</span><span class="vi">năng duyên</span>'}</h4>${x.g.map(bip).join('')}</div>
+ <div class="col r"><h4>Paccayuppanna · ${'<span class="en">conditioned</span><span class="vi">sở duyên</span>'}</h4>${x.r.length?x.r.map(bip).join(''):'<p class="rel">—</p>'}</div></div></div>`).join('')}
+ <div class="links">
+ <a target="_blank" rel="noopener" href="https://www.google.com/search?q=${q(e+' paccaya patthana')}">Search EN</a>
+ <a target="_blank" rel="noopener" href="https://www.google.com/search?q=${q(p.vi+' Paṭṭhāna 24 duyên')}">Tìm tiếng Việt</a>
+ <a target="_blank" rel="noopener" href="https://suttacentral.net/search?query=${q(e)}">SuttaCentral</a>
+ <a target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/Patthana">Wikipedia</a>
+ <a target="_blank" rel="noopener" href="https://www.youtube.com/results?search_query=${q(p.pali+' '+p.vi)}">YouTube</a>
+ </div></div>`}));
+
+let cur=0;const st=document.getElementById('stage');
+function go(i){cur=Math.max(0,Math.min(slides.length-1,i));st.innerHTML=slides[cur]();st.scrollTop=0;
+ document.getElementById('pos').textContent=(cur+1)+' / '+slides.length;location.hash=cur+1;}
+document.getElementById('prev').onclick=()=>go(cur-1);
+document.getElementById('next').onclick=()=>go(cur+1);
+document.getElementById('idx').onclick=()=>go(1);
+document.querySelectorAll('[data-l]').forEach(b=>b.onclick=()=>{document.body.dataset.lang=b.dataset.l;
+ document.querySelectorAll('[data-l]').forEach(x=>x.classList.toggle('on',x===b));});
+addEventListener('keydown',e=>{if(e.key==='ArrowRight'||e.key==='PageDown')go(cur+1);if(e.key==='ArrowLeft'||e.key==='PageUp')go(cur-1);});
+go((parseInt(location.hash.slice(1))||1)-1);
+</script>
+</body>
+</html>
