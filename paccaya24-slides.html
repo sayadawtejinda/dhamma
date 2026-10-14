@@ -47,7 +47,7 @@ body[data-lang=en] .vi,body[data-lang=vi] .en{display:none}
   <button id="idx">☰ Index</button>
 </div>
 <div id="stage"></div>
-<div id="bot"><button id="prev">◀ Prev</button><span id="pos"></span><button id="next">Next ▶</button></div>
+<div id="bot"><button id="prev">◀ Prev</button><button id="back" hidden></button><span id="pos"></span><button id="next">Next ▶</button></div>
 
 <script>
 const t=(en,vi)=>({en,vi});
@@ -193,7 +193,7 @@ const bi=o=>`<span class="en">${o.en}</span><span class="vi">${o.vi}</span>`;
 const REF={"ārammaṇa-adhipati":3,"vatthu-purejāta":10,"sahajāta":6,"purejāta":10,"pacchājāta":11,"āhāra":15,"indriya":16,"anantara":4,
 "vật tiền sanh":10,"cảnh trưởng":3,"câu sanh":6,"tiền sanh":10,"hậu sanh":11,"vật thực":15,"quyền":16,"vô gián":4};
 const RX=new RegExp(Object.keys(REF).sort((a,b)=>b.length-a.length).join('|'),'gi');
-const link=s=>/^(Similar to|Tương tự|Tương tợ)/.test(s)?s.replace(RX,m=>`<a class="xref" href="#" onclick="go(${REF[m.toLowerCase()]+1});return false">${m} →</a>`):s;
+const link=s=>/^(Similar to|Tương tự|Tương tợ)/.test(s)?s.replace(RX,m=>`<a class="xref" href="#" onclick="jump(${REF[m.toLowerCase()]+1});return false">${m} →</a>`):s;
 const bip=o=>`<p><span class="en">${link(o.en)}</span><span class="vi">${link(o.vi)}</span></p>`;
 const slides=[];
 slides.push(()=>`<div class="slide"><h1>24 Paccayas</h1>
@@ -220,15 +220,20 @@ P.forEach(p=>slides.push(()=>{
  <a target="_blank" rel="noopener" href="https://www.youtube.com/results?search_query=${q(p.pali+' '+p.vi)}">YouTube</a>
  </div></div>`}));
 
-let cur=0;const st=document.getElementById('stage');
+let cur=0;const hist=[];const st=document.getElementById('stage');
+function jump(i){hist.push(cur);go(i);}
+function goBack(){if(hist.length)go(hist.pop());}
 function go(i){cur=Math.max(0,Math.min(slides.length-1,i));st.innerHTML=slides[cur]();st.scrollTop=0;
- document.getElementById('pos').textContent=(cur+1)+' / '+slides.length;location.hash=cur+1;}
+ document.getElementById('pos').textContent=(cur+1)+' / '+slides.length;location.hash=cur+1;
+ const b=document.getElementById('back');b.hidden=!hist.length;
+ if(hist.length){const n=hist[hist.length-1];b.textContent='↩ Back to '+(n>=2?(n-1)+'. '+P[n-2].pali:'Index');}}
+document.getElementById('back').onclick=goBack;
 document.getElementById('prev').onclick=()=>go(cur-1);
 document.getElementById('next').onclick=()=>go(cur+1);
 document.getElementById('idx').onclick=()=>go(1);
 document.querySelectorAll('[data-l]').forEach(b=>b.onclick=()=>{document.body.dataset.lang=b.dataset.l;
  document.querySelectorAll('[data-l]').forEach(x=>x.classList.toggle('on',x===b));});
-addEventListener('keydown',e=>{if(e.key==='ArrowRight'||e.key==='PageDown')go(cur+1);if(e.key==='ArrowLeft'||e.key==='PageUp')go(cur-1);});
+addEventListener('keydown',e=>{if(e.key==='Backspace'||e.key==='b')goBack();if(e.key==='ArrowRight'||e.key==='PageDown')go(cur+1);if(e.key==='ArrowLeft'||e.key==='PageUp')go(cur-1);});
 go((parseInt(location.hash.slice(1))||1)-1);
 </script>
 </body>
