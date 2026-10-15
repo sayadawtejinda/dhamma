@@ -3,9 +3,17 @@
 # You can stop it (Ctrl+C) at any time and run it again: files already uploaded are skipped.
 $ia = Join-Path (python -c "import sysconfig;print(sysconfig.get_path('scripts'))") 'ia.exe'
 if (-not (Test-Path $ia)) { python -m pip install internetarchive; $ia = Join-Path (python -c "import sysconfig;print(sysconfig.get_path('scripts'))") 'ia.exe' }
-if (-not (Test-Path "$env:USERPROFILE\.config\internetarchive\ia.ini") -and -not (Test-Path "$env:USERPROFILE\.config\ia.ini")) {
-  Write-Host "First time: log in to archive.org (your own email + password, typed here only)."
-  & $ia configure
+$cfgDir = "$env:USERPROFILE\.config\internetarchive"
+$cfg = "$cfgDir\ia.ini"
+if (-not (Test-Path $cfg) -and -not (Test-Path "$env:USERPROFILE\.config\ia.ini")) {
+  Write-Host "First time only. Log in to archive.org, open https://archive.org/account/s3.php and copy the two keys."
+  Write-Host "(Works for Google/Gmail sign-in too: no password needed. Nothing you type here leaves this computer except to archive.org.)"
+  $acc = Read-Host "Paste the ACCESS key, then press Enter"
+  $secSecure = Read-Host "Paste the SECRET key, then press Enter (you will not see it)" -AsSecureString
+  $sec = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($secSecure))
+  New-Item -ItemType Directory -Force $cfgDir | Out-Null
+  Set-Content -Path $cfg -Encoding ascii -Value "[s3]`naccess = $($acc.Trim())`nsecret = $($sec.Trim())`n"
+  Write-Host "Saved to $cfg"
 }
 $sets = @(
   @{ item = 'paauk-dhamma-mp3-1'; dir = "$env:USERPROFILE\Downloads\Paauk_MP3_1"; title = 'Pa-Auk Sayadaw Dhamma talks (MP3 set 1)' },
