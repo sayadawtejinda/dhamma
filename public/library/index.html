@@ -191,6 +191,7 @@ h2.sec{margin:22px 0 8px;font-size:1.1rem;color:var(--accent)}
 <script src="data/config.js"></script>
 <script>
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+const DV='20261014b';   // bump when the data files change, so browsers do not show old copies
 const CFG=Object.assign({audioBase:'audio/'},window.LIB_CONFIG||{});
 const MD='၀၁၂၃၄၅၆၇၈၉',mn=n=>String(n).replace(/\d/g,d=>MD[d]);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -295,7 +296,7 @@ $('#rpage').onkeydown=e=>{if(e.key==='Enter')$('#rgo').click()};
 // ---------- Reader (online texts)
 let TX=[],RB=null,RP=0,RC={};
 const tmin=c=>Math.max(1,Math.round(c/900));
-async function loadTexts(){TX=await (await fetch('texts/index.json')).json();renderTexts()}
+async function loadTexts(){TX=await (await fetch('texts/index.json?v='+DV)).json();renderTexts()}
 function renderTexts(){const q=norm($('#tq').value.trim());let g=null,h='';
  TX.filter(b=>!q||norm(b.title).includes(q)||norm(b.group).includes(q)).forEach(b=>{
   if(b.group!==g){if(g!==null)h+='</div>';g=b.group;h+=`<div class="grp">${esc(g)}</div><div class="list">`}
@@ -317,7 +318,7 @@ $('#rtoc').onclick=()=>{$('#psr').classList.remove('on');$('#ptoc').classList.to
 $('#rsrch').onclick=()=>{$('#ptoc').classList.remove('on');$('#psr').classList.toggle('on');if($('#psr').classList.contains('on'))$('#psq').focus()};
 async function openText(id,toIdx){
  const b=TX.find(x=>x.id===id);if(!b)return;
- RB=await (await fetch(`texts/${id}.json`)).json();RC={};$('#fnbox').classList.remove('on');
+ RB=await (await fetch(`texts/${id}.json?v=${DV}`)).json();RC={};$('#fnbox').classList.remove('on');
  $('#rtt').textContent=RB.title;rd.classList.add('on');document.body.style.overflow='hidden';
  $('#rsl').max=RB.pages.length;
  $('#ptl').innerHTML=RB.toc.map(t=>`<button class="it" data-i="${t[0]}" style="padding-left:${10+(t[1]-2)*14}px">${esc(t[2])}</button>`).join('')||'<div class="empty">—</div>';
@@ -327,7 +328,7 @@ async function openText(id,toIdx){
  await showPage(toIdx!=null?pageOf(toIdx):Math.min(store.get('tx:'+id,0),RB.pages.length-1),toIdx);
 }
 const pageOf=i=>{let lo=0,hi=RB.pages.length-1;while(lo<hi){const m=(lo+hi+1)>>1;if(RB.pages[m]<=i)lo=m;else hi=m-1}return lo};
-async function chunk(k){if(!RC[k])RC[k]=await (await fetch(`texts/${RB.id}.${k}.json`)).json();return RC[k]}
+async function chunk(k){if(!RC[k])RC[k]=await (await fetch(`texts/${RB.id}.${k}.json?v=${DV}`)).json();return RC[k]}
 function inl(h){return h.replace(/\u0001(\d+)\u0002/g,(m,n)=>`<a class="fn" data-n="${n}">[${mn(n)}]</a>`)}
 async function showPage(p,scrollTo){
  RP=Math.max(0,Math.min(RB.pages.length-1,p));const st=RB.pages[RP],en=RP+1<RB.pages.length?RB.pages[RP+1]:RB.n;
@@ -376,7 +377,7 @@ addEventListener('keydown',e=>{if(!rd.classList.contains('on')||/input/i.test(e.
 
 // contents search across all reading texts
 let TT=null;
-async function loadTT(){if(!TT){try{TT=await (await fetch('texts/toc.json')).json();TT.norm=TT.toc.map(e=>nt(e[3]))}catch(e){TT={books:[],toc:[],norm:[]}}}return TT}
+async function loadTT(){if(!TT){try{TT=await (await fetch('texts/toc.json?v='+DV)).json();TT.norm=TT.toc.map(e=>nt(e[3]))}catch(e){TT={books:[],toc:[],norm:[]}}}return TT}
 async function renderTres(q){
  const box=$('#tres');q=nt(q);if(q.length<2){box.innerHTML='';return}
  const T=await loadTT();const res=[];
@@ -389,7 +390,7 @@ $('#tres').onclick=e=>{const t=e.target.closest('.tr');if(t)openText(t.dataset.b
 
 // ---------- Contents (မာတိကာ) of the PDF books: searchable, opens the PDF at the page
 let TOC=null;
-async function loadToc(){if(!TOC){try{TOC=await (await fetch('data/toc.json')).json();TOC.norm=TOC.toc.map(e=>nt(e[1]))}catch(e){TOC={books:[],toc:[],norm:[]}}}return TOC}
+async function loadToc(){if(!TOC){try{TOC=await (await fetch('data/toc.json?v='+DV)).json();TOC.norm=TOC.toc.map(e=>nt(e[1]))}catch(e){TOC={books:[],toc:[],norm:[]}}}return TOC}
 const nt=s=>String(s).toLowerCase().replace(/[A-Za-z\s\u200b၊။.,()\[\]\-_:;'"]+/g,'');
 async function renderToc(q){
  const box=$('#tocres');q=nt(q);
@@ -419,7 +420,7 @@ function renderHome(){const last=store.get('last',null),lb=store.get('lastbook',
  +`<h2 class="sec">အကြံပြုချက်</h2><div class="hint">စာအုပ်ကို ဖွင့်ပြီး စာမျက်နှာနံပါတ်ရိုက်ကာ တိုက်ရိုက်သွားနိုင်ပါသည်။ တရားတော်ကို <b>Offline သိမ်းမည်</b> နှိပ်ပြီး အင်တာနက်မရှိလည်း နာနိုင်ပါသည်။ Space ခုံနှိပ်၍ ရပ်/ဖွင့်နိုင်ပါသည်။</div>`;
  $('#home').onclick=e=>{const g=e.target.closest('[data-go]');if(g)return tab(g.dataset.go);const s=e.target.closest('[data-s]');if(s){tab('sermons');return playQueue(S.find(x=>x.id==s.dataset.s),+s.dataset.i)}const b=e.target.closest('[data-b]');if(b)openBook(b.dataset.b)}}
 
-Promise.all([fetch('data/sermons.json').then(r=>r.json()),fetch('data/books.json').then(r=>r.json())]).then(([s,b])=>{S=s;B=b;renderChips();renderSermons();renderBooks();renderHome();loadTexts();const h=location.hash.slice(1);if(['sermons','books','texts'].includes(h))tab(h)})
+Promise.all([fetch('data/sermons.json?v='+DV).then(r=>r.json()),fetch('data/books.json?v='+DV).then(r=>r.json())]).then(([s,b])=>{S=s;B=b;renderChips();renderSermons();renderBooks();renderHome();loadTexts();const h=location.hash.slice(1);if(['sermons','books','texts'].includes(h))tab(h)})
  .catch(()=>{$('#home').innerHTML='<div class="empty">ဒေတာဖိုင်များ မဖွင့်နိုင်ပါ</div>'});
 if('serviceWorker' in navigator&&location.protocol.startsWith('http')){/* offline audio uses Cache Storage directly; no service worker needed */}
 </script>
