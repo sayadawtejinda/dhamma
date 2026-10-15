@@ -21,9 +21,15 @@ $sets = @(
 )
 foreach ($s in $sets) {
   Write-Host "=== $($s.item) ==="
-  $files = Get-ChildItem $s.dir -File | Where-Object { $_.Extension -ieq '.mp3' } | ForEach-Object { $_.FullName }
-  & $ia upload $s.item $files --checksum --retries 30 --retries-sleep 20 `
-    --metadata="mediatype:audio" --metadata="collection:opensource_audio" `
-    --metadata="title:$($s.title)" --metadata="creator:Pa-Auk Sayadaw" --metadata="subject:Dhamma;Theravada;Burmese"
+  $files = @(Get-ChildItem $s.dir -File | Where-Object { $_.Extension -ieq '.mp3' } | Sort-Object Name | ForEach-Object { $_.FullName })
+  $first = $true
+  for ($i = 0; $i -lt $files.Count; $i += 20) {
+    $chunk = $files[$i..([Math]::Min($i + 19, $files.Count - 1))]
+    Write-Host "files $($i + 1) - $($i + $chunk.Count) of $($files.Count)"
+    $meta = @()
+    if ($first) { $meta = @("--metadata=mediatype:audio", "--metadata=collection:opensource_audio", "--metadata=title:$($s.title)", "--metadata=creator:Pa-Auk Sayadaw", "--metadata=subject:Dhamma;Theravada;Burmese") }
+    & $ia upload $s.item @chunk --checksum --no-derive --retries 30 --sleep 20 @meta
+    $first = $false
+  }
 }
 Write-Host "Done. Audio addresses: https://archive.org/download/paauk-dhamma-mp3-1/  and  https://archive.org/download/paauk-dhamma-mp3-2/"
