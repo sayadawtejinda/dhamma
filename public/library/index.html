@@ -131,6 +131,14 @@ h2.sec{margin:22px 0 8px;font-size:1.1rem;color:var(--accent)}
 #fnbox{position:absolute;left:10px;right:10px;bottom:58px;max-width:720px;margin:0 auto;background:var(--rbg);border:2px solid var(--rac);border-radius:14px;padding:10px 14px;box-shadow:var(--shadow);z-index:4;display:none;font-size:.95rem;line-height:1.7}
 #fnbox.on{display:block}
 .tapebtn{display:inline-block;margin-left:10px;font-size:.6em;vertical-align:middle;background:var(--rac);color:var(--rbg);border:0;border-radius:999px;padding:3px 12px;cursor:pointer}
+.tr{display:block;width:100%;text-align:left;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 12px;margin-bottom:6px;cursor:pointer;line-height:1.5}
+.tr:hover{border-color:var(--accent2)}
+.tr b{display:block;font-size:.98rem}.tr small{color:var(--mute)}
+#tocres h3{margin:10px 0 6px;font-size:1rem;color:var(--accent)}
+#btoc{display:none;max-height:34vh;overflow:auto;padding:6px 14px;background:var(--bg2);border-bottom:1px solid var(--line)}
+#btoc button{display:block;width:100%;text-align:left;background:none;border:0;padding:4px 6px;border-radius:8px;font:inherit;font-size:.92rem;line-height:1.5;cursor:pointer;color:var(--ink)}
+#btoc button:hover{background:var(--line)}
+#btoc input{width:100%;padding:6px 10px;border-radius:10px;border:2px solid var(--line);background:var(--card);color:var(--ink);font:inherit;margin-bottom:4px}
 </style>
 </head>
 <body>
@@ -148,14 +156,15 @@ h2.sec{margin:22px 0 8px;font-size:1.1rem;color:var(--accent)}
   <div id="tlist"></div>
  </section>
  <section id="books" hidden>
-  <div class="bar"><div class="search"><input id="bq" placeholder="စာအုပ်ရှာရန် …" autocomplete="off"></div></div>
-  <div class="count" id="bcount"></div><div class="books" id="blist"></div>
+  <div class="bar"><div class="search"><input id="bq" placeholder="စာအုပ်အမည် / မာတိကာထဲက စာလုံး ရှာရန် …" autocomplete="off"></div></div>
+  <div class="count" id="bcount"></div><div id="tocres"></div><div class="books" id="blist"></div>
  </section>
 </main>
 
 <dialog id="dsermon"><div class="dh"><h2 id="dst"></h2><button class="x" onclick="dsermon.close()">✕</button></div><div class="db" id="dsb"></div></dialog>
 <dialog id="reader" class="big"><div class="dh"><h2 id="rtitle"></h2><button class="x" onclick="closeReader()">✕</button></div>
- <div class="rt"><span>စာမျက်နှာ</span><input id="rpage" type="number" min="1" value="1"><button class="btn" id="rgo">သွားမည်</button><a class="btn alt" id="rdl" download style="text-decoration:none">⬇ ဒေါင်းလုပ်</a><a class="btn alt" id="rnew" target="_blank" rel="noopener" style="text-decoration:none">↗ Tab အသစ်</a><small id="rinfo" style="color:var(--mute)"></small></div>
+ <div class="rt"><span>စာမျက်နှာ</span><input id="rpage" type="number" min="1" value="1"><button class="btn" id="rgo">သွားမည်</button><button class="btn alt" id="rtc">☰ မာတိကာ</button><a class="btn alt" id="rdl" download style="text-decoration:none">⬇ ဒေါင်းလုပ်</a><a class="btn alt" id="rnew" target="_blank" rel="noopener" style="text-decoration:none">↗ Tab အသစ်</a><small id="rinfo" style="color:var(--mute)"></small></div>
+ <div id="btoc"><input id="btq" placeholder="ဤစာအုပ်ရဲ့ မာတိကာထဲ ရှာရန် …"><div id="btl"></div></div>
  <iframe id="rframe" title="book"></iframe></dialog>
 
 <div id="rd">
@@ -269,14 +278,14 @@ addEventListener('keydown',e=>{if(/input|select|textarea/i.test(e.target.tagName
 function renderBooks(){const q=norm($('#bq').value.trim());const l=B.filter(b=>!q||norm(b.title).includes(q));
  $('#bcount').textContent=`စာအုပ် ${mn(l.length)} အုပ်`;
  $('#blist').innerHTML=l.map(b=>`<button class="book" data-id="${b.id}"><div class="cv"><img loading="lazy" src="covers/${b.cover||b.id+'.jpg'}" alt="" onerror="this.replaceWith('📖')"></div><h4>${esc(b.title)}</h4><small>${b.pages?mn(b.pages)+' စာမျက်နှာ · ':''}${b.mb} MB</small></button>`).join('')||'<div class="empty">မတွေ့ပါ</div>'}
-$('#bq').oninput=renderBooks;
+$('#bq').oninput=()=>{renderBooks();renderToc($('#bq').value)};
 $('#blist').onclick=e=>{const c=e.target.closest('.book');if(c)openBook(c.dataset.id)};
 let curBook=null;
 function openBook(id,pg){const b=B.find(x=>x.id===id);if(!b)return;curBook=b;
  pg=pg||store.get('bk:'+id,1);$('#rtitle').textContent=b.title;$('#rpage').value=pg;$('#rpage').max=b.pages||9999;
  $('#rdl').href=`books/${b.id}.pdf`;$('#rdl').download=b.title+'.pdf';$('#rnew').href=`books/${b.id}.pdf#page=${pg}`;$('#rinfo').textContent=b.pages?`/ ${mn(b.pages)}`:'';
  $('#rframe').src=`books/${b.id}.pdf#page=${pg}`;reader.showModal();store.set('lastbook',id)}
-function closeReader(){reader.close();$('#rframe').src='about:blank'}
+function closeReader(){reader.close();$('#rframe').src='about:blank';$('#btoc').style.display='none'}
 $('#rgo').onclick=()=>{const p=Math.max(1,+$('#rpage').value||1);store.set('bk:'+curBook.id,p);$('#rnew').href=`books/${curBook.id}.pdf#page=${p}`;$('#rframe').src=`books/${curBook.id}.pdf#page=${p}`};
 $('#rpage').onkeydown=e=>{if(e.key==='Enter')$('#rgo').click()};
 
@@ -360,6 +369,29 @@ async function searchBook(){
  out.onclick=ev=>{const b=ev.target.closest('.it');if(!b)return;RB.hl=q;$('#psr').classList.remove('on');showPage(pageOf(+b.dataset.i),+b.dataset.i)}}
 $('#psq').onkeydown=e=>{if(e.key==='Enter')searchBook()};
 addEventListener('keydown',e=>{if(!rd.classList.contains('on')||/input/i.test(e.target.tagName))return;if(e.key==='ArrowRight')showPage(RP+1);if(e.key==='ArrowLeft')showPage(RP-1);if(e.key==='Escape')$('#rcl').click()});
+
+
+// ---------- Contents (မာတိကာ) of the PDF books: searchable, opens the PDF at the page
+let TOC=null;
+async function loadToc(){if(!TOC){try{TOC=await (await fetch('data/toc.json')).json();TOC.norm=TOC.toc.map(e=>nt(e[1]))}catch(e){TOC={books:[],toc:[],norm:[]}}}return TOC}
+const nt=s=>String(s).toLowerCase().replace(/[A-Za-z\s\u200b၊။.,()\[\]\-_:;'"]+/g,'');
+async function renderToc(q){
+ const box=$('#tocres');q=nt(q);
+ if(q.length<2){box.innerHTML='';return}
+ const T=await loadToc();const res=[];
+ for(let i=0;i<T.toc.length&&res.length<400;i++){const k=T.norm[i].indexOf(q);if(k>=0)res.push([k,i])}
+ res.sort((a,b)=>a[0]-b[0]);
+ if(!res.length){box.innerHTML='<h3>မာတိကာထဲမှာ မတွေ့ပါ</h3>';return}
+ box.innerHTML=`<h3>📑 မာတိကာထဲက ရလဒ် ${mn(res.length)}${res.length>=400?'+':''} ခု</h3>`+res.slice(0,150).map(([k,i])=>{const e=T.toc[i],b=B.find(x=>x.id===T.books[e[0]]);return b?`<button class="tr" data-b="${b.id}" data-p="${e[2]}"><b>${esc(e[1])}</b><small>📖 ${esc(b.title)} · စာမျက်နှာ ${mn(e[2])}</small></button>`:''}).join('');
+}
+$('#tocres').onclick=e=>{const t=e.target.closest('.tr');if(t)openBook(t.dataset.b,+t.dataset.p)};
+$('#rtc').onclick=async()=>{const box=$('#btoc');if(box.style.display==='block'){box.style.display='none';return}
+ const T=await loadToc();const bi=T.books.indexOf(curBook.id);
+ const rows=bi<0?[]:T.toc.filter(e=>e[0]===bi);
+ $('#btl').innerHTML=rows.length?rows.map(e=>`<button data-p="${e[2]}" style="padding-left:${6+(e[3]-1)*14}px">${esc(e[1])} <small style="color:var(--mute)">· ${mn(e[2])}</small></button>`).join(''):'<div class="empty" style="padding:10px">ဤစာအုပ်အတွက် မာတိကာ မရှိပါ</div>';
+ $('#btq').value='';box.style.display='block'};
+$('#btl').onclick=e=>{const b=e.target.closest('button');if(!b)return;const p=+b.dataset.p;$('#rpage').value=p;$('#rgo').click()};
+$('#btq').oninput=()=>{const q=nt($('#btq').value);$$('#btl button').forEach(b=>b.style.display=!q||nt(b.textContent).includes(q)?'':'none')};
 
 // ---------- Home
 function renderHome(){const last=store.get('last',null),lb=store.get('lastbook',null);
