@@ -151,9 +151,9 @@ h2.sec{margin:22px 0 8px;font-size:1.1rem;color:var(--accent)}
   <div class="chips" id="schips"></div><div class="count" id="scount"></div><div class="list" id="slist"></div>
  </section>
  <section id="texts" hidden>
-  <div class="bar"><div class="search"><input id="tq" placeholder="ဖတ်စာရှာရန် …" autocomplete="off"></div></div>
+  <div class="bar"><div class="search"><input id="tq" placeholder="မာတိကာ / ခေါင်းစဉ် ရှာရန် … (ဖတ်စာအားလုံးထဲက)" autocomplete="off"></div></div>
   <div class="hint" style="margin-top:0">အွန်လိုင်းမှာ တိုက်ရိုက်ဖတ်ရန် စာအုပ်များ — စာမျက်နှာ မပါသည့်အတွက် အခန်း/ခေါင်းစဉ်အလိုက် စာမျက်နှာခွဲပေးထားပါသည်။</div>
-  <div id="tlist"></div>
+  <div id="tres"></div><div id="tlist"></div>
  </section>
  <section id="books" hidden>
   <div class="bar"><div class="search"><input id="bq" placeholder="စာအုပ်အမည် / မာတိကာထဲက စာလုံး ရှာရန် …" autocomplete="off"></div></div>
@@ -299,7 +299,7 @@ function renderTexts(){const q=norm($('#tq').value.trim());let g=null,h='';
   const pg=store.get('tx:'+b.id,0),pc=b.pages>1?Math.round(pg/(b.pages-1)*100):0;
   h+=`<button class="tcard" data-id="${b.id}"><h3>${esc(b.title)}</h3><small>≈ ${fmtLong(tmin(b.chars)*60)} ဖတ်ရန် · ${mn(b.pages)} စာမျက်နှာ${pg?` · ဖတ်ပြီး ${mn(pc)}%`:''}</small>${pg?`<div class="bar2"><i style="width:${pc}%"></i></div>`:''}</button>`});
  $('#tlist').innerHTML=h?h+'</div>':'<div class="empty">မတွေ့ပါ</div>'}
-$('#tq').oninput=renderTexts;
+$('#tq').oninput=()=>{renderTexts();renderTres($('#tq').value)};
 $('#tlist').onclick=e=>{const c=e.target.closest('.tcard');if(c)openText(c.dataset.id)};
 const rd=$('#rd');
 function setFS(d){const v=Math.min(34,Math.max(14,(store.get('fs',19))+d));store.set('fs',v);rd.style.setProperty('--fs',v+'px')}
@@ -370,6 +370,20 @@ async function searchBook(){
 $('#psq').onkeydown=e=>{if(e.key==='Enter')searchBook()};
 addEventListener('keydown',e=>{if(!rd.classList.contains('on')||/input/i.test(e.target.tagName))return;if(e.key==='ArrowRight')showPage(RP+1);if(e.key==='ArrowLeft')showPage(RP-1);if(e.key==='Escape')$('#rcl').click()});
 
+
+
+// contents search across all reading texts
+let TT=null;
+async function loadTT(){if(!TT){try{TT=await (await fetch('texts/toc.json')).json();TT.norm=TT.toc.map(e=>nt(e[3]))}catch(e){TT={books:[],toc:[],norm:[]}}}return TT}
+async function renderTres(q){
+ const box=$('#tres');q=nt(q);if(q.length<2){box.innerHTML='';return}
+ const T=await loadTT();const res=[];
+ for(let i=0;i<T.toc.length&&res.length<500;i++){const k=T.norm[i].indexOf(q);if(k>=0)res.push([k,i])}
+ res.sort((a,b)=>a[0]-b[0]||a[1]-b[1]);
+ if(!res.length){box.innerHTML='<h3 style="margin:10px 0;color:var(--accent);font-size:1rem">မာတိကာထဲမှာ မတွေ့ပါ</h3>';return}
+ box.innerHTML=`<h3 style="margin:10px 0 6px;color:var(--accent);font-size:1rem">📑 မာတိကာထဲက ရလဒ် ${mn(res.length)}${res.length>=500?'+':''} ခု</h3>`+res.slice(0,150).map(([k,i])=>{const e=T.toc[i],b=TX.find(x=>x.id===T.books[e[0]]);return b?`<button class="tr" data-b="${b.id}" data-i="${e[1]}"><b>${esc(e[3])}</b><small>📚 ${esc(b.title)}</small></button>`:''}).join('');
+}
+$('#tres').onclick=e=>{const t=e.target.closest('.tr');if(t)openText(t.dataset.b,+t.dataset.i)};
 
 // ---------- Contents (မာတိကာ) of the PDF books: searchable, opens the PDF at the page
 let TOC=null;
