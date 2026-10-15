@@ -90,16 +90,62 @@ dialog.big{width:min(1000px,98vw);height:94vh}
 .t1{background:linear-gradient(135deg,#b4381e,#e8741a)}.t2{background:linear-gradient(135deg,#1f6f6a,#4aa08a)}.t3{background:linear-gradient(135deg,#5b3a8a,#9a6ad0)}
 h2.sec{margin:22px 0 8px;font-size:1.1rem;color:var(--accent)}
 .hint{background:var(--bg2);border-radius:12px;padding:10px 14px;color:var(--mute);font-size:.9rem;margin:10px 0}
+
+/* ---- reader */
+#texts .grp{margin:20px 0 8px;font-size:1.02rem;color:var(--accent);font-weight:700}
+.tcard{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;cursor:pointer;text-align:left;width:100%;display:block;transition:transform .12s,box-shadow .12s}
+.tcard:hover{transform:translateY(-2px);box-shadow:var(--shadow)}
+.tcard h3{margin:0;font-size:1rem;line-height:1.5}.tcard small{color:var(--mute)}
+.tcard .bar2{height:5px;border-radius:5px;background:var(--line);margin-top:8px;overflow:hidden}.tcard .bar2 i{display:block;height:100%;background:var(--accent2)}
+#rd{position:fixed;left:0;right:0;top:0;bottom:var(--pl,0px);z-index:40;display:none;flex-direction:column;--rbg:#fbf6ea;--rink:#2a2118;--rmute:#8a7358;--rline:#e6d6b6;--rac:#b4381e;--rpl:#6b3d8a;background:var(--rbg);color:var(--rink)}
+#rd.on{display:flex}
+#rd.t-sepia{--rbg:#efe0c0;--rink:#3a2a14;--rmute:#7d6643;--rline:#d8c295;--rac:#a1401a;--rpl:#5b3a73}
+#rd.t-dark{--rbg:#15110e;--rink:#e9dcc6;--rmute:#a99578;--rline:#3a2e24;--rac:#f08a5d;--rpl:#c9a6e8}
+.rbar{display:flex;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid var(--rline);background:var(--rbg);flex-wrap:wrap}
+.rbar h2{margin:0 4px;font-size:.98rem;flex:1;min-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--rac)}
+.rb{border:1px solid var(--rline);background:transparent;color:var(--rink);border-radius:10px;padding:5px 11px;font-size:.9rem}
+.rb.on{background:var(--rac);color:var(--rbg);border-color:var(--rac)}
+#rbody{flex:1;overflow-y:auto;padding:20px 16px 30px;scroll-behavior:smooth}
+#rtext{max-width:740px;margin:0 auto;font-size:var(--fs,19px);line-height:2.05}
+#rtext h2{font-size:1.45em;color:var(--rac);margin:1.2em 0 .5em;line-height:1.5;text-align:center}
+#rtext h3{font-size:1.15em;margin:1.5em 0 .4em;padding-bottom:.2em;border-bottom:2px solid var(--rline);color:var(--rac);line-height:1.6}
+#rtext h4{font-size:1.05em;margin:1.2em 0 .3em;color:var(--rmute);line-height:1.6}
+#rtext p{margin:.55em 0}
+#rtext .pali{color:var(--rpl);border-left:3px solid var(--rpl);padding-left:.8em;margin:.7em 0;font-size:.94em}
+#rtext .verse{margin:1em 1.2em;padding:.4em 1em;border-left:4px solid var(--rac);background:rgba(180,56,30,.06);border-radius:0 10px 10px 0;line-height:2}
+#rtext .quote{margin:.8em 1em;padding-left:.8em;border-left:3px solid var(--rline);color:var(--rmute)}
+#rtext a.fn{font-size:.7em;vertical-align:super;color:var(--rac);cursor:pointer;text-decoration:none;font-weight:700;padding:0 1px}
+#rtext a{color:var(--rac)}
+#rtext mark{background:#ffd54a;color:#000;border-radius:3px}
+#rd.nopali .pali{display:none}
+.rnav{display:flex;align-items:center;gap:8px;padding:8px 12px;border-top:1px solid var(--rline);background:var(--rbg)}
+.rnav input[type=range]{flex:1;accent-color:var(--rac)}
+.rnav small{color:var(--rmute);white-space:nowrap}
+.rpanel{position:absolute;top:50px;bottom:52px;left:0;width:min(380px,92vw);background:var(--rbg);border-right:1px solid var(--rline);box-shadow:var(--shadow);z-index:3;display:none;flex-direction:column}
+.rpanel.on{display:flex}
+.rpanel input{margin:8px;padding:8px 12px;border-radius:10px;border:2px solid var(--rline);background:transparent;color:var(--rink);font:inherit}
+.rpanel .lst{overflow-y:auto;flex:1;padding:0 6px 10px}
+.rpanel button.it{display:block;width:100%;text-align:left;background:none;border:0;color:var(--rink);padding:6px 10px;border-radius:8px;font:inherit;font-size:.92rem;line-height:1.5;cursor:pointer}
+.rpanel button.it:hover{background:var(--rline)}
+.rpanel button.it small{color:var(--rmute);display:block}
+#fnbox{position:absolute;left:10px;right:10px;bottom:58px;max-width:720px;margin:0 auto;background:var(--rbg);border:2px solid var(--rac);border-radius:14px;padding:10px 14px;box-shadow:var(--shadow);z-index:4;display:none;font-size:.95rem;line-height:1.7}
+#fnbox.on{display:block}
+.tapebtn{display:inline-block;margin-left:10px;font-size:.6em;vertical-align:middle;background:var(--rac);color:var(--rbg);border:0;border-radius:999px;padding:3px 12px;cursor:pointer}
 </style>
 </head>
 <body>
 <header class="hero"><button id="theme" title="Light / Dark">🌓</button><div class="wrap"><h1>☸ ဖားအောက်တောရ ဓမ္မစာကြည့်တိုက်</h1><p>တရားတော်များ နာယူရန် · တရားစာအုပ်များ ဖတ်ရှုရန်</p></div></header>
-<nav class="tabs"><button data-t="home" class="on">ပင်မ</button><button data-t="sermons">🎧 တရားတော်</button><button data-t="books">📖 စာအုပ်</button></nav>
+<nav class="tabs"><button data-t="home" class="on">ပင်မ</button><button data-t="sermons">🎧 တရားတော်</button><button data-t="books">📖 စာအုပ်</button><button data-t="texts">📚 ဖတ်စာ</button></nav>
 <main class="wrap" style="padding:0 14px">
  <section id="home"></section>
  <section id="sermons" hidden>
   <div class="bar"><div class="search"><input id="sq" placeholder="တရားတော်ရှာရန် … (အမည်၊ နံပါတ်)" autocomplete="off"></div><select id="ss"><option value="no">စဉ်အလိုက်</option><option value="long">အရှည်ဆုံး</option><option value="az">အမည်အလိုက်</option></select></div>
   <div class="chips" id="schips"></div><div class="count" id="scount"></div><div class="list" id="slist"></div>
+ </section>
+ <section id="texts" hidden>
+  <div class="bar"><div class="search"><input id="tq" placeholder="ဖတ်စာရှာရန် …" autocomplete="off"></div></div>
+  <div class="hint" style="margin-top:0">အွန်လိုင်းမှာ တိုက်ရိုက်ဖတ်ရန် စာအုပ်များ — စာမျက်နှာ မပါသည့်အတွက် အခန်း/ခေါင်းစဉ်အလိုက် စာမျက်နှာခွဲပေးထားပါသည်။</div>
+  <div id="tlist"></div>
  </section>
  <section id="books" hidden>
   <div class="bar"><div class="search"><input id="bq" placeholder="စာအုပ်ရှာရန် …" autocomplete="off"></div></div>
@@ -112,6 +158,16 @@ h2.sec{margin:22px 0 8px;font-size:1.1rem;color:var(--accent)}
  <div class="rt"><span>စာမျက်နှာ</span><input id="rpage" type="number" min="1" value="1"><button class="btn" id="rgo">သွားမည်</button><a class="btn alt" id="rdl" download style="text-decoration:none">⬇ ဒေါင်းလုပ်</a><a class="btn alt" id="rnew" target="_blank" rel="noopener" style="text-decoration:none">↗ Tab အသစ်</a><small id="rinfo" style="color:var(--mute)"></small></div>
  <iframe id="rframe" title="book"></iframe></dialog>
 
+<div id="rd">
+ <div class="rbar"><button class="rb" id="rtoc">☰ မာတိကာ</button><button class="rb" id="rsrch">🔍</button><h2 id="rtt"></h2>
+  <button class="rb" id="rlis" hidden>🎧 တရားခွေ</button>
+  <button class="rb" id="rpl">ပါဠိ</button><button class="rb" id="rfm">A−</button><button class="rb" id="rfp">A+</button><button class="rb" id="rth">🎨</button><button class="rb" id="rcl">✕</button></div>
+ <div class="rpanel" id="ptoc"><input id="ptq" placeholder="မာတိကာ ရှာရန် …"><div class="lst" id="ptl"></div></div>
+ <div class="rpanel" id="psr"><input id="psq" placeholder="ဤစာအုပ်ထဲ ရှာရန် … (Enter)"><div class="lst" id="psl"></div></div>
+ <div id="rbody"><div id="rtext"></div></div>
+ <div id="fnbox"></div>
+ <div class="rnav"><button class="rb" id="rpv">◀</button><input type="range" id="rsl" min="1" value="1"><small id="rpn"></small><button class="rb" id="rnx">▶</button></div>
+</div>
 <div id="player"><div class="pbar" style="margin:0 auto 4px"><span id="pcur">0:00</span><input id="seek" type="range" min="0" max="1000" value="0"><span id="pdur">0:00</span></div>
  <div class="row"><div id="pt"><b id="ptt">—</b><small id="pts"></small></div>
  <button class="pb" id="pprev" title="Previous">⏮</button><button class="pb" id="pb15" title="-15s">↺15</button><button class="pb main" id="pplay">▶</button><button class="pb" id="pf15" title="+15s">15↻</button><button class="pb" id="pnext" title="Next">⏭</button>
@@ -133,7 +189,7 @@ function toast(t,ms=3500){const e=$('#toast');e.textContent=t;e.style.display='b
 // theme
 (function(){const t=store.get('theme',null);if(t)document.documentElement.dataset.theme=t;$('#theme').onclick=()=>{const dark=matchMedia('(prefers-color-scheme:dark)').matches;const cur=document.documentElement.dataset.theme||(dark?'dark':'light');const n=cur==='dark'?'light':'dark';document.documentElement.dataset.theme=n;store.set('theme',n)}})();
 // tabs
-function tab(t){$$('nav.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));['home','sermons','books'].forEach(x=>$('#'+x).hidden=x!==t);scrollTo(0,0);if(location.hash!=='#'+t)history.replaceState(null,'','#'+t)}
+function tab(t){$$('nav.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));['home','sermons','books','texts'].forEach(x=>$('#'+x).hidden=x!==t);scrollTo(0,0);if(location.hash!=='#'+t)history.replaceState(null,'','#'+t)}
 $$('nav.tabs button').forEach(b=>b.onclick=()=>tab(b.dataset.t));
 
 let S=[],B=[];
@@ -187,7 +243,7 @@ async function playQueue(s,i){Q=s;QI=i;const t=s.tracks[i];
  au.src=await srcFor(t);au.playbackRate=+$('#spd').value;
  au.onloadedmetadata=()=>{if(pos>5&&pos<au.duration-10)au.currentTime=pos;au.onloadedmetadata=null};
  try{await au.play()}catch(e){}
- $('#player').classList.add('on');$('#ptt').textContent=`${s.no} ${s.title}`;$('#pts').textContent=`ခွေ ${mn(i+1)} / ${mn(s.tracks.length)}`;
+ $('#player').classList.add('on');document.documentElement.style.setProperty('--pl','96px');$('#ptt').textContent=`${s.no} ${s.title}`;$('#pts').textContent=`ခွေ ${mn(i+1)} / ${mn(s.tracks.length)}`;
  store.set('last',{id:s.id,i});markNow();
  if('mediaSession' in navigator){navigator.mediaSession.metadata=new MediaMetadata({title:s.title,artist:'ဖားအောက်တောရ',album:`ခွေ ${i+1}/${s.tracks.length}`});
   navigator.mediaSession.setActionHandler('nexttrack',()=>step(1));navigator.mediaSession.setActionHandler('previoustrack',()=>step(-1));}
@@ -224,17 +280,95 @@ function closeReader(){reader.close();$('#rframe').src='about:blank'}
 $('#rgo').onclick=()=>{const p=Math.max(1,+$('#rpage').value||1);store.set('bk:'+curBook.id,p);$('#rnew').href=`books/${curBook.id}.pdf#page=${p}`;$('#rframe').src=`books/${curBook.id}.pdf#page=${p}`};
 $('#rpage').onkeydown=e=>{if(e.key==='Enter')$('#rgo').click()};
 
+// ---------- Reader (online texts)
+let TX=[],RB=null,RP=0,RC={};
+const tmin=c=>Math.max(1,Math.round(c/900));
+async function loadTexts(){TX=await (await fetch('texts/index.json')).json();renderTexts()}
+function renderTexts(){const q=norm($('#tq').value.trim());let g=null,h='';
+ TX.filter(b=>!q||norm(b.title).includes(q)||norm(b.group).includes(q)).forEach(b=>{
+  if(b.group!==g){if(g!==null)h+='</div>';g=b.group;h+=`<div class="grp">${esc(g)}</div><div class="list">`}
+  const pg=store.get('tx:'+b.id,0),pc=b.pages>1?Math.round(pg/(b.pages-1)*100):0;
+  h+=`<button class="tcard" data-id="${b.id}"><h3>${esc(b.title)}</h3><small>≈ ${fmtLong(tmin(b.chars)*60)} ဖတ်ရန် · ${mn(b.pages)} စာမျက်နှာ${pg?` · ဖတ်ပြီး ${mn(pc)}%`:''}</small>${pg?`<div class="bar2"><i style="width:${pc}%"></i></div>`:''}</button>`});
+ $('#tlist').innerHTML=h?h+'</div>':'<div class="empty">မတွေ့ပါ</div>'}
+$('#tq').oninput=renderTexts;
+$('#tlist').onclick=e=>{const c=e.target.closest('.tcard');if(c)openText(c.dataset.id)};
+const rd=$('#rd');
+function setFS(d){const v=Math.min(34,Math.max(14,(store.get('fs',19))+d));store.set('fs',v);rd.style.setProperty('--fs',v+'px')}
+function setTheme(t){rd.classList.remove('t-sepia','t-dark');if(t)rd.classList.add('t-'+t);store.set('rth',t)}
+{rd.style.setProperty('--fs',store.get('fs',19)+'px');setTheme(store.get('rth',''));rd.classList.toggle('nopali',store.get('nopali',false));$('#rpl').classList.toggle('on',!store.get('nopali',false))}
+$('#rfp').onclick=()=>setFS(2);$('#rfm').onclick=()=>setFS(-2);
+$('#rth').onclick=()=>{const c=['','sepia','dark'];setTheme(c[(c.indexOf(store.get('rth',''))+1)%3])};
+$('#rpl').onclick=()=>{const n=!store.get('nopali',false);store.set('nopali',n);rd.classList.toggle('nopali',n);$('#rpl').classList.toggle('on',!n)};
+$('#rcl').onclick=()=>{rd.classList.remove('on');document.body.style.overflow='';renderTexts();history.replaceState(null,'','#texts')};
+$('#rtoc').onclick=()=>{$('#psr').classList.remove('on');$('#ptoc').classList.toggle('on')};
+$('#rsrch').onclick=()=>{$('#ptoc').classList.remove('on');$('#psr').classList.toggle('on');if($('#psr').classList.contains('on'))$('#psq').focus()};
+async function openText(id,toIdx){
+ const b=TX.find(x=>x.id===id);if(!b)return;
+ RB=await (await fetch(`texts/${id}.json`)).json();RC={};$('#fnbox').classList.remove('on');
+ $('#rtt').textContent=RB.title;rd.classList.add('on');document.body.style.overflow='hidden';
+ $('#rsl').max=RB.pages.length;
+ $('#ptl').innerHTML=RB.toc.map(t=>`<button class="it" data-i="${t[0]}" style="padding-left:${10+(t[1]-2)*14}px">${esc(t[2])}</button>`).join('')||'<div class="empty">—</div>';
+ const sm=RB.sermonMatch&&S.find(s=>s.title.includes(RB.sermonMatch));
+ $('#rlis').hidden=!sm;$('#rlis').onclick=()=>{if(sm)openSermon(sm.id)};
+ $('#psl').innerHTML='';$('#psq').value='';$('#ptoc').classList.remove('on');$('#psr').classList.remove('on');
+ await showPage(toIdx!=null?pageOf(toIdx):Math.min(store.get('tx:'+id,0),RB.pages.length-1),toIdx);
+}
+const pageOf=i=>{let lo=0,hi=RB.pages.length-1;while(lo<hi){const m=(lo+hi+1)>>1;if(RB.pages[m]<=i)lo=m;else hi=m-1}return lo};
+async function chunk(k){if(!RC[k])RC[k]=await (await fetch(`texts/${RB.id}.${k}.json`)).json();return RC[k]}
+function inl(h){return h.replace(/\u0001(\d+)\u0002/g,(m,n)=>`<a class="fn" data-n="${n}">[${mn(n)}]</a>`)}
+async function showPage(p,scrollTo){
+ RP=Math.max(0,Math.min(RB.pages.length-1,p));const st=RB.pages[RP],en=RP+1<RB.pages.length?RB.pages[RP+1]:RB.n;
+ const ks=[];for(let k=Math.floor(st/RB.chunk);k<=Math.floor((en-1)/RB.chunk);k++)ks.push(k);
+ await Promise.all(ks.map(chunk));
+ let h='';
+ for(let i=st;i<en;i++){const [k,x]=RC[Math.floor(i/RB.chunk)][i%RB.chunk];const t=inl(x);
+  if(k==='h2'||k==='h3'||k==='h4'){let extra='';
+   if(RB.tapeChapters&&k==='h2'){const m=x.match(/^ခွေ ([၀-၉]+)/);if(m){extra=`<button class="tapebtn" data-tape="${[...m[1]].map(c=>'၀၁၂၃၄၅၆၇၈၉'.indexOf(c)).join('')}">▶ ခွေ ${m[1]} နာမည်</button>`}}
+   h+=`<${k} id="b${i}">${t}${extra}</${k}>`}
+  else if(k==='pl')h+=`<p class="pali" id="b${i}">${t}</p>`;
+  else if(k==='v')h+=`<div class="verse" id="b${i}">${t}</div>`;
+  else if(k==='q')h+=`<div class="quote" id="b${i}">${t}</div>`;
+  else h+=`<p id="b${i}">${t}</p>`}
+ $('#rtext').innerHTML=h;
+ $('#rsl').value=RP+1;$('#rpn').textContent=`${mn(RP+1)} / ${mn(RB.pages.length)}`;
+ store.set('tx:'+RB.id,RP);
+ const sc=$('#rbody');sc.style.scrollBehavior='auto';
+ if(scrollTo!=null){const el=document.getElementById('b'+scrollTo);if(el){el.scrollIntoView({block:'center'});if(RB.hl)hilite(el,RB.hl)}}else sc.scrollTop=0;
+ sc.style.scrollBehavior='';
+}
+function hilite(el,q){const w=document.createTreeWalker(el,NodeFilter.SHOW_TEXT);const nodes=[];while(w.nextNode())nodes.push(w.currentNode);
+ nodes.forEach(n=>{const i=n.nodeValue.toLowerCase().indexOf(q);if(i<0)return;const r=document.createRange();r.setStart(n,i);r.setEnd(n,i+q.length);const m=document.createElement('mark');r.surroundContents(m)})}
+$('#rpv').onclick=()=>showPage(RP-1);$('#rnx').onclick=()=>showPage(RP+1);
+$('#rsl').onchange=()=>showPage(+$('#rsl').value-1);
+$('#rsl').oninput=()=>$('#rpn').textContent=`${mn($('#rsl').value)} / ${mn(RB.pages.length)}`;
+$('#ptl').onclick=e=>{const b=e.target.closest('.it');if(!b)return;RB.hl=null;$('#ptoc').classList.remove('on');showPage(pageOf(+b.dataset.i),+b.dataset.i)};
+$('#ptq').oninput=()=>{const q=norm($('#ptq').value);$$('#ptl .it').forEach(b=>b.style.display=norm(b.textContent).includes(q)?'':'none')};
+$('#rtext').onclick=e=>{
+ const f=e.target.closest('a.fn');
+ if(f){const n=f.dataset.n,box=$('#fnbox');box.innerHTML=`<b>[${mn(n)}]</b> `+inl(RB.fn[n]||'—');box.classList.add('on');return}
+ const t=e.target.closest('[data-tape]');if(t){const sm=S.find(s=>s.title.includes(RB.sermonMatch)&&s.tracks.length>=+t.dataset.tape);if(sm)playQueue(sm,+t.dataset.tape-1);else toast('ဤခွေအတွက် အသံဖိုင် မတွေ့ပါ')}};
+document.addEventListener('click',e=>{if(!e.target.closest('a.fn')&&!e.target.closest('#fnbox'))$('#fnbox').classList.remove('on')});
+async function searchBook(){
+ const q=norm($('#psq').value.trim());if(!q||!RB)return;const out=$('#psl');out.innerHTML='<div class="empty">ရှာနေသည်…</div>';
+ const nk=Math.ceil(RB.n/RB.chunk);await Promise.all([...Array(nk).keys()].map(chunk));
+ const res=[];
+ for(let i=0;i<RB.n&&res.length<200;i++){const x=RC[Math.floor(i/RB.chunk)][i%RB.chunk][1].replace(/<[^>]+>|\u0001\d+\u0002/g,'');const j=x.toLowerCase().indexOf(q);if(j>=0)res.push([i,x.slice(Math.max(0,j-30),j+q.length+50),j])}
+ out.innerHTML=res.length?res.map(r=>`<button class="it" data-i="${r[0]}">…${esc(r[1])}…<small>စာမျက်နှာ ${mn(pageOf(r[0])+1)}</small></button>`).join('')+(res.length>=200?'<div class="empty">ပထမ ၂၀၀ ခုသာ</div>':''):'<div class="empty">မတွေ့ပါ</div>';
+ out.onclick=ev=>{const b=ev.target.closest('.it');if(!b)return;RB.hl=q;$('#psr').classList.remove('on');showPage(pageOf(+b.dataset.i),+b.dataset.i)}}
+$('#psq').onkeydown=e=>{if(e.key==='Enter')searchBook()};
+addEventListener('keydown',e=>{if(!rd.classList.contains('on')||/input/i.test(e.target.tagName))return;if(e.key==='ArrowRight')showPage(RP+1);if(e.key==='ArrowLeft')showPage(RP-1);if(e.key==='Escape')$('#rcl').click()});
+
 // ---------- Home
 function renderHome(){const last=store.get('last',null),lb=store.get('lastbook',null);
  const ls=last&&S.find(s=>s.id===last.id),bk=lb&&B.find(b=>b.id===lb);
  $('#home').innerHTML=`<div class="home"><button class="tile t1" data-go="sermons"><h3>🎧 တရားတော်များ</h3><p>${mn(S.length)} စုံ · ${mn(S.reduce((a,s)=>a+s.tracks.length,0))} ခွေ · ${fmtLong(S.reduce((a,s)=>a+total(s),0))}</p></button>
- <button class="tile t2" data-go="books"><h3>📖 တရားစာအုပ်များ</h3><p>${mn(B.length)} အုပ် — ရှာဖွေဖတ်ရှုရန်</p></button></div>`
+ <button class="tile t2" data-go="books"><h3>📖 တရားစာအုပ်များ</h3><p>${mn(B.length)} အုပ် — PDF ဖွင့်ဖတ်ရန်</p></button><button class="tile t3" data-go="texts"><h3>📚 အွန်လိုင်းဖတ်စာ</h3><p>စာသားအတိုင်း ဖတ်ရန် · ရှာရန် · မာတိကာ</p></button></div>`
  +(ls?`<h2 class="sec">ဆက်နာမည်</h2><button class="card" data-s="${ls.id}" data-i="${last.i}"><div class="num">▶</div><div><h3>${esc(ls.title)}</h3><small>ခွေ ${mn(last.i+1)} မှ ဆက်နာရန်</small></div></button>`:'')
  +(bk?`<h2 class="sec">နောက်ဆုံးဖတ်သည့်စာအုပ်</h2><button class="card" data-b="${bk.id}"><div class="num">📖</div><div><h3>${esc(bk.title)}</h3><small>စာမျက်နှာ ${mn(store.get('bk:'+bk.id,1))} မှ ဆက်ဖတ်ရန်</small></div></button>`:'')
  +`<h2 class="sec">အကြံပြုချက်</h2><div class="hint">စာအုပ်ကို ဖွင့်ပြီး စာမျက်နှာနံပါတ်ရိုက်ကာ တိုက်ရိုက်သွားနိုင်ပါသည်။ တရားတော်ကို <b>Offline သိမ်းမည်</b> နှိပ်ပြီး အင်တာနက်မရှိလည်း နာနိုင်ပါသည်။ Space ခုံနှိပ်၍ ရပ်/ဖွင့်နိုင်ပါသည်။</div>`;
  $('#home').onclick=e=>{const g=e.target.closest('[data-go]');if(g)return tab(g.dataset.go);const s=e.target.closest('[data-s]');if(s){tab('sermons');return playQueue(S.find(x=>x.id==s.dataset.s),+s.dataset.i)}const b=e.target.closest('[data-b]');if(b)openBook(b.dataset.b)}}
 
-Promise.all([fetch('data/sermons.json').then(r=>r.json()),fetch('data/books.json').then(r=>r.json())]).then(([s,b])=>{S=s;B=b;renderChips();renderSermons();renderBooks();renderHome();const h=location.hash.slice(1);if(['sermons','books'].includes(h))tab(h)})
+Promise.all([fetch('data/sermons.json').then(r=>r.json()),fetch('data/books.json').then(r=>r.json())]).then(([s,b])=>{S=s;B=b;renderChips();renderSermons();renderBooks();renderHome();loadTexts();const h=location.hash.slice(1);if(['sermons','books','texts'].includes(h))tab(h)})
  .catch(()=>{$('#home').innerHTML='<div class="empty">ဒေတာဖိုင်များ မဖွင့်နိုင်ပါ</div>'});
 if('serviceWorker' in navigator&&location.protocol.startsWith('http')){/* offline audio uses Cache Storage directly; no service worker needed */}
 </script>
