@@ -139,7 +139,7 @@ $$('nav.tabs button').forEach(b=>b.onclick=()=>tab(b.dataset.t));
 let S=[],B=[];
 const norm=s=>String(s).toLowerCase().replace(/[​\s]+/g,' ');
 const total=s=>s.tracks.reduce((a,t)=>a+t[2],0);
-const url=t=>CFG.audioBase+encodeURIComponent(t[1]);
+const url=t=>((CFG.audioBase2&&t[0]>1303)?CFG.audioBase2:(CFG.audioBase1||CFG.audioBase))+encodeURIComponent(t[1]);
 
 // ---------- Sermons
 const CATS=[['သုတ္တန်','သုတ္တန်'],['ဇာတ်','ဇာတ်'],['အပဒါန်','အပဒါန်'],['ကမ္မဋ္ဌာန်း','ကမ္မဋ္ဌာန်း'],['ဝိနည်း','ဝိနည်း'],['Retreat','Retreat'],['ပဋ္ဌာန်း','ပဋ္ဌာန်း']];
