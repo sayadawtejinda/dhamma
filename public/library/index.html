@@ -118,6 +118,9 @@ h2.sec{margin:22px 0 8px;font-size:1.1rem;color:var(--accent)}
 #rtext a{color:var(--rac)}
 #rtext mark{background:#ffd54a;color:#000;border-radius:3px}
 #rd.nopali .pali{display:none}
+#rd.nobr br.a{display:none}
+#rtext h5{font-size:1em;font-weight:700;color:var(--rac);margin:1.1em 0 .1em;line-height:1.7}
+#rtext b{font-weight:800}
 .rnav{display:flex;align-items:center;gap:8px;padding:8px 12px;border-top:1px solid var(--rline);background:var(--rbg)}
 .rnav input[type=range]{flex:1;accent-color:var(--rac)}
 .rnav small{color:var(--rmute);white-space:nowrap}
@@ -305,7 +308,7 @@ const rd=$('#rd');
 function setFS(d){const v=Math.min(34,Math.max(14,(store.get('fs',19))+d));store.set('fs',v);rd.style.setProperty('--fs',v+'px')}
 function setTheme(t){rd.classList.remove('t-sepia','t-dark');if(t)rd.classList.add('t-'+t);store.set('rth',t)}
 {rd.style.setProperty('--fs',store.get('fs',19)+'px');setTheme(store.get('rth',''));rd.classList.toggle('nopali',store.get('nopali',false));$('#rpl').classList.toggle('on',!store.get('nopali',false))}
-$('#rbr').classList.toggle('on',store.get('brk',true));$('#rbr').onclick=()=>{const n=!store.get('brk',true);store.set('brk',n);$('#rbr').classList.toggle('on',n);if(RB)showPage(RP)};
+rd.classList.toggle('nobr',!store.get('brk',true));$('#rbr').classList.toggle('on',store.get('brk',true));$('#rbr').onclick=()=>{const n=!store.get('brk',true);store.set('brk',n);$('#rbr').classList.toggle('on',n);rd.classList.toggle('nobr',!n)};
 $('#rfp').onclick=()=>setFS(2);$('#rfm').onclick=()=>setFS(-2);
 $('#rth').onclick=()=>{const c=['','sepia','dark'];setTheme(c[(c.indexOf(store.get('rth',''))+1)%3])};
 $('#rpl').onclick=()=>{const n=!store.get('nopali',false);store.set('nopali',n);rd.classList.toggle('nopali',n);$('#rpl').classList.toggle('on',!n)};
@@ -325,18 +328,17 @@ async function openText(id,toIdx){
 }
 const pageOf=i=>{let lo=0,hi=RB.pages.length-1;while(lo<hi){const m=(lo+hi+1)>>1;if(RB.pages[m]<=i)lo=m;else hi=m-1}return lo};
 async function chunk(k){if(!RC[k])RC[k]=await (await fetch(`texts/${RB.id}.${k}.json`)).json();return RC[k]}
-const BRK=[/(?<=[။၊:])\s+(?=(?:[၀-၉]{1,3}။|\([၀-၉]{1,3}\)|\([က-အ]\))\s)/g,/(?<=။)\s+(?=[^\s=။<>]+(?:\s[^\s=။<>]+){0,3}\s=\s)/g];
-function brk(h){return store.get('brk',true)?h.replace(BRK[0],'<br>').replace(BRK[1],'<br>'):h}
 function inl(h){return h.replace(/\u0001(\d+)\u0002/g,(m,n)=>`<a class="fn" data-n="${n}">[${mn(n)}]</a>`)}
 async function showPage(p,scrollTo){
  RP=Math.max(0,Math.min(RB.pages.length-1,p));const st=RB.pages[RP],en=RP+1<RB.pages.length?RB.pages[RP+1]:RB.n;
  const ks=[];for(let k=Math.floor(st/RB.chunk);k<=Math.floor((en-1)/RB.chunk);k++)ks.push(k);
  await Promise.all(ks.map(chunk));
  let h='';
- for(let i=st;i<en;i++){const [k,x]=RC[Math.floor(i/RB.chunk)][i%RB.chunk];const t=inl((k==='p'||k==='q')?brk(x):x);
+ for(let i=st;i<en;i++){const [k,x]=RC[Math.floor(i/RB.chunk)][i%RB.chunk];const t=inl(x);
   if(k==='h2'||k==='h3'||k==='h4'){let extra='';
    if(RB.tapeChapters&&k==='h2'){const m=x.match(/^ခွေ ([၀-၉]+)/);if(m){extra=`<button class="tapebtn" data-tape="${[...m[1]].map(c=>'၀၁၂၃၄၅၆၇၈၉'.indexOf(c)).join('')}">▶ ခွေ ${m[1]} နာမည်</button>`}}
    h+=`<${k} id="b${i}">${t}${extra}</${k}>`}
+  else if(k==='sh')h+=`<h5 id="b${i}">${t}</h5>`;
   else if(k==='pl')h+=`<p class="pali" id="b${i}">${t}</p>`;
   else if(k==='v')h+=`<div class="verse" id="b${i}">${t}</div>`;
   else if(k==='q')h+=`<div class="quote" id="b${i}">${t}</div>`;

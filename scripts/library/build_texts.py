@@ -15,7 +15,6 @@ DL = os.path.join(os.path.expanduser('~'), 'Downloads')
 SRC = os.path.join(DL, 'လေ့လာစရာများ.xlsx')
 OUT = os.path.join(os.path.dirname(__file__), '..', '..', 'public', 'library', 'texts')
 os.makedirs(OUT, exist_ok=True)
-for f in os.listdir(OUT): os.remove(os.path.join(OUT, f))
 
 MYA = '၀၁၂၃၄၅၆၇၈၉'
 def mnum(n): return ''.join(MYA[int(c)] for c in str(n))
@@ -96,16 +95,66 @@ def is_pali(t):
     mya = sum(1 for w in words if PART.search(w))
     return mya / len(words) < .12 and bool(re.search('[္ံ]', txt))
 
+BURM_END = re.compile(r'(သည်|၏|ကို|မှာ|တယ်|ကုန်|၌|၍|နှင့်|များ|တို့|ဖြစ်|ရှိ|လည်း|ပြီး|သော|ဟု|အား|ကား|ခြင်း|လို|ပေါ့|နော်|ပါ|မယ်|ဘူး|ရ|လဲ|ကြ|၀|ဝါ)$')
+def pali_words(ws):
+    if not ws: return False
+    ok = sum(1 for w in ws if not BURM_END.search(w))
+    return ok >= 1 and ok / len(ws) >= .5
+
+# "Pali head = Myanmar meaning" units (nissaya): bold the Pali head, one unit per line
+HEAD = re.compile(r'(^|<br[^>]*>|(?<=။) |(?<=၊) )((?:[၀-၉]+။ ?)?)([^\s=။၊<>]+(?: [^\s=။၊<>]+){0,4})( = )')
+def nissaya(h):
+    if ' = ' in h:
+        def f(m):
+            if not pali_words(m.group(3).split(' ')): return m.group(0)
+            return '%s%s%s%s' % (m.group(1), m.group(2), m.group(3), m.group(4))
+        h = HEAD.sub(f, h)
+        h = re.sub(r'(?<![၀-၉]။)(?<=။) (?=(?:[၀-၉]+။ ?)?)', ' <br class="a">', h)
+        h = h.replace('', '<b>').replace('', '</b>')
+    # old-style units "<b>Pali</b>၊ meaning။ <b>Pali</b>၊ meaning" already bold in the source
+    h = re.sub(r'(?<=။) (?=<b>[^<]{1,60}</b>၊)', ' <br class="a">', h)
+    return h
+
+# numbered items inside a paragraph: ၁။ ၂။ / (၁) (၂) / (က) (ခ) after '။' '၊' or ':' go on new lines
+ITEM = re.compile(r'(?<=[။၊:]) (?=(?:[၀-၉]{1,3}။|\([၀-၉]{1,3}\)|\([က-အ]\)) )')
+def items(h): return ITEM.sub(' <br class="a">', h)
+
+def heading_like(t):
+    t = t.strip()
+    if not 3 <= len(t) <= 60 or ' = ' in t or re.match(r'^([၀-၉]+။|\([၀-၉က-အ]+\)|[၀-၉]+-[၀-၉]+။)', t): return False
+    if re.search(r'[။၊]$', t) or t.count(' ') > 7 or re.search(r'\.{3,}', t): return False
+    if re.search(r'(တယ်|ဘူး|ပါတယ်|မယ်|၏|သည်|ပါသည်|ပါမယ်)$', t): return False
+    return True
+LEAD = re.compile(r'^(.{2,45}?) ?(-{2,}|—|:) (?=\S)')
+
 def refine(blocks):
-    out = []
-    for k, h in blocks:
+    out, i = [], 0
+    while i < len(blocks):
+        k, h = blocks[i]
         if k == 'p':
+            t = plain(h)
+            if re.search(r'\.{4,}', t):                                  # contents-style lines "title ........ page"
+                grp = [h]
+                while i + 1 < len(blocks) and blocks[i + 1][0] == 'p' and re.search(r'\.{4,}', plain(blocks[i + 1][1])):
+                    i += 1; grp.append(blocks[i][1])
+                out.append(['p', '<br>'.join(grp)]); i += 1; continue
             lines = h.split('<br>')
             bold = [l for l in lines if re.fullmatch(r'\s*<b>.*</b>\s*', l)]
             if len(lines) >= 2 and len(bold) >= .6 * len(lines) and max(len(re.sub('<[^>]+>', '', l)) for l in lines) < 160:
-                out.append(['v', '<br>'.join(re.sub(r'</?b>', '', l).strip() for l in lines)]); continue
-            if is_pali(h) and '<br>' not in h: out.append(['pl', h]); continue
-        out.append([k, h])
+                out.append(['v', '<br>'.join(re.sub(r'</?b>', '', l).strip() for l in lines)]); i += 1; continue
+            if is_pali(h) and '<br>' not in h: out.append(['pl', h]); i += 1; continue
+            if re.search(r'(-{2,}|:)$', t.strip()) and len(t) <= 70 and '=' not in t:
+                out.append(['sh', h]); i += 1; continue
+            if heading_like(t) and len(t) <= 45 and '။' not in t and not re.fullmatch(r'[\W_–—-]+', t) and not (t[0] in '“"‘(' ):
+                out.append(['sh', t]); i += 1; continue
+            m = LEAD.match(t)
+            if m and '<' not in h[:60] and m.group(2).startswith('-'):    # "term --- explanation"
+                out.append(['sh', m.group(1) + ' ' + m.group(2)]); h = h[len(m.group(0)):]
+            h = nissaya(items(h))
+            out.append(['p', h]); i += 1; continue
+        if k == 'q':
+            out.append(['q', nissaya(items(h))]); i += 1; continue
+        out.append([k, h]); i += 1
     return out
 
 def plain(h): return re.sub(r'\s+', ' ', re.sub(r'<[^>]+>', '', h)).strip()
@@ -144,9 +193,24 @@ def split_h2(blocks):
     return parts
 
 # ------------------------------------------------------------------ build
-wb = openpyxl.load_workbook(SRC, read_only=True, data_only=True)
+# source rows per sheet: the workbook if it is in Downloads, otherwise the copy of the needed sheets saved earlier (study.pkl)
+PKL = os.path.join(os.environ.get('TEMP', ''), 'study.pkl')
+_rows = {}
+def ROWS(name):
+    if name not in _rows:
+        if os.path.exists(SRC):
+            wb = openpyxl.load_workbook(SRC, read_only=True, data_only=True)
+            for n in wb.sheetnames:
+                if n in SHEETS: _rows[n] = [list(r) for r in wb[n].iter_rows(values_only=True)]
+        else:
+            import pickle
+            _rows.update(pickle.load(open(os.path.abspath(PKL), 'rb')))
+    return _rows[name]
+SHEETS = ['နိဗ္ဗာ-၁', 'နိဗ္ဗာ-၂', 'နိဗ္ဗာ-၃', 'နိဗ္ဗာ-၄', 'နိဗ္ဗာ-၅', 'နိဗ္ဗာ-သေး', 'စာအုပ်သေး', 'ပြင်ရန်လိုသေး', 'သေရာညောင်စောင်း', 'တစ်ကြောင်းတည်း']
+ROWS('နိဗ္ဗာ-၁')
+for f in os.listdir(OUT): os.remove(os.path.join(OUT, f))      # only after the source was read
 def col_cells(name, col=0):
-    return [r[col] if len(r) > col else None for r in wb[name].iter_rows(values_only=True)]
+    return [r[col] if len(r) > col else None for r in ROWS(name)]
 index = []
 
 NIB = ['နိဗ္ဗာ-၁', 'နိဗ္ဗာ-၂', 'နိဗ္ဗာ-၃', 'နိဗ္ဗာ-၄', 'နိဗ္ဗာ-၅']
@@ -186,8 +250,7 @@ def sermon_id(title):
         if r > bs: best, bs = s, r
     return best['id'] if best and bs >= .6 else None
 GROUP_T = 'တရားဒေသနာ စာသား (တရားတော်ကို စာပြန်ရေးထားခြင်း)'
-ws = wb['ပြင်ရန်လိုသေး']
-rows = [list(r) for r in ws.iter_rows(values_only=True)]
+rows = ROWS('ပြင်ရန်လိုသေး')
 ncol = max(len(r) for r in rows)
 mang, tape = [], 0
 for c in range(ncol):
