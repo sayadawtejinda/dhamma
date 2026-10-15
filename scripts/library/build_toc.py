@@ -33,6 +33,8 @@ def clean(t):
     t = re.sub(r'\s+', ' ', t).strip(' .-၊')
     return t
 
+CHK_DROP = re.compile("[A-Za-z\\s​၊။.,()\\[\\]\\-_:;'\"0-9၀-၉]+")
+def chk(t): return CHK_DROP.sub('', t)      # letters only: used to find a contents title on its PDF page
 def is_unicode(s): return sum(1 for c in s if 'က' <= c <= '႟') > .5 * max(1, len(re.sub(r'\W', '', s)))
 
 def offset(doc):
@@ -95,7 +97,18 @@ for bi, b in enumerate(B):
             pg = pn + (off if off is not None else 0)
             if len(re.findall('[A-Za-z]', tt)) > max(1, len(tt) // 12): continue      # still garbled after conversion: not usable
             if 1 <= pg <= len(doc): rows.append((tt, pg, 1))
-    for t, pg, lvl in rows: out.append([bi, t, pg, lvl])
+    cache = {}
+    def ptext(j):
+        if j not in cache: cache[j] = chk(conv(doc[j].get_text())) if 0 <= j < len(doc) else ''
+        return cache[j]
+    for t, pg, lvl in rows:
+        key = chk(t)[:7]
+        shift = 9
+        if src == 'contents' and len(key) >= 4:
+            shift = None
+            for dj in (0, 1, -1, 2, -2):
+                if key in ptext(pg - 1 + dj): shift = dj; break
+        out.append([bi, t, pg, lvl, shift])
     report.append((b['id'], b['title'][:24], src, len(rows), off, votes))
 # corrections made by hand in public/library/toc-review.html (exported as toc_corrections.json, kept next to this script)
 FIX = os.path.join(os.path.dirname(__file__), 'toc_corrections.json')
@@ -105,14 +118,15 @@ if os.path.exists(FIX):
     fixes = {(c['book'], c['page'], c['title']): c for c in _fx['corrections']}
     offsets = _fx.get('offsets', {})        # page shift per book for every line not corrected by hand
     kept, n_edit, n_del = [], 0, 0
-    for bi, t, pg, lvl in out:
+    for bi, t, pg, lvl, sh in out:
         c = fixes.get((ids[bi], pg, t))
         if c and c['status'] == 'del': n_del += 1; continue
         if c and c['status'] == 'edit':
-            t, pg = c.get('new_title') or t, c.get('new_page') or pg; n_edit += 1
+            t = c.get('new_title') or t
+            pg = c['new_page'] if c.get('new_page') else max(1, pg + offsets.get(ids[bi], 0)); n_edit += 1
         elif not c: pg = max(1, pg + offsets.get(ids[bi], 0))
         elif c['status'] == 'ok': pg = max(1, pg + offsets.get(ids[bi], 0))
-        kept.append([bi, t, pg, lvl])
+        kept.append([bi, t, pg, lvl, sh])
     out = kept
     print('hand corrections applied: edited', n_edit, 'deleted', n_del)
 json.dump(dict(books=[b['id'] for b in B], toc=out), open(os.path.join(LIB, 'data', 'toc.json'), 'w', encoding='utf8'), ensure_ascii=False, separators=(',', ':'))
