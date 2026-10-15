@@ -4,7 +4,7 @@ Reads the user's local folders (Downloads/Paauk_MP3_1, Paauk_MP3_2, ဖားအ
 and writes sermons.json, books.json, covers and the PDF books. Run again after the
 folders change:  python scripts/library/build_library.py
 """
-import os, re, json, shutil, sys
+import os, re, json, shutil, sys, hashlib
 import openpyxl, pymupdf
 from mutagen.mp3 import MP3
 
@@ -19,47 +19,53 @@ os.makedirs(os.path.join(OUT, 'covers'), exist_ok=True)
 DIG = '၀၁၂၃၄၅၆၇၈၉'
 def mm(s): return int(''.join(str(DIG.index(c)) if c in DIG else c for c in str(s)))
 
-# ---- audio files (track number is the first 5 digits of the file name)
-files = {}
-for d in MP3_DIRS:
-    for f in os.listdir(d):
-        if f.lower().endswith('.mp3'):
-            files[int(f[:5])] = os.path.join(d, f)
+BOOKS_ONLY = '--books-only' in sys.argv   # keep sermons.json as it is (fast)
 
-def info(n):
-    p = files.get(n)
-    if not p: return None
-    try: dur = round(MP3(p).info.length)
-    except Exception: dur = 0
-    return [n, os.path.basename(p), dur, os.path.getsize(p)]
+if not BOOKS_ONLY:
+    # ---- audio files (track number is the first 5 digits of the file name)
+    files = {}
+    for d in MP3_DIRS:
+        for f in os.listdir(d):
+            if f.lower().endswith('.mp3'):
+                files[int(f[:5])] = os.path.join(d, f)
 
-# ---- sermon list (Unicode sheet of Mp3 list.xlsx): sermons run in order, 'ခွေပေါင်း' = number of tracks
-wb = openpyxl.load_workbook(os.path.join(MP3_DIRS[0], 'Mp3 list.xlsx'), data_only=True)
-rows = [r for r in wb['Sheet1'].iter_rows(values_only=True)][1:]
-sermons, cur = [], 1
-for r in rows:
-    if not r[4]: continue
-    cnt = mm(r[5])
-    tr = [t for t in (info(n) for n in range(cur, cur + cnt)) if t]
-    sermons.append(dict(id=len(sermons) + 1, no=str(r[3]).strip(), title=str(r[4]).strip(), expected=cnt, tracks=tr))
-    cur += cnt
-last = cur - 1
-# tracks after the list (extra talks); grouped by the file-name code
-extra = {}
-for n in sorted(files):
-    if n > last:
-        code = re.sub(r'\d*\.mp3$', '', os.path.basename(files[n])[5:], flags=re.I)
-        extra.setdefault(code, []).append(info(n))
-for code, tr in extra.items():
-    sermons.append(dict(id=len(sermons) + 1, no='', title='ထပ်ဆောင်း - ' + code, expected=len(tr), tracks=tr, extra=True))
-json.dump(sermons, open(os.path.join(OUT, 'data', 'sermons.json'), 'w', encoding='utf8'), ensure_ascii=False, separators=(',', ':'))
-print('sermons', len(sermons), 'tracks', sum(len(s['tracks']) for s in sermons))
+    def info(n):
+        p = files.get(n)
+        if not p: return None
+        try: dur = round(MP3(p).info.length)
+        except Exception: dur = 0
+        return [n, os.path.basename(p), dur, os.path.getsize(p)]
+
+    # ---- sermon list (Unicode sheet of Mp3 list.xlsx): sermons run in order, 'ခွေပေါင်း' = number of tracks
+    wb = openpyxl.load_workbook(os.path.join(MP3_DIRS[0], 'Mp3 list.xlsx'), data_only=True)
+    rows = [r for r in wb['Sheet1'].iter_rows(values_only=True)][1:]
+    sermons, cur = [], 1
+    for r in rows:
+        if not r[4]: continue
+        cnt = mm(r[5])
+        tr = [t for t in (info(n) for n in range(cur, cur + cnt)) if t]
+        sermons.append(dict(id=len(sermons) + 1, no=str(r[3]).strip(), title=str(r[4]).strip(), expected=cnt, tracks=tr))
+        cur += cnt
+    last = cur - 1
+    # tracks after the list (extra talks); grouped by the file-name code
+    extra = {}
+    for n in sorted(files):
+        if n > last:
+            code = re.sub(r'\d*\.mp3$', '', os.path.basename(files[n])[5:], flags=re.I)
+            extra.setdefault(code, []).append(info(n))
+    for code, tr in extra.items():
+        sermons.append(dict(id=len(sermons) + 1, no='', title='ထပ်ဆောင်း - ' + code, expected=len(tr), tracks=tr, extra=True))
+    json.dump(sermons, open(os.path.join(OUT, 'data', 'sermons.json'), 'w', encoding='utf8'), ensure_ascii=False, separators=(',', ':'))
+    print('sermons', len(sermons), 'tracks', sum(len(s['tracks']) for s in sermons))
+
 
 # ---- books
 books = []
+for d in ('books', 'covers'):   # start clean, so deleted/renamed books disappear
+    for f in os.listdir(os.path.join(OUT, d)): os.remove(os.path.join(OUT, d, f))
 for i, f in enumerate(sorted(x for x in os.listdir(BOOK_DIR) if x.lower().endswith('.pdf')), 1):
     src = os.path.join(BOOK_DIR, f)
-    bid = 'b%02d' % i
+    bid = 'b' + hashlib.md5(f[:-4].encode('utf8')).hexdigest()[:6]   # stable id: does not shift when a book is removed
     shutil.copyfile(src, os.path.join(OUT, 'books', bid + '.pdf'))
     pages = 0
     try:
