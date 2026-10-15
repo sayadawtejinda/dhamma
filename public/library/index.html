@@ -161,7 +161,7 @@ h2.sec{margin:22px 0 8px;font-size:1.1rem;color:var(--accent)}
 <div id="rd">
  <div class="rbar"><button class="rb" id="rtoc">☰ မာတိကာ</button><button class="rb" id="rsrch">🔍</button><h2 id="rtt"></h2>
   <button class="rb" id="rlis" hidden>🎧 တရားခွေ</button>
-  <button class="rb" id="rpl">ပါဠိ</button><button class="rb" id="rfm">A−</button><button class="rb" id="rfp">A+</button><button class="rb" id="rth">🎨</button><button class="rb" id="rcl">✕</button></div>
+  <button class="rb" id="rpl">ပါဠိ</button><button class="rb" id="rbr" title="စာကြောင်းခွဲ">↵</button><button class="rb" id="rfm">A−</button><button class="rb" id="rfp">A+</button><button class="rb" id="rth">🎨</button><button class="rb" id="rcl">✕</button></div>
  <div class="rpanel" id="ptoc"><input id="ptq" placeholder="မာတိကာ ရှာရန် …"><div class="lst" id="ptl"></div></div>
  <div class="rpanel" id="psr"><input id="psq" placeholder="ဤစာအုပ်ထဲ ရှာရန် … (Enter)"><div class="lst" id="psl"></div></div>
  <div id="rbody"><div id="rtext"></div></div>
@@ -296,6 +296,7 @@ const rd=$('#rd');
 function setFS(d){const v=Math.min(34,Math.max(14,(store.get('fs',19))+d));store.set('fs',v);rd.style.setProperty('--fs',v+'px')}
 function setTheme(t){rd.classList.remove('t-sepia','t-dark');if(t)rd.classList.add('t-'+t);store.set('rth',t)}
 {rd.style.setProperty('--fs',store.get('fs',19)+'px');setTheme(store.get('rth',''));rd.classList.toggle('nopali',store.get('nopali',false));$('#rpl').classList.toggle('on',!store.get('nopali',false))}
+$('#rbr').classList.toggle('on',store.get('brk',true));$('#rbr').onclick=()=>{const n=!store.get('brk',true);store.set('brk',n);$('#rbr').classList.toggle('on',n);if(RB)showPage(RP)};
 $('#rfp').onclick=()=>setFS(2);$('#rfm').onclick=()=>setFS(-2);
 $('#rth').onclick=()=>{const c=['','sepia','dark'];setTheme(c[(c.indexOf(store.get('rth',''))+1)%3])};
 $('#rpl').onclick=()=>{const n=!store.get('nopali',false);store.set('nopali',n);rd.classList.toggle('nopali',n);$('#rpl').classList.toggle('on',!n)};
@@ -308,20 +309,22 @@ async function openText(id,toIdx){
  $('#rtt').textContent=RB.title;rd.classList.add('on');document.body.style.overflow='hidden';
  $('#rsl').max=RB.pages.length;
  $('#ptl').innerHTML=RB.toc.map(t=>`<button class="it" data-i="${t[0]}" style="padding-left:${10+(t[1]-2)*14}px">${esc(t[2])}</button>`).join('')||'<div class="empty">—</div>';
- const sm=RB.sermonMatch&&S.find(s=>s.title.includes(RB.sermonMatch));
+ const sm=RB.sermonId&&S.find(s=>s.id===RB.sermonId);
  $('#rlis').hidden=!sm;$('#rlis').onclick=()=>{if(sm)openSermon(sm.id)};
  $('#psl').innerHTML='';$('#psq').value='';$('#ptoc').classList.remove('on');$('#psr').classList.remove('on');
  await showPage(toIdx!=null?pageOf(toIdx):Math.min(store.get('tx:'+id,0),RB.pages.length-1),toIdx);
 }
 const pageOf=i=>{let lo=0,hi=RB.pages.length-1;while(lo<hi){const m=(lo+hi+1)>>1;if(RB.pages[m]<=i)lo=m;else hi=m-1}return lo};
 async function chunk(k){if(!RC[k])RC[k]=await (await fetch(`texts/${RB.id}.${k}.json`)).json();return RC[k]}
+const BRK=[/(?<=[။၊:])\s+(?=(?:[၀-၉]{1,3}။|\([၀-၉]{1,3}\)|\([က-အ]\))\s)/g,/(?<=။)\s+(?=[^\s=။<>]+(?:\s[^\s=။<>]+){0,3}\s=\s)/g];
+function brk(h){return store.get('brk',true)?h.replace(BRK[0],'<br>').replace(BRK[1],'<br>'):h}
 function inl(h){return h.replace(/\u0001(\d+)\u0002/g,(m,n)=>`<a class="fn" data-n="${n}">[${mn(n)}]</a>`)}
 async function showPage(p,scrollTo){
  RP=Math.max(0,Math.min(RB.pages.length-1,p));const st=RB.pages[RP],en=RP+1<RB.pages.length?RB.pages[RP+1]:RB.n;
  const ks=[];for(let k=Math.floor(st/RB.chunk);k<=Math.floor((en-1)/RB.chunk);k++)ks.push(k);
  await Promise.all(ks.map(chunk));
  let h='';
- for(let i=st;i<en;i++){const [k,x]=RC[Math.floor(i/RB.chunk)][i%RB.chunk];const t=inl(x);
+ for(let i=st;i<en;i++){const [k,x]=RC[Math.floor(i/RB.chunk)][i%RB.chunk];const t=inl((k==='p'||k==='q')?brk(x):x);
   if(k==='h2'||k==='h3'||k==='h4'){let extra='';
    if(RB.tapeChapters&&k==='h2'){const m=x.match(/^ခွေ ([၀-၉]+)/);if(m){extra=`<button class="tapebtn" data-tape="${[...m[1]].map(c=>'၀၁၂၃၄၅၆၇၈၉'.indexOf(c)).join('')}">▶ ခွေ ${m[1]} နာမည်</button>`}}
    h+=`<${k} id="b${i}">${t}${extra}</${k}>`}
@@ -346,7 +349,7 @@ $('#ptq').oninput=()=>{const q=norm($('#ptq').value);$$('#ptl .it').forEach(b=>b
 $('#rtext').onclick=e=>{
  const f=e.target.closest('a.fn');
  if(f){const n=f.dataset.n,box=$('#fnbox');box.innerHTML=`<b>[${mn(n)}]</b> `+inl(RB.fn[n]||'—');box.classList.add('on');return}
- const t=e.target.closest('[data-tape]');if(t){const sm=S.find(s=>s.title.includes(RB.sermonMatch)&&s.tracks.length>=+t.dataset.tape);if(sm)playQueue(sm,+t.dataset.tape-1);else toast('ဤခွေအတွက် အသံဖိုင် မတွေ့ပါ')}};
+ const t=e.target.closest('[data-tape]');if(t){const sm=S.find(s=>s.id===RB.sermonId&&s.tracks.length>=+t.dataset.tape);if(sm)playQueue(sm,+t.dataset.tape-1);else toast('ဤခွေအတွက် အသံဖိုင် မတွေ့ပါ')}};
 document.addEventListener('click',e=>{if(!e.target.closest('a.fn')&&!e.target.closest('#fnbox'))$('#fnbox').classList.remove('on')});
 async function searchBook(){
  const q=norm($('#psq').value.trim());if(!q||!RB)return;const out=$('#psl');out.innerHTML='<div class="empty">ရှာနေသည်…</div>';

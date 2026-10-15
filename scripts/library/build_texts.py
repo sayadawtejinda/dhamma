@@ -170,22 +170,41 @@ for sheet, gid, group in (('နိဗ္ဗာ-သေး', 'nibp', 'ကျင့
 bl = parse(col_cells('သေရာညောင်စောင်း'))
 bl = [b for b in bl if not (b[0] == 'p' and plain(b[1]) in ('', 'sutta'))]
 title = plain(bl[0][1]) if bl and bl[0][0] == 'h2' else 'သေရာညောင်စောင်း'
-index.append(finish('talk-sayanaung', title, 'တရားဒေသနာ စာသား (တရားတော်ကို စာပြန်ရေးထားခြင်း)', bl[1:] if bl and bl[0][0] == 'h2' else bl, extra=dict(sermonMatch='ပဗ္ဗဇိတအဘိဏှသုတ္တန်')))
+index.append(finish('talk-sayanaung', title, 'တရားဒေသနာ စာသား (တရားတော်ကို စာပြန်ရေးထားခြင်း)', bl[1:] if bl and bl[0][0] == 'h2' else bl, extra=dict(sermonId=next((x['id'] for x in json.load(open(os.path.join(OUT, '..', 'data', 'sermons.json'), encoding='utf8')) if 'ပဗ္ဗဇိတအဘိဏှ' in x['title']), None))))
 
-# Mangala talks: every column is one tape (ခွေ)
+# Talk transcripts: every column of the sheet is one tape (ခွေ). Tapes 1-97 are the Mangala sutta talks (one book);
+# every later column is a different sutta, so each becomes its own book.
+import difflib
+SER = json.load(open(os.path.join(OUT, '..', 'data', 'sermons.json'), encoding='utf8'))
+SKEY = re.compile(r'တရားဒေသနာတော်|တရားတော်|သုတ္တန်|သုတ်|အပါဒါန်|အပဒါန်|[()၀-၉ဝ\s-]')
+def skey(t): return SKEY.sub('', re.sub(r'\([^)]*\)', '', t.replace('စျာန', 'ဈာန')))
+SKEY = re.compile(SKEY.pattern.replace('သုတ္တန်|', 'သုတ္တန်|ပထမပိုင်း|'))
+def sermon_id(title):
+    best, bs = None, 0
+    for s in SER:
+        r = difflib.SequenceMatcher(None, skey(title), skey(s['title'])).ratio()
+        if r > bs: best, bs = s, r
+    return best['id'] if best and bs >= .6 else None
+GROUP_T = 'တရားဒေသနာ စာသား (တရားတော်ကို စာပြန်ရေးထားခြင်း)'
 ws = wb['ပြင်ရန်လိုသေး']
 rows = [list(r) for r in ws.iter_rows(values_only=True)]
 ncol = max(len(r) for r in rows)
-blocks = []
+mang, tape = [], 0
 for c in range(ncol):
     cells = [r[c] if len(r) > c else None for r in rows]
     if not any(x not in (None, '') for x in cells): continue
+    tape += 1
     head = plain(re.sub(r'<[^>]+>', ' ', str(cells[0]))) if cells[0] else ''
-    chapter = len([b for b in blocks if b[0] == 'h2']) + 1
-    blocks.append(['h2', 'ခွေ %s - %s' % (mnum(chapter), head)])
-    blocks.extend(parse(cells[1:]))
-index.append(finish('talk-mangala', 'မင်္ဂလသုတ္တန် ဟောစဉ် (ခွေအလိုက် စာသား)', 'တရားဒေသနာ စာသား (တရားတော်ကို စာပြန်ရေးထားခြင်း)', blocks, extra=dict(sermonMatch='မင်္ဂလသုတ္တန်', tapeChapters=True)))
-print('mangala chapters', index[-1]['toc'])
+    if tape <= 97:
+        mang.append(['h2', 'ခွေ %s - %s' % (mnum(tape), head)])
+        mang.extend(parse(cells[1:]))
+    else:
+        title = re.sub(r'\s*တရားဒေသနာတော်$', '', head)
+        sid = sermon_id(title)
+        index.append(finish('talk-%03d' % tape, '%s (ခွေ %s)' % (title, mnum(tape)), GROUP_T, parse(cells[1:]), extra=dict(sermonId=sid) if sid else None))
+msid = next(s['id'] for s in SER if s['title'] == 'မင်္ဂလသုတ္တန်')
+index.insert(len(index) - (tape - 97), finish('talk-mangala', 'မင်္ဂလသုတ္တန် ဟောစဉ် (ခွေ ၁ - ၉၇)', GROUP_T, mang, extra=dict(sermonId=msid, tapeChapters=True)))
+print('talk books', tape - 97 + 1)
 
 # Ekayana (text in column A, footnotes in column B)
 A = parse(col_cells('တစ်ကြောင်းတည်း', 0))
