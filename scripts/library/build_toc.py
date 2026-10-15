@@ -8,6 +8,8 @@ Run after build_library.py:  python scripts/library/build_toc.py
 """
 import os, re, json, collections, sys
 import pymupdf
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from toc_clean import fix, garbage
 from myanmar import converter
 
 LIB = os.path.join(os.path.dirname(__file__), '..', '..', 'public', 'library')
@@ -75,7 +77,7 @@ def toc_entries(doc):
                 ents.append((m[0], m[1]))
     return ents
 
-out, report = [], []
+out, report, dropped = [], [], []
 for bi, b in enumerate(B):
     f = os.path.join(LIB, 'books', b['id'] + '.pdf')
     doc = pymupdf.open(f)
@@ -85,30 +87,33 @@ for bi, b in enumerate(B):
     if outline and len(outline) >= 5:
         src = 'outline'
         for lvl, title, pg in outline:
-            t = clean(title if is_unicode(title) else conv(title))
-            if t and pg >= 1: rows.append((t, pg, lvl))
+            t0 = clean(title if is_unicode(title) else conv(title))
+            t, orig = fix(t0, b['title'])
+            if t and pg >= 1: rows.append((t, pg, lvl, orig, t0))
     else:
         src = 'contents'
         for t, p in toc_entries(doc):
-            tt = clean(t if is_unicode(t) else conv(t))
+            tt0 = clean(t if is_unicode(t) else conv(t))
+            tt, orig = fix(tt0, b['title'])
             if not tt or re.match(r'^မာတိကာ|.* -- ', tt) or len(tt) < 2: continue
             try: pn = to_int(p)
             except ValueError: continue
             pg = pn + (off if off is not None else 0)
-            if len(re.findall('[A-Za-z]', tt)) > max(1, len(tt) // 12): continue      # still garbled after conversion: not usable
-            if 1 <= pg <= len(doc): rows.append((tt, pg, 1))
+            if garbage(tt) or len(re.findall('[A-Za-z]', tt)) > max(1, len(tt) // 12):      # still garbled after conversion: not usable
+                dropped.append([bi, tt[:200], pn]); continue
+            if 1 <= pg <= len(doc): rows.append((tt, pg, 1, orig, tt0))
     cache = {}
     def ptext(j):
         if j not in cache: cache[j] = chk(conv(doc[j].get_text())) if 0 <= j < len(doc) else ''
         return cache[j]
-    for t, pg, lvl in rows:
-        key = chk(t)[:7]
+    for t, pg, lvl, orig, t0 in rows:
+        keys = [k for k in {chk(t)[:7], chk(t0)[:7]} if len(k) >= 4]
         shift = 9
-        if src == 'contents' and len(key) >= 4:
+        if src == 'contents' and keys:
             shift = None
             for dj in (0, 1, -1, 2, -2):
-                if key in ptext(pg - 1 + dj): shift = dj; break
-        out.append([bi, t, pg, lvl, shift])
+                if any(k in ptext(pg - 1 + dj) for k in keys): shift = dj; break
+        out.append([bi, t, pg, lvl, shift, orig or 0])
     report.append((b['id'], b['title'][:24], src, len(rows), off, votes))
 # corrections made by hand in public/library/toc-review.html (exported as toc_corrections.json, kept next to this script)
 FIX = os.path.join(os.path.dirname(__file__), 'toc_corrections.json')
@@ -118,7 +123,7 @@ if os.path.exists(FIX):
     fixes = {(c['book'], c['page'], c['title']): c for c in _fx['corrections']}
     offsets = _fx.get('offsets', {})        # page shift per book for every line not corrected by hand
     kept, n_edit, n_del = [], 0, 0
-    for bi, t, pg, lvl, sh in out:
+    for bi, t, pg, lvl, sh, ao in out:
         c = fixes.get((ids[bi], pg, t))
         if c and c['status'] == 'del': n_del += 1; continue
         if c and c['status'] == 'edit':
@@ -126,10 +131,12 @@ if os.path.exists(FIX):
             pg = c['new_page'] if c.get('new_page') else max(1, pg + offsets.get(ids[bi], 0)); n_edit += 1
         elif not c: pg = max(1, pg + offsets.get(ids[bi], 0))
         elif c['status'] == 'ok': pg = max(1, pg + offsets.get(ids[bi], 0))
-        kept.append([bi, t, pg, lvl, sh])
+        kept.append([bi, t, pg, lvl, sh, ao])
     out = kept
     print('hand corrections applied: edited', n_edit, 'deleted', n_del)
 json.dump(dict(books=[b['id'] for b in B], toc=out), open(os.path.join(LIB, 'data', 'toc.json'), 'w', encoding='utf8'), ensure_ascii=False, separators=(',', ':'))
+json.dump(dropped, open(os.path.join(os.path.dirname(__file__), 'toc_dropped.json'), 'w', encoding='utf8'), ensure_ascii=False)
+print('garbled lines dropped (kept in scripts/library/toc_dropped.json):', len(dropped))
 for r in report: print(r)
 print('entries', len(out), 'books with entries', len({r[0] for r in out}))
 left = collections.Counter(re.findall(r'[A-Za-z]', ''.join(o[1] for o in out)))
