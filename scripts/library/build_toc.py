@@ -82,7 +82,7 @@ def page_map(doc):
         k = bisect.bisect_left(ns, n)
         lo, hi = max(0, k - 3), min(len(ns), k + 3)
         near = sorted(of[lo:hi])
-        return max(1, min(len(doc), n + near[len(near) // 2]))
+        return n + near[len(near) // 2]
     return f
 
 def toc_entries(doc):
@@ -102,6 +102,8 @@ def toc_entries(doc):
                 mm = re.match(r'^(.*?)(?:\.{2,}|\s{2,}|\s)([0-9၀-၉]{1,4})$', l)
                 if mm and mm.group(1).strip():
                     m = (' '.join(buf + [mm.group(1)]), mm.group(2)); buf = []
+                elif re.search(r'(\.{3,}|\s{2,})\s*[^\d\s.]{1,2}$', l):
+                    buf = []          # front-matter entry whose page is a letter (roman-style numbering): not a numbered contents line
                 else: buf.append(l)
             if m and m[0].strip():
                 ents.append((m[0], m[1]))
@@ -133,7 +135,7 @@ for bi, b in enumerate(B):
             mp = pmap(pn) if pmap else pg
             if garbage(tt) or len(re.findall('[A-Za-z]', tt)) > max(1, len(tt) // 12):      # still garbled after conversion: not usable
                 dropped.append([bi, tt[:200], pn]); continue
-            if 1 <= pg <= len(doc): rows.append((tt, pg, 1, orig, tt0, mp))
+            if 1 <= pg <= len(doc) and 1 <= mp <= len(doc): rows.append((tt, pg, 1, orig, tt0, mp))     # a page beyond the end of this PDF (the PDF is shorter than the printed book) is not clamped, it is skipped
     cache = {}
     def ptext(j):
         if j not in cache: cache[j] = chk(conv(doc[j].get_text())) if 0 <= j < len(doc) else ''

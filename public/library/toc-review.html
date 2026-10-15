@@ -81,8 +81,10 @@ const pageOf=(bid,e,k)=>Math.max(1,basePage(e)+shiftAt(bid,basePage(e))+((REV[k]
 const sus=t=>/[A-Za-z]/.test(t)||t.length<3||/[က-႟][ါ-ဲ]{3,}/.test(t)||/^[၀-၉0-9\s.-]+$/.test(t);
 async function init(){
   [T,B]=await Promise.all([fetch('data/toc.json?v='+Date.now()).then(r=>r.json()),fetch('data/books.json?v='+Date.now()).then(r=>r.json())]);
-  const cnt={};T.toc.forEach(e=>cnt[e[0]]=(cnt[e[0]]||0)+1);
-  $('#book').innerHTML=T.books.map((id,i)=>cnt[i]?`<option value="${i}">${esc((B.find(b=>b.id===id)||{}).title||id)} (${cnt[i]})</option>`:'').join('');
+  const cnt={},chk={},ver={};T.toc.forEach(e=>{cnt[e[0]]=(cnt[e[0]]||0)+1;if(e[4]===0||e[4]===null){chk[e[0]]=(chk[e[0]]||0)+1;if(e[4]===0)ver[e[0]]=(ver[e[0]]||0)+1}});
+  // a book whose contents lines are almost never found on the pages they point to has a contents list that does not belong to this PDF (e.g. the PDF is shorter than the printed book)
+  const weird=i=>(chk[i]||0)>=8&&(ver[i]||0)<0.25*chk[i];
+  $('#book').innerHTML=T.books.map((id,i)=>cnt[i]?`<option value="${i}">${weird(i)?'⚠ ':''}${esc((B.find(b=>b.id===id)||{}).title||id)} (${cnt[i]})${weird(i)?' — မာတိကာနဲ့ PDF မကိုက်':''}</option>`:'').join('');
   const last=+localStorage.getItem('tocbook');if(!isNaN(last)&&cnt[last])$('#book').value=last;
   cur=+$('#book').value;render();
 }
