@@ -146,12 +146,14 @@ const CATS=[['သုတ္တန်','သုတ္တန်'],['ဇာတ်','�
 let cat='';
 function renderChips(){const e=$('#schips');e.innerHTML='<button class="chip on" data-c="">အားလုံး</button>'+CATS.filter(c=>S.filter(s=>s.title.includes(c[0])).length>2).map(c=>`<button class="chip" data-c="${c[0]}">${c[1]}</button>`).join('');
  e.onclick=ev=>{const b=ev.target.closest('.chip');if(!b)return;cat=b.dataset.c;$$('#schips .chip').forEach(x=>x.classList.toggle('on',x===b));renderSermons()}}
+function txt(s){return s._t||(s._t=norm((s.info||'')+' '+Object.values(s.topics||{}).join(' ')))}
+function snippet(s,q){const t=(s.info||'')+' '+Object.entries(s.topics||{}).map(([k,v])=>`[ခွေ ${mn(k)}] ${v}`).join(' ');const i=norm(t).indexOf(q);if(i<0)return'';const a=Math.max(0,i-25);return '…'+esc(t.slice(a,i+q.length+45))+'…'}
 function renderSermons(){
  const q=norm($('#sq').value.trim()),so=$('#ss').value;
- let l=S.filter(s=>(!cat||s.title.includes(cat))&&(!q||norm(s.title).includes(q)||norm(s.no).includes(q)||s.tracks.some(t=>norm(t[1]).includes(q))));
+ let l=S.filter(s=>(!cat||s.title.includes(cat))&&(!q||norm(s.title).includes(q)||norm(s.no).includes(q)||s.tracks.some(t=>norm(t[1]).includes(q))||txt(s).includes(q)));
  if(so==='long')l=[...l].sort((a,b)=>total(b)-total(a));if(so==='az')l=[...l].sort((a,b)=>a.title.localeCompare(b.title));
  $('#scount').textContent=`တရားတော် ${mn(l.length)} ပုဒ်`;
- $('#slist').innerHTML=l.length?l.map(s=>`<button class="card" data-id="${s.id}"><div class="num">${esc(s.no.replace('။','')||'＋')}</div><div><h3>${esc(s.title)}</h3><small>🎧 ${mn(s.tracks.length)} ခွေ · ${fmtLong(total(s))}</small></div></button>`).join(''):'<div class="empty">မတွေ့ပါ</div>';
+ $('#slist').innerHTML=l.length?l.map(s=>`<button class="card" data-id="${s.id}"><div class="num">${esc(s.no.replace('။','')||'＋')}</div><div><h3>${esc(s.title)}</h3><small>🎧 ${mn(s.tracks.length)} ခွေ · ${fmtLong(total(s))}</small>${q&&!norm(s.title).includes(q)&&txt(s).includes(q)?`<br><small style="color:var(--accent)">${snippet(s,q)}</small>`:''}</div></button>`).join(''):'<div class="empty">မတွေ့ပါ</div>';
 }
 $('#slist').onclick=e=>{const c=e.target.closest('.card');if(c)openSermon(+c.dataset.id)};
 $('#sq').oninput=renderSermons;$('#ss').onchange=renderSermons;
@@ -163,9 +165,9 @@ async function openSermon(id){
  $('#dst').textContent=(s.no?s.no+' ':'')+s.title;
  const saved=await Promise.all(s.tracks.map(isSaved));
  const miss=s.expected-s.tracks.length;
- $('#dsb').innerHTML=`<div class="acts"><button class="btn" id="pall">▶ အားလုံးဖွင့်မည်</button><button class="btn gold" id="sv">⬇ Offline သိမ်းမည်</button></div>
+ $('#dsb').innerHTML=(s.info?`<div class="hint" style="margin-top:0">${esc(s.info)}</div>`:'')+`<div class="acts"><button class="btn" id="pall">▶ အားလုံးဖွင့်မည်</button><button class="btn gold" id="sv">⬇ Offline သိမ်းမည်</button></div>
  <div class="pr" id="svp" hidden><i></i></div><small style="color:var(--mute)" id="svt">${mn(s.tracks.length)} ခွေ · ${fmtLong(total(s))}${miss>0?` · ⚠ ဖိုင် ${mn(miss)} ခု မတွေ့ပါ`:''}</small><div style="margin-top:10px">`+
- s.tracks.map((t,i)=>`<div class="trk" data-i="${i}"><button data-p="${i}">▶</button><div class="t"><b>ခွေ ${mn(i+1)} <small>(${esc(t[1])})</small></b><small>${fmt(t[2])} · ${(t[3]/1048576).toFixed(1)} MB ${saved[i]?'· ✅ offline':''}</small></div><a href="${url(t)}" download="${esc(t[1])}" title="Download">⬇</a></div>`).join('')+'</div>';
+ s.tracks.map((t,i)=>`<div class="trk" data-i="${i}"><button data-p="${i}">▶</button><div class="t"><b>ခွေ ${mn(i+1)} <small>(${esc(t[1])})</small></b><small>${fmt(t[2])} · ${(t[3]/1048576).toFixed(1)} MB ${saved[i]?'· ✅ offline':''}</small>${(s.topics&&s.topics[i+1])?`<div style="font-size:.86rem;margin-top:3px;line-height:1.5">${esc(s.topics[i+1])}</div>`:''}</div><a href="${url(t)}" download="${esc(t[1])}" title="Download">⬇</a></div>`).join('')+'</div>';
  $('#dsb').onclick=e=>{const p=e.target.closest('[data-p]');if(p)playQueue(s,+p.dataset.p)};
  $('#pall').onclick=()=>playQueue(s,0);
  $('#sv').onclick=()=>saveOffline(s);
@@ -210,7 +212,7 @@ addEventListener('keydown',e=>{if(/input|select|textarea/i.test(e.target.tagName
 // ---------- Books
 function renderBooks(){const q=norm($('#bq').value.trim());const l=B.filter(b=>!q||norm(b.title).includes(q));
  $('#bcount').textContent=`စာအုပ် ${mn(l.length)} အုပ်`;
- $('#blist').innerHTML=l.map(b=>`<button class="book" data-id="${b.id}"><div class="cv"><img loading="lazy" src="covers/${b.id}.jpg" alt="" onerror="this.replaceWith('📖')"></div><h4>${esc(b.title)}</h4><small>${b.pages?mn(b.pages)+' စာမျက်နှာ · ':''}${b.mb} MB</small></button>`).join('')||'<div class="empty">မတွေ့ပါ</div>'}
+ $('#blist').innerHTML=l.map(b=>`<button class="book" data-id="${b.id}"><div class="cv"><img loading="lazy" src="covers/${b.cover||b.id+'.jpg'}" alt="" onerror="this.replaceWith('📖')"></div><h4>${esc(b.title)}</h4><small>${b.pages?mn(b.pages)+' စာမျက်နှာ · ':''}${b.mb} MB</small></button>`).join('')||'<div class="empty">မတွေ့ပါ</div>'}
 $('#bq').oninput=renderBooks;
 $('#blist').onclick=e=>{const c=e.target.closest('.book');if(c)openBook(c.dataset.id)};
 let curBook=null;
