@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="my">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>မာတိကာ စစ်ဆေးရန်</title>
+<meta name="robots" content="noindex">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Myanmar:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#fff7ea;--card:#fff;--ink:#3a1e12;--mute:#8a6a52;--line:#ecd7b4;--ac:#b4381e;--ok:#1f8a4c;--warn:#d98a00;--bad:#b3261e}
+@media (prefers-color-scheme:dark){:root{--bg:#1c1410;--card:#2c211a;--ink:#f6e8d2;--mute:#c2a888;--line:#4a372a;--ac:#e2623f;--ok:#4cc38a;--warn:#f2b84a;--bad:#ff8a80}}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--ink);font:15px/1.6 "Noto Sans Myanmar","Pyidaungsu","Myanmar Text",system-ui,sans-serif;display:flex;flex-direction:column}
+header{padding:8px 12px;border-bottom:1px solid var(--line);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+header b{color:var(--ac)}
+select,input,button{font:inherit;color:inherit}
+select,input[type=text],input[type=search],input[type=number]{background:var(--card);border:1.5px solid var(--line);border-radius:8px;padding:5px 9px}
+button{background:var(--card);border:1.5px solid var(--line);border-radius:8px;padding:5px 11px;cursor:pointer}
+button.pri{background:var(--ac);color:#fff;border-color:var(--ac)}
+button.on{background:var(--ac);color:#fff;border-color:var(--ac)}
+#main{flex:1;display:flex;min-height:0}
+#list{flex:1;overflow:auto;padding:8px 10px;min-width:0}
+#pane{width:46%;border-left:1px solid var(--line);display:flex;flex-direction:column;background:var(--card)}
+#pane .ph{padding:6px 10px;font-size:.9rem;color:var(--mute);border-bottom:1px solid var(--line)}
+#pane iframe{flex:1;border:0;background:#fff}
+.row{display:flex;gap:6px;align-items:center;padding:4px 6px;margin-bottom:4px;border:1.5px solid var(--line);border-left-width:5px;border-radius:10px;background:var(--card)}
+.row.ok{border-left-color:var(--ok)}.row.edit{border-left-color:var(--warn)}.row.del{border-left-color:var(--bad);opacity:.55}
+.row.sus{background:rgba(217,138,0,.10)}
+.row input.t{flex:1;min-width:0}
+.row input.p{width:70px}
+.row .lv{color:var(--mute);font-size:.8rem;width:14px}
+.row button{padding:3px 9px}
+.tb{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.hint{color:var(--mute);font-size:.88rem;padding:6px 12px}
+@media(max-width:850px){#main{flex-direction:column}#pane{width:100%;height:45%;border-left:0;border-top:1px solid var(--line)}}
+</style>
+</head>
+<body>
+<header>
+  <b>📑 မာတိကာ စစ်ဆေးရန်</b>
+  <select id="book"></select>
+  <span class="tb" id="chips">
+    <button data-f="sus" class="on">သံသယရှိ</button><button data-f="todo">မစစ်ရသေး</button><button data-f="all">အားလုံး</button><button data-f="done">စစ်ပြီး</button>
+  </span>
+  <input type="search" id="q" placeholder="ရှာရန် …" style="width:140px">
+  <span id="stat" style="color:var(--mute)"></span>
+  <span style="flex:1"></span>
+  <button id="imp">⬆ ပြန်သွင်း</button><input type="file" id="impf" accept=".json" hidden>
+  <button id="exp" class="pri">⬇ စစ်ပြီးတာ ထုတ်ပေးမည်</button>
+</header>
+<div class="hint">တစ်ကြောင်းချင်းကို ညာဘက် PDF နဲ့ ကြည့်ပြီး ညှိပါ။ <b>✅</b> = မှန်တယ်၊ စာပြင်ရင် အလိုအလျောက် "ပြင်ပြီး" ဖြစ်မယ်၊ <b>🗑</b> = ဒီမာတိကာအတန်း မလိုဘူး။ စာကြောင်းကို နှိပ်ရင် PDF က အဲဒီစာမျက်နှာကို ဖွင့်ပေးမယ်။ ကိုယ်တိုင်သိမ်းပေးထားပြီးသားပါ (ဘရောက်ဇာထဲမှာ)။</div>
+<div id="main">
+  <div id="list"></div>
+  <div id="pane"><div class="ph" id="ph">PDF</div><iframe id="fr" title="pdf"></iframe></div>
+</div>
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let T,B,REV={},filt='sus',cur=0;
+const key=(bid,pg,t)=>bid+'|'+pg+'|'+t;
+try{REV=JSON.parse(localStorage.getItem('tocrev')||'{}')}catch(e){}
+const save=()=>{try{localStorage.setItem('tocrev',JSON.stringify(REV))}catch(e){}};
+const sus=t=>/[A-Za-z]/.test(t)||t.length<3||/[က-႟][ါ-ဲ]{3,}/.test(t)||/^[၀-၉0-9\s.-]+$/.test(t);
+async function init(){
+  [T,B]=await Promise.all([fetch('data/toc.json?v='+Date.now()).then(r=>r.json()),fetch('data/books.json?v='+Date.now()).then(r=>r.json())]);
+  const cnt={};T.toc.forEach(e=>cnt[e[0]]=(cnt[e[0]]||0)+1);
+  $('#book').innerHTML=T.books.map((id,i)=>cnt[i]?`<option value="${i}">${esc((B.find(b=>b.id===id)||{}).title||id)} (${cnt[i]})</option>`:'').join('');
+  const last=+localStorage.getItem('tocbook');if(!isNaN(last)&&cnt[last])$('#book').value=last;
+  cur=+$('#book').value;render();
+}
+function rows(){const bid=T.books[cur];const q=$('#q').value.trim();
+  return T.toc.map((e,i)=>({e,i})).filter(({e})=>e[0]===cur).map(o=>{const k=key(bid,o.e[2],o.e[1]);return {...o,k,r:REV[k]}}).filter(o=>{
+    const st=o.r&&o.r.st;
+    if(q&&!(o.r&&o.r.t||o.e[1]).includes(q))return false;
+    if(filt==='sus')return !st&&sus(o.e[1]);
+    if(filt==='todo')return !st;
+    if(filt==='done')return !!st;
+    return true})}
+function render(){
+  const bid=T.books[cur];const list=rows();
+  const all=T.toc.filter(e=>e[0]===cur);const done=all.filter(e=>REV[key(bid,e[2],e[1])]).length;
+  $('#stat').textContent=`ဒီစာအုပ် ${done}/${all.length} စစ်ပြီး · ပြထားတာ ${list.length}`;
+  $('#list').innerHTML=list.length?list.map(o=>{const e=o.e,st=o.r?o.r.st:'',t=o.r&&o.r.t!=null?o.r.t:e[1],p=o.r&&o.r.p!=null?o.r.p:e[2];
+    return `<div class="row ${st} ${!st&&sus(e[1])?'sus':''}" data-k="${esc(o.k)}" data-bid="${bid}"><span class="lv">${e[3]>1?'›':''}</span><input class="p" type="number" min="1" value="${p}" title="PDF စာမျက်နှာ"><input class="t" type="text" value="${esc(t)}"><button class="ok" title="မှန်တယ်">✅</button><button class="del" title="ဖျက်မည်">🗑</button></div>`}).join(''):'<div class="hint">ဒီစစ်ထုတ်မှုမှာ မရှိတော့ပါ 🎉</div>';
+}
+function show(bid,pg){clearTimeout(show.t);show.t=setTimeout(()=>{const b=B.find(x=>x.id===bid);$('#ph').textContent=(b?b.title:bid)+' — စာမျက်နှာ '+pg;const src=`books/${bid}.pdf#page=${pg}`;const fr=$('#fr');if(fr.dataset.b===bid){fr.contentWindow.location.hash='page='+pg}else{fr.dataset.b=bid;fr.src=src}},250)}
+$('#list').addEventListener('focusin',e=>{const r=e.target.closest('.row');if(r)show(r.dataset.bid,+r.querySelector('.p').value)});
+$('#list').addEventListener('click',e=>{const r=e.target.closest('.row');if(!r)return;const k=r.dataset.k;
+  const orig=T.toc.find(x=>key(T.books[x[0]],x[2],x[1])===k);
+  const t=r.querySelector('.t').value,p=+r.querySelector('.p').value;
+  if(e.target.classList.contains('ok')){REV[k]={st:(t!==orig[1]||p!==orig[2])?'edit':'ok',t,p};save();advance(r)}
+  else if(e.target.classList.contains('del')){REV[k]={st:'del',t:orig[1],p:orig[2]};save();advance(r)}
+  else if(e.target.tagName!=='INPUT')show(r.dataset.bid,p);
+});
+$('#list').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.tagName==='INPUT'){e.preventDefault();e.target.closest('.row').querySelector('.ok').click()}});
+function advance(r){const next=r.nextElementSibling;const k=r.dataset.k;
+  if(filt==='sus'||filt==='todo'){r.remove();$('#stat').textContent='…';render0(next)}else{r.className=r.className.replace(/\b(ok|edit|del)\b/g,'')+' '+REV[k].st;render0(next)}}
+function render0(next){const nk=next&&next.dataset?next.dataset.k:null;render();if(nk){const el=[...document.querySelectorAll('.row')].find(x=>x.dataset.k===nk);if(el){el.querySelector('.t').focus();el.scrollIntoView({block:'center'})}}}
+$('#book').onchange=()=>{cur=+$('#book').value;localStorage.setItem('tocbook',cur);render();$('#list').scrollTop=0};
+$('#chips').onclick=e=>{const b=e.target.closest('button');if(!b)return;filt=b.dataset.f;[...$('#chips').children].forEach(x=>x.classList.toggle('on',x===b));render()};
+$('#q').oninput=render;
+$('#exp').onclick=()=>{
+  const out=[];for(const [k,v] of Object.entries(REV)){const [bid,pg,...t]=k.split('|');out.push({book:bid,page:+pg,title:t.join('|'),status:v.st,new_title:v.st==='edit'?v.t:undefined,new_page:v.st==='edit'&&v.p!==+pg?v.p:undefined})}
+  const blob=new Blob([JSON.stringify({exported:new Date().toISOString(),count:out.length,corrections:out},null,1)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='toc_corrections.json';a.click();
+};
+$('#imp').onclick=()=>$('#impf').click();
+$('#impf').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const j=JSON.parse(await f.text());(j.corrections||[]).forEach(c=>{REV[key(c.book,c.page,c.title)]={st:c.status,t:c.new_title!=null?c.new_title:c.title,p:c.new_page!=null?c.new_page:c.page}});save();render()}catch(err){alert('ဖိုင်ဖတ်၍မရပါ')}};
+init();
+</script>
+</body>
+</html>

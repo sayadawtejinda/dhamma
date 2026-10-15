@@ -97,6 +97,20 @@ for bi, b in enumerate(B):
             if 1 <= pg <= len(doc): rows.append((tt, pg, 1))
     for t, pg, lvl in rows: out.append([bi, t, pg, lvl])
     report.append((b['id'], b['title'][:24], src, len(rows), off, votes))
+# corrections made by hand in public/library/toc-review.html (exported as toc_corrections.json, kept next to this script)
+FIX = os.path.join(os.path.dirname(__file__), 'toc_corrections.json')
+if os.path.exists(FIX):
+    ids = [b['id'] for b in B]
+    fixes = {(c['book'], c['page'], c['title']): c for c in json.load(open(FIX, encoding='utf8'))['corrections']}
+    kept, n_edit, n_del = [], 0, 0
+    for bi, t, pg, lvl in out:
+        c = fixes.get((ids[bi], pg, t))
+        if c and c['status'] == 'del': n_del += 1; continue
+        if c and c['status'] == 'edit':
+            t, pg = c.get('new_title') or t, c.get('new_page') or pg; n_edit += 1
+        kept.append([bi, t, pg, lvl])
+    out = kept
+    print('hand corrections applied: edited', n_edit, 'deleted', n_del)
 json.dump(dict(books=[b['id'] for b in B], toc=out), open(os.path.join(LIB, 'data', 'toc.json'), 'w', encoding='utf8'), ensure_ascii=False, separators=(',', ':'))
 for r in report: print(r)
 print('entries', len(out), 'books with entries', len({r[0] for r in out}))
