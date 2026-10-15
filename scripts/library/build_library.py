@@ -59,21 +59,47 @@ if not BOOKS_ONLY:
     print('sermons', len(sermons), 'tracks', sum(len(s['tracks']) for s in sermons))
 
 
+def split_spreads(src, dst):
+    """Some PDFs have two book pages side by side on one PDF page (a 'spread'), mixed with single pages, which
+    breaks page numbers. Every spread (an unrotated page about twice as wide as the book's usual page) is split
+    into a left and a right page. Returns the number of spreads split; the file is copied as it is when none."""
+    doc = pymupdf.open(src)
+    sizes = [(round(p.rect.width), round(p.rect.height)) for p in doc if p.rotation == 0]
+    if not sizes:
+        shutil.copyfile(src, dst); return 0
+    bw, bh = max(set(sizes), key=sizes.count)
+    if bw > bh * 1.05:                 # the usual page is itself landscape: nothing to split
+        shutil.copyfile(src, dst); return 0
+    todo = [i for i, p in enumerate(doc) if p.rotation == 0 and abs(p.rect.width - 2 * bw) < .12 * 2 * bw and abs(p.rect.height - bh) < .12 * bh]
+    if not todo:
+        shutil.copyfile(src, dst); return 0
+    for i in reversed(todo):
+        r = doc[i].rect
+        doc.fullcopy_page(i, i + 1)
+        doc[i].set_cropbox(pymupdf.Rect(0, 0, r.width / 2, r.height))
+        doc[i + 1].set_cropbox(pymupdf.Rect(r.width / 2, 0, r.width, r.height))
+    doc.save(dst, garbage=3, deflate=True)
+    return len(todo)
+
 # ---- books
+if not os.path.isdir(BOOK_DIR):
+    print('book source folder not found - keeping the books already in public/library/books'); sys.exit(0)
 books = []
 for d in ('books', 'covers'):   # start clean, so deleted/renamed books disappear
     for f in os.listdir(os.path.join(OUT, d)): os.remove(os.path.join(OUT, d, f))
 for i, f in enumerate(sorted(x for x in os.listdir(BOOK_DIR) if x.lower().endswith('.pdf')), 1):
     src = os.path.join(BOOK_DIR, f)
     bid = 'b' + hashlib.md5(f[:-4].encode('utf8')).hexdigest()[:6]   # stable id: does not shift when a book is removed
-    shutil.copyfile(src, os.path.join(OUT, 'books', bid + '.pdf'))
+    dst = os.path.join(OUT, 'books', bid + '.pdf')
+    split = split_spreads(src, dst)
     pages = 0
     try:
-        doc = pymupdf.open(src); pages = len(doc)
+        doc = pymupdf.open(dst); pages = len(doc)
         pix = doc[0].get_pixmap(matrix=pymupdf.Matrix(0.5, 0.5))
         pix.save(os.path.join(OUT, 'covers', bid + '.jpg'), jpg_quality=62)
     except Exception as e:
         print('cover failed', f, e)
-    books.append(dict(id=bid, title=f[:-4], pages=pages, mb=round(os.path.getsize(src) / 1e6, 1)))
+    books.append(dict(id=bid, title=f[:-4], pages=pages, mb=round(os.path.getsize(dst) / 1e6, 1), split=split))
+    if split: print('split', split, 'spreads in', f)
 json.dump(books, open(os.path.join(OUT, 'data', 'books.json'), 'w', encoding='utf8'), ensure_ascii=False, separators=(',', ':'))
 print('books', len(books))

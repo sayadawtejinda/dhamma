@@ -101,13 +101,17 @@ for bi, b in enumerate(B):
 FIX = os.path.join(os.path.dirname(__file__), 'toc_corrections.json')
 if os.path.exists(FIX):
     ids = [b['id'] for b in B]
-    fixes = {(c['book'], c['page'], c['title']): c for c in json.load(open(FIX, encoding='utf8'))['corrections']}
+    _fx = json.load(open(FIX, encoding='utf8'))
+    fixes = {(c['book'], c['page'], c['title']): c for c in _fx['corrections']}
+    offsets = _fx.get('offsets', {})        # page shift per book for every line not corrected by hand
     kept, n_edit, n_del = [], 0, 0
     for bi, t, pg, lvl in out:
         c = fixes.get((ids[bi], pg, t))
         if c and c['status'] == 'del': n_del += 1; continue
         if c and c['status'] == 'edit':
             t, pg = c.get('new_title') or t, c.get('new_page') or pg; n_edit += 1
+        elif not c: pg = max(1, pg + offsets.get(ids[bi], 0))
+        elif c['status'] == 'ok': pg = max(1, pg + offsets.get(ids[bi], 0))
         kept.append([bi, t, pg, lvl])
     out = kept
     print('hand corrections applied: edited', n_edit, 'deleted', n_del)

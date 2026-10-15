@@ -43,8 +43,9 @@ button.on{background:var(--ac);color:#fff;border-color:var(--ac)}
   <span class="tb" id="chips">
     <button data-f="sus" class="on">သံသယရှိ</button><button data-f="todo">မစစ်ရသေး</button><button data-f="all">အားလုံး</button><button data-f="done">စစ်ပြီး</button>
   </span>
+  <label style="white-space:nowrap" title="ဖွင့်ထားရင် တစ်ကြောင်းရဲ့ စာမျက်နှာကို ပြင်တာနဲ့ ဒီစာအုပ်ရဲ့ ကျန်တဲ့ စာကြောင်းအားလုံးကို အတူ အတိုးအလျော့လုပ်ပေးမယ်"><input type="checkbox" id="follow" checked> ကျန်တာပါ လိုက်ညှိ</label>
   <input type="search" id="q" placeholder="ရှာရန် …" style="width:140px">
-  <span id="stat" style="color:var(--mute)"></span>
+  <span id="offbox" style="color:var(--mute)"></span><button id="offreset" title="ဒီစာအုပ်ရဲ့ စာမျက်နှာ ချိန်ညှိချက်ကို ပယ်ဖျက်">↺ စာမျက်နှာညှိတာ ပယ်ဖျက်</button><span id="stat" style="color:var(--mute)"></span>
   <span style="flex:1"></span>
   <button id="imp">⬆ ပြန်သွင်း</button><input type="file" id="impf" accept=".json" hidden>
   <button id="exp" class="pri">⬇ စစ်ပြီးတာ ထုတ်ပေးမည်</button>
@@ -57,10 +58,12 @@ button.on{background:var(--ac);color:#fff;border-color:var(--ac)}
 <script>
 const $=s=>document.querySelector(s);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-let T,B,REV={},filt='sus',cur=0;
+let T,B,REV={},OFF={},filt='sus',cur=0;
 const key=(bid,pg,t)=>bid+'|'+pg+'|'+t;
 try{REV=JSON.parse(localStorage.getItem('tocrev')||'{}')}catch(e){}
-const save=()=>{try{localStorage.setItem('tocrev',JSON.stringify(REV))}catch(e){}};
+try{OFF=JSON.parse(localStorage.getItem('tocoff')||'{}')}catch(e){}
+const save=()=>{try{localStorage.setItem('tocrev',JSON.stringify(REV));localStorage.setItem('tocoff',JSON.stringify(OFF))}catch(e){}};
+const off=bid=>OFF[bid]||0;
 const sus=t=>/[A-Za-z]/.test(t)||t.length<3||/[က-႟][ါ-ဲ]{3,}/.test(t)||/^[၀-၉0-9\s.-]+$/.test(t);
 async function init(){
   [T,B]=await Promise.all([fetch('data/toc.json?v='+Date.now()).then(r=>r.json()),fetch('data/books.json?v='+Date.now()).then(r=>r.json())]);
@@ -81,7 +84,8 @@ function render(){
   const bid=T.books[cur];const list=rows();
   const all=T.toc.filter(e=>e[0]===cur);const done=all.filter(e=>REV[key(bid,e[2],e[1])]).length;
   $('#stat').textContent=`ဒီစာအုပ် ${done}/${all.length} စစ်ပြီး · ပြထားတာ ${list.length}`;
-  $('#list').innerHTML=list.length?list.map(o=>{const e=o.e,st=o.r?o.r.st:'',t=o.r&&o.r.t!=null?o.r.t:e[1],p=o.r&&o.r.p!=null?o.r.p:e[2];
+  $('#offbox').textContent=off(bid)?`စာမျက်နှာညှိချက် ${off(bid)>0?'+':''}${off(bid)} · `:'';
+  $('#list').innerHTML=list.length?list.map(o=>{const e=o.e,st=o.r?o.r.st:'',t=o.r&&o.r.t!=null?o.r.t:e[1],p=o.r&&o.r.p!=null?o.r.p:Math.max(1,e[2]+off(bid));
     return `<div class="row ${st} ${!st&&sus(e[1])?'sus':''}" data-k="${esc(o.k)}" data-bid="${bid}"><span class="lv">${e[3]>1?'›':''}</span><input class="p" type="number" min="1" value="${p}" title="PDF စာမျက်နှာ"><input class="t" type="text" value="${esc(t)}"><a class="go" target="_blank" rel="noopener" href="books/${bid}.pdf#page=${p}" title="PDF ကို tab အသစ်မှာဖွင့်" style="text-decoration:none;padding:3px 6px">↗</a><button class="ok" title="မှန်တယ်">✅</button><button class="del" title="ဖျက်မည်">🗑</button></div>`}).join(''):'<div class="hint">ဒီစစ်ထုတ်မှုမှာ မရှိတော့ပါ 🎉</div>';
 }
 function show(bid,pg){clearTimeout(show.t);show.t=setTimeout(()=>{const b=B.find(x=>x.id===bid);$('#ph').textContent=(b?b.title:bid)+' — စာမျက်နှာ '+pg;const old=$('#fr');const fr=document.createElement('iframe');fr.id='fr';fr.title='pdf';fr.src=`books/${bid}.pdf#page=${pg}&zoom=page-width`;old.replaceWith(fr);$('#open').href=`books/${bid}.pdf#page=${pg}`},200)}
@@ -89,11 +93,17 @@ $('#list').addEventListener('focusin',e=>{const r=e.target.closest('.row');if(r)
 $('#list').addEventListener('click',e=>{const r=e.target.closest('.row');if(!r)return;const k=r.dataset.k;
   const orig=T.toc.find(x=>key(T.books[x[0]],x[2],x[1])===k);
   const t=r.querySelector('.t').value,p=+r.querySelector('.p').value;
-  if(e.target.classList.contains('ok')){REV[k]={st:(t!==orig[1]||p!==orig[2])?'edit':'ok',t,p};save();advance(r)}
+  if(e.target.classList.contains('ok')){REV[k]={st:(t!==orig[1]||p!==Math.max(1,orig[2]+off(r.dataset.bid)))?'edit':'ok',t,p};save();advance(r)}
   else if(e.target.classList.contains('del')){REV[k]={st:'del',t:orig[1],p:orig[2]};save();advance(r)}
   else if(!e.target.closest('a'))show(r.dataset.bid,p);
 });
-$('#list').addEventListener('change',e=>{const r=e.target.closest('.row');if(r&&e.target.classList.contains('p')){const p=+e.target.value;r.querySelector('.go').href=`books/${r.dataset.bid}.pdf#page=${p}`;show(r.dataset.bid,p)}});
+$('#list').addEventListener('change',e=>{const r=e.target.closest('.row');if(r&&e.target.classList.contains('p')){const p=+e.target.value,bid=r.dataset.bid;
+  const orig=T.toc.find(x=>key(T.books[x[0]],x[2],x[1])===r.dataset.k);const was=REV[r.dataset.k]&&REV[r.dataset.k].p!=null?REV[r.dataset.k].p:Math.max(1,orig[2]+off(bid));
+  const d=p-was;
+  if(d&&$('#follow').checked){OFF[bid]=off(bid)+d;if(REV[r.dataset.k]){REV[r.dataset.k].p=p}save();render()}
+  else{r.querySelector('.go').href=`books/${bid}.pdf#page=${p}`}
+  show(bid,p)}});
+$('#offreset').onclick=()=>{const bid=T.books[cur];if(off(bid)&&confirm('ဒီစာအုပ်ရဲ့ စာမျက်နှာညှိချက်ကို ပယ်ဖျက်မလား?')){delete OFF[bid];save();render()}};
 $('#list').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.tagName==='INPUT'){e.preventDefault();e.target.closest('.row').querySelector('.ok').click()}});
 function advance(r){const next=r.nextElementSibling;const k=r.dataset.k;
   if(filt==='sus'||filt==='todo'){r.remove();$('#stat').textContent='…';render0(next)}else{r.className=r.className.replace(/\b(ok|edit|del)\b/g,'')+' '+REV[k].st;render0(next)}}
@@ -103,11 +113,11 @@ $('#chips').onclick=e=>{const b=e.target.closest('button');if(!b)return;filt=b.d
 $('#q').oninput=render;
 $('#exp').onclick=()=>{
   const out=[];for(const [k,v] of Object.entries(REV)){const [bid,pg,...t]=k.split('|');out.push({book:bid,page:+pg,title:t.join('|'),status:v.st,new_title:v.st==='edit'?v.t:undefined,new_page:v.st==='edit'&&v.p!==+pg?v.p:undefined})}
-  const blob=new Blob([JSON.stringify({exported:new Date().toISOString(),count:out.length,corrections:out},null,1)],{type:'application/json'});
+  const blob=new Blob([JSON.stringify({exported:new Date().toISOString(),count:out.length,offsets:OFF,corrections:out},null,1)],{type:'application/json'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='toc_corrections.json';a.click();
 };
 $('#imp').onclick=()=>$('#impf').click();
-$('#impf').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const j=JSON.parse(await f.text());(j.corrections||[]).forEach(c=>{REV[key(c.book,c.page,c.title)]={st:c.status,t:c.new_title!=null?c.new_title:c.title,p:c.new_page!=null?c.new_page:c.page}});save();render()}catch(err){alert('ဖိုင်ဖတ်၍မရပါ')}};
+$('#impf').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const j=JSON.parse(await f.text());if(j.offsets)Object.assign(OFF,j.offsets);(j.corrections||[]).forEach(c=>{REV[key(c.book,c.page,c.title)]={st:c.status,t:c.new_title!=null?c.new_title:c.title,p:c.new_page!=null?c.new_page:c.page}});save();render()}catch(err){alert('ဖိုင်ဖတ်၍မရပါ')}};
 init();
 </script>
 </body>
