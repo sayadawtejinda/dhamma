@@ -120,7 +120,9 @@ h2.sec{margin:22px 0 8px;font-size:1.1rem;color:var(--accent)}
 #rd.nopali .pali{display:none}
 #rd.nobr br.a{display:none}
 #rtext h5{font-size:1em;font-weight:700;color:var(--rac);margin:1.1em 0 .1em;line-height:1.7}
-#rtext b{font-weight:800}
+#rd{font-family:"Noto Sans Myanmar","Pyidaungsu","Myanmar Text",system-ui,sans-serif}
+#rtext b{font-weight:700;color:var(--rbold,#7a1f1f);-webkit-text-stroke:.45px currentColor;paint-order:stroke fill}
+#rd.t-sepia{--rbold:#6b2410}#rd.t-dark{--rbold:#ffd9a8}
 .rnav{display:flex;align-items:center;gap:8px;padding:8px 12px;border-top:1px solid var(--rline);background:var(--rbg)}
 .rnav input[type=range]{flex:1;accent-color:var(--rac)}
 .rnav small{color:var(--rmute);white-space:nowrap}
@@ -191,7 +193,7 @@ h2.sec{margin:22px 0 8px;font-size:1.1rem;color:var(--accent)}
 <script src="data/config.js"></script>
 <script>
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
-const DV='20261014b';   // bump when the data files change, so browsers do not show old copies
+const DV='20261014c';   // bump when the data files change, so browsers do not show old copies
 const CFG=Object.assign({audioBase:'audio/'},window.LIB_CONFIG||{});
 const MD='၀၁၂၃၄၅၆၇၈၉',mn=n=>String(n).replace(/\d/g,d=>MD[d]);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
