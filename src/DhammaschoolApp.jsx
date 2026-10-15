@@ -827,6 +827,13 @@ export default function DhammaschoolApp({ entryRequest, onExit, isActive }) {
     }
   }, []);
 
+  // True only while the component is really being removed. The big init effect below is re-run whenever
+  // entryRequest changes (e.g. back to null when the student leaves, then a new object when they come back), but
+  // its one-time guard stops the second run -- so its cleanup must NOT delete the window.* handlers
+  // (goToLibrary, Home, Finish ...) on those changes, or every button dies the second time the app is opened.
+  const unmountingRef = useRef(false);
+  useEffect(() => { unmountingRef.current = false; return () => { unmountingRef.current = true; }; }, []);
+
   useEffect(() => {
     // Dev-mode double-invoke / re-mount guard — this whole script wires up
     // onclick handlers, Firestore listeners, and localStorage-backed state;
@@ -4850,6 +4857,7 @@ function renderClickableWords(text) {
         // --- END FIX ---
 
       return () => {
+      if (!unmountingRef.current) return;
       delete window.lastImageUrl;
       delete window.addManualPairRow;
       delete window.quickSetTF;
