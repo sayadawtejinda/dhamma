@@ -193,7 +193,7 @@ h2.sec{margin:22px 0 8px;font-size:1.1rem;color:var(--accent)}
 <script src="data/config.js"></script>
 <script>
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
-const DV='20261015a';   // bump when the data files change, so browsers do not show old copies
+const DV='20261015b';   // bump when the data files change, so browsers do not show old copies
 const CFG=Object.assign({audioBase:'audio/'},window.LIB_CONFIG||{});
 const MD='၀၁၂၃၄၅၆၇၈၉',mn=n=>String(n).replace(/\d/g,d=>MD[d]);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -405,13 +405,13 @@ async function renderToc(q){
  for(let i=0;i<T.toc.length&&res.length<400;i++){const k=T.norm[i].indexOf(q);if(k>=0)res.push([k,i])}
  res.sort((a,b)=>a[0]-b[0]);
  if(!res.length){box.innerHTML='<h3>မာတိကာထဲမှာ မတွေ့ပါ</h3>';return}
- box.innerHTML=`<h3>📑 မာတိကာထဲက ရလဒ် ${mn(res.length)}${res.length>=400?'+':''} ခု</h3>`+res.slice(0,150).map(([k,i])=>{const e=T.toc[i],b=B.find(x=>x.id===T.books[e[0]]);return b?`<button class="tr" data-b="${b.id}" data-p="${e[2]}"><b>${esc(e[1])}</b><small>📖 ${esc(b.title)} · စာမျက်နှာ ${mn(e[2])}</small></button>`:''}).join('');
+ box.innerHTML=`<h3>📑 မာတိကာထဲက ရလဒ် ${mn(res.length)}${res.length>=400?'+':''} ခု</h3>`+res.slice(0,150).map(([k,i])=>{const e=T.toc[i],b=B.find(x=>x.id===T.books[e[0]]);return b?`<button class="tr" data-b="${b.id}" data-p="${e[6]||e[2]}"><b>${esc(e[1])}</b><small>📖 ${esc(b.title)} · စာမျက်နှာ ${mn(e[6]||e[2])}</small></button>`:''}).join('');
 }
 $('#tocres').onclick=e=>{const t=e.target.closest('.tr');if(t)openBook(t.dataset.b,+t.dataset.p)};
 $('#rtc').onclick=async()=>{const box=$('#btoc');if(box.style.display==='block'){box.style.display='none';return}
  const T=await loadToc();const bi=T.books.indexOf(curBook.id);
  const rows=bi<0?[]:T.toc.filter(e=>e[0]===bi);
- $('#btl').innerHTML=rows.length?rows.map(e=>`<button data-p="${e[2]}" style="padding-left:${6+(e[3]-1)*14}px">${esc(e[1])} <small style="color:var(--mute)">· ${mn(e[2])}</small></button>`).join(''):'<div class="empty" style="padding:10px">ဤစာအုပ်အတွက် မာတိကာ မရှိပါ</div>';
+ $('#btl').innerHTML=rows.length?rows.map(e=>`<button data-p="${e[6]||e[2]}" style="padding-left:${6+(e[3]-1)*14}px">${esc(e[1])} <small style="color:var(--mute)">· ${mn(e[6]||e[2])}</small></button>`).join(''):'<div class="empty" style="padding:10px">ဤစာအုပ်အတွက် မာတိကာ မရှိပါ</div>';
  $('#btq').value='';box.style.display='block'};
 $('#btl').onclick=e=>{const b=e.target.closest('button');if(!b)return;const p=+b.dataset.p;$('#rpage').value=p;$('#rgo').click()};
 $('#btq').oninput=()=>{const q=nt($('#btq').value);$$('#btl button').forEach(b=>b.style.display=!q||nt(b.textContent).includes(q)?'':'none')};
