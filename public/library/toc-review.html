@@ -86,7 +86,7 @@ function render(){
   $('#stat').textContent=`ဒီစာအုပ် ${done}/${all.length} စစ်ပြီး · ပြထားတာ ${list.length}`;
   $('#offbox').textContent=off(bid)?`စာမျက်နှာညှိချက် ${off(bid)>0?'+':''}${off(bid)} · `:'';
   $('#list').innerHTML=list.length?list.map(o=>{const e=o.e,st=o.r?o.r.st:'',t=o.r&&o.r.t!=null?o.r.t:e[1],p=o.r&&o.r.p!=null?o.r.p:Math.max(1,e[2]+off(bid));
-    return `<div class="row ${st} ${!st&&sus(e[1])?'sus':''}" data-k="${esc(o.k)}" data-bid="${bid}"><span class="lv">${e[3]>1?'›':''}</span><input class="p" type="number" min="1" value="${p}" title="PDF စာမျက်နှာ"><input class="t" type="text" value="${esc(t)}"><a class="go" target="_blank" rel="noopener" href="books/${bid}.pdf#page=${p}" title="PDF ကို tab အသစ်မှာဖွင့်" style="text-decoration:none;padding:3px 6px">↗</a><button class="ok" title="မှန်တယ်">✅</button><button class="del" title="ဖျက်မည်">🗑</button></div>`}).join(''):'<div class="hint">ဒီစစ်ထုတ်မှုမှာ မရှိတော့ပါ 🎉</div>';
+    return `<div class="row ${st} ${!st&&sus(e[1])?'sus':''}" data-k="${esc(o.k)}" data-bid="${bid}" data-op="${e[2]}"><span class="lv">${e[3]>1?'›':''}</span><input class="p" type="number" min="1" value="${p}" title="PDF စာမျက်နှာ"><input class="t" type="text" value="${esc(t)}"><a class="go" target="_blank" rel="noopener" href="books/${bid}.pdf#page=${p}" title="PDF ကို tab အသစ်မှာဖွင့်" style="text-decoration:none;padding:3px 6px">↗</a><button class="ok" title="မှန်တယ်">✅</button><button class="del" title="ဖျက်မည်">🗑</button></div>`}).join(''):'<div class="hint">ဒီစစ်ထုတ်မှုမှာ မရှိတော့ပါ 🎉</div>';
 }
 function show(bid,pg){clearTimeout(show.t);show.t=setTimeout(()=>{const b=B.find(x=>x.id===bid);$('#ph').textContent=(b?b.title:bid)+' — စာမျက်နှာ '+pg;const old=$('#fr');const fr=document.createElement('iframe');fr.id='fr';fr.title='pdf';fr.src=`books/${bid}.pdf#page=${pg}&zoom=page-width`;old.replaceWith(fr);$('#open').href=`books/${bid}.pdf#page=${pg}`},200)}
 $('#list').addEventListener('focusin',e=>{const r=e.target.closest('.row');if(r)show(r.dataset.bid,+r.querySelector('.p').value)});
@@ -100,7 +100,11 @@ $('#list').addEventListener('click',e=>{const r=e.target.closest('.row');if(!r)r
 $('#list').addEventListener('change',e=>{const r=e.target.closest('.row');if(r&&e.target.classList.contains('p')){const p=+e.target.value,bid=r.dataset.bid;
   const orig=T.toc.find(x=>key(T.books[x[0]],x[2],x[1])===r.dataset.k);const was=REV[r.dataset.k]&&REV[r.dataset.k].p!=null?REV[r.dataset.k].p:Math.max(1,orig[2]+off(bid));
   const d=p-was;
-  if(d&&$('#follow').checked){OFF[bid]=off(bid)+d;if(REV[r.dataset.k]){REV[r.dataset.k].p=p}save();render()}
+  if(d&&$('#follow').checked){OFF[bid]=off(bid)+d;if(REV[r.dataset.k]){REV[r.dataset.k].p=p}save();
+    // update the other lines in place (a full redraw would drop the line you are about to click or type in)
+    document.querySelectorAll('#list .row').forEach(x=>{if(x!==r&&!REV[x.dataset.k]){const np=Math.max(1,+x.dataset.op+off(bid));x.querySelector('.p').value=np;x.querySelector('.go').href=`books/${bid}.pdf#page=${np}`}});
+    r.querySelector('.go').href=`books/${bid}.pdf#page=${p}`;
+    $('#offbox').textContent=off(bid)?`စာမျက်နှာညှိချက် ${off(bid)>0?'+':''}${off(bid)} · `:''}
   else{r.querySelector('.go').href=`books/${bid}.pdf#page=${p}`}
   show(bid,p)}});
 $('#offreset').onclick=()=>{const bid=T.books[cur];if(off(bid)&&confirm('ဒီစာအုပ်ရဲ့ စာမျက်နှာညှိချက်ကို ပယ်ဖျက်မလား?')){delete OFF[bid];save();render()}};
