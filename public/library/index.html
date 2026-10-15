@@ -193,7 +193,7 @@ h2.sec{margin:22px 0 8px;font-size:1.1rem;color:var(--accent)}
 <script src="data/config.js"></script>
 <script>
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
-const DV='20261014c';   // bump when the data files change, so browsers do not show old copies
+const DV='20261015a';   // bump when the data files change, so browsers do not show old copies
 const CFG=Object.assign({audioBase:'audio/'},window.LIB_CONFIG||{});
 const MD='၀၁၂၃၄၅၆၇၈၉',mn=n=>String(n).replace(/\d/g,d=>MD[d]);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -286,13 +286,17 @@ function renderBooks(){const q=norm($('#bq').value.trim());const l=B.filter(b=>!
  $('#blist').innerHTML=l.map(b=>`<button class="book" data-id="${b.id}"><div class="cv"><img loading="lazy" src="covers/${b.cover||b.id+'.jpg'}" alt="" onerror="this.replaceWith('📖')"></div><h4>${esc(b.title)}</h4><small>${b.pages?mn(b.pages)+' စာမျက်နှာ · ':''}${b.mb} MB</small></button>`).join('')||'<div class="empty">မတွေ့ပါ</div>'}
 $('#bq').oninput=()=>{renderBooks();renderToc($('#bq').value)};
 $('#blist').onclick=e=>{const c=e.target.closest('.book');if(c)openBook(c.dataset.id)};
+// The browser's own PDF viewer (Edge in particular) ignores page changes inside an iframe, so the book is shown in Mozilla's
+// PDF.js viewer, which always opens the right page. The PDF is read from the published site (it needs CORS, which GitHub Pages allows).
+const PDF_SITE='https://sayadawtejinda.github.io/dhamma/library/books/';
+const pdfView=(id,pg)=>'https://mozilla.github.io/pdf.js/web/viewer.html?file='+encodeURIComponent(PDF_SITE+id+'.pdf')+'#page='+pg+'&zoom=page-width';
 let curBook=null;
 function openBook(id,pg){const b=B.find(x=>x.id===id);if(!b)return;curBook=b;
  pg=pg||store.get('bk:'+id,1);$('#rtitle').textContent=b.title;$('#rpage').value=pg;$('#rpage').max=b.pages||9999;
  $('#rdl').href=`books/${b.id}.pdf`;$('#rdl').download=b.title+'.pdf';$('#rnew').href=`books/${b.id}.pdf#page=${pg}`;$('#rinfo').textContent=b.pages?`/ ${mn(b.pages)}`:'';
- $('#rframe').src=`books/${b.id}.pdf#page=${pg}`;reader.showModal();store.set('lastbook',id)}
+ $('#rframe').src=pdfView(b.id,pg);reader.showModal();store.set('lastbook',id)}
 function closeReader(){reader.close();$('#rframe').src='about:blank';$('#btoc').style.display='none'}
-$('#rgo').onclick=()=>{const p=Math.max(1,+$('#rpage').value||1);store.set('bk:'+curBook.id,p);$('#rnew').href=`books/${curBook.id}.pdf#page=${p}`;$('#rframe').src=`books/${curBook.id}.pdf#page=${p}`};
+$('#rgo').onclick=()=>{const p=Math.max(1,+$('#rpage').value||1);store.set('bk:'+curBook.id,p);$('#rnew').href=`books/${curBook.id}.pdf#page=${p}`;$('#rframe').src=pdfView(curBook.id,p)};
 $('#rpage').onkeydown=e=>{if(e.key==='Enter')$('#rgo').click()};
 
 // ---------- Reader (online texts)
