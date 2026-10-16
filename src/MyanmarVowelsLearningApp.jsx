@@ -466,7 +466,7 @@ const MVL_APP_BODY_HTML = `
             🔊
         </button>
         <button id="repeat-interval-btn" onclick="window.__mvlApp.cycleRepeatInterval()" class="game-btn text-indigo-600 border-indigo-300 hover:bg-indigo-50 hidden font-bold" style="min-width:4.5rem" title="How often the sound repeats">
-            🔁 5s
+            🔁 8s
         </button>
     </div>
 
@@ -848,12 +848,12 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
 
         // Loop controls
         let gameLoopInterval = null;
-        // How often a game repeats its sound by itself: the student picks 3 / 5 / 8 seconds or off (the button 🔁 in the
-        // toolbar); remembered on this device. Until chosen, each game keeps its own pace (Listen & Match 5 s, typing 7 s).
-        const REPEAT_CHOICES = [3, 5, 8, 0];
+        // How often a game repeats its sound by itself: the student picks 8 / 10 / 15 seconds or off (the button 🔁 in the
+        // toolbar); remembered on this device. Until chosen it is 8 seconds.
+        const REPEAT_CHOICES = [8, 10, 15, 0];
         let repeatChoice = null;
         try { const v = localStorage.getItem('mvlRepeatSeconds'); if (v !== null && REPEAT_CHOICES.includes(parseInt(v, 10))) repeatChoice = parseInt(v, 10); } catch (e) { /* ignore */ }
-        let repeatDefaultSeconds = 5;
+        let repeatDefaultSeconds = 8;
         let repeatPlayFn = null;
         function repeatLabel() { const sec = repeatChoice === null ? repeatDefaultSeconds : repeatChoice; return sec > 0 ? `🔁 ${sec}s` : '🔁 off'; }
         function scheduleRepeat(playFn, defaultSeconds) {
@@ -1196,7 +1196,7 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
             };
             
             setTimeout(playSound, 500);
-            scheduleRepeat(playSound, 5);
+            scheduleRepeat(playSound, 8);
         }
 
         function checkListenAnswer(selectedChoice, btn) {
@@ -1323,7 +1323,7 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
             
             const playSound = () => playSequence(currentTypingVowels);
             setTimeout(playSound, 500);
-            scheduleRepeat(playSound, 7);
+            scheduleRepeat(playSound, 8);
         }
 
         function checkTypingAnswer(input) {
