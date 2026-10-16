@@ -35,9 +35,9 @@
   <div class="sub" id="asof">Loading…</div>
 
   <div class="card">
-    <b>Classes</b> <span class="sub" id="chipsTitle">— classes counted in this table</span>
+    <b>Classes</b> <span class="sub">— the classes counted in this table</span>
     <div class="chips" id="chips"></div>
-    <div class="tools" id="tools" style="margin-top:10px;display:none"><button id="all">All classes</button><button id="none">None</button><button id="print">Print</button></div>
+    <div class="tools" style="margin-top:10px"><button id="print">Print</button></div>
   </div>
 
   <div class="card" style="overflow-x:auto">
@@ -48,84 +48,33 @@
   </div>
   <div class="sub">Points are counted like the SmartStudy Global Leaderboard (the first attempt of each lesson). The numbers are as of the date above; they are refreshed every week.</div>
 </div>
-<script type="module">
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
-import { getAuth, signInAnonymously, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
-import { getFirestore, doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
-
-// Which classes are left out is the teacher's choice and is kept in Firestore (config/paramiReport), so students who open
-// this page see the same table the teacher made. Only the teacher's browser (the same sign-in as the app, which is the uid
-// stored in config/teacher) can change it; for everyone else the class list is just shown, not editable.
-var firebaseConfig = { apiKey: 'AIzaSyCFwHPLW6VnQqgM-ZrisQZZaBLVrm88e9M', authDomain: 'myanmardhammaclass.firebaseapp.com', projectId: 'myanmardhammaclass', appId: '1:779222889065:web:8afbe9348c3314bef3a8f8' };
-var BASE = 'artifacts/dhamma-tutoring-app/public/data/config';
-
-var data = null, hidden = {}, isTeacher = false, ready = false;
-var $ = function (id) { return document.getElementById(id); };
-var fmt = function (n) { return Number(n).toLocaleString('en-US'); };
-function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
-
-var db = null;
-function save() {
-  if (!isTeacher || !db) return;
-  setDoc(doc(db, BASE + '/paramiReport'), { hidden: Object.keys(hidden) }, { merge: true }).catch(function (e) { console.error(e); alert('Could not save. Please try again.'); });
-}
-
-function render() {
-  var chips = $('chips'); chips.innerHTML = '';
-  $('tools').style.display = isTeacher ? '' : 'none';
-  $('chipsTitle').textContent = isTeacher ? 'tap a class to leave it out of the lessons and points (everyone sees your choice)' : 'classes counted in this table';
-  data.classes.forEach(function (c) {
-    if (!isTeacher && hidden[c]) return;
-    var l = document.createElement('label'); l.className = 'chip' + (hidden[c] ? ' off' : '');
-    if (isTeacher) {
-      var cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = !hidden[c];
-      cb.onchange = function () { if (cb.checked) delete hidden[c]; else hidden[c] = 1; save(); render(); };
-      l.appendChild(cb);
-    } else { l.style.cursor = 'default'; }
-    l.appendChild(document.createTextNode(c)); chips.appendChild(l);
-  });
-  var rows = data.students.map(function (s) {
-    var cl = s.classes.filter(function (c) { return !hidden[c.classId]; });
-    return { name: s.name, classes: cl,
-      lessons: cl.reduce(function (n, c) { return n + c.lessons; }, 0),
-      points: cl.reduce(function (n, c) { return n + c.points; }, 0) };
-  }).sort(function (a, b) { return b.points - a.points || b.lessons - a.lessons || (a.name < b.name ? -1 : 1); });
-  var tb = $('rows'); tb.innerHTML = '';
-  rows.forEach(function (r, i) {
-    var tr = document.createElement('tr');
-    var classes = r.classes.map(function (c) { return '<span class="cls">' + esc(c.classId) + ' · ' + c.lessons + ' · ' + fmt(c.points) + '</span>'; }).join('') || '<span class="zero">—</span>';
-    tr.innerHTML = '<td class="rank">' + (i + 1) + '</td><td><b>' + esc(r.name) + '</b></td><td class="hide-sm">' + classes +
-      '</td><td class="num">' + r.classes.length + '</td><td class="num">' + r.lessons + '</td><td class="num pts' + (r.points ? '' : ' zero') + '">' + fmt(r.points) + '</td>';
-    tb.appendChild(tr);
-  });
-}
-
-$('print').onclick = function () { window.print(); };
-$('all').onclick = function () { hidden = {}; save(); render(); };
-$('none').onclick = function () { data.classes.forEach(function (c) { hidden[c] = 1; }); save(); render(); };
-
-var reportPromise = fetch('paramiReport.json?' + Date.now()).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); });
-reportPromise.then(function (j) {
-  data = j;
-  $('asof').textContent = data.students.length + ' students · as of ' + new Date(data.generatedAt).toLocaleString();
-  render();
-  // then the teacher's choices (if this cannot be read the table simply shows every class)
-  try {
-    var app = initializeApp(firebaseConfig);
-    var auth = getAuth(app);
-    db = getFirestore(app);
-    var started = false;
-    onAuthStateChanged(auth, function (user) {
-      if (started) return; if (!user) { signInAnonymously(auth).catch(function () {}); return; }
-      started = true;
-      Promise.all([getDoc(doc(db, BASE + '/paramiReport')), getDoc(doc(db, BASE + '/teacher'))]).then(function (res) {
-        hidden = {}; ((res[0].exists() && res[0].data().hidden) || []).forEach(function (c) { hidden[c] = 1; });
-        isTeacher = res[1].exists() && res[1].data().uid === user.uid;
-        render();
-      }).catch(function (e) { console.error(e); });
+<script>
+// A plain page: it reads only paramiReport.json (a file on GitHub, rebuilt when the teacher confirms a change in the
+// app), no database, so any number of students can open it at no cost.
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var fmt = function (n) { return Number(n).toLocaleString('en-US'); };
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  $('print').onclick = function () { window.print(); };
+  fetch('paramiReport.json?' + Date.now()).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); }).then(function (data) {
+    $('asof').textContent = data.students.length + ' students · as of ' + new Date(data.generatedAt).toLocaleString();
+    var chips = $('chips'); chips.innerHTML = '';
+    data.classes.forEach(function (c) { var l = document.createElement('span'); l.className = 'chip'; l.style.cursor = 'default'; l.textContent = c; chips.appendChild(l); });
+    var rows = data.students.map(function (s) {
+      return { name: s.name, classes: s.classes,
+        lessons: s.classes.reduce(function (n, c) { return n + c.lessons; }, 0),
+        points: s.classes.reduce(function (n, c) { return n + c.points; }, 0) };
+    }).sort(function (a, b) { return b.points - a.points || b.lessons - a.lessons || (a.name < b.name ? -1 : 1); });
+    var tb = $('rows'); tb.innerHTML = '';
+    rows.forEach(function (r, i) {
+      var tr = document.createElement('tr');
+      var classes = r.classes.map(function (c) { return '<span class="cls">' + esc(c.classId) + ' · ' + c.lessons + ' · ' + fmt(c.points) + '</span>'; }).join('') || '<span class="zero">—</span>';
+      tr.innerHTML = '<td class="rank">' + (i + 1) + '</td><td><b>' + esc(r.name) + '</b></td><td class="hide-sm">' + classes +
+        '</td><td class="num">' + r.classes.length + '</td><td class="num">' + r.lessons + '</td><td class="num pts' + (r.points ? '' : ' zero') + '">' + fmt(r.points) + '</td>';
+      tb.appendChild(tr);
     });
-  } catch (e) { console.error(e); }
-}).catch(function () { $('asof').textContent = 'The report is not ready yet. It is made by the weekly update.'; });
+  }).catch(function () { $('asof').textContent = 'The report is not ready yet.'; });
+})();
 </script>
 </body>
 </html>

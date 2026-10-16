@@ -9,6 +9,9 @@ on:
     - cron: "*/15 * * * *"
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 concurrency:
   group: close-open-sessions
   cancel-in-progress: false
@@ -34,3 +37,24 @@ jobs:
 
       - name: Pay SmartStudy contest prizes that are due
         run: node scripts/pay-contest-prizes.mjs
+
+      # The Parami report: when the teacher pressed "Confirm" in the app, rebuild its files and put them on GitHub
+      # (the students' page reads them as plain files). With nothing to publish this reads one small document.
+      - name: Rebuild the Parami report if the teacher confirmed a change
+        id: parami
+        run: node scripts/publish-parami-report.mjs
+
+      - name: Put the Parami report on GitHub
+        if: steps.parami.outputs.requestedAt != ''
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add public/paramiReport.json public/paramiReportFull.json
+          if git diff --cached --quiet; then
+            echo "Parami report: files unchanged."
+          else
+            git commit -m "Parami report published"
+            git pull --rebase origin main
+            git push
+          fi
+          node scripts/mark-parami-published.mjs "${{ steps.parami.outputs.requestedAt }}"

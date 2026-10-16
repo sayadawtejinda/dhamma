@@ -1,6 +1,7 @@
 import { listenWithHistory, listenLessonsWithHistory } from './studentHistory';
 import { isOnlineStatusDay, isParamiClassTime } from './presenceDay';
 import { PeekName, AvatarThumb } from './AvatarPeek';
+import ParamiReportEditor from './ParamiReportEditor';
 import { startLiveWatchListener, setLiveWatch, useLiveWatch, liveWatchUntilMs } from './liveWatch';
 import { SPECIAL_AWARD_ITEMS } from './festivals';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
@@ -6847,17 +6848,8 @@ ${toSend.map(l => '• ' + l.title).join(', ')}`
       {viewMode === 'students' && (
         <div className="bg-rose-50/70 backdrop-blur-sm p-6 rounded-xl shadow-lg border border-rose-200">
 
-          {/* The Parami group's SmartStudy report: a page (made weekly) with each student's classes, lessons and points. */}
-          <div className="mb-8">
-            <a
-              href={`${import.meta.env.BASE_URL}parami-report.html`}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-block text-sm font-semibold text-pink-700 bg-pink-50 hover:bg-pink-100 border border-pink-200 rounded-lg px-4 py-2"
-            >
-              🌸 Parami report (SmartStudy) ↗
-            </a>
-          </div>
+          {/* The Parami group's SmartStudy report: the teacher edits it here and confirms; students read a plain page on GitHub. */}
+          <ParamiReportEditor />
 
           {waitingStarAnnouncements.length > 0 && (
             <div className="mb-8">
