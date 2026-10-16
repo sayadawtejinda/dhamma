@@ -615,10 +615,12 @@ export function CharacterSvg({ skinColor, hair, outfitColor, outfitPattern, acce
   }
 
   return (
-    <svg viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg" className={className} style={style}>
+    <svg viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg" className={className} style={{ filter: 'drop-shadow(0 2px 3px rgba(0,0,0,0.35))', ...style }}>
       <ellipse cx="100" cy="224" rx="58" ry="9" fill="#00000022" />
       <path d={BODY_PATH} fill={(ROBE_PATTERNS[outfitPattern] && ROBE_PATTERNS[outfitPattern][0]) || outfitColor} />
       {ROBE_PATTERNS[outfitPattern] && React.createElement(ROBE_PATTERNS[outfitPattern][1], { color: outfitColor })}
+      {/* a dark outline around the robe, so it stands out even when it is the same colour as the background */}
+      <path d={BODY_PATH} fill="none" stroke="#1B1B1B" strokeOpacity="0.55" strokeWidth="3.5" strokeLinejoin="round" />
       <circle cx="68" cy="108" r="8" fill={skinColor} opacity="0.55" />
       <circle cx="132" cy="108" r="8" fill={skinColor} opacity="0.55" />
       <circle cx="100" cy="95" r="55" fill={skinColor} />
