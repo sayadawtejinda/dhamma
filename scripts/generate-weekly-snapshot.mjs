@@ -20,7 +20,7 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously } from 'firebase/auth';
 import { getFirestore, collection, query, where, getDocs, Timestamp, doc, updateDoc } from 'firebase/firestore';
-import { writeFileSync, mkdirSync, readFileSync } from 'node:fs';
+import { writeFileSync, mkdirSync, readFileSync, readdirSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { firebaseConfig, appId } from '../src/firebaseConfig.js';
@@ -111,17 +111,61 @@ async function main() {
 
   if (want('core')) {
   const startOfYear = new Date(new Date().getFullYear(), 0, 1);
+
+  // Only what is NEW is read from Firebase. Every student's year of schedule + sessions already sits in
+  // public/studentHistory/{uid}.json from the earlier runs, so a normal run reads just the schedule entries and
+  // sessions from the last 3 weeks (about 1,000 documents) and adds them to what is on disk. About every 4 weeks (or
+  // with --full, or when there is no state yet) everything is read again, which also catches entries that were deleted.
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const STATE_PATH = join(__dirname, '..', 'public', 'weeklyState.json');
+  const KEYS_PATH = join(__dirname, '..', 'public', 'studentWeeklyKeys.json');
+  const HISTORY_DIR = join(__dirname, '..', 'public', 'studentHistory');
+  mkdirSync(HISTORY_DIR, { recursive: true });
+  let state = {};
+  try { state = JSON.parse(readFileSync(STATE_PATH, 'utf8')); } catch (e) { state = {}; }
+  const FULL = process.argv.includes('--full') || !state.lastRunMs || !state.fullAt || Date.now() - state.fullAt > 28 * DAY_MS;
+  const sinceMs = FULL ? 0 : state.lastRunMs - 21 * DAY_MS;
+  const sinceTs = Timestamp.fromMillis(sinceMs);
+  console.log(FULL ? 'Attendance: reading everything (full run)' : `Attendance: reading only what is new since ${new Date(sinceMs).toISOString().slice(0, 10)}`);
+  const schedRef = collection(db, `${publicDataPath}/teacherSchedule`);
+  const sessRef = collection(db, `${publicDataPath}/studySessions`);
   const [studentsSnap, scheduleSnap, sessionsSnap, recurringSnap] = await Promise.all([
     getDocs(collection(db, `${publicDataPath}/students`)),
-    getDocs(query(collection(db, `${publicDataPath}/teacherSchedule`), where('startTime', '>=', Timestamp.fromDate(startOfYear)))),
-    getDocs(query(collection(db, `${publicDataPath}/studySessions`), where('startTime', '>=', Timestamp.fromDate(startOfYear)))),
+    getDocs(FULL ? schedRef : query(schedRef, where('startTime', '>=', sinceTs))),
+    getDocs(FULL ? sessRef : query(sessRef, where('startTime', '>=', sinceTs))),
     getDocs(collection(db, `${publicDataPath}/recurringSchedule`)),
   ]);
 
+  // the earlier runs' data, from the history files (their timestamps were saved as { _ms })
+  const revive = (v) => {
+    if (v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 1 && typeof v._ms === 'number') return Timestamp.fromMillis(v._ms);
+    if (Array.isArray(v)) return v.map(revive);
+    if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, revive(x)]));
+    return v;
+  };
+  const inYear = (e) => e.startTime && typeof e.startTime.toDate === 'function' && e.startTime.toDate() >= startOfYear;
+  const prevLessonsByUid = {};
+  const scheduleById = new Map();
+  const sessionsById = new Map();
+  if (!FULL) {
+    for (const f of existsSync(HISTORY_DIR) ? readdirSync(HISTORY_DIR).filter(x => x.endsWith('.json')) : []) {
+      try {
+        const h = JSON.parse(readFileSync(join(HISTORY_DIR, f), 'utf8'));
+        (h.schedule || []).forEach(e => scheduleById.set(e.id, revive(e)));
+        (h.sessions || []).forEach(x => sessionsById.set(x.id, revive(x)));
+        if (h.lessons && h.lessons.length) prevLessonsByUid[decodeURIComponent(f.replace(/\.json$/, ''))] = h.lessons;
+      } catch (e) { /* a damaged file: the next full run rebuilds it */ }
+    }
+  }
+  scheduleSnap.docs.forEach(d => scheduleById.set(d.id, { id: d.id, ...d.data() }));
+  sessionsSnap.docs.forEach(d => sessionsById.set(d.id, { id: d.id, ...d.data() }));
+  const allRealSchedule = [...scheduleById.values()];
+  const allSessions = [...sessionsById.values()];
+
   const students = studentsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-  const realSchedule = scheduleSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-  const sessions = sessionsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const realSchedule = allRealSchedule.filter(inYear);
   const recurringSlots = recurringSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const sessions = allSessions.filter(inYear);
 
   const now = new Date();
   const synthetic = synthesizeOccurrencesFromRecurringSchedule(recurringSlots, realSchedule, startOfYear, now);
@@ -246,12 +290,6 @@ async function main() {
   // ---- Per-student "weeks attended" (all time), for the Bodhi Tree and Shrine Room ----
   // Both used to read a student's whole schedule + whole session history every time
   // they were opened. One small static file replaces that (up to a week old).
-  const [allSchedSnap, allSessSnap] = await Promise.all([
-    getDocs(collection(db, `${publicDataPath}/teacherSchedule`)),
-    getDocs(collection(db, `${publicDataPath}/studySessions`)),
-  ]);
-  const allRealSchedule = allSchedSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-  const allSessions = allSessSnap.docs.map(d => ({ id: d.id, ...d.data() }));
   const allSchedule = [...allRealSchedule, ...synthesizeOccurrencesFromRecurringSchedule(recurringSlots, allRealSchedule, startOfYear, now)];
   const weekKeyOf = (date) => {
     const day = date.getDay();
@@ -268,8 +306,13 @@ async function main() {
     if (!attended) return;
     (weeksByUid[e.studentUid] = weeksByUid[e.studentUid] || new Set()).add(weekKeyOf(d));
   });
+  // a normal run only sees this year, so the weeks found are added to the weeks kept from the earlier runs
+  const keysByUid = {};
+  if (!FULL) { try { Object.entries(JSON.parse(readFileSync(KEYS_PATH, 'utf8')).weeks || {}).forEach(([uid, list]) => { keysByUid[uid] = new Set(list); }); } catch (e) { /* none yet */ } }
+  Object.entries(weeksByUid).forEach(([uid, set]) => { const k = (keysByUid[uid] = keysByUid[uid] || new Set()); set.forEach(w => k.add(w)); });
+  writeFileSync(KEYS_PATH, JSON.stringify({ weeks: Object.fromEntries(Object.entries(keysByUid).map(([uid, set]) => [uid, [...set].sort()])) }));
   const attendedWeeks = {};
-  Object.entries(weeksByUid).forEach(([uid, set]) => { attendedWeeks[uid] = set.size; });
+  Object.entries(keysByUid).forEach(([uid, set]) => { attendedWeeks[uid] = set.size; });
   // The teacher's own tree grants (scripts/treeOverrides.json): a minimum number of weeks for a student.
   try {
     const grants = JSON.parse(readFileSync(join(__dirname, 'treeOverrides.json'), 'utf8'));
@@ -284,24 +327,29 @@ async function main() {
     if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, serialize(x)]));
     return v;
   };
-  const HISTORY_DIR = join(__dirname, '..', 'public', 'studentHistory');
-  mkdirSync(HISTORY_DIR, { recursive: true });
-  const inYear = (e) => e.startTime && typeof e.startTime.toDate === 'function' && e.startTime.toDate() >= startOfYear;
   const histByUid = {};
   allSessions.filter(inYear).forEach(sx => { if (sx.studentUid) (histByUid[sx.studentUid] = histByUid[sx.studentUid] || { sessions: [], schedule: [] }).sessions.push(serialize(sx)); });
   // Lessons already reported, kept as a static list too (the live part of a student's lesson list is then only the open ones).
-  const lessonsSnapAll = await getDocs(collection(db, `${publicDataPath}/lessons`));
+  // (a normal run reads only the lessons reported in the last 3 weeks and keeps the earlier ones from the history files)
+  const lessonsRef = collection(db, `${publicDataPath}/lessons`);
+  const lessonsSnapAll = await getDocs(FULL ? lessonsRef : query(lessonsRef, where('reportedAt', '>=', sinceTs)));
+  const lessonsByUid = {};
+  Object.entries(prevLessonsByUid).forEach(([uid, list]) => { lessonsByUid[uid] = new Map(list.map(l => [l.id, l])); });
   lessonsSnapAll.docs.forEach(d => {
     const l = d.data();
     if (!l.studentUid || l.status !== 'reported') return;
-    const h = (histByUid[l.studentUid] = histByUid[l.studentUid] || { sessions: [], schedule: [] });
-    (h.lessons = h.lessons || []).push(serialize({ id: d.id, ...l }));
+    (lessonsByUid[l.studentUid] = lessonsByUid[l.studentUid] || new Map()).set(d.id, serialize({ id: d.id, ...l }));
+  });
+  Object.entries(lessonsByUid).forEach(([uid, map]) => {
+    const h = (histByUid[uid] = histByUid[uid] || { sessions: [], schedule: [] });
+    h.lessons = [...map.values()];
   });
   allRealSchedule.filter(inYear).forEach(e => { if (e.studentUid && e.studentUid !== 'offline') (histByUid[e.studentUid] = histByUid[e.studentUid] || { sessions: [], schedule: [] }).schedule.push(serialize(e)); });
   for (const [uid, h] of Object.entries(histByUid)) {
     writeFileSync(join(HISTORY_DIR, `${encodeURIComponent(uid)}.json`), JSON.stringify({ generatedAtMs: Date.now(), lessons: [], ...h }));
   }
 
+  writeFileSync(STATE_PATH, JSON.stringify({ lastRunMs: Date.now(), fullAt: FULL ? Date.now() : state.fullAt }));
   console.log(`Wrote ${attendanceRankedList.length} attendance rows and ${trophyList.length} trophy rows to ${OUT_PATH}`);
   }
 
