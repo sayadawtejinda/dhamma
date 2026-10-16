@@ -672,7 +672,7 @@ const Leaderboard = React.memo(({ globalLeaderboardScores, setSelectedName, hand
 
 // ---- 2-week contest -----------------------------------------------------------------
 // The teacher starts it for a class; the prizes are paid automatically when the two weeks end
-// (scripts/pay-contest-prizes.mjs, every 15 minutes). The students read the contest from the
+// (scripts/pay-contest-prizes.mjs, once an hour). The students read the contest from the
 // class doc they already read, so showing it costs nothing extra.
 const CONTEST_PRIZES = [7000, 5000, 4000, 4000, 3000, 3000, 2000, 2000, 1000, 1000];
 const CONTEST_DAYS = 14;
@@ -775,7 +775,7 @@ const ContestCard = ({ classId, contest }) => {
       {running ? (
         <>
           <p className="text-sm text-amber-900 mt-1">Running: started {fmtContestDate(contest.startedAt)} · ends <b>{fmtContestDate(contest.endsAt)}</b>.</p>
-          <p className="text-sm text-amber-900">{ended ? 'The time is up. The prizes will be paid automatically within about 15 minutes.' : 'The prizes are paid automatically a few minutes after it ends.'}</p>
+          <p className="text-sm text-amber-900">{ended ? 'The time is up. The prizes will be paid automatically within about an hour.' : 'The prizes are paid automatically within an hour after it ends.'}</p>
           <p className="text-xs text-amber-800 mt-1">Prizes: {(contest.prizes || []).map((c, i) => `${ordinalWord(i + 1)} ${c}`).join(' · ')}</p>
           {ended && <button onClick={payNow} disabled={busy} className="mt-2 mr-2 px-4 py-2 font-bold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 shadow">{busy ? 'Paying…' : '💰 Pay prizes now'}</button>}
           {!ended && <button onClick={cancelContest} disabled={busy} className="mt-2 px-3 py-1 text-sm font-bold bg-white text-red-600 border border-red-300 rounded-lg hover:bg-red-50">Cancel contest</button>}
