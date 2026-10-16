@@ -465,6 +465,9 @@ const MVL_APP_BODY_HTML = `
         <button id="replay-sound-btn" onclick="window.__mvlApp.replayCurrentSound()" class="game-btn text-blue-600 border-blue-300 hover:bg-blue-50 hidden" title="Replay Sound">
             🔊
         </button>
+        <button id="repeat-interval-btn" onclick="window.__mvlApp.cycleRepeatInterval()" class="game-btn text-indigo-600 border-indigo-300 hover:bg-indigo-50 hidden font-bold" style="min-width:4.5rem" title="How often the sound repeats">
+            🔁 5s
+        </button>
     </div>
 
     <div class="main-container">
@@ -845,6 +848,31 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
 
         // Loop controls
         let gameLoopInterval = null;
+        // How often a game repeats its sound by itself: the student picks 3 / 5 / 8 seconds or off (the button 🔁 in the
+        // toolbar); remembered on this device. Until chosen, each game keeps its own pace (Listen & Match 5 s, typing 7 s).
+        const REPEAT_CHOICES = [3, 5, 8, 0];
+        let repeatChoice = null;
+        try { const v = localStorage.getItem('mvlRepeatSeconds'); if (v !== null && REPEAT_CHOICES.includes(parseInt(v, 10))) repeatChoice = parseInt(v, 10); } catch (e) { /* ignore */ }
+        let repeatDefaultSeconds = 5;
+        let repeatPlayFn = null;
+        function repeatLabel() { const sec = repeatChoice === null ? repeatDefaultSeconds : repeatChoice; return sec > 0 ? `🔁 ${sec}s` : '🔁 off'; }
+        function scheduleRepeat(playFn, defaultSeconds) {
+            repeatPlayFn = playFn;
+            repeatDefaultSeconds = defaultSeconds;
+            clearInterval(gameLoopInterval);
+            const sec = repeatChoice === null ? defaultSeconds : repeatChoice;
+            if (sec > 0) gameLoopInterval = setInterval(playFn, sec * 1000);
+            const btn = byId('repeat-interval-btn');
+            if (btn) { btn.textContent = repeatLabel(); btn.classList.remove('hidden'); }
+        }
+        function cycleRepeatInterval() {
+            const current = repeatChoice === null ? repeatDefaultSeconds : repeatChoice;
+            const i = REPEAT_CHOICES.indexOf(current);
+            repeatChoice = REPEAT_CHOICES[(i + 1) % REPEAT_CHOICES.length];
+            try { localStorage.setItem('mvlRepeatSeconds', String(repeatChoice)); } catch (e) { /* ignore */ }
+            if (repeatPlayFn) scheduleRepeat(repeatPlayFn, repeatDefaultSeconds);
+            else { const btn = byId('repeat-interval-btn'); if (btn) btn.textContent = repeatLabel(); }
+        }
         let currentQuestionPool = [];
         let originalFullPool = [];
         let currentTypingVowels = [];
@@ -1041,6 +1069,8 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
             chatInput.placeholder = "Type the vowels you want to hear...";
             
             byId('replay-sound-btn').classList.add('hidden');
+            byId('repeat-interval-btn').classList.add('hidden');
+            repeatPlayFn = null;
             currentGameType = null;
             createMessage("Game stopped.", false);
         };
@@ -1166,8 +1196,7 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
             };
             
             setTimeout(playSound, 500);
-            clearInterval(gameLoopInterval);
-            gameLoopInterval = setInterval(playSound, 5000);
+            scheduleRepeat(playSound, 5);
         }
 
         function checkListenAnswer(selectedChoice, btn) {
@@ -1209,6 +1238,7 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
             currentClickSequence = currentQuestionPool[0];
 
             byId('replay-sound-btn').classList.remove('hidden');
+            byId('repeat-interval-btn').classList.add('hidden');
             gameFeedback.innerHTML = `<p class="text-lg text-green-600">👆 Click the sequence of sounds you heard!</p>`;
             
             const playSound = () => playSequence(currentClickSequence);
@@ -1293,8 +1323,7 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
             
             const playSound = () => playSequence(currentTypingVowels);
             setTimeout(playSound, 500);
-            clearInterval(gameLoopInterval);
-            gameLoopInterval = setInterval(playSound, 7000);
+            scheduleRepeat(playSound, 7);
         }
 
         function checkTypingAnswer(input) {
@@ -1734,7 +1763,7 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
         // this one can't silently overwrite it.
         window.__mvlApp = {
           stopGame, closeConsonantModal, closeGameMenu, switchMode,
-          openConsonantModal, readAloud, openGameMenu, replayCurrentSound,
+          openConsonantModal, readAloud, openGameMenu, replayCurrentSound, cycleRepeatInterval,
           handleVowelClick, startGameSession,
           depositCoinsToShrineRoom,
         };
