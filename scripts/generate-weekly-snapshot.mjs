@@ -26,7 +26,6 @@ import { dirname, join } from 'node:path';
 import { firebaseConfig, appId } from '../src/firebaseConfig.js';
 import { refreshClassSnapshots, CLASS_DIR } from './class-snapshots.mjs';
 import { refreshContentSnapshots, refreshAnnouncementsSnapshot, refreshAvatarSnapshot, refreshScheduleSnapshot } from './content-snapshots.mjs';
-import { refreshParamiReport } from './parami-report.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const OUT_PATH = join(__dirname, '..', 'public', 'weeklySnapshot.json');
@@ -311,7 +310,6 @@ async function main() {
     // every score live (see class-snapshots.mjs: only what is new is read, and a quiet week changes nothing).
     await refreshClassSnapshots(db, appId, { full: process.argv.includes('--full') });
     await refreshAnnouncementsSnapshot(db, appId);
-    await refreshParamiReport(db, appId);
   }
   if (want('content')) {
     await refreshContentSnapshots(db);

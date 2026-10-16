@@ -1,0 +1,46 @@
+name: Parami report
+
+# Rebuilds the Parami report (https://sayadawtejinda.github.io/dhamma/parami-report.html) -- by hand only, when the
+# teacher wants it (about once a year): Actions -> "Parami report" -> Run workflow. First save the choice of classes in
+# the app (Students tab -> 🌸 Parami report -> Save my choice). This is the only time Firebase is read for the report.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: parami-report
+  cancel-in-progress: false
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Rebuild the report
+        run: node scripts/rebuild-parami-report.mjs
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add public/paramiReport.json public/paramiReportFull.json public/classSnapshots
+          if git diff --cached --quiet; then
+            echo "Nothing changed."
+          else
+            git commit -m "Parami report rebuilt"
+            git pull --rebase origin main
+            git push
+          fi

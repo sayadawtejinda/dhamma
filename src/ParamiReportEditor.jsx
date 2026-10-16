@@ -4,12 +4,14 @@ import { db } from './firebase';
 import { appId } from './firebaseConfig';
 
 // The teacher's side of the Parami report (the students' page is public/parami-report.html, a plain page that reads one
-// file on GitHub, so it costs nothing however many students open it). Here the teacher sees every class, leaves out the
-// ones that should not count, and presses Confirm: that writes the choice to Firestore (config/paramiReport), and within
-// about 15 minutes the "close-open-sessions" job rebuilds the report files from the latest class files and puts them on
-// GitHub. New SmartStudy classes appear in the list by themselves the next time the files are rebuilt.
+// file on GitHub, so it costs nothing however many students open it). Used about once a year:
+//   1. here: leave out the classes that should not count, press "Save my choice"
+//   2. on GitHub: Actions -> "Parami report" -> Run workflow. That is the ONLY time Firebase is read for the report: it
+//      brings in the newest scores, rebuilds the report files (new SmartStudy classes included) and puts them on GitHub.
+// Opening this editor reads one small settings document; nothing else is read or kept running.
 const SETTINGS = () => doc(db, `artifacts/${appId}/public/data/config/paramiReport`);
 const fmt = (n) => Number(n).toLocaleString('en-US');
+const RUN_URL = 'https://github.com/sayadawtejinda/dhamma/actions/workflows/parami-report.yml';
 const when = (ms) => (ms ? new Date(ms).toLocaleString() : '');
 
 export default function ParamiReportEditor() {
@@ -28,7 +30,7 @@ export default function ParamiReportEditor() {
         getDoc(SETTINGS()),
       ]);
       const s = snap.exists() ? snap.data() : {};
-      if (!res) { setError('The report data is not ready yet. It is made by the weekly update, or when you press Confirm.'); }
+      if (!res) { setError('The report data is not ready yet. Press Run on GitHub to make it.'); }
       setFull(res);
       setSettings(s);
       setHidden(Object.fromEntries((s.hidden || []).map(c => [c, 1])));
@@ -40,14 +42,13 @@ export default function ParamiReportEditor() {
   const confirm = async () => {
     setBusy(true);
     try {
-      await setDoc(SETTINGS(), { hidden: Object.keys(hidden), requestedAt: Date.now() }, { merge: true });
-      setSettings(prev => ({ ...prev, hidden: Object.keys(hidden), requestedAt: Date.now() }));
-      alert('Confirmed. It goes on GitHub within about 15 minutes, and a few minutes later students see it.');
+      await setDoc(SETTINGS(), { hidden: Object.keys(hidden), savedAt: Date.now() }, { merge: true });
+      setSettings(prev => ({ ...prev, hidden: Object.keys(hidden), savedAt: Date.now() }));
+      alert('Saved. Now open GitHub and press Run workflow on "Parami report" (the link under the table), and a few minutes later students see it.');
     } catch (e) { console.error(e); alert('Could not confirm. Please try again.'); }
     setBusy(false);
   };
 
-  const waiting = settings.requestedAt && settings.requestedAt > (settings.publishedAt || 0);
   const rows = full ? full.students.map(s => {
     const cl = s.classes.filter(c => !hidden[c.classId]);
     return { name: s.name, classes: cl, lessons: cl.reduce((n, c) => n + c.lessons, 0), points: cl.reduce((n, c) => n + c.points, 0) };
@@ -98,16 +99,16 @@ export default function ParamiReportEditor() {
           )}
           <div className="flex flex-wrap items-center gap-3 mt-3">
             <button type="button" disabled={busy || !full} onClick={confirm} className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-bold hover:bg-emerald-700 disabled:opacity-50">
-              {busy ? '…' : '✅ Confirm and publish'}
+              {busy ? '…' : '✅ Save my choice'}
             </button>
+            <a href={RUN_URL} target="_blank" rel="noreferrer" className="px-4 py-2 bg-gray-800 text-white rounded-lg text-sm font-bold hover:bg-gray-900">▶ Run on GitHub ↗</a>
             <a href={`${import.meta.env.BASE_URL}parami-report.html`} target="_blank" rel="noreferrer" className="text-sm font-semibold text-pink-700 underline">Students' page ↗</a>
           </div>
           <p className="text-xs text-gray-500 mt-2">
-            {waiting ? `⏳ Confirmed ${when(settings.requestedAt)} — waiting to go on GitHub (about 15 minutes).`
-              : settings.publishedAt ? `✅ Published ${when(settings.publishedAt)}.` : 'Nothing published yet.'}
-            {changed ? ' You have changes that are not confirmed yet.' : ''}
+            {settings.savedAt ? `Saved ${when(settings.savedAt)}.` : 'Nothing saved yet.'}
+            {changed ? ' You have changes that are not saved yet.' : ''}
           </p>
-          <p className="text-xs text-gray-400 mt-1">New SmartStudy classes appear here after the next rebuild (press Confirm to refresh the numbers too).</p>
+          <p className="text-xs text-gray-400 mt-1">1) Save my choice. 2) Run on GitHub → "Run workflow" (it brings the newest scores and any new classes, and updates the students' page). Do this when you want a new report, for example once a year.</p>
         </div>
       )}
     </div>

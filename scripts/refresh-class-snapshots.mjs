@@ -7,7 +7,6 @@ import { getFirestore } from 'firebase/firestore';
 import { firebaseConfig, appId } from '../src/firebaseConfig.js';
 import { refreshClassSnapshots } from './class-snapshots.mjs';
 import { refreshContentSnapshots, refreshAnnouncementsSnapshot, refreshAvatarSnapshot } from './content-snapshots.mjs';
-import { refreshParamiReport } from './parami-report.mjs';
 
 const app = initializeApp(firebaseConfig);
 await signInAnonymously(getAuth(app));
@@ -16,5 +15,4 @@ await refreshClassSnapshots(db, appId, { full: process.argv.includes('--full') }
 await refreshContentSnapshots(db);
 await refreshAnnouncementsSnapshot(db, appId);
 await refreshAvatarSnapshot(db);
-await refreshParamiReport(db, appId);
 process.exit(0);
