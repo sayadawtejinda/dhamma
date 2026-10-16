@@ -14,18 +14,12 @@ import { readFileSync, writeFileSync, existsSync, statSync } from 'node:fs';
 import { join, isAbsolute, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { gemini, loadKey, GEMINI_KEY_FILE, GAP_MS } from './gemini.mjs';
+import { AGE_LEVELS, LEVEL_SPECS, countWords, levelMaxWords, cleanLessonText, checkLevelText, alignAnswer, checkQuiz, baseRules, levelRules, quizSchema } from './lesson-rules.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DRY = process.argv.includes('--dry');
-let MODEL = process.env.GEMINI_MODEL || 'gemini-3.8-flash'; // changed automatically if Google has retired it (see pickModel)
-const GAP_MS = parseInt(process.env.GEMINI_GAP_MS || '4500', 10); // pause between requests
 const LEVELS = ['storyteller', 'explorer', 'adventurer', 'voyager'];
-const AGE_LEVELS = {
-  storyteller: 'Storytellers (Ages 5+ / Beginner)',
-  explorer: 'Explorers (Ages 6-8)',
-  adventurer: 'Adventurers (Ages 9-11)',
-  voyager: 'Voyagers (Ages 12+)',
-};
 
 const rl = createInterface({ input, output });
 const ask = async (q, def = '') => { const a = (await rl.question(q + (def ? ` [${def}]` : '') + ': ')).trim(); return a || def; };
@@ -59,75 +53,75 @@ function parseStories(text) {
     .filter(s => s.text.length > 80);
 }
 
-// ---- Gemini -------------------------------------------------------------------------------------------------------
-// Google retires model names from time to time ("no longer available"). When that happens, ask Google which models
-// this key may use and take the newest ordinary "flash" one.
-async function pickModel(key) {
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?pageSize=200&key=${key}`);
-  if (!res.ok) throw new Error(`Could not list the Gemini models (HTTP ${res.status}). Is the key right?`);
-  const list = ((await res.json()).models || [])
-    .filter(m => (m.supportedGenerationMethods || []).includes('generateContent'))
-    .map(m => m.name.replace(/^models\//, ''))
-    .filter(n => /^gemini-[\d.]+-flash$/.test(n));
-  const version = (n) => parseFloat((n.match(/^gemini-([\d.]+)-/) || [])[1]) || 0;
-  list.sort((a, b) => version(b) - version(a));
-  if (!list.length) throw new Error('No usable Gemini flash model was found for this key.');
-  return list[0];
-}
-let lastCall = 0;
-async function gemini(key, payload, tries = 6) {
-  for (let attempt = 0; attempt < tries; attempt++) {
-    const wait = lastCall + GAP_MS - Date.now();
-    if (wait > 0) await new Promise(r => setTimeout(r, wait));
-    lastCall = Date.now();
-    try {
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${key}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
-      });
-      if (res.status === 429 || res.status >= 500) {
-        const back = Math.min(90, 10 * (attempt + 1));
-        console.log(`   (Gemini asked to wait, trying again in ${back}s...)`);
-        await new Promise(r => setTimeout(r, back * 1000));
-        continue;
-      }
-      if (res.status === 404 && !globalThis.__modelPicked) {
-        globalThis.__modelPicked = true;
-        MODEL = await pickModel(key);
-        console.log(`   (that model is gone; using ${MODEL} instead)`);
-        continue;
-      }
-      if (!res.ok) throw new Error(`HTTP ${res.status}: ${(await res.text()).slice(0, 300)}`);
-      const j = await res.json();
-      const text = j.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '';
-      if (!text.trim()) throw new Error('empty answer');
-      return text;
-    } catch (e) {
-      if (attempt === tries - 1) throw e;
-      await new Promise(r => setTimeout(r, 5000));
-    }
+
+const FORMAT_PROMPT = `You are an expert editor for children's learning materials. Your task is to take the provided raw lesson text and format it into visually appealing and readable English markdown. Crucially, do not change the original facts, meaning, or educational content. Only adjust the presentation. Do NOT use any headings (like # or ##). Use bold text (**text**) for important words or phrases. Use numbered (1.) or bulleted (-) lists if appropriate. Use italic text (*text*) if appropriate. Do NOT add any extra text, comments, or explanations outside of the formatted content. Only return the formatted markdown content.`;
+
+// The same steps as the teacher screen of the "smartstudy Quiz - fixed" app (rules in lesson-rules.mjs).
+// The story is in Burmese, so its word count says nothing about English length: the level limits alone are used.
+const masterWordsOf = (text) => {
+  const latin = (text.match(/[A-Za-z]/g) || []).length;
+  return latin > text.length * 0.3 ? countWords(text) : 0;
+};
+
+// ONE call writes all 4 levels (as in the app); a level that breaks its limits is then redone on its own.
+async function writeLevels(key, master) {
+  const masterWords = masterWordsOf(master);
+  const specText = LEVELS.map(l => {
+    const sp = LEVEL_SPECS[l];
+    return `"${l}" -- for ${sp.who}. ${Math.min(sp.minWords, levelMaxWords(l, masterWords))} to ${levelMaxWords(l, masterWords)} words in total, never more. No sentence longer than ${sp.maxSentenceWords} words, at most ${sp.maxSentences} sentences.\n${sp.rules.map(r => '  - ' + r).join('\n')}`;
+  }).join('\n\n');
+  const systemPrompt = `You are an expert children's educational writer. Rewrite the lesson you are given 4 times, once for each reading level below. Every fact you write must be true to the original; leaving things out is fine and often best, never add new facts. Plain text only: no title, no headings, no markdown, no quotation marks, no emojis.\n\nThe 4 levels:\n\n${specText}\n\nThe youngest level must be much shorter and simpler than the others. Return JSON with the 4 texts.`;
+  const schema = { type: 'OBJECT', properties: Object.fromEntries(LEVELS.map(l => [l, { type: 'STRING' }])), required: LEVELS, propertyOrdering: LEVELS };
+  let parsed = null;
+  for (let attempt = 0; attempt < 3 && !parsed; attempt++) {
+    const text = await gemini(key, { contents: [{ parts: [{ text: master }] }], systemInstruction: { parts: [{ text: systemPrompt }] }, generationConfig: { responseMimeType: 'application/json', responseSchema: schema } });
+    try { parsed = JSON.parse(text); } catch (e) { parsed = null; }
   }
-  throw new Error('Gemini did not answer');
+  if (!parsed) throw new Error('Gemini did not return the 4 levels');
+  const out = {};
+  for (const l of LEVELS) {
+    let text = cleanLessonText(parsed[l] || '');
+    let problems = text ? checkLevelText(text, l, masterWords) : ['it is empty'];
+    const spec = LEVEL_SPECS[l];
+    for (let attempt = 0; attempt < 2 && problems.length; attempt++) {
+      console.log(`   ${l}: ${problems.join('; ')} -- writing that level again`);
+      const prompt = `You are an expert children's educational writer. Rewrite the lesson you are given for ${spec.who} (${AGE_LEVELS[l]}).\n\nHARD LIMITS (they will be checked):\n- Between ${Math.min(spec.minWords, levelMaxWords(l, masterWords))} and ${levelMaxWords(l, masterWords)} words in total. Never more than ${levelMaxWords(l, masterWords)}. Do not make it much longer than the original lesson.\n- No sentence longer than ${spec.maxSentenceWords} words. No more than ${spec.maxSentences} sentences.\n\nHOW TO WRITE IT:\n${spec.rules.map(r => '- ' + r).join('\n')}\n- Every fact you do write must be true to the original lesson. It is fine, and often best, to leave things out; never add new facts.\n- Plain text only: no title, no headings, no markdown, no quotation marks, no emojis. Do not put a line break before a full stop.\n- Return ONLY the rewritten lesson text, nothing else.\n\nYour previous answer was rejected because ${problems.join('; ')}. Write it again, shorter and simpler, and respect every limit.`;
+      const again = cleanLessonText(await gemini(key, { contents: [{ parts: [{ text: master }] }], systemInstruction: { parts: [{ text: prompt }] } }));
+      const p2 = checkLevelText(again, l, masterWords);
+      if (p2.length <= problems.length) { text = again; problems = p2; }
+    }
+    out[l] = { text, problems };
+  }
+  return out;
 }
 
-const levelPrompt = (level) => `You are an expert children's educational writer. Rewrite the given lesson content in English so it is appropriate for this reading level: ${AGE_LEVELS[level]}. Adjust vocabulary difficulty, sentence length, and total word count to match this age group (younger levels: very short sentences, simple words, fewer words overall; older levels: richer vocabulary, longer sentences, more detail). Keep all facts and meaning accurate. Do not add headings. Return only the rewritten lesson text, nothing else.`;
-const FORMAT_PROMPT = `You are an expert editor for children's learning materials. Your task is to take the provided raw lesson text and format it into visually appealing and readable English markdown. Crucially, do not change the original facts, meaning, or educational content. Only adjust the presentation. Do NOT use any headings (like # or ##). Use bold text (**text**) for important words or phrases. Use numbered (1.) or bulleted (-) lists if appropriate. Use italic text (*text*) if appropriate. Do NOT add any extra text, comments, or explanations outside of the formatted content. Only return the formatted markdown content.`;
-const QUIZ_BASE = `You are a helpful educational assistant. Generate a quiz based on the provided lesson. The quiz must contain exactly 10 questions and use simple, clear English: Five Multiple Choice Questions (MCQ) with 4 options and a single correct answer. Five True/False (TF) questions. The response MUST be a JSON array matching the provided schema.`;
-const QUIZ_PROMPTS = {
-  storyteller: `(Ages 5+) ${QUIZ_BASE} Make extremely simple.`,
-  explorer: `(Ages 6-8) ${QUIZ_BASE} Make simple.`,
-  adventurer: `(Ages 9-11) ${QUIZ_BASE} Make standard.`,
-  voyager: `(Ages 12+) ${QUIZ_BASE} Make challenging.`,
-};
-const QUIZ_SCHEMA = { type: 'ARRAY', items: { type: 'OBJECT', properties: { type: { type: 'STRING', enum: ['mcq', 'tf'] }, text: { type: 'STRING' }, correct: { type: 'STRING' }, options: { type: 'ARRAY', items: { type: 'STRING' } } }, required: ['type', 'text', 'correct'], propertyOrdering: ['type', 'text', 'options', 'correct'] } };
+async function writeQuiz(key, title, text, level) {
+  let questions = [], problems = [];
+  const isSoft = (p) => /too long for this age|ask about the same thing/.test(p);
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const fix = attempt === 0 ? '' : `\n\nYour previous quiz was rejected because ${problems.join('; ')}. Write the whole quiz again and fix this.`;
+    const raw = await gemini(key, {
+      contents: [{ parts: [{ text: `Lesson title: "${title}"\nLesson text:\n${text}` }] }],
+      systemInstruction: { parts: [{ text: `${baseRules}\n${levelRules[level]}${fix}` }] },
+      generationConfig: { responseMimeType: 'application/json', responseSchema: quizSchema, temperature: 0.4 },
+    });
+    try { questions = JSON.parse(raw); } catch (e) { questions = []; }
+    problems = checkQuiz(questions, level);
+    if (problems.filter(p => !isSoft(p)).length === 0) { problems = []; break; }
+  }
+  if (problems.length) throw new Error(`${level} quiz: ${problems.slice(0, 3).join('; ')}`);
+  return questions.map(alignAnswer);
+}
 
 async function makeLesson(key, story, index) {
   const master = `${story.heading}\n\n${story.text}`;
+  process.stdout.write('   writing the 4 reading levels... ');
+  const levels = await writeLevels(key, master);
   const content = {};
-  for (const level of LEVELS) {
-    process.stdout.write(`   ${level} text... `);
-    content[level] = (await gemini(key, { contents: [{ parts: [{ text: master }] }], systemInstruction: { parts: [{ text: levelPrompt(level) }] } })).trim();
-    console.log('ok');
-  }
+  LEVELS.forEach(l => { content[l] = levels[l].text; });
+  console.log(LEVELS.map(l => `${l} ${countWords(content[l])}`).join(', '));
+  const warnings = LEVELS.filter(l => levels[l].problems.length).map(l => `${l}: ${levels[l].problems.join('; ')}`);
+  if (warnings.length) console.log('   ⚠ please check: ' + warnings.join(' | '));
   process.stdout.write('   title... ');
   const title = (await gemini(key, { contents: [{ parts: [{ text: `Lesson content:\n${content.adventurer}\n\nSuggest one short, clear English title for this lesson (5 words or fewer). Return only the title text, nothing else.` }] }] })).replace(/["\n]/g, '').trim() || `Lesson ${index + 1}`;
   console.log(title);
@@ -140,18 +134,7 @@ async function makeLesson(key, story, index) {
   const questions = {};
   for (const level of LEVELS) {
     process.stdout.write(`   quiz ${level}... `);
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      const text = await gemini(key, {
-        contents: [{ parts: [{ text: `Generate a 10-question quiz for: "${title}". Content: "${content[level]}"` }] }],
-        systemInstruction: { parts: [{ text: QUIZ_PROMPTS[level] }] },
-        generationConfig: { responseMimeType: 'application/json', responseSchema: QUIZ_SCHEMA },
-      });
-      try {
-        const q = JSON.parse(text);
-        if (Array.isArray(q) && q.length === 10) { questions[level] = q; break; }
-      } catch (e) { /* try again */ }
-      if (attempt === 3) throw new Error(`Gemini did not give 10 questions for ${level}`);
-    }
+    questions[level] = await writeQuiz(key, title, content[level], level);
     console.log('ok');
   }
   return {
@@ -162,6 +145,7 @@ async function makeLesson(key, story, index) {
 
 // ---- main ---------------------------------------------------------------------------------------------------------
 console.log(DRY ? '\n(--dry: Gemini is not called)\n' : '\n📝 Make lessons with Gemini\n');
+const abhi = (await ask('1 = SmartStudy lessons, 2 = Abhidhamma lessons', '1')) === '2';
 const name = await ask('Stories file name (the notebook .txt)');
 const file = findFile(name);
 if (!file) die(`I could not find "${name}" (looked in this folder, Downloads, Desktop and Documents).`);
@@ -171,10 +155,26 @@ console.log(`Found ${stories.length} stories:`);
 stories.forEach((s, i) => console.log(`  ${i + 1}. ${s.heading.slice(0, 70)}  (${s.text.length} characters)`));
 if (DRY) { rl.close(); process.exit(0); }
 
-let key = process.env.GEMINI_API_KEY || '';
-const keyFile = join(__dirname, 'gemini-key.txt');
-if (!key && existsSync(keyFile)) key = readFileSync(keyFile, 'utf8').trim();
-if (!key) die(`No Gemini key. Save your key as one line in ${keyFile} (get it at https://aistudio.google.com/apikey).`);
+// Abhidhamma: the lesson is the Burmese text itself. Nothing is asked from Gemini here: add-lessons.bat adds the 5
+// picture names to each lesson and then makes the 4 age versions (English text, discussion questions, quiz).
+if (abhi) {
+  const stampA = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
+  const outA = await ask('Save the lessons as', `abhidhamma-${stampA}.json`);
+  const fileA = isAbsolute(outA) ? outA : join(homedir(), 'Downloads', outA);
+  const lessonsA = stories.map((s, i) => ({
+    title: s.heading.replace(/^ကလေးများအတွက်\s*/, '').trim() || `Lesson ${i + 1}`,
+    burmeseContent: s.text,
+  }));
+  writeFileSync(fileA, JSON.stringify({ lessons: lessonsA }, null, 2));
+  console.log(`
+Done: ${lessonsA.length} lesson(s) in ${fileA}`);
+  console.log('Next: put the pictures in Pictures\\Screenshots (split-sheets.bat if they are sheets) and double-click add-lessons.bat, choose 2 = Abhidhamma.');
+  rl.close();
+  process.exit(0);
+}
+
+const key = loadKey();
+if (!key) die(`No Gemini key. Save your key as one line in ${GEMINI_KEY_FILE} (get it at https://aistudio.google.com/apikey).`);
 
 const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
 const outName = await ask('Save the lessons as', `lessons-${stamp}.json`);
@@ -186,7 +186,7 @@ if (existsSync(outFile)) {
 }
 const lessons = [...done];
 const save = () => writeFileSync(outFile, JSON.stringify({ classId: '', timestamp: Date.now(), lessons }, null, 2));
-const minutes = Math.ceil(((stories.length - done.length) * 17 * GAP_MS) / 60000);
+const minutes = Math.ceil(((stories.length - done.length) * 12 * GAP_MS) / 60000);
 console.log(`\nAbout ${minutes} minute(s). You can leave it running.\n`);
 
 for (let i = done.length; i < stories.length; i++) {

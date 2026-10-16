@@ -19,6 +19,8 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously } from 'firebase/auth';
 import { getFirestore, collection, doc, getDocs, getDoc, setDoc, updateDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { firebaseConfig, appId } from '../src/firebaseConfig.js';
+import { loadKey, GEMINI_KEY_FILE } from './gemini.mjs';
+import { makeVariant, AGE_GROUPS } from './abhi-variants.mjs';
 
 const DRY = process.argv.includes('--dry');
 const SCREENSHOTS = process.env.LESSON_PICTURES || join(homedir(), 'Pictures', 'Screenshots');
@@ -27,6 +29,7 @@ const REPO_DIR = process.env.LESSON_IMAGE_REPO_DIR || join(homedir(), 'dhammasch
 const RAW_BASE = (branch) => `https://raw.githubusercontent.com/${IMAGE_REPO}/${branch}/`;
 const ABHI = 'artifacts/lesson-translator-app-v6/public/data';
 const IMAGES_PER_LESSON = 5;
+const abhiDocs = []; // the Abhidhamma lessons that were loaded, for the age-versions step
 
 const rl = createInterface({ input, output });
 const ask = async (q, def = '') => { const a = (await rl.question(q + (def ? ` [${def}]` : '') + ': ')).trim(); return a || def; };
@@ -201,6 +204,7 @@ if (which === 'smartstudy') {
       id, classId, title: l.title || `Lesson ${i + 1}`, burmeseContent: l.burmeseContent || '', imageBaseUrl: l.imageBaseUrl,
       variants: l.variants || {}, createdAt: Timestamp.fromMillis(now + i * 1000),
     });
+    abhiDocs.push({ id, title: l.title || `Lesson ${i + 1}`, content: l.burmeseContent || '', hasVariants: Object.keys(l.variants || {}).length >= 4 });
     added++;
   }
   console.log(`✅ ${added} lesson(s) added to Abhidhamma class "${classId}".`);
@@ -211,6 +215,31 @@ if (needed) {
   use.forEach(f => unlinkSync(join(SCREENSHOTS, f)));
   console.log(`🗑️ The ${needed} used screenshot(s) were deleted from ${SCREENSHOTS}.`);
 }
+// 4. Abhidhamma: the 4 age versions (English text, discussion questions, quiz) -- what the app's Generate button does
+if (which === 'abhidhamma' && abhiDocs.some(d => !d.hasVariants)) {
+  const key = loadKey();
+  if (!key) {
+    console.log(`\nThe age versions were NOT made: no Gemini key (save it in ${GEMINI_KEY_FILE}), or use the Generate buttons in the app.`);
+  } else if ((await ask('\nMake the 4 age versions of each lesson now with Gemini? About 3 minutes per lesson (y/n)', 'y')).toLowerCase().startsWith('y')) {
+    for (const [n, d] of abhiDocs.filter(x => !x.hasVariants).entries()) {
+      console.log(`Lesson ${n + 1}: ${d.title}`);
+      const variants = {};
+      for (const group of Object.keys(AGE_GROUPS)) {
+        try {
+          process.stdout.write(`   ${group}... `);
+          variants[group] = await makeVariant(key, d.title, d.content, group);
+          console.log('ok');
+        } catch (e) { console.log('failed: ' + e.message); }
+      }
+      if (Object.keys(variants).length) {
+        await setDoc(doc(db, `${ABHI}/classes/${classId}/lessons/${d.id}`), { variants }, { merge: true });
+        console.log(`   saved ${Object.keys(variants).length} of 4 versions.`);
+      }
+    }
+    console.log('If some versions failed, open that lesson in the app and press its Generate button for the missing ones.');
+  }
+}
+
 console.log('\nAll done. Open the app and refresh to see the new lessons.');
 rl.close();
 process.exit(0);
