@@ -9,3 +9,4 @@ Paramattha2.txt
 
 # sermon audio is hosted elsewhere (12 GB) -- never commit it
 public/library/audio/
+scripts/gemini-key.txt
