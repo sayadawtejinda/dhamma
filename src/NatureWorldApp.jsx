@@ -29,9 +29,9 @@ const GRID_COLS = 12;
 const GRID_ROWS = 5;
 const MAX_PLOTS = GRID_COLS * GRID_ROWS;
 const FREE_PLOTS = 10;
-// Cost to unlock the NEXT plot grows by 50% with every plot already bought
-// (see PLOT_COST_GROWTH), so the first few are cheap and a big world takes
-// a long time.
+// The price of each plot you buy rises gently from FIRST_PLOT_COST (the first plot after the free ones) to
+// LAST_PLOT_COST (the very last plot), so every student can afford the whole world one day. It is worked out
+// when a plot is bought, so land bought earlier at the old prices is unchanged.
 // At most this many plots can be bought per week (Monday-based week).
 const LAND_PLOTS_PER_WEEK = 2;
 const currentWeekKey = () => {
@@ -40,8 +40,9 @@ const currentWeekKey = () => {
   return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
 };
 const FIRST_PLOT_COST = 40;
-const PLOT_COST_GROWTH = 1.5; // each plot bought makes the next one cost 150% of the last
-const plotCost = (alreadyUnlocked) => Math.round(FIRST_PLOT_COST * Math.pow(PLOT_COST_GROWTH, Math.max(0, alreadyUnlocked - FREE_PLOTS)));
+const LAST_PLOT_COST = 1000;
+const PLOT_COST_GROWTH = Math.pow(LAST_PLOT_COST / FIRST_PLOT_COST, 1 / (MAX_PLOTS - FREE_PLOTS - 1)); // about 1.068 per plot
+const plotCost = (alreadyUnlocked) => Math.min(LAST_PLOT_COST, Math.round(FIRST_PLOT_COST * Math.pow(PLOT_COST_GROWTH, Math.max(0, alreadyUnlocked - FREE_PLOTS))));
 
 const TREE_OPTIONS = [
   { id: 'pine', name: 'Pine Tree', emoji: '🌲', cost: 10, kind: 'tree' },
