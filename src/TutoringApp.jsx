@@ -902,6 +902,33 @@ const teacherScheduleCollection = collection(db, `${publicDataPath}/teacherSched
 // teacherSchedule doc for every week's occurrence. teacherSchedule itself is
 // left untouched as the historical record for dates before this existed.
 const recurringScheduleCollection = collection(db, `${publicDataPath}/recurringSchedule`);
+
+// When a student's weekly slot is added, changed or removed, the old dated entries of an earlier repeating batch
+// (they have a recurrenceId) for FUTURE dates that no longer match any of the student's weekly slots would keep
+// showing in the Weekly Schedule at the old time. This removes exactly those; one-off entries (no recurrenceId),
+// past dates, and dates that still match a slot are left alone. Times are compared in California time.
+const PT_PARTS = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false });
+const ptDayAndTime = (ms) => {
+  const p = Object.fromEntries(PT_PARTS.formatToParts(new Date(ms)).map(x => [x.type, x.value]));
+  return { day: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(p.weekday), hm: `${p.hour === '24' ? '00' : p.hour}:${p.minute}` };
+};
+async function clearStaleDatedEntries(studentUid) {
+  if (!studentUid || studentUid === 'offline') return 0;
+  try {
+    const slots = (await getDocs(query(recurringScheduleCollection, where('studentUid', '==', studentUid)))).docs.map(d => d.data());
+    if (!slots.length) return 0;
+    const future = await getDocs(query(teacherScheduleCollection, where('studentUid', '==', studentUid), where('startTime', '>=', Timestamp.now())));
+    let n = 0;
+    for (const d of future.docs) {
+      const e = d.data();
+      if (!e.recurrenceId) continue;
+      const s = ptDayAndTime(e.startTime.toMillis()); const en = ptDayAndTime(e.endTime.toMillis());
+      if (slots.some(r => r.dayOfWeek === s.day && r.startTime === s.hm && r.endTime === en.hm)) continue;
+      await deleteDoc(d.ref); n++;
+    }
+    return n;
+  } catch (e) { console.error('Could not clear old dated entries:', e); return 0; }
+}
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const groupsCollection = collection(db, `${publicDataPath}/studentGroups`);
 const announcementsCollection = collection(db, `${publicDataPath}/announcements`);
@@ -2751,6 +2778,7 @@ Each one will see the Teacher in their Visitors list, with a gift waiting to ope
             groupId: null,
             ...slotFields,
           });
+          clearStaleDatedEntries(studentUid);
         }
         setManualStudentName('');
         setScheduleSelectedGroupId('');
@@ -3192,7 +3220,10 @@ ${toSend.map(l => '• ' + l.title).join(', ')}`
     else return;
     
     try {
+      let slotOwner = null;
+      if (type === 'recurringSchedule') { try { slotOwner = (await getDoc(docRef)).data()?.studentUid || null; } catch (e) { /* ignore */ } }
       await deleteDoc(docRef);
+      if (slotOwner) clearStaleDatedEntries(slotOwner);
       closeDeleteModal();
     } catch (error) {
       console.error("Error deleting item:", error);
