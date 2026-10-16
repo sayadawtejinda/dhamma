@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DRY = process.argv.includes('--dry');
-const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+let MODEL = process.env.GEMINI_MODEL || 'gemini-3.8-flash'; // changed automatically if Google has retired it (see pickModel)
 const GAP_MS = parseInt(process.env.GEMINI_GAP_MS || '4500', 10); // pause between requests
 const LEVELS = ['storyteller', 'explorer', 'adventurer', 'voyager'];
 const AGE_LEVELS = {
@@ -60,6 +60,20 @@ function parseStories(text) {
 }
 
 // ---- Gemini -------------------------------------------------------------------------------------------------------
+// Google retires model names from time to time ("no longer available"). When that happens, ask Google which models
+// this key may use and take the newest ordinary "flash" one.
+async function pickModel(key) {
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?pageSize=200&key=${key}`);
+  if (!res.ok) throw new Error(`Could not list the Gemini models (HTTP ${res.status}). Is the key right?`);
+  const list = ((await res.json()).models || [])
+    .filter(m => (m.supportedGenerationMethods || []).includes('generateContent'))
+    .map(m => m.name.replace(/^models\//, ''))
+    .filter(n => /^gemini-[\d.]+-flash$/.test(n));
+  const version = (n) => parseFloat((n.match(/^gemini-([\d.]+)-/) || [])[1]) || 0;
+  list.sort((a, b) => version(b) - version(a));
+  if (!list.length) throw new Error('No usable Gemini flash model was found for this key.');
+  return list[0];
+}
 let lastCall = 0;
 async function gemini(key, payload, tries = 6) {
   for (let attempt = 0; attempt < tries; attempt++) {
@@ -76,7 +90,13 @@ async function gemini(key, payload, tries = 6) {
         await new Promise(r => setTimeout(r, back * 1000));
         continue;
       }
-      if (!res.ok) throw new Error(`HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
+      if (res.status === 404 && !globalThis.__modelPicked) {
+        globalThis.__modelPicked = true;
+        MODEL = await pickModel(key);
+        console.log(`   (that model is gone; using ${MODEL} instead)`);
+        continue;
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}: ${(await res.text()).slice(0, 300)}`);
       const j = await res.json();
       const text = j.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '';
       if (!text.trim()) throw new Error('empty answer');
