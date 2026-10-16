@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dhamma Measures · အတိုင်းအတာ</title>
+<meta name="theme-color" content="#7a1f1f">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Myanmar:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#fff7ea;--bg2:#fdeccc;--card:#fff;--ink:#3a1e12;--mute:#8a6a52;--line:#ecd7b4;--ac:#b4381e;--ac2:#e8a21a;--shadow:0 8px 26px rgba(122,52,18,.14)}
+@media (prefers-color-scheme:dark){:root{--bg:#1c1410;--bg2:#2a1c14;--card:#2c211a;--ink:#f6e8d2;--mute:#c2a888;--line:#4a372a;--ac:#e2623f;--ac2:#f2b84a;--shadow:0 8px 26px rgba(0,0,0,.45)}}
+:root[data-theme=light]{--bg:#fff7ea;--bg2:#fdeccc;--card:#fff;--ink:#3a1e12;--mute:#8a6a52;--line:#ecd7b4;--ac:#b4381e;--ac2:#e8a21a;--shadow:0 8px 26px rgba(122,52,18,.14)}
+:root[data-theme=dark]{--bg:#1c1410;--bg2:#2a1c14;--card:#2c211a;--ink:#f6e8d2;--mute:#c2a888;--line:#4a372a;--ac:#e2623f;--ac2:#f2b84a;--shadow:0 8px 26px rgba(0,0,0,.45)}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 Inter,"Noto Sans Myanmar",system-ui,sans-serif}
+.my{font-family:"Noto Sans Myanmar","Pyidaungsu","Myanmar Text",sans-serif;color:var(--mute)}
+body[data-lang=en] .my{display:none}
+body[data-lang=my] .en{display:none}
+body[data-lang=my] .my{color:inherit}
+header{background:linear-gradient(135deg,#7a1f1f,#b4381e 60%,#e8a21a 135%);color:#fff;padding:22px 16px 56px;position:relative;overflow:hidden}
+header::after{content:"☸";position:absolute;right:-20px;top:-34px;font-size:180px;opacity:.12}
+header .my{color:rgba(255,255,255,.85)}
+.wrap{max-width:1000px;margin:0 auto}
+header h1{margin:0;font-size:1.7rem;line-height:1.3;padding-top:22px}
+header p{margin:6px 0 0;opacity:.92}
+.ctl{position:absolute;right:12px;top:10px;display:flex;gap:6px;z-index:2}
+.ctl button{background:rgba(255,255,255,.2);border:0;border-radius:18px;color:#fff;padding:4px 10px;font:inherit;font-size:.85rem;cursor:pointer}
+.ctl button.on{background:#fff;color:#7a1f1f}
+nav{margin:-30px auto 0;max-width:1000px;padding:0 12px;position:relative;z-index:3;display:flex;gap:6px;overflow-x:auto}
+nav button{flex:1;min-width:max-content;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 14px;font:inherit;color:var(--ink);cursor:pointer;box-shadow:var(--shadow);line-height:1.35}
+nav button small{display:block;color:var(--mute);font-size:.78rem}
+nav button.on{background:linear-gradient(135deg,var(--ac),var(--ac2));color:#fff;border-color:transparent}
+nav button.on small{color:rgba(255,255,255,.9)}
+main{max-width:1000px;margin:0 auto;padding:18px 12px 60px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px 18px;margin:14px 0;box-shadow:var(--shadow)}
+.card h2{margin:0 0 4px;font-size:1.2rem;color:var(--ac)}
+.card h3{margin:14px 0 4px;font-size:1.02rem}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:end}
+label{display:block;font-size:.85rem;color:var(--mute);margin-bottom:3px}
+input,select{font:inherit;color:var(--ink);background:var(--bg);border:2px solid var(--line);border-radius:12px;padding:9px 12px;min-width:0;max-width:100%}
+input:focus,select:focus{outline:none;border-color:var(--ac2)}
+input[type=number]{width:140px}
+.seg{display:inline-flex;border:2px solid var(--line);border-radius:12px;overflow:hidden}
+.seg button{background:var(--bg);border:0;padding:8px 14px;font:inherit;color:var(--ink);cursor:pointer;line-height:1.35}
+.seg button.on{background:var(--ac);color:#fff}
+.seg button.on .my{color:#fff}
+table{width:100%;border-collapse:collapse;font-size:.93rem}
+th,td{padding:7px 9px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{color:var(--mute);font-weight:600;font-size:.8rem;text-transform:uppercase;letter-spacing:.04em}
+td.n{font-variant-numeric:tabular-nums;white-space:nowrap}
+tr.hl td{background:rgba(232,162,26,.16);font-weight:600}
+.tw{overflow-x:auto}
+.res{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;margin-top:12px}
+.tile{background:var(--bg2);border-radius:14px;padding:10px 12px}
+.tile b{display:block;font-size:1.15rem;font-variant-numeric:tabular-nums}
+.tile>span{color:var(--mute);font-size:.85rem}
+.pill{display:inline-block;border-radius:999px;padding:2px 11px;font-size:.78rem;color:#fff;margin-right:6px}
+.bud{background:#c26a00}.maj{background:#1f7a55}.pak{background:#5b3a8a}
+.pers{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px}
+.pers .tile{border-left:6px solid}
+.pers .b{border-color:#c26a00}.pers .m{border-color:#1f7a55}.pers .p{border-color:#5b3a8a}
+.eq{background:linear-gradient(135deg,rgba(232,162,26,.2),rgba(180,56,30,.12));border-radius:16px;padding:14px 16px;margin-top:12px}
+.eq .big{font-size:1.25rem;font-weight:700;line-height:1.5}
+.note{background:var(--bg2);border-left:5px solid var(--ac2);border-radius:12px;padding:10px 14px;color:var(--mute);font-size:.9rem;margin-top:12px}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.chip{background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:6px 14px;cursor:pointer;font:inherit;color:var(--ink);font-size:.9rem;text-align:left;line-height:1.4}
+.chip:hover{border-color:var(--ac2)}
+ul.clean{padding-left:20px;margin:6px 0}
+ul.clean li{margin:7px 0}
+.hide{display:none}
+@media(max-width:560px){header h1{font-size:1.4rem}input[type=number]{width:110px}.ctl{flex-wrap:wrap;justify-content:flex-end;left:8px}}
+</style>
+</head>
+<body data-lang="both">
+<header><div class="ctl"><button data-l="both" class="on">EN + မြန်မာ</button><button data-l="en">EN</button><button data-l="my">မြန်မာ</button><button id="th" title="Light / dark">🌓</button></div>
+<div class="wrap"><h1>☸ Dhamma Measures<br><span class="my" style="font-size:1.05rem">အတိုင်းအတာ — ရှေးခေတ်နှင့် ယခုခေတ်</span></h1>
+<p>Old Burmese units, the Buddha's span and cubit, and today's feet, inches and metres.<br><span class="my">မြန်မာရှေးအတိုင်းအတာ၊ ဘုရားရှင်၏ ထွာ၊ တောင်နှင့် ယခုခေတ် ပေ၊ လက်မ၊ မီတာ။</span></p></div></header>
+<nav id="tabs">
+ <button data-t="vin" class="on">Vinaya spans<small class="my">ဝိနည်း ထွာ/တောင်</small></button>
+ <button data-t="conv">Converter<small class="my">ပြောင်းလဲရန်</small></button>
+ <button data-t="ref">Old Burmese tables<small class="my">ရှေးအတိုင်းအတာဇယား</small></button>
+ <button data-t="how">How it works<small class="my">တွက်ပုံ</small></button>
+</nav>
+<main>
+
+<section id="vin">
+ <div class="card">
+  <h2>The Buddha, the "middle" man and the ordinary man<br><span class="my" style="font-size:.95rem">ဘုရားရှင်၊ မဇ္ဈိမပုရိသနှင့် ပကတိပုရိသ</span></h2>
+  <p>Vinaya rules often say "<i>so many spans of the <b>Sugata</b></i>" (the Buddha's own span). The Buddha was much bigger than an ordinary man, so his span is long. Choose how to calculate, then convert.<br><span class="my">ဝိနည်းစည်းမျဉ်းများတွင် "သုဂတအထွာ" ဟု ဆိုလေ့ရှိသည်။ ဘုရားရှင်၏ အထွာသည် ပကတိလူ၏ အထွာထက် များစွာ ရှည်သည်။ တွက်နည်းကို ရွေးပြီး ပြောင်းလဲကြည့်ပါ။</span></p>
+  <div class="row" style="margin-top:8px"><div><label>Method <span class="my">တွက်နည်း</span></label>
+   <div class="seg" id="method"><button data-m="mv" class="on">Majjhima-Vaḍḍhakī<br><span class="my" style="font-size:.75rem">မဇ္ဈိမဝဍ္ဎကီ</span></button><button data-m="en">English 18-inch<br><span class="my" style="font-size:.75rem">အင်္ဂလိပ်တွက်နည်း</span></button></div></div>
+   <div><label>Show lengths in <span class="my">ထုတ်ပြမည့်ယူနစ်</span></label><div class="seg" id="sys"><button data-s="imp" class="on">ft / in</button><button data-s="met">m / cm</button></div></div></div>
+  <div class="pers" id="persons" style="margin-top:14px"></div>
+  <div class="note" id="methodNote"></div>
+ </div>
+
+ <div class="card">
+  <h2>Convert a length<br><span class="my" style="font-size:.95rem">အလျား တစ်ခုကို ပြောင်းကြည့်ရန်</span></h2>
+  <div class="row">
+   <div><label>Amount <span class="my">ပမာဏ</span></label><input type="number" id="vq" value="8" step="any" min="0"></div>
+   <div><label>Unit <span class="my">ယူနစ်</span></label><select id="vu"></select></div>
+   <div><label>Whose measure? <span class="my">ဘယ်သူ့အတိုင်းအတာ</span></label><select id="vp"></select></div>
+  </div>
+  <div class="chips" id="presets"></div>
+  <div class="eq" id="veq"></div>
+  <h3>The same length in everyone's units <span class="my">ထိုအလျားကို သုံးမျိုးလုံး၏ ယူနစ်ဖြင့်</span></h3>
+  <div class="tw"><table id="vtab"></table></div>
+ </div>
+
+ <div class="card">
+  <h2>Worked examples from the Vinaya text<br><span class="my" style="font-size:.95rem">ဝိနည်းကျမ်း ဥပမာများ</span></h2>
+  <div class="tw"><table id="ex"></table></div>
+  <div class="note"><span class="en">A calculation aid only. For a real Vinaya decision (a robe, a hut, a mat) ask your preceptor or a Vinaya teacher.</span><br><span class="my">ဤကိရိယာသည် တွက်ရာ၌ အကူပြုရန်သာ ဖြစ်သည်။ လက်တွေ့ ဝိနည်းဆုံးဖြတ်ချက်များ (သင်္ကန်း၊ ကုဋီ၊ ဖျာ) အတွက် ဆရာတော်/ဝိနည်းဆရာကို မေးပါ။</span></div>
+ </div>
+</section>
+
+<section id="conv" class="hide">
+ <div class="card">
+  <h2>Old Burmese ⇄ modern units<br><span class="my" style="font-size:.95rem">မြန်မာ့ရှေးယူနစ် ⇄ ယခုခေတ်ယူနစ်</span></h2>
+  <div class="seg" id="kind" style="margin-bottom:10px"><button data-k="len" class="on">Length · အလျား</button><button data-k="wt">Weight · အလေးချိန်</button><button data-k="vol">Volume · ထုထည်</button></div>
+  <div class="row"><div><label>Amount <span class="my">ပမာဏ</span></label><input type="number" id="cq" value="1" step="any" min="0"></div>
+   <div><label>Unit <span class="my">ယူနစ်</span></label><select id="cu"></select></div></div>
+  <div class="res" id="cres"></div>
+  <div class="note" id="cnote"></div>
+ </div>
+</section>
+
+<section id="ref" class="hide"><div id="refbody"></div></section>
+
+<section id="how" class="hide">
+ <div class="card">
+  <h2>How the Vinaya spans work<br><span class="my" style="font-size:.95rem">ဝိနည်းထွာများ အလုပ်လုပ်ပုံ</span></h2>
+  <ul class="clean">
+   <li><span class="en">The basic unit is the <b>finger-breadth</b> (<i>aṅgula</i>, လက်သစ်). 12 finger-breadths = 1 <b>span</b> (ထွာ); 24 = 1 <b>cubit</b> (တောင်); 36 = a <b>cubit-and-span</b> (တောင့်ထွာ).</span><br><span class="my">အခြေခံယူနစ်မှာ လက်သစ်ဖြစ်သည်။ ၁၂ လက်သစ် = ၁ ထွာ၊ ၂၄ = ၁ တောင်၊ ၃၆ = ၁ တောင့်ထွာ။</span></li>
+   <li><span class="en">Three people have three different finger-breadths. The Buddha's is <b>3×</b> the middle man's, and the middle man's is <b>1.5×</b> the ordinary man's. So <b>8 Buddha-fingers = 24 middle-man fingers = 36 ordinary fingers</b> — the same cloth. This is the old saying "one span of the Buddha, three spans of the middle man, four and a half of an ordinary man".</span><br><span class="my">လူသုံးမျိုး၏ လက်သစ် မတူပါ။ ဘုရားရှင်၏ လက်သစ်သည် မဇ္ဈိမ၏ ၃ ဆ၊ မဇ္ဈိမ၏ လက်သစ်သည် ပကတိ၏ ၁½ ဆ ဖြစ်သည်။ ထို့ကြောင့် ဘုရားရှင်၏ ၈ သစ် = မဇ္ဈိမ၏ ၂၄ သစ် = ပကတိ၏ ၃၆ သစ် (အဝတ်ထည်တစ်ခုတည်း)။</span></li>
+   <li><span class="en"><b>Majjhima-Vaḍḍhakī method</b>: middle man's finger = 1 inch (cubit 24 in), ordinary man's finger = ⅔ inch (cubit 16 in, which matches the old Sri Lankan commentators), Buddha's finger = 3 inches.</span><br><span class="my">မဇ္ဈိမဝဍ္ဎကီတွက်နည်း - မဇ္ဈိမ၏ ၁ သစ် = ၁ လက်မ၊ ပကတိ၏ ၁ သစ် = ⅔ လက်မ၊ ဘုရားရှင်၏ ၁ သစ် = ၃ လက်မ။</span></li>
+   <li><span class="en"><b>English method</b>: the ordinary man's cubit is the English 18 inches (finger ¾ in). Then the middle man's finger = 1⅛ in and the Buddha's finger = 3⅜ in, so everything is 12.5% larger than the first method.</span><br><span class="my">အင်္ဂလိပ်တွက်နည်း - ပကတိ၏ ၁ တောင် = ၁၈ လက်မ ယူသည်။ ထိုအခါ မဇ္ဈိမ၏ ၁ သစ် = ၁⅛ လက်မ၊ ဘုရားရှင်၏ ၁ သစ် = ၃⅜ လက်မ။ ပထမနည်းထက် ၁၂.၅% ကြီးသည်။</span></li>
+   <li><span class="en">Today's Burmese <i>taung</i> is 18 inches (45.72 cm), the same as the English cubit. The Vinaya "ordinary man's cubit" under the first method is only 16 inches, which is why the numbers do not agree.</span><br><span class="my">ယခုခေတ် မြန်မာ တောင်သည် ၁၈ လက်မ (၄၅.၇၂ စင်တီမီတာ) ဖြစ်သည်။ ပထမတွက်နည်းမှ ပကတိတောင်မှာ ၁၆ လက်မသာ ရှိသဖြင့် ကိန်းဂဏန်းများ မညီခြင်း ဖြစ်သည်။</span></li>
+  </ul>
+  <div class="note"><span class="en">The figures and method names come from the Vinaya teaching text supplied by the author of this page (and the Burmese measurement table). They are not a substitute for the original texts.</span><br><span class="my">ဤစာမျက်နှာရှိ ကိန်းဂဏန်းနှင့် တွက်နည်းအမည်များသည် ရေးသားသူ ပေးပို့သော ဝိနည်းဆိုင်ရာစာနှင့် မြန်မာအတိုင်းအတာဇယားအပေါ် မူတည်သည်။ မူရင်းကျမ်းများကို မအစားထိုးနိုင်ပါ။</span></div>
+ </div>
+</section>
+</main>
+
+<script>
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+const MD='၀၁၂၃၄၅၆၇၈၉';
+let burDigits=false,sys='imp',method='mv',kind='len';
+function num(v){if(!isFinite(v))return '—';const a=Math.abs(v);let s;
+ if(a===0)s='0';else if(a>=1e7||a<1e-4)s=v.toExponential(3);else s=String(+v.toPrecision(a>=100?7:6));
+ return burDigits?s.replace(/\d/g,c=>MD[c]):s}
+const FR=[[1/8,'⅛'],[1/4,'¼'],[3/8,'⅜'],[1/2,'½'],[5/8,'⅝'],[3/4,'¾'],[7/8,'⅞'],[1/3,'⅓'],[2/3,'⅔']];
+function frac(v){const w=Math.floor(v+1e-9),f=v-w;if(f<1e-3)return String(w);for(const [x,s] of FR)if(Math.abs(f-x)<0.004)return (w?w:'')+s;return null}
+function ftin(inches){const ft=Math.floor(inches/12+1e-9),r=inches-ft*12;const f=frac(r);const rs=f!==null?f:num(+r.toFixed(3));return ft>0?`${ft} ft ${r<1e-3?'':rs+' in'}`.trim():`${rs} in`}
+function lenOut(inches){const cm=inches*2.54;if(sys==='imp')return ftin(inches)+` <span class="my">(${num(+cm.toFixed(2))} cm)</span>`;return (cm>=100?num(+(cm/100).toFixed(3))+' m':num(+cm.toFixed(2))+' cm')+` <span class="my">(${ftin(inches)})</span>`}
+
+try{const t=localStorage.getItem('dm-theme');if(t)document.documentElement.dataset.theme=t}catch(e){}
+$('#th').onclick=()=>{const dark=matchMedia('(prefers-color-scheme:dark)').matches;const cur=document.documentElement.dataset.theme||(dark?'dark':'light');const n=cur==='dark'?'light':'dark';document.documentElement.dataset.theme=n;try{localStorage.setItem('dm-theme',n)}catch(e){}};
+function setLang(l){document.body.dataset.lang=l;burDigits=l==='my';$$('.ctl [data-l]').forEach(x=>x.classList.toggle('on',x.dataset.l===l));try{localStorage.setItem('dm-lang',l)}catch(e){}}
+$$('.ctl [data-l]').forEach(b=>b.onclick=()=>{setLang(b.dataset.l);renderAll()});
+try{const l=localStorage.getItem('dm-lang');if(l)setLang(l)}catch(e){}
+function tab(t){$$('main>section').forEach(s=>s.classList.toggle('hide',s.id!==t));$$('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));history.replaceState(null,'','#'+t)}
+$$('#tabs button').forEach(b=>b.onclick=()=>tab(b.dataset.t));
+
+// ================= VINAYA
+const PERS=[{id:'b',cls:'bud',en:'Buddha (Sugata)',short:'Buddha',my:'ဘုရားရှင် (သုဂတ)'},{id:'m',cls:'maj',en:'Middle man (Majjhima)',short:'Middle man',my:'မဇ္ဈိမပုရိသ'},{id:'p',cls:'pak',en:'Ordinary man (Pakati)',short:'Ordinary man',my:'ပကတိပုရိသ'}];
+const FING={mv:{b:3,m:1,p:2/3},en:{b:3.375,m:1.125,p:0.75}};      // finger-breadth in inches
+const UNITS=[{id:'f',en:'Finger-breadth',my:'လက်သစ်',k:1},{id:'s',en:'Span',my:'ထွာ',k:12},{id:'c',en:'Cubit',my:'တောင်',k:24},{id:'cs',en:'Cubit + span',my:'တောင့်ထွာ',k:36}];
+const fingerIn=p=>FING[method][p];
+function renderPersons(){
+ $('#persons').innerHTML=PERS.map(p=>{const f=fingerIn(p.id);return `<div class="tile ${p.id}"><span class="pill ${p.cls}">${p.en}</span><span class="my">${p.my}</span>
+ <table style="margin-top:6px">${UNITS.map(u=>`<tr><td>1 ${u.en}<br><span class="my">${u.my}</span></td><td class="n">${lenOut(f*u.k)}</td></tr>`).join('')}</table></div>`}).join('');
+ $('#methodNote').innerHTML=method==='mv'
+  ?`<span class="en"><b>Majjhima-Vaḍḍhakī method:</b> the ordinary man's cubit is 16 in — the measure of the Sri Lankan commentators — and the middle man's cubit is 24 in. The text prefers this method for Vinaya.</span><br><span class="my"><b>မဇ္ဈိမဝဍ္ဎကီ တွက်နည်း -</b> ပကတိ၏ တောင် ၁၆ လက်မ၊ မဇ္ဈိမ၏ တောင် ၂၄ လက်မ။ ဝိနည်းအရာတွင် ဤနည်းကို ယူသင့်သည်ဟု ဆိုသည်။</span>`
+  :`<span class="en"><b>English method:</b> takes the ordinary man's cubit as the English 18 in, so every measure comes out 12.5% longer (a 24-in cloth becomes 27 in).</span><br><span class="my"><b>အင်္ဂလိပ်တွက်နည်း -</b> ပကတိ၏ တောင်ကို အင်္ဂလိပ် ၁၈ လက်မ ယူသည်။ အလျားအားလုံး ၁၂.၅% ပို၍ ရှည်သည် (၂၄ လက်မ → ၂၇ လက်မ)။</span>`}
+function renderVinConv(){
+ const q=+$('#vq').value||0,u=UNITS.find(x=>x.id===$('#vu').value),p=PERS.find(x=>x.id===$('#vp').value);
+ const inches=q*u.k*fingerIn(p.id),fingers=q*u.k;
+ $('#veq').innerHTML=`<div class="big">${num(q)} ${u.en.toLowerCase()}${q==1?'':'s'} of the ${p.short}<span class="my"> (${p.my} ၏ ${u.my} ${num(q)})</span></div>
+ <div class="big" style="color:var(--ac)">= ${lenOut(inches)}</div>
+ <div style="color:var(--mute)">= ${num(fingers)} finger-breadths <span class="my">(${num(fingers)} လက်သစ်)</span></div>`;
+ $('#vtab').innerHTML=`<tr><th>Person<br><span class="my">ပုဂ္ဂိုလ်</span></th>${UNITS.map(x=>`<th>${x.en}<br><span class="my">${x.my}</span></th>`).join('')}<th>Length<br><span class="my">အလျား</span></th></tr>`+
+  PERS.map(pp=>{const n=inches/fingerIn(pp.id);return `<tr class="${pp.id===p.id?'hl':''}"><td><span class="pill ${pp.cls}">${pp.short}</span><br><span class="my">${pp.my}</span></td>${UNITS.map(x=>`<td class="n">${num(n/x.k)}</td>`).join('')}<td class="n">${lenOut(inches)}</td></tr>`}).join('')}
+const PRESETS=[
+ {en:'Cloth to determine — length: 8 Buddha-fingers',my:'အဓိဋ္ဌာန်အဝတ် အလျား (ဘုရားရှင် ၈ သစ်)',q:8,u:'f',p:'b'},
+ {en:'… width: 4 Buddha-fingers',my:'… အနံ (ဘုရားရှင် ၄ သစ်)',q:4,u:'f',p:'b'},
+ {en:"Buddha's robe: 9 spans",my:'ဘုရားရှင်၏ သင်္ကန်း အလျား ၉ ထွာ',q:9,u:'s',p:'b'},
+ {en:"Buddha's robe: 6 spans",my:'သင်္ကန်း အနံ ၆ ထွာ',q:6,u:'s',p:'b'},
+ {en:'1 cubit of the ordinary man',my:'ပကတိ ၁ တောင်',q:1,u:'c',p:'p'},
+ {en:'1 cubit of the middle man',my:'မဇ္ဈိမ ၁ တောင်',q:1,u:'c',p:'m'}];
+function renderPresets(){$('#presets').innerHTML=PRESETS.map((x,i)=>`<button class="chip" data-i="${i}">${x.en}<br><span class="my" style="font-size:.78rem">${x.my}</span></button>`).join('');
+ $$('#presets .chip').forEach(b=>b.onclick=()=>{const x=PRESETS[+b.dataset.i];$('#vq').value=x.q;$('#vu').value=x.u;$('#vp').value=x.p;renderVinConv()})}
+function renderExamples(){
+ const rows=[['Smallest cloth to determine — length','အဓိဋ္ဌာန်အဝတ် အနည်းဆုံး အလျား',8,'f'],['Smallest cloth to determine — width','အဓိဋ္ဌာန်အဝတ် အနည်းဆုံး အနံ',4,'f'],
+  ["Buddha's robe — length (9 spans = 4½ cubits)",'ဘုရားရှင်၏ သင်္ကန်း အလျား (၉ ထွာ)',9,'s'],["Buddha's robe — width (6 spans = 3 cubits)",'ဘုရားရှင်၏ သင်္ကန်း အနံ (၆ ထွာ)',6,'s']];
+ $('#ex').innerHTML=`<tr><th>Item<br><span class="my">အကြောင်းအရာ</span></th><th>Buddha's measure<br><span class="my">ဘုရားရှင်၏ ပမာဏ</span></th><th>Middle man<br><span class="my">မဇ္ဈိမ</span></th><th>Ordinary man<br><span class="my">ပကတိ</span></th><th>Result<br><span class="my">ရလဒ်</span></th></tr>`+
+ rows.map(r=>{const u=UNITS.find(x=>x.id===r[3]);const inches=r[2]*u.k*fingerIn('b');const un=u.en.toLowerCase()+'s';
+  return `<tr><td>${r[0]}<br><span class="my">${r[1]}</span></td><td class="n">${num(r[2])} ${un}</td><td class="n">${num(inches/fingerIn('m')/u.k)} ${un}</td><td class="n">${num(inches/fingerIn('p')/u.k)} ${un}</td><td class="n"><b>${lenOut(inches)}</b></td></tr>`}).join('')}
+$('#method').onclick=e=>{const b=e.target.closest('button');if(!b)return;method=b.dataset.m;$$('#method button').forEach(x=>x.classList.toggle('on',x===b));renderAll()};
+$('#sys').onclick=e=>{const b=e.target.closest('button');if(!b)return;sys=b.dataset.s;$$('#sys button').forEach(x=>x.classList.toggle('on',x===b));renderAll()};
+$('#vu').innerHTML=UNITS.map(u=>`<option value="${u.id}">${u.en} · ${u.my}</option>`).join('');$('#vu').value='f';
+$('#vp').innerHTML=PERS.map(p=>`<option value="${p.id}">${p.short} · ${p.my}</option>`).join('');$('#vp').value='b';
+$('#vq').oninput=$('#vu').onchange=$('#vp').onchange=renderVinConv;
+
+// ================= CONVERTER  (base units: metre, gram, litre)
+const DATA={
+ len:{unit:[['Hair-width','ဆံခြည်',79.375e-6],['Sesame seed','နှမ်း',0.79375e-3],['Barley grain','မုယော',4.7625e-3],['Finger-breadth','လက်သစ်',0.01905],['Maik (8 fingers)','မိုက်',0.1524],['Span','ထွာ',0.2286],['Cubit','တောင်',0.4572],['Yard (2 cubits)','ကိုက်',0.9144],['Lan (4 cubits)','လံ',1.8288],['Tar (7 cubits)','တာ',3.2004],['Ussabha (20 tar)','ဥသဘ',64.008],['Kosa (20 ussabha)','ကောသ',1280.16],['Gavuta (4 kosa)','ဂါဝုတ်',5120.64],['Yojana (4 gavuta)','ယူဇနာ',20482.56],['Tain (1000 tar)','တိုင်',3200.4]],
+  met:[['mm',0.001],['cm',0.01],['m',1],['km',1000]],imp:[['inch',0.0254],['foot',0.3048],['yard',0.9144],['mile',1609.344]],def:6},
+ wt:{unit:[['Ywei-lay','ရွေးလေး',0.136078],['Ywei-gyi','ရွေးကြီး',0.272155],['Pe-thar','ပဲသား',1.02058],['Mu-thar','မူးသား',2.04117],['Mat-thar','မတ်သား',4.08233],['Nga-mu-thar','ငါးမူးသား',8.16466],['Kyat-thar (tical)','ကျပ်သား',16.3293],['A-wet-thar','အဝက်သား',204.117],['A-sit-thar','အစိတ်သား',408.233],['Nga-zeh-thar','ငါးဆယ်သား',816.466],['Peittha (viss)','ပိဿာ',1632.93],['A-yein-tayar (100 viss)','အချိန်တစ်ရာ',163293]],
+  met:[['mg',0.001],['g',1],['kg',1000]],imp:[['grain',0.06479891],['ounce',28.349523],['pound',453.59237]],def:10},
+ vol:{unit:[['Lamyu','လမြူ',0.0799118],['Lamyet','လမျက်',0.159824],['Lameh','လမယ်',0.319647],['Salè','စလယ်',0.639294],['Hmwet (cup)','ခွက်',1.27859],['Pyi','ပြည်',2.55718],['Seit','စိတ်',10.2287],['Hkwe','ခွဲ',20.4574],['Tin (basket)','တင်း',40.9148]],
+  met:[['ml',0.001],['litre',1]],imp:[['US fl oz',0.0295735],['US pint',0.473176],['US quart',0.946353],['US gallon',3.78541],['Imperial pint',0.568261],['Imperial gallon',4.54609]],def:8}};
+function renderConv(){
+ const D=DATA[kind],u=D.unit[+$('#cu').value||0],q=+$('#cq').value||0,base=q*u[2];
+ const t=(v,l,my)=>`<div class="tile"><b>${num(v)}</b><span>${l}${my?` · <span class="my">${my}</span>`:''}</span></div>`;
+ $('#cres').innerHTML=`<div style="grid-column:1/-1;font-weight:600;color:var(--ac)">Modern <span class="my">· ယခုခေတ်</span></div>`+D.met.map(x=>t(base/x[1],x[0])).join('')+D.imp.map(x=>t(base/x[1],x[0])).join('')+
+  `<div style="grid-column:1/-1;font-weight:600;color:var(--ac);margin-top:6px">Old Burmese <span class="my">· မြန်မာရှေးယူနစ်</span></div>`+D.unit.map(x=>t(base/x[2],x[0],x[1])).join('');
+ $('#cnote').innerHTML=kind==='len'?`<span class="en">1 <i>taung</i> (cubit) = 18 in = 45.72 cm. 1 <i>tain</i> = 1000 <i>tar</i> = 3.2004 km ≈ 1.99 miles, so in the countryside "2 miles ≈ 1 tain".</span><br><span class="my">၁ တောင် = ၁၈ လက်မ = ၄၅.၇၂ စင်တီမီတာ။ ၁ တိုင် = ၁၀၀၀ တာ = ၃.၂၀၀၄ ကီလိုမီတာ ≈ ၁.၉၉ မိုင်။ ကျေးလက်တွင် "နှစ်မိုင် ≈ တစ်တိုင်" ဟု ယူသည်။</span>`:kind==='wt'?`<span class="en">1 <i>peittha</i> (viss) = 100 <i>kyat-thar</i> = 1.63293 kg ≈ 3.6 lb.</span><br><span class="my">၁ ပိဿာ = ၁၀၀ ကျပ်သား = ၁.၆၃၂၉၃ ကီလိုဂရမ် ≈ ၃.၆ ပေါင်။</span>`:`<span class="en">1 <i>tin</i> (basket) = 16 <i>pyi</i> = 40.9148 litres.</span><br><span class="my">၁ တင်း = ၁၆ ပြည် = ၄၀.၉၁၄၈ လီတာ။</span>`}
+function fillUnits(){$('#cu').innerHTML=DATA[kind].unit.map((x,i)=>`<option value="${i}">${x[0]} · ${x[1]}</option>`).join('');$('#cu').value=String(DATA[kind].def)}
+$('#kind').onclick=e=>{const b=e.target.closest('button');if(!b)return;kind=b.dataset.k;$$('#kind button').forEach(x=>x.classList.toggle('on',x===b));fillUnits();renderConv()};
+$('#cq').oninput=$('#cu').onchange=renderConv;
+
+// ================= REFERENCE
+function renderRef(){
+ const T=(title,my,head,rows)=>`<div class="card"><h2>${title}<br><span class="my" style="font-size:.95rem">${my}</span></h2><div class="tw"><table><tr>${head.map(h=>`<th>${h}</th>`).join('')}</tr>${rows.map(r=>`<tr>${r.map((c,i)=>`<td${i?' class="n"':''}>${c}</td>`).join('')}</tr>`).join('')}</table></div></div>`;
+ const L=[['Hair-width <span class="my">ဆံခြည်</span>','79.375 µm','3⅛ thou'],['Sesame <span class="my">နှမ်း</span>','0.79375 mm','1⁄32 in'],['Barley <span class="my">မုယော</span>','4.7625 mm','3⁄16 in'],['Finger-breadth <span class="my">လက်သစ်</span>','1.905 cm','¾ in'],['Maik <span class="my">မိုက်</span>','15.24 cm','6 in'],['Span <span class="my">ထွာ</span>','22.86 cm','9 in'],['Cubit <span class="my">တောင်</span>','45.72 cm','1½ ft'],['Lan <span class="my">လံ</span>','1.8288 m','6 ft'],['Tar <span class="my">တာ</span>','3.2004 m','10½ ft'],['Ussabha <span class="my">ဥသဘ</span>','64.008 m','70 yd'],['Kosa <span class="my">ကောသ</span>','1.28016 km','0.795 mi'],['Gavuta <span class="my">ဂါဝုတ်</span>','5.12064 km','3.18 mi'],['Yojana <span class="my">ယူဇနာ</span>','20.48256 km','12.73 mi'],['Tain <span class="my">တိုင်</span>','3.2004 km','1.99 mi']];
+ const W=[['Ywei-lay <span class="my">ရွေးလေး</span>','136.078 mg','2.1 grain'],['Ywei-gyi <span class="my">ရွေးကြီး</span>','272.155 mg','4.2 grain'],['Pe-thar <span class="my">ပဲသား</span>','1.02058 g','15.75 grain'],['Mu-thar <span class="my">မူးသား</span>','2.04117 g','31.5 grain'],['Mat-thar <span class="my">မတ်သား</span>','4.08233 g','63 grain'],['Nga-mu-thar <span class="my">ငါးမူးသား</span>','8.16466 g','0.288 oz'],['Kyat-thar <span class="my">ကျပ်သား</span>','16.3293 g','0.576 oz'],['A-wet-thar <span class="my">အဝက်သား</span>','204.117 g','7.2 oz'],['A-sit-thar <span class="my">အစိတ်သား</span>','408.233 g','14.4 oz'],['Nga-zeh-thar <span class="my">ငါးဆယ်သား</span>','816.466 g','1.8 lb'],['Peittha <span class="my">ပိဿာ</span>','1.63293 kg','3.6 lb'],['A-yein-tayar <span class="my">အချိန်တစ်ရာ</span>','163.293 kg','360 lb']];
+ const V=[['Lamyu <span class="my">လမြူ</span>','79.9118 ml','2.70 US fl oz'],['Lamyet <span class="my">လမျက်</span>','159.824 ml','5.40 US fl oz'],['Lameh <span class="my">လမယ်</span>','319.647 ml','10.8 US fl oz'],['Salè <span class="my">စလယ်</span>','639.294 ml','1.35 US pt'],['Hmwet <span class="my">ခွက်</span>','1.27859 l','1.35 US qt'],['Pyi <span class="my">ပြည်</span>','2.55718 l','2.70 US qt'],['Seit <span class="my">စိတ်</span>','10.2287 l','2.70 US gal'],['Hkwe <span class="my">ခွဲ</span>','20.4574 l','5.40 US gal'],['Tin <span class="my">တင်း</span>','40.9148 l','10.8 US gal']];
+ $('#refbody').innerHTML=T('Length','အလျား',['Unit','Metric','Imperial'],L)+
+  `<div class="card"><h2>How the length units build up<br><span class="my" style="font-size:.95rem">တိုင်းတာပုံ</span></h2><ul class="clean">
+   <li>10 hair-widths = 1 sesame · <span class="my">၁၀ ဆံခြည် = ၁ နှမ်း</span></li><li>6 sesame = 1 barley · <span class="my">၆ နှမ်း = ၁ မုယော</span></li><li>4 barley = 1 finger-breadth · <span class="my">၄ မုယော = ၁ လက်သစ်</span></li>
+   <li>8 fingers = 1 maik; 3 maik = 1 cubit; 12 fingers = 1 span; 2 spans = 1 cubit · <span class="my">၈ လက်သစ် = ၁ မိုက်၊ ၃ မိုက် = ၁ တောင်၊ ၁၂ လက်သစ် = ၁ ထွာ၊ ၂ ထွာ = ၁ တောင်</span></li>
+   <li>2 cubits = 1 <i>kaik</i> (yard); 4 cubits = 1 <i>lan</i>; 7 cubits = 1 <i>tar</i> · <span class="my">၂ တောင် = ၁ ကိုက်၊ ၄ တောင် = ၁ လံ၊ ၇ တောင် = ၁ တာ</span></li>
+   <li>20 tar = 1 ussabha; 20 ussabha = 1 kosa; 4 kosa = 1 gavuta; 4 gavuta = 1 yojana · <span class="my">၂၀ တာ = ၁ ဥသဘ၊ ၂၀ ဥသဘ = ၁ ကောသ၊ ၄ ကောသ = ၁ ဂါဝုတ်၊ ၄ ဂါဝုတ် = ၁ ယူဇနာ</span></li>
+   <li>1000 tar = 1 <i>tain</i>; 6 tain + 400 tar = 1 yojana · <span class="my">၁၀၀၀ တာ = ၁ တိုင်၊ ၆ တိုင်နှင့် ၄၀၀ တာ = ၁ ယူဇနာ</span></li></ul>
+   <div class="note"><span class="en">"A journey of ten thousand, a needle too heavy": 10 <i>tain</i> = 10,000 tar. 1 tar = 7 cubits, so 1 tain = 7,000 cubits = 10,500 ft ≈ 1.99 miles; in the countryside "2 miles ≈ 1 tain".</span><br><span class="my">ခရီးတစ်သောင်း အပ်တစ်ချောင်း - ၁၀ တိုင် = တာ တစ်သောင်း။ ၁ တာ = ၇ တောင်၊ ၁ တိုင် = ၇၀၀၀ တောင် = ပေ ၁၀၅၀၀ ≈ ၁.၉၉ မိုင်။</span></div></div>`+
+  T('Weight','အလေးချိန်',['Unit','Metric','Imperial / US'],W)+T('Capacity','ထုထည်',['Unit','Metric','US'],V)+
+  `<div class="card"><h2>Old Burmese money<br><span class="my" style="font-size:.95rem">မြန်မာ့ငွေကြေး</span></h2><table><tr><th>Unit</th><th>Value</th></tr><tr><td>Pya <span class="my">ပြား</span></td><td class="n">1 pya</td></tr><tr><td>Mat <span class="my">မတ်</span></td><td class="n">25 pya</td></tr><tr><td>Ngamu <span class="my">ငါးမူး</span></td><td class="n">2 mat = 50 pya</td></tr><tr><td>Kyat <span class="my">ကျပ်</span></td><td class="n">10 mu = 100 pya</td></tr></table></div>`}
+function renderAll(){renderPersons();renderVinConv();renderPresets();renderExamples();renderConv();renderRef()}
+fillUnits();renderAll();
+{const h=location.hash.slice(1);if(['vin','conv','ref','how'].includes(h))tab(h)}
+</script>
+</body>
+</html>
