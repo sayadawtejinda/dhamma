@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Parami Report</title>
+<style>
+  :root { --bg:#fff7fb; --card:#fff; --ink:#2b2233; --muted:#7a6b85; --line:#ecd9e6; --accent:#c2185b; --accent2:#fce4ec; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#1d1822; --card:#2a2330; --ink:#f2e9f6; --muted:#b9a8c4; --line:#473b52; --accent:#f48fb1; --accent2:#3b2a38; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  .wrap { max-width:1000px; margin:0 auto; padding:16px; }
+  h1 { font-size:1.5rem; margin:.2rem 0; }
+  .sub { color:var(--muted); font-size:.9rem; margin-bottom:12px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px 14px; margin-bottom:14px; }
+  .chips { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+  label.chip { display:inline-flex; align-items:center; gap:6px; background:var(--accent2); border:1px solid var(--line); border-radius:999px; padding:5px 12px; cursor:pointer; user-select:none; font-weight:600; font-size:.9rem; }
+  label.chip.off { opacity:.45; text-decoration:line-through; }
+  .tools button { background:var(--accent); color:#fff; border:0; border-radius:8px; padding:6px 12px; font-weight:700; cursor:pointer; margin-right:6px; }
+  table { width:100%; border-collapse:collapse; }
+  th, td { text-align:left; padding:8px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--muted); font-size:.8rem; text-transform:uppercase; letter-spacing:.04em; position:sticky; top:0; background:var(--card); }
+  td.num, th.num { text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
+  td.rank { width:2.4rem; font-weight:800; color:var(--accent); }
+  .cls { display:inline-block; background:var(--accent2); border-radius:6px; padding:1px 7px; margin:1px 3px 1px 0; font-size:.8rem; white-space:nowrap; }
+  .zero { color:var(--muted); }
+  .pts { font-weight:800; }
+  @media (max-width:640px) { th.hide-sm, td.hide-sm { display:none; } }
+  @media print { .tools, .chips input { display:none; } body { background:#fff; color:#000; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🌸 Parami group — SmartStudy report</h1>
+  <div class="sub" id="asof">Loading…</div>
+
+  <div class="card">
+    <b>Classes</b> <span class="sub">— tap a class to leave it out of the lessons and points</span>
+    <div class="chips" id="chips"></div>
+    <div class="tools" style="margin-top:10px"><button id="all">All classes</button><button id="none">None</button><button onclick="window.print()">Print</button></div>
+  </div>
+
+  <div class="card" style="overflow-x:auto">
+    <table>
+      <thead><tr><th>#</th><th>Student</th><th class="hide-sm">Classes studied</th><th class="num">Classes</th><th class="num">Lessons</th><th class="num">Total points</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+  <div class="sub">Points are counted like the SmartStudy Global Leaderboard (the first attempt of each lesson). The numbers are as of the date above; they are refreshed every week.</div>
+</div>
+<script>
+(function () {
+  var KEY = 'paramiReportHidden';
+  var data = null, hidden = {};
+  try { hidden = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch (e) { hidden = {}; }
+  var save = function () { try { localStorage.setItem(KEY, JSON.stringify(hidden)); } catch (e) {} };
+  var $ = function (id) { return document.getElementById(id); };
+  var fmt = function (n) { return Number(n).toLocaleString('en-US'); };
+
+  function render() {
+    var chips = $('chips'); chips.innerHTML = '';
+    data.classes.forEach(function (c) {
+      var l = document.createElement('label'); l.className = 'chip' + (hidden[c] ? ' off' : '');
+      var cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = !hidden[c];
+      cb.onchange = function () { if (cb.checked) delete hidden[c]; else hidden[c] = 1; save(); render(); };
+      l.appendChild(cb); l.appendChild(document.createTextNode(c)); chips.appendChild(l);
+    });
+    var rows = data.students.map(function (s) {
+      var cl = s.classes.filter(function (c) { return !hidden[c.classId]; });
+      return { name: s.name, classes: cl,
+        lessons: cl.reduce(function (n, c) { return n + c.lessons; }, 0),
+        points: cl.reduce(function (n, c) { return n + c.points; }, 0) };
+    }).sort(function (a, b) { return b.points - a.points || b.lessons - a.lessons || (a.name < b.name ? -1 : 1); });
+    var tb = $('rows'); tb.innerHTML = '';
+    rows.forEach(function (r, i) {
+      var tr = document.createElement('tr');
+      var classes = r.classes.map(function (c) { return '<span class="cls">' + esc(c.classId) + ' · ' + c.lessons + ' · ' + fmt(c.points) + '</span>'; }).join('') || '<span class="zero">—</span>';
+      tr.innerHTML = '<td class="rank">' + (i + 1) + '</td><td><b>' + esc(r.name) + '</b></td><td class="hide-sm">' + classes +
+        '</td><td class="num">' + r.classes.length + '</td><td class="num">' + r.lessons + '</td><td class="num pts' + (r.points ? '' : ' zero') + '">' + fmt(r.points) + '</td>';
+      tb.appendChild(tr);
+    });
+  }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+
+  $('all').onclick = function () { hidden = {}; save(); render(); };
+  $('none').onclick = function () { data.classes.forEach(function (c) { hidden[c] = 1; }); save(); render(); };
+  fetch('paramiReport.json?' + Date.now()).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); }).then(function (j) {
+    data = j;
+    $('asof').textContent = data.students.length + ' students · as of ' + new Date(data.generatedAt).toLocaleString();
+    render();
+  }).catch(function () { $('asof').textContent = 'The report is not ready yet. It is made by the weekly update.'; });
+})();
+</script>
+</body>
+</html>
