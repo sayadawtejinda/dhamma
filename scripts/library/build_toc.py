@@ -109,8 +109,11 @@ def toc_entries(doc):
                 ents.append((m[0], m[1]))
     return ents
 
+# books whose contents list does not belong to the PDF (decided by the user): no contents are kept for them
+EXCLUDE = {'b4a1c85'}      # လောကကိုသုညဆိုက်အောင်ကြည့်ပါ
 out, report, dropped = [], [], []
 for bi, b in enumerate(B):
+    if b['id'] in EXCLUDE: continue
     f = os.path.join(LIB, 'books', b['id'] + '.pdf')
     doc = pymupdf.open(f)
     off, votes = offset(doc)

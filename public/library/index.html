@@ -119,6 +119,7 @@ h2.sec{margin:22px 0 8px;font-size:1.1rem;color:var(--accent)}
 #rtext mark{background:#ffd54a;color:#000;border-radius:3px}
 #rd.nopali .pali{display:none}
 #rd.nobr br.a{display:none}
+.pgnav{display:flex;justify-content:center;align-items:center;gap:22px;margin:26px 0 10px}.pgnav .rb{padding:10px 26px;font-size:1.05rem}.pgnav span{color:var(--rmute)}.pgnav .rb:disabled{opacity:.3}
 #rtext h5{font-size:1em;font-weight:700;color:var(--rac);margin:1.1em 0 .1em;line-height:1.7}
 #rd{font-family:"Noto Sans Myanmar","Pyidaungsu","Myanmar Text",system-ui,sans-serif}
 #rtext b{font-weight:700;color:var(--rbold,#7a1f1f);-webkit-text-stroke:.45px currentColor;paint-order:stroke fill}
@@ -143,8 +144,9 @@ h2.sec{margin:22px 0 8px;font-size:1.1rem;color:var(--accent)}
 #btoc{display:none;max-height:34vh;overflow:auto;padding:6px 14px;background:var(--bg2);border-bottom:1px solid var(--line)}
 #btoc button{display:block;width:100%;text-align:left;background:none;border:0;padding:4px 6px;border-radius:8px;font:inherit;font-size:.92rem;line-height:1.5;cursor:pointer;color:var(--ink)}
 #btoc button:hover{background:var(--line)}
+#btoc button.here{background:var(--accent2);color:#2a1a08;font-weight:700}
 #btoc input{width:100%;padding:6px 10px;border-radius:10px;border:2px solid var(--line);background:var(--card);color:var(--ink);font:inherit;margin-bottom:4px}
-</style>
+@media(max-width:800px){.rt{gap:5px;padding:6px 8px}.rt .btn{padding:7px 12px}.rt input{width:64px}.dh{padding:10px 12px}#btoc{max-height:46vh}}</style>
 </head>
 <body>
 <header class="hero"><button id="theme" title="Light / Dark">🌓</button><div class="wrap"><h1>☸ ဖားအောက်တောရ ဓမ္မစာကြည့်တိုက်</h1><p>တရားတော်များ နာယူရန် · တရားစာအုပ်များ ဖတ်ရှုရန်</p></div></header>
@@ -168,7 +170,7 @@ h2.sec{margin:22px 0 8px;font-size:1.1rem;color:var(--accent)}
 
 <dialog id="dsermon"><div class="dh"><h2 id="dst"></h2><button class="x" onclick="dsermon.close()">✕</button></div><div class="db" id="dsb"></div></dialog>
 <dialog id="reader" class="big"><div class="dh"><h2 id="rtitle"></h2><button class="x" onclick="closeReader()">✕</button></div>
- <div class="rt"><span>စာမျက်နှာ</span><input id="rpage" type="number" min="1" value="1"><button class="btn" id="rgo">သွားမည်</button><button class="btn alt" id="rtc">☰ မာတိကာ</button><a class="btn alt" id="rdl" download style="text-decoration:none">⬇ ဒေါင်းလုပ်</a><a class="btn alt" id="rnew" target="_blank" rel="noopener" style="text-decoration:none">↗ Tab အသစ်</a><small id="rinfo" style="color:var(--mute)"></small></div>
+ <div class="rt"><span title="စာမျက်နှာ">📄</span><input id="rpage" type="number" min="1" value="1" title="စာမျက်နှာ"><button class="btn" id="rgo" title="သွားမည်">➜</button><button class="btn alt" id="rtc" title="မာတိကာ">☰</button><a class="btn alt" id="rdl" download title="ဒေါင်းလုပ်" style="text-decoration:none">⬇</a><a class="btn alt" id="rnew" target="_blank" rel="noopener" title="Tab အသစ်" style="text-decoration:none">↗</a><small id="rinfo" style="color:var(--mute)"></small></div>
  <div id="btoc"><input id="btq" placeholder="ဤစာအုပ်ရဲ့ မာတိကာထဲ ရှာရန် …"><div id="btl"></div></div>
  <iframe id="rframe" title="book"></iframe></dialog>
 
@@ -193,7 +195,7 @@ h2.sec{margin:22px 0 8px;font-size:1.1rem;color:var(--accent)}
 <script src="data/config.js"></script>
 <script>
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
-const DV='20261015b';   // bump when the data files change, so browsers do not show old copies
+const DV='20261015c';   // bump when the data files change, so browsers do not show old copies
 const CFG=Object.assign({audioBase:'audio/'},window.LIB_CONFIG||{});
 const MD='၀၁၂၃၄၅၆၇၈၉',mn=n=>String(n).replace(/\d/g,d=>MD[d]);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -350,7 +352,7 @@ async function showPage(p,scrollTo){
   else if(k==='v')h+=`<div class="verse" id="b${i}">${t}</div>`;
   else if(k==='q')h+=`<div class="quote" id="b${i}">${t}</div>`;
   else h+=`<p id="b${i}">${t}</p>`}
- $('#rtext').innerHTML=h;
+ $('#rtext').innerHTML=h+`<div class="pgnav"><button class="rb" onclick="showPage(RP-1)" ${RP?'':'disabled'}>◀</button><span>${mn(RP+1)} / ${mn(RB.pages.length)}</span><button class="rb" onclick="showPage(RP+1)" ${RP+1<RB.pages.length?'':'disabled'}>▶</button></div>`;
  $('#rsl').value=RP+1;$('#rpn').textContent=`${mn(RP+1)} / ${mn(RB.pages.length)}`;
  store.set('tx:'+RB.id,RP);
  const sc=$('#rbody');sc.style.scrollBehavior='auto';
@@ -359,6 +361,11 @@ async function showPage(p,scrollTo){
 }
 function hilite(el,q){const w=document.createTreeWalker(el,NodeFilter.SHOW_TEXT);const nodes=[];while(w.nextNode())nodes.push(w.currentNode);
  nodes.forEach(n=>{const i=n.nodeValue.toLowerCase().indexOf(q);if(i<0)return;const r=document.createRange();r.setStart(n,i);r.setEnd(n,i+q.length);const m=document.createElement('mark');r.surroundContents(m)})}
+// swipe left / right on the text = next / previous page (vertical scrolling is left alone)
+{let sx=0,sy=0,st=0;const el=$('#rbody');
+ el.addEventListener('touchstart',e=>{if(e.touches.length!==1)return;sx=e.touches[0].clientX;sy=e.touches[0].clientY;st=Date.now()},{passive:true});
+ el.addEventListener('touchend',e=>{if(!RB||!st)return;const t=e.changedTouches[0],dx=t.clientX-sx,dy=t.clientY-sy;const dt=Date.now()-st;st=0;
+  if(Math.abs(dx)>70&&Math.abs(dx)>2*Math.abs(dy)&&dt<700&&!getSelection().toString()){showPage(RP+(dx<0?1:-1))}},{passive:true})}
 $('#rpv').onclick=()=>showPage(RP-1);$('#rnx').onclick=()=>showPage(RP+1);
 $('#rsl').onchange=()=>showPage(+$('#rsl').value-1);
 $('#rsl').oninput=()=>$('#rpn').textContent=`${mn($('#rsl').value)} / ${mn(RB.pages.length)}`;
@@ -412,8 +419,10 @@ $('#rtc').onclick=async()=>{const box=$('#btoc');if(box.style.display==='block')
  const T=await loadToc();const bi=T.books.indexOf(curBook.id);
  const rows=bi<0?[]:T.toc.filter(e=>e[0]===bi);
  $('#btl').innerHTML=rows.length?rows.map(e=>`<button data-p="${e[6]||e[2]}" style="padding-left:${6+(e[3]-1)*14}px">${esc(e[1])} <small style="color:var(--mute)">· ${mn(e[6]||e[2])}</small></button>`).join(''):'<div class="empty" style="padding:10px">ဤစာအုပ်အတွက် မာတိကာ မရှိပါ</div>';
- $('#btq').value='';box.style.display='block'};
-$('#btl').onclick=e=>{const b=e.target.closest('button');if(!b)return;const p=+b.dataset.p;$('#rpage').value=p;$('#rgo').click()};
+ $('#btq').value='';box.style.display='block';
+ const cp=+$('#rpage').value||1;let best=null;$$('#btl button').forEach(b=>{b.classList.remove('here');if(+b.dataset.p<=cp)best=b});
+ if(best){best.classList.add('here');best.scrollIntoView({block:'center'})}};
+$('#btl').onclick=e=>{const b=e.target.closest('button');if(!b)return;const p=+b.dataset.p;$('#rpage').value=p;$('#btoc').style.display='none';$('#rgo').click()};
 $('#btq').oninput=()=>{const q=nt($('#btq').value);$$('#btl button').forEach(b=>b.style.display=!q||nt(b.textContent).includes(q)?'':'none')};
 
 // ---------- Home
