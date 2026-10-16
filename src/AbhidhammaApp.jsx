@@ -667,9 +667,12 @@ const AbhiTeacherLogin = ({ onComplete, onClose }) => {
 
 
 // ─── LessonItem ───────────────────────────────────────────────────────────────
-const AbhiLessonItem = ({ lesson, classId, isTeacher, studentAgeGroup, studentName, userId, onEdit, onGenerateVariants, onTakeQuiz, isGenerating, isOpen, onToggle, classImageBase }) => {
+const AbhiLessonItem = ({ lesson, classId, isTeacher, studentAgeGroup, studentName, userId, onEdit, onGenerateVariants, onTakeQuiz, isGenerating, isOpen, onToggle, classImageBase, completedFromParent }) => {
   const [tab,setTab]=useState('content');
-  const [isCompleted,setIsCompleted]=useState(false);
+  const [isCompletedOwn,setIsCompleted]=useState(false);
+  // A student's list gets "done" for every lesson from ONE pair of queries in the main component (below); looking it up here
+  // for each lesson card (3 queries per card, one of them reading all of the student's scores) cost over a thousand reads per class opened.
+  const isCompleted = completedFromParent !== undefined ? completedFromParent : isCompletedOwn;
   const [hasAsked,setHasAsked]=useState(false);
   const [hasReplied,setHasReplied]=useState(false);
   const [leaderboard,setLb]=useState([]);const [showLb,setShowLb]=useState(false);
@@ -724,6 +727,7 @@ const AbhiLessonItem = ({ lesson, classId, isTeacher, studentAgeGroup, studentNa
   // well means a stray auth reset can never make a real completion vanish
   // from view, even for the one visit before things settle back down.
   useEffect(()=>{
+    if(completedFromParent!==undefined)return;
     if(!classId||!lesson.id||!studentAgeGroup||!studentName)return;
     let fromResultsByName=false,fromScoresByName=false,fromScoresByUserId=false;
     const recompute=()=>setIsCompleted(fromResultsByName||fromScoresByName||fromScoresByUserId);
@@ -736,11 +740,11 @@ const AbhiLessonItem = ({ lesson, classId, isTeacher, studentAgeGroup, studentNa
       ...(userId?[onSnapshot(doc(abhiScoresRef(),`${userId}_${lesson.id}`),snap=>{fromScoresByUserId=snap.exists();recompute();},err=>console.error('UserId completion track:',err.code))]:[])
     ];
     return()=>{subs.forEach(u=>u());};
-  },[classId,lesson.id,studentAgeGroup,studentName,userId]);
+  },[classId,lesson.id,studentAgeGroup,studentName,userId,completedFromParent!==undefined]);
   
   // Track Q&A participation for quiz unlock (ask + reply)
   useEffect(()=>{
-    if(!classId||!userId||!lesson.id||isTeacher)return;
+    if(!classId||!userId||!lesson.id||isTeacher||!isOpen)return; // only the open card needs it (it unlocks the quiz)
     return onSnapshot(abhiQRef(classId,lesson.id),snap=>{
       let asked=false,replied=false;
       snap.docs.forEach(d=>{
@@ -750,7 +754,7 @@ const AbhiLessonItem = ({ lesson, classId, isTeacher, studentAgeGroup, studentNa
       });
       setHasAsked(asked); setHasReplied(replied);
     },err=>console.error('QA track:',err.code));
-  },[classId,lesson.id,userId,isTeacher]);
+  },[classId,lesson.id,userId,isTeacher,isOpen]);
   
   // Leaderboard
   useEffect(()=>{
@@ -921,6 +925,8 @@ export default function AbhidhammaApp({ entryRequest, onExit, isActive }) {
   const ABHI_POINTS_PER_COIN=50;
   const [myAbhiTotalScore,setMyAbhiTotalScore]=useState(0);
   const [myDoneByClass,setMyDoneByClass]=useState({}); // classId -> lessons I've completed (live)
+  const [myDoneIdsByUser,setMyDoneIdsByUser]=useState({}); // classId -> Set of lesson ids (found by my user id)
+  const [myDoneIdsByName,setMyDoneIdsByName]=useState({}); // the same, found by my name (a safety net if the user id changed)
   const [abhiCoinsTransferredOut,setAbhiCoinsTransferredOut]=useState(0);
   // Stays false until the already-deposited total has really been read --
   // before that it reads as 0, which made every earned coin look
@@ -934,9 +940,18 @@ export default function AbhidhammaApp({ entryRequest, onExit, isActive }) {
       snap.forEach(d=>{const dt=d.data();total+=dt.score||0;if(dt.classId&&dt.lessonId){(byClass[dt.classId]=byClass[dt.classId]||new Set()).add(dt.lessonId);}});
       setMyAbhiTotalScore(total);
       setMyDoneByClass(Object.fromEntries(Object.entries(byClass).map(([k,s])=>[k,s.size])));
+      setMyDoneIdsByUser(byClass);
     });
     return unsub;
   },[role,effectiveUserId]);
+  useEffect(()=>{
+    if(role!=='Student'||!studentProfile?.name)return;
+    return onSnapshot(query(abhiScoresRef(),where('studentName','==',studentProfile.name)),snap=>{
+      const byClass={};
+      snap.forEach(d=>{const dt=d.data();if(dt.classId&&dt.lessonId)(byClass[dt.classId]=byClass[dt.classId]||new Set()).add(dt.lessonId);});
+      setMyDoneIdsByName(byClass);
+    },err=>console.error('Name score completion track:',err.code));
+  },[role,studentProfile?.name]);
   useEffect(()=>{
     if(role!=='Student'||!studentProfile?.name)return;
     const sanitize=k=>(k||'unknown').trim().replace(/[.$#/\[\]]/g,'_');
@@ -1697,6 +1712,7 @@ export default function AbhidhammaApp({ entryRequest, onExit, isActive }) {
                     classImageBase={classImageBase} onGenerateVariants={()=>{}} onEdit={()=>{}}
                     onTakeQuiz={(id,title,data)=>{setActiveQuizId(id);setActiveQuizData(data);setActiveQuizTitle(title||'');}}
                     isGenerating={false} isOpen={openLessonId===l.id}
+                    completedFromParent={!!((myDoneIdsByUser[classId]&&myDoneIdsByUser[classId].has(l.id))||(myDoneIdsByName[classId]&&myDoneIdsByName[classId].has(l.id)))}
                     onToggle={()=>setOpenLessonId(openLessonId===l.id?null:l.id)}/>
                 ))}
               </div>

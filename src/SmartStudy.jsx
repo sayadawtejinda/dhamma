@@ -2143,6 +2143,9 @@ const QuizView = React.memo(({ quiz, questionNumber, totalQuestions, timerValue,
 
 // How often a student's open tab re-reads the class-wide leaderboards.
 const CLASS_POLL_MS = 20 * 60 * 1000;
+// A student's screen does not poll at all (each refresh re-reads the class's hearts and recent completions, over 100
+// documents, per student, every time); it loads once when opened and again only when coming back after this long.
+const STUDENT_REFRESH_MS = 90 * 60 * 1000;
 // The activity bell shows only the latest 20 completions, so a student's screen asks
 // for just those (needs a one-time Firestore index on classId + timestamp). Until that
 // index exists the query is refused for free and the old full read is used instead.
@@ -2367,15 +2370,16 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
       } catch (e) { console.error("Error loading class data:", e); }
     };
     load();
-    const timer = setInterval(() => {
+    const isStudentScreen = entryRequest?.mode === 'student';
+    const timer = isStudentScreen ? null : setInterval(() => {
       if (isActiveRef.current && !document.hidden) load();
     }, CLASS_POLL_MS);
     // Coming back to this app after it sat hidden for a while: refresh once.
     const onVisible = () => {
-      if (!document.hidden && isActiveRef.current && Date.now() - lastClassLoadRef.current > CLASS_POLL_MS) load();
+      if (!document.hidden && isActiveRef.current && Date.now() - lastClassLoadRef.current > (isStudentScreen ? STUDENT_REFRESH_MS : CLASS_POLL_MS)) load();
     };
     document.addEventListener('visibilitychange', onVisible);
-    return () => { cancelled = true; clearInterval(timer); document.removeEventListener('visibilitychange', onVisible); };
+    return () => { cancelled = true; if (timer) clearInterval(timer); document.removeEventListener('visibilitychange', onVisible); };
   }, [isAuthReady, classId, teacherLive, classRefreshKey, entryRequest?.mode]);
   // A student reading a lesson sees classmates' reflections for THAT lesson. The older
   // ones come from the weekly static file (no Firestore read; classmates' newer ones
@@ -2424,7 +2428,7 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
   // Opening SmartStudy again (switching back to it) also refreshes if the
   // data is more than CLASS_POLL_MS old.
   useEffect(() => {
-    if (isActive && !teacherLive && Date.now() - lastClassLoadRef.current > CLASS_POLL_MS) setClassRefreshKey(k => k + 1);
+    if (isActive && !teacherLive && Date.now() - lastClassLoadRef.current > (entryRequest?.mode === 'student' ? STUDENT_REFRESH_MS : CLASS_POLL_MS)) setClassRefreshKey(k => k + 1);
   }, [isActive]);
 
   useEffect(() => {
