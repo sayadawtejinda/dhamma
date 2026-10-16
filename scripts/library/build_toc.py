@@ -159,10 +159,16 @@ if os.path.exists(FIX):
     ids = [b['id'] for b in B]
     _fx = json.load(open(FIX, encoding='utf8'))
     fixes = {(c['book'], c['page'], c['title']): c for c in _fx['corrections']}
+    by_title = {}
+    for c in _fx['corrections']: by_title.setdefault((c['book'], c['title']), []).append(c)
+    used = set()
     steps = _fx.get('steps', {})            # per book: [[fromPage, delta], ...] every line from that (base) page downward moves by delta
     kept, n_edit, n_del = [], 0, 0
     for bi, t, pg, lvl, sh, ao, base in out:
         c = fixes.get((ids[bi], pg, t))
+        if c is None:                                  # the line moved a little since the review: same book + same title, only one such review
+            cand = by_title.get((ids[bi], t), [])
+            if len(cand) == 1 and cand[0]['status'] != 'del': c = cand[0]      # never delete a line on a title match alone
         if c and c['status'] == 'del': n_del += 1; continue
         nb = base + sum(d for fr, d in steps.get(ids[bi], []) if base >= fr)
         if c and c.get('page_delta'): nb += c['page_delta']
