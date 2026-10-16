@@ -8,10 +8,10 @@
 //   3. the name of the lessons file (the .json you would otherwise import in the app)
 // The pictures are always taken from C:\Users\sayad\Pictures\Screenshots (oldest first, 5 per lesson).
 // They are renamed to continue the numbers (SmartStudy 4 digits, Abhidhamma 6 digits) in https://github.com/sayadawtejinda/dhammaschool (SmartStudy: 0151.png, 0152.png ...),
-// pushed there, and the used screenshots are moved into Screenshots\done so the next time the folder only holds new ones.
+// pushed there, and once they are safely on GitHub (and the lessons are loaded) the used screenshots are deleted from the computer.
 import { createInterface } from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
-import { readFileSync, existsSync, readdirSync, copyFileSync, mkdirSync, renameSync, statSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync, copyFileSync, unlinkSync, statSync } from 'node:fs';
 import { join, basename, extname, isAbsolute } from 'node:path';
 import { homedir } from 'node:os';
 import { execFileSync } from 'node:child_process';
@@ -61,8 +61,15 @@ function prepareRepo(digits) {
     console.log(`Getting a copy of ${IMAGE_REPO} into ${REPO_DIR} (first time only)...`);
     execFileSync('git', ['clone', `https://github.com/${IMAGE_REPO}.git`, REPO_DIR], { stdio: 'inherit' });
   } else {
+    // this folder is only a work copy for the pictures: throw away anything left over from an earlier failed run
+    git(['reset', '--hard']);
+    git(['clean', '-fdq']);
     git(['pull', '--ff-only']);
   }
+  // commits need a name and an email; use the computer's Git ones, or fall back to these for this folder only
+  const has = (k) => { try { return !!git(['config', k]); } catch (e) { return false; } };
+  if (!has('user.name')) git(['config', 'user.name', 'sayadawtejinda']);
+  if (!has('user.email')) git(['config', 'user.email', 'sayadawtejinda@gmail.com']);
   const branch = git(['rev-parse', '--abbrev-ref', 'HEAD']);
   // SmartStudy pictures are numbered with 4 digits (0001.png ...), Abhidhamma's with 6 (001305.png ...): each series continues on its own
   const numbers = readdirSync(REPO_DIR).map(f => (f.match(new RegExp('^(\\d{' + digits + '})\\.(png|jpg|jpeg)$', 'i')) || [])[1]).filter(Boolean).map(n => parseInt(n, 10));
@@ -199,12 +206,10 @@ if (which === 'smartstudy') {
   console.log(`✅ ${added} lesson(s) added to Abhidhamma class "${classId}".`);
 }
 
-// 3. tidy the used screenshots
+// 3. the used screenshots are now safe on GitHub: delete them from the computer
 if (needed) {
-  const done = join(SCREENSHOTS, 'done');
-  mkdirSync(done, { recursive: true });
-  use.forEach(f => renameSync(join(SCREENSHOTS, f), join(done, f)));
-  console.log(`📁 The ${needed} used screenshot(s) were moved to ${done}.`);
+  use.forEach(f => unlinkSync(join(SCREENSHOTS, f)));
+  console.log(`🗑️ The ${needed} used screenshot(s) were deleted from ${SCREENSHOTS}.`);
 }
 console.log('\nAll done. Open the app and refresh to see the new lessons.');
 rl.close();
