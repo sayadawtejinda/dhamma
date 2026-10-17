@@ -165,3 +165,38 @@ export async function refreshClassDocSnapshots(db, appId) {
   console.log(`SmartStudy class files: ${snap.size} classes, ${written} file(s) written`);
   return written;
 }
+
+// ---- Each Abhidhamma class (its lessons with all four age versions) as a plain file ---------------------------------------
+// A lesson is about 55 KB (all four versions), 1-2 MB a class, 12 MB for all classes -- far too much to send out of Firestore
+// to every student who opens a class. This writes public/classSnapshots/abhidhamma-class/{CLASS}.json =
+// { builtAt, classData, lessons } (times as { seconds }, the way the app already reads them). A student uses the file when it
+// is newer than the last lesson edit (config/classMeta versions "abhi:CLASS", set by the teacher's screen), else Firestore.
+export async function refreshAbhidhammaClassFiles(db) {
+  const { collection, getDocs } = await import('firebase/firestore');
+  const ABHI = 'artifacts/lesson-translator-app-v6/public/data';
+  const dir = join(CLASS_DIR, 'abhidhamma-class');
+  mkdirSync(dir, { recursive: true });
+  const builtAt = Date.now();
+  const plain = (v) => {
+    if (v && typeof v.toMillis === 'function') return { seconds: Math.floor(v.toMillis() / 1000), nanoseconds: 0 };
+    if (Array.isArray(v)) return v.map(plain);
+    if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, plain(x)]));
+    return v;
+  };
+  const classes = await getDocs(collection(db, `${ABHI}/classes`));
+  let written = 0;
+  for (const c of classes.docs) {
+    const lessonsSnap = await getDocs(collection(db, `${ABHI}/classes/${c.id}/lessons`));
+    const lessons = lessonsSnap.docs.map(d => plain({ id: d.id, ...d.data() }))
+      .sort((a, b) => ((a.createdAt && a.createdAt.seconds) || 0) - ((b.createdAt && b.createdAt.seconds) || 0) || (a.id < b.id ? -1 : 1));
+    const body = { classData: plain(c.data()), lessons };
+    const file = join(dir, `${encodeURIComponent(c.id)}.json`);
+    let old = null;
+    try { const j = JSON.parse(readFileSync(file, 'utf8')); old = JSON.stringify({ classData: j.classData, lessons: j.lessons }); } catch (e) { /* none yet */ }
+    if (old === JSON.stringify(body)) continue;
+    writeFileSync(file, JSON.stringify({ builtAt, ...body }));
+    written += 1;
+  }
+  console.log(`Abhidhamma class files: ${classes.size} classes, ${written} file(s) written`);
+  return written;
+}

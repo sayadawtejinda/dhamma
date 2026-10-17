@@ -209,6 +209,7 @@ if (which === 'smartstudy') {
     abhiDocs.push({ id, title: l.title || `Lesson ${i + 1}`, content: l.burmeseContent || '', hasVariants: Object.keys(l.variants || {}).length >= 4 });
     added++;
   }
+  await setDoc(doc(db, `artifacts/${appId}/public/data/config/classMeta`), { versions: { [`abhi:${classId}`]: Date.now() } }, { merge: true });
   console.log(`✅ ${added} lesson(s) added to Abhidhamma class "${classId}".`);
 }
 

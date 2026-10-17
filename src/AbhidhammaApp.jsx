@@ -11,6 +11,7 @@ import {
 import { auth, db } from './firebase';
 import { presenceIntervalMs, isOnlineStatusDay } from './presenceDay';
 import { AvatarPeekModal } from './AvatarPeek';
+import { loadClassMeta, setClassMeta } from './classMeta';
 import OnlineStatusWidget from './OnlineStatusWidget';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -1219,20 +1220,46 @@ export default function AbhidhammaApp({ entryRequest, onExit, isActive }) {
       const sort=list=>list.sort((a,b)=>(a.createdAt?.seconds||a.createdAt?._ms/1000||0)-(b.createdAt?.seconds||b.createdAt?._ms/1000||0));
       const mem=abhiLessonsMemory.get(classId);
       if(mem&&Date.now()-mem.at<15*60*1000){setLessons(mem.list);return()=>{u1();};}
-      getDocs(abhiLessonsRef(classId)).then(snap=>{
-        if(cancelled)return;
-        const list=sort(snap.docs.map(d=>({id:d.id,...d.data()})));
-        abhiLessonsMemory.set(classId,{at:Date.now(),list});
-        setLessons(list);
-      }).catch(err=>console.error('Lessons load error:',err.code,err.message));
+      (async()=>{
+        // 1. the class as a plain file on GitHub (no Firestore), when it is newer than the teacher's last edit of its lessons
+        try{
+          const [meta,res]=await Promise.all([
+            loadClassMeta().catch(()=>null),
+            fetch(`${import.meta.env.BASE_URL}classSnapshots/abhidhamma-class/${encodeURIComponent(classId)}.json`,{cache:'no-cache'}).then(r=>r.ok?r.json():null).catch(()=>null),
+          ]);
+          if(res&&Array.isArray(res.lessons)&&meta&&res.builtAt>=((meta.versions&&meta.versions[`abhi:${classId}`])||0)){
+            if(cancelled)return;
+            const list=sort(res.lessons.slice());
+            abhiLessonsMemory.set(classId,{at:Date.now(),list});
+            setLessons(list);
+            return;
+          }
+        }catch(e){ /* fall through to Firestore */ }
+        // 2. Firestore
+        try{
+          const snap=await getDocs(abhiLessonsRef(classId));
+          if(cancelled)return;
+          const list=sort(snap.docs.map(d=>({id:d.id,...d.data()})));
+          abhiLessonsMemory.set(classId,{at:Date.now(),list});
+          setLessons(list);
+        }catch(err){console.error('Lessons load error:',err.code,err.message);}
+      })();
       return()=>{cancelled=true;u1();};
     }
+    let seen=0;
     const u2=onSnapshot(
       abhiLessonsRef(classId),
-      snap => setLessons(
-        snap.docs.map(d=>({id:d.id,...d.data()}))
-          .sort((a,b)=>(a.createdAt?.seconds||0)-(b.createdAt?.seconds||0))
-      ),
+      snap => {
+        seen+=1;
+        // Any change of the lessons while the teacher has the class open (edit, import, generated versions, new picture names...)
+        // tells the students' screens to read Firestore instead of the weekly file until the next file is built.
+        const ch=snap.docChanges();
+        if(ch.length>0&&(seen>=2||ch.some(c=>c.type!=='added')))setClassMeta({versions:{[`abhi:${classId}`]:Date.now()}});
+        setLessons(
+          snap.docs.map(d=>({id:d.id,...d.data()}))
+            .sort((a,b)=>(a.createdAt?.seconds||0)-(b.createdAt?.seconds||0))
+        );
+      },
       err => console.error('Lessons load error:', err.code, err.message)
     );
     return()=>{u1();u2();};
