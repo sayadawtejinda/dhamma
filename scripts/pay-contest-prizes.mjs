@@ -99,7 +99,9 @@ async function main() {
     const how = [];
     for (const w of winners) how.push(await payOne(contest, w.rank, w, w.coins));
     await updateDoc(d.ref, { status: 'paid', paidAt: now, winners });
-    await updateDoc(doc(db, `${P}/classes`, contest.classId), { contest: { id: contest.id, startedAt: contest.startedAt, endsAt: contest.endsAt, prizes, status: 'paid', paidAt: now, winners: winners.map(w => ({ rank: w.rank, name: w.name, total: w.total, coins: w.coins })) } }).catch(e => console.error('class doc update failed', e.message));
+    const paidContest = { id: contest.id, startedAt: contest.startedAt, endsAt: contest.endsAt, prizes, status: 'paid', paidAt: now, winners: winners.map(w => ({ rank: w.rank, name: w.name, total: w.total, coins: w.coins })) };
+    await updateDoc(doc(db, `${P}/classes`, contest.classId), { contest: paidContest }).catch(e => console.error('class doc update failed', e.message));
+    await setDoc(doc(db, `${P}/config/classMeta`), { contests: { [contest.classId]: paidContest } }, { merge: true }).catch(e => console.error('classMeta update failed', e.message)); // the students' screens read the contest from this tiny document
     console.log(`  paid ${winners.length} winner(s) (${how.join(', ')})`);
   }
   process.exit(0);

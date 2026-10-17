@@ -192,6 +192,8 @@ if (which === 'smartstudy') {
   if (existing.length + added.length > 50) die('A SmartStudy class can hold at most 50 lessons. The pictures are on GitHub already; nothing was loaded.');
   if (snap.exists()) await updateDoc(ref, { lessons: [...existing, ...added] });
   else await setDoc(ref, { classId, lessons: added, autoApprove: false }, { merge: true });
+  // students read a class from a plain file; tell their screens this class changed since the file was built
+  await setDoc(doc(db, `artifacts/${appId}/public/data/config/classMeta`), { versions: { [`ss:${classId}`]: Date.now() }, ...(snap.exists() ? {} : { autoApprove: { [classId]: false } }) }, { merge: true });
   console.log(`✅ ${added.length} lesson(s) added to SmartStudy class "${classId}" (now ${existing.length + added.length}).`);
 } else {
   await setDoc(doc(db, `${ABHI}/classes/${classId}`), { classId, autoApprove: false, createdAt: serverTimestamp(), ...(classExists ? {} : { imageBaseUrl: RAW_BASE(branch) }) }, { merge: true });

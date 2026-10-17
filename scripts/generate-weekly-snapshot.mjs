@@ -24,7 +24,7 @@ import { writeFileSync, mkdirSync, readFileSync, readdirSync, existsSync } from 
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { firebaseConfig, appId } from '../src/firebaseConfig.js';
-import { refreshClassSnapshots, CLASS_DIR } from './class-snapshots.mjs';
+import { refreshClassSnapshots, refreshClassDocSnapshots, CLASS_DIR } from './class-snapshots.mjs';
 import { refreshContentSnapshots, refreshAnnouncementsSnapshot, refreshAvatarSnapshot, refreshScheduleSnapshot } from './content-snapshots.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -358,6 +358,7 @@ async function main() {
     // every score live (see class-snapshots.mjs: only what is new is read, and a quiet week changes nothing).
     await refreshClassSnapshots(db, appId, { full: process.argv.includes('--full') });
     await refreshAnnouncementsSnapshot(db, appId);
+    await refreshClassDocSnapshots(db, appId);
   }
   if (want('content')) {
     await refreshContentSnapshots(db);

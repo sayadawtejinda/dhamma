@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import coinDropSound from '../audio/coin-drop.mp3';
+import { loadClassMeta, setClassMeta, bumpLessonVersion } from './classMeta';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { 
   doc, 
@@ -77,7 +78,21 @@ const getClassDocRef = (classId) => doc(db, 'artifacts', appId, 'public', 'data'
 // minutes on the device. Anything the teacher changes about the classes clears it (invalidateClassList).
 const CLASS_LIST_KEY = 'ssClassListLight_v1';
 const invalidateClassList = () => { try { localStorage.removeItem(CLASS_LIST_KEY); localStorage.removeItem('ssClassList_v1'); } catch (e) { /* ignore */ } };
-async function loadClassListLight() {
+async function loadClassListLight({ forStudent = false } = {}) {
+  if (forStudent) {
+    try {
+      const [meta, res] = await Promise.all([
+        loadClassMeta().catch(() => null),
+        fetch(`${import.meta.env.BASE_URL}classSnapshots/smartstudy-class/_classes.json`, { cache: 'no-cache' }).then(r => (r.ok ? r.json() : null)).catch(() => null),
+      ]);
+      if (res && Array.isArray(res.classes) && meta) {
+        const byId = new Map(res.classes.map(c => [c.id, { id: c.id, displayName: c.displayName, teacherId: null, autoApprove: false, lessonCount: c.lessonCount }]));
+        Object.keys(meta.autoApprove || {}).forEach(id => { if (!byId.has(id)) byId.set(id, { id, displayName: null, teacherId: null, autoApprove: false, lessonCount: 0 }); });
+        byId.forEach((c, id) => { c.autoApprove = !!(meta.autoApprove && meta.autoApprove[id]); });
+        return [...byId.values()].sort((a, b) => a.id.localeCompare(b.id));
+      }
+    } catch (e) { /* fall through to Firestore */ }
+  }
   try {
     const c = JSON.parse(localStorage.getItem(CLASS_LIST_KEY) || 'null');
     if (c && Array.isArray(c.list) && Date.now() - c.at < 10 * 60 * 1000) return c.list;
@@ -88,6 +103,21 @@ async function loadClassListLight() {
   return list;
 }
 async function getClassDocCached(classId) {
+  // 1. the class as a plain file on GitHub (no Firestore), when it is newer than the teacher's last edit of its lessons; the
+  //    contest and the "open class" flag, which change during the week, come from the tiny config/classMeta document
+  try {
+    const [meta, res] = await Promise.all([
+      loadClassMeta().catch(() => null),
+      fetch(`${import.meta.env.BASE_URL}classSnapshots/smartstudy-class/${encodeURIComponent(classId)}.json`, { cache: 'no-cache' }).then(r => (r.ok ? r.json() : null)).catch(() => null),
+    ]);
+    if (res && res.data && meta && res.builtAt >= ((meta.versions && meta.versions[`ss:${classId}`]) || 0)) {
+      const data = { ...res.data };
+      if (meta.contests && classId in meta.contests) data.contest = meta.contests[classId];
+      if (meta.autoApprove && classId in meta.autoApprove) data.autoApprove = meta.autoApprove[classId];
+      return { exists: () => true, data: () => data };
+    }
+  } catch (e) { /* fall through to Firestore */ }
+  // 2. Firestore, with a copy kept 15 minutes on the device
   const key = `ssClassDoc_${classId}`;
   try {
     const c = JSON.parse(localStorage.getItem(key) || 'null');
@@ -724,6 +754,7 @@ const ContestCard = ({ classId, contest }) => {
       const id = `${classId}_${startedAt}`;
       await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'smartStudyContests', id), { classId, startedAt, endsAt, prizes: CONTEST_PRIZES, status: 'active' });
       await updateDoc(getClassDocRef(classId), { contest: { id, startedAt, endsAt, prizes: CONTEST_PRIZES, status: 'active' } });
+      setClassMeta({ contests: { [classId]: { id, startedAt, endsAt, prizes: CONTEST_PRIZES, status: 'active' } } });
     } catch (e) { console.error(e); alert('Could not start the contest. Please try again.'); }
     setBusy(false);
   };
@@ -782,6 +813,7 @@ const ContestCard = ({ classId, contest }) => {
       const paidAt = Date.now();
       await updateDoc(contestRef, { status: 'paid', paidAt, winners });
       await updateDoc(getClassDocRef(classId), { contest: { id: contest.id, startedAt: contest.startedAt, endsAt: contest.endsAt, prizes, status: 'paid', paidAt, winners } });
+      setClassMeta({ contests: { [classId]: { id: contest.id, startedAt: contest.startedAt, endsAt: contest.endsAt, prizes, status: 'paid', paidAt, winners } } });
       alert(`Paid ${winners.length} winner(s).`);
     } catch (e) { console.error(e); alert('Something went wrong while paying. Please check the contest card and try again.'); }
     setBusy(false);
@@ -793,6 +825,7 @@ const ContestCard = ({ classId, contest }) => {
     try {
       await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'smartStudyContests', contest.id), { status: 'cancelled' });
       await updateDoc(getClassDocRef(classId), { contest: null });
+      setClassMeta({ contests: { [classId]: null } });
     } catch (e) { console.error(e); alert('Could not cancel. Please try again.'); }
     setBusy(false);
   };
@@ -2308,7 +2341,16 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
     setClassDataLoaded(false); // reset while new class loads
     const apply = (data) => { if (data) { setClassData(data); setLessons(data.lessons || []); } else { setClassData(null); setLessons([]); } setClassDataLoaded(true); };
     if (entryRequest?.mode !== 'student') {
-      const classUnsub = onSnapshot(getClassDocRef(classId), (docSnap) => { apply(docSnap.exists() ? docSnap.data() : null); }, (error) => console.error("Error fetching class data:", error));
+      let prevLessons = null;
+      const classUnsub = onSnapshot(getClassDocRef(classId), (docSnap) => {
+        const data = docSnap.exists() ? docSnap.data() : null;
+        // Any change of the class's lessons while the teacher has it open (every edit, import, generated quiz...) tells the
+        // students' screens to read Firestore instead of the weekly file until the next file is built.
+        const cur = JSON.stringify((data && data.lessons) || []);
+        if (prevLessons !== null && cur !== prevLessons) bumpLessonVersion(classId);
+        prevLessons = cur;
+        apply(data);
+      }, (error) => console.error("Error fetching class data:", error));
       return () => classUnsub();
     }
     let cancelled = false;
@@ -2925,10 +2967,12 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
         if (!sawThisClass) batch.update(getClassDocRef(classId), { autoApprove: true });
         await batch.commit();
         invalidateClassList();
+        setClassMeta({ autoApprove: Object.fromEntries([...classesSnap.docs.map(d => [d.id, d.id === classId]), [classId, true]]) });
         setModal({ message: `Auto-Approve is now ON for ${classId}. It's the only open class now — every other class's Auto-Approve was switched off.`, type: 'success', visible: true });
       } else {
         await updateDoc(getClassDocRef(classId), { autoApprove: false });
         invalidateClassList();
+        setClassMeta({ autoApprove: { [classId]: false } });
         setModal({ message: `Auto-Approve is now OFF.`, type: 'success', visible: true });
       }
     } catch (error) { setModal({ message: `Failed to toggle Auto-Approve: ${error.message}`, type: 'error', visible: true }); }
@@ -3516,7 +3560,7 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
     if (view !== 'classPicker') return;
     setClassPickerLoading(true);
     const highlightClassId = entryRequest?.classId || null;
-    loadClassListLight()
+    loadClassListLight({ forStudent: true })
       .then(async classList => {
         let ids = classList.map(c => c.id).sort();
         if (highlightClassId && !ids.includes(highlightClassId)) ids = [highlightClassId, ...ids];
@@ -3852,7 +3896,7 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
 
   const handleTeacherCreateClass = useCallback(async () => {
     if (!classId || !currentUserId) return; setIsLoading(true);
-    try { await setDoc(getClassDocRef(classId), { classId, teacherId: currentUserId, lessons: [], autoApprove: false }, { merge: true }); invalidateClassList(); setModal({ message: `Class initialized.`, type: 'success', visible: true }); } 
+    try { await setDoc(getClassDocRef(classId), { classId, teacherId: currentUserId, lessons: [], autoApprove: false }, { merge: true }); invalidateClassList(); setClassMeta({ autoApprove: { [classId]: false } }); setModal({ message: `Class initialized.`, type: 'success', visible: true }); } 
     catch (error) { setModal({ message: `Failed: ${error.message}`, type: 'error', visible: true }); } finally { setIsLoading(false); }
   }, [classId, currentUserId]);
 

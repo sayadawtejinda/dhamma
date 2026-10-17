@@ -120,3 +120,48 @@ export async function refreshClassSnapshots(db, appId, { full = false } = {}) {
   console.log(`Class snapshots (${FULL ? 'full rebuild' : 'incremental'}): ${scoresSnap.size} SmartStudy score(s), ${reflSnap.size} reflection(s), ${abhiScoresSnap.size} Abhidhamma score(s), ${dsSnap.size} Dhammaschool answer(s) read; ${filesWritten} file(s) written`);
   return { full: FULL, read: scoresSnap.size + reflSnap.size + abhiScoresSnap.size + dsSnap.size, filesWritten };
 }
+
+// ---- Each SmartStudy class as a plain file, so students read their lessons from GitHub, not from Firestore -------------
+// A SmartStudy class document holds ALL of the class's lessons with their four levels and quizzes: 200-400 KB each (2.4 MB
+// for the 12 classes), and Firestore charges for the data it sends out. This writes every class document to
+//   public/classSnapshots/smartstudy-class/{CLASS}.json   = { builtAt, data: <the class document> }
+//   public/classSnapshots/smartstudy-class/_classes.json  = the list of classes for the students' class picker
+// and refreshes the tiny document config/classMeta that carries what changes during the week (the contest, which class is
+// "open", and when each class's lessons were last edited). A student uses the file when it is newer than the last edit and
+// otherwise (the teacher edited since) falls back to Firestore -- see getClassDocCached in SmartStudy.jsx.
+export async function refreshClassDocSnapshots(db, appId) {
+  const { collection, getDocs, doc, setDoc } = await import('firebase/firestore');
+  const snap = await getDocs(collection(db, `artifacts/${appId}/public/data/classes`));
+  const dir = join(CLASS_DIR, 'smartstudy-class');
+  mkdirSync(dir, { recursive: true });
+  const builtAt = Date.now();
+  const plain = (v) => {
+    if (v && typeof v.toMillis === 'function') return v.toMillis();
+    if (Array.isArray(v)) return v.map(plain);
+    if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, plain(x)]));
+    return v;
+  };
+  const list = [], contests = {}, autoApprove = {};
+  let written = 0;
+  for (const d of snap.docs) {
+    const data = plain(d.data());
+    list.push({ id: d.id, displayName: data.displayName || null, lessonCount: (data.lessons || []).length });
+    contests[d.id] = data.contest || null;
+    autoApprove[d.id] = data.autoApprove === true;
+    const file = join(dir, `${encodeURIComponent(d.id)}.json`);
+    let old = null;
+    try { old = JSON.stringify(JSON.parse(readFileSync(file, 'utf8')).data); } catch (e) { /* none yet */ }
+    if (old === JSON.stringify(data)) continue;
+    writeFileSync(file, JSON.stringify({ builtAt, data }));
+    written += 1;
+  }
+  list.sort((a, b) => (a.id < b.id ? -1 : 1));
+  const listFile = join(dir, '_classes.json');
+  let oldList = null;
+  try { oldList = JSON.stringify(JSON.parse(readFileSync(listFile, 'utf8')).classes); } catch (e) { /* none yet */ }
+  if (oldList !== JSON.stringify(list)) { writeFileSync(listFile, JSON.stringify({ builtAt, classes: list })); written += 1; }
+  // what the app reads live (tiny): the contest of each class, which class is open, and the lesson-edit times (kept as they are)
+  await setDoc(doc(db, `artifacts/${appId}/public/data/config/classMeta`), { contests, autoApprove, builtAt }, { merge: true });
+  console.log(`SmartStudy class files: ${snap.size} classes, ${written} file(s) written`);
+  return written;
+}
