@@ -72,6 +72,21 @@ const fetchWithRetry = async (url, options, maxRetries = 3) => {
 const getClassDocRef = (classId) => doc(db, 'artifacts', appId, 'public', 'data', 'classes', classId);
 // A class document holds all of the class's lessons (200-400 KB). A student's screen reads it through this: a copy kept 15
 // minutes on the device is used when there is one, so entering a class, checking it and showing its lessons is ONE read.
+// The list of classes (ids, names, owner, lesson count, which one is "open") -- needed by both class pickers. Reading it means
+// reading every class document (2.4 MB in all, because each holds its lessons), so only these few fields are kept, for 10
+// minutes on the device. Anything the teacher changes about the classes clears it (invalidateClassList).
+const CLASS_LIST_KEY = 'ssClassListLight_v1';
+const invalidateClassList = () => { try { localStorage.removeItem(CLASS_LIST_KEY); localStorage.removeItem('ssClassList_v1'); } catch (e) { /* ignore */ } };
+async function loadClassListLight() {
+  try {
+    const c = JSON.parse(localStorage.getItem(CLASS_LIST_KEY) || 'null');
+    if (c && Array.isArray(c.list) && Date.now() - c.at < 10 * 60 * 1000) return c.list;
+  } catch (e) { /* no cache */ }
+  const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'classes'));
+  const list = snap.docs.map(d => { const x = d.data(); return { id: d.id, displayName: x.displayName || null, teacherId: x.teacherId || null, autoApprove: x.autoApprove === true, lessonCount: (x.lessons || []).length }; }).sort((a, b) => a.id.localeCompare(b.id));
+  try { localStorage.setItem(CLASS_LIST_KEY, JSON.stringify({ at: Date.now(), list })); } catch (e) { /* ignore */ }
+  return list;
+}
 async function getClassDocCached(classId) {
   const key = `ssClassDoc_${classId}`;
   try {
@@ -2777,6 +2792,7 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
       onConfirm: async () => {
         try {
           await deleteDoc(getClassDocRef(classIdToDelete));
+          invalidateClassList();
           setAllTeacherClasses(prev => prev.filter(c => c.id !== classIdToDelete));
           setConfirmationModal({ message: '', onConfirm: null });
         } catch (err) {
@@ -2799,8 +2815,8 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
   // Load all classes when teacher opens the class picker
   useEffect(() => {
     if (view !== 'teacherLogin') return;
-    getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'classes'))
-      .then(snap => setAllTeacherClasses(snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>a.id.localeCompare(b.id))))
+    loadClassListLight()
+      .then(list => setAllTeacherClasses(list))
       .catch(() => {});
   }, [view]);
 
@@ -2808,6 +2824,7 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
     if (!classId || !displayName.trim()) return;
     try {
       await updateDoc(getClassDocRef(classId), { displayName: displayName.trim() });
+      invalidateClassList();
       setAllTeacherClasses(prev => prev.map(c => c.id === classId ? { ...c, displayName: displayName.trim() } : c));
     } catch(e) { console.error('Rename error:', e); }
   }, []);
@@ -2842,6 +2859,7 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
         const batch = writeBatch(db);
         chunk.forEach(c => batch.update(getClassDocRef(c.id), { teacherId: currentUserId }));
         await batch.commit();
+        invalidateClassList();
       }
       setAllTeacherClasses(prev => prev.map(c =>
         mismatched.some(m => m.id === c.id) ? { ...c, teacherId: currentUserId } : c
@@ -2906,9 +2924,11 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
         });
         if (!sawThisClass) batch.update(getClassDocRef(classId), { autoApprove: true });
         await batch.commit();
+        invalidateClassList();
         setModal({ message: `Auto-Approve is now ON for ${classId}. It's the only open class now — every other class's Auto-Approve was switched off.`, type: 'success', visible: true });
       } else {
         await updateDoc(getClassDocRef(classId), { autoApprove: false });
+        invalidateClassList();
         setModal({ message: `Auto-Approve is now OFF.`, type: 'success', visible: true });
       }
     } catch (error) { setModal({ message: `Failed to toggle Auto-Approve: ${error.message}`, type: 'error', visible: true }); }
@@ -3496,16 +3516,16 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
     if (view !== 'classPicker') return;
     setClassPickerLoading(true);
     const highlightClassId = entryRequest?.classId || null;
-    getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'classes'))
-      .then(async snap => {
-        let ids = snap.docs.map(d => d.id).sort();
+    loadClassListLight()
+      .then(async classList => {
+        let ids = classList.map(c => c.id).sort();
         if (highlightClassId && !ids.includes(highlightClassId)) ids = [highlightClassId, ...ids];
         setClassPickerList(ids);
 
         // Whichever single class currently has Auto-Approve ON is the
         // "open" class — students tapping any class in the picker land
         // there instead, so the teacher can steer everyone into one class.
-        const openDoc = snap.docs.find(d => d.data().autoApprove === true);
+        const openDoc = classList.find(c => c.autoApprove === true);
         setOpenClassId(openDoc ? openDoc.id : null);
 
         // Load per-class lesson counts and student rank (parallel queries)
@@ -3513,8 +3533,8 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
         await Promise.all(ids.map(async cId => {
           try {
             // lesson count from class doc
-            const classDoc = snap.docs.find(d => d.id === cId);
-            const lessonCount = classDoc ? (classDoc.data().lessons || []).length : 0;
+            const classDoc = classList.find(c => c.id === cId);
+            const lessonCount = classDoc ? classDoc.lessonCount : 0;
             // student's completions for this class
             const myCompletions = new Set(
               allMyScoresGlobal.filter(s => s.classId === cId).map(s => s.lessonId)
@@ -3832,7 +3852,7 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
 
   const handleTeacherCreateClass = useCallback(async () => {
     if (!classId || !currentUserId) return; setIsLoading(true);
-    try { await setDoc(getClassDocRef(classId), { classId, teacherId: currentUserId, lessons: [], autoApprove: false }, { merge: true }); setModal({ message: `Class initialized.`, type: 'success', visible: true }); } 
+    try { await setDoc(getClassDocRef(classId), { classId, teacherId: currentUserId, lessons: [], autoApprove: false }, { merge: true }); invalidateClassList(); setModal({ message: `Class initialized.`, type: 'success', visible: true }); } 
     catch (error) { setModal({ message: `Failed: ${error.message}`, type: 'error', visible: true }); } finally { setIsLoading(false); }
   }, [classId, currentUserId]);
 
