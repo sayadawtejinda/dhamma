@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useLayoutEffect } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, doc, setDoc, updateDoc, arrayUnion, onSnapshot, query, orderBy, serverTimestamp, addDoc, getDoc, where, getDocs, limit, deleteDoc, writeBatch, increment, runTransaction } from 'firebase/firestore';
+import { collection, doc, setDoc, updateDoc, arrayUnion, onSnapshot, query, orderBy, serverTimestamp, addDoc, getDoc, where, getDocs, limit, deleteDoc, writeBatch, increment, runTransaction, getCountFromServer } from 'firebase/firestore';
 import {
   BookOpen, Edit2, Zap, RotateCw, Upload, Download, CheckCircle, MessageCircle, Send, Heart,
   Trophy, Timer, Pause, ChevronDown, ChevronRight, Gamepad2, X, ExternalLink, Youtube, Music,
@@ -666,6 +666,9 @@ const AbhiTeacherLogin = ({ onComplete, onClose }) => {
 };
 
 
+// A student's copy of each class's lessons, kept while the page stays open (see the lessons effect in the main component)
+const abhiLessonsMemory=new Map();
+
 // ─── LessonItem ───────────────────────────────────────────────────────────────
 const AbhiLessonItem = ({ lesson, classId, isTeacher, studentAgeGroup, studentName, userId, onEdit, onGenerateVariants, onTakeQuiz, isGenerating, isOpen, onToggle, classImageBase, completedFromParent }) => {
   const [tab,setTab]=useState('content');
@@ -1184,7 +1187,7 @@ export default function AbhidhammaApp({ entryRequest, onExit, isActive }) {
         try{
           const scoresSnap=await getDocs(query(abhiScoresRef(),where('classId','==',c.id)));
           if(lessonCountCacheRef.current[c.id]==null){
-            lessonCountCacheRef.current[c.id]=(await getDocs(abhiLessonsRef(c.id))).size;
+            lessonCountCacheRef.current[c.id]=(await getCountFromServer(abhiLessonsRef(c.id))).data().count;
           }
           const byStudent={};
           scoresSnap.docs.forEach(d=>{
@@ -1208,6 +1211,22 @@ export default function AbhidhammaApp({ entryRequest, onExit, isActive }) {
   useEffect(()=>{
     if(!classId||!authReady)return;
     const u1=onSnapshot(abhiClassDocRef(classId),snap=>{if(snap.exists()){setClassData(snap.data());setClassImageBase(snap.data().imageBaseUrl||DEFAULT_IMG_BASE);}else setClassData(null);});
+    // A class's lessons are about 55 KB each (all four age versions) -- 1-2 MB a class. The teacher keeps the live listener; a
+    // student reads them once per class and keeps them in memory for 15 minutes instead of being sent
+    // all of them again on every opening and every change.
+    if(role==='Student'){
+      let cancelled=false;
+      const sort=list=>list.sort((a,b)=>(a.createdAt?.seconds||a.createdAt?._ms/1000||0)-(b.createdAt?.seconds||b.createdAt?._ms/1000||0));
+      const mem=abhiLessonsMemory.get(classId);
+      if(mem&&Date.now()-mem.at<15*60*1000){setLessons(mem.list);return()=>{u1();};}
+      getDocs(abhiLessonsRef(classId)).then(snap=>{
+        if(cancelled)return;
+        const list=sort(snap.docs.map(d=>({id:d.id,...d.data()})));
+        abhiLessonsMemory.set(classId,{at:Date.now(),list});
+        setLessons(list);
+      }).catch(err=>console.error('Lessons load error:',err.code,err.message));
+      return()=>{cancelled=true;u1();};
+    }
     const u2=onSnapshot(
       abhiLessonsRef(classId),
       snap => setLessons(
@@ -1217,7 +1236,7 @@ export default function AbhidhammaApp({ entryRequest, onExit, isActive }) {
       err => console.error('Lessons load error:', err.code, err.message)
     );
     return()=>{u1();u2();};
-  },[classId,authReady]);
+  },[classId,authReady,role]);
 
   const enterClass = (cId) => {
     // Reset all class-specific state to prevent stale data rendering

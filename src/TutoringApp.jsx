@@ -22,6 +22,7 @@ import {
   serverTimestamp,
   Timestamp,
   getDocs,
+  getCountFromServer,
   deleteDoc,
   writeBatch,
   orderBy,
@@ -2087,8 +2088,9 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
       const list = await Promise.all(snap.docs.map(async d => {
         let lessonCount = 0;
         try {
-          const lessonsSnap = await getDocs(collection(db, 'artifacts', 'lesson-translator-app-v6', 'public', 'data', 'classes', d.id, 'lessons'));
-          lessonCount = lessonsSnap.size;
+          // Only the NUMBER of lessons is wanted. Reading the lesson documents (about 55 KB each, 12 MB for all classes) was
+          // the biggest single source of data sent out of Firestore; a count query sends none of them.
+          lessonCount = (await getCountFromServer(collection(db, 'artifacts', 'lesson-translator-app-v6', 'public', 'data', 'classes', d.id, 'lessons'))).data().count;
         } catch (e) {}
         return { classId: d.id, displayName: d.data().displayName || d.id, lessonCount };
       }));
@@ -2106,11 +2108,18 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
 
   const loadSmartStudyClassList = async () => {
     if (smartStudyClasses !== null) return smartStudyClasses; // already loaded/cached
+    // Only the number of lessons per class is wanted, but it lives inside each class document (200-400 KB each, 2.4 MB in
+    // all), so the list is remembered on this device for 6 hours instead of being read every time.
+    try {
+      const cached = JSON.parse(localStorage.getItem('ssClassList_v1') || 'null');
+      if (cached && Array.isArray(cached.list) && Date.now() - cached.at < 6 * 60 * 60 * 1000) { setSmartStudyClasses(cached.list); return cached.list; }
+    } catch (e) { /* no cache */ }
     setPickerLoading(true);
     try {
       const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'classes'));
       const list = snap.docs.map(d => ({ classId: d.id, lessonCount: (d.data().lessons || []).length }));
       list.sort((a, b) => a.classId.localeCompare(b.classId));
+      try { localStorage.setItem('ssClassList_v1', JSON.stringify({ at: Date.now(), list })); } catch (e) { /* ignore */ }
       setSmartStudyClasses(list);
       setPickerLoading(false);
       return list;

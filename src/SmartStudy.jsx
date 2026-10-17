@@ -70,6 +70,18 @@ const fetchWithRetry = async (url, options, maxRetries = 3) => {
 };
 
 const getClassDocRef = (classId) => doc(db, 'artifacts', appId, 'public', 'data', 'classes', classId);
+// A class document holds all of the class's lessons (200-400 KB). A student's screen reads it through this: a copy kept 15
+// minutes on the device is used when there is one, so entering a class, checking it and showing its lessons is ONE read.
+async function getClassDocCached(classId) {
+  const key = `ssClassDoc_${classId}`;
+  try {
+    const c = JSON.parse(localStorage.getItem(key) || 'null');
+    if (c && c.data && Date.now() - c.at < 15 * 60 * 1000) return { exists: () => true, data: () => c.data };
+  } catch (e) { /* no cache */ }
+  const snap = await getDoc(getClassDocRef(classId));
+  if (snap.exists()) { try { localStorage.setItem(key, JSON.stringify({ at: Date.now(), data: snap.data() })); } catch (e) { /* too big for the device storage: just not kept */ } }
+  return snap;
+}
 const getTeacherPasscodeDocRef = () => doc(db, 'artifacts', appId, 'public', 'data', 'config', 'teacherPasscode');
 const getScoresCollectionRef = () => collection(db, 'artifacts', appId, 'public', 'data', 'scores');
 const getCompletionsCollectionRef = () => collection(db, 'artifacts', appId, 'public', 'data', 'quizCompletions');
@@ -2272,15 +2284,25 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
     return () => unsubscribe(); 
   }, []); 
 
-  // The class's own doc (its lessons) stays live -- it's one small doc.
+  // The class's own doc holds ALL the class's lessons (with their four levels and quizzes): 200-400 KB, not "one small doc".
+  // The teacher keeps a live listener on it. A student reads it ONCE when the class is opened and keeps the copy for 15
+  // minutes on the device, because every live delivery (on opening, and again whenever anything in the class changes) sent
+  // the whole document to every student's screen.
   useEffect(() => {
     if (!isAuthReady || !classId) return;
     setClassDataLoaded(false); // reset while new class loads
-    const classUnsub = onSnapshot(getClassDocRef(classId), (docSnap) => {
-      if (docSnap.exists()) { const data = docSnap.data(); setClassData(data); setLessons(data.lessons || []); } else { setClassData(null); setLessons([]); } setClassDataLoaded(true);
-    }, (error) => console.error("Error fetching class data:", error));
-    return () => classUnsub();
-  }, [isAuthReady, classId]);
+    const apply = (data) => { if (data) { setClassData(data); setLessons(data.lessons || []); } else { setClassData(null); setLessons([]); } setClassDataLoaded(true); };
+    if (entryRequest?.mode !== 'student') {
+      const classUnsub = onSnapshot(getClassDocRef(classId), (docSnap) => { apply(docSnap.exists() ? docSnap.data() : null); }, (error) => console.error("Error fetching class data:", error));
+      return () => classUnsub();
+    }
+    let cancelled = false;
+    getClassDocCached(classId).then((docSnap) => {
+      if (cancelled) return;
+      apply(docSnap.exists() ? docSnap.data() : null);
+    }).catch((error) => { console.error("Error fetching class data:", error); if (!cancelled) setClassDataLoaded(true); });
+    return () => { cancelled = true; };
+  }, [isAuthReady, classId, entryRequest?.mode]);
 
   // Everyone's scores / hearts / reflections / roster / completions for the
   // class (the leaderboards). A student's tab keeps this app mounted all day,
@@ -3586,7 +3608,7 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
     localStorage.setItem('lastClassId', actualTargetId);
     localStorage.setItem('lastUserName', enteredName);
     try {
-      const classDocSnap = await getDoc(getClassDocRef(actualTargetId));
+      const classDocSnap = await getClassDocCached(actualTargetId);
       if (!classDocSnap.exists()) { setModal({ message: 'This class does not exist.', type: 'error', visible: true }); return; }
       const rosterDocRef = getRosterDocRef(actualTargetId, enteredName);
       const docSnap = await getDoc(rosterDocRef);
@@ -3619,7 +3641,7 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
     localStorage.setItem('lastClassId', enteredClassId);
     localStorage.setItem('lastUserName', enteredName);
     try {
-      const classDocSnap = await getDoc(getClassDocRef(enteredClassId));
+      const classDocSnap = await getClassDocCached(enteredClassId);
       if (!classDocSnap.exists()) { setModal({ message: 'Class ID does not exist. Please check and try again.', type: 'error', visible: true }); return; }
       const isAutoApprove = classDocSnap.data().autoApprove === true;
       const rosterDocRef = getRosterDocRef(enteredClassId, enteredName);
