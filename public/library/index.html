@@ -146,7 +146,8 @@ h2.sec{margin:22px 0 8px;font-size:1.1rem;color:var(--accent)}
 #btoc button:hover{background:var(--line)}
 #btoc button.here{background:var(--accent2);color:#2a1a08;font-weight:700}
 #btoc input{width:100%;padding:6px 10px;border-radius:10px;border:2px solid var(--line);background:var(--card);color:var(--ink);font:inherit;margin-bottom:4px}
-@media(max-width:800px){.rt{gap:5px;padding:6px 8px}.rt .btn{padding:7px 12px}.rt input{width:64px}.dh{padding:10px 12px}#btoc{max-height:46vh}}.sumb{line-height:1.9;font-size:1.02rem}.sumb h4{margin:1em 0 .2em;color:var(--accent);font-size:1.05rem}.sumb p{margin:.5em 0}.sumb ul{margin:.3em 0;padding-left:1.3em}.sumb li{margin:.25em 0}
+@media(max-width:800px){.rt{gap:5px;padding:6px 8px}.rt .btn{padding:7px 12px}.rt input{width:64px}.dh{padding:10px 12px}#btoc{max-height:46vh}}.book,.tcard{position:relative}.sumchip{position:absolute;top:6px;right:6px;z-index:2;width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.85);color:#555;display:grid;place-items:center;font-size:.95rem;opacity:.55;box-shadow:0 1px 4px rgba(0,0,0,.25)}.sumchip.has{opacity:1;background:var(--accent2);color:#2a1a08}.sumchip:hover{opacity:1}
+.sumb{line-height:1.9;font-size:1.02rem}.sumb h4{margin:1em 0 .2em;color:var(--accent);font-size:1.05rem}.sumb p{margin:.5em 0}.sumb ul{margin:.3em 0;padding-left:1.3em}.sumb li{margin:.25em 0}
 .trk button.has,.btn.has{box-shadow:0 0 0 2px var(--accent2) inset}
 .sdot{color:var(--accent2);font-size:.85em}
 </style>
@@ -292,9 +293,9 @@ addEventListener('keydown',e=>{if(/input|select|textarea/i.test(e.target.tagName
 // ---------- Books
 function renderBooks(){const q=norm($('#bq').value.trim());const l=B.filter(b=>!q||norm(b.title).includes(q));
  $('#bcount').textContent=`စာအုပ် ${mn(l.length)} အုပ်`;
- $('#blist').innerHTML=l.map(b=>`<button class="book" data-id="${b.id}"><div class="cv"><img loading="lazy" src="covers/${b.cover||b.id+'.jpg'}" alt="" onerror="this.replaceWith('📖')"></div><h4>${esc(b.title)}</h4><small>${b.pages?mn(b.pages)+' စာမျက်နှာ · ':''}${b.mb} MB</small></button>`).join('')||'<div class="empty">မတွေ့ပါ</div>'}
+ $('#blist').innerHTML=l.map(b=>`<button class="book" data-id="${b.id}"><span class="sumchip ${hasSum('book',b.id)?'has':''}" data-sumb="${b.id}" title="အနှစ်ချုပ်">📝</span><div class="cv"><img loading="lazy" src="covers/${b.cover||b.id+'.jpg'}" alt="" onerror="this.replaceWith('📖')"></div><h4>${esc(b.title)}</h4><small>${b.pages?mn(b.pages)+' စာမျက်နှာ · ':''}${b.mb} MB</small></button>`).join('')||'<div class="empty">မတွေ့ပါ</div>'}
 $('#bq').oninput=()=>{renderBooks();renderToc($('#bq').value)};
-$('#blist').onclick=e=>{const c=e.target.closest('.book');if(c)openBook(c.dataset.id)};
+$('#blist').onclick=e=>{const sc=e.target.closest('[data-sumb]');if(sc){const b=B.find(x=>x.id===sc.dataset.sumb);showSummary('book',sc.dataset.sumb,b?b.title:'');return}const c=e.target.closest('.book');if(c)openBook(c.dataset.id)};
 // The browser's own PDF viewer (Edge in particular) ignores page changes inside an iframe, so the book is shown in Mozilla's
 // PDF.js viewer, which always opens the right page. The PDF is read from the published site (it needs CORS, which GitHub Pages allows).
 const PDF_SITE='https://sayadawtejinda.github.io/dhamma/library/books/';
@@ -316,10 +317,10 @@ function renderTexts(){const q=norm($('#tq').value.trim());let g=null,h='';
  TX.filter(b=>!q||norm(b.title).includes(q)||norm(b.group).includes(q)).forEach(b=>{
   if(b.group!==g){if(g!==null)h+='</div>';g=b.group;h+=`<div class="grp">${esc(g)}</div><div class="list">`}
   const pg=store.get('tx:'+b.id,0),pc=b.pages>1?Math.round(pg/(b.pages-1)*100):0;
-  h+=`<button class="tcard" data-id="${b.id}"><h3>${esc(b.title)}</h3><small>≈ ${fmtLong(tmin(b.chars)*60)} ဖတ်ရန် · ${mn(b.pages)} စာမျက်နှာ${pg?` · ဖတ်ပြီး ${mn(pc)}%`:''}</small>${pg?`<div class="bar2"><i style="width:${pc}%"></i></div>`:''}</button>`});
+  h+=`<button class="tcard" data-id="${b.id}"><span class="sumchip ${hasSum('text',b.id)?'has':''}" data-sumt="${b.id}" title="အနှစ်ချုပ်">📝</span><h3>${esc(b.title)}</h3><small>≈ ${fmtLong(tmin(b.chars)*60)} ဖတ်ရန် · ${mn(b.pages)} စာမျက်နှာ${pg?` · ဖတ်ပြီး ${mn(pc)}%`:''}</small>${pg?`<div class="bar2"><i style="width:${pc}%"></i></div>`:''}</button>`});
  $('#tlist').innerHTML=h?h+'</div>':'<div class="empty">မတွေ့ပါ</div>'}
 $('#tq').oninput=()=>{renderTexts();renderTres($('#tq').value)};
-$('#tlist').onclick=e=>{const c=e.target.closest('.tcard');if(c)openText(c.dataset.id)};
+$('#tlist').onclick=e=>{const sc=e.target.closest('[data-sumt]');if(sc){const b=TX.find(x=>x.id===sc.dataset.sumt);showSummary('text',sc.dataset.sumt,b?b.title:'');return}const c=e.target.closest('.tcard');if(c)openText(c.dataset.id)};
 const rd=$('#rd');
 function setFS(d){const v=Math.min(34,Math.max(14,(store.get('fs',19))+d));store.set('fs',v);rd.style.setProperty('--fs',v+'px')}
 function setTheme(t){rd.classList.remove('t-sepia','t-dark');if(t)rd.classList.add('t-'+t);store.set('rth',t)}
