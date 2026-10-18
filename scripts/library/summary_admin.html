@@ -100,8 +100,10 @@ $('#pub').onclick=async()=>{if(dirty&&!(await save()))return;const lg=$('#log');
 addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue=''}});
 
 // ---- auto layout: headings, line breaks of (က)(ခ) items, first sentence of a paragraph in bold.  Result is plain text with ### / - / ** marks, so it stays editable.
+// a "။" or "၊" that landed at the start of the next line goes back to the end of the previous line
+function fixPunct(t){return String(t).replace(/\r\n?/g,'\n').replace(/[ \t]*\n+[ \t]*(?=[။၊])/g,'')}
 function fmtSummary(raw, bold=true){
-  const lines=String(raw).replace(/\r\n?/g,'\n').split('\n').map(l=>l.trim());
+  const lines=fixPunct(raw).split('\n').map(l=>l.trim());
   const items=[];            // {t:'h'|'p'|'li', x}
   const isItem=l=>/^\(([က-အ]|[၀-၉]{1,2}|[0-9]{1,2})\)\s*\S/.test(l)||/^[-*•]\s+\S/.test(l);
   const isHead=l=>/^[၀-၉0-9]+။\s*\S/.test(l)&&!/[။၊]$/.test(l)&&l.length<140;
@@ -154,7 +156,7 @@ $('#bScan').onclick=()=>{
 $('#bSave').onclick=async()=>{
   const tapes=Object.fromEntries(CAT.items.filter(i=>i.kind==='tape').map(i=>[+i.key,i]));let n=0;$('#bSave').disabled=true;
   for(const b of bulkBlocks){const it=tapes[b.n];if(!it)continue;
-    const text=$('#bFmt').checked?fmtSummary(b.text,true):b.text;const r=await api('/api/save',{kind:'tape',key:String(b.n),text});if(!r.error){it.has=true;CAT.counts=r.counts;n++;$('#bMsg').textContent=`⏳ ${n} / ${bulkBlocks.length}`}}
+    const text=$('#bFmt').checked?fmtSummary(b.text,true):fixPunct(b.text);const r=await api('/api/save',{kind:'tape',key:String(b.n),text});if(!r.error){it.has=true;CAT.counts=r.counts;n++;$('#bMsg').textContent=`⏳ ${n} / ${bulkBlocks.length}`}}
   $('#bMsg').textContent=`✅ ${n} ခွေ သိမ်းပြီး — ဘယ်ဘက်က ခွေတစ်ခုကို ရွေးကြည့်ပြီး ပြင်လို့ရတယ်။ ပြီးရင် 🚀 တင်မည်။`;counts();render()};
 $('#fmt').onclick=()=>{const t=$('#ta').value;if(!t.trim())return;$('#ta').value=fmtSummary(t,true);dirty=true;preview();$('#msg').style.color='';$('#msg').textContent='🪄 စီစဉ်ပြီး — မကြိုက်ရင် Ctrl+Z နဲ့ ပြန်လုပ်ပါ၊ ပြီးမှ သိမ်းပါ'};
 init();
