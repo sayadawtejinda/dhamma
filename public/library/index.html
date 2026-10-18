@@ -146,7 +146,10 @@ h2.sec{margin:22px 0 8px;font-size:1.1rem;color:var(--accent)}
 #btoc button:hover{background:var(--line)}
 #btoc button.here{background:var(--accent2);color:#2a1a08;font-weight:700}
 #btoc input{width:100%;padding:6px 10px;border-radius:10px;border:2px solid var(--line);background:var(--card);color:var(--ink);font:inherit;margin-bottom:4px}
-@media(max-width:800px){.rt{gap:5px;padding:6px 8px}.rt .btn{padding:7px 12px}.rt input{width:64px}.dh{padding:10px 12px}#btoc{max-height:46vh}}</style>
+@media(max-width:800px){.rt{gap:5px;padding:6px 8px}.rt .btn{padding:7px 12px}.rt input{width:64px}.dh{padding:10px 12px}#btoc{max-height:46vh}}.sumb{line-height:1.9;font-size:1.02rem}.sumb h4{margin:1em 0 .2em;color:var(--accent);font-size:1.05rem}.sumb p{margin:.5em 0}.sumb ul{margin:.3em 0;padding-left:1.3em}.sumb li{margin:.25em 0}
+.trk button.has,.btn.has{box-shadow:0 0 0 2px var(--accent2) inset}
+.sdot{color:var(--accent2);font-size:.85em}
+</style>
 </head>
 <body>
 <header class="hero"><button id="theme" title="Light / Dark">🌓</button><div class="wrap"><h1>☸ ဖားအောက်တောရ ဓမ္မစာကြည့်တိုက်</h1><p>တရားတော်များ နာယူရန် · တရားစာအုပ်များ ဖတ်ရှုရန်</p></div></header>
@@ -168,16 +171,17 @@ h2.sec{margin:22px 0 8px;font-size:1.1rem;color:var(--accent)}
  </section>
 </main>
 
+<dialog id="dsum"><div class="dh"><h2 id="dsumt"></h2><button class="x" onclick="dsum.close()">✕</button></div><div class="db sumb" id="dsumb"></div></dialog>
 <dialog id="dsermon"><div class="dh"><h2 id="dst"></h2><button class="x" onclick="dsermon.close()">✕</button></div><div class="db" id="dsb"></div></dialog>
 <dialog id="reader" class="big"><div class="dh"><h2 id="rtitle"></h2><button class="x" onclick="closeReader()">✕</button></div>
- <div class="rt"><span title="စာမျက်နှာ">📄</span><input id="rpage" type="number" min="1" value="1" title="စာမျက်နှာ"><button class="btn" id="rgo" title="သွားမည်">➜</button><button class="btn alt" id="rtc" title="မာတိကာ">☰</button><a class="btn alt" id="rdl" download title="ဒေါင်းလုပ်" style="text-decoration:none">⬇</a><a class="btn alt" id="rnew" target="_blank" rel="noopener" title="Tab အသစ်" style="text-decoration:none">↗</a><small id="rinfo" style="color:var(--mute)"></small></div>
+ <div class="rt"><span title="စာမျက်နှာ">📄</span><input id="rpage" type="number" min="1" value="1" title="စာမျက်နှာ"><button class="btn" id="rgo" title="သွားမည်">➜</button><button class="btn alt" id="rtc" title="မာတိကာ">☰</button><button class="btn alt" id="rsum" title="အနှစ်ချုပ်">📝</button><a class="btn alt" id="rdl" download title="ဒေါင်းလုပ်" style="text-decoration:none">⬇</a><a class="btn alt" id="rnew" target="_blank" rel="noopener" title="Tab အသစ်" style="text-decoration:none">↗</a><small id="rinfo" style="color:var(--mute)"></small></div>
  <div id="btoc"><input id="btq" placeholder="ဤစာအုပ်ရဲ့ မာတိကာထဲ ရှာရန် …"><div id="btl"></div></div>
  <iframe id="rframe" title="book"></iframe></dialog>
 
 <div id="rd">
  <div class="rbar"><button class="rb" id="rtoc">☰ မာတိကာ</button><button class="rb" id="rsrch">🔍</button><h2 id="rtt"></h2>
   <button class="rb" id="rlis" hidden>🎧 တရားခွေ</button>
-  <button class="rb" id="rpl">ပါဠိ</button><button class="rb" id="rbr" title="စာကြောင်းခွဲ">↵</button><button class="rb" id="rfm">A−</button><button class="rb" id="rfp">A+</button><button class="rb" id="rth">🎨</button><button class="rb" id="rcl">✕</button></div>
+  <button class="rb" id="rsm" title="အနှစ်ချုပ်">📝</button><button class="rb" id="rpl">ပါဠိ</button><button class="rb" id="rbr" title="စာကြောင်းခွဲ">↵</button><button class="rb" id="rfm">A−</button><button class="rb" id="rfp">A+</button><button class="rb" id="rth">🎨</button><button class="rb" id="rcl">✕</button></div>
  <div class="rpanel" id="ptoc"><input id="ptq" placeholder="မာတိကာ ရှာရန် …"><div class="lst" id="ptl"></div></div>
  <div class="rpanel" id="psr"><input id="psq" placeholder="ဤစာအုပ်ထဲ ရှာရန် … (Enter)"><div class="lst" id="psl"></div></div>
  <div id="rbody"><div id="rtext"></div></div>
@@ -195,7 +199,8 @@ h2.sec{margin:22px 0 8px;font-size:1.1rem;color:var(--accent)}
 <script src="data/config.js"></script>
 <script>
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
-const DV='20261017b';   // bump when the data files change, so browsers do not show old copies
+const TV='20261017b';            // texts/ files: bump when the reading texts change
+const DV=String(Math.floor(Date.now()/300000));   // data/ files: new copy at least every 5 minutes (contents, summaries ...)   // bump when the data files change, so browsers do not show old copies
 const CFG=Object.assign({audioBase:'audio/'},window.LIB_CONFIG||{});
 const MD='၀၁၂၃၄၅၆၇၈၉',mn=n=>String(n).replace(/\d/g,d=>MD[d]);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -226,7 +231,7 @@ function renderSermons(){
  let l=S.filter(s=>(!cat||s.title.includes(cat))&&(!q||norm(s.title).includes(q)||norm(s.no).includes(q)||s.tracks.some(t=>norm(t[1]).includes(q))||txt(s).includes(q)));
  if(so==='long')l=[...l].sort((a,b)=>total(b)-total(a));if(so==='az')l=[...l].sort((a,b)=>a.title.localeCompare(b.title));
  $('#scount').textContent=`တရားတော် ${mn(l.length)} ပုဒ်`;
- $('#slist').innerHTML=l.length?l.map(s=>`<button class="card" data-id="${s.id}"><div class="num">${esc(s.no.replace('။','')||'＋')}</div><div><h3>${esc(s.title)}</h3><small>🎧 ${mn(s.tracks.length)} ခွေ · ${fmtLong(total(s))}</small>${q&&!norm(s.title).includes(q)&&txt(s).includes(q)?`<br><small style="color:var(--accent)">${snippet(s,q)}</small>`:''}</div></button>`).join(''):'<div class="empty">မတွေ့ပါ</div>';
+ $('#slist').innerHTML=l.length?l.map(s=>`<button class="card" data-id="${s.id}"><div class="num">${esc(s.no.replace('။','')||'＋')}</div><div><h3>${esc(s.title)}</h3><small>🎧 ${mn(s.tracks.length)} ခွေ · ${fmtLong(total(s))}${hasSum('sermon',s.id)?' · <span class="sdot">📝</span>':''}</small>${q&&!norm(s.title).includes(q)&&txt(s).includes(q)?`<br><small style="color:var(--accent)">${snippet(s,q)}</small>`:''}</div></button>`).join(''):'<div class="empty">မတွေ့ပါ</div>';
 }
 $('#slist').onclick=e=>{const c=e.target.closest('.card');if(c)openSermon(+c.dataset.id)};
 $('#sq').oninput=renderSermons;$('#ss').onchange=renderSermons;
@@ -238,11 +243,13 @@ async function openSermon(id){
  $('#dst').textContent=(s.no?s.no+' ':'')+s.title;
  const saved=await Promise.all(s.tracks.map(isSaved));
  const miss=s.expected-s.tracks.length;
- $('#dsb').innerHTML=(s.info?`<div class="hint" style="margin-top:0">${esc(s.info)}</div>`:'')+`<div class="acts"><button class="btn" id="pall">▶ အားလုံးဖွင့်မည်</button><button class="btn gold" id="sv">⬇ Offline သိမ်းမည်</button></div>
+ $('#dsb').innerHTML=(s.info?`<div class="hint" style="margin-top:0">${esc(s.info)}</div>`:'')+`<div class="acts"><button class="btn" id="pall">▶ အားလုံးဖွင့်မည်</button><button class="btn alt ${hasSum('sermon',s.id)?'has':''}" id="sumS">📝 အနှစ်ချုပ်</button><button class="btn gold" id="sv">⬇ Offline သိမ်းမည်</button></div>
  <div class="pr" id="svp" hidden><i></i></div><small style="color:var(--mute)" id="svt">${mn(s.tracks.length)} ခွေ · ${fmtLong(total(s))}${miss>0?` · ⚠ ဖိုင် ${mn(miss)} ခု မတွေ့ပါ`:''}</small><div style="margin-top:10px">`+
- s.tracks.map((t,i)=>`<div class="trk" data-i="${i}"><button data-p="${i}">▶</button><div class="t"><b>ခွေ ${mn(i+1)} <small>(${esc(t[1])})</small></b><small>${fmt(t[2])} · ${(t[3]/1048576).toFixed(1)} MB ${saved[i]?'· ✅ offline':''}</small>${(s.topics&&s.topics[i+1])?`<div style="font-size:.86rem;margin-top:3px;line-height:1.5">${esc(s.topics[i+1])}</div>`:''}</div><a href="${url(t)}" download="${esc(t[1])}" title="Download">⬇</a></div>`).join('')+'</div>';
+ s.tracks.map((t,i)=>`<div class="trk" data-i="${i}"><button data-p="${i}">▶</button><button data-sum="${t[0]}" title="အနှစ်ချုပ်" class="${hasSum('tape',t[0])?'has':''}">📝</button><div class="t"><b>ခွေ ${mn(i+1)} <small>(${esc(t[1])})</small></b><small>${fmt(t[2])} · ${(t[3]/1048576).toFixed(1)} MB ${saved[i]?'· ✅ offline':''}</small>${(s.topics&&s.topics[i+1])?`<div style="font-size:.86rem;margin-top:3px;line-height:1.5">${esc(s.topics[i+1])}</div>`:''}</div><a href="${url(t)}" download="${esc(t[1])}" title="Download">⬇</a></div>`).join('')+'</div>';
  $('#dsb').onclick=e=>{const p=e.target.closest('[data-p]');if(p)playQueue(s,+p.dataset.p)};
  $('#pall').onclick=()=>playQueue(s,0);
+ $('#sumS').onclick=()=>showSummary('sermon',s.id,(s.no?s.no+' ':'')+s.title);
+ $$('#dsb [data-sum]').forEach(b=>b.onclick=e=>{e.stopPropagation();const i=s.tracks.findIndex(t=>String(t[0])===b.dataset.sum);showSummary('tape',b.dataset.sum,s.title+' — ခွေ '+mn(i+1))});
  $('#sv').onclick=()=>saveOffline(s);
  dsermon.showModal();markNow();
 }
@@ -304,7 +311,7 @@ $('#rpage').onkeydown=e=>{if(e.key==='Enter')$('#rgo').click()};
 // ---------- Reader (online texts)
 let TX=[],RB=null,RP=0,RC={};
 const tmin=c=>Math.max(1,Math.round(c/900));
-async function loadTexts(){TX=await (await fetch('texts/index.json?v='+DV)).json();renderTexts()}
+async function loadTexts(){TX=await (await fetch('texts/index.json?v='+TV)).json();renderTexts()}
 function renderTexts(){const q=norm($('#tq').value.trim());let g=null,h='';
  TX.filter(b=>!q||norm(b.title).includes(q)||norm(b.group).includes(q)).forEach(b=>{
   if(b.group!==g){if(g!==null)h+='</div>';g=b.group;h+=`<div class="grp">${esc(g)}</div><div class="list">`}
@@ -326,7 +333,7 @@ $('#rtoc').onclick=()=>{$('#psr').classList.remove('on');$('#ptoc').classList.to
 $('#rsrch').onclick=()=>{$('#ptoc').classList.remove('on');$('#psr').classList.toggle('on');if($('#psr').classList.contains('on'))$('#psq').focus()};
 async function openText(id,toIdx){
  const b=TX.find(x=>x.id===id);if(!b)return;
- RB=await (await fetch(`texts/${id}.json?v=${DV}`)).json();RC={};$('#fnbox').classList.remove('on');
+ RB=await (await fetch(`texts/${id}.json?v=${TV}`)).json();RC={};$('#fnbox').classList.remove('on');
  $('#rtt').textContent=RB.title;rd.classList.add('on');document.body.style.overflow='hidden';
  $('#rsl').max=RB.pages.length;
  $('#ptl').innerHTML=RB.toc.map(t=>`<button class="it" data-i="${t[0]}" style="padding-left:${10+(t[1]-2)*14}px">${esc(t[2])}</button>`).join('')||'<div class="empty">—</div>';
@@ -336,7 +343,7 @@ async function openText(id,toIdx){
  await showPage(toIdx!=null?pageOf(toIdx):Math.min(store.get('tx:'+id,0),RB.pages.length-1),toIdx);
 }
 const pageOf=i=>{let lo=0,hi=RB.pages.length-1;while(lo<hi){const m=(lo+hi+1)>>1;if(RB.pages[m]<=i)lo=m;else hi=m-1}return lo};
-async function chunk(k){if(!RC[k])RC[k]=await (await fetch(`texts/${RB.id}.${k}.json?v=${DV}`)).json();return RC[k]}
+async function chunk(k){if(!RC[k])RC[k]=await (await fetch(`texts/${RB.id}.${k}.json?v=${TV}`)).json();return RC[k]}
 function inl(h){return h.replace(/\u0001(\d+)\u0002/g,(m,n)=>`<a class="fn" data-n="${n}">[${mn(n)}]</a>`)}
 async function showPage(p,scrollTo){
  RP=Math.max(0,Math.min(RB.pages.length-1,p));const st=RB.pages[RP],en=RP+1<RB.pages.length?RB.pages[RP+1]:RB.n;
@@ -390,7 +397,7 @@ addEventListener('keydown',e=>{if(!rd.classList.contains('on')||/input/i.test(e.
 
 // contents search across all reading texts
 let TT=null;
-async function loadTT(){if(!TT){try{TT=await (await fetch('texts/toc.json?v='+DV)).json();TT.norm=TT.toc.map(e=>nt(e[3]))}catch(e){TT={books:[],toc:[],norm:[]}}}return TT}
+async function loadTT(){if(!TT){try{TT=await (await fetch('texts/toc.json?v='+TV)).json();TT.norm=TT.toc.map(e=>nt(e[3]))}catch(e){TT={books:[],toc:[],norm:[]}}}return TT}
 async function renderTres(q){
  const box=$('#tres');q=nt(q);if(q.length<2){box.innerHTML='';return}
  const T=await loadTT();const res=[];
@@ -424,6 +431,23 @@ $('#rtc').onclick=async()=>{const box=$('#btoc');if(box.style.display==='block')
  if(best){best.classList.add('here');best.scrollIntoView({block:'center'})}};
 $('#btl').onclick=e=>{const b=e.target.closest('button');if(!b)return;const p=+b.dataset.p;$('#rpage').value=p;$('#btoc').style.display='none';$('#rgo').click()};
 $('#btq').oninput=()=>{const q=nt($('#btq').value);$$('#btl button').forEach(b=>b.style.display=!q||nt(b.textContent).includes(q)?'':'none')};
+
+
+// ---------- Summaries (အနှစ်ချုပ်)  - written with scripts/library/summary_admin.py, data in data/summaries-*.json
+let SUMX={sermon:[],tape:[],book:[],text:[]};const SUMD={};
+fetch('data/summaries-index.json?v='+DV).then(r=>r.json()).then(j=>{SUMX=j;try{renderSermons();renderBooks();renderTexts()}catch(e){}}).catch(()=>{});
+const hasSum=(k,key)=>(SUMX[k]||[]).includes(String(key));
+function sumMd(t){const inl=x=>esc(x).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');let h='',ul=false;
+ for(const l of t.split('\n')){const m=/^\s*[-*•]\s+(.*)/.exec(l);if(m){if(!ul){h+='<ul>';ul=true}h+='<li>'+inl(m[1])+'</li>';continue}if(ul){h+='</ul>';ul=false}
+  if(/^#{1,4}\s/.test(l))h+='<h4>'+inl(l.replace(/^#+\s*/,''))+'</h4>';else if(l.trim())h+='<p>'+inl(l)+'</p>'}
+ return h+(ul?'</ul>':'')}
+async function showSummary(kind,key,title){
+ $('#dsumt').textContent='📝 '+title;$('#dsumb').innerHTML='<div class="empty">ဖတ်နေသည်…</div>';if(!dsum.open)dsum.showModal();
+ try{if(!SUMD[kind])SUMD[kind]=await (await fetch(`data/summaries-${kind}.json?v=${DV}`)).json();const t=SUMD[kind][String(key)];
+  $('#dsumb').innerHTML=t?sumMd(t):'<div class="empty">အနှစ်ချုပ် မရှိသေးပါ — နောက်မှ ထည့်သွင်းပေးပါမည်။</div>'}
+ catch(e){$('#dsumb').innerHTML='<div class="empty">အနှစ်ချုပ် မရှိသေးပါ။</div>'}}
+$('#rsum').onclick=()=>{if(curBook)showSummary('book',curBook.id,curBook.title)};
+$('#rsm').onclick=()=>{if(RB)showSummary('text',RB.id,RB.title)};
 
 // ---------- Home
 function renderHome(){const last=store.get('last',null),lb=store.get('lastbook',null);
