@@ -118,15 +118,14 @@ for bi, b in enumerate(B):
     f = os.path.join(LIB, 'books', b['id'] + '.pdf')
     doc = pymupdf.open(f)
     if b['id'] in toc_manual.MANUAL:            # contents typed by hand (scanned PDF without text)
-        moff = toc_manual.MANUAL[b['id']]
         n_ok = 0
         for t, pn in toc_manual.parse(b['id']):
-            pdfp = pn + moff
+            pdfp = toc_manual.pdf_page(b['id'], pn)
             if 1 <= pdfp <= len(doc):
                 out.append([bi, t, pdfp, 1, 9, 0, pdfp]); n_ok += 1
             else:
                 dropped.append([bi, 'PAGE OUT OF RANGE (printed %d -> PDF %d of %d): %s' % (pn, pdfp, len(doc), t[:80]), pn])
-        report.append((b['id'], b['title'][:24], 'manual', n_ok, moff, 0))
+        report.append((b['id'], b['title'][:24], 'manual', n_ok, 0, 0))
         continue
     off, votes = offset(doc)
     pmap = page_map(doc)

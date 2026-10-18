@@ -10,7 +10,15 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 MANUAL = {
     'bd65c59': 5,    # သမထဘာဝနာနှင့် ဝိပဿနာဘာဝနာတို့တွင် အောင်မြင်ပေါက်မြောက်ခြင်း (scanned, printed page 13 = PDF page 18)
     'b58f192': 0,    # အမြိုက်နိဗ္ဗာန်သို့ ပို့ဆောင်ပေးနေသည့် စွမ်းအားကြီး ၇-ရပ် (printed page = PDF page)
+    'b0a67b8': [(0, 4), (9, 10)],   # ဖားအောက်တောရမိတ်ဆက် (scanned): printed 3-8 = PDF 7-12 (+4), then 8 pages of photographs, printed 9+ = PDF 19+ (+10)
 }
+def pdf_page(book_id, printed):
+    o = MANUAL[book_id]
+    if isinstance(o, int): return printed + o
+    off = o[0][1]
+    for frm, v in o:
+        if printed >= frm: off = v
+    return printed + off
 MYD = '၀၁၂၃၄၅၆၇၈၉'
 def to_int(s): return int(''.join(str(MYD.index(c)) if c in MYD else c for c in s))
 
