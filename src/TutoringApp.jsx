@@ -6908,7 +6908,10 @@ ${toSend.map(l => '• ' + l.title).join(', ')}`
               <div className="space-y-4">
                 {trophyRequests.map(student => {
                   const amount = student.requestedTrophyAmount || 1;
-                  const lessonTitle = student.requestedTrophyLessonTitle || 'a lesson';
+                  // which class the trophy is for (e.g. "Smart Study Lesson — BUDDHA GUNA"), taken from the lesson's link
+                  const trophyLink = student.requestedTrophyLessonLink || '';
+                  const trophyClass = trophyLink.startsWith('watchandlearn://') ? null : extractClassIdFromLink(trophyLink);
+                  const lessonTitle = (student.requestedTrophyLessonTitle || 'a lesson') + (trophyClass ? ` — ${trophyClass}` : '');
                   return (
                     <div key={student.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 rounded-lg bg-yellow-100 border border-yellow-300 shadow-sm">
                       <div>
