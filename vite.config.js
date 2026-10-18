@@ -6,6 +6,8 @@ import { resolve } from 'path'
 // Repo: https://github.com/sayadawtejinda/dhamma -> base: '/dhamma/'
 export default defineConfig({
   plugins: [react()],
+  // every 'firebase/firestore' import goes through a thin wrapper that counts the documents read (see src/firestoreCounted.js)
+  resolve: { alias: [{ find: /^firebase\/firestore$/, replacement: resolve(__dirname, 'src/firestoreCounted.js') }] },
   base: '/dhamma/',
   // Dev-only: honour PORT so the preview tool can assign a free port
   // (falls back to Vite's default 5173 when PORT is not set).
