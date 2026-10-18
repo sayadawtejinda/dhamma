@@ -1287,8 +1287,8 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
                 }
             } else {
                 handleWrongAnswer("Incorrect sequence");
-                isHintSequenceActive = true;
-                showClickingHint();
+                // No pointing finger any more: after a wrong answer the student starts over and finds the right vowels by
+                // listening (the sound is played again below).
                 playerClickSequenceIndex = 0;
                 setTimeout(() => {
                     gameFeedback.innerHTML = `<p class="text-lg text-green-600">👆 Please try again!</p>`;
