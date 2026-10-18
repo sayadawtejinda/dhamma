@@ -8008,9 +8008,15 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     const dayKey = `autoTrophyCatchUp_${studentUid}`;
     const today = new Date().toDateString();
     try { if (localStorage.getItem(dayKey) === today) return; } catch (e) { /* no storage: just runs */ }
-    const cutoff = Date.now() - 21 * 24 * 60 * 60 * 1000;
+    // Each closed session is looked at ONCE EVER (remembered on this device). Before, every day the last 3 weeks of
+    // sessions were worked out again from scratch -- several score queries each -- which was the biggest source of reads.
+    const doneKey = `autoTrophyDone_${studentUid}`;
+    let done = [];
+    try { done = JSON.parse(localStorage.getItem(doneKey) || '[]'); } catch (e) { done = []; }
+    const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
     const latest = new Map();
     mySessions.forEach(x => {
+      if (done.includes(x.id)) return;
       if (!x.lessonId || !x.lessonLink || x.lessonLink.startsWith('watchandlearn://')) return;
       if (!String(x.feedbackNotes || '').startsWith('Automatically submitted')) return;
       const end = x.endTime?.toDate ? x.endTime.toDate().getTime() : 0;
@@ -8020,6 +8026,8 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     });
     if (latest.size === 0) return;
     try { localStorage.setItem(dayKey, today); } catch (e) { /* ignore */ }
+    const doneNow = [...done, ...[...latest.values()].map(v => v.session.id)].slice(-60);
+    try { localStorage.setItem(doneKey, JSON.stringify(doneNow)); } catch (e) { /* ignore */ }
     (async () => {
       for (const { session } of latest.values()) {
         try { if (await requestEarnedTrophiesForAutoReport(session)) break; }
