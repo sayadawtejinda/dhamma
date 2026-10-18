@@ -10,6 +10,7 @@ import os, re, json, collections, sys
 import pymupdf
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from toc_clean import fix, garbage
+import toc_manual
 from myanmar import converter
 
 LIB = os.path.join(os.path.dirname(__file__), '..', '..', 'public', 'library')
@@ -116,6 +117,17 @@ for bi, b in enumerate(B):
     if b['id'] in EXCLUDE: continue
     f = os.path.join(LIB, 'books', b['id'] + '.pdf')
     doc = pymupdf.open(f)
+    if b['id'] in toc_manual.MANUAL:            # contents typed by hand (scanned PDF without text)
+        moff = toc_manual.MANUAL[b['id']]
+        n_ok = 0
+        for t, pn in toc_manual.parse(b['id']):
+            pdfp = pn + moff
+            if 1 <= pdfp <= len(doc):
+                out.append([bi, t, pdfp, 1, 9, 0, pdfp]); n_ok += 1
+            else:
+                dropped.append([bi, 'PAGE OUT OF RANGE (printed %d -> PDF %d of %d): %s' % (pn, pdfp, len(doc), t[:80]), pn])
+        report.append((b['id'], b['title'][:24], 'manual', n_ok, moff, 0))
+        continue
     off, votes = offset(doc)
     pmap = page_map(doc)
     rows, src = [], ''
