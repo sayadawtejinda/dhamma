@@ -164,15 +164,14 @@ for bi, b in enumerate(B):
         base = mp + (shift if isinstance(shift, int) and shift != 9 else 0)       # where the title is really found, else the mapped page
         out.append([bi, t, pg, lvl, 0 if isinstance(shift, int) and shift != 9 else shift, orig or 0, max(1, min(len(doc), base))])
     report.append((b['id'], b['title'][:24], src, len(rows), off, votes))
-# corrections made by hand in public/library/toc-review.html (exported as toc_corrections.json, kept next to this script)
-FIX = os.path.join(os.path.dirname(__file__), 'toc_corrections.json')
-if os.path.exists(FIX):
+# corrections made by hand in public/library/toc-review.html (exported as toc_corrections*.json, kept next to this script).
+# Every file is applied in name order; a later file was made on the contents as they were after the earlier files.
+def apply_corrections(out, path):
     ids = [b['id'] for b in B]
-    _fx = json.load(open(FIX, encoding='utf8'))
+    _fx = json.load(open(path, encoding='utf8'))
     fixes = {(c['book'], c['page'], c['title']): c for c in _fx['corrections']}
     by_title = {}
     for c in _fx['corrections']: by_title.setdefault((c['book'], c['title']), []).append(c)
-    used = set()
     steps = _fx.get('steps', {})            # per book: [[fromPage, delta], ...] every line from that (base) page downward moves by delta
     kept, n_edit, n_del = [], 0, 0
     for bi, t, pg, lvl, sh, ao, base in out:
@@ -185,8 +184,11 @@ if os.path.exists(FIX):
         if c and c.get('page_delta'): nb += c['page_delta']
         if c and c['status'] == 'edit': t = c.get('new_title') or t; n_edit += 1
         kept.append([bi, t, pg, lvl, sh, ao, max(1, nb)])
-    out = kept
-    print('hand corrections applied: edited', n_edit, 'deleted', n_del)
+    print('hand corrections', os.path.basename(path), ': edited', n_edit, 'deleted', n_del)
+    return kept
+import glob
+for _f in sorted(glob.glob(os.path.join(os.path.dirname(__file__), 'toc_corrections*.json'))):
+    out = apply_corrections(out, _f)
 json.dump(dict(books=[b['id'] for b in B], toc=out), open(os.path.join(LIB, 'data', 'toc.json'), 'w', encoding='utf8'), ensure_ascii=False, separators=(',', ':'))
 json.dump(dropped, open(os.path.join(os.path.dirname(__file__), 'toc_dropped.json'), 'w', encoding='utf8'), ensure_ascii=False)
 print('garbled lines dropped (kept in scripts/library/toc_dropped.json):', len(dropped))
