@@ -34,6 +34,7 @@ textarea:focus{outline:none;border-color:var(--ac2)}
 .bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}
 #msg{color:var(--ok);font-size:.9rem}
 #prev{background:#fff;border:1px dashed var(--line);border-radius:12px;padding:8px 14px;margin-top:8px}
+#bt{height:38vh} #bList .row{display:flex;gap:8px;padding:3px 0;border-bottom:1px solid var(--line)} #bList .bad{color:#b3261e}
 #prev h4{margin:.6em 0 .2em;color:var(--ac)} #prev p{margin:.4em 0} #prev ul{margin:.3em 0;padding-left:1.3em}
 pre#log{background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px 10px;white-space:pre-wrap;font-size:.8rem;display:none}
 .hint{color:var(--mute);font-size:.85rem}
@@ -41,15 +42,23 @@ pre#log{background:#fff;border:1px solid var(--line);border-radius:10px;padding:
 </style>
 </head>
 <body>
-<header><b>📝 အနှစ်ချုပ် ထည့်ရန်</b><span id="counts" style="opacity:.9;font-size:.9rem"></span><span style="flex:1"></span><button class="pub" id="pub">🚀 website ပေါ်သို့ တင်မည်</button></header>
+<header><b>📝 အနှစ်ချုပ် ထည့်ရန်</b><button id="bulkBtn">📥 အစုလိုက် ထည့်ရန်</button><span id="counts" style="opacity:.9;font-size:.9rem"></span><span style="flex:1"></span><button class="pub" id="pub">🚀 website ပေါ်သို့ တင်မည်</button></header>
 <div id="main">
  <div id="left"><div id="tools"><div id="kinds"></div><input type="search" id="q" placeholder="ရှာရန် … (အမည်၊ နံပါတ်)"><label class="hint"><input type="checkbox" id="onlyNo"> အနှစ်ချုပ် မရှိသေးတာကိုသာ ပြ</label></div><div id="list"></div></div>
- <div id="right"><div id="empty" class="hint">ဘယ်ဘက်က တစ်ခုကို ရွေးပါ။</div>
+ <div id="right"><div id="bulk" style="display:none">
+   <h2>📥 အစုလိုက် ထည့်ရန် (AI ရေးပေးတာကို paste လုပ်ပါ)</h2>
+   <div class="hint">ပုံစံ — တစ်ခွေစီကို <b>(00001ANP01.mp3)</b> လို ဖိုင်နာမည်စာကြောင်းနဲ့ စပါ၊ အောက်မှာ အနှစ်ချုပ်။ နောက်တစ်ခွေကို အလားတူ ဆက်ပါ။ ခွေ ၂၆ ခုလုံး တစ်ခါတည်း paste လုပ်လို့ရတယ်။</div>
+   <textarea id="bt" placeholder="(00001ANP01.mp3)&#10;၁။ ခေါင်းစဉ်&#10;စာပိုဒ် …&#10;&#10;(00002ANP02.mp3)&#10;…"></textarea>
+   <div class="bar"><label><input type="checkbox" id="bFmt" checked> စာကြောင်းခွဲ၊ ခေါင်းစဉ်၊ အဓိကစာကြောင်း စာလုံးမည်း အလိုအလျောက်စီစဉ်</label></div>
+   <div class="bar"><button id="bScan">🔍 စစ်ကြည့်မည်</button><button class="pri" id="bSave" disabled>💾 အားလုံး သိမ်းမည်</button><span id="bMsg"></span></div>
+   <div id="bList" class="hint"></div>
+  </div>
+  <div id="empty" class="hint">ဘယ်ဘက်က တစ်ခုကို ရွေးပါ။</div>
   <div id="ed" style="display:none">
    <h2 id="t"></h2><div id="sub"></div>
    <audio id="au" controls preload="none"></audio>
    <textarea id="ta" placeholder="အနှစ်ချုပ်ကို ဒီမှာ ရေး (သို့) paste လုပ်ပါ။&#10;&#10;# ခေါင်းစဉ်ငယ်&#10;- အချက်တစ်ခု&#10;- အချက်နှစ်ခု&#10;&#10;**စာလုံးမည်း** လည်း သုံးနိုင်သည်။"></textarea>
-   <div class="bar"><button class="pri" id="save">💾 သိမ်းမည် (Ctrl+S)</button><button id="saveNext">သိမ်းပြီး နောက်တစ်ခု ▶</button><button id="del">🗑 ဖျက်မည်</button><span id="msg"></span></div>
+   <div class="bar"><button class="pri" id="save">💾 သိမ်းမည် (Ctrl+S)</button><button id="fmt" title="စာကြောင်းခွဲ၊ ခေါင်းစဉ်၊ အဓိကစာကြောင်း စာလုံးမည်း အလိုအလျောက်စီစဉ်">🪄 စီစဉ်ပေးမည်</button><button id="saveNext">သိမ်းပြီး နောက်တစ်ခု ▶</button><button id="del">🗑 ဖျက်မည်</button><span id="msg"></span></div>
    <div class="hint">သိမ်းပြီးရင် ဘယ်ဘက်မှာ ✓ ပေါ်မည်။ အားလုံး ပြီးမှ (သို့) တစ်ခါတစ်ခါ အပေါ်ညာက <b>🚀 website ပေါ်သို့ တင်မည်</b> ကိုနှိပ်ပါ။</div>
    <div id="prev"></div>
   </div>
@@ -74,7 +83,7 @@ function render(){const q=$('#q').value.trim().toLowerCase(),no=$('#onlyNo').che
  $('#list').innerHTML=items.slice(0,600).map(i=>`<div class="it ${cur&&cur.kind===i.kind&&cur.key===i.key?'sel':''}" data-k="${esc(i.key)}"><i>${i.has?'✓':''}</i><div>${esc(i.title)}<small>${esc(i.sub||'')}</small></div></div>`).join('')+(items.length>600?`<div class="hint" style="padding:8px">… နောက်ထပ် ${items.length-600} ခု — ရှာပါ</div>`:'');
  $('#list').onclick=e=>{const d=e.target.closest('.it');if(!d)return;open(CAT.items.find(i=>i.kind===kind&&i.key===d.dataset.k))}}
 async function open(it){if(!it)return;if(dirty&&!confirm('သိမ်းမထားသေးပါ။ ဆက်သွားမလား?'))return;cur=it;dirty=false;
- $('#empty').style.display='none';$('#ed').style.display='block';$('#t').textContent=it.title;$('#sub').textContent=KN[it.kind]+' · '+it.key;
+ $('#empty').style.display='none';$('#bulk').style.display='none';$('#ed').style.display='block';$('#t').textContent=it.title;$('#sub').textContent=KN[it.kind]+' · '+it.key;
  const r=await api('/api/get?kind='+it.kind+'&key='+encodeURIComponent(it.key));$('#ta').value=r.text||'';preview();$('#msg').textContent='';
  const au=$('#au');if(it.kind==='tape'){const n=+it.key,b=CAT.audio;au.style.display='block';au.src=(n>1303?b[1]:b[0])+encodeURIComponent(it.file)}else{au.pause();au.removeAttribute('src');au.style.display='none'}
  render()}
@@ -89,6 +98,65 @@ addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='s'){e.prevent
 $('#q').oninput=render;$('#onlyNo').onchange=render;
 $('#pub').onclick=async()=>{if(dirty&&!(await save()))return;const lg=$('#log');lg.style.display='block';lg.textContent='⏳ တင်နေသည်… (ခဏစောင့်ပါ)';$('#empty').style.display='none';const r=await api('/api/publish',{});lg.textContent=r.log||r.error};
 addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue=''}});
+
+// ---- auto layout: headings, line breaks of (က)(ခ) items, first sentence of a paragraph in bold.  Result is plain text with ### / - / ** marks, so it stays editable.
+function fmtSummary(raw, bold=true){
+  const lines=String(raw).replace(/\r\n?/g,'\n').split('\n').map(l=>l.trim());
+  const items=[];            // {t:'h'|'p'|'li', x}
+  const isItem=l=>/^\(([က-အ]|[၀-၉]{1,2}|[0-9]{1,2})\)\s*\S/.test(l)||/^[-*•]\s+\S/.test(l);
+  const isHead=l=>/^[၀-၉0-9]+။\s*\S/.test(l)&&!/[။၊]$/.test(l)&&l.length<140;
+  let buf='';
+  const flush=()=>{if(buf.trim())items.push({t:'p',x:buf.trim()});buf=''};
+  for(const l of lines){
+    if(!l){flush();continue}
+    if(/^#{1,4}\s/.test(l)){flush();items.push({t:'h',x:l.replace(/^#+\s*/,'')});continue}
+    if(isHead(l)){flush();items.push({t:'h',x:l});continue}
+    if(isItem(l)){flush();items.push({t:'li',x:l.replace(/^[-*•]\s+/,'')});continue}
+    // a line that continues the previous sentence (previous line did not end a sentence) is joined with it
+    if(buf&&!/[။:：]$/.test(buf.trim())&&!/[၊,]$/.test(buf.trim())) buf+=' '+l; else if(buf&&/[၊,]$/.test(buf.trim())) buf+=' '+l; else {flush();buf=l}
+  }
+  flush();
+  // a paragraph that ends with the first item "(က) .." of a list whose next items are on their own lines: split that first item out
+  for(let i=0;i<items.length-1;i++){
+    const it=items[i],nx=items[i+1];
+    if(it.t==='p'&&nx.t==='li'&&/^\((?:ခ|၂)\)/.test(nx.x)){const m=/\s(?=\((?:က|၁)\)\s)/.exec(it.x);if(m){const a1=it.x.slice(0,m.index).trim(),b1=it.x.slice(m.index).trim();items.splice(i,1,...(a1?[{t:'p',x:a1}]:[]),{t:'li',x:b1});i++}}
+  }
+  // split inline "(က) .. (ခ) .." / "(၁) .. (၂) .." runs out of a paragraph
+  const out=[];
+  for(const it of items){
+    if(it.t!=='p'){out.push(it);continue}
+    const re=/\s(?=\((?:[က-အ]|[၀-၉]{1,2})\)\s)/g; const first=/\((?:က|၁)\)\s/.exec(it.x);
+    if(first&&(it.x.match(/\((?:[က-အ]|[၀-၉]{1,2})\)\s/g)||[]).length>=2){
+      const parts=it.x.split(re).map(x=>x.trim()).filter(Boolean);
+      parts.forEach((p,i)=>{ if(/^\((?:[က-အ]|[၀-၉]{1,2})\)\s/.test(p)) out.push({t:'li',x:p}); else out.push({t:'p',x:p}) });
+    } else out.push(it);
+  }
+  const first1=x=>{const m=/^(.{18,260}?။)(\s+)(\S[\s\S]*)$/.exec(x);return m?'**'+m[1]+'**'+m[2]+m[3]:x};
+  return out.map(it=>it.t==='h'?'### '+it.x:it.t==='li'?'- '+it.x:(bold?first1(it.x):it.x)).join('\n')+'\n';
+}
+// ---- bulk: "(00001ANP01.mp3)" blocks -> one summary per tape
+function splitBulk(raw){
+  const L=String(raw).replace(/\r\n?/g,'\n').split('\n'),blocks=[];let cur=null;
+  for(const l of L){
+    const m=/^\s*[(（]?\s*(\d{5})([A-Za-z0-9_]*)\.mp3\s*[)）]?\s*$/i.exec(l);
+    if(m){cur={n:+m[1],file:m[1]+m[2]+'.mp3',text:[]};blocks.push(cur);continue}
+    if(cur)cur.text.push(l)
+  }
+  return blocks.map(b=>({...b,text:b.text.join('\n').trim()})).filter(b=>b.text);
+}
+let bulkBlocks=[];
+$('#bulkBtn').onclick=()=>{if(dirty&&!confirm('သိမ်းမထားသေးပါ။ ဆက်သွားမလား?'))return;dirty=false;$('#empty').style.display='none';$('#ed').style.display='none';$('#log').style.display='none';$('#bulk').style.display='block'};
+$('#bScan').onclick=()=>{
+  bulkBlocks=splitBulk($('#bt').value);const tapes=Object.fromEntries(CAT.items.filter(i=>i.kind==='tape').map(i=>[+i.key,i]));
+  $('#bList').innerHTML=bulkBlocks.length?bulkBlocks.map(b=>{const it=tapes[b.n];const ok=it&&it.file===b.file||it;const same=it&&it.file!==b.file;
+    return `<div class="row"><span>${it?(it.has?'♻':'✓'):'⚠'}</span><span class="${it?'':'bad'}">${esc(b.file)} → ${it?esc(it.title)+(it.has?' (ရှိပြီးသား — အစားထိုးမည်)':''):'ဒီနံပါတ်ခွေ မတွေ့ပါ'}${same?' ⚠ ဖိုင်နာမည် ကွဲနေသည် ('+esc(it.file)+')':''}</span><span class="hint">${b.text.length} လုံး</span></div>`}).join(''):'<span class="bad">(00001ANP01.mp3) လို ဖိုင်နာမည်စာကြောင်း မတွေ့ပါ</span>';
+  const okN=bulkBlocks.filter(b=>tapes[b.n]).length;$('#bSave').disabled=!okN;$('#bMsg').textContent=bulkBlocks.length?`${bulkBlocks.length} ခွေ တွေ့သည် (သိမ်းနိုင်သည် ${okN})`:''};
+$('#bSave').onclick=async()=>{
+  const tapes=Object.fromEntries(CAT.items.filter(i=>i.kind==='tape').map(i=>[+i.key,i]));let n=0;$('#bSave').disabled=true;
+  for(const b of bulkBlocks){const it=tapes[b.n];if(!it)continue;
+    const text=$('#bFmt').checked?fmtSummary(b.text,true):b.text;const r=await api('/api/save',{kind:'tape',key:String(b.n),text});if(!r.error){it.has=true;CAT.counts=r.counts;n++;$('#bMsg').textContent=`⏳ ${n} / ${bulkBlocks.length}`}}
+  $('#bMsg').textContent=`✅ ${n} ခွေ သိမ်းပြီး — ဘယ်ဘက်က ခွေတစ်ခုကို ရွေးကြည့်ပြီး ပြင်လို့ရတယ်။ ပြီးရင် 🚀 တင်မည်။`;counts();render()};
+$('#fmt').onclick=()=>{const t=$('#ta').value;if(!t.trim())return;$('#ta').value=fmtSummary(t,true);dirty=true;preview();$('#msg').style.color='';$('#msg').textContent='🪄 စီစဉ်ပြီး — မကြိုက်ရင် Ctrl+Z နဲ့ ပြန်လုပ်ပါ၊ ပြီးမှ သိမ်းပါ'};
 init();
 </script>
 </body>
