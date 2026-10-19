@@ -29,6 +29,29 @@ function add(ref, n) {
   if (!saveTimer) saveTimer = setTimeout(() => { saveTimer = null; try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* ignore */ } paint(); }, 1500);
 }
 
+// The full list, in a box whose text can be selected, with a Copy button (an alert() could not be copied).
+function showDetails() {
+  const text = `reads ${state.day}: ${state.total}
+` + Object.entries(state.by).sort((x, y) => y[1] - x[1]).map(([k, v]) => `${k}: ${v}`).join('
+');
+  const box = document.createElement('div');
+  box.style.cssText = 'position:fixed;left:8px;right:8px;top:8px;z-index:100000;background:#fff;color:#000;border:2px solid #333;border-radius:10px;padding:10px;font:13px monospace;max-height:70vh;overflow:auto;box-shadow:0 4px 20px rgba(0,0,0,.4)';
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.readOnly = true; ta.style.cssText = 'width:100%;height:40vh;font:13px monospace;user-select:text';
+  const copy = document.createElement('button');
+  copy.textContent = 'Copy'; copy.style.cssText = 'margin:6px 6px 0 0;padding:6px 14px;background:#2563eb;color:#fff;border-radius:6px';
+  copy.onclick = async () => { try { await navigator.clipboard.writeText(text); copy.textContent = 'Copied'; } catch (e) { ta.select(); document.execCommand('copy'); copy.textContent = 'Copied'; } };
+  const reset = document.createElement('button');
+  reset.textContent = 'Reset counter'; reset.style.cssText = 'margin:6px 6px 0 0;padding:6px 14px;background:#d97706;color:#fff;border-radius:6px';
+  reset.onclick = () => { window.__resetReads(); box.remove(); };
+  const close = document.createElement('button');
+  close.textContent = 'Close'; close.style.cssText = 'margin:6px 0 0 0;padding:6px 14px;background:#555;color:#fff;border-radius:6px';
+  close.onclick = () => box.remove();
+  box.append(ta, copy, reset, close);
+  document.body.appendChild(box);
+  ta.focus(); ta.select();
+}
+
 function paint() {
   try {
     if (new URLSearchParams(location.search).get('reads') === '1') localStorage.setItem('showReads', '1');
@@ -38,7 +61,7 @@ function paint() {
   if (!badge) {
     badge = document.createElement('div');
     badge.style.cssText = 'position:fixed;left:4px;bottom:4px;z-index:99999;background:rgba(0,0,0,.75);color:#fff;font:11px monospace;padding:3px 6px;border-radius:6px;cursor:pointer;max-width:70vw';
-    badge.onclick = () => { badge.title = ''; alert(JSON.stringify(state, null, 1)); };
+    badge.onclick = showDetails;
     document.body.appendChild(badge);
   }
   const top = Object.entries(state.by).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, v]) => `${k} ${v}`).join(' · ');
