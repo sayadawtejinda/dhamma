@@ -2424,6 +2424,9 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
           try {
             const r = await fetch(`${import.meta.env.BASE_URL}classSnapshots/smartstudy/${encodeURIComponent(classId)}.json`);
             if (r.ok) snapshotScores = (await r.json()).scores || [];
+            // A class with no file yet (a brand-new class, before the next weekly build): a student's screen does NOT read every
+            // score of the class from Firebase; it starts from an empty list and their own scores are laid over it.
+            else if (r.status === 404 && entryRequest?.mode === 'student') snapshotScores = [];
           } catch (e) { /* fall through to Firestore */ }
         }
         // A student's screen never uses the class roster, and shows classmates'
@@ -2487,9 +2490,12 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
             const seen = new Set(lessonReflections.map(r => r.id));
             mine.docs.forEach(d => { if (!seen.has(d.id)) lessonReflections.push({ id: d.id, ...d.data() }); });
           }
+        } else if (userName) {
+          // no file for this class yet: only this student's own reflections are read (classmates' appear after the next weekly build)
+          const mine = await getDocs(query(getReflectionsCollectionRef(), where("classId", "==", classId), where("lessonId", "==", activeLessonId), where("studentName", "==", userName)));
+          lessonReflections = mine.docs.map(d => ({ id: d.id, ...d.data() }));
         } else {
-          const snap = await getDocs(query(getReflectionsCollectionRef(), where("classId", "==", classId), where("lessonId", "==", activeLessonId)));
-          lessonReflections = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          lessonReflections = [];
         }
         if (cancelled) return;
         setAllReflections(prev => [...prev.filter(r => r.lessonId !== activeLessonId), ...lessonReflections]);
@@ -3610,6 +3616,7 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
                 }
               } catch (e) { /* fall through to Firestore */ }
             }
+            if (!gotSnapshot && entryRequest?.mode === 'student') gotSnapshot = true; // no file yet: classmates appear after the next weekly build
             if (!gotSnapshot) {
               const scoresSnap = await getDocs(query(
                 collection(db,'artifacts',appId,'public','data','scores'),
