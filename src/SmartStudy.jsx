@@ -2343,7 +2343,8 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
     if (!isAuthReady || !classId) return;
     setClassDataLoaded(false); // reset while new class loads
     const apply = (data) => { if (data) { setClassData(data); setLessons(data.lessons || []); } else { setClassData(null); setLessons([]); } setClassDataLoaded(true); };
-    if (entryRequest?.mode !== 'student') {
+    if (!entryRequest) { setClassDataLoaded(true); return; } // not opened by anyone right now: nothing is read
+    if (entryRequest.mode === 'teacher') {
       let prevLessons = null;
       const classUnsub = onSnapshot(getClassDocRef(classId), (docSnap) => {
         const data = docSnap.exists() ? docSnap.data() : null;
@@ -2385,6 +2386,8 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
   const lastClassLoadRef = useRef(0);
   useEffect(() => {
     if (!isAuthReady || !classId) return;
+    if (!entryRequest) return; // the app stays mounted after a student leaves: nothing is read while nobody has it open
+    const teacherMode = entryRequest.mode === 'teacher';
     if (teacherLive) {
       const scoresUnsub = onSnapshot(query(getScoresCollectionRef(), where("classId", "==", classId)), (qs) => {
         const f = []; qs.forEach((d) => f.push({ id: d.id, ...d.data() })); setAllScores(f);
@@ -2422,20 +2425,20 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
         // Firestore like before. Falls back to Firestore if the file's missing.
         let snapshotScores = null;
         // Students always use the weekly file; only the teacher's screen reads live during the class window.
-        if (entryRequest?.mode === 'student' || !isOnlineStatusDay()) {
+        if (!teacherMode || !isOnlineStatusDay()) {
           try {
             const r = await fetch(`${import.meta.env.BASE_URL}classSnapshots/smartstudy/${encodeURIComponent(classId)}.json`);
             if (r.ok) snapshotScores = (await r.json()).scores || [];
             // A class with no file yet (a brand-new class, before the next weekly build): a student's screen does NOT read every
             // score of the class from Firebase; it starts from an empty list and their own scores are laid over it.
-            else if (r.status === 404 && entryRequest?.mode === 'student') snapshotScores = [];
+            else if (r.status === 404 && !teacherMode) snapshotScores = [];
           } catch (e) { /* fall through to Firestore */ }
         }
         // A student's screen never uses the class roster, and shows classmates'
         // reflections for ONE lesson at a time (loaded when that lesson opens, see
         // below) -- so only the teacher loads those two in full. For a class of 50
         // that is hundreds of reads saved on every load and every refresh.
-        const studentOnly = entryRequest?.mode === 'student';
+        const studentOnly = !teacherMode;
         // Everything below is kept on this device and read from Firebase again only when the saved copy is old (a student's:
         // 6 hours, the teacher's: 24 hours) or (10 minutes) when the teacher opens the Students tab. The
         // teacher's / student's OWN changes are added to the saved copy at once.
@@ -2461,7 +2464,7 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
       } catch (e) { console.error("Error loading class data:", e); }
     };
     load();
-    const isStudentScreen = entryRequest?.mode === 'student';
+    const isStudentScreen = !teacherMode;
     const timer = isStudentScreen ? null : setInterval(() => {
       if (isActiveRef.current && !document.hidden) load();
     }, CLASS_POLL_MS);
@@ -2471,7 +2474,7 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
     };
     document.addEventListener('visibilitychange', onVisible);
     return () => { cancelled = true; if (timer) clearInterval(timer); document.removeEventListener('visibilitychange', onVisible); };
-  }, [isAuthReady, classId, teacherLive, classRefreshKey, entryRequest?.mode]);
+  }, [isAuthReady, classId, teacherLive, classRefreshKey, entryRequest?.mode, !!entryRequest]);
   // A student reading a lesson sees classmates' reflections for THAT lesson. The older
   // ones come from the weekly static file (no Firestore read; classmates' newer ones
   // appear after the next weekly refresh), and the student's OWN reflections for the
@@ -2652,7 +2655,7 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
     // under 10 seconds old), and opening the listener re-reads every announcement
     // ever sent to the class -- so it is only opened while the class meets.
     // Teacher only: students no longer get these live pop-ups.
-    if (entryRequest?.mode === 'student' || !isOnlineStatusDay()) return;
+    if (entryRequest?.mode !== 'teacher' || !isOnlineStatusDay()) return;
     const q = query(getGlobalAnnouncementsCollectionRef(), where("classId", "==", classId));
     const unsub = onSnapshot(q, (snapshot) => {
       snapshot.docChanges().forEach((change) => {
