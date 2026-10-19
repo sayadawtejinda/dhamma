@@ -57,6 +57,29 @@ const localDayKey = () => {
 const AVAILABLE_SHEETS = ['A', 'B']; 
 const SHEET_B_AUDIO = "https://raw.githubusercontent.com/nathantun93/bell/main/သူငယ်တန်း1.mp3";
 const SHEET_B_AUDIO2 = "https://raw.githubusercontent.com/nathantun93/bell/main/သူငယ်တန်း2.mp3";
+
+// Plays one line (from second `t`, for `durationMs`) of the long Sheet B recording. Before, the code set the file, jumped to
+// the time and started a stop-timer all at once: when the big file had not loaded enough yet the jump was ignored or the
+// timer ran out before any sound began, so some lines stayed silent. Now it (1) sets the file only when it is a different
+// file (re-setting the same address restarts the download), (2) waits until the file can be jumped in, and (3) starts
+// the stop-timer only after the sound has really started. Resolves when the line has finished (or was interrupted).
+async function playSheetBClip(audio, src, t, durationMs) {
+  clearTimeout(audio._sbTimeout);
+  const token = (audio._sbToken = (audio._sbToken || 0) + 1);
+  if (audio._sbSrc !== src) { audio._sbSrc = src; audio.src = src; audio.load(); }
+  if (audio.readyState < 1) {
+    await new Promise((res) => {
+      const done = () => { audio.removeEventListener('loadedmetadata', done); res(); };
+      audio.addEventListener('loadedmetadata', done);
+      setTimeout(done, 10000);
+    });
+  }
+  if (audio._sbToken !== token) return;
+  try { audio.currentTime = t; } catch (e) { /* retried below */ }
+  try { await audio.play(); } catch (e) { return; }
+  if (audio._sbToken !== token) { audio.pause(); return; }
+  await new Promise((res) => { audio._sbTimeout = setTimeout(() => { audio.pause(); res(); }, durationMs); });
+}
 const SHEET_B_CHAPTERS = {
   'A': {
     times: [0.00,2.00,4.00,6.00,11.00,13.00,15.00,17.00,24.00,26.00,27.00,29.00,35.00,37.00,39.00,41.00],
@@ -1441,6 +1464,7 @@ const [sheetBAudio] = useState(new Audio());
 
       if (sheetBAudio) {
           clearTimeout(sheetBAudio._sbTimeout);
+          sheetBAudio._sbToken = (sheetBAudio._sbToken || 0) + 1;
           sheetBAudio.pause();
       }
   };
@@ -2197,16 +2221,11 @@ setTimeout(() => {
           if (currentSheetName === 'B' && sheetBParagraph && sheetBParagraph[sheetBParaIndex] && sheetBLineIndex >= 0) {
               interruptPlayback();
               const colIdx = getColumnIndex(selectedColumn);
-              sheetBAudio.src = colIdx >= 15 ? SHEET_B_AUDIO2 : SHEET_B_AUDIO;
               const times = sheetBParagraph[sheetBParaIndex].audioTimes;
               const t = times[sheetBLineIndex];
               const nextT = sheetBParagraph[sheetBParaIndex].nextAudioTimes[sheetBLineIndex];
               const duration = nextT ? (nextT - t - 0.1) * 1000 : 3500;
-              sheetBAudio.currentTime = t;
-              await new Promise((resolve) => {
-                  sheetBAudio.play();
-                  sheetBAudio._sbTimeout = setTimeout(() => { sheetBAudio.pause(); resolve(); }, duration);
-              });
+              await playSheetBClip(sheetBAudio, colIdx >= 15 ? SHEET_B_AUDIO2 : SHEET_B_AUDIO, t, duration);
           }
 
           justRead = true;
@@ -2815,6 +2834,7 @@ const closeQAPanel = () => {
         qaAudioRef.current.pause();
     }
     clearTimeout(sheetBAudio._sbTimeout);
+    sheetBAudio._sbToken = (sheetBAudio._sbToken || 0) + 1;
     sheetBAudio.pause();
     const currentPlaybackId = playbackIdRef.current;
     setIsPlaying(true);
@@ -2852,14 +2872,11 @@ const closeQAPanel = () => {
         // Sheet B ဆိုရင် paragraph audio တဆက်တည်း ဖတ်ပါ
         if (currentSheetName === 'B' && sheetBParagraph && sheetBParagraph[sheetBParaIndex] && sheetBLineIndex >= 0) {
             const colIdx = getColumnIndex(selectedColumn);
-            sheetBAudio.src = colIdx >= 15 ? SHEET_B_AUDIO2 : SHEET_B_AUDIO;
             const times = sheetBParagraph[sheetBParaIndex].audioTimes;
             const t = times[sheetBLineIndex];
             const nextT = sheetBParagraph[sheetBParaIndex].nextAudioTimes[sheetBLineIndex];
             const duration = nextT ? (nextT - t - 0.1) * 1000 : 3500;
-            sheetBAudio.currentTime = t;
-            sheetBAudio.play();
-            sheetBAudio._sbTimeout = setTimeout(() => sheetBAudio.pause(), duration);
+            playSheetBClip(sheetBAudio, colIdx >= 15 ? SHEET_B_AUDIO2 : SHEET_B_AUDIO, t, duration);
         }
     }
   };
@@ -4177,14 +4194,11 @@ setCurrentSheetIndex(lineGlobalIndex);
 setShowTranslation(true);
             const chapterData = SHEET_B_CHAPTERS[selectedColumn];
             const colIdx = getColumnIndex(selectedColumn);
-sheetBAudio.src = colIdx >= 15 ? SHEET_B_AUDIO2 : SHEET_B_AUDIO;
 const times = sheetBParagraph[sheetBParaIndex].audioTimes;
 const t = times[li];
 const nextT = sheetBParagraph[sheetBParaIndex].nextAudioTimes[li];
 const duration = nextT ? (nextT - t - 0.1) * 1000 : 3500;
-sheetBAudio.currentTime = t;
-sheetBAudio.play();
-sheetBAudio._sbTimeout = setTimeout(() => sheetBAudio.pause(), duration);
+playSheetBClip(sheetBAudio, colIdx >= 15 ? SHEET_B_AUDIO2 : SHEET_B_AUDIO, t, duration);
           }}
           className={`text-left text-2xl px-3 py-1 rounded-xl transition-all font-bold
     ${li === sheetBLineIndex && sheetBParaIndex === sheetBParaIndex 
