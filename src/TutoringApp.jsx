@@ -1,4 +1,4 @@
-import { listenWithHistory, listenLessonsWithHistory } from './studentHistory';
+import { listenWithHistory, listenLessonsWithHistory, loadStudentHistory } from './studentHistory';
 import { isOnlineStatusDay, isParamiClassTime } from './presenceDay';
 import { PeekName, AvatarThumb } from './AvatarPeek';
 import ParamiReportEditor from './ParamiReportEditor';
@@ -10669,6 +10669,32 @@ function WeeklySchedule({ role, targetStudentUid }) {
   const openCountModal = async (studentUid, studentName) => {
     setModalData({ name: studentName, attended: 0, total: 0, loading: true });
     setShowCountModal(true);
+
+    // A student looking at someone else's count: from that student's static history file on GitHub (this year's schedule
+    // and sessions, rewritten weekly) -- nothing is read from Firebase. Only the teacher reads it live.
+    if (role !== 'teacher') {
+      try {
+        const hist = studentUid && studentUid !== 'offline' ? await loadStudentHistory(studentUid) : null;
+        const now = new Date();
+        const sched = ((hist && hist.schedule) || []).filter(e => e.startTime && e.startTime.toDate() <= now);
+        const sess = (hist && hist.sessions) || [];
+        let attended = 0;
+        sched.forEach(entry => {
+          if (entry.overrideStatus === 'attended') attended++;
+          else if (entry.overrideStatus === 'absent') { /* absent */ }
+          else {
+            const d = entry.startTime.toDate();
+            const a = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0);
+            const b = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59);
+            if (sess.some(x => x.startTime && x.startTime.toDate() >= a && x.startTime.toDate() <= b)) attended++;
+          }
+        });
+        setModalData({ name: studentName, attended, total: sched.length, starMessages: [], loading: false });
+      } catch (e) {
+        setModalData({ name: studentName, attended: 0, total: 0, loading: false, error: true });
+      }
+      return;
+    }
 
     try {
       let scheduleQuery;
