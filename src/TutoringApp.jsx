@@ -10432,7 +10432,9 @@ function WeeklySchedule({ role, targetStudentUid }) {
   const [recurringSlots, setRecurringSlots] = useState([]);
   const [sessions, setSessions] = useState([]);
   const [groups, setGroups] = useState([]);
-  const [weekOffset, setWeekOffset] = useState(0);
+  // A student sees only finished weeks (from the static files on GitHub): the screen opens on LAST week and the current week
+  // is not shown to students at all, so nothing is read from Firebase for them. The teacher sees everything as before.
+  const [weekOffset, setWeekOffset] = useState(role === 'teacher' ? 0 : -1);
 
   const [showCountModal, setShowCountModal] = useState(false);
   const [modalData, setModalData] = useState({ name: '', attended: 0, total: 0, loading: false });
@@ -10455,7 +10457,8 @@ function WeeklySchedule({ role, targetStudentUid }) {
 
   useEffect(() => {
     // Group names only; rarely changes, so once per visit.
-    const unsub = watchTeacherLiveElseOnce(false, groupsCollection, (snap) => setGroups(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+    // kept on this device (a day for students; the teacher's copy is refreshed with the Refresh button)
+    const unsub = cachedListen('w_groups', groupsCollection, (snap) => setGroups(snap.docs.map(d => ({ id: d.id, ...d.data() }))), undefined, role === 'teacher' ? undefined : 24 * 60 * 60 * 1000);
     return () => unsub();
   }, []);
   
@@ -10494,7 +10497,16 @@ function WeeklySchedule({ role, targetStudentUid }) {
     try { slotsCached = JSON.parse(localStorage.getItem(slotsKey) || 'null'); } catch (e) { /* none */ }
     const slotsFresh = !refreshedNow && slotsCached && Date.now() - slotsCached.at < 6 * 60 * 60 * 1000;
     let slotsPromise;
-    if (slotsFresh) {
+    if (role !== 'teacher') {
+      slotsPromise = fetch(`${import.meta.env.BASE_URL}todaySchedule.json`)
+        .then(r => (r.ok ? r.json() : { slots: [] }))
+        .then(j => {
+          const list = (j.slots || []).map(sl => ({ id: sl.id, studentUid: sl.u, studentName: sl.n, dayOfWeek: sl.d, startTime: sl.s, endTime: sl.e }));
+          setRecurringSlots(list);
+          return list;
+        })
+        .catch(() => []);
+    } else if (slotsFresh) {
       const list = reviveWeekTimes(slotsCached.list);
       setRecurringSlots(list);
       slotsPromise = Promise.resolve(list);
@@ -10578,7 +10590,9 @@ function WeeklySchedule({ role, targetStudentUid }) {
       }));
     };
 
-    if (weekOffset === 0) {
+    if (role !== 'teacher' && weekOffset >= 0) {
+      setSchedule([]); setSessions([]); setFromFile(false); // not shown to students
+    } else if (weekOffset === 0) {
       loadCurrentWeek();
     } else if (weekOffset < 0 && !refreshedNow) {
       // A PAST week ALWAYS comes from the static files on GitHub (written by the weekly job) -- no Firestore reads. Only the
@@ -10832,7 +10846,7 @@ function WeeklySchedule({ role, targetStudentUid }) {
         <h3 className="text-lg font-semibold text-gray-700">
           {weekStartDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} &nbsp;-&nbsp; {new Date(weekStartDate.getTime() + 6 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
         </h3>
-        <button onClick={() => setWeekOffset(o => o + 1)} className="px-4 py-2 bg-white text-gray-800 rounded-lg hover:bg-gray-100 shadow-md">Next Week &rarr;</button>
+        <button onClick={() => setWeekOffset(o => o + 1)} disabled={role !== 'teacher' && weekOffset >= 0} className="px-4 py-2 bg-white text-gray-800 rounded-lg hover:bg-gray-100 shadow-md disabled:opacity-40">Next Week &rarr;</button>
       </div>
       {role === 'teacher' && (
         <div className="flex justify-center items-center gap-3 mb-4 text-sm text-gray-500">
@@ -10841,8 +10855,14 @@ function WeeklySchedule({ role, targetStudentUid }) {
         </div>
       )}
 
+      {role !== 'teacher' && weekOffset >= 0 && (
+        <p className="text-center text-gray-600 bg-white/90 rounded-xl p-6 shadow">🗓️ This week will be shown next week (with who attended).</p>
+      )}
+      {role !== 'teacher' && weekOffset < 0 && fromFile && fileIncomplete && (
+        <p className="text-center text-xs text-gray-500 mb-3">The last days of this week may still be missing; the list is completed every week.</p>
+      )}
       <div className="space-y-6">
-        {daysOfWeek.map(day => {
+        {(role !== 'teacher' && weekOffset >= 0 ? [] : daysOfWeek).map(day => {
           const dayEntries = displaySchedule.filter(entry => {
             const entryDate = entry.startTime.toDate();
             return entryDate.getDate() === day.getDate() && entryDate.getMonth() === day.getMonth() && entryDate.getFullYear() === day.getFullYear();
