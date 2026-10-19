@@ -21,6 +21,7 @@ import {
   increment,
   serverTimestamp
 } from 'firebase/firestore';
+import { cachedListen, cachedGetDocs } from './cachedListen';
 import { 
     BookOpen, Users, Award, Sparkles, Loader2, RefreshCw, 
     CheckCircle, XCircle, Zap, User, Edit, Trash2, LayoutGrid, List, FileText,
@@ -2432,7 +2433,9 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
         const studentOnly = entryRequest?.mode === 'student';
         const [scoresSnap, heartsSnap, reflSnap, rosterSnap, compSnap] = await Promise.all([
           snapshotScores ? Promise.resolve(null) : getDocs(query(getScoresCollectionRef(), where("classId", "==", classId))),
-          getDocs(query(getStudentHeartsCollectionRef(), where("classId", "==", classId))),
+          studentOnly
+            ? cachedGetDocs(`ssHearts_${classId}`, query(getStudentHeartsCollectionRef(), where("classId", "==", classId)), 6 * 60 * 60 * 1000, { accept: (d) => d.classId === classId })
+            : getDocs(query(getStudentHeartsCollectionRef(), where("classId", "==", classId))),
           studentOnly ? Promise.resolve(null) : getDocs(query(getReflectionsCollectionRef(), where("classId", "==", classId))),
           studentOnly ? Promise.resolve(null) : getDocs(query(getRosterCollectionRef(), where("classId", "==", classId))),
           loadCompletionsForClass(classId, studentOnly),
@@ -2513,9 +2516,11 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
   useEffect(() => {
     if (!isAuthReady || !userName) return;
     const q = query(getScoresCollectionRef(), where("studentName", "==", userName));
-    const unsub = onSnapshot(q, (querySnapshot) => {
+    // This student's own scores (hundreds of documents for an active student): kept on this device for a day and brought up
+    // to date by the student's own new scores, instead of a live listener that re-read all of them every time SmartStudy opened.
+    const unsub = cachedListen(`ssMine_${userName}`, q, (querySnapshot) => {
       const fetched = []; querySnapshot.forEach((doc) => fetched.push({ id: doc.id, ...doc.data() })); setAllMyScoresGlobal(fetched);
-    });
+    }, undefined, 24 * 60 * 60 * 1000, { accept: (d) => d.studentName === userName });
     return () => unsub();
   }, [isAuthReady, userName]);
 

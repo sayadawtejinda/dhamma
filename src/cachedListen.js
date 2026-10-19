@@ -102,3 +102,17 @@ export function cachedListen(key, q, onNext, onError, ttlMs = 30 * 24 * 60 * 60 
 
   return () => { dead = true; clearTimeout(flushTimer); window.removeEventListener('dhamma-write', onWrite); listeners.delete(l); };
 }
+
+// One-time read of a query/document from the saved copy (read from Firebase only if there is no copy younger than ttlMs).
+export function cachedGetDocs(key, q, ttlMs, opts = {}) {
+  return new Promise((resolve, reject) => {
+    let done = false;
+    let off = null;
+    off = cachedListen(key, q, (snap) => {
+      if (done) return;
+      done = true;
+      resolve(snap);
+      setTimeout(() => { if (off) off(); }, 0);
+    }, (e) => { if (!done) { done = true; reject(e); } }, ttlMs, opts);
+  });
+}
