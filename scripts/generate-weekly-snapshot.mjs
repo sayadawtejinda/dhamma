@@ -378,6 +378,12 @@ async function main() {
     console.log(`Wrote ${wrote} week file(s) for the Teacher's Weekly Schedule`);
   }
 
+  // Today's Schedule: the standing weekly slots (everyone, offline students too) as one static file -- the page picks today's.
+  writeFileSync(join(__dirname, '..', 'public', 'todaySchedule.json'), JSON.stringify({
+    generatedAt,
+    slots: recurringSlots.filter(r => !r.studentInactive && r.studentName).map(r => ({ id: r.id, u: r.studentUid || null, n: r.studentName, d: r.dayOfWeek, s: r.startTime, e: r.endTime })),
+  }));
+
   writeFileSync(STATE_PATH, JSON.stringify({ lastRunMs: Date.now(), fullAt: FULL ? Date.now() : state.fullAt }));
   console.log(`Wrote ${attendanceRankedList.length} attendance rows and ${trophyList.length} trophy rows to ${OUT_PATH}`);
   }

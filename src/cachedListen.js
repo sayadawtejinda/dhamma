@@ -1,8 +1,8 @@
 import { getDocs, getDoc, Timestamp } from 'firebase/firestore';
 
 // A saved-copy replacement for a live onSnapshot on a collection / query (used on the teacher's dashboard).
-//  - The documents are kept on this device; they are read from Firebase again only when the copy is older than `ttlMs`
-//    (default 1 hour) or when "Refresh" is pressed -- opening the screen again meanwhile costs no reads at all.
+//  - The documents are kept on this device; they are read from Firebase again only when the screen is OPENED with a copy older
+//    than `ttlMs` (default 1 hour), or when "Refresh" is pressed -- opening the screen again meanwhile costs no reads at all.
 //  - The teacher's OWN writes (every write announces itself, see firestoreCounted.js) bring just the one changed document
 //    up to date (one read), so what the teacher does shows at once.
 //  - What other people change (a student starting a lesson) shows up with the next hourly read or Refresh.
@@ -32,7 +32,6 @@ export function cachedListen(key, q, onNext, onError, ttlMs = 60 * 60 * 1000) {
   let docs = new Map();   // id -> serialized data
   let at = 0;
   let dead = false;
-  let timer = null;
   const store = () => { try { localStorage.setItem(PREFIX + key, JSON.stringify({ at, docs: Object.fromEntries(docs) })); } catch (e) { /* too big: memory only */ } };
   const emit = () => {
     if (dead) return;
@@ -55,8 +54,7 @@ export function cachedListen(key, q, onNext, onError, ttlMs = 60 * 60 * 1000) {
     if (c && c.docs && c.at && Date.now() - c.at < ttlMs) { docs = new Map(Object.entries(c.docs)); at = c.at; l.at = at; emit(); }
   } catch (e) { /* no copy */ }
   if (!at) fetchAll();
-  // while the screen stays open, read again once the copy is an hour old
-  timer = setInterval(() => { if (Date.now() - at >= ttlMs) fetchAll(); }, 5 * 60 * 1000);
+  // (nothing is read while the screen just sits open: a copy older than an hour is read again only when the screen is opened)
 
   // the teacher's own change to one document of this collection
   let pending = new Map();
@@ -81,5 +79,5 @@ export function cachedListen(key, q, onNext, onError, ttlMs = 60 * 60 * 1000) {
   };
   window.addEventListener('dhamma-write', onWrite);
 
-  return () => { dead = true; clearInterval(timer); clearTimeout(flushTimer); window.removeEventListener('dhamma-write', onWrite); listeners.delete(l); };
+  return () => { dead = true; clearTimeout(flushTimer); window.removeEventListener('dhamma-write', onWrite); listeners.delete(l); };
 }

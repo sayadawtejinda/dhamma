@@ -10294,24 +10294,22 @@ function TodaySchedule() {
     const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0);
     const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
 
-    const q = query(
-      teacherScheduleCollection,
-      where("startTime", ">=", Timestamp.fromDate(startOfDay)),
-      where("startTime", "<=", Timestamp.fromDate(endOfDay))
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const scheduleList = snapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() }))
-        .sort((a, b) => a.startTime.toDate() - b.startTime.toDate());
-      setSchedule(scheduleList);
-      setLoading(false);
-    }, (error) => {
-      console.error("Error fetching today's schedule:", error);
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
+    // From ONE static file on GitHub (the standing weekly slots, written by the weekly job): opening this costs nothing.
+    let cancelled = false;
+    fetch(`${import.meta.env.BASE_URL}todaySchedule.json`)
+      .then(r => (r.ok ? r.json() : { slots: [] }))
+      .then(data => {
+        if (cancelled) return;
+        const at = (hhmm) => { const [h, m] = String(hhmm || '00:00').split(':').map(Number); return Timestamp.fromDate(new Date(today.getFullYear(), today.getMonth(), today.getDate(), h, m)); };
+        const list = (data.slots || [])
+          .filter(sl => sl.d === today.getDay())
+          .map(sl => ({ id: sl.id, studentUid: sl.u, studentName: sl.n, startTime: at(sl.s), endTime: at(sl.e), isRecurring: true }))
+          .sort((a, b) => a.startTime.toDate() - b.startTime.toDate());
+        setSchedule(list);
+        setLoading(false);
+      })
+      .catch((error) => { console.error("Error fetching today's schedule:", error); if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, []);
 
   const renderTimeSlots = () => {
