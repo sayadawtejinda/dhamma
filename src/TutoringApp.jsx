@@ -10419,6 +10419,7 @@ function WeeklySchedule({ role, targetStudentUid }) {
   const [refreshKey, setRefreshKey] = useState(0);
   const [lastLoadedAt, setLastLoadedAt] = useState(null);
   const [fromFile, setFromFile] = useState(false);
+  const [fileIncomplete, setFileIncomplete] = useState(false);
   const recurringLoadedRef = useRef(-1);
   const refreshUsedRef = useRef(0);
 
@@ -10460,6 +10461,12 @@ function WeeklySchedule({ role, targetStudentUid }) {
 
     const loadFromFirebase = () => {
       setFromFile(false);
+      if (weekOffset > 0) {
+        // Weeks that have not come yet look like the current one: they are drawn from the weekly standing slots (read once
+        // above), so nothing is read for them.
+        setSchedule([]); setSessions([]); setLastLoadedAt(new Date());
+        return;
+      }
       const q = query(
         teacherScheduleCollection,
         where("startTime", ">=", Timestamp.fromDate(weekStartDate)),
@@ -10472,7 +10479,6 @@ function WeeklySchedule({ role, targetStudentUid }) {
           .sort((a, b) => a.startTime.toDate() - b.startTime.toDate());
         setSchedule(scheduleList);
       }));
-      if (weekOffset > 0) { setSessions([]); return; } // nobody has studied in a week that has not come yet
       const qSessions = query(
         sessionsCollection,
         where("startTime", ">=", Timestamp.fromDate(weekStartDate)),
@@ -10489,22 +10495,22 @@ function WeeklySchedule({ role, targetStudentUid }) {
     const refreshedNow = refreshKey !== refreshUsedRef.current;
     refreshUsedRef.current = refreshKey;
     if (weekOffset < 0 && !refreshedNow) {
-      // A PAST week comes from the static files on GitHub (written by the weekly job) -- no Firestore reads. A file
-      // is used only if it was built after that week ended; otherwise (last week, before the next weekly run) or when
-      // Refresh is pressed, Firebase is read as before.
+      // A PAST week ALWAYS comes from the static files on GitHub (written by the weekly job) -- no Firestore reads. Only the
+      // Refresh button reads that one week from Firebase (for last week, before the next weekly run has added it).
       (async () => {
         try {
           const files = await Promise.all(weekBucketKeys(weekStartDate.getTime(), weekEndDate.getTime()).map(k =>
             fetch(`${import.meta.env.BASE_URL}weekFiles/${k}.json`).then(r => (r.ok ? r.json() : null))));
           if (cancelled) return;
-          if (files.some(f => !f || !(f.builtAt >= weekEndDate.getTime()))) { loadFromFirebase(); return; }
           const inWeek = (e) => { const ms = e.startTime && e.startTime._ms; return ms >= weekStartDate.getTime() && ms < weekEndDate.getTime(); };
-          const sched = files.flatMap(f => f.schedule).filter(inWeek).map(reviveWeekTimes).sort((a, b) => a.startTime.toDate() - b.startTime.toDate());
+          const sched = files.filter(Boolean).flatMap(f => f.schedule).filter(inWeek).map(reviveWeekTimes).sort((a, b) => a.startTime.toDate() - b.startTime.toDate());
           setSchedule(sched);
-          setSessions(files.flatMap(f => f.sessions).filter(inWeek).map(reviveWeekTimes));
+          setSessions(files.filter(Boolean).flatMap(f => f.sessions).filter(inWeek).map(reviveWeekTimes));
           setFromFile(true);
-          setLastLoadedAt(new Date(Math.min(...files.map(f => f.builtAt))));
-        } catch (e) { if (!cancelled) loadFromFirebase(); }
+          const builtAts = files.filter(Boolean).map(f => f.builtAt);
+          setLastLoadedAt(builtAts.length ? new Date(Math.min(...builtAts)) : null);
+          setFileIncomplete(builtAts.length === 0 || Math.min(...builtAts) < weekEndDate.getTime());
+        } catch (e) { if (!cancelled) { setSchedule([]); setSessions([]); setFromFile(true); setFileIncomplete(true); } }
       })();
     } else {
       loadFromFirebase();
@@ -10740,7 +10746,7 @@ function WeeklySchedule({ role, targetStudentUid }) {
       </div>
       {role === 'teacher' && (
         <div className="flex justify-center items-center gap-3 mb-4 text-sm text-gray-500">
-          <span>{weekOffset === 0 ? '🟢 Attendance updates live this week' : fromFile ? `📁 Saved copy from ${lastLoadedAt ? lastLoadedAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''} (free)` : (lastLoadedAt ? `Loaded ${lastLoadedAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}` : 'Loading...')}</span>
+          <span>{weekOffset === 0 ? '🟢 Attendance updates live this week' : fromFile ? `📁 Saved copy from ${lastLoadedAt ? lastLoadedAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}${fileIncomplete ? ' — this week may not be complete yet; press Refresh' : ''}` : weekOffset > 0 ? '📅 Same as this week' : (lastLoadedAt ? `Loaded ${lastLoadedAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}` : 'Loading...')}</span>
           <button onClick={() => setRefreshKey(k => k + 1)} className="px-3 py-1 bg-white border border-gray-300 text-gray-700 rounded-full hover:bg-gray-100 shadow-sm font-semibold">🔄 Refresh</button>
         </div>
       )}
