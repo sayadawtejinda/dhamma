@@ -11062,18 +11062,22 @@ function YearAttendanceBoard({ role, targetStudentUid }) {
         if (cancelled) return;
         setRankedList(data.attendanceRankedList || []);
         setGeneratedAt(data.generatedAt || null);
+        if (role !== 'teacher') setHiddenOfflineNames(data.hiddenOfflineNames || []);
       })
       .catch(e => console.error('Error loading attendance snapshot:', e))
       .finally(() => { if (!cancelled) setSnapshotLoading(false); });
     return () => { cancelled = true; };
   }, []);
 
+  // Students get the hidden list from the same weekly file (no Firebase read); only the teacher reads the setting, because
+  // the teacher is the one who changes it.
   useEffect(() => {
+    if (role !== 'teacher') return;
     const unsub = onSnapshot(teacherConfigDoc, (docSnap) => {
       if (docSnap.exists()) setHiddenOfflineNames(docSnap.data().hiddenOfflineNames || []);
     });
     return () => unsub();
-  }, []);
+  }, [role]);
 
   const toggleHideOffline = async (name) => {
     try {

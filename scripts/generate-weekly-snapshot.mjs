@@ -19,7 +19,7 @@
 // the DISPLAYED counts are the once-a-week snapshot.)
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously } from 'firebase/auth';
-import { getFirestore, collection, query, where, getDocs, Timestamp, doc, updateDoc } from 'firebase/firestore';
+import { getFirestore, collection, query, where, getDocs, getDoc, Timestamp, doc, updateDoc } from 'firebase/firestore';
 import { writeFileSync, mkdirSync, readFileSync, readdirSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -284,7 +284,10 @@ async function main() {
     .map(e => ({ id: e.id, name: e.name, isOffline: e.isOffline, attended: e.monthAttended, absent: e.monthAbsent, total: e.monthAttended + e.monthAbsent }))
     .sort((a, b) => b.attended - a.attended);
 
-  const snapshot = { generatedAt: new Date().toISOString(), attendanceRankedList, attendanceMonthlyRankedList, trophyList, attendanceTotals };
+  // the offline names the teacher hid from the board (students read this from the file instead of Firebase)
+  let hiddenOfflineNames = [];
+  try { const cfg = await getDoc(doc(db, `${publicDataPath}/config/teacher`)); hiddenOfflineNames = (cfg.exists() && cfg.data().hiddenOfflineNames) || []; } catch (e) { /* none */ }
+  const snapshot = { generatedAt: new Date().toISOString(), hiddenOfflineNames, attendanceRankedList, attendanceMonthlyRankedList, trophyList, attendanceTotals };
   writeFileSync(OUT_PATH, JSON.stringify(snapshot, null, 2));
 
   // ---- Per-student "weeks attended" (all time), for the Bodhi Tree and Shrine Room ----
