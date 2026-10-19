@@ -10424,8 +10424,8 @@ const clearWeekCache = () => { try { Object.keys(localStorage).filter(k => k.sta
 const readWeekCache = (weekStartMs) => {
   try { const c = JSON.parse(localStorage.getItem(WEEK_CACHE_PREFIX + weekStartMs) || 'null'); return c && c.at ? c : null; } catch (e) { return null; }
 };
-// The teacher's saved copy is used until Refresh is pressed (or it is a week old); a student's for an hour.
-const weekCacheFresh = (cache, weekStartMs, role, now = Date.now()) => now - cache.at < (role === 'teacher' ? 7 * 24 : 1) * 60 * 60 * 1000;
+// The teacher's saved copy is used until Refresh is pressed (or it is a week old); a student's for a day.
+const weekCacheFresh = (cache, weekStartMs, role, now = Date.now()) => now - cache.at < (role === 'teacher' ? 7 * 24 : 24) * 60 * 60 * 1000;
 
 function WeeklySchedule({ role, targetStudentUid }) {
   const [schedule, setSchedule] = useState([]);
