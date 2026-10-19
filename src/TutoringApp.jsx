@@ -10381,6 +10381,22 @@ function watchTeacherLiveElseOnce(isTeacher, ref, onNext) {
   return () => { cancelled = true; };
 }
 
+// The Sundays (UTC) that start the 7-day buckets of public/weekFiles/{key}.json -- the one or two buckets that cover the
+// week [startMs, endMs). Must match the bucketing in scripts/generate-weekly-snapshot.mjs.
+const WEEK_BUCKET_MS = 7 * 24 * 60 * 60 * 1000;
+const WEEK_BUCKET_REF = Date.UTC(2024, 0, 7);
+const weekBucketKeys = (startMs, endMs) => {
+  const keys = [];
+  for (let k = WEEK_BUCKET_REF + Math.floor((startMs - WEEK_BUCKET_REF) / WEEK_BUCKET_MS) * WEEK_BUCKET_MS; k < endMs; k += WEEK_BUCKET_MS) keys.push(new Date(k).toISOString().slice(0, 10));
+  return keys;
+};
+const reviveWeekTimes = (v) => {
+  if (v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 1 && typeof v._ms === 'number') return Timestamp.fromMillis(v._ms);
+  if (Array.isArray(v)) return v.map(reviveWeekTimes);
+  if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, reviveWeekTimes(x)]));
+  return v;
+};
+
 function WeeklySchedule({ role, targetStudentUid }) {
   const [schedule, setSchedule] = useState([]);
   const [recurringSlots, setRecurringSlots] = useState([]);
@@ -10402,6 +10418,9 @@ function WeeklySchedule({ role, targetStudentUid }) {
   // week opens; the Refresh button below reads it again on request.)
   const [refreshKey, setRefreshKey] = useState(0);
   const [lastLoadedAt, setLastLoadedAt] = useState(null);
+  const [fromFile, setFromFile] = useState(false);
+  const recurringLoadedRef = useRef(-1);
+  const refreshUsedRef = useRef(0);
 
   useEffect(() => {
     // Group names only; rarely changes, so once per visit.
@@ -10427,45 +10446,73 @@ function WeeklySchedule({ role, targetStudentUid }) {
   useEffect(() => {
     const weekEndDate = new Date(weekStartDate);
     weekEndDate.setDate(weekEndDate.getDate() + 7);
+    let cancelled = false;
+    let unsubs = [];
 
-    const q = query(
-      teacherScheduleCollection,
-      where("startTime", ">=", Timestamp.fromDate(weekStartDate)),
-      where("startTime", "<", Timestamp.fromDate(weekEndDate))
-    );
+    // Weekly standing slots: a small collection, read ONCE per visit (again only on Refresh), not on every week change.
+    if (recurringLoadedRef.current !== refreshKey) {
+      recurringLoadedRef.current = refreshKey;
+      const recurringQuery = targetStudentUid
+        ? query(recurringScheduleCollection, where('studentUid', '==', targetStudentUid))
+        : recurringScheduleCollection;
+      getDocs(recurringQuery).then(snap => setRecurringSlots(snap.docs.map(d => ({ id: d.id, ...d.data() })))).catch(() => {});
+    }
 
-    const unsubscribe = watchTeacherLiveElseOnce(false, q, (snapshot) => {
-      setLastLoadedAt(new Date());
-      const scheduleList = snapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() }))
-        .sort((a, b) => a.startTime.toDate() - b.startTime.toDate());
-      setSchedule(scheduleList);
-    });
+    const loadFromFirebase = () => {
+      setFromFile(false);
+      const q = query(
+        teacherScheduleCollection,
+        where("startTime", ">=", Timestamp.fromDate(weekStartDate)),
+        where("startTime", "<", Timestamp.fromDate(weekEndDate))
+      );
+      unsubs.push(watchTeacherLiveElseOnce(false, q, (snapshot) => {
+        setLastLoadedAt(new Date());
+        const scheduleList = snapshot.docs
+          .map(doc => ({ id: doc.id, ...doc.data() }))
+          .sort((a, b) => a.startTime.toDate() - b.startTime.toDate());
+        setSchedule(scheduleList);
+      }));
+      if (weekOffset > 0) { setSessions([]); return; } // nobody has studied in a week that has not come yet
+      const qSessions = query(
+        sessionsCollection,
+        where("startTime", ">=", Timestamp.fromDate(weekStartDate)),
+        where("startTime", "<", Timestamp.fromDate(weekEndDate))
+      );
+      // Only the CURRENT week's sessions are live: a live listener is billed once for what it loads and then only per
+      // change (a student starting a session), never for time spent open.
+      unsubs.push(watchTeacherLiveElseOnce(role === 'teacher' && weekOffset === 0, qSessions, (snapshot) => {
+        setSessions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      }));
+    };
 
-    // Fills in weeks that no longer get a new dated teacherSchedule doc
-    // (see recurringScheduleCollection) -- read once per week view, cheap
-    // either way since it's a small collection.
-    const recurringQuery = targetStudentUid
-      ? query(recurringScheduleCollection, where('studentUid', '==', targetStudentUid))
-      : recurringScheduleCollection;
-    getDocs(recurringQuery).then(snap => setRecurringSlots(snap.docs.map(d => ({ id: d.id, ...d.data() })))).catch(() => {});
-
-    const qSessions = query(
-      sessionsCollection,
-      where("startTime", ">=", Timestamp.fromDate(weekStartDate)), 
-      where("startTime", "<", Timestamp.fromDate(weekEndDate))   
-    );
-    // Only the CURRENT week's sessions are live: a live listener is billed once
-    // for what it loads and then only per change (a student starting a session),
-    // never for time spent open. Other weeks never change, so read them once.
-    const unsubSessions = watchTeacherLiveElseOnce(role === 'teacher' && weekOffset === 0, qSessions, (snapshot) => {
-      const sessionList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setSessions(sessionList);
-    });
+    // (the Refresh button reads this one week live; moving to another week goes back to the saved files)
+    const refreshedNow = refreshKey !== refreshUsedRef.current;
+    refreshUsedRef.current = refreshKey;
+    if (weekOffset < 0 && !refreshedNow) {
+      // A PAST week comes from the static files on GitHub (written by the weekly job) -- no Firestore reads. A file
+      // is used only if it was built after that week ended; otherwise (last week, before the next weekly run) or when
+      // Refresh is pressed, Firebase is read as before.
+      (async () => {
+        try {
+          const files = await Promise.all(weekBucketKeys(weekStartDate.getTime(), weekEndDate.getTime()).map(k =>
+            fetch(`${import.meta.env.BASE_URL}weekFiles/${k}.json`).then(r => (r.ok ? r.json() : null))));
+          if (cancelled) return;
+          if (files.some(f => !f || !(f.builtAt >= weekEndDate.getTime()))) { loadFromFirebase(); return; }
+          const inWeek = (e) => { const ms = e.startTime && e.startTime._ms; return ms >= weekStartDate.getTime() && ms < weekEndDate.getTime(); };
+          const sched = files.flatMap(f => f.schedule).filter(inWeek).map(reviveWeekTimes).sort((a, b) => a.startTime.toDate() - b.startTime.toDate());
+          setSchedule(sched);
+          setSessions(files.flatMap(f => f.sessions).filter(inWeek).map(reviveWeekTimes));
+          setFromFile(true);
+          setLastLoadedAt(new Date(Math.min(...files.map(f => f.builtAt))));
+        } catch (e) { if (!cancelled) loadFromFirebase(); }
+      })();
+    } else {
+      loadFromFirebase();
+    }
 
     return () => {
-      unsubscribe();
-      unsubSessions();
+      cancelled = true;
+      unsubs.forEach(u => { try { u(); } catch (e) { /* ignore */ } });
     };
   }, [weekStartDate, weekOffset, refreshKey]);
 
@@ -10693,7 +10740,7 @@ function WeeklySchedule({ role, targetStudentUid }) {
       </div>
       {role === 'teacher' && (
         <div className="flex justify-center items-center gap-3 mb-4 text-sm text-gray-500">
-          <span>{weekOffset === 0 ? '🟢 Attendance updates live this week' : (lastLoadedAt ? `Loaded ${lastLoadedAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}` : 'Loading...')}</span>
+          <span>{weekOffset === 0 ? '🟢 Attendance updates live this week' : fromFile ? `📁 Saved copy from ${lastLoadedAt ? lastLoadedAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''} (free)` : (lastLoadedAt ? `Loaded ${lastLoadedAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}` : 'Loading...')}</span>
           <button onClick={() => setRefreshKey(k => k + 1)} className="px-3 py-1 bg-white border border-gray-300 text-gray-700 rounded-full hover:bg-gray-100 shadow-sm font-semibold">🔄 Refresh</button>
         </div>
       )}

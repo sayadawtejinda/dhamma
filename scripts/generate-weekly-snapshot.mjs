@@ -349,6 +349,35 @@ async function main() {
     writeFileSync(join(HISTORY_DIR, `${encodeURIComponent(uid)}.json`), JSON.stringify({ generatedAtMs: Date.now(), lessons: [], ...h }));
   }
 
+  // ---- The Teacher's Weekly Schedule for PAST weeks: one small file per week (public/weekFiles/{key}.json) ----
+  // The key is the Sunday (UTC) that starts the 7-day bucket; the page picks the one or two buckets that cover the week it
+  // shows (see weekBucketKeys in TutoringApp.jsx -- keep the two in step). Each file holds that week's schedule entries and,
+  // for each session, just who it was and when. A normal run rewrites only the buckets wholly inside what it read fresh
+  // (the last 3 weeks); older files stay as they were; a full run rewrites everything.
+  {
+    const WEEK_MS = 7 * DAY_MS;
+    const REF_SUNDAY = Date.UTC(2024, 0, 7);
+    const bucketStart = (ms) => REF_SUNDAY + Math.floor((ms - REF_SUNDAY) / WEEK_MS) * WEEK_MS;
+    const WEEK_DIR = join(__dirname, '..', 'public', 'weekFiles');
+    mkdirSync(WEEK_DIR, { recursive: true });
+    const buckets = new Map();
+    const bucketOf = (ms) => { const k = bucketStart(ms); if (!buckets.has(k)) buckets.set(k, { schedule: [], sessions: [] }); return buckets.get(k); };
+    const freshSchedule = FULL ? allRealSchedule : scheduleSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const freshSessions = FULL ? allSessions : sessionsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    freshSchedule.forEach(e => { if (e.startTime && typeof e.startTime.toMillis === 'function') bucketOf(e.startTime.toMillis()).schedule.push(serialize(e)); });
+    freshSessions.forEach(x => { if (x.startTime && typeof x.startTime.toMillis === 'function' && x.studentUid) bucketOf(x.startTime.toMillis()).sessions.push({ studentUid: x.studentUid, startTime: { _ms: x.startTime.toMillis() } }); });
+    // an empty week must still get a file (otherwise the page would fall back to reading Firebase for it)
+    const firstKey = Math.min(...[...buckets.keys(), bucketStart(Date.now())]);
+    for (let k = firstKey; k <= bucketStart(Date.now()); k += WEEK_MS) if (!buckets.has(k)) buckets.set(k, { schedule: [], sessions: [] });
+    let wrote = 0;
+    for (const [k, v] of buckets) {
+      if (!FULL && k < sinceMs) continue; // partly older than what was read this time: leave the file from the earlier run
+      writeFileSync(join(WEEK_DIR, `${new Date(k).toISOString().slice(0, 10)}.json`), JSON.stringify({ builtAt: Date.now(), ...v }));
+      wrote++;
+    }
+    console.log(`Wrote ${wrote} week file(s) for the Teacher's Weekly Schedule`);
+  }
+
   writeFileSync(STATE_PATH, JSON.stringify({ lastRunMs: Date.now(), fullAt: FULL ? Date.now() : state.fullAt }));
   console.log(`Wrote ${attendanceRankedList.length} attendance rows and ${trophyList.length} trophy rows to ${OUT_PATH}`);
   }
