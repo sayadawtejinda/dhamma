@@ -2216,7 +2216,8 @@ const reflectionSnapshotCache = new Map();
 const loadCompletionsForClass = async (classId, studentOnly) => {
   if (studentOnly && !completionsIndexMissing) {
     try {
-      return await getDocs(query(getCompletionsCollectionRef(), where("classId", "==", classId), orderBy("timestamp", "desc"), limit(20)));
+      // kept on the device for 6 hours (the student's own new completions are added at once)
+      return await cachedGetDocs(`ssComp_${classId}`, query(getCompletionsCollectionRef(), where("classId", "==", classId), orderBy("timestamp", "desc"), limit(20)), 6 * 60 * 60 * 1000, { accept: (d) => d.classId === classId });
     } catch (e) {
       if (e?.code === 'failed-precondition') { completionsIndexMissing = true; console.warn('Completions index missing -- using the full read:', e.message); }
       else throw e;
