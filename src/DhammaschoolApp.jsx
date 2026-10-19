@@ -11,6 +11,7 @@ import { auth as sharedAuth, db as sharedDb } from './firebase';
 import OnlineStatusWidget from './OnlineStatusWidget';
 import { AvatarPeekModal } from './AvatarPeek';
 import { presenceIntervalMs, listenLiveOrOnce } from './presenceDay';
+import { cachedListen } from './cachedListen';
 
 // The vanilla script below tracks role/name/class as plain closure `let`s,
 // not React state, so this collection path is the only piece the shared
@@ -1522,14 +1523,17 @@ let bilingualMode = false;
                 } else {
                     renderStudentLibrary();
                 }
-            });
+            }, 'ds_lessons_' + scope);
         }
 
         // Cost control: the teacher keeps live listeners (edits show at once);
         // students read ONCE when they open -- no listener held open, so nobody
         // else's activity is pushed to every student's device.
-        function listenTeacherLiveElseOnce(ref, onNext) {
-            return isTeacher ? onSnapshot(ref, onNext) : listenLiveOrOnce(ref, onNext);
+        // A student's copy is kept on the device (6 hours) when a `key` is given, so opening the app again costs no reads.
+        function listenTeacherLiveElseOnce(ref, onNext, key) {
+            if (isTeacher) return onSnapshot(ref, onNext);
+            if (key) return cachedListen(key, ref, onNext, undefined, 6 * 60 * 60 * 1000);
+            return listenLiveOrOnce(ref, onNext);
         }
 
         function setupListeners() {
@@ -1551,7 +1555,7 @@ let bilingualMode = false;
                 snap.docs.forEach(d => { allClassRegistry[d.id] = { id: d.id, ...d.data() }; });
                 if (isTeacher) renderTeacherClassPicker();
                 else renderClassPicker();
-            });
+            }, 'ds_classes');
             
             // --- START FIX: Run shared listeners for everyone ---
             setupSharedListeners(); 
@@ -1707,11 +1711,12 @@ let bilingualMode = false;
             // completions the same way (by studentName), so this makes the
             // two agree.
             const q = query(collection(db, PATHS.completions), where("studentName", "==", studentName));
-            completionsUnsub = onSnapshot(q, (snap) => {
+            // kept on this device for a day; the student's own new completions are added at once
+            completionsUnsub = cachedListen('ds_myCompletions_' + studentName, q, (snap) => {
                 myCompletedLessonIds = new Set();
                 snap.forEach(d => myCompletedLessonIds.add(d.data().lessonId));
                 if (!isTeacher) renderStudentLibrary();
-            });
+            }, undefined, 24 * 60 * 60 * 1000, { accept: (d) => d.studentName === studentName });
         }
 
         async function recordLessonCompletion() {
@@ -1822,11 +1827,14 @@ let bilingualMode = false;
             // below), so this one is left as a whole-collection listener
             // for now; typically far fewer docs than answers/scores.
             if (allCompletionsUnsub) allCompletionsUnsub();
-            allCompletionsUnsub = listenLiveOrOnce(collection(db, PATHS.completions), (snap) => {
+            const onAllCompletions = (snap) => {
                 allCompletions = [];
                 snap.forEach(d => allCompletions.push({ id: d.id, ...d.data() }));
                 renderNotificationBell();
-            }, undefined, isTeacher);
+            };
+            allCompletionsUnsub = isTeacher
+                ? listenLiveOrOnce(collection(db, PATHS.completions), onAllCompletions, undefined, true)
+                : cachedListen('ds_allCompletions', collection(db, PATHS.completions), onAllCompletions, undefined, 24 * 60 * 60 * 1000);
         }
 
         // Which class's notifications are relevant right now — the teacher's
