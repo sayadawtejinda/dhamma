@@ -27,8 +27,10 @@ const listeners = new Set();
 export const refreshCachedListeners = () => listeners.forEach(l => l.reload());
 export const cachedListenUpdatedAt = () => { let m = 0; listeners.forEach(l => { if (l.at && (!m || l.at < m)) m = l.at; }); return m; };
 
+// `opts.accept(data)`: after the teacher's/student's own write, a changed document is kept only if it still belongs to this query.
 // `q` may also be ONE document (then `onNext` gets a document-like snapshot: id, exists(), data()). `opts.refetchOnWrite`: for a
 // small query whose matches can change by a write (e.g. "status == pending"), read it again after the teacher's own write.
+const inflight = new Map();
 export function cachedListen(key, q, onNext, onError, ttlMs = 30 * 24 * 60 * 60 * 1000, opts = {}) {
   const isDoc = q && q.type === 'document';
   const collPath = isDoc ? String(q.path).split('/').slice(0, -1).join('/') : pathOf(q);
@@ -44,15 +46,19 @@ export function cachedListen(key, q, onNext, onError, ttlMs = 30 * 24 * 60 * 60 
   };
   const fetchAll = async () => {
     try {
-      if (isDoc) {
-        const one = await getDoc(q);
-        if (dead) return;
-        docs = new Map(one.exists() ? [[one.id, serialize(one.data())]] : []);
-      } else {
-        const snap = await getDocs(q);
-        if (dead) return;
-        docs = new Map(snap.docs.map(d => [d.id, serialize(d.data())]));
+      let pendingRead = inflight.get(key);
+      if (!pendingRead) {
+        pendingRead = (async () => {
+          if (isDoc) { const one = await getDoc(q); return new Map(one.exists() ? [[one.id, serialize(one.data())]] : []); }
+          const snap = await getDocs(q);
+          return new Map(snap.docs.map(d => [d.id, serialize(d.data())]));
+        })();
+        inflight.set(key, pendingRead);
+        pendingRead.finally(() => inflight.delete(key));
       }
+      const got = await pendingRead;
+      if (dead) return;
+      docs = new Map(got);
       at = Date.now(); l.at = at; store(); emit();
     } catch (e) { if (onError) onError(e); else console.error('Could not read', key, e); }
   };
@@ -83,7 +89,10 @@ export function cachedListen(key, q, onNext, onError, ttlMs = 30 * 24 * 60 * 60 
       const batch = pending; pending = new Map();
       for (const [docId, { ref: r, deleted: del }] of batch) {
         if (del) { docs.delete(docId); continue; }
-        try { const s = await getDoc(r); if (s.exists()) docs.set(docId, serialize(s.data())); else docs.delete(docId); } catch (e) { /* next hourly read fixes it */ }
+        try {
+          const s = await getDoc(r);
+          if (s.exists() && (!opts.accept || opts.accept(s.data()))) docs.set(docId, serialize(s.data())); else docs.delete(docId);
+        } catch (e) { /* Refresh fixes it */ }
       }
       if (dead) return;
       store(); emit();

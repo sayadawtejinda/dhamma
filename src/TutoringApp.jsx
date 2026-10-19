@@ -7329,6 +7329,7 @@ ${toSend.map(l => '• ' + l.title).join(', ')}`
 // renamed, so we also look up the Smart Study roster name (the name used in
 // quizCompletions) via the classRoster collection and query with whichever
 // name(s) appear there, falling back to the Tutoring name if nothing is found.
+const ssClassTotals = new Map(); // classId -> Promise of its number of lessons (see SmartStudyProgressBadge)
 function SmartStudyProgressBadge({ classId, studentName, smartStudyNames, compact, onCountChange }) {
   const [completedCount, setCompletedCount] = useState(null);
   const [totalCount, setTotalCount] = useState(null);
@@ -7364,7 +7365,9 @@ function SmartStudyProgressBadge({ classId, studentName, smartStudyNames, compac
           where('studentName', '==', name)
         );
         let firstFire = true;
-        const unsub = onSnapshot(q, (snap) => {
+        // Kept on this device (a day) and brought up to date by this student's own new completions, instead of a live
+        // listener that re-read every completion each time the home page opened.
+        const unsub = cachedListen(`ssc_${classId}_${name}`, q, (snap) => {
           snap.docs.forEach(d => distinctIds.add(d.data().lessonId));
           if (firstFire) { firstFire = false; settled++; }
           trySetCount();
@@ -7372,7 +7375,7 @@ function SmartStudyProgressBadge({ classId, studentName, smartStudyNames, compac
           console.error('Error loading Smart Study completions:', err);
           if (firstFire) { firstFire = false; settled++; }
           trySetCount();
-        });
+        }, 24 * 60 * 60 * 1000, { accept: (d) => d.classId === classId && d.studentName === name });
         unsubs.push(unsub);
       } catch (err) {
         console.error('Error setting up Smart Study progress listener:', err);
@@ -7394,8 +7397,10 @@ function SmartStudyProgressBadge({ classId, studentName, smartStudyNames, compac
         db, 'artifacts', appId, 'public', 'data', 'classRoster',
         `${classId}_${encodeURIComponent(studentName)}`
       );
-      getDoc(rosterRef).then(snap => {
-        if (!live) return;
+      let rosterDone = false;
+      const offRoster = cachedListen(`ssRoster_${classId}_${studentName}`, rosterRef, (snap) => {
+        if (!live || rosterDone) return;
+        rosterDone = true;
         const rosterName = snap.exists() ? snap.data().studentName : null;
         if (rosterName && !initialNames.includes(rosterName)) {
           // Found a distinct old name — subscribe for it
@@ -7404,11 +7409,13 @@ function SmartStudyProgressBadge({ classId, studentName, smartStudyNames, compac
         }
         settled++; // roster check itself is now settled
         trySetCount();
-      }).catch(() => {
-        if (!live) return;
+      }, () => {
+        if (!live || rosterDone) return;
+        rosterDone = true;
         settled++;
         trySetCount();
       });
+      unsubs.push(offRoster);
     }
 
     return () => {
@@ -7425,9 +7432,17 @@ function SmartStudyProgressBadge({ classId, studentName, smartStudyNames, compac
   useEffect(() => {
     if (!classId || classId.includes('/')) return;
     try {
-      getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'classes', classId))
-        .then(snap => setTotalCount(snap.exists() ? (snap.data().lessons || []).length : null))
-        .catch(() => setTotalCount(null));
+      // Only the NUMBER of lessons is needed: from the class's static file on GitHub (remembered for the visit); the big
+      // class document (200-400 KB) is read only if that file is missing.
+      let off = false;
+      if (!ssClassTotals.has(classId)) {
+        ssClassTotals.set(classId, fetch(`${import.meta.env.BASE_URL}classSnapshots/smartstudy-class/${encodeURIComponent(classId)}.json`)
+          .then(r => (r.ok ? r.json() : null))
+          .then(j => (j && j.data && Array.isArray(j.data.lessons) ? j.data.lessons.length : getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'classes', classId)).then(snap => (snap.exists() ? (snap.data().lessons || []).length : null))))
+          .catch(() => null));
+      }
+      ssClassTotals.get(classId).then(n => { if (!off) setTotalCount(n); });
+      return () => { off = true; };
     } catch (err) {
       console.error('Error fetching Smart Study class:', err);
     }
@@ -10409,8 +10424,8 @@ const clearWeekCache = () => { try { Object.keys(localStorage).filter(k => k.sta
 const readWeekCache = (weekStartMs) => {
   try { const c = JSON.parse(localStorage.getItem(WEEK_CACHE_PREFIX + weekStartMs) || 'null'); return c && c.at ? c : null; } catch (e) { return null; }
 };
-// The saved copy is used until the teacher presses Refresh (or it is a week old).
-const weekCacheFresh = (cache, weekStartMs, now = Date.now()) => now - cache.at < 7 * 24 * 60 * 60 * 1000;
+// The teacher's saved copy is used until Refresh is pressed (or it is a week old); a student's for an hour.
+const weekCacheFresh = (cache, weekStartMs, role, now = Date.now()) => now - cache.at < (role === 'teacher' ? 7 * 24 : 1) * 60 * 60 * 1000;
 
 function WeeklySchedule({ role, targetStudentUid }) {
   const [schedule, setSchedule] = useState([]);
@@ -10505,7 +10520,7 @@ function WeeklySchedule({ role, targetStudentUid }) {
       const cache = readWeekCache(wk);
       const slots = await slotsPromise;
       if (cancelled) return;
-      if (!refreshedNow && cache && weekCacheFresh({ ...cache, slots: cache.slots && cache.slots.length ? cache.slots : serializeTs(slots) }, wk)) {
+      if (!refreshedNow && cache && weekCacheFresh({ ...cache, slots: cache.slots && cache.slots.length ? cache.slots : serializeTs(slots) }, wk, role)) {
         setSchedule(reviveWeekTimes(cache.schedule).sort((a, b) => a.startTime.toDate() - b.startTime.toDate()));
         setSessions(reviveWeekTimes(cache.sessions));
         setLastLoadedAt(new Date(cache.at));
