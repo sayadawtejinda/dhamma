@@ -2213,17 +2213,17 @@ const STUDENT_REFRESH_MS = 90 * 60 * 1000;
 let completionsIndexMissing = false;
 // classId -> that class's reflections from the weekly static file (or null if none)
 const reflectionSnapshotCache = new Map();
-const loadCompletionsForClass = async (classId, studentOnly) => {
+const loadCompletionsForClass = async (classId, studentOnly, ttl = 6 * 60 * 60 * 1000) => {
   if (studentOnly && !completionsIndexMissing) {
     try {
-      // kept on the device for 6 hours (the student's own new completions are added at once)
-      return await cachedGetDocs(`ssComp_${classId}`, query(getCompletionsCollectionRef(), where("classId", "==", classId), orderBy("timestamp", "desc"), limit(20)), 6 * 60 * 60 * 1000, { accept: (d) => d.classId === classId });
+      // kept on the device (the student's own new completions are added at once)
+      return await cachedGetDocs(`ssComp_${classId}`, query(getCompletionsCollectionRef(), where("classId", "==", classId), orderBy("timestamp", "desc"), limit(20)), ttl, { accept: (d) => d.classId === classId });
     } catch (e) {
       if (e?.code === 'failed-precondition') { completionsIndexMissing = true; console.warn('Completions index missing -- using the full read:', e.message); }
       else throw e;
     }
   }
-  return getDocs(query(getCompletionsCollectionRef(), where("classId", "==", classId)));
+  return cachedGetDocs(`ssCompAll_${classId}`, query(getCompletionsCollectionRef(), where("classId", "==", classId)), ttl, { accept: (d) => d.classId === classId });
 };
 
 const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
@@ -2240,6 +2240,8 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
   const [lessons, setLessons] = useState([]);
   const [allScores, setAllScores] = useState([]);
   const [classRefreshKey, setClassRefreshKey] = useState(0);
+  const forceFreshRef = useRef(false); // true -> the next class load reads Firebase again instead of using the saved copy
+  const refreshClassNow = useCallback(() => { forceFreshRef.current = true; setClassRefreshKey(k => k + 1); }, []);
   // Class-wide scores read from the weekly static snapshot (see load() in the
   // class-data effect); scoresBaseIsSnapshot => the student's OWN live scores
   // get merged over it below.
@@ -2435,14 +2437,18 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
         // below) -- so only the teacher loads those two in full. For a class of 50
         // that is hundreds of reads saved on every load and every refresh.
         const studentOnly = entryRequest?.mode === 'student';
+        // Everything below is kept on this device and read from Firebase again only when the saved copy is old (a student's:
+        // 6 hours, the teacher's: 24 hours) or (10 minutes) when the teacher opens the Students tab. The
+        // teacher's / student's OWN changes are added to the saved copy at once.
+        const force = forceFreshRef.current; forceFreshRef.current = false;
+        const ttl = force ? 10 * 60 * 1000 : (studentOnly ? 6 : 24) * 60 * 60 * 1000;
+        const accept = { accept: (d) => d.classId === classId };
         const [scoresSnap, heartsSnap, reflSnap, rosterSnap, compSnap] = await Promise.all([
-          snapshotScores ? Promise.resolve(null) : getDocs(query(getScoresCollectionRef(), where("classId", "==", classId))),
-          studentOnly
-            ? cachedGetDocs(`ssHearts_${classId}`, query(getStudentHeartsCollectionRef(), where("classId", "==", classId)), 6 * 60 * 60 * 1000, { accept: (d) => d.classId === classId })
-            : getDocs(query(getStudentHeartsCollectionRef(), where("classId", "==", classId))),
-          studentOnly ? Promise.resolve(null) : getDocs(query(getReflectionsCollectionRef(), where("classId", "==", classId))),
-          studentOnly ? Promise.resolve(null) : getDocs(query(getRosterCollectionRef(), where("classId", "==", classId))),
-          loadCompletionsForClass(classId, studentOnly),
+          snapshotScores ? Promise.resolve(null) : cachedGetDocs(`ssScores_${classId}`, query(getScoresCollectionRef(), where("classId", "==", classId)), ttl, accept),
+          cachedGetDocs(`ssHearts_${classId}`, query(getStudentHeartsCollectionRef(), where("classId", "==", classId)), ttl, accept),
+          studentOnly ? Promise.resolve(null) : cachedGetDocs(`ssRefl_${classId}`, query(getReflectionsCollectionRef(), where("classId", "==", classId)), ttl, accept),
+          studentOnly ? Promise.resolve(null) : cachedGetDocs(`ssClassRoster_${classId}`, query(getRosterCollectionRef(), where("classId", "==", classId)), ttl, accept),
+          loadCompletionsForClass(classId, studentOnly, ttl),
         ]);
         if (cancelled) return;
         if (snapshotScores) { setScoresBase(snapshotScores); setScoresBaseIsSnapshot(true); }
@@ -3957,7 +3963,7 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
       case 'studentWaiting': return <StudentWaitingView handleSetView={handleSetView} userName={userName} isRejected={isRejected} />;
       case 'teacherDashboard':
         if (!classData) return <ClassCreateView classId={classId} handleTeacherCreateClass={handleTeacherCreateClass} isLoading={isLoading} handleSetView={handleSetView} />;
-        return <TeacherDashboard classId={classId} setClassRefreshKey={setClassRefreshKey} newLesson={newLesson} setNewLesson={setNewLesson} lessons={lessons} isLoading={isLoading} handleSaveLesson={handleSaveLesson} handleFormatLesson={handleFormatLesson} generateQuestions={generateQuestions} handleGenerateAllLevels={handleGenerateAllLevels} handleRegenerateLevel={handleRegenerateLevel} handleEditLesson={handleEditLesson} handleDeleteLesson={handleDeleteLesson} globalLeaderboardScores={globalLeaderboardScores} setSelectedName={setSelectedName} handleSetView={handleSetView} playClickSound={playClickSound} handleDownloadLessons={handleDownloadLessons} handleUploadLessons={handleUploadLessons} fileInputRef={fileInputRef} handleDownloadLessonsOnly={handleDownloadLessonsOnly} handleUploadLessonsOnly={handleUploadLessonsOnly} fileInputRefLessonsOnly={fileInputRefLessonsOnly} heartCounts={heartCounts} setSelectedAgeLevel={setSelectedAgeLevel} classRoster={classRoster} handleApproveStudent={handleApproveStudent} handleDeleteStudent={handleDeleteStudent} autoApprove={classData?.autoApprove || false} handleToggleAutoApprove={handleToggleAutoApprove} completionsList={completionsList} onLinkStudent={handleLinkStudentToTutoring} onUnlinkStudent={handleUnlinkStudent} allScores={allScores} studentsWithCompletionsNotApproved={studentsWithCompletionsNotApproved} onApproveStudentsWithCompletions={handleApproveStudentsWithCompletions} contest={classData?.contest || null} />;
+        return <TeacherDashboard classId={classId} setClassRefreshKey={(fn) => { forceFreshRef.current = true; setClassRefreshKey(fn); }} newLesson={newLesson} setNewLesson={setNewLesson} lessons={lessons} isLoading={isLoading} handleSaveLesson={handleSaveLesson} handleFormatLesson={handleFormatLesson} generateQuestions={generateQuestions} handleGenerateAllLevels={handleGenerateAllLevels} handleRegenerateLevel={handleRegenerateLevel} handleEditLesson={handleEditLesson} handleDeleteLesson={handleDeleteLesson} globalLeaderboardScores={globalLeaderboardScores} setSelectedName={setSelectedName} handleSetView={handleSetView} playClickSound={playClickSound} handleDownloadLessons={handleDownloadLessons} handleUploadLessons={handleUploadLessons} fileInputRef={fileInputRef} handleDownloadLessonsOnly={handleDownloadLessonsOnly} handleUploadLessonsOnly={handleUploadLessonsOnly} fileInputRefLessonsOnly={fileInputRefLessonsOnly} heartCounts={heartCounts} setSelectedAgeLevel={setSelectedAgeLevel} classRoster={classRoster} handleApproveStudent={handleApproveStudent} handleDeleteStudent={handleDeleteStudent} autoApprove={classData?.autoApprove || false} handleToggleAutoApprove={handleToggleAutoApprove} completionsList={completionsList} onLinkStudent={handleLinkStudentToTutoring} onUnlinkStudent={handleUnlinkStudent} allScores={allScores} studentsWithCompletionsNotApproved={studentsWithCompletionsNotApproved} onApproveStudentsWithCompletions={handleApproveStudentsWithCompletions} contest={classData?.contest || null} />;
       case 'studentLesson':
         if (!classDataLoaded) return <LoadingView />;
         if (!classData) return <ClassErrorView classId={classId} handleSetView={handleSetView} />;
