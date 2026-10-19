@@ -31,9 +31,7 @@ function add(ref, n) {
 
 // The full list, in a box whose text can be selected, with a Copy button (an alert() could not be copied).
 function showDetails() {
-  const text = `reads ${state.day}: ${state.total}
-` + Object.entries(state.by).sort((x, y) => y[1] - x[1]).map(([k, v]) => `${k}: ${v}`).join('
-');
+  const text = 'reads ' + state.day + ': ' + state.total + String.fromCharCode(10) + Object.entries(state.by).sort((x, y) => y[1] - x[1]).map(([k, v]) => k + ': ' + v).join(String.fromCharCode(10));
   const box = document.createElement('div');
   box.style.cssText = 'position:fixed;left:8px;right:8px;top:8px;z-index:100000;background:#fff;color:#000;border:2px solid #333;border-radius:10px;padding:10px;font:13px monospace;max-height:70vh;overflow:auto;box-shadow:0 4px 20px rgba(0,0,0,.4)';
   const ta = document.createElement('textarea');
