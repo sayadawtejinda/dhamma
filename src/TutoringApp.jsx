@@ -10459,11 +10459,9 @@ function WeeklySchedule({ role, targetStudentUid }) {
     return startDate;
   };
 
-  const [weekStartDate, setWeekStartDate] = useState(getWeekStart(weekOffset));
-
-  useEffect(() => {
-    setWeekStartDate(getWeekStart(weekOffset));
-  }, [weekOffset]);
+  // Worked out straight from weekOffset (it used to be copied into state by an effect, one render late, so for a moment the
+  // new offset was paired with the OLD week's dates and the wrong week was read from Firebase before the right one).
+  const weekStartDate = useMemo(() => getWeekStart(weekOffset), [weekOffset]);
 
   useEffect(() => {
     const weekEndDate = new Date(weekStartDate);
