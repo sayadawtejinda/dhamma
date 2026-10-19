@@ -8,7 +8,7 @@
 // rebuild from scratch happens once a month (or with --full) because edits and deletions are not seen by
 // the incremental read. The state of the last run is kept in public/classSnapshots/_state.json.
 import { collection, query, where, getDocs, getCountFromServer, Timestamp } from 'firebase/firestore';
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -51,6 +51,15 @@ export async function refreshClassSnapshots(db, appId, { full = false } = {}) {
     if (!s.classId) return;
     (ssByClass[s.classId] = ssByClass[s.classId] || []).push({ id: d.id, classId: s.classId, studentName: s.studentName, studentAgeLevel: s.studentAgeLevel, lessonId: s.lessonId, score: s.score, timestamp: s.timestamp });
   });
+  // A class that has NO file yet (a brand-new class) must be read in full: the incremental read only holds what is new since
+  // the last run, which would leave the file with just the latest few students instead of the whole class.
+  if (!FULL) {
+    for (const cid of Object.keys(ssByClass)) {
+      if (existsSync(join(CLASS_DIR, 'smartstudy', `${encodeURIComponent(cid)}.json`))) continue;
+      const full = await getDocs(query(collection(db, `${publicDataPath}/scores`), where('classId', '==', cid)));
+      ssByClass[cid] = full.docs.map(d => { const s = d.data(); return { id: d.id, classId: s.classId, studentName: s.studentName, studentAgeLevel: s.studentAgeLevel, lessonId: s.lessonId, score: s.score, timestamp: s.timestamp }; });
+    }
+  }
   mergeInto(ssByClass, 'smartstudy', 'scores');
 
   // SmartStudy reflections
@@ -63,6 +72,13 @@ export async function refreshClassSnapshots(db, appId, { full = false } = {}) {
     if (!r.classId || !r.lessonId || !r.text) return;
     (reflByClass[r.classId] = reflByClass[r.classId] || []).push({ id: d.id, classId: r.classId, lessonId: r.lessonId, studentName: r.studentName, text: r.text, timestamp: r.timestamp });
   });
+  if (!FULL) {
+    for (const cid of Object.keys(reflByClass)) {
+      if (existsSync(join(CLASS_DIR, 'smartstudy-reflections', `${encodeURIComponent(cid)}.json`))) continue;
+      const full = await getDocs(query(collection(db, `${publicDataPath}/reflections`), where('classId', '==', cid)));
+      reflByClass[cid] = full.docs.map(d => ({ id: d.id, ...d.data() })).filter(x => x.lessonId && x.text).map(x => ({ id: x.id, classId: x.classId, lessonId: x.lessonId, studentName: x.studentName, text: x.text, timestamp: x.timestamp }));
+    }
+  }
   mergeInto(reflByClass, 'smartstudy-reflections', 'reflections');
 
   // Abhidhamma: lesson counts from a count query (not by reading every lesson); each student's finished
