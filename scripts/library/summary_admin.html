@@ -109,8 +109,16 @@ function fmtSummary(raw, bold=true){
   const isHead=l=>/^[၀-၉0-9]+။\s*\S/.test(l)&&!/[။၊]$/.test(l)&&l.length<140;
   let buf='';
   const flush=()=>{if(buf.trim())items.push({t:'p',x:buf.trim()});buf=''};
-  for(const l of lines){
+  // small headings the AI writes in different ways: "၁။ title", a short line without ending punctuation, or a short line ending with ":"
+  const isShort=l=>l.length<=80&&!/[။၊,.;:：]$/.test(l)&&!/\s-\s/.test(l)&&!/\s[-–]$/.test(l)&&!isItem(l)&&!/^#/.test(l);
+  const isColon=l=>l.length<=80&&/[:：]$/.test(l)&&!isItem(l);
+  let lastIdx=-1;lines.forEach((l,i)=>{if(l)lastIdx=i});
+  for(let li_=0;li_<lines.length;li_++){
+    const l=lines[li_];
     if(!l){flush();continue}
+    const atStart=!buf.trim()||/[။]$/.test(buf.trim());
+    if(atStart&&li_<lastIdx&&isColon(l)){flush();items.push({t:'h',x:l.replace(/[:：]$/,'').trim(),lv:4});continue}
+    if(atStart&&li_<lastIdx&&isShort(l)){flush();items.push({t:'h',x:l});continue}
     if(/^#{1,4}\s/.test(l)){flush();items.push({t:'h',x:l.replace(/^#+\s*/,'')});continue}
     if(isHead(l)){flush();items.push({t:'h',x:l});continue}
     if(isItem(l)){flush();items.push({t:'li',x:l.replace(/^[-*•]\s+/,'')});continue}
@@ -133,8 +141,15 @@ function fmtSummary(raw, bold=true){
       parts.forEach((p,i)=>{ if(/^\((?:[က-အ]|[၀-၉]{1,2})\)\s/.test(p)) out.push({t:'li',x:p}); else out.push({t:'p',x:p}) });
     } else out.push(it);
   }
+  // runs of "name - explanation" lines (2 or more) become list items
+  const dashRe=/^(.{2,70}?)\s-\s+(\S.*)$/;
+  for(let i=0;i<out.length;){
+    if(out[i].t==='p'&&dashRe.test(out[i].x)){let j=i;while(j<out.length&&out[j].t==='p'&&dashRe.test(out[j].x))j++;
+      if(j-i>=2){for(let k=i;k<j;k++){const m=dashRe.exec(out[k].x);out[k]={t:'li',x:'**'+m[1]+'** - '+m[2]}}}i=j}else i++}
+  // "* label: text" -> label in bold (only the short label, never the whole sentence)
+  for(const it of out)if(it.t==='li'&&!it.x.includes('**')){const m=/^([^:：]{2,80})[:：]\s+(\S.*)$/.exec(it.x);if(m)it.x='**'+m[1]+':** '+m[2]}
   const first1=x=>{const m=/^(.{18,260}?။)(\s+)(\S[\s\S]*)$/.exec(x);return m?'**'+m[1]+'**'+m[2]+m[3]:x};
-  return out.map(it=>it.t==='h'?'### '+it.x:it.t==='li'?'- '+it.x:(bold?first1(it.x):it.x)).join('\n')+'\n';
+  return out.map(it=>it.t==='h'?(it.lv===4?'#### ':'### ')+it.x:it.t==='li'?'- '+it.x:it.x).join('\n')+'\n';
 }
 // ---- bulk: "(00001ANP01.mp3)" blocks -> one summary per tape
 function splitBulk(raw){
