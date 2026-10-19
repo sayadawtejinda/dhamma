@@ -668,7 +668,7 @@ const AbhiTeacherLogin = ({ onComplete, onClose }) => {
 
 
 // A student's copy of each class's lessons, kept while the page stays open (see the lessons effect in the main component)
-const abhiLessonsMemory=new Map();
+const abhiLessonsMemory=new globalThis.Map(); // (`Map` here is the lucide icon, not the JS Map)
 
 // ─── LessonItem ───────────────────────────────────────────────────────────────
 const AbhiLessonItem = ({ lesson, classId, isTeacher, studentAgeGroup, studentName, userId, onEdit, onGenerateVariants, onTakeQuiz, isGenerating, isOpen, onToggle, classImageBase, completedFromParent }) => {
