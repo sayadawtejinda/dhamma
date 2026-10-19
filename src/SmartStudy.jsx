@@ -2241,7 +2241,6 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
   const [allScores, setAllScores] = useState([]);
   const [classRefreshKey, setClassRefreshKey] = useState(0);
   const forceFreshRef = useRef(false); // true -> the next class load reads Firebase again instead of using the saved copy
-  const refreshClassNow = useCallback(() => { forceFreshRef.current = true; setClassRefreshKey(k => k + 1); }, []);
   // Class-wide scores read from the weekly static snapshot (see load() in the
   // class-data effect); scoresBaseIsSnapshot => the student's OWN live scores
   // get merged over it below.
