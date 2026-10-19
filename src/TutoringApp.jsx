@@ -1443,6 +1443,28 @@ function AttendanceReports({ students }) {
   );
 }
 
+// "A student greeted you" toast: ONE listener for the whole visit (not a new one -- and a new minimum read -- every time the
+// teacher comes back Home). It only asks for greetings made after it started.
+let greetingToastSetter = null;
+let greetingListenerStarted = false;
+function startGreetingListener() {
+  if (greetingListenerStarted) return;
+  greetingListenerStarted = true;
+  let hasLoadedInitial = false;
+  const q = query(greetingsCollection, where('createdAt', '>', Timestamp.fromMillis(Date.now())));
+  onSnapshot(q, (snapshot) => {
+    if (!hasLoadedInitial) { hasLoadedInitial = true; return; }
+    snapshot.docChanges().forEach(change => {
+      if (change.type === 'added' && greetingToastSetter) {
+        const data = change.doc.data();
+        const set = greetingToastSetter;
+        set({ studentName: data.studentName || 'A student' });
+        setTimeout(() => set(null), 5000);
+      }
+    });
+  }, (error) => { greetingListenerStarted = false; console.error("Error listening for greetings: ", error); });
+}
+
 function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenConsonantPractice, onOpenBurmeseGame, onOpenMyanmarSpeaking, onOpenNumberLearning, onOpenVowelsLearning, onOpenAnimalSound, onOpenBurmeseLearningGames, onOpenInteractiveQuiz, onOpenMyanmarPoems, onOpenConsonantEndings, onOpenTimeAndCalendar, onOpenMyanmarSpelling, onOpenMyanmarSoundPractice, onOpenReadingMyanmar, onOpenSpeakingMyanmar, onOpenMyanmarPart1And2, onOpenWatchAndLearn, onOpenFestival, onOpenBodhiTree, onOpenShrineRoom, onNavigate }) {
   const [students, setStudents] = useState([]);
   const approvingTrophyRef = useRef(new Set());
@@ -1823,29 +1845,9 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
   // dashboard doesn't replay every greeting sent since forever.
   useEffect(() => {
     if (!user?.uid) return;
-    let hasLoadedInitial = false;
-    // Not scoped by teacherUid — this app's students/lessons collections
-    // aren't teacher-scoped either (single-teacher deployment), so greetings
-    // follow the same pattern.
-    // Only greetings made from now on are asked for (the collection holds ~1,000 old ones, and the old
-    // way read every one of them each time the teacher dashboard opened just to throw them away).
-    const greetingsFromNow = query(greetingsCollection, where('createdAt', '>', Timestamp.fromMillis(Date.now())));
-    const unsubscribe = onSnapshot(greetingsFromNow, (snapshot) => {
-      if (!hasLoadedInitial) {
-        hasLoadedInitial = true;
-        return;
-      }
-      snapshot.docChanges().forEach(change => {
-        if (change.type === 'added') {
-          const data = change.doc.data();
-          setGreetingToast({ studentName: data.studentName || 'A student' });
-          setTimeout(() => setGreetingToast(null), 5000);
-        }
-      });
-    }, (error) => {
-      console.error("Error listening for greetings: ", error);
-    });
-    return () => unsubscribe();
+    greetingToastSetter = setGreetingToast; // (the listener below is started once and lives on, see startGreetingListener)
+    startGreetingListener();
+    return () => { greetingToastSetter = null; };
   }, [user.uid]);
 
   useEffect(() => {
@@ -7525,7 +7527,11 @@ function StudentDashboard({ user, studentProfile, studentUid, announcements, onO
   const [showGreetingPrompt, setShowGreetingPrompt] = useState(() => {
     if (studentUid === VISITOR_UID) return false;
     try {
-      return localStorage.getItem(GREETING_PROMPT_KEY) !== new Date().toDateString();
+      // once in 24 hours (the time of the last greeting is kept; an older saved date counts as that day's midnight)
+      const last = localStorage.getItem(GREETING_PROMPT_KEY);
+      if (!last) return true;
+      const lastMs = /^\d+$/.test(last) ? Number(last) : Date.parse(last);
+      return !(Date.now() - lastMs < 24 * 60 * 60 * 1000);
     } catch (e) {
       return true;
     }
@@ -7568,7 +7574,7 @@ function StudentDashboard({ user, studentProfile, studentUid, announcements, onO
 
   const handleGreetTeacher = async () => {
     setShowGreetingPrompt(false);
-    try { localStorage.setItem(GREETING_PROMPT_KEY, new Date().toDateString()); } catch (e) {}
+    try { localStorage.setItem(GREETING_PROMPT_KEY, String(Date.now())); } catch (e) {}
     try {
       await addDoc(greetingsCollection, {
         studentUid,
@@ -11737,12 +11743,13 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpen
         orderBy("expiresAt", "desc"), 
         limit(5)
       );
-      unsubscribe = onSnapshot(q, (snapshot) => {
+      // read at most once in 24 hours (kept on this device; the teacher's own change brings it up to date at once)
+      unsubscribe = cachedListen('announcements5', q, (snapshot) => {
         const annList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setAnnouncements(annList);
       }, (error) => {
         console.error("Error fetching announcements:", error);
-      });
+      }, 24 * 60 * 60 * 1000, { refetchOnWrite: true });
     };
     if (role === 'teacher') { goLive(); return () => unsubscribe(); }
     fetch(`${import.meta.env.BASE_URL}announcementsSnapshot.json`)
