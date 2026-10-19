@@ -10397,6 +10397,27 @@ const reviveWeekTimes = (v) => {
   return v;
 };
 
+// The current week's schedule + sessions are kept on this device and re-read from Firebase at most once an hour while a class
+// is on (any class starting within 30 minutes or still running), and otherwise only when a class has ended since the last
+// read (so the final attendance is picked up once) or after 24 hours. Opening the screen again meanwhile costs no reads.
+const WEEK_CACHE_PREFIX = 'weekCache_v2_';
+const clearWeekCache = () => { try { Object.keys(localStorage).filter(k => k.startsWith(WEEK_CACHE_PREFIX)).forEach(k => localStorage.removeItem(k)); } catch (e) { /* ignore */ } };
+const readWeekCache = (weekStartMs) => {
+  try { const c = JSON.parse(localStorage.getItem(WEEK_CACHE_PREFIX + weekStartMs) || 'null'); return c && c.at ? c : null; } catch (e) { return null; }
+};
+const weekCacheFresh = (cache, weekStartMs, now = Date.now()) => {
+  const slots = reviveWeekTimes(cache.slots || []);
+  const real = reviveWeekTimes(cache.schedule || []);
+  const all = [...real, ...synthesizeScheduleOccurrences(slots.filter(x => !x.studentInactive), real, new Date(weekStartMs), new Date(weekStartMs + WEEK_BUCKET_MS))];
+  const times = all.filter(e => e.startTime && e.endTime && e.startTime.toMillis).map(e => [e.startTime.toMillis(), e.endTime.toMillis()]);
+  const HALF = 30 * 60 * 1000;
+  const classNow = times.some(([a, b]) => now >= a - HALF && now <= b + HALF);
+  const age = now - cache.at;
+  if (classNow) return age < 60 * 60 * 1000;
+  const endedSince = times.some(([, b]) => b > cache.at && b <= now);
+  return !endedSince && age < 24 * 60 * 60 * 1000;
+};
+
 function WeeklySchedule({ role, targetStudentUid }) {
   const [schedule, setSchedule] = useState([]);
   const [recurringSlots, setRecurringSlots] = useState([]);
@@ -10450,14 +10471,73 @@ function WeeklySchedule({ role, targetStudentUid }) {
     let cancelled = false;
     let unsubs = [];
 
-    // Weekly standing slots: a small collection, read ONCE per visit (again only on Refresh), not on every week change.
-    if (recurringLoadedRef.current !== refreshKey) {
+    // (the Refresh button reads this one week live; moving to another week goes back to the saved files)
+    const refreshedNow = refreshKey !== refreshUsedRef.current;
+    refreshUsedRef.current = refreshKey;
+    const serializeTs = (v) => {
+      if (v && typeof v.toMillis === 'function') return { _ms: v.toMillis() };
+      if (Array.isArray(v)) return v.map(serializeTs);
+      if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, serializeTs(x)]));
+      return v;
+    };
+
+    // Weekly standing slots: a small collection, kept on this device for 6 hours (and read again on Refresh).
+    const slotsKey = 'weekSlots_v2_' + (targetStudentUid || 'all');
+    let slotsCached = null;
+    try { slotsCached = JSON.parse(localStorage.getItem(slotsKey) || 'null'); } catch (e) { /* none */ }
+    const slotsFresh = !refreshedNow && slotsCached && Date.now() - slotsCached.at < 6 * 60 * 60 * 1000;
+    let slotsPromise;
+    if (slotsFresh) {
+      const list = reviveWeekTimes(slotsCached.list);
+      setRecurringSlots(list);
+      slotsPromise = Promise.resolve(list);
+    } else if (recurringLoadedRef.current !== refreshKey || !slotsCached) {
       recurringLoadedRef.current = refreshKey;
       const recurringQuery = targetStudentUid
         ? query(recurringScheduleCollection, where('studentUid', '==', targetStudentUid))
         : recurringScheduleCollection;
-      getDocs(recurringQuery).then(snap => setRecurringSlots(snap.docs.map(d => ({ id: d.id, ...d.data() })))).catch(() => {});
+      slotsPromise = getDocs(recurringQuery).then(snap => {
+        const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        setRecurringSlots(list);
+        try { localStorage.setItem(slotsKey, JSON.stringify({ at: Date.now(), list: serializeTs(list) })); } catch (e) { /* ignore */ }
+        return list;
+      }).catch(() => []);
+    } else {
+      slotsPromise = Promise.resolve([]);
     }
+
+    // The CURRENT week: from this device's saved copy while it is still good enough (see weekCacheFresh), else one read.
+    const loadCurrentWeek = async () => {
+      setFromFile(false);
+      const wk = weekStartDate.getTime();
+      const cache = readWeekCache(wk);
+      const slots = await slotsPromise;
+      if (cancelled) return;
+      if (!refreshedNow && cache && weekCacheFresh({ ...cache, slots: cache.slots && cache.slots.length ? cache.slots : serializeTs(slots) }, wk)) {
+        setSchedule(reviveWeekTimes(cache.schedule).sort((a, b) => a.startTime.toDate() - b.startTime.toDate()));
+        setSessions(reviveWeekTimes(cache.sessions));
+        setLastLoadedAt(new Date(cache.at));
+        return;
+      }
+      try {
+        const [sSnap, xSnap] = await Promise.all([
+          getDocs(query(teacherScheduleCollection, where("startTime", ">=", Timestamp.fromDate(weekStartDate)), where("startTime", "<", Timestamp.fromDate(weekEndDate)))),
+          getDocs(query(sessionsCollection, where("startTime", ">=", Timestamp.fromDate(weekStartDate)), where("startTime", "<", Timestamp.fromDate(weekEndDate)))),
+        ]);
+        if (cancelled) return;
+        const scheduleList = sSnap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => a.startTime.toDate() - b.startTime.toDate());
+        const sessionList = xSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        setSchedule(scheduleList);
+        setSessions(sessionList);
+        setLastLoadedAt(new Date());
+        try {
+          localStorage.setItem(WEEK_CACHE_PREFIX + wk, JSON.stringify({
+            at: Date.now(), schedule: serializeTs(scheduleList), slots: serializeTs(slots),
+            sessions: sessionList.filter(x => x.studentUid && x.startTime).map(x => ({ studentUid: x.studentUid, startTime: { _ms: x.startTime.toMillis() } })),
+          }));
+        } catch (e) { /* ignore */ }
+      } catch (e) { console.error('Weekly schedule:', e); }
+    };
 
     const loadFromFirebase = () => {
       setFromFile(false);
@@ -10491,10 +10571,9 @@ function WeeklySchedule({ role, targetStudentUid }) {
       }));
     };
 
-    // (the Refresh button reads this one week live; moving to another week goes back to the saved files)
-    const refreshedNow = refreshKey !== refreshUsedRef.current;
-    refreshUsedRef.current = refreshKey;
-    if (weekOffset < 0 && !refreshedNow) {
+    if (weekOffset === 0) {
+      loadCurrentWeek();
+    } else if (weekOffset < 0 && !refreshedNow) {
       // A PAST week ALWAYS comes from the static files on GitHub (written by the weekly job) -- no Firestore reads. Only the
       // Refresh button reads that one week from Firebase (for last week, before the next weekly run has added it).
       (async () => {
@@ -10664,10 +10743,12 @@ function WeeklySchedule({ role, targetStudentUid }) {
         overrideStatus: status,
       };
       const ref = await addDoc(teacherScheduleCollection, data);
+      clearWeekCache();
       setSchedule(prev => [...prev, { id: ref.id, ...data }]);
       return;
     }
     await updateDoc(doc(db, `${publicDataPath}/teacherSchedule`, entry.id), { overrideStatus: status });
+    clearWeekCache();
     setSchedule(prev => prev.map(e => (e.id === entry.id ? { ...e, overrideStatus: status } : e)));
   };
 
@@ -10703,6 +10784,7 @@ function WeeklySchedule({ role, targetStudentUid }) {
     if (!window.confirm(`Delete this schedule entry for ${entry.studentName} (${formatTime(entry.startTime)} - ${formatTime(entry.endTime)})? This cannot be undone.`)) return;
     try {
       await deleteDoc(doc(db, `${publicDataPath}/teacherSchedule`, entry.id));
+      clearWeekCache();
       setSchedule(prev => prev.filter(e => e.id !== entry.id));
     } catch (error) {
       console.error("Error deleting schedule entry:", error);
@@ -10719,6 +10801,7 @@ function WeeklySchedule({ role, targetStudentUid }) {
       const batch = writeBatch(db);
       entries.forEach(entry => batch.delete(doc(db, `${publicDataPath}/teacherSchedule`, entry.id)));
       await batch.commit();
+      clearWeekCache();
       const gone = new Set(entries.map(e => e.id));
       setSchedule(prev => prev.filter(e => !gone.has(e.id)));
     } catch (error) {
@@ -10746,7 +10829,7 @@ function WeeklySchedule({ role, targetStudentUid }) {
       </div>
       {role === 'teacher' && (
         <div className="flex justify-center items-center gap-3 mb-4 text-sm text-gray-500">
-          <span>{weekOffset === 0 ? '🟢 Attendance updates live this week' : fromFile ? `📁 Saved copy from ${lastLoadedAt ? lastLoadedAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}${fileIncomplete ? ' — this week may not be complete yet; press Refresh' : ''}` : weekOffset > 0 ? '📅 Same as this week' : (lastLoadedAt ? `Loaded ${lastLoadedAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}` : 'Loading...')}</span>
+          <span>{weekOffset === 0 ? `🕐 Updated ${lastLoadedAt ? lastLoadedAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '…'} (refreshes hourly during class)` : fromFile ? `📁 Saved copy from ${lastLoadedAt ? lastLoadedAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}${fileIncomplete ? ' — this week may not be complete yet; press Refresh' : ''}` : weekOffset > 0 ? '📅 Same as this week' : (lastLoadedAt ? `Loaded ${lastLoadedAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}` : 'Loading...')}</span>
           <button onClick={() => setRefreshKey(k => k + 1)} className="px-3 py-1 bg-white border border-gray-300 text-gray-700 rounded-full hover:bg-gray-100 shadow-sm font-semibold">🔄 Refresh</button>
         </div>
       )}
