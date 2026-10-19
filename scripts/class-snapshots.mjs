@@ -130,7 +130,7 @@ export async function refreshClassSnapshots(db, appId, { full = false } = {}) {
 // "open", and when each class's lessons were last edited). A student uses the file when it is newer than the last edit and
 // otherwise (the teacher edited since) falls back to Firestore -- see getClassDocCached in SmartStudy.jsx.
 export async function refreshClassDocSnapshots(db, appId) {
-  const { collection, getDocs, doc, setDoc } = await import('firebase/firestore');
+  const { collection, getDocs, getDoc, doc, setDoc } = await import('firebase/firestore');
   const snap = await getDocs(collection(db, `artifacts/${appId}/public/data/classes`));
   const dir = join(CLASS_DIR, 'smartstudy-class');
   mkdirSync(dir, { recursive: true });
@@ -143,15 +143,18 @@ export async function refreshClassDocSnapshots(db, appId) {
   };
   const list = [], contests = {}, autoApprove = {};
   let written = 0;
+  // a file built BEFORE the class's last lesson edit is refused by the students' app, so it is rewritten (new builtAt) even if its content is unchanged
+  let versions = {};
+  try { const m = await getDoc(doc(db, `artifacts/${appId}/public/data/config/classMeta`)); versions = (m.exists() && m.data().versions) || {}; } catch (e) { /* none */ }
   for (const d of snap.docs) {
     const data = plain(d.data());
     list.push({ id: d.id, displayName: data.displayName || null, lessonCount: (data.lessons || []).length });
     contests[d.id] = data.contest || null;
     autoApprove[d.id] = data.autoApprove === true;
     const file = join(dir, `${encodeURIComponent(d.id)}.json`);
-    let old = null;
-    try { old = JSON.stringify(JSON.parse(readFileSync(file, 'utf8')).data); } catch (e) { /* none yet */ }
-    if (old === JSON.stringify(data)) continue;
+    let old = null, oldBuiltAt = 0;
+    try { const j = JSON.parse(readFileSync(file, 'utf8')); old = JSON.stringify(j.data); oldBuiltAt = j.builtAt || 0; } catch (e) { /* none yet */ }
+    if (old === JSON.stringify(data) && !((versions[`ss:${d.id}`] || 0) > oldBuiltAt)) continue;
     writeFileSync(file, JSON.stringify({ builtAt, data }));
     written += 1;
   }
@@ -172,9 +175,11 @@ export async function refreshClassDocSnapshots(db, appId) {
 // { builtAt, classData, lessons } (times as { seconds }, the way the app already reads them). A student uses the file when it
 // is newer than the last lesson edit (config/classMeta versions "abhi:CLASS", set by the teacher's screen), else Firestore.
 export async function refreshAbhidhammaClassFiles(db) {
-  const { collection, getDocs } = await import('firebase/firestore');
+  const { collection, getDocs, getDoc, doc } = await import('firebase/firestore');
   const ABHI = 'artifacts/lesson-translator-app-v6/public/data';
   const dir = join(CLASS_DIR, 'abhidhamma-class');
+  let versions = {};
+  try { const m = await getDoc(doc(db, 'artifacts/dhamma-tutoring-app/public/data/config/classMeta')); versions = (m.exists() && m.data().versions) || {}; } catch (e) { /* none */ }
   mkdirSync(dir, { recursive: true });
   const builtAt = Date.now();
   const plain = (v) => {
@@ -191,9 +196,9 @@ export async function refreshAbhidhammaClassFiles(db) {
       .sort((a, b) => ((a.createdAt && a.createdAt.seconds) || 0) - ((b.createdAt && b.createdAt.seconds) || 0) || (a.id < b.id ? -1 : 1));
     const body = { classData: plain(c.data()), lessons };
     const file = join(dir, `${encodeURIComponent(c.id)}.json`);
-    let old = null;
-    try { const j = JSON.parse(readFileSync(file, 'utf8')); old = JSON.stringify({ classData: j.classData, lessons: j.lessons }); } catch (e) { /* none yet */ }
-    if (old === JSON.stringify(body)) continue;
+    let old = null, oldBuiltAt = 0;
+    try { const j = JSON.parse(readFileSync(file, 'utf8')); old = JSON.stringify({ classData: j.classData, lessons: j.lessons }); oldBuiltAt = j.builtAt || 0; } catch (e) { /* none yet */ }
+    if (old === JSON.stringify(body) && !((versions[`abhi:${c.id}`] || 0) > oldBuiltAt)) continue;
     writeFileSync(file, JSON.stringify({ builtAt, ...body }));
     written += 1;
   }
