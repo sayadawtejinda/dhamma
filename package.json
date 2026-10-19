@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "snapshot:weekly": "node scripts/generate-weekly-snapshot.mjs",
-    "snapshot:classes": "node scripts/refresh-class-snapshots.mjs"
+    "snapshot:classes": "node scripts/refresh-class-snapshots.mjs",
+    "snapshot:boards": "node scripts/refresh-class-snapshots.mjs --boards-only"
   },
   "dependencies": {
     "firebase": "^10.12.2",

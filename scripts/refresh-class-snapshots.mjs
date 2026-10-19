@@ -12,6 +12,8 @@ const app = initializeApp(firebaseConfig);
 await signInAnonymously(getAuth(app));
 const db = getFirestore(app);
 await refreshClassSnapshots(db, appId, { full: process.argv.includes('--full') });
+// --boards-only: just the leaderboards classmates see (scores, reflections, Abhidhamma/Dhammaschool boards) -- only what is NEW is read
+if (process.argv.includes('--boards-only')) process.exit(0);
 await refreshContentSnapshots(db);
 await refreshAnnouncementsSnapshot(db, appId);
 await refreshAvatarSnapshot(db);

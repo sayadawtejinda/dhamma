@@ -52,8 +52,13 @@ jobs:
         if: steps.classcheck.outputs.needed == 'true'
         run: npm run snapshot:classes
 
+      # a contest ends within 3 hours: show the final standings (only what is new is read)
+      - name: Refresh the leaderboards before a contest ends
+        if: steps.classcheck.outputs.needed != 'true' && steps.classcheck.outputs.boards == 'true'
+        run: npm run snapshot:boards
+
       - name: Commit, push and publish if changed
-        if: steps.classcheck.outputs.needed == 'true'
+        if: steps.classcheck.outputs.needed == 'true' || steps.classcheck.outputs.boards == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

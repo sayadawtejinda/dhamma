@@ -43,6 +43,19 @@ for (const [k, v] of Object.entries(versions)) {
   if (built === null || v > built) reasons.push(`Abhidhamma ${id}: ${built === null ? 'no file yet' : 'lessons edited after the file was built'}`);
 }
 
+// A SmartStudy contest that ends within the next 3 hours: the boards (what classmates see) are refreshed once before it ends,
+// so the final standings are shown before the prizes are paid. (_state.json 'since' = when the boards were last refreshed.)
+let boards = false;
+try {
+  const state = JSON.parse(readFileSync(join(DIR, '_state.json'), 'utf8'));
+  const now = Date.now();
+  for (const [cid, c] of Object.entries(meta.contests || {})) {
+    if (!c || c.status !== 'active') continue;
+    const ends = typeof c.endsAt === 'number' ? c.endsAt : (c.endsAt && c.endsAt.seconds ? c.endsAt.seconds * 1000 : Date.parse(c.endsAt) || 0);
+    if (ends > now && ends - now < 3 * 60 * 60 * 1000 && (state.since || 0) < ends - 3 * 60 * 60 * 1000) { boards = true; console.log(`Contest of ${cid} ends soon: refresh the boards once`); }
+  }
+} catch (e) { /* no state yet */ }
+
 console.log(reasons.length ? `Class files to rebuild:\n  ${reasons.join('\n  ')}` : 'All class files are up to date.');
-if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `needed=${reasons.length > 0}\n`);
+if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `needed=${reasons.length > 0}\nboards=${boards}\n`);
 process.exit(0);

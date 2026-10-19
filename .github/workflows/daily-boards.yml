@@ -1,0 +1,53 @@
+name: Daily classmates boards
+
+# Once a day, brings the leaderboards classmates see (SmartStudy scores and reflections, Abhidhamma and Dhammaschool boards)
+# up to date as static files, so students feel they are studying together. Only what is NEW since the last run is read
+# from Firebase (a few hundred documents on a busy day, nothing on a quiet one) and nothing is committed or published
+# when nothing changed. The run is at 4 AM Pacific. Run it by hand from the Actions tab any time.
+on:
+  schedule:
+    - cron: "0 11 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: class-snapshots
+  cancel-in-progress: false
+
+jobs:
+  boards:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Refresh the boards
+        run: npm run snapshot:boards
+
+      - name: Commit, push and publish if changed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add public/classSnapshots
+          if git diff --cached --quiet; then
+            echo "Nothing changed."
+          else
+            git commit -m "Daily boards refresh"
+            git pull --rebase origin main
+            git push
+            gh workflow run deploy.yml
+          fi
