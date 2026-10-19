@@ -1803,7 +1803,7 @@ let bilingualMode = false;
                         onAnswersChanged();
                     });
                 };
-                fetch(`${import.meta.env.BASE_URL}classSnapshots/dhammaschool/${encodeURIComponent(lid)}.json`)
+                fetch(`${import.meta.env.BASE_URL}classSnapshots/dhammaschool/${encodeURIComponent(encodeURIComponent(lid))}.json`)
                     .then(r => (r.ok ? r.json() : null))
                     .then(j => { if (cancelled) return; if (j && Array.isArray(j.answers)) { base = j.answers; recompute(); } else if (j === null) { base = []; recompute(); } })
                     .catch(() => goLive());

@@ -7436,7 +7436,7 @@ function SmartStudyProgressBadge({ classId, studentName, smartStudyNames, compac
       // class document (200-400 KB) is read only if that file is missing.
       let off = false;
       if (!ssClassTotals.has(classId)) {
-        ssClassTotals.set(classId, fetch(`${import.meta.env.BASE_URL}classSnapshots/smartstudy-class/${encodeURIComponent(classId)}.json`)
+        ssClassTotals.set(classId, fetch(`${import.meta.env.BASE_URL}classSnapshots/smartstudy-class/${encodeURIComponent(encodeURIComponent(classId))}.json`)
           .then(r => (r.ok ? r.json() : null))
           .then(j => (j && j.data && Array.isArray(j.data.lessons) ? j.data.lessons.length : getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'classes', classId)).then(snap => (snap.exists() ? (snap.data().lessons || []).length : null))))
           .catch(() => null));

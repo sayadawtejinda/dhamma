@@ -1225,7 +1225,7 @@ export default function AbhidhammaApp({ entryRequest, onExit, isActive }) {
         try{
           const [meta,res]=await Promise.all([
             loadClassMeta().catch(()=>null),
-            fetch(`${import.meta.env.BASE_URL}classSnapshots/abhidhamma-class/${encodeURIComponent(classId)}.json`,{cache:'no-cache'}).then(r=>r.ok?r.json():null).catch(()=>null),
+            fetch(`${import.meta.env.BASE_URL}classSnapshots/abhidhamma-class/${encodeURIComponent(encodeURIComponent(classId))}.json`,{cache:'no-cache'}).then(r=>r.ok?r.json():null).catch(()=>null),
           ]);
           if(res&&Array.isArray(res.lessons)&&meta&&res.builtAt>=((meta.versions&&meta.versions[`abhi:${classId}`])||0)){
             if(cancelled)return;

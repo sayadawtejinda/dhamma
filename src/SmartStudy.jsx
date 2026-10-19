@@ -109,7 +109,7 @@ async function getClassDocCached(classId) {
   try {
     const [meta, res] = await Promise.all([
       loadClassMeta().catch(() => null),
-      fetch(`${import.meta.env.BASE_URL}classSnapshots/smartstudy-class/${encodeURIComponent(classId)}.json`, { cache: 'no-cache' }).then(r => (r.ok ? r.json() : null)).catch(() => null),
+      fetch(`${import.meta.env.BASE_URL}classSnapshots/smartstudy-class/${encodeURIComponent(encodeURIComponent(classId))}.json`, { cache: 'no-cache' }).then(r => (r.ok ? r.json() : null)).catch(() => null),
     ]);
     if (res && res.data && meta && res.builtAt >= ((meta.versions && meta.versions[`ss:${classId}`]) || 0)) {
       const data = { ...res.data };
@@ -2427,7 +2427,7 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
         // Students always use the weekly file; only the teacher's screen reads live during the class window.
         if (!teacherMode || !isOnlineStatusDay()) {
           try {
-            const r = await fetch(`${import.meta.env.BASE_URL}classSnapshots/smartstudy/${encodeURIComponent(classId)}.json`);
+            const r = await fetch(`${import.meta.env.BASE_URL}classSnapshots/smartstudy/${encodeURIComponent(encodeURIComponent(classId))}.json`);
             if (r.ok) snapshotScores = (await r.json()).scores || [];
             // A class with no file yet (a brand-new class, before the next weekly build): a student's screen does NOT read every
             // score of the class from Firebase; it starts from an empty list and their own scores are laid over it.
@@ -2487,7 +2487,7 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
     (async () => {
       try {
         if (!reflectionSnapshotCache.has(classId)) {
-          reflectionSnapshotCache.set(classId, fetch(`${import.meta.env.BASE_URL}classSnapshots/smartstudy-reflections/${encodeURIComponent(classId)}.json`)
+          reflectionSnapshotCache.set(classId, fetch(`${import.meta.env.BASE_URL}classSnapshots/smartstudy-reflections/${encodeURIComponent(encodeURIComponent(classId))}.json`)
             .then(r => (r.ok ? r.json() : null)).then(j => (j && j.reflections) || null).catch(() => null));
         }
         const fromFile = await reflectionSnapshotCache.get(classId);
@@ -3614,7 +3614,7 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
             let gotSnapshot = false;
             if (entryRequest?.mode === 'student' || !isOnlineStatusDay()) {
               try {
-                const r = await fetch(`${import.meta.env.BASE_URL}classSnapshots/smartstudy/${encodeURIComponent(cId)}.json`);
+                const r = await fetch(`${import.meta.env.BASE_URL}classSnapshots/smartstudy/${encodeURIComponent(encodeURIComponent(cId))}.json`);
                 if (r.ok) {
                   const j = await r.json();
                   (j.scores || []).forEach(s => {
