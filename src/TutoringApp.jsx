@@ -4793,7 +4793,7 @@ ${toSend.map(l => '• ' + l.title).join(', ')}`
     const unsub = cachedListen('t_starPending',
       query(starAnnouncementsCollection, where('status', '==', 'pending')),
       (snap) => setPendingStarAnnouncements(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
-      (e) => console.error('Error loading pending announcements:', e), 60 * 60 * 1000, { refetchOnWrite: true }
+      (e) => console.error('Error loading pending announcements:', e), undefined, { refetchOnWrite: true }
     );
     return () => unsub();
   }, []);
@@ -4856,7 +4856,7 @@ ${toSend.map(l => '• ' + l.title).join(', ')}`
           .filter(a => a.status === 'approved' && a.startsAt && a.startsAt.toMillis() > Date.now())
           .sort((x, y) => x.startsAt.toMillis() - y.startsAt.toMillis())
       ),
-      (e) => console.error('Error loading waiting announcements:', e), 60 * 60 * 1000, { refetchOnWrite: true }
+      (e) => console.error('Error loading waiting announcements:', e), undefined, { refetchOnWrite: true }
     );
     return () => unsub();
   }, []);
@@ -10403,26 +10403,14 @@ const reviveWeekTimes = (v) => {
   return v;
 };
 
-// The current week's schedule + sessions are kept on this device and re-read from Firebase at most once an hour while a class
-// is on (any class starting within 30 minutes or still running); outside class time the saved copy is used as it is.
+// The current week's schedule + sessions are kept on this device and re-read from Firebase only when the teacher presses Refresh.
 const WEEK_CACHE_PREFIX = 'weekCache_v2_';
 const clearWeekCache = () => { try { Object.keys(localStorage).filter(k => k.startsWith(WEEK_CACHE_PREFIX)).forEach(k => localStorage.removeItem(k)); } catch (e) { /* ignore */ } };
 const readWeekCache = (weekStartMs) => {
   try { const c = JSON.parse(localStorage.getItem(WEEK_CACHE_PREFIX + weekStartMs) || 'null'); return c && c.at ? c : null; } catch (e) { return null; }
 };
-const weekCacheFresh = (cache, weekStartMs, now = Date.now()) => {
-  const slots = reviveWeekTimes(cache.slots || []);
-  const real = reviveWeekTimes(cache.schedule || []);
-  const all = [...real, ...synthesizeScheduleOccurrences(slots.filter(x => !x.studentInactive), real, new Date(weekStartMs), new Date(weekStartMs + WEEK_BUCKET_MS))];
-  const times = all.filter(e => e.startTime && e.endTime && e.startTime.toMillis).map(e => [e.startTime.toMillis(), e.endTime.toMillis()]);
-  const HALF = 30 * 60 * 1000;
-  const classNow = times.some(([a, b]) => now >= a - HALF && now <= b + HALF);
-  const age = now - cache.at;
-  if (classNow) return age < 60 * 60 * 1000;
-  // outside class time nothing is read again: a student's attendance is recorded when they open their lesson, which the
-  // hourly reads during class already picked up (Refresh gets anything later)
-  return age < 7 * 24 * 60 * 60 * 1000;
-};
+// The saved copy is used until the teacher presses Refresh (or it is a week old).
+const weekCacheFresh = (cache, weekStartMs, now = Date.now()) => now - cache.at < 7 * 24 * 60 * 60 * 1000;
 
 function WeeklySchedule({ role, targetStudentUid }) {
   const [schedule, setSchedule] = useState([]);
@@ -10833,7 +10821,7 @@ function WeeklySchedule({ role, targetStudentUid }) {
       </div>
       {role === 'teacher' && (
         <div className="flex justify-center items-center gap-3 mb-4 text-sm text-gray-500">
-          <span>{weekOffset === 0 ? `🕐 Updated ${lastLoadedAt ? lastLoadedAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '…'} (refreshes hourly during class)` : fromFile ? `📁 Saved copy from ${lastLoadedAt ? lastLoadedAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}${fileIncomplete ? ' — this week may not be complete yet; press Refresh' : ''}` : weekOffset > 0 ? '📅 Same as this week' : (lastLoadedAt ? `Loaded ${lastLoadedAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}` : 'Loading...')}</span>
+          <span>{weekOffset === 0 ? `🕐 Updated ${lastLoadedAt ? lastLoadedAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '…'} (press Refresh for the latest)` : fromFile ? `📁 Saved copy from ${lastLoadedAt ? lastLoadedAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}${fileIncomplete ? ' — this week may not be complete yet; press Refresh' : ''}` : weekOffset > 0 ? '📅 Same as this week' : (lastLoadedAt ? `Loaded ${lastLoadedAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}` : 'Loading...')}</span>
           <button onClick={() => setRefreshKey(k => k + 1)} className="px-3 py-1 bg-white border border-gray-300 text-gray-700 rounded-full hover:bg-gray-100 shadow-sm font-semibold">🔄 Refresh</button>
         </div>
       )}
@@ -11323,9 +11311,9 @@ function TeacherRefreshButton() {
     <button
       onClick={() => { refreshCachedListeners(); clearWeekCache(); setTick(x => x + 1); }}
       className="px-3 py-1 bg-white border border-gray-300 text-gray-700 rounded-full hover:bg-gray-100 shadow-sm text-sm font-semibold"
-      title="Read the newest data from Firebase now (it is read automatically once an hour)"
+      title="Read the newest data from Firebase now. Nothing is read by itself: press this when you need the latest."
     >
-      🔄 Refresh{at ? ` · updated ${new Date(at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}` : ''}
+      🔄 Refresh{at ? ` · updated ${new Date(at).toLocaleString('en-US', Date.now() - at > 12 * 3600 * 1000 ? { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' } : { hour: 'numeric', minute: '2-digit' })}` : ''}
     </button>
   );
 }
@@ -11613,6 +11601,7 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpen
   useEffect(() => { if (isAuthReady) startLiveWatchListener(db, appId); }, [isAuthReady]);
   const [studentProfile, setStudentProfile] = useState(null);
   const [teacherUid, setTeacherUid] = useState(null); 
+  const [teacherUids, setTeacherUids] = useState([]); // every device that has been signed in as the teacher
   const [targetStudentUid, setTargetStudentUid] = useState(null); 
   const [view, setView] = useState('login'); 
   const [announcements, setAnnouncements] = useState([]); 
@@ -11662,6 +11651,7 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpen
       (doc) => {
         if (doc.exists()) {
           setTeacherUid(doc.data().uid);
+          setTeacherUids([doc.data().uid, ...(doc.data().uids || [])].filter(Boolean));
         } else {
           setTeacherUid(''); 
         }
@@ -11686,7 +11676,7 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpen
           setRoleCheckDone(true);
         });
     }
-  }, [user, isAuthReady, teacherUid]);
+  }, [user, isAuthReady, teacherUid, teacherUids]);
   
   // A gift the teacher just sent: pop it up over whatever app is open (owned
   // by App.jsx, same as the trophy celebration), then clear the flag. This
@@ -11768,7 +11758,7 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpen
     if (!uid || targetStudentUid) { console.log('[DIAG] checkUserRole bailed early (no uid, or targetStudentUid already set)'); return; }
 
     try { 
-      if (teacherUid && uid === teacherUid) {
+      if (teacherUid && (uid === teacherUid || teacherUids.includes(uid))) {
         console.log('[DIAG] checkUserRole: matched as TEACHER');
         setRole('teacher');
         if(view !== 'teacher') setView('teacher');
@@ -11834,8 +11824,10 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpen
         return;
       }
       // Correct passcode — reclaim teacher status for this browser/device.
-      await setDoc(teacherConfigDoc, { uid: user.uid }, { merge: true });
+      // (this device is ADDED to the teacher's devices; the others stay signed in as the teacher too)
+      await setDoc(teacherConfigDoc, { uid: user.uid, uids: arrayUnion(...[configSnap.data().uid, user.uid].filter(Boolean)) }, { merge: true });
       setTeacherUid(user.uid);
+      setTeacherUids(prev => [...new Set([...prev, user.uid])]);
       setRole('teacher');
       setView('teacher');
     } catch (error) {

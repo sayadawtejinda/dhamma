@@ -1,8 +1,8 @@
 import { getDocs, getDoc, Timestamp } from 'firebase/firestore';
 
 // A saved-copy replacement for a live onSnapshot on a collection / query (used on the teacher's dashboard).
-//  - The documents are kept on this device; they are read from Firebase again only when the screen is OPENED with a copy older
-//    than `ttlMs` (default 1 hour), or when "Refresh" is pressed -- opening the screen again meanwhile costs no reads at all.
+//  - The documents are kept on this device; they are read from Firebase again only when "Refresh" is pressed (or, if the copy
+//    is older than `ttlMs` -- 30 days unless a call says otherwise -- when the screen is opened) -- opening the screen again meanwhile costs no reads at all.
 //  - The teacher's OWN writes (every write announces itself, see firestoreCounted.js) bring just the one changed document
 //    up to date (one read), so what the teacher does shows at once.
 //  - What other people change (a student starting a lesson) shows up with the next hourly read or Refresh.
@@ -29,7 +29,7 @@ export const cachedListenUpdatedAt = () => { let m = 0; listeners.forEach(l => {
 
 // `q` may also be ONE document (then `onNext` gets a document-like snapshot: id, exists(), data()). `opts.refetchOnWrite`: for a
 // small query whose matches can change by a write (e.g. "status == pending"), read it again after the teacher's own write.
-export function cachedListen(key, q, onNext, onError, ttlMs = 60 * 60 * 1000, opts = {}) {
+export function cachedListen(key, q, onNext, onError, ttlMs = 30 * 24 * 60 * 60 * 1000, opts = {}) {
   const isDoc = q && q.type === 'document';
   const collPath = isDoc ? String(q.path).split('/').slice(0, -1).join('/') : pathOf(q);
   let docs = new Map();   // id -> serialized data
