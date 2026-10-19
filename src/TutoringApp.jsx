@@ -1625,7 +1625,7 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
   const hasAutoSelectedGroupRef = useRef(false);
 
   useEffect(() => {
-    const unsubscribe = onSnapshot(teacherConfigDoc, (docSnap) => {
+    const unsubscribe = cachedListen('t_config', teacherConfigDoc, (docSnap) => {
       if (docSnap.exists()) setTeacherConfigData(docSnap.data());
     });
     return () => unsubscribe();
@@ -4788,10 +4788,10 @@ ${toSend.map(l => '• ' + l.title).join(', ')}`
   // they scroll across anyone's screen. A tiny query -- normally zero docs.
   const [pendingStarAnnouncements, setPendingStarAnnouncements] = useState([]);
   useEffect(() => {
-    const unsub = onSnapshot(
+    const unsub = cachedListen('t_starPending',
       query(starAnnouncementsCollection, where('status', '==', 'pending')),
       (snap) => setPendingStarAnnouncements(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
-      (e) => console.error('Error loading pending announcements:', e)
+      (e) => console.error('Error loading pending announcements:', e), 60 * 60 * 1000, { refetchOnWrite: true }
     );
     return () => unsub();
   }, []);
@@ -4847,14 +4847,14 @@ ${toSend.map(l => '• ' + l.title).join(', ')}`
   // teacher so a queued one doesn't look lost.
   const [waitingStarAnnouncements, setWaitingStarAnnouncements] = useState([]);
   useEffect(() => {
-    const unsub = onSnapshot(
+    const unsub = cachedListen('t_starWaiting',
       query(starAnnouncementsCollection, where('expiresAt', '>', Timestamp.now())),
       (snap) => setWaitingStarAnnouncements(
         snap.docs.map(d => ({ id: d.id, ...d.data() }))
           .filter(a => a.status === 'approved' && a.startsAt && a.startsAt.toMillis() > Date.now())
           .sort((x, y) => x.startsAt.toMillis() - y.startsAt.toMillis())
       ),
-      (e) => console.error('Error loading waiting announcements:', e)
+      (e) => console.error('Error loading waiting announcements:', e), 60 * 60 * 1000, { refetchOnWrite: true }
     );
     return () => unsub();
   }, []);
@@ -11328,7 +11328,8 @@ function NewAccountsSwitch() {
   const [mode, setMode] = useState('auto');
   const [loaded, setLoaded] = useState(false);
   useEffect(() => {
-    getDoc(accountSettingsRef()).then(snap => { if (snap.exists() && snap.data().newAccountsMode) setMode(snap.data().newAccountsMode); }).catch(() => {}).finally(() => setLoaded(true));
+    const off = cachedListen('t_accountSettings', accountSettingsRef(), (snap) => { if (snap.exists() && snap.data().newAccountsMode) setMode(snap.data().newAccountsMode); setLoaded(true); }, () => setLoaded(true));
+    return off;
   }, []);
   const choose = async (m) => {
     setMode(m);

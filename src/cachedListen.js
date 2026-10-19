@@ -27,8 +27,11 @@ const listeners = new Set();
 export const refreshCachedListeners = () => listeners.forEach(l => l.reload());
 export const cachedListenUpdatedAt = () => { let m = 0; listeners.forEach(l => { if (l.at && (!m || l.at < m)) m = l.at; }); return m; };
 
-export function cachedListen(key, q, onNext, onError, ttlMs = 60 * 60 * 1000) {
-  const collPath = pathOf(q);
+// `q` may also be ONE document (then `onNext` gets a document-like snapshot: id, exists(), data()). `opts.refetchOnWrite`: for a
+// small query whose matches can change by a write (e.g. "status == pending"), read it again after the teacher's own write.
+export function cachedListen(key, q, onNext, onError, ttlMs = 60 * 60 * 1000, opts = {}) {
+  const isDoc = q && q.type === 'document';
+  const collPath = isDoc ? String(q.path).split('/').slice(0, -1).join('/') : pathOf(q);
   let docs = new Map();   // id -> serialized data
   let at = 0;
   let dead = false;
@@ -36,13 +39,20 @@ export function cachedListen(key, q, onNext, onError, ttlMs = 60 * 60 * 1000) {
   const emit = () => {
     if (dead) return;
     const list = [...docs.entries()].map(([id, data]) => { const d = revive(data); return { id, data: () => d, exists: () => true }; });
+    if (isDoc) { const one = list[0]; onNext({ id: q.id, exists: () => !!one, data: () => (one ? one.data() : undefined) }); return; }
     onNext({ docs: list, size: list.length, empty: list.length === 0, forEach: (f) => list.forEach(f), docChanges: () => [] });
   };
   const fetchAll = async () => {
     try {
-      const snap = await getDocs(q);
-      if (dead) return;
-      docs = new Map(snap.docs.map(d => [d.id, serialize(d.data())]));
+      if (isDoc) {
+        const one = await getDoc(q);
+        if (dead) return;
+        docs = new Map(one.exists() ? [[one.id, serialize(one.data())]] : []);
+      } else {
+        const snap = await getDocs(q);
+        if (dead) return;
+        docs = new Map(snap.docs.map(d => [d.id, serialize(d.data())]));
+      }
       at = Date.now(); l.at = at; store(); emit();
     } catch (e) { if (onError) onError(e); else console.error('Could not read', key, e); }
   };
@@ -65,6 +75,8 @@ export function cachedListen(key, q, onNext, onError, ttlMs = 60 * 60 * 1000) {
     const parts = String(ref.path).split('/');
     const id = parts.pop();
     if (parts.join('/') !== collPath) return;
+    if (isDoc && ref.path !== q.path) return;
+    if (isDoc || opts.refetchOnWrite) { clearTimeout(flushTimer); flushTimer = setTimeout(fetchAll, 400); return; }
     pending.set(id, { ref, deleted });
     clearTimeout(flushTimer);
     flushTimer = setTimeout(async () => {
