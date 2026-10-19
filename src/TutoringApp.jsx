@@ -33,6 +33,7 @@ import {
   runTransaction,
   deleteField
 } from 'firebase/firestore';
+import { cachedListen, refreshCachedListeners, cachedListenUpdatedAt } from './cachedListen';
 import { appId } from './firebaseConfig';
 import { getHomeBackground } from './homeBackgrounds';
 import { auth, db } from './firebase';
@@ -1669,7 +1670,7 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
 
   useEffect(() => {
     const q = query(studentsCollection);
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribe = cachedListen('t_students', q, (snapshot) => {
       const studentList = snapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
         .sort((a, b) => a.name.localeCompare(b.name)); 
@@ -1699,7 +1700,7 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
     // recovering access (see handleRepairTeacherUid above, now unnecessary
     // for this collection). Query the whole collection instead.
     const q = query(lessonBankCollection);
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribe = cachedListen('t_lessonBank', q, (snapshot) => {
       const bankList = snapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
         .sort((a, b) => a.title.localeCompare(b.title));
@@ -1735,7 +1736,7 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
   // picker for the one Lesson Bank entry that now covers all of them.
   useEffect(() => {
     const q = query(collection(db, `${publicDataPath}/watchAndLearnVideos`), orderBy('order', 'asc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribe = cachedListen('t_videos', q, (snapshot) => {
       setWatchLearnVideos(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
     });
     return () => unsubscribe();
@@ -1784,7 +1785,7 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
     if (!user?.uid) return;
     // Not filtered by teacherUid -- see the lessonBank listener above.
     const q = query(groupsCollection);
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribe = cachedListen('t_groups', q, (snapshot) => {
       const groupList = snapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
         .sort((a, b) => {
@@ -1852,7 +1853,7 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
     // ~7,000 docs and nobody browses old sessions). Older data: backup/reports.
     const since = Timestamp.fromDate(new Date(Date.now() - 14 * 24 * 60 * 60 * 1000));
     const q = query(sessionsCollection, where('startTime', '>=', since)); 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribe = cachedListen('t_sessions14', q, (snapshot) => {
       const sessionList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setSessions(sessionList);
       
@@ -1877,7 +1878,7 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
     const since = Timestamp.fromDate(new Date(Date.now() - 14 * 24 * 60 * 60 * 1000));
     const endOfToday = new Date(); endOfToday.setHours(23, 59, 59, 999);
     const q = query(teacherScheduleCollection, where('startTime', '>=', since), where('startTime', '<=', Timestamp.fromDate(endOfToday)));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribe = cachedListen('t_schedule14', q, (snapshot) => {
       const scheduleList = snapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
         .sort((a, b) => a.startTime.toDate() - b.startTime.toDate());
@@ -1889,7 +1890,7 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
   useEffect(() => {
     // One doc per weekly slot (~1 per student) -- small, so live is cheap,
     // unlike the capped teacherSchedule listener above.
-    const unsubscribe = onSnapshot(recurringScheduleCollection, (snapshot) => {
+    const unsubscribe = cachedListen('t_recurring', recurringScheduleCollection, (snapshot) => {
       setRecurringSchedule(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
     });
     return () => unsubscribe();
@@ -5162,6 +5163,7 @@ ${toSend.map(l => '• ' + l.title).join(', ')}`
       
       <div className="flex items-center flex-wrap gap-3 mb-6">
         <h2 className="text-3xl font-bold text-indigo-700">Teacher Dashboard</h2>
+        <TeacherRefreshButton />
         {onOpenBodhiTree && (
           <button
             onClick={() => onOpenBodhiTree({ mode: 'teacher' })}
@@ -11302,6 +11304,23 @@ function TrophyBoard({ role, targetStudentUid, studentProfile }) {
 // "New Student" side completely while it is closed.
 const accountSettingsRef = () => doc(db, `${publicDataPath}/config`, 'accountSettings');
 const newAccountsClosed = (mode) => mode === 'closed' || (mode !== 'open' && isParamiClassTime());
+
+// The dashboard keeps a saved copy of the students, sessions, schedule... (see cachedListen.js) and reads Firebase again
+// only once an hour; this button reads everything again right away.
+function TeacherRefreshButton() {
+  const [, setTick] = useState(0);
+  useEffect(() => { const i = setInterval(() => setTick(x => x + 1), 30000); return () => clearInterval(i); }, []);
+  const at = cachedListenUpdatedAt();
+  return (
+    <button
+      onClick={() => { refreshCachedListeners(); clearWeekCache(); setTick(x => x + 1); }}
+      className="px-3 py-1 bg-white border border-gray-300 text-gray-700 rounded-full hover:bg-gray-100 shadow-sm text-sm font-semibold"
+      title="Read the newest data from Firebase now (it is read automatically once an hour)"
+    >
+      🔄 Refresh{at ? ` · updated ${new Date(at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}` : ''}
+    </button>
+  );
+}
 
 function NewAccountsSwitch() {
   const [mode, setMode] = useState('auto');

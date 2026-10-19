@@ -79,3 +79,37 @@ export function onSnapshot(ref, ...args) {
   });
   return _onSnapshot(ref, ...wrapped);
 }
+
+// ---- every write announces itself ('dhamma-write'), so a screen that keeps a saved copy of a collection (cachedListen.js)
+// can bring just that one document up to date after the teacher's own change, without reading the whole collection. ----
+import { updateDoc as _updateDoc, setDoc as _setDoc, addDoc as _addDoc, deleteDoc as _deleteDoc, writeBatch as _writeBatch, runTransaction as _runTransaction } from '@firebase/firestore';
+const announce = (ref, deleted) => { try { if (ref && typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('dhamma-write', { detail: { ref, deleted: !!deleted } })); } catch (e) { /* never break a write */ } };
+export async function updateDoc(ref, ...rest) { const r = await _updateDoc(ref, ...rest); announce(ref); return r; }
+export async function setDoc(ref, ...rest) { const r = await _setDoc(ref, ...rest); announce(ref); return r; }
+export async function deleteDoc(ref) { const r = await _deleteDoc(ref); announce(ref, true); return r; }
+export async function addDoc(ref, data) { const r = await _addDoc(ref, data); announce(r); return r; }
+export function writeBatch(dbArg) {
+  const b = _writeBatch(dbArg);
+  const touched = [];
+  const w = {
+    set: (ref, ...a) => { touched.push([ref, false]); b.set(ref, ...a); return w; },
+    update: (ref, ...a) => { touched.push([ref, false]); b.update(ref, ...a); return w; },
+    delete: (ref) => { touched.push([ref, true]); b.delete(ref); return w; },
+    commit: async () => { const r = await b.commit(); touched.forEach(([ref, del]) => announce(ref, del)); return r; },
+  };
+  return w;
+}
+export async function runTransaction(dbArg, fn, opts) {
+  const touched = [];
+  const r = await _runTransaction(dbArg, (tx) => {
+    const w = {
+      get: (ref) => tx.get(ref),
+      set: (ref, ...a) => { touched.push([ref, false]); tx.set(ref, ...a); return w; },
+      update: (ref, ...a) => { touched.push([ref, false]); tx.update(ref, ...a); return w; },
+      delete: (ref) => { touched.push([ref, true]); tx.delete(ref); return w; },
+    };
+    return fn(w);
+  }, opts);
+  touched.forEach(([ref, del]) => announce(ref, del));
+  return r;
+}
