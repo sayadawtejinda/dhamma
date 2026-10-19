@@ -3863,7 +3863,7 @@ useEffect(() => {
             </div>
           )}
 
-          <div className={`flex flex-wrap justify-center sm:justify-start sm:flex-nowrap items-center gap-3 mt-6 sm:overflow-x-auto pb-2 scrollbar-hide px-1 ${onboardingStep === 'sheet_icon' ? 'pt-28' : ''}`}>
+          <div className={`flex flex-nowrap justify-start items-center gap-3 mt-6 overflow-x-auto pb-2 scrollbar-hide px-1 ${onboardingStep === 'sheet_icon' ? 'pt-28' : ''}`}>
             
             {appMode === 'sheet' && sheetData.length > 0 && currentSheetIndex >= 0 ? (
                 <div className="flex items-center gap-1 h-[60px]">
@@ -4131,7 +4131,7 @@ useEffect(() => {
     </div>
 )}
               {currentSheetName === 'B' && sheetBParagraph && sheetBParagraph[sheetBParaIndex] && (
-  <div className="bg-yellow-50 border-2 border-yellow-300 rounded-2xl p-4 mb-4 flex gap-4 items-stretch relative">
+  <div className="bg-yellow-50 border-2 border-yellow-300 rounded-2xl p-4 mb-4 flex flex-col sm:flex-row gap-4 items-stretch relative">
     <div className="absolute -top-3 -right-3 z-20 flex items-center gap-1  rounded-full px-1.5 py-1.5 shadow-lg border-2 border-white">
       <button
         onClick={() => handleNextQAClick(sheetBParaIndex)}
@@ -4153,7 +4153,7 @@ useEffect(() => {
     <img 
   ref={sheetBImageRef}
   src={`https://raw.githubusercontent.com/nathantun93/Pic/main/${String(getColumnIndex(selectedColumn)).padStart(2,'0')}-${String(sheetBParaIndex+1).padStart(2,'0')}.png`} 
-  className="w-80 h-auto object-contain rounded-xl border border-yellow-200 bg-white"
+  className="w-full sm:w-80 h-auto object-contain rounded-xl border border-yellow-200 bg-white"
   alt=""
   onLoad={() => {
     if (sheetBImageRef.current) {
