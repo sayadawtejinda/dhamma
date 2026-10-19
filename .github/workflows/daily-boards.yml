@@ -49,5 +49,5 @@ jobs:
             git commit -m "Daily boards refresh"
             git pull --rebase origin main
             git push
-            gh workflow run deploy.yml
+            gh workflow run deploy.yml || echo "Could not start the publish step by itself; it will happen with the next push."
           fi

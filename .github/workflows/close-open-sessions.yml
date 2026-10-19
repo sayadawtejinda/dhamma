@@ -71,5 +71,5 @@ jobs:
             git commit -m "Class files rebuilt (new or edited class)"
             git pull --rebase origin main
             git push
-            gh workflow run deploy.yml
+            gh workflow run deploy.yml || echo "Could not start the publish step by itself; it will happen with the next push."
           fi
