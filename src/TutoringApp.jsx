@@ -10398,8 +10398,7 @@ const reviveWeekTimes = (v) => {
 };
 
 // The current week's schedule + sessions are kept on this device and re-read from Firebase at most once an hour while a class
-// is on (any class starting within 30 minutes or still running), and otherwise only when a class has ended since the last
-// read (so the final attendance is picked up once) or after 24 hours. Opening the screen again meanwhile costs no reads.
+// is on (any class starting within 30 minutes or still running); outside class time the saved copy is used as it is.
 const WEEK_CACHE_PREFIX = 'weekCache_v2_';
 const clearWeekCache = () => { try { Object.keys(localStorage).filter(k => k.startsWith(WEEK_CACHE_PREFIX)).forEach(k => localStorage.removeItem(k)); } catch (e) { /* ignore */ } };
 const readWeekCache = (weekStartMs) => {
@@ -10414,8 +10413,9 @@ const weekCacheFresh = (cache, weekStartMs, now = Date.now()) => {
   const classNow = times.some(([a, b]) => now >= a - HALF && now <= b + HALF);
   const age = now - cache.at;
   if (classNow) return age < 60 * 60 * 1000;
-  const endedSince = times.some(([, b]) => b > cache.at && b <= now);
-  return !endedSince && age < 24 * 60 * 60 * 1000;
+  // outside class time nothing is read again: a student's attendance is recorded when they open their lesson, which the
+  // hourly reads during class already picked up (Refresh gets anything later)
+  return age < 7 * 24 * 60 * 60 * 1000;
 };
 
 function WeeklySchedule({ role, targetStudentUid }) {
