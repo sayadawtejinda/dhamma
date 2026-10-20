@@ -11364,18 +11364,36 @@ const newAccountsClosed = (mode) => mode === 'closed' || (mode !== 'open' && isP
 
 // The dashboard keeps a saved copy of the students, sessions, schedule... (see cachedListen.js) and reads Firebase again
 // only once an hour; this button reads everything again right away.
+const STUDENT_KEYS = ['t_students', 't_starPending', 't_starWaiting'];
+const HISTORY_KEYS = ['t_sessions14', 't_schedule14'];
 function TeacherRefreshButton() {
   const [, setTick] = useState(0);
   useEffect(() => { const i = setInterval(() => setTick(x => x + 1), 30000); return () => clearInterval(i); }, []);
-  const at = cachedListenUpdatedAt();
+  const fmt = (at) => (at ? ` · ${new Date(at).toLocaleString('en-US', Date.now() - at > 12 * 3600 * 1000 ? { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' } : { hour: 'numeric', minute: '2-digit' })}` : '');
+  const btn = 'px-3 py-1 bg-white border border-gray-300 text-gray-700 rounded-full hover:bg-gray-100 shadow-sm text-sm font-semibold';
   return (
-    <button
-      onClick={() => { refreshCachedListeners(); clearWeekCache(); setTick(x => x + 1); }}
-      className="px-3 py-1 bg-white border border-gray-300 text-gray-700 rounded-full hover:bg-gray-100 shadow-sm text-sm font-semibold"
-      title="Read the newest data from Firebase now. Nothing is read by itself: press this when you need the latest."
-    >
-      🔄 Refresh{at ? ` · updated ${new Date(at).toLocaleString('en-US', Date.now() - at > 12 * 3600 * 1000 ? { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' } : { hour: 'numeric', minute: '2-digit' })}` : ''}
-    </button>
+    <>
+      {/* The one you need: new students and trophy requests (the student list, ~150 documents). */}
+      <button
+        onClick={() => { refreshCachedListeners(STUDENT_KEYS); setTick(x => x + 1); }}
+        className={btn}
+        title="Read the newest students and trophy requests now (about 150 reads). Nothing is read by itself."
+      >
+        🔄 Students{fmt(cachedListenUpdatedAt(['t_students']))}
+      </button>
+      {/* Only when you want to see them: the last 14 days of sessions and schedule (about 1,000 reads); at most once an hour. */}
+      <button
+        onClick={() => {
+          const at = cachedListenUpdatedAt(HISTORY_KEYS);
+          if (at && Date.now() - at < 60 * 60 * 1000) { alert(`Sessions and schedule were read ${Math.round((Date.now() - at) / 60000)} minutes ago. They can be read again after one hour (this protects the daily read limit).`); return; }
+          refreshCachedListeners(HISTORY_KEYS, 60 * 60 * 1000); setTick(x => x + 1);
+        }}
+        className={btn}
+        title="Read the last 14 days of sessions and schedule (about 1,000 reads). At most once an hour."
+      >
+        🔄 Sessions &amp; schedule{fmt(cachedListenUpdatedAt(HISTORY_KEYS))}
+      </button>
+    </>
   );
 }
 

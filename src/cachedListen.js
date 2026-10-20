@@ -24,8 +24,18 @@ const pathOf = (q) => {
   try { return String(q.path || q._query.path.canonicalString()); } catch (e) { return ''; }
 };
 const listeners = new Set();
-export const refreshCachedListeners = () => listeners.forEach(l => l.reload());
-export const cachedListenUpdatedAt = () => { let m = 0; listeners.forEach(l => { if (l.at && (!m || l.at < m)) m = l.at; }); return m; };
+// Read again the saved copies named in `keys` (all of them when omitted). With `minAgeMs`, a copy that was read more recently than
+// that is left alone (no read), so pressing the button twice within the hour costs nothing. Returns how many were read.
+export const refreshCachedListeners = (keys, minAgeMs = 0) => {
+  let n = 0;
+  listeners.forEach(l => {
+    if (keys && !keys.includes(l.key)) return;
+    if (minAgeMs && l.at && Date.now() - l.at < minAgeMs) return;
+    l.reload(); n++;
+  });
+  return n;
+};
+export const cachedListenUpdatedAt = (keys) => { let m = 0; listeners.forEach(l => { if (keys && !keys.includes(l.key)) return; if (l.at && (!m || l.at < m)) m = l.at; }); return m; };
 
 // `opts.accept(data)`: after the teacher's/student's own write, a changed document is kept only if it still belongs to this query.
 // `q` may also be ONE document (then `onNext` gets a document-like snapshot: id, exists(), data()). `opts.refetchOnWrite`: for a
@@ -62,7 +72,7 @@ export function cachedListen(key, q, onNext, onError, ttlMs = 30 * 24 * 60 * 60 
       at = Date.now(); l.at = at; store(); emit();
     } catch (e) { if (onError) onError(e); else console.error('Could not read', key, e); }
   };
-  const l = { at: 0, reload: () => fetchAll() };
+  const l = { key, at: 0, reload: () => fetchAll() };
   listeners.add(l);
 
   try {
