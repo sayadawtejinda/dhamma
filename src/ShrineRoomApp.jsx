@@ -1,4 +1,4 @@
-import { getAttendedWeeksMap } from './studentWeekly';
+import { getTreeWeeksMap as getAttendedWeeksMap } from './studentWeekly';
 import { AvatarThumb } from './AvatarPeek';
 import React, { useEffect, useRef, useState } from 'react';
 import { collection, query, where, getDocs, doc, getDoc, getDocFromServer, setDoc, updateDoc, deleteDoc, serverTimestamp, increment, runTransaction } from 'firebase/firestore';

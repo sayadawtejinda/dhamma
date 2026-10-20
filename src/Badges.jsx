@@ -14,9 +14,11 @@ export function useBadges(name, profile) {
   if (!data || !name) return [];
   const given = givenOf(data, name, profile);
   const list = Object.keys(given).filter(k => !k.startsWith('award-')).map(badgeMeta).filter(Boolean);
-  // only the HIGHEST Bodhi Tree level given is shown (each new level replaces the one before)
-  const top = Math.max(-1, ...list.filter(b => b.shape === 'bodhi').map(b => b.level));
-  return list.filter(b => b.shape !== 'bodhi' || b.level === top);
+  // Bodhi Tree: only this year's HIGHEST level given is shown (each new level replaces the one before; earlier years live on as their
+  // gold yearly badge); every yearly badge is kept
+  const nowYear = new Date().getFullYear();
+  const top = Math.max(-1, ...list.filter(b => b.shape === 'bodhi' && b.year === nowYear).map(b => b.level));
+  return list.filter(b => b.shape !== 'bodhi' || (b.year === nowYear && b.level === top));
 }
 
 const METALS = {
@@ -178,6 +180,15 @@ export function BadgeSvg({ badge, size = 56 }) {
   // the Bodhi Tree level badges are the teacher's own artwork (see bodhiLevels.js)
   if (badge.shape === 'bodhi') {
     return <div style={{ width: size, height: size, filter: 'drop-shadow(0 2px 2px rgba(0,0,0,.35))' }} role="img" aria-label={badge.name} dangerouslySetInnerHTML={{ __html: LEVEL_BADGES_SVG[badge.level] }} />;
+  }
+  if (badge.shape === 'bodhiyear') {
+    // the same level artwork turned gold, with the year on a ribbon
+    return (
+      <div style={{ width: size, height: size, position: 'relative', filter: 'drop-shadow(0 2px 2px rgba(0,0,0,.35))' }} role="img" aria-label={badge.name}>
+        <div style={{ width: '100%', height: '100%', filter: 'sepia(1) saturate(4.2) hue-rotate(-12deg) brightness(1.12) contrast(1.05)' }} dangerouslySetInnerHTML={{ __html: LEVEL_BADGES_SVG[badge.level] }} />
+        <span style={{ position: 'absolute', left: '50%', bottom: '2%', transform: 'translateX(-50%)', background: 'linear-gradient(180deg,#fff1a6,#e0a800)', color: '#5a3a00', fontWeight: 900, fontSize: Math.max(9, size * 0.2), padding: '0 8px', borderRadius: 6, border: '1.5px solid #8a6a00', lineHeight: 1.25, letterSpacing: 1 }}>{badge.year}</span>
+      </div>
+    );
   }
   const m = METALS[badge.metal] || METALS.gold;
   const gid = `bg-${uid}`;

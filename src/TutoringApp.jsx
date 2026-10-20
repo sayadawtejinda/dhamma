@@ -11543,8 +11543,11 @@ function BadgeApprovals({ students, sessions }) {
                       {BADGE_DEFS.filter(b => b.group === g.id).map(b => <option key={b.id} value={`b:${b.id}`}>{b.name} — {b.desc}</option>)}
                     </optgroup>
                   ))}
-                  <optgroup label="Bodhi Tree levels">
-                    {STAGE_NAMES.map((n, i) => <option key={`bodhi${i}`} value={`b:bodhi-level:${i}`}>Level {i + 1}: {n}</option>)}
+                  <optgroup label={`Bodhi Tree levels (${new Date().getFullYear()})`}>
+                    {STAGE_NAMES.map((n, i) => <option key={`bodhi${i}`} value={`b:bodhi-level:${new Date().getFullYear()}:${i}`}>Level {i + 1}: {n}</option>)}
+                  </optgroup>
+                  <optgroup label="Bodhi Tree gold yearly badge (given at the end of a year)">
+                    {STAGE_NAMES.map((n, i) => <option key={`bodhiy${i}`} value={`b:bodhi-year:${new Date().getFullYear()}:${i}`}>{new Date().getFullYear()} · {n}</option>)}
                   </optgroup>
                   <optgroup label="Top-three honours (the ceremony; the honour itself shows only while the student really holds that place)">
                     {['trophy', 'holy', 'joy'].flatMap(k => [1, 2, 3].map(t => <option key={`${k}${t}`} value={`a:${k}:${t}`}>{AWARD_LISTS[k][t - 1].en} (place {t})</option>))}

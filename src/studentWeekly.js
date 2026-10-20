@@ -20,6 +20,13 @@ export async function getAttendedWeeks(studentUid) {
   return typeof n === 'number' ? n : null;
 }
 
+// The weeks that count for the Bodhi Tree and its levels: THIS YEAR's weeks (the tree starts again every January). Falls back to the
+// all-time weeks while the file has no yearly numbers yet.
+export async function getTreeWeeksMap() {
+  const data = await loadWeekly();
+  return data?.yearWeeks || data?.attendedWeeks || null;
+}
+
 // Every student's weeks at once (uid -> weeks), or null when the file cannot be loaded. A student who
 // is not in the file simply has no attended weeks yet, so use `?? 0` for them rather than a live read.
 export async function getAttendedWeeksMap() {

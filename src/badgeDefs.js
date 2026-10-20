@@ -84,11 +84,17 @@ export const BADGE_DEFS = [
 
 // one badge per Dhammaschool grade: finishing every chapter of the grade (id 'ds-grade:GRADE-3')
 export const dynamicBadge = (id) => {
-  // the student's current Bodhi Tree level (the ten titles the Bodhi Tree room already gives, drawn with the same artwork)
-  if (id.startsWith('bodhi-level:')) {
-    const i = Number(id.slice(12));
-    if (!(i >= 0 && i < STAGE_NAMES.length)) return null;
-    return { id, group: 'attend', shape: 'bodhi', level: i, metal: 'gold', icon: '', name: STAGE_NAMES[i], desc: `Bodhi Tree level ${i + 1} (${WEEK_MILESTONES[i]} weeks of coming to class)`, master: i === STAGE_NAMES.length - 1 };
+  // The Bodhi Tree: 'bodhi-level:2026:6' = level 7 reached in 2026 (the current year's level; each new level replaces the one before,
+  // and every January it starts again); 'bodhi-year:2026:8' = the GOLD badge of the level a student finished 2026 on, with the year on it
+  // (kept for ever). The old form 'bodhi-level:6' (no year) counts as 2026.
+  if (id.startsWith('bodhi-level:') || id.startsWith('bodhi-year:')) {
+    const parts = id.split(':');
+    const isYear = parts[0] === 'bodhi-year';
+    const year = parts.length >= 3 ? Number(parts[1]) : 2026;
+    const i = Number(parts[parts.length - 1]);
+    if (!(i >= 0 && i < STAGE_NAMES.length) || !year) return null;
+    if (isYear) return { id, group: 'attend', shape: 'bodhiyear', level: i, year, metal: 'gold', icon: '', name: `${year} ${STAGE_NAMES[i]}`, desc: `Reached Bodhi Tree level ${i + 1} (${STAGE_NAMES[i]}) in ${year}`, master: true };
+    return { id, group: 'attend', shape: 'bodhi', level: i, year, metal: 'gold', icon: '', name: STAGE_NAMES[i], desc: `Bodhi Tree level ${i + 1} (${WEEK_MILESTONES[i]} weeks of coming to class in ${year})`, master: i === STAGE_NAMES.length - 1 };
   }
   if (id.startsWith('ds-grade:')) {
     const g = id.slice(9);

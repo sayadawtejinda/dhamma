@@ -4,7 +4,8 @@
 // thresholds are in WEEKS of attendance (1/3/5/7/9/13/20/30/40/50) -- since
 // treeAgeDays is already "attended weeks x 7" (see getWeekKey/attendedWeeks
 // above), a week threshold converts to a day threshold by x7.
-export const WEEK_MILESTONES = [1, 3, 5, 7, 9, 13, 20, 30, 40, 50];
+// Counted in the weeks of attendance of the CURRENT YEAR (the tree starts again every January): all ten levels within 40 weeks.
+export const WEEK_MILESTONES = [1, 3, 5, 7, 9, 13, 19, 26, 33, 40];
 export const MILESTONES = WEEK_MILESTONES.map(w => w * 7);
 export const STAGE_NAMES = [
   'Little Planter',

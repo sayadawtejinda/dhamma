@@ -42,6 +42,17 @@ const abhi = (readJson('classSnapshots/abhidhamma.json') || {}).classes || {};
 // Dhammaschool: the chapters each student finished, and which chapters make up each grade (classSnapshots/dhammaschool-progress.json)
 const dsProgress = readJson('classSnapshots/dhammaschool-progress.json') || { lessonsByClass: {}, completions: {} };
 
+// weeks of attendance per calendar year (a week belongs to the year of its Monday), from the weekly list of attended weeks
+const THIS_YEAR = new Date().getFullYear();
+const weekKeys = (readJson('studentWeeklyKeys.json') || {}).weeks || {};
+let grants = {};
+try { grants = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'treeOverrides.json'), 'utf8')); } catch (e) { /* none */ }
+const yearWeeksOf = (uid) => {
+  const out = {};
+  (weekKeys[uid] || []).forEach(k => { const y = Number(String(k).slice(0, 4)); out[y] = (out[y] || 0) + 1; });
+  if (typeof grants[uid] === 'number') out[2026] = Math.max(out[2026] || 0, grants[uid]);
+  return out;
+};
 const BASIC_VOWELS = ['B-listen-1', 'B-listen-2', 'B-click-1', 'B-click-2', 'B-click-3'];
 const out = {};
 for (const st of students) {
@@ -49,8 +60,11 @@ for (const st of students) {
   const got = [];
   const at = (value, list) => list.forEach(([min, id]) => { if (value >= min) got.push(id); });
   at(st.trophyCount || 0, [[10, 'trophy-10'], [50, 'trophy-50'], [100, 'trophy-100'], [250, 'trophy-250']]);
-  const bodhi = levelForWeeks(weekly[st.id] || 0); // the current Bodhi Tree level (only the highest one is kept)
-  if (bodhi >= 0) got.push(`bodhi-level:${bodhi}`);
+  // Bodhi Tree: the level of THIS year's weeks, and a gold yearly badge for every finished year (from 2026 on)
+  const yw = yearWeeksOf(st.id);
+  const bodhi = levelForWeeks(yw[THIS_YEAR] || 0);
+  if (bodhi >= 0) got.push(`bodhi-level:${THIS_YEAR}:${bodhi}`);
+  for (let y = 2026; y < THIS_YEAR; y++) { const l = levelForWeeks(yw[y] || 0); if (l >= 0) got.push(`bodhi-year:${y}:${l}`); }
   at(weekly[st.id] || 0, [[10, 'weeks-10'], [25, 'weeks-25'], [50, 'weeks-50']]);
   at(st.heartsReceived || 0, [[10, 'hearts-10'], [50, 'hearts-50'], [100, 'hearts-100']]);
   const sh = shrine.get(n);

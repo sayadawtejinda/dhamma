@@ -26,7 +26,7 @@ export function parseEntry(entry) {
   const b = badgeMeta(entry.slice(2));
   if (!b) return null;
   // Bodhi Tree levels: the first three levels a gift box, the next three a drone, the high levels the stage
-  const style = b.shape === 'bodhi' ? (b.level >= 6 ? 'stage' : b.level >= 3 ? 'drone' : 'gift') : (b.master || b.metal === 'gold' ? 'stage' : b.metal === 'silver' ? 'drone' : 'gift');
+  const style = b.shape === 'bodhiyear' ? 'stage' : b.shape === 'bodhi' ? (b.level >= 6 ? 'stage' : b.level >= 3 ? 'drone' : 'gift') : (b.master || b.metal === 'gold' ? 'stage' : b.metal === 'silver' ? 'drone' : 'gift');
   return { type: 'badge', badge: b, title: b.name, text: b.desc, style };
 }
 

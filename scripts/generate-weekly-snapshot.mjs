@@ -324,7 +324,15 @@ async function main() {
     const grants = JSON.parse(readFileSync(join(__dirname, 'treeOverrides.json'), 'utf8'));
     Object.entries(grants).forEach(([uid, weeks]) => { if (typeof weeks === 'number') attendedWeeks[uid] = Math.max(attendedWeeks[uid] || 0, weeks); });
   } catch (e) { /* no grants file */ }
-  writeFileSync(join(__dirname, '..', 'public', 'studentWeekly.json'), JSON.stringify({ generatedAt, attendedWeeks }));
+  // The Bodhi Tree starts again every January: this calendar year's weeks of attendance (a week belongs to the year of its Monday).
+  const treeYear = now.getFullYear();
+  const yearWeeks = {};
+  Object.entries(keysByUid).forEach(([uid, set]) => { let n = 0; set.forEach(k => { if (String(k).startsWith(String(treeYear))) n++; }); yearWeeks[uid] = n; });
+  try {
+    // the teacher's own grants (a minimum number of weeks) belong to the year they were made for: 2026
+    if (treeYear === 2026) Object.entries(JSON.parse(readFileSync(join(__dirname, 'treeOverrides.json'), 'utf8'))).forEach(([uid, weeks]) => { if (typeof weeks === 'number') yearWeeks[uid] = Math.max(yearWeeks[uid] || 0, weeks); });
+  } catch (e) { /* no grants file */ }
+  writeFileSync(join(__dirname, '..', 'public', 'studentWeekly.json'), JSON.stringify({ generatedAt, year: treeYear, attendedWeeks, yearWeeks }));
 
   // ---- Each student's schedule + sessions for this year (their login used to read all of it) ----
   const serialize = (v) => {
