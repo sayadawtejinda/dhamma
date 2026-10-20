@@ -76,16 +76,16 @@ for (const st of students) {
   if (sh) {
     at(sh.lotusCount || 0, [[100, 'lotus-100'], [500, 'lotus-500'], [1000, 'lotus-1000'], [2000, 'lotus-2000'], [3000, 'lotus-3000'], [4000, 'lotus-4000'], [5000, 'lotus-5000']]);
     // Shrine Room: friends visited. Nature World: gifts sent to friends and trees planted.
-    at(new Set(sh.shrineVisitedFriends || []).size, [[10, 'shrine-visits'], [25, 'shrine-visits-25'], [50, 'shrine-visits-50'], [75, 'shrine-visits-75']]);
+    at(new Set(sh.shrineVisitedFriends || []).size, [[2, 'shrine-visits-2'], [10, 'shrine-visits'], [25, 'shrine-visits-25'], [50, 'shrine-visits-50'], [75, 'shrine-visits-75']]);
     const nw = sh.natureWorld || {};
     at(new Set(nw.giftedFriends || []).size, [[1, 'nature-gift-1'], [5, 'nature-gift-5'], [15, 'nature-gift-15'], [30, 'nature-gift-30'], [50, 'nature-gift-50'], [100, 'nature-gift-100'], [200, 'nature-gift-200'], [300, 'nature-gift-300']]);
     const trees = nw.placedTrees ? Object.keys(nw.placedTrees).length : 0;
-    at(trees, [[3, 'nature-3'], [8, 'nature-5'], [15, 'nature-15'], [30, 'nature-12'], [60, 'nature-25'], [100, 'nature-100']]);
+    at(trees, [[2, 'nature-2'], [3, 'nature-3'], [8, 'nature-5'], [15, 'nature-15'], [30, 'nature-12'], [60, 'nature-25'], [100, 'nature-100']]);
     const owned = new Set();
     // items the student has GOT (each one once -- wearing one again does not count), without the free starter item of each kind
     const FREE = new Set(['hair:short-black', 'outfit:blue', 'accessory:none', 'bg:sky', 'homeBackground:default']);
     Object.entries(sh.avatarOwned || {}).forEach(([cat, arr]) => (Array.isArray(arr) ? arr : []).forEach(x => { if (!FREE.has(`${cat}:${x}`)) owned.add(`${cat}:${x}`); }));
-    at(owned.size, [[5, 'avatar-5'], [10, 'avatar-10'], [20, 'avatar-25'], [30, 'avatar-30'], [50, 'avatar-50']]);
+    at(owned.size, [[2, 'avatar-2'], [5, 'avatar-5'], [10, 'avatar-10'], [20, 'avatar-25'], [30, 'avatar-30'], [50, 'avatar-50']]);
   }
   const po = poems.get(n);
   if (po) {

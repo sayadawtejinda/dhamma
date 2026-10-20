@@ -241,7 +241,8 @@ export function BadgeShelf({ name, profile = null, title = '🎖️ Badges', com
     // a Bodhi level reached means every level before it was reached too: fill them in
     if (k.startsWith('bodhi-level:')) {
       const year = k.split(':')[1];
-      for (let lv = 0; lv < ladderRank(list[list.length - 1].id); lv++) { const id = `bodhi-level:${year}:${lv}`; if (!list.some(x => x.id === id)) { const m = badgeMeta(id); if (m) list.push(m); } }
+      const topLevel = ladderRank(list[list.length - 1].id);
+      for (let lv = 0; lv < topLevel; lv++) { const id = `bodhi-level:${year}:${lv}`; if (!list.some(x => x.id === id)) { const m = badgeMeta(id); if (m) list.push(m); } }
       list.sort((a, b) => ladderRank(a.id) - ladderRank(b.id));
     }
   });
