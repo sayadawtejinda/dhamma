@@ -80,7 +80,7 @@ for (const st of students) {
     const nw = sh.natureWorld || {};
     at(new Set(nw.giftedFriends || []).size, [[1, 'nature-gift-1'], [5, 'nature-gift-5'], [15, 'nature-gift-15'], [30, 'nature-gift-30'], [50, 'nature-gift-50'], [100, 'nature-gift-100'], [200, 'nature-gift-200'], [300, 'nature-gift-300']]);
     const trees = nw.placedTrees ? Object.keys(nw.placedTrees).length : 0;
-    at(trees, [[2, 'nature-2'], [3, 'nature-3'], [8, 'nature-5'], [15, 'nature-15'], [30, 'nature-12'], [60, 'nature-25'], [100, 'nature-100']]);
+    at(trees, [[3, 'nature-3'], [8, 'nature-5'], [15, 'nature-15'], [30, 'nature-12'], [60, 'nature-25'], [100, 'nature-100']]);
     const owned = new Set();
     // items the student has GOT (each one once -- wearing one again does not count), without the free starter item of each kind
     const FREE = new Set(['hair:short-black', 'outfit:blue', 'accessory:none', 'bg:sky', 'homeBackground:default']);

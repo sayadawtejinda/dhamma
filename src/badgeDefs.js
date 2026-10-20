@@ -73,7 +73,6 @@ export const BADGE_DEFS = [
   { id: 'nature-gift-100', group: 'nature', shape: 'rosette', metal: 'gold', icon: '🎁', name: 'Heart of Giving', desc: 'Sent Nature World gifts to 100 friends', master: true },
   { id: 'nature-gift-200', group: 'nature', shape: 'crest', metal: 'gold', icon: '💝', name: 'Dana Master', desc: 'Sent Nature World gifts to 200 friends', master: true },
   { id: 'nature-gift-300', group: 'nature', shape: 'crest', metal: 'gold', icon: '🌍', name: 'Giver of the World', desc: 'Sent Nature World gifts to 300 friends', master: true },
-  { id: 'nature-2', group: 'nature', shape: 'tree', metal: 'bronze', icon: '', name: 'Little Sprout', desc: 'Planted 2 trees' },
   { id: 'nature-3', group: 'nature', shape: 'tree', metal: 'bronze', icon: '', name: 'Seed Planter', desc: 'Planted 3 trees' },
   { id: 'nature-5', group: 'nature', shape: 'tree', metal: 'bronze', icon: '', name: 'Gardener', desc: 'Planted 8 trees' },
   { id: 'nature-15', group: 'nature', shape: 'tree', metal: 'silver', icon: '', name: 'Tree Tender', desc: 'Planted 15 trees' },
