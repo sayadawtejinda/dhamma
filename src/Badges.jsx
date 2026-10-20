@@ -13,7 +13,10 @@ export function useBadges(name, profile) {
   const data = useBadgeData();
   if (!data || !name) return [];
   const given = givenOf(data, name, profile);
-  return Object.keys(given).filter(k => !k.startsWith('award-')).map(badgeMeta).filter(Boolean);
+  const list = Object.keys(given).filter(k => !k.startsWith('award-')).map(badgeMeta).filter(Boolean);
+  // only the HIGHEST Bodhi Tree level given is shown (each new level replaces the one before)
+  const top = Math.max(-1, ...list.filter(b => b.shape === 'bodhi').map(b => b.level));
+  return list.filter(b => b.shape !== 'bodhi' || b.level === top);
 }
 
 const METALS = {

@@ -7,6 +7,7 @@ import BadgeCeremony from './BadgeCeremony';
 import { useBadgeData } from './badgeData';
 import { useTopThree, awardsFor, AWARDS, HOLY_AWARDS, JOY_AWARDS } from './Awards';
 import { badgeMeta, BADGE_DEFS, BADGE_GROUPS } from './badgeDefs';
+import { STAGE_NAMES } from './bodhiLevels';
 import ParamiReportEditor from './ParamiReportEditor';
 import { startLiveWatchListener, setLiveWatch, useLiveWatch, liveWatchUntilMs } from './liveWatch';
 import { SPECIAL_AWARD_ITEMS } from './festivals';
@@ -11542,6 +11543,9 @@ function BadgeApprovals({ students, sessions }) {
                       {BADGE_DEFS.filter(b => b.group === g.id).map(b => <option key={b.id} value={`b:${b.id}`}>{b.name} — {b.desc}</option>)}
                     </optgroup>
                   ))}
+                  <optgroup label="Bodhi Tree levels">
+                    {STAGE_NAMES.map((n, i) => <option key={`bodhi${i}`} value={`b:bodhi-level:${i}`}>Level {i + 1}: {n}</option>)}
+                  </optgroup>
                   <optgroup label="Top-three honours (the ceremony; the honour itself shows only while the student really holds that place)">
                     {['trophy', 'holy', 'joy'].flatMap(k => [1, 2, 3].map(t => <option key={`${k}${t}`} value={`a:${k}:${t}`}>{AWARD_LISTS[k][t - 1].en} (place {t})</option>))}
                   </optgroup>
@@ -11553,7 +11557,7 @@ function BadgeApprovals({ students, sessions }) {
                     if (!st || !manualBadge) return;
                     const [type, a, b] = manualBadge.split(':');
                     const given = st.badgesGiven || {};
-                    if (type === 'b' && given[a + (b ? ':' + b : '')]) { alert('This badge was already given to this student.'); return; }
+                    if (type === 'b' && given[manualBadge.slice(2)]) { alert('This badge was already given to this student.'); return; }
                     await give(st, [type === 'a' ? { award: true, kind: a, tier: Number(b) } : { award: false, id: manualBadge.slice(2) }]);
                     setManualBadge('');
                   }}
