@@ -52,8 +52,11 @@ export const BADGE_DEFS = [
   { id: 'hearts-300', group: 'heart', shape: 'crown', metal: 'gold', icon: '💘', name: 'Heart Legend', desc: '300 hearts received', master: true },
   { id: 'hearts-500', group: 'heart', shape: 'crest', metal: 'gold', icon: '❤️', name: 'Heart Immortal', desc: '500 hearts received', master: true },
   // shrine room
+  { id: 'lotus-10', group: 'shrine', shape: 'flower', metal: 'bronze', icon: '🪷', name: 'Lotus Bud', desc: '10 lotus flowers' },
+  { id: 'lotus-25', group: 'shrine', shape: 'flower', metal: 'bronze', icon: '🪷', name: 'Lotus Sprout', desc: '25 lotus flowers' },
+  { id: 'lotus-50', group: 'shrine', shape: 'flower', metal: 'silver', icon: '🪷', name: 'Lotus Keeper', desc: '50 lotus flowers — you can change your name now!' },
   { id: 'lotus-100', group: 'shrine', shape: 'flower', metal: 'bronze', icon: '🪷', name: 'Lotus Seed', desc: '100 lotus flowers' },
-  { id: 'lotus-500', group: 'shrine', shape: 'flower', metal: 'silver', icon: '🪷', name: 'Lotus Bloom', desc: '500 lotus flowers' },
+  { id: 'lotus-500', group: 'shrine', shape: 'flower', metal: 'silver', icon: '🪷', name: 'Lotus Bloom', desc: '500 lotus flowers — you can change your name again!' },
   { id: 'lotus-1000', group: 'shrine', shape: 'flower', metal: 'gold', icon: '🪷', name: 'Lotus Master', desc: '1,000 lotus flowers', master: true },
   { id: 'lotus-2000', group: 'shrine', shape: 'lotusgate', metal: 'gold', icon: '🪷', name: 'Golden Lotus', desc: '2,000 lotus flowers', master: true },
   { id: 'lotus-3000', group: 'shrine', shape: 'badge8', metal: 'gold', icon: '🪷', name: 'Lotus Pond Keeper', desc: '3,000 lotus flowers', master: true },

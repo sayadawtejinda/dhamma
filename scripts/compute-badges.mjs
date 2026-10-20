@@ -74,7 +74,7 @@ for (const st of students) {
   at(st.heartsReceived || 0, [[5, 'hearts-5'], [20, 'hearts-20'], [50, 'hearts-50'], [100, 'hearts-100'], [200, 'hearts-200'], [300, 'hearts-300'], [500, 'hearts-500']]);
   const sh = shrine.get(n);
   if (sh) {
-    at(sh.lotusCount || 0, [[100, 'lotus-100'], [500, 'lotus-500'], [1000, 'lotus-1000'], [2000, 'lotus-2000'], [3000, 'lotus-3000'], [4000, 'lotus-4000'], [5000, 'lotus-5000']]);
+    at(sh.lotusCount || 0, [[10, 'lotus-10'], [25, 'lotus-25'], [50, 'lotus-50'], [100, 'lotus-100'], [500, 'lotus-500'], [1000, 'lotus-1000'], [2000, 'lotus-2000'], [3000, 'lotus-3000'], [4000, 'lotus-4000'], [5000, 'lotus-5000']]);
     // Shrine Room: friends visited. Nature World: gifts sent to friends and trees planted.
     at(new Set(sh.shrineVisitedFriends || []).size, [[2, 'shrine-visits-2'], [10, 'shrine-visits'], [25, 'shrine-visits-25'], [50, 'shrine-visits-50'], [75, 'shrine-visits-75']]);
     const nw = sh.natureWorld || {};
