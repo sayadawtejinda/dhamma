@@ -19,7 +19,7 @@
 // the DISPLAYED counts are the once-a-week snapshot.)
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously } from 'firebase/auth';
-import { getFirestore, collection, query, where, getDocs, getDoc, Timestamp, doc, updateDoc } from 'firebase/firestore';
+import { getFirestore, collection, query, where, getDocs, getDoc, Timestamp, doc, updateDoc, increment } from 'firebase/firestore';
 import { writeFileSync, mkdirSync, readFileSync, readdirSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -256,6 +256,13 @@ async function main() {
   // work out how many ❤️ they have left to give) and their row, even if the
   // app only ever DISPLAYS the ones with trophyCount > 0.
   const attendedById = Object.fromEntries(computed.filter(e => !e.isOffline).map(e => [e.id, e.attended]));
+  // Every student who has come into the Trophies list gets 3 hearts from the teacher, once (they count towards the heart badges).
+  for (const s of students.filter(x => x.isActive === true && (x.trophyCount || 0) > 0 && !x.teacherHeartsGiven)) {
+    await updateDoc(doc(db, `${publicDataPath}/students`, s.id), { heartsReceived: increment(3), 'heartsFromCounts.Teacher_name': 'Teacher', 'heartsFromCounts.Teacher_count': increment(3), teacherHeartsGiven: true });
+    s.heartsReceived = (s.heartsReceived || 0) + 3; s.teacherHeartsGiven = true;
+    s.heartsFromCounts = { ...(s.heartsFromCounts || {}), Teacher_name: 'Teacher', Teacher_count: ((s.heartsFromCounts || {}).Teacher_count || 0) + 3 };
+    console.log(`Teacher gave 3 hearts to ${s.name}`);
+  }
   const trophyList = students
     .filter(s => s.isActive === true)
     .map(s => ({

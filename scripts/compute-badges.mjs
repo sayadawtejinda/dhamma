@@ -67,7 +67,7 @@ for (const st of students) {
   if (bodhi >= 0) got.push(`bodhi-level:${THIS_YEAR}:${bodhi}`);
   for (let y = 2026; y < THIS_YEAR; y++) { const l = levelForWeeks(yw[y] || 0); if (l >= 0) got.push(`bodhi-year:${y}:${l}`); }
   at(weekly[st.id] || 0, [[10, 'weeks-10'], [25, 'weeks-25'], [50, 'weeks-50']]);
-  at(st.heartsReceived || 0, [[10, 'hearts-10'], [50, 'hearts-50'], [100, 'hearts-100']]);
+  at(st.heartsReceived || 0, [[5, 'hearts-5'], [20, 'hearts-20'], [50, 'hearts-50'], [100, 'hearts-100'], [200, 'hearts-200'], [300, 'hearts-300'], [500, 'hearts-500']]);
   const sh = shrine.get(n);
   if (sh) {
     at(sh.lotusCount || 0, [[100, 'lotus-100'], [500, 'lotus-500'], [1000, 'lotus-1000'], [2000, 'lotus-2000'], [3000, 'lotus-3000'], [4000, 'lotus-4000'], [5000, 'lotus-5000']]);

@@ -38,9 +38,13 @@ export const BADGE_DEFS = [
   { id: 'weeks-25', group: 'attend', shape: 'soccer', metal: 'silver', icon: '', name: 'Star Player', desc: 'Came to class in 25 weeks' },
   { id: 'weeks-50', group: 'attend', shape: 'soccer', metal: 'gold', icon: '', name: 'Team Captain', desc: 'Came to class in 50 weeks', master: true },
   // hearts
-  { id: 'hearts-10', group: 'heart', shape: 'heart', metal: 'bronze', icon: '💕', name: 'Loved', desc: '10 hearts received' },
-  { id: 'hearts-50', group: 'heart', shape: 'heart', metal: 'silver', icon: '💖', name: 'Beloved', desc: '50 hearts received' },
-  { id: 'hearts-100', group: 'heart', shape: 'heart', metal: 'gold', icon: '💝', name: 'Everyone\'s Friend', desc: '100 hearts received', master: true },
+  { id: 'hearts-5', group: 'heart', shape: 'heart', metal: 'bronze', icon: '💕', name: 'Warm Heart', desc: '5 hearts received' },
+  { id: 'hearts-20', group: 'heart', shape: 'heart', metal: 'silver', icon: '💖', name: 'Dear Friend', desc: '20 hearts received' },
+  { id: 'hearts-50', group: 'heart', shape: 'heart', metal: 'gold', icon: '💝', name: 'Beloved', desc: '50 hearts received' },
+  { id: 'hearts-100', group: 'heart', shape: 'heart', metal: 'gold', icon: '💗', name: 'Heart of Gold', desc: '100 hearts received' },
+  { id: 'hearts-200', group: 'heart', shape: 'burst', metal: 'gold', icon: '💞', name: 'Everyone\'s Friend', desc: '200 hearts received', master: true },
+  { id: 'hearts-300', group: 'heart', shape: 'crown', metal: 'gold', icon: '💘', name: 'Heart Legend', desc: '300 hearts received', master: true },
+  { id: 'hearts-500', group: 'heart', shape: 'crest', metal: 'gold', icon: '❤️', name: 'Heart Immortal', desc: '500 hearts received', master: true },
   // shrine room
   { id: 'lotus-100', group: 'shrine', shape: 'flower', metal: 'bronze', icon: '🪷', name: 'Lotus Seed', desc: '100 lotus flowers' },
   { id: 'lotus-500', group: 'shrine', shape: 'flower', metal: 'silver', icon: '🪷', name: 'Lotus Bloom', desc: '500 lotus flowers' },
