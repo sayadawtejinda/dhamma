@@ -7,6 +7,7 @@ import OnlineStatusWidget from './OnlineStatusWidget';
 import { FESTIVAL_AVATAR_ITEMS } from './festivals';
 import { STAR_MAX_LIVE } from './starAnnouncementConfig';
 import { CharacterSvg } from './AvatarCharacter';
+import { useAward, AwardPlaque, TrophyCup } from './Awards';
 
 // Avatar deliberately has no wallet of its own -- it spends directly out of
 // the same Shrine Room coin balance every other app already deposits into,
@@ -124,6 +125,7 @@ export default function AvatarApp({ entryRequest, onExit }) {
   const isTeacherPreview = !entryRequest?.studentUid;
   const studentUid = entryRequest?.studentUid;
   const studentName = entryRequest?.studentName || 'Friend';
+  const myAward = useAward({ id: entryRequest?.studentUid, name: entryRequest?.studentName });
   const [loading, setLoading] = useState(true);
   const [coinBalance, setCoinBalance] = useState(isTeacherPreview ? 500 : 0);
   const [config, setConfig] = useState(DEFAULT_CONFIG);
@@ -511,12 +513,16 @@ export default function AvatarApp({ entryRequest, onExit }) {
       )}
 
       {/* Big preview */}
-      <div
-        className="w-56 h-56 rounded-3xl shadow-xl border-4 border-white flex items-center justify-center mb-4 transition-colors duration-500"
-        style={{ background: bg.color }}
-      >
-        <CharacterSvg skinColor={skin.color} hair={hair} outfitColor={outfit.color} outfitPattern={outfit.pattern} accessory={accessory} className="w-44 h-44" />
+      <div className="flex items-end justify-center gap-2 mb-4">
+        <div
+          className="w-56 h-56 rounded-3xl shadow-xl border-4 border-white flex items-center justify-center transition-colors duration-500"
+          style={{ background: bg.color }}
+        >
+          <CharacterSvg skinColor={skin.color} hair={hair} outfitColor={outfit.color} outfitPattern={outfit.pattern} accessory={accessory} className="w-44 h-44" />
+        </div>
+        {myAward && <TrophyCup tier={myAward.tier} size={72} />}
       </div>
+      {myAward && <div className="mb-4 flex justify-center w-full"><AwardPlaque tier={myAward.tier} name={myAward.name} count={myAward.count} generatedAt={myAward.generatedAt} compact /></div>}
 
       {/* Skin tone -- free, always available */}
       <div className="flex items-center gap-2 mb-8">

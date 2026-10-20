@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { CharacterSvg } from './AvatarCharacter';
 import { getHomeBackground } from './homeBackgrounds';
+import { useAward, AwardMedal, TrophyCup } from './Awards';
 import { SKIN_OPTIONS, HAIR_OPTIONS, BG_OPTIONS, ALL_OUTFITS, ALL_ACCESSORIES, AVATAR_DEFAULT_CONFIG, findAvatarOption } from './AvatarApp';
 
 // Tap a student's name anywhere -> see their Avatar. The looks come from ONE static file written by the
@@ -27,12 +28,14 @@ export function useAvatarLook(name) {
 // The drawn Avatar on its coloured square.
 export function AvatarThumb({ name, size = 72, className = '', look = null }) {
   const weekly = useAvatarLook(name);
+  const won = useAward({ name }); // the three students with the most trophies wear a small medal
   // `look`: the student's own, always-fresh look (kept on their profile); everyone else's comes from the weekly file
   const cfg = look && Object.keys(look).length ? { ...AVATAR_DEFAULT_CONFIG, ...look } : weekly;
   if (!cfg) return <div style={{ width: size, height: size }} className={className} />;
   const outfit = findAvatarOption(ALL_OUTFITS, cfg.outfit);
   return (
-    <div className={`rounded-2xl border-2 border-white shadow flex items-center justify-center flex-shrink-0 ${className}`} style={{ width: size, height: size, background: findAvatarOption(BG_OPTIONS, cfg.bg).color }}>
+    <div className={`relative rounded-2xl border-2 border-white shadow flex items-center justify-center flex-shrink-0 ${className}`} style={{ width: size, height: size, background: findAvatarOption(BG_OPTIONS, cfg.bg).color }}>
+      {won && <span className="absolute -right-2 -bottom-2 z-10 pointer-events-none"><AwardMedal tier={won.tier} size={Math.max(18, Math.round(size * 0.3))} /></span>}
       <CharacterSvg
         skinColor={findAvatarOption(SKIN_OPTIONS, cfg.skin).color}
         hair={findAvatarOption(HAIR_OPTIONS, cfg.hair)}
@@ -95,6 +98,7 @@ export function AvatarPeekModal({ name, onClose }) {
   const weeks = e ? extras.weeks[e.id] : null;
   const bg = getHomeBackground(cfg && cfg.homeBackground).image;
   const slots = (e && extras.slots[e.id]) || [];
+  const won = useAward({ name });
   return (
     <div
       className="fixed inset-0 z-[10050] flex flex-col items-start p-6"
@@ -105,6 +109,12 @@ export function AvatarPeekModal({ name, onClose }) {
       <div className="flex flex-col items-center w-44" onClick={(ev) => ev.stopPropagation()}>
         <AvatarThumb name={name} size={110} />
         <span className="mt-1 text-sm font-bold text-emerald-700 bg-white/85 backdrop-blur-sm px-2 py-0.5 rounded-xl shadow-sm text-center break-words max-w-full">{name} 🏡</span>
+        {won && (
+          <span className="mt-2 flex flex-col items-center bg-white/85 rounded-2xl px-2 py-1 shadow-sm">
+            <TrophyCup tier={won.tier} size={56} />
+            <span className="text-[11px] font-extrabold text-amber-800 text-center leading-tight">{won.award.my}</span>
+          </span>
+        )}
         <span className="mt-2 flex gap-2 text-sm font-bold">
           <span className="bg-white/85 px-2 py-0.5 rounded-full shadow-sm">🏆 {e ? e.trophies : 0}</span>
           <span className="bg-white/85 px-2 py-0.5 rounded-full shadow-sm">🌳 {weeks != null ? weeks : 0}</span>
