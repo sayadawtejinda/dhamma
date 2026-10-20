@@ -64,7 +64,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add public/weeklySnapshot.json public/classSnapshots public/contentSnapshots public/announcementsSnapshot.json public/avatarSnapshot.json public/scheduleSnapshot.json public/studentWeekly.json public/studentWeeklyKeys.json public/weeklyState.json public/rosterSnapshots public/studentHistory public/weekFiles public/todaySchedule.json public/badges.json public/badgesGiven.json public/festivalDeeds.json
+          git add public/weeklySnapshot.json public/classSnapshots public/contentSnapshots public/announcementsSnapshot.json public/avatarSnapshot.json public/scheduleSnapshot.json public/studentWeekly.json public/studentWeeklyKeys.json public/weeklyState.json public/rosterSnapshots public/studentHistory public/weekFiles public/todaySchedule.json public/badges.json public/badgesGiven.json public/festivalDeeds.json scripts/heartsCarry.json
           if git diff --cached --quiet; then
             echo "No change -- nothing to commit."
           else

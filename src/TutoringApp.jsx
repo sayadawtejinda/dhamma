@@ -11307,7 +11307,7 @@ function TrophyBoard({ role, targetStudentUid, studentProfile }) {
   }, [rankedList, role, targetStudentUid]);
 
   // From last week's snapshot -- see the tradeoff note above.
-  const myAttendedThisYear = trophyList.find(s => s.id === targetStudentUid)?.attendedThisYear || 0;
+  const myAttendedThisYear = (() => { const r = trophyList.find(s => s.id === targetStudentUid); return r?.attendedTotal ?? r?.attendedThisYear ?? 0; })(); // all years together: the new year takes no hearts away
   const heartsGivenSoFar = studentProfile?.heartsGivenCount || 0;
   const remainingHearts = role === 'student' ? Math.max(0, myAttendedThisYear - heartsGivenSoFar) : null;
 

@@ -263,6 +263,13 @@ async function main() {
     s.heartsFromCounts = { ...(s.heartsFromCounts || {}), Teacher_name: 'Teacher', Teacher_count: ((s.heartsFromCounts || {}).Teacher_count || 0) + 3 };
     console.log(`Teacher gave 3 hearts to ${s.name}`);
   }
+  // Hearts to give = every class attended, over ALL years (the year changing takes nothing away): each year's count is kept in a small file.
+  const CARRY_PATH = join(__dirname, 'heartsCarry.json');
+  let carry = {}; try { carry = JSON.parse(readFileSync(CARRY_PATH, 'utf8')); } catch (e) { /* first run */ }
+  const thisYear = String(now.getFullYear());
+  Object.entries(attendedById).forEach(([uid, n]) => { if (n > 0) (carry[uid] = carry[uid] || {})[thisYear] = n; });
+  writeFileSync(CARRY_PATH, JSON.stringify(carry));
+  const attendedAllYears = Object.fromEntries(Object.entries(carry).map(([uid, y]) => [uid, Object.values(y).reduce((a, b) => a + b, 0)]));
   const trophyList = students
     .filter(s => s.isActive === true)
     .map(s => ({
@@ -272,6 +279,7 @@ async function main() {
       heartsReceived: s.heartsReceived || 0,
       heartsFromCounts: s.heartsFromCounts || {},
       attendedThisYear: attendedById[s.id] || 0,
+      attendedTotal: attendedAllYears[s.id] || 0,
     }));
 
   // Class-wide month / year attendance totals for the Teacher Dashboard's
