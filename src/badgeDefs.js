@@ -47,7 +47,7 @@ export const BADGE_DEFS = [
   { id: 'hearts-5', group: 'heart', shape: 'heart', metal: 'bronze', icon: '💕', name: 'Warm Heart', desc: '5 hearts received' },
   { id: 'hearts-20', group: 'heart', shape: 'heart', metal: 'silver', icon: '💖', name: 'Dear Friend', desc: '20 hearts received' },
   { id: 'hearts-50', group: 'heart', shape: 'heart', metal: 'gold', icon: '💝', name: 'Beloved', desc: '50 hearts received' },
-  { id: 'hearts-100', group: 'heart', shape: 'heart', metal: 'gold', icon: '💗', name: 'Heart of Gold', desc: '100 hearts received' },
+  { id: 'hearts-100', group: 'heart', shape: 'heart', metal: 'gold', icon: '💗', name: 'Golden Heart', desc: '100 hearts received' },
   { id: 'hearts-200', group: 'heart', shape: 'burst', metal: 'gold', icon: '💞', name: 'Everyone\'s Friend', desc: '200 hearts received', master: true },
   { id: 'hearts-300', group: 'heart', shape: 'crown', metal: 'gold', icon: '💘', name: 'Heart Legend', desc: '300 hearts received', master: true },
   { id: 'hearts-500', group: 'heart', shape: 'crest', metal: 'gold', icon: '❤️', name: 'Heart Immortal', desc: '500 hearts received', master: true },

@@ -66,7 +66,7 @@ for (const st of students) {
   // Bodhi Tree: the level of THIS year's weeks, and a gold yearly badge for every finished year (from 2026 on)
   const yw = yearWeeksOf(st.id);
   const bodhi = levelForWeeks(yw[THIS_YEAR] || 0);
-  if (bodhi >= 0) got.push(`bodhi-level:${THIS_YEAR}:${bodhi}`);
+  for (let l = 0; l <= bodhi; l++) got.push(`bodhi-level:${THIS_YEAR}:${l}`); // every level reached counts as a badge of its own
   for (let y = 2026; y < THIS_YEAR; y++) { const l = levelForWeeks(yw[y] || 0); if (l >= 0) got.push(`bodhi-year:${y}:${l}`); }
   // weeks of coming to class, counted from 2026 on (earlier weeks are not counted)
   const weeksSince2026 = Object.entries(yw).filter(([y]) => Number(y) >= 2026).reduce((n, [, v]) => n + v, 0);

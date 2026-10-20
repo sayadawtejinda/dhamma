@@ -246,13 +246,14 @@ export function BadgeShelf({ name, profile = null, title = '🎖️ Badges', com
       list.sort((a, b) => ladderRank(a.id) - ladderRank(b.id));
     }
   });
+  const total = [...ladders.values()].reduce((n, l) => n + l.length, 0); // every single badge counts, each Bodhi level too
   const tops = [...ladders.values()].map(list => ({ ...list[list.length - 1], _ladder: ladderOf(list[0].id), _count: list.length }));
   const groups = compact ? [{ id: 'all-in-one', title: '', items: tops }] : BADGE_GROUPS.map(g => ({ ...g, items: tops.filter(b => b.group === g.id) })).filter(g => g.items.length > 0);
   const chip = 'bg-white/85 backdrop-blur-sm shadow rounded-2xl';
   return (
     <div className="mb-6 pb-16">
       <button type="button" onClick={toggle} className={`inline-flex items-center gap-2 ${chip} px-4 py-1.5 font-extrabold text-amber-900`}>
-        {title} <span className="text-sm font-bold text-amber-700">· {badges.length}</span> <span className="text-xs text-gray-500">{open ? '▲ hide' : '▼ show'}</span>
+        {title} <span className="text-sm font-bold text-amber-700">· {total}</span> <span className="text-xs text-gray-500">{open ? '▲ hide' : '▼ show'}</span>
       </button>
       {open && (
         <div className={compact ? 'mt-2 flex flex-wrap gap-1.5' : 'mt-2 flex flex-wrap items-start gap-x-4 gap-y-2'}>
@@ -261,7 +262,7 @@ export function BadgeShelf({ name, profile = null, title = '🎖️ Badges', com
               {!compact && <p className={`inline-block ${chip} px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-amber-800 mb-1`}>{g.title}</p>}
               <div className="flex flex-wrap gap-1.5">
                 {g.items.slice().sort((a, b) => (rank[a.metal] ?? 3) - (rank[b.metal] ?? 3)).map(b => (
-                  <button key={b.id} type="button" onClick={() => setPicked(picked === b._ladder ? null : b._ladder)} className={`relative flex flex-col items-center w-[66px] px-1 pt-1.5 pb-1 ${chip} focus:outline-none`} title={`${b.name} — ${b.desc}`}>
+                  <button key={b.id} type="button" onClick={() => setPicked(picked === b._ladder ? null : b._ladder)} className={`relative flex flex-col items-center w-[66px] px-1 pt-1.5 pb-1 ${chip} focus:outline-none ${picked === b._ladder ? 'ring-4 ring-amber-400 bg-amber-100' : ''}`} title={`${b.name} — ${b.desc}`}>
                     <BadgeSvg badge={b} size={compact ? 42 : 50} />
                     {b._count > 1 && <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-amber-600 text-white text-[10px] font-extrabold leading-[18px] text-center shadow">{b._count}</span>}
                     <span className="text-[9px] font-bold text-amber-900 text-center leading-tight mt-0.5 break-words">{b.name}</span>
@@ -271,7 +272,8 @@ export function BadgeShelf({ name, profile = null, title = '🎖️ Badges', com
             </div>
           ))}
           {picked && ladders.get(picked) && (
-            <div className={`w-full ${chip} px-2 py-2 flex flex-wrap gap-1.5 items-start`}>
+            <div className={`w-full ${chip} px-2 py-2 flex flex-wrap gap-1.5 items-start ring-2 ring-amber-300`}>
+              <p className="w-full text-[11px] font-extrabold text-amber-800">🎖️ {ladders.get(picked).length} badge{ladders.get(picked).length > 1 ? 's' : ''} earned — {ladders.get(picked)[ladders.get(picked).length - 1].name} is the highest</p>
               {ladders.get(picked).map(b => (
                 <div key={b.id} className="flex flex-col items-center w-[84px]" title={b.desc}>
                   <BadgeSvg badge={b} size={46} />

@@ -11481,7 +11481,8 @@ function BadgeApprovals({ students, sessions }) {
   const rows = (students || []).filter(s => s.isActive === true && s.name).map(s => ({ s, items: pendingFor(s), live: inClass(s) }))
     .filter(r => r.items.length > 0 && (!query.trim() || r.s.name.toLowerCase().includes(query.trim().toLowerCase()) || String(r.s.displayId || '') === query.trim()))
     .sort((a, b) => (b.live - a.live) || (b.items.length - a.items.length) || (a.s.name < b.s.name ? -1 : 1));
-  const totalPending = rows.reduce((n, r) => n + r.items.length, 0);
+  const countOf = (items) => items.reduce((n, it) => n + (it.ids ? it.ids.length : 1), 0); // every single badge counts (a ladder of 7 = 7)
+  const totalPending = rows.reduce((n, r) => n + countOf(r.items), 0);
 
   const give = async (s, items) => {
     setBusy(prev => ({ ...prev, [s.id]: true }));
@@ -11511,7 +11512,7 @@ function BadgeApprovals({ students, sessions }) {
                 <div key={s.id} className="bg-white rounded-lg border border-amber-100 p-3">
                   <div className="flex items-center justify-between gap-2 flex-wrap">
                     <p className="font-bold text-gray-800">{live && <span title="has a session open now">🟢 </span>}{s.name} <span className="text-xs font-semibold text-gray-400">ID {s.displayId}</span></p>
-                    <span className="text-xs font-bold text-amber-700">{items.length} waiting</span>
+                    <span className="text-xs font-bold text-amber-700">{countOf(items)} waiting</span>
                   </div>
                   <div className="flex items-center justify-between gap-2 mt-2 flex-wrap">
                     <p className="text-sm text-gray-700 min-w-0"><span className="font-bold">{next.award ? '🏅' : '🎖️'} {next.title}</span><span className="text-gray-500"> — {next.sub}</span></p>
