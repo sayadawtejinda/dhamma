@@ -1,5 +1,6 @@
 import React, { useEffect, useId, useState } from 'react';
 import { BADGE_GROUPS, badgeMeta } from './badgeDefs';
+import { LEVEL_BADGES_SVG } from './bodhiLevels';
 
 // The badge shelf: every badge a student has earned, drawn in rows at the bottom of their Home page (and shown when a friend
 // visits). Which badges each student has comes from ONE static file (public/badges.json, written weekly by
@@ -179,6 +180,10 @@ function Shape({ shape, fill, stroke, uid, m }) {
 
 export function BadgeSvg({ badge, size = 56 }) {
   const uid = useId().replace(/:/g, '');
+  // the Bodhi Tree level badges are the teacher's own artwork (see bodhiLevels.js)
+  if (badge.shape === 'bodhi') {
+    return <div style={{ width: size, height: size, filter: 'drop-shadow(0 2px 2px rgba(0,0,0,.35))' }} role="img" aria-label={badge.name} dangerouslySetInnerHTML={{ __html: LEVEL_BADGES_SVG[badge.level] }} />;
+  }
   const m = METALS[badge.metal] || METALS.gold;
   const gid = `bg-${uid}`;
   const centerY = badge.shape === 'rosette' ? 46 : badge.shape === 'scroll' ? 52 : 54;

@@ -5,6 +5,7 @@ import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BADGE_DEFS, dynamicBadge } from '../src/badgeDefs.js';
+import { levelForWeeks } from '../src/bodhiLevels.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', 'public');
 const readJson = (p) => { try { return JSON.parse(readFileSync(join(ROOT, p), 'utf8')); } catch (e) { return null; } };
@@ -48,6 +49,8 @@ for (const st of students) {
   const got = [];
   const at = (value, list) => list.forEach(([min, id]) => { if (value >= min) got.push(id); });
   at(st.trophyCount || 0, [[10, 'trophy-10'], [50, 'trophy-50'], [100, 'trophy-100'], [250, 'trophy-250']]);
+  const bodhi = levelForWeeks(weekly[st.id] || 0); // the current Bodhi Tree level (only the highest one is kept)
+  if (bodhi >= 0) got.push(`bodhi-level:${bodhi}`);
   at(weekly[st.id] || 0, [[10, 'weeks-10'], [25, 'weeks-25'], [50, 'weeks-50']]);
   at(st.heartsReceived || 0, [[10, 'hearts-10'], [50, 'hearts-50'], [100, 'hearts-100']]);
   const sh = shrine.get(n);

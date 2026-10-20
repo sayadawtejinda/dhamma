@@ -4,6 +4,8 @@
 //
 // shape: how the badge is drawn (every group has its own look); metal: bronze | silver | gold; icon: the picture in the middle.
 
+import { STAGE_NAMES, WEEK_MILESTONES } from './bodhiLevels.js';
+
 export const BADGE_GROUPS = [
   { id: 'trophy', title: 'Trophies' },
   { id: 'attend', title: 'Coming to class' },
@@ -82,6 +84,12 @@ export const BADGE_DEFS = [
 
 // one badge per Dhammaschool grade: finishing every chapter of the grade (id 'ds-grade:GRADE-3')
 export const dynamicBadge = (id) => {
+  // the student's current Bodhi Tree level (the ten titles the Bodhi Tree room already gives, drawn with the same artwork)
+  if (id.startsWith('bodhi-level:')) {
+    const i = Number(id.slice(12));
+    if (!(i >= 0 && i < STAGE_NAMES.length)) return null;
+    return { id, group: 'attend', shape: 'bodhi', level: i, metal: 'gold', icon: '', name: STAGE_NAMES[i], desc: `Bodhi Tree level ${i + 1} (${WEEK_MILESTONES[i]} weeks of coming to class)`, master: i === STAGE_NAMES.length - 1 };
+  }
   if (id.startsWith('ds-grade:')) {
     const g = id.slice(9);
     const label = g.replace(/^GRADE-?/i, 'Grade ') || g;
