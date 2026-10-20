@@ -59,7 +59,7 @@ for (const st of students) {
   const n = st.name;
   const got = [];
   const at = (value, list) => list.forEach(([min, id]) => { if (value >= min) got.push(id); });
-  at(st.trophyCount || 0, [[10, 'trophy-10'], [50, 'trophy-50'], [100, 'trophy-100'], [250, 'trophy-250']]);
+  at(st.trophyCount || 0, [[10, 'trophy-10'], [50, 'trophy-50'], [100, 'trophy-100'], [200, 'trophy-200'], [250, 'trophy-250'], [300, 'trophy-300'], [400, 'trophy-400'], [500, 'trophy-500']]);
   // Bodhi Tree: the level of THIS year's weeks, and a gold yearly badge for every finished year (from 2026 on)
   const yw = yearWeeksOf(st.id);
   const bodhi = levelForWeeks(yw[THIS_YEAR] || 0);
@@ -69,7 +69,7 @@ for (const st of students) {
   at(st.heartsReceived || 0, [[10, 'hearts-10'], [50, 'hearts-50'], [100, 'hearts-100']]);
   const sh = shrine.get(n);
   if (sh) {
-    at(sh.lotusCount || 0, [[100, 'lotus-100'], [500, 'lotus-500'], [1000, 'lotus-1000']]);
+    at(sh.lotusCount || 0, [[100, 'lotus-100'], [500, 'lotus-500'], [1000, 'lotus-1000'], [2000, 'lotus-2000'], [3000, 'lotus-3000'], [4000, 'lotus-4000'], [5000, 'lotus-5000']]);
     if ((sh.shrineVisitedFriends || []).length >= 10) got.push('shrine-visits');
     if ((sh.shrineGiftFriends || []).length >= 5) got.push('shrine-gifts');
     const trees = sh.natureWorld && sh.natureWorld.placedTrees ? Object.keys(sh.natureWorld.placedTrees).length : 0;

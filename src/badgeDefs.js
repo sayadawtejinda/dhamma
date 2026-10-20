@@ -27,7 +27,11 @@ export const BADGE_DEFS = [
   { id: 'trophy-10', group: 'trophy', shape: 'cup', metal: 'bronze', icon: '', name: 'Trophy Rookie', desc: '10 trophies' },
   { id: 'trophy-50', group: 'trophy', shape: 'cup', metal: 'silver', icon: '', name: 'Trophy Hunter', desc: '50 trophies' },
   { id: 'trophy-100', group: 'trophy', shape: 'cup', metal: 'gold', icon: '', name: 'Trophy Champion', desc: '100 trophies' },
+  { id: 'trophy-200', group: 'trophy', shape: 'shield', metal: 'gold', icon: '🏆', name: 'Trophy Hero', desc: '200 trophies' },
   { id: 'trophy-250', group: 'trophy', shape: 'crown', metal: 'gold', icon: '', name: 'Trophy Legend', desc: '250 trophies', master: true },
+  { id: 'trophy-300', group: 'trophy', shape: 'burst', metal: 'gold', icon: '🏆', name: 'Trophy Titan', desc: '300 trophies', master: true },
+  { id: 'trophy-400', group: 'trophy', shape: 'rosette', metal: 'gold', icon: '🏆', name: 'Trophy Grandmaster', desc: '400 trophies', master: true },
+  { id: 'trophy-500', group: 'trophy', shape: 'crest', metal: 'gold', icon: '💎', name: 'Trophy Immortal', desc: '500 trophies', master: true },
   // coming to class: football
   { id: 'weeks-10', group: 'attend', shape: 'soccer', metal: 'bronze', icon: '', name: 'Regular Player', desc: 'Came to class in 10 weeks' },
   { id: 'weeks-25', group: 'attend', shape: 'soccer', metal: 'silver', icon: '', name: 'Star Player', desc: 'Came to class in 25 weeks' },
@@ -40,6 +44,10 @@ export const BADGE_DEFS = [
   { id: 'lotus-100', group: 'shrine', shape: 'flower', metal: 'bronze', icon: '🪷', name: 'Lotus Seed', desc: '100 lotus flowers' },
   { id: 'lotus-500', group: 'shrine', shape: 'flower', metal: 'silver', icon: '🪷', name: 'Lotus Bloom', desc: '500 lotus flowers' },
   { id: 'lotus-1000', group: 'shrine', shape: 'flower', metal: 'gold', icon: '🪷', name: 'Lotus Master', desc: '1,000 lotus flowers', master: true },
+  { id: 'lotus-2000', group: 'shrine', shape: 'lotusgate', metal: 'gold', icon: '🪷', name: 'Golden Lotus', desc: '2,000 lotus flowers', master: true },
+  { id: 'lotus-3000', group: 'shrine', shape: 'badge8', metal: 'gold', icon: '🪷', name: 'Lotus Pond Keeper', desc: '3,000 lotus flowers', master: true },
+  { id: 'lotus-4000', group: 'shrine', shape: 'rosette', metal: 'gold', icon: '🪷', name: 'Lotus Sage', desc: '4,000 lotus flowers', master: true },
+  { id: 'lotus-5000', group: 'shrine', shape: 'crown', metal: 'gold', icon: '', name: 'Lotus Legend', desc: '5,000 lotus flowers', master: true },
   { id: 'shrine-visits', group: 'shrine', shape: 'feet', metal: 'silver', icon: '', name: 'Friendly Visitor', desc: 'Visited 10 friends\' Shrine Rooms' },
   { id: 'shrine-gifts', group: 'shrine', shape: 'gift', metal: 'gold', icon: '', name: 'Gift Giver', desc: 'Gave gifts to 5 friends' },
   // nature & avatar
