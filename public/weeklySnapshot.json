@@ -1807,7 +1807,11 @@
         "Teacher_name": "Teacher",
         "Teacher_count": 3
       },
-      "attendedThisYear": 30
+      "attendedThisYear": 30,
+      "partUnits": {
+        "cp": 7,
+        "bg": 4
+      }
     },
     {
       "id": "00802625881036049904",
@@ -1839,7 +1843,10 @@
         "Ryan_count": 1,
         "Amara_count": 1
       },
-      "attendedThisYear": 40
+      "attendedThisYear": 40,
+      "partUnits": {
+        "bg": 6
+      }
     },
     {
       "id": "00866228154468732206",
@@ -1856,7 +1863,10 @@
         "Xandra Han Tun_count": 1,
         "Alyson_count": 1
       },
-      "attendedThisYear": 31
+      "attendedThisYear": 31,
+      "partUnits": {
+        "bg": 6
+      }
     },
     {
       "id": "01149173619276614204",
@@ -1910,7 +1920,12 @@
         "Teacher_name": "Teacher",
         "Teacher_count": 3
       },
-      "attendedThisYear": 37
+      "attendedThisYear": 37,
+      "partUnits": {
+        "cp": 7,
+        "bg": 2,
+        "vl": 4
+      }
     },
     {
       "id": "02284119635381758800",
@@ -1949,7 +1964,12 @@
         "Teacher_name": "Teacher",
         "Teacher_count": 3
       },
-      "attendedThisYear": 37
+      "attendedThisYear": 37,
+      "partUnits": {
+        "cp": 7,
+        "bg": 1,
+        "vl": 3
+      }
     },
     {
       "id": "03322234451078013753",
@@ -1971,7 +1991,11 @@
         "Teacher_count": 3,
         "Teacher_name": "Teacher"
       },
-      "attendedThisYear": 39
+      "attendedThisYear": 39,
+      "partUnits": {
+        "bg": 5,
+        "vl": 3
+      }
     },
     {
       "id": "03891002505761493940",
@@ -1990,7 +2014,10 @@
         "Ryan_count": 1,
         "Amara_count": 1
       },
-      "attendedThisYear": 22
+      "attendedThisYear": 22,
+      "partUnits": {
+        "bg": 19
+      }
     },
     {
       "id": "03932052732596581115",
@@ -2050,7 +2077,12 @@
         "Kaung Myat Lin_count": 1,
         "Teacher_name": "Teacher"
       },
-      "attendedThisYear": 39
+      "attendedThisYear": 39,
+      "partUnits": {
+        "cp": 7,
+        "bg": 7,
+        "vl": 6
+      }
     },
     {
       "id": "04434286618963826725",
@@ -2133,7 +2165,11 @@
         "Teacher_count": 3,
         "Andrian Win_count": 1
       },
-      "attendedThisYear": 29
+      "attendedThisYear": 29,
+      "partUnits": {
+        "cp": 7,
+        "vl": 2
+      }
     },
     {
       "id": "06413950706311222670",
@@ -2159,7 +2195,11 @@
         "Teacher_name": "Teacher",
         "Ryan_count": 1
       },
-      "attendedThisYear": 38
+      "attendedThisYear": 38,
+      "partUnits": {
+        "bg": 6,
+        "vl": 4
+      }
     },
     {
       "id": "07035317489929864976",
@@ -2172,7 +2212,10 @@
         "Ryan_name": "Ryan",
         "Ryan_count": 1
       },
-      "attendedThisYear": 35
+      "attendedThisYear": 35,
+      "partUnits": {
+        "bg": 2
+      }
     },
     {
       "id": "07644816819740308841",
@@ -2193,7 +2236,10 @@
         "Amara_name": "Amara",
         "Teacher_name": "Teacher"
       },
-      "attendedThisYear": 39
+      "attendedThisYear": 39,
+      "partUnits": {
+        "bg": 10
+      }
     },
     {
       "id": "07869321494653277000",
@@ -2327,7 +2373,12 @@
         "Alyson_count": 2,
         "Teacher_count": 3
       },
-      "attendedThisYear": 32
+      "attendedThisYear": 32,
+      "partUnits": {
+        "cp": 7,
+        "bg": 5,
+        "vl": 3
+      }
     },
     {
       "id": "09929444368870187789",
@@ -2403,7 +2454,10 @@
         "Teacher_count": 3,
         "Sarah_name": "Sarah"
       },
-      "attendedThisYear": 56
+      "attendedThisYear": 56,
+      "partUnits": {
+        "bg": 5
+      }
     },
     {
       "id": "11171738439920447327",
@@ -2467,7 +2521,10 @@
         "Teacher_name": "Teacher",
         "Teacher_count": 3
       },
-      "attendedThisYear": 36
+      "attendedThisYear": 36,
+      "partUnits": {
+        "vl": 1
+      }
     },
     {
       "id": "11387669167230724182",
@@ -2508,7 +2565,10 @@
         "Ryan_count": 1,
         "Sarah_count": 15
       },
-      "attendedThisYear": 59
+      "attendedThisYear": 59,
+      "partUnits": {
+        "bg": 5
+      }
     },
     {
       "id": "12107057628683538624",
@@ -2557,7 +2617,12 @@
         "Teacher_count": 3,
         "Teacher_name": "Teacher"
       },
-      "attendedThisYear": 29
+      "attendedThisYear": 29,
+      "partUnits": {
+        "cp": 7,
+        "bg": 6,
+        "vl": 1
+      }
     },
     {
       "id": "12309875323100516098",
@@ -2631,7 +2696,12 @@
         "Ryan_name": "Ryan",
         "Teacher_count": 3
       },
-      "attendedThisYear": 39
+      "attendedThisYear": 39,
+      "partUnits": {
+        "cp": 7,
+        "bg": 8,
+        "vl": 11
+      }
     },
     {
       "id": "12713258776130177393",
@@ -2657,7 +2727,12 @@
         "Teacher_name": "Teacher",
         "Teacher_count": 3
       },
-      "attendedThisYear": 35
+      "attendedThisYear": 35,
+      "partUnits": {
+        "cp": 7,
+        "bg": 9,
+        "vl": 2
+      }
     },
     {
       "id": "12798861857420230640",
@@ -2670,7 +2745,11 @@
         "Teacher_count": 3,
         "Kaung Myat Lin_name": "Kaung Myat Lin"
       },
-      "attendedThisYear": 37
+      "attendedThisYear": 37,
+      "partUnits": {
+        "cp": 7,
+        "vl": 1
+      }
     },
     {
       "id": "13244126480807031250",
@@ -2702,7 +2781,12 @@
         "Kaung Myat Lin_name": "Kaung Myat Lin",
         "Kaung Myat Lin_count": 7
       },
-      "attendedThisYear": 30
+      "attendedThisYear": 30,
+      "partUnits": {
+        "cp": 7,
+        "bg": 6,
+        "vl": 4
+      }
     },
     {
       "id": "13614081013479265779",
@@ -2777,7 +2861,12 @@
         "daniel the chin_name": "daniel the chin",
         "daniel the chin_count": 1
       },
-      "attendedThisYear": 34
+      "attendedThisYear": 34,
+      "partUnits": {
+        "cp": 7,
+        "bg": 6,
+        "vl": 2
+      }
     },
     {
       "id": "15582281378698029156",
@@ -2824,7 +2913,11 @@
         "Teacher_name": "Teacher",
         "Ryan_name": "Ryan"
       },
-      "attendedThisYear": 30
+      "attendedThisYear": 30,
+      "partUnits": {
+        "cp": 7,
+        "bg": 5
+      }
     },
     {
       "id": "16330921956975916136",
@@ -2839,7 +2932,11 @@
         "Caran Zay Lynn_name": "Caran Zay Lynn",
         "Teacher_name": "Teacher"
       },
-      "attendedThisYear": 34
+      "attendedThisYear": 34,
+      "partUnits": {
+        "cp": 7,
+        "bg": 3
+      }
     },
     {
       "id": "16475607144557267157",
@@ -2850,7 +2947,10 @@
         "Teacher_name": "Teacher",
         "Teacher_count": 3
       },
-      "attendedThisYear": 35
+      "attendedThisYear": 35,
+      "partUnits": {
+        "bg": 5
+      }
     },
     {
       "id": "16685285020362320583",

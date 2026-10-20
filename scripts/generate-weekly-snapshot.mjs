@@ -270,8 +270,14 @@ async function main() {
   Object.entries(attendedById).forEach(([uid, n]) => { if (n > 0) (carry[uid] = carry[uid] || {})[thisYear] = n; });
   writeFileSync(CARRY_PATH, JSON.stringify(carry));
   const attendedAllYears = Object.fromEntries(Object.entries(carry).map(([uid, y]) => [uid, Object.values(y).reduce((a, b) => a + b, 0)]));
-  // Consonant Practice (Part 1): how many of its 7 cups the teacher has approved (the Lesson Bank unit count on the student's record)
-  const consonantDoneOf = (s) => Math.max(0, ...Object.entries(s.completedUnits || {}).filter(([k]) => /Reading Myanmar_consonantpractice$/.test(k)).map(([, v]) => Number(v) || 0));
+  // The teacher-approved cups of the three Reading Myanmar parts (Lesson Bank unit counts on the student's record): cp = Consonant Practice (7),
+  // bg = Burmese Consonant Game (19), vl = Myanmar Vowels (Basic 8 + Pro 3 = 11). The badges read these from the weekly file.
+  const partUnitsOf = (s) => {
+    const cu = s.completedUnits || {}; const get = (part) => Math.max(0, ...Object.entries(cu).filter(([k]) => k.endsWith(`Reading Myanmar_${part}`)).map(([, v]) => Number(v) || 0));
+    const u = { cp: get('consonantpractice'), bg: get('burmesegame'), vl: get('vowelslearning') };
+    Object.keys(u).forEach(k => { if (!u[k]) delete u[k]; });
+    return u;
+  };
   const trophyList = students
     .filter(s => s.isActive === true)
     .map(s => ({
@@ -282,7 +288,7 @@ async function main() {
       heartsFromCounts: s.heartsFromCounts || {},
       attendedThisYear: attendedById[s.id] || 0,
       attendedTotal: attendedAllYears[s.id] || 0,
-      ...(consonantDoneOf(s) > 0 ? { consonantDone: consonantDoneOf(s) } : {}),
+      ...(Object.keys(partUnitsOf(s)).length ? { partUnits: partUnitsOf(s) } : {}),
     }));
 
   // Class-wide month / year attendance totals for the Teacher Dashboard's
