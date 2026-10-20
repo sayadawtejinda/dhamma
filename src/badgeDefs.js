@@ -64,8 +64,8 @@ export const BADGE_DEFS = [
   { id: 'nature-15', group: 'nature', shape: 'tree', metal: 'silver', icon: '', name: 'Tree Tender', desc: 'Planted 15 trees' },
   { id: 'nature-12', group: 'nature', shape: 'tree', metal: 'gold', icon: '', name: 'Forest Keeper', desc: 'Planted 30 trees', master: true },
   { id: 'nature-25', group: 'nature', shape: 'leaf', metal: 'gold', icon: '🌳', name: 'Grove Guardian', desc: 'Planted 60 trees', master: true },
-  { id: 'avatar-10', group: 'nature', shape: 'shirt', metal: 'silver', icon: '', name: 'Stylist', desc: 'Owns 20 Avatar items' },
-  { id: 'avatar-25', group: 'nature', shape: 'shirt', metal: 'gold', icon: '', name: 'Fashion Star', desc: 'Owns 35 Avatar items', master: true },
+  { id: 'avatar-10', group: 'nature', shape: 'shirt', metal: 'silver', icon: '', name: 'Stylist', desc: 'Got 10 Avatar items' },
+  { id: 'avatar-25', group: 'nature', shape: 'shirt', metal: 'gold', icon: '', name: 'Fashion Star', desc: 'Got 20 Avatar items', master: true },
   // poems: singing
   { id: 'poems-10', group: 'poems', shape: 'music', metal: 'bronze', icon: '', name: 'Little Singer', desc: 'Recited 10 poems' },
   { id: 'poems-25', group: 'poems', shape: 'music', metal: 'silver', icon: '', name: 'Sweet Voice', desc: 'Recited 25 poems' },

@@ -78,8 +78,10 @@ for (const st of students) {
     const trees = nw.placedTrees ? Object.keys(nw.placedTrees).length : 0;
     at(trees, [[8, 'nature-5'], [15, 'nature-15'], [30, 'nature-12'], [60, 'nature-25']]);
     const owned = new Set();
-    Object.entries(sh.avatarOwned || {}).forEach(([cat, arr]) => (Array.isArray(arr) ? arr : []).forEach(x => owned.add(`${cat}:${x}`)));
-    at(owned.size, [[20, 'avatar-10'], [35, 'avatar-25']]);
+    // items the student has GOT (each one once -- wearing one again does not count), without the free starter item of each kind
+    const FREE = new Set(['hair:short-black', 'outfit:blue', 'accessory:none', 'bg:sky', 'homeBackground:default']);
+    Object.entries(sh.avatarOwned || {}).forEach(([cat, arr]) => (Array.isArray(arr) ? arr : []).forEach(x => { if (!FREE.has(`${cat}:${x}`)) owned.add(`${cat}:${x}`); }));
+    at(owned.size, [[10, 'avatar-10'], [20, 'avatar-25']]);
   }
   const po = poems.get(n);
   if (po) {
