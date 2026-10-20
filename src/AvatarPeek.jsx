@@ -36,7 +36,7 @@ export function AvatarThumb({ name, size = 72, className = '', look = null }) {
   return (
     <div className={`relative rounded-2xl border-2 border-white shadow flex items-center justify-center flex-shrink-0 ${className}`} style={{ width: size, height: size, background: findAvatarOption(BG_OPTIONS, cfg.bg).color }}>
       {won.map(w => (
-        <span key={w.kind} className={`absolute -bottom-2 z-10 pointer-events-none ${w.kind === 'holy' ? '-left-2' : '-right-2'}`}><AwardMedal kind={w.kind} tier={w.tier} size={Math.max(18, Math.round(size * 0.3))} /></span>
+        <span key={w.kind} className={`absolute z-10 pointer-events-none ${w.kind === 'holy' ? '-bottom-2 -left-2' : w.kind === 'joy' ? '-top-3 -right-2' : '-bottom-2 -right-2'}`}><AwardMedal kind={w.kind} tier={w.tier} size={Math.max(18, Math.round(size * 0.3))} /></span>
       ))}
       <CharacterSvg
         skinColor={findAvatarOption(SKIN_OPTIONS, cfg.skin).color}

@@ -16,6 +16,14 @@ export const HOLY_AWARDS = [
   { tier: 3, metal: 'bronze', en: 'Devoted Holy Award', emoji: '🥉' },
 ];
 
+// For the three students who came to class most often this year: a happy sun (school is a joy, learning is a joy).
+export const JOY_AWARDS = [
+  { tier: 1, metal: 'gold', en: 'Radiant Joy Award', emoji: '🥇' },
+  { tier: 2, metal: 'silver', en: 'Cheerful Heart Award', emoji: '🥈' },
+  { tier: 3, metal: 'bronze', en: 'Happy Learner Award', emoji: '🥉' },
+];
+const LISTS = { trophy: AWARDS, holy: HOLY_AWARDS, joy: JOY_AWARDS };
+
 const METALS = {
   gold: { light: '#fff6b0', mid: '#f5c518', dark: '#a87a06', edge: '#7a5600', plate: ['#fff1a6', '#e8b923', '#c99710'] },
   silver: { light: '#ffffff', mid: '#cdd3da', dark: '#7d8791', edge: '#56606a', plate: ['#ffffff', '#cfd5dc', '#a2abb5'] },
@@ -37,26 +45,31 @@ const loadTop = () => {
       const holy = ((shrine && shrine.docs) || []).filter(d => (d.studentName || d.id) && (d.lotusCount || 0) > 0)
         .sort((a, b) => (b.lotusCount || 0) - (a.lotusCount || 0)).slice(0, 3)
         .map((d, i) => ({ name: d.studentName || d.id, count: d.lotusCount || 0, tier: i + 1 }));
-      return { trophy, holy, generatedAt: (snap && snap.generatedAt) || (shrine && shrine.generatedAt) || null };
-    }).catch(() => { topPromise = null; return { trophy: [], holy: [], generatedAt: null }; });
+      const joy = ((snap && snap.attendanceRankedList) || []).filter(s => !s.isOffline && (s.attended || 0) > 0)
+        .sort((a, b) => (b.attended || 0) - (a.attended || 0)).slice(0, 3)
+        .map((s, i) => ({ id: s.id, name: s.name, count: s.attended || 0, tier: i + 1 }));
+      return { trophy, holy, joy, generatedAt: (snap && snap.generatedAt) || (shrine && shrine.generatedAt) || null };
+    }).catch(() => { topPromise = null; return { trophy: [], holy: [], joy: [], generatedAt: null }; });
   }
   return topPromise;
 };
 
 export function useTopThree() {
-  const [data, setData] = useState({ trophy: [], holy: [], generatedAt: null });
+  const [data, setData] = useState({ trophy: [], holy: [], joy: [], generatedAt: null });
   useEffect(() => { let off = false; loadTop().then(d => { if (!off) setData(d); }); return () => { off = true; }; }, []);
   return data;
 }
 
 // Every award one student holds: [{ kind: 'trophy' | 'holy', tier, name, count, info, generatedAt }]
 export function useAwards({ name, id } = {}) {
-  const { trophy, holy, generatedAt } = useTopThree();
+  const { trophy, holy, joy, generatedAt } = useTopThree();
   const list = [];
   const t = trophy.find(s => (id && s.id === id) || (name && s.name === name));
   if (t) list.push({ kind: 'trophy', tier: t.tier, name: t.name, count: t.count, info: AWARDS[t.tier - 1], generatedAt });
   const h = name ? holy.find(s => s.name === name) : null;
   if (h) list.push({ kind: 'holy', tier: h.tier, name: h.name, count: h.count, info: HOLY_AWARDS[h.tier - 1], generatedAt });
+  const j = (joy || []).find(s => (id && s.id === id) || (name && s.name === name));
+  if (j) list.push({ kind: 'joy', tier: j.tier, name: j.name, count: j.count, info: JOY_AWARDS[j.tier - 1], generatedAt });
   return list;
 }
 
@@ -145,13 +158,54 @@ export function DhammaWheel({ tier = 1, size = 96, className = '' }) {
   );
 }
 
+// A smiling sun: rays all around, a round face with eyes, rosy cheeks and a smile, on a small stand.
+export function JoySun({ tier = 1, size = 96, className = '' }) {
+  const m = METALS[JOY_AWARDS[tier - 1].metal];
+  const gid = `sun-${tier}`;
+  const rays = Array.from({ length: 12 }, (_, i) => i * 30);
+  return (
+    <svg viewBox="0 0 100 112" width={size} height={size * 1.12} className={className} role="img" aria-label={JOY_AWARDS[tier - 1].en}>
+      <defs>
+        <radialGradient id={`${gid}-f`} cx="0.35" cy="0.3" r="0.85">
+          <stop offset="0" stopColor={m.light} /><stop offset="0.55" stopColor={m.mid} /><stop offset="1" stopColor={m.dark} />
+        </radialGradient>
+        <linearGradient id={`${gid}-s`} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stopColor={m.dark} /><stop offset="0.4" stopColor={m.light} /><stop offset="1" stopColor={m.dark} />
+        </linearGradient>
+        <radialGradient id={`${gid}-g`} cx="0.5" cy="0.5" r="0.5">
+          <stop offset="0" stopColor="#fff8c8" stopOpacity="0.85" /><stop offset="1" stopColor="#fff8c8" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+      <circle cx="50" cy="48" r="47" fill={`url(#${gid}-g)`} />
+      <g transform="translate(50 48)">
+        {rays.map(a => (
+          <path key={a} transform={`rotate(${a})`} d="M-6 -30 L0 -46 L6 -30 Z" fill={`url(#${gid}-f)`} stroke={m.edge} strokeWidth="1.2" strokeLinejoin="round" />
+        ))}
+        <circle r="31" fill={`url(#${gid}-f)`} stroke={m.edge} strokeWidth="2.4" />
+        <circle r="26" fill="none" stroke="#fff" strokeOpacity="0.45" strokeWidth="1.5" />
+        <ellipse cx="-10" cy="-7" rx="3.6" ry="4.8" fill="#3b2a0c" />
+        <ellipse cx="10" cy="-7" rx="3.6" ry="4.8" fill="#3b2a0c" />
+        <circle cx="-9" cy="-9" r="1.3" fill="#fff" /><circle cx="11" cy="-9" r="1.3" fill="#fff" />
+        <ellipse cx="-17" cy="6" rx="5" ry="3.2" fill="#ff8a80" fillOpacity="0.7" />
+        <ellipse cx="17" cy="6" rx="5" ry="3.2" fill="#ff8a80" fillOpacity="0.7" />
+        <path d="M-13 6 Q0 24 13 6" fill="#7a1f1f" stroke="#3b2a0c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M-8 11 Q0 17 8 11" fill="#ff7b7b" />
+      </g>
+      <path d="M34 98 L66 98 L72 110 L28 110 Z" fill={`url(#${gid}-s)`} stroke={m.edge} strokeWidth="1.6" strokeLinejoin="round" />
+      <rect x="44" y="92" width="12" height="7" fill={m.mid} stroke={m.edge} strokeWidth="1.2" />
+    </svg>
+  );
+}
+
 export function AwardEmblem({ kind, tier, size }) {
-  return kind === 'holy' ? <DhammaWheel tier={tier} size={size} /> : <TrophyCup tier={tier} size={size} />;
+  if (kind === 'holy') return <DhammaWheel tier={tier} size={size} />;
+  if (kind === 'joy') return <JoySun tier={tier} size={size} />;
+  return <TrophyCup tier={tier} size={size} />;
 }
 
 // a small medal (with ribbon) for the corner of an Avatar picture; the holy one carries a tiny wheel
 export function AwardMedal({ kind = 'trophy', tier = 1, size = 26 }) {
-  const list = kind === 'holy' ? HOLY_AWARDS : AWARDS;
+  const list = LISTS[kind] || AWARDS;
   const m = METALS[list[tier - 1].metal];
   const gid = `medal-${kind}-${tier}`;
   return (
@@ -161,10 +215,16 @@ export function AwardMedal({ kind = 'trophy', tier = 1, size = 26 }) {
           <stop offset="0" stopColor={m.light} /><stop offset="0.55" stopColor={m.mid} /><stop offset="1" stopColor={m.dark} />
         </radialGradient>
       </defs>
-      <path d="M9 0 L20 22 L14 24 L2 2 Z" fill={kind === 'holy' ? '#b9770e' : '#c0392b'} /><path d="M31 0 L20 22 L26 24 L38 2 Z" fill={kind === 'holy' ? '#e08e0b' : '#e74c3c'} />
+      <path d="M9 0 L20 22 L14 24 L2 2 Z" fill={kind === 'holy' ? '#b9770e' : kind === 'joy' ? '#e67e22' : '#c0392b'} /><path d="M31 0 L20 22 L26 24 L38 2 Z" fill={kind === 'holy' ? '#e08e0b' : kind === 'joy' ? '#f5a623' : '#e74c3c'} />
       <circle cx="20" cy="33" r="15" fill={`url(#${gid})`} stroke={m.edge} strokeWidth="2" />
       <circle cx="20" cy="33" r="10.5" fill="none" stroke={m.edge} strokeOpacity="0.55" strokeWidth="1.2" />
-      {kind === 'holy' ? (
+      {kind === 'joy' ? (
+        <g transform="translate(20 33)" fill="none" stroke="#fffbe0" strokeLinecap="round">
+          {Array.from({ length: 8 }, (_, i) => <line key={i} x1="0" y1="-8" x2="0" y2="-11" strokeWidth="1.6" transform={`rotate(${i * 45})`} />)}
+          <circle cx="-2.8" cy="-1.5" r="1.1" fill="#fffbe0" stroke="none" /><circle cx="2.8" cy="-1.5" r="1.1" fill="#fffbe0" stroke="none" />
+          <path d="M-4 2 Q0 6.5 4 2" strokeWidth="1.5" />
+        </g>
+      ) : kind === 'holy' ? (
         <g transform="translate(20 33)" stroke="#fffbe0" strokeWidth="1.6" strokeLinecap="round" fill="none">
           {Array.from({ length: 8 }, (_, i) => <line key={i} x1="0" y1="-3" x2="0" y2="-8.5" transform={`rotate(${i * 45})`} />)}
           <circle r="2.2" fill="#fffbe0" stroke="none" />
@@ -183,7 +243,7 @@ export function AwardPlaque({ award, compact = false }) {
   const { kind, tier, name, count, info, generatedAt } = award;
   const m = METALS[info.metal];
   const engraved = { color: '#3b2a0c', textShadow: '0 1px 0 rgba(255,255,255,.65), 0 -1px 0 rgba(0,0,0,.25)' };
-  const what = kind === 'holy' ? `🪷 ${count} lotus flowers` : `🏆 ${count} trophies`;
+  const what = kind === 'holy' ? `🪷 ${count} lotus flowers` : kind === 'joy' ? `☀️ ${count} classes` : `🏆 ${count} trophies`;
   return (
     <div
       className="rounded-2xl p-1.5 shadow-xl w-full"

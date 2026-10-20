@@ -9812,7 +9812,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                   >
                     <AvatarThumb name={studentProfile?.name} look={studentProfile?.avatarLook} size={96} />
                   </button>
-                  {myAwards.length > 0 && <span className="mt-1 flex items-end justify-center gap-1">{myAwards.map(w => <AwardEmblem key={w.kind} kind={w.kind} tier={w.tier} size={40} />)}</span>}
+                  {myAwards.length > 0 && <span className="mt-1 flex items-end justify-center gap-1">{myAwards.map(w => <AwardEmblem key={w.kind} kind={w.kind} tier={w.tier} size={myAwards.length > 2 ? 32 : 40} />)}</span>}
                   <span className="mt-1 text-sm font-bold text-emerald-700 bg-white/85 backdrop-blur-sm px-2 py-0.5 rounded-xl shadow-sm text-center break-words max-w-full">{studentProfile?.name} 🏡</span>
                 </div>
                   <div>

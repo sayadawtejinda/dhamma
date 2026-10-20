@@ -9,6 +9,7 @@ import OnlineStatusWidget, { loadRosterSnapshot } from './OnlineStatusWidget';
 import TeacherGiftBox from './TeacherGiftBox';
 import { ownedAfterGift } from './festivals';
 import { spawnFlyingCoins, trackLastClickPoint } from './flyingCoins';
+import { useAwards, AwardPlaque } from './Awards';
 import bigBellSound from '../audio/big-bellburmese.mp3';
 import windChimesSound from '../audio/wind-chimes.mp3';
 import meditationBowlsSound from '../audio/meditation-bowls.mp3';
@@ -819,6 +820,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   const isTeacherPreview = !entryRequest?.studentUid;
   const studentUid = entryRequest?.studentUid;
   const studentName = entryRequest?.studentName || 'Friend';
+  const holyAward = useAwards({ name: entryRequest?.studentName }).find(w => w.kind === 'holy');
   const [loading, setLoading] = useState(true);
   // Teacher preview mode has no roster doc to load from (nothing persists),
   // so it starts with enough coins to freely try every shop item instead of
@@ -1790,6 +1792,9 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
           app (Merit Shop currency). Positioned at its own default top-2
           spot, so the app's own coin/button column below is pushed down
           to top-16 to leave it room. */}
+      {holyAward && !isTeacherPreview && (
+        <div className="fixed left-2 top-[4.5rem] z-40 w-32 sm:w-36"><AwardPlaque award={holyAward} compact /></div>
+      )}
       <OnlineStatusWidget
         rosterPath={SHRINE_ROSTER_PATH}
         studentName={isTeacherPreview ? null : studentName}

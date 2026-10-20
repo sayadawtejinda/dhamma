@@ -8,6 +8,7 @@ import { appId } from './firebaseConfig';
 import birdsChirpingSound from '../audio/birds-chirping.mp3';
 import chirpingBirdsSound from '../audio/chirping-birds.mp3';
 import OnlineStatusWidget from './OnlineStatusWidget';
+import { useAwards, AwardPlaque } from './Awards';
 import { rosterDocRefByUid, migrateNameKeyedRosterDoc } from './studentRosterIdentity';
 
 // A fully independent app (deliberately NOT part of TutoringApp.jsx) --
@@ -667,6 +668,7 @@ export default function BodhiTreeApp({ entryRequest, onExit }) {
   const isTeacherMode = entryRequest?.mode === 'teacher';
   const studentUid = entryRequest?.studentUid;
   const studentName = entryRequest?.studentName || 'Friend';
+  const joyAward = useAwards({ id: entryRequest?.studentUid, name: entryRequest?.studentName }).find(w => w.kind === 'joy');
   const [loading, setLoading] = useState(true);
   const [treeAgeDays, setTreeAgeDays] = useState(0);
   const [showWater, setShowWater] = useState(false);
@@ -866,6 +868,9 @@ export default function BodhiTreeApp({ entryRequest, onExit }) {
         🏡
       </button>
 
+      {joyAward && !isTeacherMode && (
+        <div className="fixed right-2 top-16 z-40 w-32 sm:w-36"><AwardPlaque award={joyAward} compact /></div>
+      )}
       {!isTeacherMode && (
         <>
           <OnlineStatusWidget
