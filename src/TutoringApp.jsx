@@ -6,7 +6,7 @@ import { BadgeShelf } from './Badges';
 import BadgeCeremony from './BadgeCeremony';
 import { useBadgeData } from './badgeData';
 import { useTopThree, awardsFor, AWARDS, HOLY_AWARDS, JOY_AWARDS } from './Awards';
-import { badgeMeta } from './badgeDefs';
+import { badgeMeta, BADGE_DEFS, BADGE_GROUPS } from './badgeDefs';
 import ParamiReportEditor from './ParamiReportEditor';
 import { startLiveWatchListener, setLiveWatch, useLiveWatch, liveWatchUntilMs } from './liveWatch';
 import { SPECIAL_AWARD_ITEMS } from './festivals';
@@ -11443,6 +11443,9 @@ function BadgeApprovals({ students, sessions }) {
   const [expanded, setExpanded] = useState({});
   const [busy, setBusy] = useState({});
   const [limit, setLimit] = useState(20);
+  const [manualQuery, setManualQuery] = useState('');
+  const [manualId, setManualId] = useState('');
+  const [manualBadge, setManualBadge] = useState('');
   const data = useBadgeData();
   const top = useTopThree();
   if (!data) return null;
@@ -11518,6 +11521,47 @@ function BadgeApprovals({ students, sessions }) {
             })}
           </div>
           {rows.length > limit && <button onClick={() => setLimit(l => l + 20)} className="mt-3 text-sm font-semibold text-amber-800 underline">Show more students</button>}
+
+          {/* any badge to any student, by hand (a special recognition, or a test student who has not earned anything yet) */}
+          <div className="mt-4 pt-3 border-t border-amber-200">
+            <p className="text-sm font-bold text-amber-900 mb-2">➕ Give any badge by hand</p>
+            <input value={manualQuery} onChange={e => { setManualQuery(e.target.value); setManualId(''); }} placeholder="Student name or Student ID" className="w-full mb-2 px-3 py-2 rounded-lg border border-amber-300 text-sm" />
+            {manualQuery.trim() && !manualId && (
+              <div className="mb-2 space-y-1">
+                {(students || []).filter(s => s.name && (s.name.toLowerCase().includes(manualQuery.trim().toLowerCase()) || String(s.displayId || '') === manualQuery.trim())).slice(0, 6).map(s => (
+                  <button key={s.id} onClick={() => { setManualId(s.id); setManualQuery(s.name); }} className="block w-full text-left px-3 py-1.5 rounded-lg bg-white border border-amber-100 hover:bg-amber-100 text-sm">{s.name} <span className="text-xs text-gray-400">ID {s.displayId} {s.isActive === true ? '' : '(not active)'}</span></button>
+                ))}
+              </div>
+            )}
+            {manualId && (
+              <div className="flex flex-wrap items-center gap-2">
+                <select value={manualBadge} onChange={e => setManualBadge(e.target.value)} className="px-2 py-2 rounded-lg border border-amber-300 text-sm max-w-full">
+                  <option value="">Choose a badge…</option>
+                  {BADGE_GROUPS.map(g => (
+                    <optgroup key={g.id} label={g.title}>
+                      {BADGE_DEFS.filter(b => b.group === g.id).map(b => <option key={b.id} value={`b:${b.id}`}>{b.name} — {b.desc}</option>)}
+                    </optgroup>
+                  ))}
+                  <optgroup label="Top-three honours (the ceremony; the honour itself shows only while the student really holds that place)">
+                    {['trophy', 'holy', 'joy'].flatMap(k => [1, 2, 3].map(t => <option key={`${k}${t}`} value={`a:${k}:${t}`}>{AWARD_LISTS[k][t - 1].en} (place {t})</option>))}
+                  </optgroup>
+                </select>
+                <button
+                  disabled={!manualBadge}
+                  onClick={async () => {
+                    const st = (students || []).find(x => x.id === manualId);
+                    if (!st || !manualBadge) return;
+                    const [type, a, b] = manualBadge.split(':');
+                    const given = st.badgesGiven || {};
+                    if (type === 'b' && given[a + (b ? ':' + b : '')]) { alert('This badge was already given to this student.'); return; }
+                    await give(st, [type === 'a' ? { award: true, kind: a, tier: Number(b) } : { award: false, id: manualBadge.slice(2) }]);
+                    setManualBadge('');
+                  }}
+                  className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold disabled:opacity-40"
+                >✅ Give</button>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
