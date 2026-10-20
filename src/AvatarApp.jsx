@@ -223,8 +223,11 @@ export default function AvatarApp({ entryRequest, onExit }) {
   // dashboard; nameChangeCount only rises once the teacher actually
   // approves it (see handleApproveNameChange in TutoringApp.jsx), so a
   // denied or cancelled request doesn't raise the bar for next time.
-  const nameChangeThreshold = studentInfo.nameChangeCount > 0 ? 500 : 50;
-  const canRequestNameChange = lotusCount >= nameChangeThreshold;
+  // Lotus flowers earn name changes in total: 50 -> 1, 500 -> 2, 1000 -> 3, 2000 -> 4, 3000 -> 5, 4000 -> 6, 5000 -> 7.
+  const NAME_CHANGE_STEPS = [50, 500, 1000, 2000, 3000, 4000, 5000];
+  const nameChangesEarned = NAME_CHANGE_STEPS.filter(n => lotusCount >= n).length;
+  const nameChangeThreshold = NAME_CHANGE_STEPS[Math.min(studentInfo.nameChangeCount, NAME_CHANGE_STEPS.length - 1)];
+  const canRequestNameChange = nameChangesEarned > studentInfo.nameChangeCount;
 
   const handleSubmitRename = () => {
     const trimmed = renameInput.trim();
