@@ -4,6 +4,7 @@ import { listenLiveOrOnce, isOnlineStatusDay } from './presenceDay';
 import { useLiveWatch } from './liveWatch';
 import { AvatarPeekModal } from './AvatarPeek';
 import { X } from 'lucide-react';
+import { HolyRankBadge } from './Awards';
 import { db } from './firebase';
 
 // One shared "who's online" pill + panel, used the same way in every app in
@@ -53,7 +54,7 @@ export const loadRosterSnapshot = (rosterPath) => {
   return rosterSnapshotCache.get(rosterPath);
 };
 
-export function useOnlineRoster(rosterPath, filterDocs, lastSeenField = 'lastSeen', isTeacherMode = false) {
+export function useOnlineRoster(rosterPath, filterDocs, lastSeenField = 'lastSeen', isTeacherMode = false, rankField = null) {
   const liveWatchOn = useLiveWatch();
   const [rosterDocs, setRosterDocs] = useState([]);
   const [nowTick, setNowTick] = useState(Date.now());
@@ -106,7 +107,11 @@ export function useOnlineRoster(rosterPath, filterDocs, lastSeenField = 'lastSee
   const onlineCount = roster.filter(s => s._isOnlineNow).length;
   const warningCount = roster.filter(s => s._isWarning).length;
 
-  return { weeklyRosterList, onlineCount, warningCount };
+  // `rankField` (e.g. the Shrine Room's lotus count): EVERY student, the highest first, instead of just who was active this week
+  const rankedAll = rankField
+    ? roster.filter(s => (s.studentName || s.name)).slice().sort((a, b) => (b[rankField] || 0) - (a[rankField] || 0))
+    : null;
+  return { weeklyRosterList, onlineCount, warningCount, rankedAll };
 }
 
 // `renderActivity(entry)` is optional -- return JSX for a row's right side
@@ -150,9 +155,12 @@ export default function OnlineStatusWidget({
   // A pointing finger for beginners: on the list button, then (inside the list) at the first friend's button.
   // Shown for the first 3 times the student opens this app, then never again (remembered on this device).
   guideKey = null,
+  // Name of a roster number (e.g. 'lotusCount'): the list then shows every student ranked by it (top three wear a Dhamma wheel).
+  rankField = null,
 }) {
   const liveWatchOn = useLiveWatch();
-  const { weeklyRosterList, onlineCount, warningCount: rawWarningCount } = useOnlineRoster(rosterPath, filterDocs, lastSeenField, isTeacherMode);
+  const { weeklyRosterList, onlineCount, warningCount: rawWarningCount, rankedAll } = useOnlineRoster(rosterPath, filterDocs, lastSeenField, isTeacherMode, rankField);
+  const shownList = rankedAll || weeklyRosterList;
   const warningCount = showInactiveWarning ? rawWarningCount : 0;
   const [showPanel, setShowPanel] = useState(false);
   const [peekName, setPeekName] = useState(null);
@@ -218,14 +226,15 @@ export default function OnlineStatusWidget({
               <h2 className="text-xl font-bold text-gray-800">{panelTitle} {onlineCount > 0 && <span className="text-emerald-600">({onlineCount} online)</span>}</h2>
               <button onClick={() => setShowPanel(false)} className="w-9 h-9 flex-shrink-0 flex items-center justify-center rounded-full bg-red-600 hover:bg-red-700 text-white" aria-label="Close"><X size={20} /></button>
             </div>
-            <p className="text-xs text-gray-400 mb-3">Showing everyone active in the last 7 days.</p>
+            <p className="text-xs text-gray-400 mb-3">{rankedAll ? 'Everyone, the most first (updated weekly).' : 'Showing everyone active in the last 7 days.'}</p>
             {panelNote && <p className="text-sm font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg p-2 mb-3">{panelNote}</p>}
             <div className="space-y-2">
-              {weeklyRosterList.map(s => {
+              {shownList.map((s, idx) => {
                 const isWarning = showInactiveWarning && s._isWarning;
                 return (
                 <div key={s.id} className={`flex items-center justify-between p-3 rounded-xl border ${isWarning ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-100'}`}>
                   <div className="flex items-center gap-2">
+                    {rankedAll && <HolyRankBadge rank={idx + 1} />}
                     <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${s._isOnlineNow ? 'bg-emerald-500' : isWarning ? 'bg-red-500' : 'bg-gray-300'}`}></span>
                     <button type="button" className="font-bold text-gray-800 hover:underline text-left" title="See their Avatar" onClick={(e) => { e.stopPropagation(); setPeekName(s.studentName || s.name); }}>{s.studentName || s.name}</button>
                   </div>
@@ -242,7 +251,7 @@ export default function OnlineStatusWidget({
                 </div>
                 );
               })}
-              {weeklyRosterList.length === 0 && <p className="text-center text-gray-400 py-6">No students active this week yet.</p>}
+              {shownList.length === 0 && <p className="text-center text-gray-400 py-6">No students active this week yet.</p>}
             </div>
           </div>
         </div>

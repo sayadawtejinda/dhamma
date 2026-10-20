@@ -7,7 +7,7 @@ import OnlineStatusWidget from './OnlineStatusWidget';
 import { FESTIVAL_AVATAR_ITEMS } from './festivals';
 import { STAR_MAX_LIVE } from './starAnnouncementConfig';
 import { CharacterSvg } from './AvatarCharacter';
-import { useAward, AwardPlaque, TrophyCup } from './Awards';
+import { useAwards, AwardPlaque, AwardEmblem } from './Awards';
 
 // Avatar deliberately has no wallet of its own -- it spends directly out of
 // the same Shrine Room coin balance every other app already deposits into,
@@ -125,7 +125,7 @@ export default function AvatarApp({ entryRequest, onExit }) {
   const isTeacherPreview = !entryRequest?.studentUid;
   const studentUid = entryRequest?.studentUid;
   const studentName = entryRequest?.studentName || 'Friend';
-  const myAward = useAward({ id: entryRequest?.studentUid, name: entryRequest?.studentName });
+  const myAwards = useAwards({ id: entryRequest?.studentUid, name: entryRequest?.studentName });
   const [loading, setLoading] = useState(true);
   const [coinBalance, setCoinBalance] = useState(isTeacherPreview ? 500 : 0);
   const [config, setConfig] = useState(DEFAULT_CONFIG);
@@ -520,9 +520,14 @@ export default function AvatarApp({ entryRequest, onExit }) {
         >
           <CharacterSvg skinColor={skin.color} hair={hair} outfitColor={outfit.color} outfitPattern={outfit.pattern} accessory={accessory} className="w-44 h-44" />
         </div>
-        {myAward && <TrophyCup tier={myAward.tier} size={72} />}
+        {myAwards.length > 0 && <div className="flex flex-col items-center gap-1">{myAwards.map(w => <AwardEmblem key={w.kind} kind={w.kind} tier={w.tier} size={64} />)}</div>}
       </div>
-      {myAward && <div className="mb-4 flex justify-center w-full"><AwardPlaque tier={myAward.tier} name={myAward.name} count={myAward.count} generatedAt={myAward.generatedAt} compact /></div>}
+      {/* the engraved plaques stand at the right, under the wallet, one above the other (more awards go below) */}
+      {myAwards.length > 0 && (
+        <div className="fixed right-2 top-16 z-[9700] flex flex-col gap-2 w-36">
+          {myAwards.map(w => <AwardPlaque key={w.kind} award={w} compact />)}
+        </div>
+      )}
 
       {/* Skin tone -- free, always available */}
       <div className="flex items-center gap-2 mb-8">

@@ -1,7 +1,7 @@
 import { listenWithHistory, listenLessonsWithHistory, loadStudentHistory } from './studentHistory';
 import { isOnlineStatusDay, isParamiClassTime } from './presenceDay';
 import { PeekName, AvatarThumb } from './AvatarPeek';
-import { useAward, AwardPlaque, TrophyCup, HallOfExcellence } from './Awards';
+import { useAwards, AwardEmblem, HallOfExcellence } from './Awards';
 import ParamiReportEditor from './ParamiReportEditor';
 import { startLiveWatchListener, setLiveWatch, useLiveWatch, liveWatchUntilMs } from './liveWatch';
 import { SPECIAL_AWARD_ITEMS } from './festivals';
@@ -7605,7 +7605,7 @@ function StudentDashboard({ user, studentProfile, studentUid, announcements, onO
     })();
   }, [studentUid, studentProfile?.isActive, studentProfile?.autoDeactivatedReason]);
 
-  const myAward = useAward({ id: studentUid, name: studentProfile?.name }); // top-3 honour (from the weekly file, no read)
+  const myAwards = useAwards({ id: studentUid, name: studentProfile?.name }); // top-3 honours (from the weekly files, no read)
 
   const handleGreetTeacher = async () => {
     setShowGreetingPrompt(false);
@@ -9801,9 +9801,6 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       </div>
 
 
-      {myAward && (
-        <div className="flex justify-center mt-4"><AwardPlaque tier={myAward.tier} name={myAward.name} count={myAward.count} generatedAt={myAward.generatedAt} /></div>
-      )}
       <div className="py-6 mb-8 relative flex flex-col md:flex-row justify-between items-start md:items-center">
             <div className="w-full">
                 <div className="flex items-start gap-3 mb-2">
@@ -9815,7 +9812,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                   >
                     <AvatarThumb name={studentProfile?.name} look={studentProfile?.avatarLook} size={96} />
                   </button>
-                  {myAward && <span className="mt-1 flex flex-col items-center"><TrophyCup tier={myAward.tier} size={44} /></span>}
+                  {myAwards.length > 0 && <span className="mt-1 flex items-end justify-center gap-1">{myAwards.map(w => <AwardEmblem key={w.kind} kind={w.kind} tier={w.tier} size={40} />)}</span>}
                   <span className="mt-1 text-sm font-bold text-emerald-700 bg-white/85 backdrop-blur-sm px-2 py-0.5 rounded-xl shadow-sm text-center break-words max-w-full">{studentProfile?.name} 🏡</span>
                 </div>
                   <div>
