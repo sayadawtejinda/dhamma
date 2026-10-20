@@ -39,6 +39,14 @@ function Shape({ shape, fill, stroke, uid, m }) {
   const light = m ? m.light : '#fff';
   switch (shape) {
     // ---- pictures: a trophy cup, a football, a golf flag, a microphone, music notes, a light bulb, a rocket ... ----
+    case 'lamp': return (<g>
+      <path d="M50 8 C60 22 66 32 50 44 C34 32 40 22 50 8 Z" fill="#ffb300" stroke={stroke} strokeWidth="2.2" strokeLinejoin="round" />
+      <path d="M50 22 C55 30 55 36 50 40 C45 36 45 30 50 22 Z" fill="#fff59d" />
+      <path d="M12 52 H88 C88 76 70 86 50 86 C30 86 12 76 12 52 Z" fill={fill} stroke={stroke} strokeWidth={sw} strokeLinejoin="round" />
+      <path d="M88 56 C98 56 98 68 86 70" fill="none" stroke={stroke} strokeWidth="6" strokeLinecap="round" /><path d="M88 56 C98 56 98 68 86 70" fill="none" stroke={fill} strokeWidth="3" strokeLinecap="round" />
+      <rect x="38" y="86" width="24" height="8" rx="3" fill={fill} stroke={stroke} strokeWidth="2.4" />
+      <path d="M22 58 C26 70 38 76 50 77" fill="none" stroke="#fff" strokeOpacity="0.5" strokeWidth="3.5" strokeLinecap="round" />
+    </g>);
     case 'cup': return (<g>
       <path d="M26 20 C6 18 6 54 32 56" fill="none" stroke={stroke} strokeWidth="9" strokeLinecap="round" /><path d="M26 20 C6 18 6 54 32 56" fill="none" stroke={fill} strokeWidth="5" strokeLinecap="round" />
       <path d="M74 20 C94 18 94 54 68 56" fill="none" stroke={stroke} strokeWidth="9" strokeLinecap="round" /><path d="M74 20 C94 18 94 54 68 56" fill="none" stroke={fill} strokeWidth="5" strokeLinecap="round" />
@@ -227,7 +235,7 @@ export function BadgeShelf({ name, profile = null, title = '🎖️ Badges', com
   const groups = compact ? [{ id: 'all-in-one', title: '', items: badges }] : BADGE_GROUPS.map(g => ({ ...g, items: badges.filter(b => b.group === g.id) })).filter(g => g.items.length > 0);
   const chip = 'bg-white/85 backdrop-blur-sm shadow rounded-2xl';
   return (
-    <div className="mb-6">
+    <div className="mb-6 pb-16">
       <button type="button" onClick={toggle} className={`inline-flex items-center gap-2 ${chip} px-4 py-1.5 font-extrabold text-amber-900`}>
         {title} <span className="text-sm font-bold text-amber-700">· {badges.length}</span> <span className="text-xs text-gray-500">{open ? '▲ hide' : '▼ show'}</span>
       </button>

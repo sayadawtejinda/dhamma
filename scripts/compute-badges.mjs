@@ -53,6 +53,7 @@ const yearWeeksOf = (uid) => {
   if (typeof grants[uid] === 'number') out[2026] = Math.max(out[2026] || 0, grants[uid]);
   return out;
 };
+const festivalDeeds = readJson('festivalDeeds.json') || { students: {} };
 const BASIC_VOWELS = ['B-listen-1', 'B-listen-2', 'B-click-1', 'B-click-2', 'B-click-3'];
 const out = {};
 for (const st of students) {
@@ -70,10 +71,12 @@ for (const st of students) {
   const sh = shrine.get(n);
   if (sh) {
     at(sh.lotusCount || 0, [[100, 'lotus-100'], [500, 'lotus-500'], [1000, 'lotus-1000'], [2000, 'lotus-2000'], [3000, 'lotus-3000'], [4000, 'lotus-4000'], [5000, 'lotus-5000']]);
-    if ((sh.shrineVisitedFriends || []).length >= 10) got.push('shrine-visits');
-    if ((sh.shrineGiftFriends || []).length >= 5) got.push('shrine-gifts');
-    const trees = sh.natureWorld && sh.natureWorld.placedTrees ? Object.keys(sh.natureWorld.placedTrees).length : 0;
-    at(trees, [[8, 'nature-5'], [20, 'nature-12']]);
+    // Shrine Room: friends visited. Nature World: gifts sent to friends and trees planted.
+    at(new Set(sh.shrineVisitedFriends || []).size, [[10, 'shrine-visits'], [25, 'shrine-visits-25'], [50, 'shrine-visits-50'], [75, 'shrine-visits-75']]);
+    const nw = sh.natureWorld || {};
+    at(new Set(nw.giftedFriends || []).size, [[1, 'nature-gift-1'], [3, 'nature-gift-3'], [5, 'nature-gift-5']]);
+    const trees = nw.placedTrees ? Object.keys(nw.placedTrees).length : 0;
+    at(trees, [[8, 'nature-5'], [15, 'nature-15'], [20, 'nature-12'], [25, 'nature-25']]);
     const owned = new Set();
     Object.entries(sh.avatarOwned || {}).forEach(([cat, arr]) => (Array.isArray(arr) ? arr : []).forEach(x => owned.add(`${cat}:${x}`)));
     at(owned.size, [[20, 'avatar-10'], [35, 'avatar-25']]);
@@ -101,6 +104,12 @@ for (const st of students) {
   const ss = ssDone[n] || {};
   let ssTotal = 0;
   for (const set of Object.values(ss)) ssTotal += set.size;
+  // festivals: good deeds (a kind thought, paying respect) and the festival lamps lit (public/festivalDeeds.json, weekly)
+  const fd = (festivalDeeds.students || {})[n];
+  if (fd) {
+    at(fd.deeds || 0, [[25, 'deeds-25'], [50, 'deeds-50'], [100, 'deeds-100'], [200, 'deeds-200'], [300, 'deeds-300'], [500, 'deeds-500']]);
+    at(fd.lamps || 0, [[10, 'lamps-10'], [25, 'lamps-25'], [50, 'lamps-50'], [100, 'lamps-100'], [200, 'lamps-200']]);
+  }
   at(ssTotal, [[10, 'ss-10'], [25, 'ss-25'], [50, 'ss-50'], [100, 'ss-100'], [200, 'ss-200']]);
   // Abhidhamma: lessons finished, all classes together
   let abTotal = 0;

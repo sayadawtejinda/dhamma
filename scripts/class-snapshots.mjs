@@ -185,6 +185,28 @@ export async function refreshClassDocSnapshots(db, appId) {
   return written;
 }
 
+// ---- Festival good deeds: public/festivalDeeds.json = { generatedAt, students: { name: { deeds, lamps } } } --------------------
+// `deeds` = respects paid / kind thoughts (every festival together), `lamps` = festival lamps lit. One document per student per festival
+// (a few hundred), read once a week; used only for the badges (no Firebase read in the app).
+export async function refreshFestivalDeeds(db) {
+  const snap = await getDocs(collection(db, 'artifacts/festival-app/public/data/progress'));
+  const students = {};
+  snap.docs.forEach(d => {
+    const x = d.data();
+    if (!x.studentName) return;
+    const me = (students[x.studentName] = students[x.studentName] || { deeds: 0, lamps: 0 });
+    Object.values(x.kadaw || {}).forEach(list => { if (Array.isArray(list)) me.deeds += list.length; });
+    me.lamps += Number(x.lampsTotal) || 0;
+  });
+  const sorted = Object.fromEntries(Object.entries(students).sort(([a], [b]) => (a < b ? -1 : 1)));
+  mkdirSync(join(CLASS_DIR, '..'), { recursive: true });
+  const file = join(CLASS_DIR, '..', 'festivalDeeds.json');
+  let old = null;
+  try { old = JSON.stringify(JSON.parse(readFileSync(file, 'utf8')).students); } catch (e) { /* none yet */ }
+  if (old !== JSON.stringify(sorted)) writeFileSync(file, JSON.stringify({ generatedAt: new Date().toISOString(), students: sorted }));
+  console.log(`Festival deeds: ${Object.keys(sorted).length} students from ${snap.size} progress records`);
+}
+
 // ---- Dhammaschool progress: which chapters make up each grade and which chapters each student finished -------------------
 // public/classSnapshots/dhammaschool-progress.json = { generatedAt, lessonsByClass: { 'GRADE-1': [lessonId...] }, completions: { name: [lessonId...] } }
 // Used for the Dhammaschool badges (no Firebase read in the app). ~200 lesson documents + the completions; weekly only.
