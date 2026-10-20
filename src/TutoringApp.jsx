@@ -9802,7 +9802,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       </div>
 
 
-      <div className="py-6 mb-8 relative flex flex-col md:flex-row justify-between items-start md:items-center">
+      <div className="py-2 sm:py-6 mb-3 sm:mb-8 relative flex flex-col md:flex-row justify-between items-start md:items-center">
             <div className="w-full">
                 <div className="flex items-start gap-3 mb-2">
                 <div className="flex flex-col items-center flex-shrink-0 w-28">
