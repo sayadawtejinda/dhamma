@@ -102,7 +102,15 @@ for (const st of students) {
   const valid = got.filter(id => BADGE_DEFS.some(b => b.id === id) || dynamicBadge(id));
   if (valid.length) out[n] = valid;
 }
-writeFileSync(join(ROOT, 'badges.json'), JSON.stringify({ generatedAt: new Date().toISOString(), students: out }));
+// the three places of the three honours (trophies, lotus flowers in the Shrine Room, classes attended)
+const top3 = (list, key, nameOf, idOf) => list.filter(x => (x[key] || 0) > 0).sort((a, b) => (b[key] || 0) - (a[key] || 0)).slice(0, 3)
+  .map((x, i) => ({ id: idOf ? idOf(x) : undefined, name: nameOf(x), count: x[key] || 0, tier: i + 1 }));
+const awards = {
+  trophy: top3(students, 'trophyCount', x => x.name, x => x.id),
+  holy: top3([...shrine.values()].filter(d => (d.studentName || d.id)), 'lotusCount', x => x.studentName || x.id),
+  joy: top3((snap.attendanceRankedList || []).filter(s => !s.isOffline), 'attended', x => x.name, x => x.id),
+};
+writeFileSync(join(ROOT, 'badges.json'), JSON.stringify({ generatedAt: new Date().toISOString(), students: out, awards }));
 const counts = {};
 Object.values(out).forEach(l => l.forEach(id => { counts[id] = (counts[id] || 0) + 1; }));
 console.log(`Badges: ${Object.keys(out).length} students; ${Object.values(out).reduce((a, l) => a + l.length, 0)} badges`);

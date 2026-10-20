@@ -3,6 +3,10 @@ import { isOnlineStatusDay, isParamiClassTime } from './presenceDay';
 import { PeekName, AvatarThumb } from './AvatarPeek';
 import { useAwards, AwardEmblem, HallOfExcellence } from './Awards';
 import { BadgeShelf } from './Badges';
+import BadgeCeremony from './BadgeCeremony';
+import { useBadgeData } from './badgeData';
+import { useTopThree, awardsFor, AWARDS, HOLY_AWARDS, JOY_AWARDS } from './Awards';
+import { badgeMeta } from './badgeDefs';
 import ParamiReportEditor from './ParamiReportEditor';
 import { startLiveWatchListener, setLiveWatch, useLiveWatch, liveWatchUntilMs } from './liveWatch';
 import { SPECIAL_AWARD_ITEMS } from './festivals';
@@ -6950,6 +6954,7 @@ ${toSend.map(l => '• ' + l.title).join(', ')}`
 
           <LiveWatchSwitch />
           <NewAccountsSwitch />
+          <BadgeApprovals students={students} sessions={sessions} />
           {pendingStudents.length > 0 && (
             <div className="mb-8">
               <h3 className="text-xl font-semibold mb-4 text-gray-800">
@@ -7606,7 +7611,10 @@ function StudentDashboard({ user, studentProfile, studentUid, announcements, onO
     })();
   }, [studentUid, studentProfile?.isActive, studentProfile?.autoDeactivatedReason]);
 
-  const myAwards = useAwards({ id: studentUid, name: studentProfile?.name }); // top-3 honours (from the weekly files, no read)
+  const myAwards = useAwards({ id: studentUid, name: studentProfile?.name, profile: studentProfile });
+  // badges the teacher has just given: a short celebration for each, once (they are taken off the list when seen)
+  const [ceremonySeen, setCeremonySeen] = useState(() => new Set());
+  const pendingCeremony = (Array.isArray(studentProfile?.badgesNew) ? studentProfile.badgesNew : []).filter(e => !ceremonySeen.has(e)); // top-3 honours (from the weekly files, no read)
 
   const handleGreetTeacher = async () => {
     setShowGreetingPrompt(false);
@@ -10236,7 +10244,18 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         </div>
       </div>
       )}
-      <div className="mt-8"><BadgeShelf name={studentProfile?.name} /></div>
+      <div className="mt-8"><BadgeShelf name={studentProfile?.name} profile={studentProfile} /></div>
+      {studentUid !== VISITOR_UID && pendingCeremony.length > 0 && (
+        <BadgeCeremony
+          queue={pendingCeremony}
+          name={studentProfile?.name}
+          look={studentProfile?.avatarLook}
+          onSeen={(entry) => {
+            setCeremonySeen(prev => new Set([...prev, entry]));
+            updateDoc(doc(db, `${publicDataPath}/students`, studentUid), { badgesNew: arrayRemove(entry) }).catch(() => {});
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -11409,6 +11428,99 @@ function TeacherRefreshButton() {
         🔄 Sessions &amp; schedule{fmt(cachedListenUpdatedAt(HISTORY_KEYS))}
       </button>
     </>
+  );
+}
+
+// ---- 🎖️ Badges to give: the teacher approves each badge for each student, one by one (during that student's class) ----
+// What a student has EARNED comes from the weekly file public/badges.json; what was GIVEN is on the student's record
+// (badgesGiven), which this screen already holds live -- so working out who is waiting for what costs no read. Giving a badge writes
+// ONE small update on that student's record; their Home page shows the celebration when they open it (see BadgeCeremony).
+const AWARD_LISTS = { trophy: AWARDS, holy: HOLY_AWARDS, joy: JOY_AWARDS };
+const badgeWeight = (b) => (b.master ? 0 : b.metal === 'gold' ? 1 : b.metal === 'silver' ? 2 : 3);
+function BadgeApprovals({ students, sessions }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [expanded, setExpanded] = useState({});
+  const [busy, setBusy] = useState({});
+  const [limit, setLimit] = useState(20);
+  const data = useBadgeData();
+  const top = useTopThree();
+  if (!data) return null;
+
+  const pendingFor = (s) => {
+    const given = s.badgesGiven || {};
+    const items = [];
+    awardsFor(top, { name: s.name, id: s.id }).forEach(a => { if (given[`award-${a.kind}`] !== a.tier) items.push({ award: true, kind: a.kind, tier: a.tier, title: a.info.en, sub: `${a.kind === 'trophy' ? 'Most trophies' : a.kind === 'holy' ? 'Most lotus flowers' : 'Most classes attended'} · place ${a.tier}`, weight: -1 }); });
+    ((data.earned.students || {})[s.name] || []).forEach(id => {
+      if (given[id]) return;
+      const b = badgeMeta(id);
+      if (b) items.push({ award: false, id, title: b.name, sub: b.desc, weight: badgeWeight(b), metal: b.metal });
+    });
+    return items.sort((a, b) => a.weight - b.weight);
+  };
+  const inClass = (s) => (sessions || []).some(x => x.studentUid === s.id && !x.endTime && x.startTime && x.startTime.toDate && Date.now() - x.startTime.toDate().getTime() < 3 * 60 * 60 * 1000);
+
+  const rows = (students || []).filter(s => s.isActive === true && s.name).map(s => ({ s, items: pendingFor(s), live: inClass(s) }))
+    .filter(r => r.items.length > 0 && (!query.trim() || r.s.name.toLowerCase().includes(query.trim().toLowerCase()) || String(r.s.displayId || '') === query.trim()))
+    .sort((a, b) => (b.live - a.live) || (b.items.length - a.items.length) || (a.s.name < b.s.name ? -1 : 1));
+  const totalPending = rows.reduce((n, r) => n + r.items.length, 0);
+
+  const give = async (s, items) => {
+    setBusy(prev => ({ ...prev, [s.id]: true }));
+    try {
+      const upd = { badgesNew: arrayUnion(...items.map(it => (it.award ? `a:${it.kind}:${it.tier}` : `b:${it.id}`))) };
+      items.forEach(it => { if (it.award) upd[`badgesGiven.award-${it.kind}`] = it.tier; else upd[`badgesGiven.${it.id}`] = Date.now(); });
+      await updateDoc(doc(db, `${publicDataPath}/students`, s.id), upd);
+    } catch (e) { console.error('Could not give the badge:', e); alert('Could not give the badge. Please try again.'); }
+    setBusy(prev => ({ ...prev, [s.id]: false }));
+  };
+
+  return (
+    <div className="mb-6">
+      <button type="button" onClick={() => setOpen(o => !o)} className="text-sm font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded-lg px-4 py-2">
+        🎖️ Badges to give {open ? '▲' : '▼'} <span className="ml-1 text-xs font-semibold text-amber-700">({rows.length} students · {totalPending} waiting)</span>
+      </button>
+      {open && (
+        <div className="mt-3 p-4 rounded-xl bg-amber-50 border border-amber-200">
+          <p className="text-xs text-gray-600 mb-2">Give a badge while that student is in class: when they open their Home page the celebration plays (a gift box, a drone, a stage or a podium). A badge is given only once. Students studying now (an open session) are listed first.</p>
+          <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search a name or Student ID" className="w-full mb-3 px-3 py-2 rounded-lg border border-amber-300 text-sm" />
+          {rows.length === 0 && <p className="text-sm text-gray-500">Nothing is waiting.</p>}
+          <div className="space-y-2">
+            {rows.slice(0, limit).map(({ s, items, live }) => {
+              const next = items[0];
+              const isOpen = !!expanded[s.id];
+              return (
+                <div key={s.id} className="bg-white rounded-lg border border-amber-100 p-3">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <p className="font-bold text-gray-800">{live && <span title="has a session open now">🟢 </span>}{s.name} <span className="text-xs font-semibold text-gray-400">ID {s.displayId}</span></p>
+                    <span className="text-xs font-bold text-amber-700">{items.length} waiting</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 mt-2 flex-wrap">
+                    <p className="text-sm text-gray-700 min-w-0"><span className="font-bold">{next.award ? '🏅' : '🎖️'} {next.title}</span><span className="text-gray-500"> — {next.sub}</span></p>
+                    <div className="flex gap-2 flex-shrink-0">
+                      <button disabled={busy[s.id]} onClick={() => give(s, [next])} className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold disabled:opacity-50">✅ Give</button>
+                      {items.length > 1 && <button onClick={() => setExpanded(prev => ({ ...prev, [s.id]: !isOpen }))} className="px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold">{isOpen ? 'Hide' : `+${items.length - 1} more`}</button>}
+                    </div>
+                  </div>
+                  {isOpen && (
+                    <div className="mt-2 pt-2 border-t border-gray-100 space-y-1">
+                      {items.slice(1).map(it => (
+                        <div key={it.award ? `a-${it.kind}` : it.id} className="flex items-center justify-between gap-2 text-sm">
+                          <span className="text-gray-700"><span className="font-semibold">{it.title}</span><span className="text-gray-500"> — {it.sub}</span></span>
+                          <button disabled={busy[s.id]} onClick={() => give(s, [it])} className="px-2 py-1 rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold disabled:opacity-50">Give</button>
+                        </div>
+                      ))}
+                      <button disabled={busy[s.id]} onClick={() => give(s, items)} className="mt-1 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold disabled:opacity-50">🎁 Give all {items.length}</button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {rows.length > limit && <button onClick={() => setLimit(l => l + 20)} className="mt-3 text-sm font-semibold text-amber-800 underline">Show more students</button>}
+        </div>
+      )}
+    </div>
   );
 }
 

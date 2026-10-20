@@ -1,27 +1,19 @@
 import React, { useEffect, useId, useState } from 'react';
 import { BADGE_GROUPS, badgeMeta } from './badgeDefs';
 import { LEVEL_BADGES_SVG } from './bodhiLevels';
+import { useBadgeData, givenOf } from './badgeData';
 
 // The badge shelf: every badge a student has earned, drawn in rows at the bottom of their Home page (and shown when a friend
 // visits). Which badges each student has comes from ONE static file (public/badges.json, written weekly by
 // scripts/compute-badges.mjs from files already on GitHub), so this costs no Firebase read.
 
-let badgesPromise = null;
-const loadBadges = () => {
-  if (!badgesPromise) {
-    badgesPromise = fetch(`${import.meta.env.BASE_URL}badges.json`)
-      .then(r => (r.ok ? r.json() : null))
-      .then(j => ({ students: (j && j.students) || {}, generatedAt: (j && j.generatedAt) || null }))
-      .catch(() => { badgesPromise = null; return { students: {}, generatedAt: null }; });
-  }
-  return badgesPromise;
-};
-
-export function useBadges(name) {
-  const [data, setData] = useState(null);
-  useEffect(() => { let off = false; loadBadges().then(d => { if (!off) setData(d); }); return () => { off = true; }; }, []);
+// The badges a student HAS = the ones the teacher has given (see badgeData.js). `profile` is the student's own live record when we
+// have it (their Home page); a friend looking at someone else's Home sees the weekly copy of what was given.
+export function useBadges(name, profile) {
+  const data = useBadgeData();
   if (!data || !name) return [];
-  return (data.students[name] || []).map(badgeMeta).filter(Boolean);
+  const given = givenOf(data, name, profile);
+  return Object.keys(given).filter(k => !k.startsWith('award-')).map(badgeMeta).filter(Boolean);
 }
 
 const METALS = {
@@ -208,8 +200,8 @@ export function BadgeSvg({ badge, size = 56 }) {
 }
 
 // Badges in rows, grouped by the app they belong to (a group per line), master badges first inside a group.
-export function BadgeShelf({ name, title = '🎖️ Badges', compact = false }) {
-  const badges = useBadges(name);
+export function BadgeShelf({ name, profile = null, title = '🎖️ Badges', compact = false }) {
+  const badges = useBadges(name, profile);
   const [open, setOpen] = useState(null);
   if (badges.length === 0) return null;
   const rank = { gold: 0, silver: 1, bronze: 2 };

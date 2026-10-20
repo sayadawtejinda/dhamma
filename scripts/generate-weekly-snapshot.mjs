@@ -384,6 +384,13 @@ async function main() {
     console.log(`Wrote ${wrote} week file(s) for the Teacher's Weekly Schedule`);
   }
 
+  // What the teacher has GIVEN each student (badgesGiven on their record), copied to a file so friends who visit see it too.
+  {
+    const given = {};
+    students.forEach(s => { if (s.name && s.badgesGiven && Object.keys(s.badgesGiven).length) given[s.name] = s.badgesGiven; });
+    writeFileSync(join(__dirname, '..', 'public', 'badgesGiven.json'), JSON.stringify({ generatedAt, given }));
+  }
+
   // Today's Schedule: the standing weekly slots (everyone, offline students too) as one static file -- the page picks today's.
   writeFileSync(join(__dirname, '..', 'public', 'todaySchedule.json'), JSON.stringify({
     generatedAt,

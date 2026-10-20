@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useBadgeData, givenOf } from './badgeData';
 
 // Two honours, gold / silver / bronze, for the three students at the top:
 //   - TROPHY awards (cup) for the most trophies          -- from the weekly file public/weeklySnapshot.json
@@ -60,17 +61,25 @@ export function useTopThree() {
   return data;
 }
 
-// Every award one student holds: [{ kind: 'trophy' | 'holy', tier, name, count, info, generatedAt }]
-export function useAwards({ name, id } = {}) {
-  const { trophy, holy, joy, generatedAt } = useTopThree();
+// Every award a student is entitled to by the numbers: [{ kind, tier, name, count, info }] -- given or not (the teacher's list uses this).
+export function awardsFor(top, { name, id } = {}) {
+  const { trophy, holy, joy } = top;
   const list = [];
   const t = trophy.find(s => (id && s.id === id) || (name && s.name === name));
-  if (t) list.push({ kind: 'trophy', tier: t.tier, name: t.name, count: t.count, info: AWARDS[t.tier - 1], generatedAt });
+  if (t) list.push({ kind: 'trophy', tier: t.tier, name: t.name, count: t.count, info: AWARDS[t.tier - 1] });
   const h = name ? holy.find(s => s.name === name) : null;
-  if (h) list.push({ kind: 'holy', tier: h.tier, name: h.name, count: h.count, info: HOLY_AWARDS[h.tier - 1], generatedAt });
+  if (h) list.push({ kind: 'holy', tier: h.tier, name: h.name, count: h.count, info: HOLY_AWARDS[h.tier - 1] });
   const j = (joy || []).find(s => (id && s.id === id) || (name && s.name === name));
-  if (j) list.push({ kind: 'joy', tier: j.tier, name: j.name, count: j.count, info: JOY_AWARDS[j.tier - 1], generatedAt });
+  if (j) list.push({ kind: 'joy', tier: j.tier, name: j.name, count: j.count, info: JOY_AWARDS[j.tier - 1] });
   return list;
+}
+
+// The awards a student HAS (the teacher gave them, and they still hold that place): `profile` = their own live record when known.
+export function useAwards({ name, id, profile } = {}) {
+  const top = useTopThree();
+  const data = useBadgeData();
+  const given = givenOf(data, name, profile);
+  return awardsFor(top, { name, id }).filter(a => given[`award-${a.kind}`] === a.tier).map(a => ({ ...a, generatedAt: top.generatedAt }));
 }
 
 // ---- the drawings ----
