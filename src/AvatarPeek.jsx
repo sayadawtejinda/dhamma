@@ -92,7 +92,44 @@ const fmtTime = (hhmm) => {
 // Go and look at this student's Shrine Room / Bodhi Tree / Nature World (last week's picture, from static files).
 const goVisit = (app, name, uid) => window.dispatchEvent(new CustomEvent('dhamma-visit-student', { detail: { app, name, uid } }));
 
+// One rule everywhere: tap a NAME -> that student's Avatar window; tap the AVATAR in it -> their home page.
 export function AvatarPeekModal({ name, onClose }) {
+  const [home, setHome] = useState(false);
+  const cfg = useAvatarLook(name || '');
+  const won = useAwards({ name });
+  if (!name) return null;
+  if (home) return <HomeVisitModal name={name} onClose={onClose} />;
+  const bg = getHomeBackground(cfg && cfg.homeBackground).image;
+  return (
+    <div
+      className="fixed inset-0 z-[10050] flex flex-col items-center justify-center p-6"
+      style={{ backgroundImage: `linear-gradient(rgba(0,0,0,.35),rgba(0,0,0,.35)), url(${import.meta.env.BASE_URL}${bg})`, backgroundSize: 'cover', backgroundPosition: 'center' }}
+      onClick={onClose}
+    >
+      <button onClick={onClose} className="fixed top-3 right-3 z-[10051] w-11 h-11 rounded-full bg-red-600 hover:bg-red-700 text-white text-2xl font-bold shadow-lg flex items-center justify-center" aria-label="Close">×</button>
+      <div className="flex flex-col items-center" onClick={(ev) => ev.stopPropagation()}>
+        <button type="button" onClick={() => setHome(true)} className="rounded-3xl hover:scale-105 active:scale-95 transition-transform focus:outline-none" title="Visit their home">
+          <AvatarThumb name={name} size={168} />
+        </button>
+        <span className="mt-3 text-lg font-extrabold text-emerald-800 bg-white/90 px-3 py-1 rounded-xl shadow text-center break-words max-w-[80vw]">{name}</span>
+        {won.length > 0 && (
+          <span className="mt-2 flex gap-2 flex-wrap justify-center">
+            {won.map(w => (
+              <span key={w.kind} className="flex flex-col items-center bg-white/90 rounded-2xl px-2 py-1 shadow">
+                <AwardEmblem kind={w.kind} tier={w.tier} size={46} />
+                <span className="text-[10px] font-extrabold text-amber-800 text-center leading-tight max-w-[110px]">{w.info.en}</span>
+              </span>
+            ))}
+          </span>
+        )}
+        <button type="button" onClick={() => setHome(true)} className="mt-4 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 px-4 py-2 rounded-full shadow-lg animate-pulse">🏡 Tap the Avatar to visit home</button>
+      </div>
+    </div>
+  );
+}
+
+// A student's home page, as it was last week (their picture, Avatar, trophies, tree, class time, badges, the three rooms).
+export function HomeVisitModal({ name, onClose }) {
   const cfg = useAvatarLook(name || '');
   const [extras, setExtras] = useState(null);
   useEffect(() => { if (name) loadExtras().then(setExtras); }, [name]);

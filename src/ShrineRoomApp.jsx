@@ -1,5 +1,5 @@
 import { getTreeWeeksMap as getAttendedWeeksMap } from './studentWeekly';
-import { AvatarThumb } from './AvatarPeek';
+import { AvatarThumb, HomeVisitModal } from './AvatarPeek';
 import React, { useEffect, useRef, useState } from 'react';
 import { collection, query, where, getDocs, doc, getDoc, getDocFromServer, setDoc, updateDoc, deleteDoc, serverTimestamp, increment, runTransaction } from 'firebase/firestore';
 import { db } from './firebase';
@@ -1173,6 +1173,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     return () => { off = true; };
   }, [studentName]);
   const [visitingStudentName, setVisitingStudentName] = useState(null);
+  const [homeVisit, setHomeVisit] = useState(null); // the Avatar tapped in a friend's room -> their home page
   const [visitingData, setVisitingData] = useState(null);
   const [visitLoading, setVisitLoading] = useState(false);
   // Free-offering gifts from visiting friends' altars: [{ id, from }], plus
@@ -1810,6 +1811,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
         showInactiveWarning={false}
         guideKey="shrine"
         rankField="lotusCount"
+        onNameTap={(s) => { const n = s.studentName || s.name; if (!n || n === studentName || isTeacherPreview) return false; handleVisitStudent(n); return true; }}
         renderActivity={(s) => (
           <span className="flex items-center gap-2 justify-end">
             <span className="text-amber-600 font-semibold">🪷 {s.lotusCount || 0}</span>
@@ -1987,7 +1989,8 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
           <div className="relative bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <button onClick={closeVisit} className="absolute top-2 right-2 z-[10002] w-11 h-11 rounded-full bg-red-600 hover:bg-red-700 text-white text-2xl font-bold shadow-lg flex items-center justify-center" aria-label="Close">×</button>
             <h2 className="text-lg font-bold text-emerald-800 mb-2">🛕 {visitingStudentName}'s Shrine Room</h2>
-            <div className="flex justify-center mb-3"><AvatarThumb name={visitingStudentName} size={72} /></div>
+            <div className="flex justify-center mb-3"><button type="button" onClick={() => setHomeVisit(visitingStudentName)} title="Visit their home" className="rounded-2xl hover:scale-105 transition-transform"><AvatarThumb name={visitingStudentName} size={72} /></button></div>
+            {homeVisit && <HomeVisitModal name={homeVisit} onClose={() => setHomeVisit(null)} />}
             {visitGiftNote && (
               <p className="mb-4 text-sm font-semibold text-amber-800 bg-amber-50 border border-amber-300 rounded-xl px-3 py-2">{visitGiftNote}</p>
             )}

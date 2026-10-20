@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { doc, getDoc, setDoc, increment, deleteField } from 'firebase/firestore';
 import { db } from './firebase';
 import OnlineStatusWidget, { loadRosterSnapshot } from './OnlineStatusWidget';
-import { AvatarThumb } from './AvatarPeek';
+import { AvatarThumb, HomeVisitModal } from './AvatarPeek';
 
 // A student's own growing "nature world" -- buy land plots, then plant
 // trees on them one at a time, all paid for with coins earned from
@@ -377,6 +377,7 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
     setHeartRainId(Date.now());
   };
   const [visitingStudentName, setVisitingStudentName] = useState(null);
+  const [homeVisit, setHomeVisit] = useState(null); // the Avatar tapped in a friend's room -> their home page
   const [visitingWorld, setVisitingWorld] = useState(null);
   const [visitLoading, setVisitLoading] = useState(false);
   const [visitGiftNote, setVisitGiftNote] = useState(null);
@@ -655,6 +656,7 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
         coinBalance={isTeacherPreview ? null : coinBalance}
         coinIcon="🪙"
         panelTitle="🌿 Students"
+        onNameTap={(s) => { const n = s.studentName || s.name; if (!n || n === studentName || isTeacherPreview) return false; handleVisitStudent(n); return true; }}
         weeklyLabel={(n) => <>📦 🎁 {n} 👥</>}
         panelNote="👣 ➜ 🌿 ➜ 📦 ➜ 🎁   ✅"
         teacherLabel="🧑‍🏫 Teacher"
@@ -851,7 +853,8 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
           <div className="relative bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 text-center max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <button onClick={closeVisit} className="absolute top-2 right-2 z-[10002] w-11 h-11 rounded-full bg-red-600 hover:bg-red-700 text-white text-2xl font-bold shadow-lg flex items-center justify-center" aria-label="Close">×</button>
             <h2 className="text-lg font-bold text-emerald-800 mb-2">🌿 {visitingStudentName}'s Nature World</h2>
-            <div className="flex justify-center mb-3"><AvatarThumb name={visitingStudentName} size={72} /></div>
+            <div className="flex justify-center mb-3"><button type="button" onClick={() => setHomeVisit(visitingStudentName)} title="Visit their home" className="rounded-2xl hover:scale-105 transition-transform"><AvatarThumb name={visitingStudentName} size={72} /></button></div>
+            {homeVisit && <HomeVisitModal name={homeVisit} onClose={() => setHomeVisit(null)} />}
             {visitGiftNote && (
               <p className="mb-4 text-sm font-semibold text-emerald-800 bg-emerald-50 border border-emerald-300 rounded-xl px-3 py-2">{visitGiftNote}</p>
             )}

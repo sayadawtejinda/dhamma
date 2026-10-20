@@ -157,6 +157,8 @@ export default function OnlineStatusWidget({
   guideKey = null,
   // Name of a roster number (e.g. 'lotusCount'): the list then shows every student ranked by it (top three wear a Dhamma wheel).
   rankField = null,
+  // A room can decide what a tap on a NAME does (e.g. open that friend's room with their Avatar); return false to fall back to the Avatar window.
+  onNameTap = null,
 }) {
   const liveWatchOn = useLiveWatch();
   const { weeklyRosterList, onlineCount, warningCount: rawWarningCount, rankedAll } = useOnlineRoster(rosterPath, filterDocs, lastSeenField, isTeacherMode, rankField);
@@ -236,7 +238,7 @@ export default function OnlineStatusWidget({
                   <div className="flex items-center gap-2">
                     {rankedAll && <HolyRankBadge rank={idx + 1} />}
                     <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${s._isOnlineNow ? 'bg-emerald-500' : isWarning ? 'bg-red-500' : 'bg-gray-300'}`}></span>
-                    <button type="button" className="font-bold text-gray-800 hover:underline text-left" title="See their Avatar" onClick={(e) => { e.stopPropagation(); setPeekName(s.studentName || s.name); }}>{s.studentName || s.name}</button>
+                    <button type="button" className="font-bold text-gray-800 hover:underline text-left" title="See their Avatar" onClick={(e) => { e.stopPropagation(); const handled = onNameTap ? onNameTap(s) : false; if (handled === false || !onNameTap) setPeekName(s.studentName || s.name); }}>{s.studentName || s.name}</button>
                   </div>
                   <div className="text-right text-sm flex items-center justify-end gap-1">
                     {s.id === firstFriendId && <span aria-hidden="true" className="text-3xl leading-none animate-bounce">👉</span>}

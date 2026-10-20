@@ -1,5 +1,5 @@
 import { getAttendedWeeks, getTreeWeeksMap as getAttendedWeeksMap } from './studentWeekly';
-import { AvatarThumb } from './AvatarPeek';
+import { AvatarThumb, HomeVisitModal } from './AvatarPeek';
 import React, { useEffect, useRef, useState } from 'react';
 import { collection, query, where, getDocs, doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase';
@@ -560,6 +560,7 @@ export default function BodhiTreeApp({ entryRequest, onExit }) {
   const [weeksMap, setWeeksMap] = useState(null);
   useEffect(() => { let off = false; getAttendedWeeksMap().then(m => { if (!off) setWeeksMap(m || {}); }); return () => { off = true; }; }, []);
   const [visitingStudentName, setVisitingStudentName] = useState(null);
+  const [homeVisit, setHomeVisit] = useState(null); // the Avatar tapped in a friend's room -> their home page
   const [visitingAgeDays, setVisitingAgeDays] = useState(null);
   const [visitLoading, setVisitLoading] = useState(false);
   const treeAgeDaysRef = useRef(0);
@@ -754,6 +755,7 @@ export default function BodhiTreeApp({ entryRequest, onExit }) {
             isTeacherMode={false}
             panelTitle="🌳 Students"
             showInactiveWarning={false}
+            onNameTap={(s) => { const n = s.studentName || s.name; if (!n || n === studentName) return false; handleVisitStudent(n, s.id, s.treeAgeDays || 0); return true; }}
             renderActivity={(s) => (
               <span className="flex items-center gap-2 justify-end">
                 <span className="text-emerald-600 font-semibold">{weeksMap && weeksMap[s.id] != null ? weeksMap[s.id] * 7 : (s.treeAgeDays || 0)}d</span>
@@ -864,7 +866,8 @@ export default function BodhiTreeApp({ entryRequest, onExit }) {
               <p className="text-sm text-gray-400 py-8">Couldn't load their tree.</p>
             ) : (
               <div>
-                <div className="flex justify-center mb-2"><AvatarThumb name={visitingStudentName} size={72} /></div>
+                <div className="flex justify-center mb-2"><button type="button" onClick={() => setHomeVisit(visitingStudentName)} title="Visit their home" className="rounded-2xl hover:scale-105 transition-transform"><AvatarThumb name={visitingStudentName} size={72} /></button></div>
+                {homeVisit && <HomeVisitModal name={homeVisit} onClose={() => setHomeVisit(null)} />}
                 <div className="w-full h-56 relative">
                   <TreeCanvas days={visitingAgeDays} />
                 </div>
