@@ -1,0 +1,45 @@
+name: Attendance streak coins
+
+# Every morning (about 8 AM Pacific) pays the regular-attendance coins for the scheduled classes that ended since the last run:
+# 100 coins for the first class of a streak, 125 for the next, 150 ... (+25 each); a missed scheduled class starts again from 100.
+# See scripts/pay-attendance-streaks.mjs. The very first run only STARTS the programme (nothing is paid for the past).
+# It reads about 300 documents a day. Run it by hand from the Actions tab at any time ("dry" = only say what it would pay).
+on:
+  schedule:
+    - cron: "0 15 * * *"
+  workflow_dispatch:
+    inputs:
+      dry:
+        description: "true = only show what would be paid"
+        required: false
+        default: "false"
+
+concurrency:
+  group: attendance-streaks
+  cancel-in-progress: false
+
+jobs:
+  streaks:
+    runs-on: ubuntu-latest
+    env:
+      TZ: America/Los_Angeles
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Pay the attendance streak coins
+        run: |
+          if [ "${{ github.event.inputs.dry }}" = "true" ]; then
+            node scripts/pay-attendance-streaks.mjs --dry
+          else
+            node scripts/pay-attendance-streaks.mjs
+          fi
