@@ -72,8 +72,11 @@ function synthesizeOccurrencesFromRecurringSchedule(recurringSlots, realSchedule
     const key = slot.studentUid === 'offline' ? `offline:${slot.studentName}` : `uid:${slot.studentUid}`;
     const [sh, sm] = (slot.startTime || '00:00').split(':').map(Number);
     const [eh, em] = (slot.endTime || '00:00').split(':').map(Number);
-    // Walk every date in range, pick out the ones matching this slot's weekday.
-    const cursor = new Date(startOfYear);
+    // Walk every date in range, pick out the ones matching this slot's weekday -- but only from the day the slot was
+    // created (a new student's slot must not be counted for the weeks before they ever came: that made brand-new
+    // students look like "missed 10 weeks in a row" and switched them off).
+    const createdMs = slot.createdAt && typeof slot.createdAt.toMillis === 'function' ? slot.createdAt.toMillis() : 0;
+    const cursor = new Date(Math.max(startOfYear.getTime(), createdMs ? new Date(new Date(createdMs).getFullYear(), new Date(createdMs).getMonth(), new Date(createdMs).getDate()).getTime() : 0));
     while (cursor <= now) {
       if (cursor.getDay() === slot.dayOfWeek) {
         const dateKey = `${key}_${cursor.getFullYear()}-${cursor.getMonth()}-${cursor.getDate()}`;
@@ -384,7 +387,7 @@ async function main() {
   // Today's Schedule: the standing weekly slots (everyone, offline students too) as one static file -- the page picks today's.
   writeFileSync(join(__dirname, '..', 'public', 'todaySchedule.json'), JSON.stringify({
     generatedAt,
-    slots: recurringSlots.filter(r => !r.studentInactive && r.studentName).map(r => ({ id: r.id, u: r.studentUid || null, n: r.studentName, d: r.dayOfWeek, s: r.startTime, e: r.endTime })),
+    slots: recurringSlots.filter(r => !r.studentInactive && r.studentName).map(r => ({ id: r.id, u: r.studentUid || null, n: r.studentName, d: r.dayOfWeek, s: r.startTime, e: r.endTime, c: r.createdAt && typeof r.createdAt.toMillis === 'function' ? r.createdAt.toMillis() : 0 })),
   }));
 
   writeFileSync(STATE_PATH, JSON.stringify({ lastRunMs: Date.now(), fullAt: FULL ? Date.now() : state.fullAt }));

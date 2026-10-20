@@ -864,7 +864,9 @@ const synthesizeScheduleOccurrences = (recurringSlots, realSchedule, rangeStart,
   (recurringSlots || []).forEach(slot => {
     const [sh, sm] = (slot.startTime || '00:00').split(':').map(Number);
     const [eh, em] = (slot.endTime || '00:00').split(':').map(Number);
-    const cursor = new Date(rangeStart);
+    // only from the day the slot was created (a new student has no weeks before they came)
+    const cMs = slot.createdAt && typeof slot.createdAt.toMillis === 'function' ? slot.createdAt.toMillis() : (slot.createdAt && slot.createdAt.seconds ? slot.createdAt.seconds * 1000 : 0);
+    const cursor = new Date(Math.max(new Date(rangeStart).getTime(), cMs ? new Date(new Date(cMs).getFullYear(), new Date(cMs).getMonth(), new Date(cMs).getDate()).getTime() : 0));
     while (cursor <= rangeEnd) {
       if (cursor.getDay() === slot.dayOfWeek) {
         const dateKey = `${slot.studentUid}_${cursor.getFullYear()}-${cursor.getMonth()}-${cursor.getDate()}`;
@@ -7588,6 +7590,20 @@ function StudentDashboard({ user, studentProfile, studentUid, announcements, onO
     };
   }, [studentProfile?.isRentalDevice, onLogout]);
 
+  // A student who was switched off AUTOMATICALLY (missed many weeks) and opens the app again is switched on again (the count of
+  // missed weeks starts afresh). One the teacher switched off by hand has no autoDeactivatedReason and stays off.
+  useEffect(() => {
+    if (!studentUid || studentUid === VISITOR_UID) return;
+    if (studentProfile?.isActive !== false || !studentProfile?.autoDeactivatedReason) return;
+    (async () => {
+      try {
+        await updateDoc(doc(db, `${publicDataPath}/students`, studentUid), { isActive: true, reactivatedAt: Date.now(), autoDeactivatedAt: deleteField(), autoDeactivatedReason: deleteField() });
+        const slots = await getDocs(query(recurringScheduleCollection, where('studentUid', '==', studentUid)));
+        await Promise.all(slots.docs.map(sd => updateDoc(sd.ref, { studentInactive: false })));
+      } catch (e) { console.error('Could not switch the student on again:', e); }
+    })();
+  }, [studentUid, studentProfile?.isActive, studentProfile?.autoDeactivatedReason]);
+
   const handleGreetTeacher = async () => {
     setShowGreetingPrompt(false);
     try { localStorage.setItem(GREETING_PROMPT_KEY, String(Date.now())); } catch (e) {}
@@ -10502,7 +10518,7 @@ function WeeklySchedule({ role, targetStudentUid }) {
       slotsPromise = fetch(`${import.meta.env.BASE_URL}todaySchedule.json`)
         .then(r => (r.ok ? r.json() : { slots: [] }))
         .then(j => {
-          const list = (j.slots || []).map(sl => ({ id: sl.id, studentUid: sl.u, studentName: sl.n, dayOfWeek: sl.d, startTime: sl.s, endTime: sl.e }));
+          const list = (j.slots || []).map(sl => ({ id: sl.id, studentUid: sl.u, studentName: sl.n, dayOfWeek: sl.d, startTime: sl.s, endTime: sl.e, createdAt: sl.c ? Timestamp.fromMillis(sl.c) : null }));
           setRecurringSlots(list);
           return list;
         })
@@ -12034,6 +12050,23 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpen
           
           localStorage.setItem('lastStudentId', displayId);
 
+        } else if (studentData.isActive === false && studentData.autoDeactivatedReason) {
+          // Switched off AUTOMATICALLY (missed many weeks): coming back with their ID switches them on again, and the
+          // count of missed weeks starts afresh. (A student the teacher switched off by hand stays off.)
+          try {
+            const studentRef = doc(db, `${publicDataPath}/students`, studentDocId);
+            await updateDoc(studentRef, { isActive: true, reactivatedAt: Date.now(), autoDeactivatedAt: deleteField(), autoDeactivatedReason: deleteField() });
+            const slots = await getDocs(query(recurringScheduleCollection, where('studentUid', '==', studentDocId)));
+            await Promise.all(slots.docs.map(sd => updateDoc(sd.ref, { studentInactive: false })));
+            setRole('student');
+            setTargetStudentUid(studentDocId);
+            setView('student');
+            if (user && user.uid !== studentDocId) { try { await updateDoc(studentRef, { authorizedUids: arrayUnion(user.uid) }); } catch (err) { /* ignore */ } }
+            localStorage.setItem('lastStudentId', displayId);
+          } catch (err) {
+            console.error('Could not switch the student on again:', err);
+            onError('An error occurred. Please try again.');
+          }
         } else if (studentData.isActive === false) {
           onError('This account has been deactivated.'); 
         } else {
