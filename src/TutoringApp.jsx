@@ -1684,6 +1684,8 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
         const bMs = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : (b.createdAt?.seconds ? b.createdAt.seconds * 1000 : 0);
         return bMs - aMs;
       })
+      // a student who earned several trophies in the week appears ONCE, with the newest announcement
+      .filter((a, i, list) => list.findIndex(x => x.studentName === a.studentName) === i)
       .map(a => ({ ...a, _unseen: !seenIds.includes(a.id) }));
     setVisibleAnnouncements(recent);
   }, [announcements, teacherConfigData]);
@@ -5058,7 +5060,7 @@ ${toSend.map(l => '• ' + l.title).join(', ')}`
               {visibleAnnouncements.map(ann => (
                 <div key={ann.id} className={`p-3 rounded-lg border text-sm relative ${ann._unseen ? 'bg-yellow-50 border-yellow-200' : 'bg-gray-50 border-gray-100'}`}>
                   <button onClick={() => dismissAnnouncement(ann.id)} className="absolute top-1.5 right-1.5 text-gray-300 hover:text-gray-600 text-xs">✕</button>
-                  <p className="font-bold text-yellow-900 pr-4">🎉 {ann.studentName}</p>
+                  <p className="font-bold text-yellow-900 pr-4">🎉 <PeekName name={ann.studentName} /></p>
                   <p className="text-yellow-800">earned their <span className="font-black text-yellow-600">{ann.trophyCount}</span>th trophy! 🏆</p>
                 </div>
               ))}
@@ -7925,6 +7927,8 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           const bMs = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : (b.createdAt?.seconds ? b.createdAt.seconds * 1000 : 0);
           return bMs - aMs;
         })
+        // a student who earned several trophies in the week appears ONCE, with the newest announcement
+        .filter((a, i, list) => list.findIndex(x => x.studentName === a.studentName) === i)
         .map(a => ({ ...a, _unseen: !seenIds.includes(a.id) }));
       setVisibleAnnouncements(recent);
     }
@@ -9801,7 +9805,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
               {visibleAnnouncements.map(ann => (
                 <div key={ann.id} className={`p-3 rounded-lg border text-sm relative ${ann._unseen ? 'bg-yellow-50 border-yellow-200' : 'bg-gray-50 border-gray-100'}`}>
                   <button onClick={() => dismissAnnouncement(ann.id)} className="absolute top-1.5 right-1.5 text-gray-300 hover:text-gray-600 text-xs">✕</button>
-                  <p className="font-bold text-yellow-900 pr-4">🎉 {ann.studentName}</p>
+                  <p className="font-bold text-yellow-900 pr-4">🎉 <PeekName name={ann.studentName} /></p>
                   <p className="text-yellow-800">earned their <span className="font-black text-yellow-600">{ann.trophyCount}</span>th trophy! 🏆</p>
                 </div>
               ))}
@@ -11021,7 +11025,7 @@ function WeeklySchedule({ role, targetStudentUid }) {
                                 return (
                                   <div key={entry.id} className={`flex items-center justify-between bg-white/70 rounded-lg px-3 py-2 ${isMine ? 'ring-2 ring-indigo-500' : ''}`}>
                                     <span className={`text-sm font-medium ${status === 'attended' ? 'text-emerald-900' : status === 'absent' ? 'text-red-900' : 'text-gray-800'}`}>
-                                      {entry.studentName}{isMine && <span className="ml-2 text-xs font-bold text-indigo-600">(You)</span>}
+                                      <PeekName name={entry.studentName} />{isMine && <span className="ml-2 text-xs font-bold text-indigo-600">(You)</span>}
                                     </span>
                                     <div className="flex items-center gap-1">
                                       {role === 'teacher' && isPast && (
@@ -11086,9 +11090,10 @@ function WeeklySchedule({ role, targetStudentUid }) {
                       <div key={entry.id} ref={isMine ? myEntryRef : null} className={`p-3 rounded-lg flex items-center justify-between ${bgColor} ${isMine ? 'ring-2 ring-indigo-500' : ''}`}>
                         <div className="flex items-center">
                           <div className="w-3 h-3 rounded-full mr-3 flex-shrink-0" style={{ backgroundColor: stringToColor(entry.studentName) }}></div>
-                          <button onClick={() => openCountModal(entry.studentUid, entry.studentName)} className="text-left disabled:cursor-not-allowed">
+                          <div className="text-left">
                             <p className={`font-semibold ${attendanceStatus === 'absent' ? 'text-red-900' : (attendanceStatus === 'attended' ? 'text-emerald-900' : 'text-violet-900')}`}>
-                              {entry.studentName}{isMine && <span className="ml-2 text-xs font-bold text-indigo-600">(You)</span>}
+                              <PeekName name={entry.studentName} />{isMine && <span className="ml-2 text-xs font-bold text-indigo-600">(You)</span>}
+                              <button type="button" onClick={() => openCountModal(entry.studentUid, entry.studentName)} className="ml-2 text-xs font-bold text-gray-500 bg-white/70 hover:bg-white border border-gray-200 rounded-full px-1.5 py-0.5 align-middle" title="Attendance count">📊</button>
                             </p>
                             <p className="text-sm text-gray-700">
                               {formatTime(entry.startTime)} - {formatTime(entry.endTime)}
@@ -11096,7 +11101,7 @@ function WeeklySchedule({ role, targetStudentUid }) {
                               {attendanceStatus === 'attended' && <span className="ml-2 text-xs font-bold text-emerald-700">(Attended{attendanceTime ? ` at ${formatTime(attendanceTime)}` : ''})</span>}
                               {attendanceStatus === 'absent' && <span className="ml-2 text-xs font-bold text-red-700">(Absent)</span>}
                             </p>
-                          </button>
+                          </div>
                         </div>
 
                         {role === 'teacher' && (

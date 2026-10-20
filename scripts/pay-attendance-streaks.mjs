@@ -1,6 +1,6 @@
 // The regular-attendance coin reward.
 //
-// Every scheduled class a student comes to, in a row, pays more coins: the 1st class of a streak 100 coins, the 2nd 125, the 3rd 150 ...
+// Every scheduled class a student comes to, in a row, pays more coins (at most 500): the 1st class of a streak 100 coins, the 2nd 125, the 3rd 150 ...
 // (+25 each time). Missing a scheduled class starts again from 100. Only a scheduled class counts (the weekly slot or the dated
 // entry of that student, on that day); coming on another day earns nothing. A student with two classes a week uses the same rule:
 // the streak goes on from one class to the next.
@@ -23,6 +23,7 @@ import { firebaseConfig, appId } from '../src/firebaseConfig.js';
 const DRY = process.argv.includes('--dry');
 const BASE_COINS = 100;
 const STEP_COINS = 25;
+const MAX_COINS = 500; // the reward stops growing at 500 coins
 const GRACE_MS = 30 * 60 * 1000; // a class counts once it has been over for half an hour
 const P = `artifacts/${appId}/public/data`;
 const GIFTS = 'artifacts/shrine-room-app/public/data/teacherGifts';
@@ -99,7 +100,7 @@ async function main() {
     const came = c.override === 'attended' || (c.override !== 'absent' && attendedDays.has(`${c.uid}_${c.day}`));
     if (came) {
       st.n += 1; st.last = c.start;
-      const coins = BASE_COINS + STEP_COINS * (st.n - 1);
+      const coins = Math.min(MAX_COINS, BASE_COINS + STEP_COINS * (st.n - 1));
       pay.push({ uid: c.uid, name: c.name || names[c.uid] || 'Student', n: st.n, coins });
       console.log(`  ${c.name || c.uid}: came (${c.day}) -> class ${st.n} in a row, ${coins} coins`);
     } else {
