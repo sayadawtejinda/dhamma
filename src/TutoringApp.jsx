@@ -33,7 +33,7 @@ import {
   runTransaction,
   deleteField
 } from 'firebase/firestore';
-import { cachedListen, refreshCachedListeners, cachedListenUpdatedAt } from './cachedListen';
+import { cachedListen, liveShared, refreshCachedListeners, cachedListenUpdatedAt } from './cachedListen';
 import { appId } from './firebaseConfig';
 import { getHomeBackground } from './homeBackgrounds';
 import { auth, db } from './firebase';
@@ -1692,7 +1692,8 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
 
   useEffect(() => {
     const q = query(studentsCollection);
-    const unsubscribe = cachedListen('t_students', q, (snapshot) => {
+    // live, but started ONCE and kept (see liveShared): paid for only when a student's record really changes
+    const unsubscribe = liveShared('t_students', q, (snapshot) => {
       const studentList = snapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
         .sort((a, b) => a.name.localeCompare(b.name)); 
@@ -4790,10 +4791,10 @@ ${toSend.map(l => '• ' + l.title).join(', ')}`
   // they scroll across anyone's screen. A tiny query -- normally zero docs.
   const [pendingStarAnnouncements, setPendingStarAnnouncements] = useState([]);
   useEffect(() => {
-    const unsub = cachedListen('t_starPending',
+    const unsub = liveShared('t_starPending',
       query(starAnnouncementsCollection, where('status', '==', 'pending')),
       (snap) => setPendingStarAnnouncements(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
-      (e) => console.error('Error loading pending announcements:', e), undefined, { refetchOnWrite: true }
+      (e) => console.error('Error loading pending announcements:', e)
     );
     return () => unsub();
   }, []);
@@ -11364,7 +11365,6 @@ const newAccountsClosed = (mode) => mode === 'closed' || (mode !== 'open' && isP
 
 // The dashboard keeps a saved copy of the students, sessions, schedule... (see cachedListen.js) and reads Firebase again
 // only once an hour; this button reads everything again right away.
-const STUDENT_KEYS = ['t_students', 't_starPending', 't_starWaiting'];
 const HISTORY_KEYS = ['t_sessions14', 't_schedule14'];
 function TeacherRefreshButton() {
   const [, setTick] = useState(0);
@@ -11373,14 +11373,6 @@ function TeacherRefreshButton() {
   const btn = 'px-3 py-1 bg-white border border-gray-300 text-gray-700 rounded-full hover:bg-gray-100 shadow-sm text-sm font-semibold';
   return (
     <>
-      {/* The one you need: new students and trophy requests (the student list, ~150 documents). */}
-      <button
-        onClick={() => { refreshCachedListeners(STUDENT_KEYS); setTick(x => x + 1); }}
-        className={btn}
-        title="Read the newest students and trophy requests now (about 150 reads). Nothing is read by itself."
-      >
-        🔄 Students{fmt(cachedListenUpdatedAt(['t_students']))}
-      </button>
       {/* Only when you want to see them: the last 14 days of sessions and schedule (about 1,000 reads); at most once an hour. */}
       <button
         onClick={() => {

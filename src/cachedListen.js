@@ -1,4 +1,4 @@
-import { getDocs, getDoc, Timestamp } from 'firebase/firestore';
+import { getDocs, getDoc, onSnapshot as _onSnapshot, Timestamp } from 'firebase/firestore';
 
 // A saved-copy replacement for a live onSnapshot on a collection / query (used on the teacher's dashboard).
 //  - The documents are kept on this device; they are read from Firebase again only when "Refresh" is pressed (or, if the copy
@@ -125,4 +125,22 @@ export function cachedGetDocs(key, q, ttlMs, opts = {}) {
       setTimeout(() => { if (off) off(); }, 0);
     }, (e) => { if (!done) { done = true; reject(e); } }, ttlMs, opts);
   });
+}
+
+// A live listener that is started ONCE per page load and then kept (never closed when a screen is left and opened again).
+// A live listener is paid for only by what it receives: all documents once at the start, then one read per document that
+// changes. Starting a new one every time the screen opens (and being paid for every document again) is what costs; this one
+// is shared, so going Home <-> Trophies <-> Home costs nothing. Use it only for small collections that change rarely.
+const shared = new Map();
+export function liveShared(key, q, onNext, onError) {
+  let s = shared.get(key);
+  if (!s) {
+    s = { subs: new Set(), last: null };
+    shared.set(key, s);
+    _onSnapshot(q, (snap) => { s.last = snap; s.subs.forEach(f => { try { f(snap); } catch (e) { console.error(e); } }); },
+      (e) => { shared.delete(key); if (onError) onError(e); else console.error('Live listener', key, e); });
+  }
+  s.subs.add(onNext);
+  if (s.last) { try { onNext(s.last); } catch (e) { console.error(e); } }
+  return () => { s.subs.delete(onNext); };
 }
