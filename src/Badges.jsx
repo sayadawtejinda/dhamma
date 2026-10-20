@@ -214,30 +214,41 @@ export function BadgeSvg({ badge, size = 56 }) {
 }
 
 // Badges in rows, grouped by the app they belong to (a group per line), master badges first inside a group.
+// No big coloured panel: it would cover the student's home picture. Each badge sits on its own small rounded chip, and the whole shelf
+// can be folded away (remembered on this device) with the button above it.
+const SHELF_KEY = 'badgeShelfOpen';
 export function BadgeShelf({ name, profile = null, title = '🎖️ Badges', compact = false }) {
   const badges = useBadges(name, profile);
-  const [open, setOpen] = useState(null);
+  const [open, setOpen] = useState(() => { try { return localStorage.getItem(SHELF_KEY) !== '0'; } catch (e) { return true; } });
+  const [picked, setPicked] = useState(null);
+  const toggle = () => { setOpen(o => { try { localStorage.setItem(SHELF_KEY, o ? '0' : '1'); } catch (e) { /* ignore */ } return !o; }); };
   if (badges.length === 0) return null;
   const rank = { gold: 0, silver: 1, bronze: 2 };
+  const groups = compact ? [{ id: 'all-in-one', title: '', items: badges }] : BADGE_GROUPS.map(g => ({ ...g, items: badges.filter(b => b.group === g.id) })).filter(g => g.items.length > 0);
+  const chip = 'bg-white/85 backdrop-blur-sm shadow rounded-2xl';
   return (
-    <div className="rounded-2xl p-3 mb-6" style={{ background: 'linear-gradient(180deg,#fffaf0,#f3e7c9)', border: '2px solid #d9b866' }}>
-      <p className="font-extrabold text-amber-900 mb-2">{title} <span className="text-sm font-bold text-amber-700">· {badges.length}</span></p>
-      <div className={compact ? 'flex flex-wrap gap-1.5' : 'space-y-2'}>
-        {(compact ? [{ id: 'all-in-one', title: '', items: badges }] : BADGE_GROUPS.map(g => ({ ...g, items: badges.filter(b => b.group === g.id) })).filter(g => g.items.length > 0)).map(g => (
-          <div key={g.id} className={compact ? 'contents' : ''}>
-            {!compact && <p className="text-[11px] font-bold uppercase tracking-wide text-amber-700 mb-0.5">{g.title}</p>}
-            <div className="flex flex-wrap gap-2">
-              {g.items.slice().sort((a, b) => (rank[a.metal] ?? 3) - (rank[b.metal] ?? 3)).map(b => (
-                <button key={b.id} type="button" onClick={() => setOpen(open === b.id ? null : b.id)} className="flex flex-col items-center w-[60px] focus:outline-none" title={`${b.name} — ${b.desc}`}>
-                  <BadgeSvg badge={b} size={compact ? 44 : 52} />
-                  <span className="text-[9px] font-bold text-amber-900 text-center leading-tight mt-0.5 break-words">{b.name}</span>
-                </button>
-              ))}
+    <div className="mb-6">
+      <button type="button" onClick={toggle} className={`inline-flex items-center gap-2 ${chip} px-4 py-1.5 font-extrabold text-amber-900`}>
+        {title} <span className="text-sm font-bold text-amber-700">· {badges.length}</span> <span className="text-xs text-gray-500">{open ? '▲ hide' : '▼ show'}</span>
+      </button>
+      {open && (
+        <div className={compact ? 'mt-2 flex flex-wrap gap-1.5' : 'mt-2 flex flex-wrap items-start gap-x-4 gap-y-2'}>
+          {groups.map(g => (
+            <div key={g.id} className={compact ? 'contents' : 'max-w-full'}>
+              {!compact && <p className={`inline-block ${chip} px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-amber-800 mb-1`}>{g.title}</p>}
+              <div className="flex flex-wrap gap-1.5">
+                {g.items.slice().sort((a, b) => (rank[a.metal] ?? 3) - (rank[b.metal] ?? 3)).map(b => (
+                  <button key={b.id} type="button" onClick={() => setPicked(picked === b.id ? null : b.id)} className={`flex flex-col items-center w-[66px] px-1 pt-1.5 pb-1 ${chip} focus:outline-none`} title={`${b.name} — ${b.desc}`}>
+                    <BadgeSvg badge={b} size={compact ? 42 : 50} />
+                    <span className="text-[9px] font-bold text-amber-900 text-center leading-tight mt-0.5 break-words">{b.name}</span>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
-      {open && (() => { const b = badges.find(x => x.id === open); return b ? <p className="mt-2 text-xs font-semibold text-amber-900 bg-white/70 rounded-lg px-2 py-1">🎖️ {b.name} — {b.desc}</p> : null; })()}
+          ))}
+          {picked && (() => { const b = badges.find(x => x.id === picked); return b ? <p className={`inline-block ${chip} px-3 py-1 text-xs font-semibold text-amber-900`}>🎖️ {b.name} — {b.desc}</p> : null; })()}
+        </div>
+      )}
     </div>
   );
 }
