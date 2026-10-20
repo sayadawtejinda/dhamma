@@ -11454,6 +11454,18 @@ function BadgeApprovals({ students, sessions }) {
   const [manualBadge, setManualBadge] = useState('');
   const data = useBadgeData();
   const top = useTopThree();
+  // Auto-give: when ON, the weekly job gives every earned badge by itself (scripts/auto-give-badges.mjs); OFF = the teacher gives them here.
+  const [autoOn, setAutoOn] = useState(null); // null until read (only when the panel is opened)
+  useEffect(() => {
+    if (!open || autoOn !== null) return;
+    getDoc(doc(db, `${publicDataPath}/config/badgeAuto`)).then(s => setAutoOn(!!(s.exists() && s.data().on === true))).catch(() => setAutoOn(false));
+  }, [open, autoOn]);
+  const toggleAuto = async () => {
+    const next = !autoOn;
+    setAutoOn(next);
+    try { await setDoc(doc(db, `${publicDataPath}/config/badgeAuto`), { on: next, updatedAt: Date.now() }, { merge: true }); }
+    catch (e) { console.error('Could not save Auto-give:', e); setAutoOn(!next); alert('Could not save. Please try again.'); }
+  };
   if (!data) return null;
 
   const pendingFor = (s) => {
@@ -11501,7 +11513,14 @@ function BadgeApprovals({ students, sessions }) {
       </button>
       {open && (
         <div className="mt-3 p-4 rounded-xl bg-amber-50 border border-amber-200">
-          <p className="text-xs text-gray-600 mb-2">Give a badge while that student is in class: when they open their Home page the celebration plays (a gift box, a drone, a stage or a podium). A badge is given only once. Students studying now (an open session) are listed first.</p>
+          <div className={`mb-3 p-3 rounded-lg border-2 flex items-center justify-between gap-3 flex-wrap ${autoOn ? 'bg-emerald-50 border-emerald-300' : 'bg-white border-gray-200'}`}>
+            <div className="text-sm min-w-0">
+              <p className="font-bold text-gray-800">🤖 Auto-give: {autoOn === null ? '…' : autoOn ? 'ON' : 'OFF (you give them here)'}</p>
+              <p className="text-xs text-gray-600">{autoOn ? 'Every earned badge is given by itself in the weekly job (a ladder together, lowest first); the student sees the celebration when they open their Home page. The top-three honours are still yours to give.' : 'Switch it on when you trust the badges: they will be given by themselves once a week.'}</p>
+            </div>
+            <button type="button" onClick={toggleAuto} disabled={autoOn === null} className={`px-4 py-2 rounded-lg font-bold text-white shadow ${autoOn ? 'bg-red-500 hover:bg-red-600' : 'bg-emerald-600 hover:bg-emerald-700'} disabled:opacity-50`}>{autoOn ? 'Turn off' : 'Turn on'}</button>
+          </div>
+          <p className="text-xs text-gray-600 mb-2">Give a badge while that student is in class: when they open their Home page the celebration plays (a gift box, a drone, a stage or a podium). A badge is given only once. Students studying now (🟢, an open session) are listed first at the top; press 🔄 Refresh to update who is in class.</p>
           <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search a name or Student ID" className="w-full mb-3 px-3 py-2 rounded-lg border border-amber-300 text-sm" />
           {rows.length === 0 && <p className="text-sm text-gray-500">Nothing is waiting.</p>}
           <div className="space-y-2">

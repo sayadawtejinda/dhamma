@@ -58,6 +58,10 @@ jobs:
       - name: Work out the badges
         run: node scripts/compute-badges.mjs
 
+      # Gives the earned badges to the students -- only when the teacher has switched Auto-give ON (1 read when it is off)
+      - name: Auto-give badges
+        run: node scripts/auto-give-badges.mjs
+
       - name: Commit and push if changed
         env:
           GH_TOKEN: ${{ github.token }}
