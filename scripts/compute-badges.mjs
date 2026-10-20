@@ -78,7 +78,7 @@ for (const st of students) {
     // Shrine Room: friends visited. Nature World: gifts sent to friends and trees planted.
     at(new Set(sh.shrineVisitedFriends || []).size, [[2, 'shrine-visits-2'], [10, 'shrine-visits'], [25, 'shrine-visits-25'], [50, 'shrine-visits-50'], [75, 'shrine-visits-75']]);
     const nw = sh.natureWorld || {};
-    at(new Set(nw.giftedFriends || []).size, [[1, 'nature-gift-1'], [5, 'nature-gift-5'], [15, 'nature-gift-15'], [30, 'nature-gift-30'], [50, 'nature-gift-50'], [100, 'nature-gift-100'], [200, 'nature-gift-200'], [300, 'nature-gift-300']]);
+    at(new Set(nw.giftedFriends || []).size, [[1, 'nature-gift-1'], [3, 'nature-gift-3'], [10, 'nature-gift-10'], [20, 'nature-gift-20'], [50, 'nature-gift-50'], [100, 'nature-gift-100'], [200, 'nature-gift-200'], [300, 'nature-gift-300']]);
     const trees = nw.placedTrees ? Object.keys(nw.placedTrees).length : 0;
     at(trees, [[3, 'nature-3'], [8, 'nature-5'], [15, 'nature-15'], [30, 'nature-12'], [60, 'nature-25'], [100, 'nature-100']]);
     const owned = new Set();
@@ -119,7 +119,7 @@ for (const st of students) {
   // festivals: good deeds (a kind thought, paying respect) and the festival lamps lit (public/festivalDeeds.json, weekly)
   const fd = (festivalDeeds.students || {})[n];
   if (fd) {
-    at(fd.deeds || 0, [[25, 'deeds-25'], [50, 'deeds-50'], [100, 'deeds-100'], [200, 'deeds-200'], [300, 'deeds-300'], [500, 'deeds-500']]);
+    at(fd.deeds || 0, [[5, 'deeds-5'], [15, 'deeds-15'], [40, 'deeds-40'], [65, 'deeds-65'], [100, 'deeds-100'], [200, 'deeds-200'], [300, 'deeds-300'], [500, 'deeds-500']]);
     at(fd.lamps || 0, [[10, 'lamps-10'], [50, 'lamps-50'], [100, 'lamps-100'], [200, 'lamps-200'], [500, 'lamps-500']]);
   }
   at(ssTotal, [[10, 'ss-10'], [25, 'ss-25'], [50, 'ss-50'], [100, 'ss-100'], [200, 'ss-200']]);
