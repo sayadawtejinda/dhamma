@@ -101,7 +101,8 @@ for (const st of students) {
   if (BASIC_VOWELS.every(x => vg.has(x)) || vlUnits >= 8) got.push('vowels-basic');
   if (PRO_VOWELS.every(x => vg.has(x)) || vlUnits >= 11) got.push('vowels-pro');
   const nu = numbers.get(n);
-  if (nu) at((nu.completedLevels || []).length, [[1, 'numbers-1'], [2, 'numbers-2'], [3, 'numbers-3'], [4, 'numbers-master']]);
+  // not given for now (the teacher is rethinking badges for number games and Animal Sound)
+  if (false && nu) at((nu.completedLevels || []).length, [[1, 'numbers-1'], [2, 'numbers-2'], [3, 'numbers-3'], [4, 'numbers-master']]);
   const co = consonants.get(n);
   // Part 1 Consonant Practice: all 7 cups (5, 10, 15, 20, 25, 30, 33 consonants) -- from the student's own game record or the teacher-approved count
   const cpRoster = consonantPractice.get(n);
@@ -110,7 +111,7 @@ for (const st of students) {
   // Part 2 Burmese Consonant Game: trophies won (19 in all)
   at(Math.max(co ? (co.completedGames || []).length : 0, pu.bg || 0), [[5, 'consonants-5'], [19, 'consonants-19']]);
   const an = animals.get(n);
-  if (an) at(an.trophyWins || 0, [[1, 'animals-1'], [3, 'animals-3'], [5, 'animals-master']]);
+  if (false && an) at(an.trophyWins || 0, [[1, 'animals-1'], [3, 'animals-3'], [5, 'animals-master']]);
   // Smart Study: lessons finished, all classes together
   const ss = ssDone[n] || {};
   let ssTotal = 0;
