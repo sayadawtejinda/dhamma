@@ -73,22 +73,36 @@ export const BADGE_DEFS = [
   { id: 'nature-15', group: 'nature', shape: 'tree', metal: 'silver', icon: '', name: 'Tree Tender', desc: 'Planted 15 trees' },
   { id: 'nature-12', group: 'nature', shape: 'tree', metal: 'gold', icon: '', name: 'Forest Keeper', desc: 'Planted 30 trees', master: true },
   { id: 'nature-25', group: 'nature', shape: 'leaf', metal: 'gold', icon: '🌳', name: 'Grove Guardian', desc: 'Planted 60 trees', master: true },
+  { id: 'avatar-5', group: 'nature', shape: 'shirt', metal: 'bronze', icon: '', name: 'Dress-up Fan', desc: 'Got 5 Avatar items' },
   { id: 'avatar-10', group: 'nature', shape: 'shirt', metal: 'silver', icon: '', name: 'Stylist', desc: 'Got 10 Avatar items' },
   { id: 'avatar-25', group: 'nature', shape: 'shirt', metal: 'gold', icon: '', name: 'Fashion Star', desc: 'Got 20 Avatar items', master: true },
+  { id: 'avatar-30', group: 'nature', shape: 'shirt', metal: 'gold', icon: '', name: 'Trendsetter', desc: 'Got 30 Avatar items', master: true },
+  { id: 'avatar-50', group: 'nature', shape: 'shirt', metal: 'gold', icon: '👑', name: 'Fashion Icon', desc: 'Got 50 Avatar items', master: true },
   // poems: singing
+  { id: 'poems-5', group: 'poems', shape: 'music', metal: 'bronze', icon: '', name: 'Poem Beginner', desc: 'Recited 5 poems' },
   { id: 'poems-10', group: 'poems', shape: 'music', metal: 'bronze', icon: '', name: 'Little Singer', desc: 'Recited 10 poems' },
   { id: 'poems-25', group: 'poems', shape: 'music', metal: 'silver', icon: '', name: 'Sweet Voice', desc: 'Recited 25 poems' },
+  { id: 'poems-40', group: 'poems', shape: 'mic', metal: 'gold', icon: '', name: 'Golden Voice', desc: 'Recited 40 poems' },
   { id: 'poem-master', group: 'poems', shape: 'mic', metal: 'gold', icon: '', name: 'Poem Master', desc: 'Recited all 48 poems', master: true },
   // reader
+  { id: 'reader-5', group: 'reader', shape: 'book', metal: 'bronze', icon: '📖', name: 'First Pages', desc: 'Reached chapter 5' },
   { id: 'reader-10', group: 'reader', shape: 'book', metal: 'bronze', icon: '📖', name: 'Reader', desc: 'Reached chapter 10' },
+  { id: 'reader-15', group: 'reader', shape: 'book', metal: 'silver', icon: '📖', name: 'Page Turner', desc: 'Reached chapter 15' },
   { id: 'reader-20', group: 'reader', shape: 'book', metal: 'silver', icon: '📖', name: 'Bookworm', desc: 'Reached chapter 20' },
+  { id: 'reader-25', group: 'reader', shape: 'book', metal: 'gold', icon: '📖', name: 'Story Lover', desc: 'Reached chapter 25' },
   { id: 'reader-master', group: 'reader', shape: 'book', metal: 'gold', icon: '🎓', name: 'Myanmar Reader Master', desc: 'Finished all 29 chapters', master: true },
   // games
   { id: 'vowels-basic', group: 'games', shape: 'rocket', metal: 'bronze', icon: '', name: 'Vowel Starter', desc: 'Finished the basic vowel games' },
+  { id: 'vowels-5', group: 'games', shape: 'rocket', metal: 'silver', icon: '', name: 'Vowel Explorer', desc: 'Finished 5 vowel games' },
   { id: 'vowels-pro', group: 'games', shape: 'rocket', metal: 'gold', icon: '', name: 'Vowel Master', desc: 'Finished 10 vowel games', master: true },
+  { id: 'numbers-1', group: 'games', shape: 'target', metal: 'bronze', icon: '', name: 'Number Starter', desc: 'Finished 1 number level' },
   { id: 'numbers-2', group: 'games', shape: 'target', metal: 'silver', icon: '', name: 'Number Learner', desc: 'Finished 2 number levels' },
+  { id: 'numbers-3', group: 'games', shape: 'target', metal: 'gold', icon: '', name: 'Number Whiz', desc: 'Finished 3 number levels' },
   { id: 'numbers-master', group: 'games', shape: 'golf', metal: 'gold', icon: '', name: 'Hole in One', desc: 'Finished all 4 number levels', master: true },
+  { id: 'consonants-3', group: 'games', shape: 'quill', metal: 'bronze', icon: '', name: 'Consonant Starter', desc: 'Finished 3 consonant games' },
   { id: 'consonants-6', group: 'games', shape: 'quill', metal: 'silver', icon: '', name: 'Consonant Explorer', desc: 'Finished 6 consonant games' },
+  { id: 'animals-1', group: 'games', shape: 'paw', metal: 'bronze', icon: '', name: 'Animal Friend', desc: 'Won 1 Animal Sound trophy' },
+  { id: 'animals-3', group: 'games', shape: 'paw', metal: 'silver', icon: '', name: 'Animal Lover', desc: 'Won 3 Animal Sound trophies' },
   { id: 'animals-master', group: 'games', shape: 'paw', metal: 'gold', icon: '🐘', name: 'Animal Sound Master', desc: 'Won all 5 Animal Sound trophies', master: true },
   // Smart Study: by the number of lessons finished (all classes together)
   { id: 'ss-10', group: 'ss', shape: 'bulb', metal: 'bronze', icon: '', name: 'Quiz Starter', desc: '10 Smart Study lessons' },
@@ -158,6 +172,7 @@ export const ladderOf = (id) => {
   if (id.startsWith('vowels-')) return 'vowels';
   if (id.startsWith('numbers-')) return 'numbers';
   if (id === 'poem-master') return 'poems';
+  if (id === 'animals-master') return 'animals';
   if (id === 'reader-master') return 'reader';
   return id.replace(/-\d+$/, '');
 };

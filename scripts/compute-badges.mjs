@@ -83,27 +83,28 @@ for (const st of students) {
     // items the student has GOT (each one once -- wearing one again does not count), without the free starter item of each kind
     const FREE = new Set(['hair:short-black', 'outfit:blue', 'accessory:none', 'bg:sky', 'homeBackground:default']);
     Object.entries(sh.avatarOwned || {}).forEach(([cat, arr]) => (Array.isArray(arr) ? arr : []).forEach(x => { if (!FREE.has(`${cat}:${x}`)) owned.add(`${cat}:${x}`); }));
-    at(owned.size, [[10, 'avatar-10'], [20, 'avatar-25']]);
+    at(owned.size, [[5, 'avatar-5'], [10, 'avatar-10'], [20, 'avatar-25'], [30, 'avatar-30'], [50, 'avatar-50']]);
   }
   const po = poems.get(n);
   if (po) {
     const c = new Set(po.completedPoemIds || []).size;
-    at(c, [[10, 'poems-10'], [25, 'poems-25'], [48, 'poem-master']]);
+    at(c, [[5, 'poems-5'], [10, 'poems-10'], [25, 'poems-25'], [40, 'poems-40'], [48, 'poem-master']]);
   }
   const rd = reader.get(n);
-  if (rd) at(rd.furthestChapter || 0, [[10, 'reader-10'], [20, 'reader-20'], [29, 'reader-master']]);
+  if (rd) at(rd.furthestChapter || 0, [[5, 'reader-5'], [10, 'reader-10'], [15, 'reader-15'], [20, 'reader-20'], [25, 'reader-25'], [29, 'reader-master']]);
   const vo = vowels.get(n);
   if (vo) {
     const g = new Set(vo.completedGames || []);
     if (BASIC_VOWELS.every(x => g.has(x))) got.push('vowels-basic');
+    if (g.size >= 5) got.push('vowels-5');
     if (g.size >= 10) got.push('vowels-pro');
   }
   const nu = numbers.get(n);
-  if (nu) at((nu.completedLevels || []).length, [[2, 'numbers-2'], [4, 'numbers-master']]);
+  if (nu) at((nu.completedLevels || []).length, [[1, 'numbers-1'], [2, 'numbers-2'], [3, 'numbers-3'], [4, 'numbers-master']]);
   const co = consonants.get(n);
-  if (co && (co.completedGames || []).length >= 6) got.push('consonants-6');
+  if (co) at((co.completedGames || []).length, [[3, 'consonants-3'], [6, 'consonants-6']]);
   const an = animals.get(n);
-  if (an && (an.trophyWins || 0) >= 5) got.push('animals-master');
+  if (an) at(an.trophyWins || 0, [[1, 'animals-1'], [3, 'animals-3'], [5, 'animals-master']]);
   // Smart Study: lessons finished, all classes together
   const ss = ssDone[n] || {};
   let ssTotal = 0;
