@@ -21,6 +21,7 @@ const reader = byName(roster('myanmar-reader-app'));
 const vowels = byName(roster('myanmar-vowels-learning-app'));
 const numbers = byName(roster('myanmar-number-learning-app'));
 const consonants = byName(roster('burmese-consonant-game-app'));
+const consonantPractice = byName(roster('consonant-practice-app'));
 const animals = byName(roster('animal-sound-app'));
 
 // Smart Study: distinct lessons per student per class (the class boards), and the lessons in each class
@@ -55,6 +56,7 @@ const yearWeeksOf = (uid) => {
 };
 const festivalDeeds = readJson('festivalDeeds.json') || { students: {} };
 const BASIC_VOWELS = ['B-listen-1', 'B-listen-2', 'B-click-1', 'B-click-2', 'B-click-3'];
+const PRO_VOWELS = ['P-listen-1', 'P-listen-2', 'P-click-1'];
 const out = {};
 for (const st of students) {
   const n = st.name;
@@ -96,13 +98,16 @@ for (const st of students) {
   if (vo) {
     const g = new Set(vo.completedGames || []);
     if (BASIC_VOWELS.every(x => g.has(x))) got.push('vowels-basic');
-    if (g.size >= 5) got.push('vowels-5');
-    if (g.size >= 10) got.push('vowels-pro');
+    if (PRO_VOWELS.every(x => g.has(x))) got.push('vowels-pro');
   }
   const nu = numbers.get(n);
   if (nu) at((nu.completedLevels || []).length, [[1, 'numbers-1'], [2, 'numbers-2'], [3, 'numbers-3'], [4, 'numbers-master']]);
   const co = consonants.get(n);
-  if (co) at((co.completedGames || []).length, [[3, 'consonants-3'], [6, 'consonants-6']]);
+  // Part 1 Consonant Practice: all 7 cups (5, 10, 15, 20, 25, 30, 33 consonants) -- from the student's own game record or the teacher-approved count
+  const cpRoster = consonantPractice.get(n);
+  if (new Set((cpRoster && cpRoster.completedGroups) || []).size >= 7 || (st.consonantDone || 0) >= 7) got.push('cp-33');
+  // Part 2 Burmese Consonant Game: trophies won (19 in all)
+  if (co) at((co.completedGames || []).length, [[5, 'consonants-5'], [19, 'consonants-19']]);
   const an = animals.get(n);
   if (an) at(an.trophyWins || 0, [[1, 'animals-1'], [3, 'animals-3'], [5, 'animals-master']]);
   // Smart Study: lessons finished, all classes together
