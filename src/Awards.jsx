@@ -250,15 +250,19 @@ export function AwardPlaque({ award, compact = false }) {
       style={{ background: 'linear-gradient(135deg,#7b4a21,#b27535 45%,#6b3d17)', border: '2px solid #4a2a0e' }}
     >
       <div
-        className="rounded-xl px-2 py-2 text-center"
+        className="rounded-xl px-3 py-2"
         style={{ background: `linear-gradient(160deg, ${m.plate[0]}, ${m.plate[1]} 55%, ${m.plate[2]})`, border: `2px solid ${m.edge}`, boxShadow: 'inset 0 0 10px rgba(0,0,0,.25)' }}
       >
-        <div className="flex justify-center"><AwardEmblem kind={kind} tier={tier} size={compact ? 40 : 60} /></div>
-        <p className={`${compact ? 'text-[10px]' : 'text-xs'} tracking-wider font-extrabold uppercase leading-tight`} style={engraved}>{info.en}</p>
-        <div className="my-1 h-px" style={{ background: `linear-gradient(90deg, transparent, ${m.edge}, transparent)` }} />
-        <p className={`${compact ? 'text-sm' : 'text-lg'} font-black break-words leading-tight`} style={engraved}>{name}</p>
-        <p className={`${compact ? 'text-[11px]' : 'text-sm'} font-bold mt-0.5`} style={engraved}>{what}</p>
-        {!compact && generatedAt && <p className="text-[11px] mt-0.5 font-semibold opacity-80" style={engraved}>{fmtDate(generatedAt)}</p>}
+        <div className="flex items-center gap-3">
+          <div className="flex-shrink-0"><AwardEmblem kind={kind} tier={tier} size={compact ? 46 : 64} /></div>
+          <div className="text-left min-w-0 flex-1">
+            <p className={`${compact ? 'text-[10px]' : 'text-xs'} tracking-wider font-extrabold uppercase leading-tight`} style={engraved}>{info.en}</p>
+            <div className="my-1 h-px" style={{ background: `linear-gradient(90deg, ${m.edge}, transparent)` }} />
+            <p className={`${compact ? 'text-sm' : 'text-lg'} font-black break-words leading-tight`} style={engraved}>{name}</p>
+            <p className={`${compact ? 'text-[11px]' : 'text-sm'} font-bold mt-0.5`} style={engraved}>{what}</p>
+            {!compact && generatedAt && <p className="text-[11px] mt-0.5 font-semibold opacity-80" style={engraved}>{fmtDate(generatedAt)}</p>}
+          </div>
+        </div>
       </div>
     </div>
   );

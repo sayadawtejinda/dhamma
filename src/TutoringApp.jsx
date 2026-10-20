@@ -2,6 +2,7 @@ import { listenWithHistory, listenLessonsWithHistory, loadStudentHistory } from 
 import { isOnlineStatusDay, isParamiClassTime } from './presenceDay';
 import { PeekName, AvatarThumb } from './AvatarPeek';
 import { useAwards, AwardEmblem, HallOfExcellence } from './Awards';
+import { BadgeShelf } from './Badges';
 import ParamiReportEditor from './ParamiReportEditor';
 import { startLiveWatchListener, setLiveWatch, useLiveWatch, liveWatchUntilMs } from './liveWatch';
 import { SPECIAL_AWARD_ITEMS } from './festivals';
@@ -10235,6 +10236,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         </div>
       </div>
       )}
+      <div className="mt-8"><BadgeShelf name={studentProfile?.name} /></div>
     </div>
   );
 }

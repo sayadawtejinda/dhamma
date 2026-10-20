@@ -524,7 +524,7 @@ export default function AvatarApp({ entryRequest, onExit }) {
       </div>
       {/* the engraved plaques stand at the right, under the wallet, one above the other (more awards go below) */}
       {myAwards.length > 0 && (
-        <div className="fixed right-2 top-16 z-[9700] flex flex-col gap-2 w-36">
+        <div className="fixed right-2 top-16 z-[9700] flex flex-col gap-2 w-56 sm:w-64">
           {myAwards.map(w => <AwardPlaque key={w.kind} award={w} compact />)}
         </div>
       )}

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { CharacterSvg } from './AvatarCharacter';
 import { getHomeBackground } from './homeBackgrounds';
 import { useAwards, AwardMedal, AwardEmblem } from './Awards';
+import { BadgeShelf } from './Badges';
 import { SKIN_OPTIONS, HAIR_OPTIONS, BG_OPTIONS, ALL_OUTFITS, ALL_ACCESSORIES, AVATAR_DEFAULT_CONFIG, findAvatarOption } from './AvatarApp';
 
 // Tap a student's name anywhere -> see their Avatar. The looks come from ONE static file written by the
@@ -103,7 +104,7 @@ export function AvatarPeekModal({ name, onClose }) {
   const won = useAwards({ name });
   return (
     <div
-      className="fixed inset-0 z-[10050] flex flex-col items-start p-6"
+      className="fixed inset-0 z-[10050] flex flex-col items-start p-6 overflow-y-auto"
       style={{ backgroundImage: `url(${import.meta.env.BASE_URL}${bg})`, backgroundSize: 'cover', backgroundPosition: 'center top' }}
       onClick={onClose}
     >
@@ -132,6 +133,7 @@ export function AvatarPeekModal({ name, onClose }) {
           ))}
         </span>
       </div>
+      <div className="mt-4 w-full max-w-md" onClick={(ev) => ev.stopPropagation()}><BadgeShelf name={name} title="🎖️ Badges" compact /></div>
     </div>
   );
 }

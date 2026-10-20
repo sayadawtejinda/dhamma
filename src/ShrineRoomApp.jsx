@@ -1793,7 +1793,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
           spot, so the app's own coin/button column below is pushed down
           to top-16 to leave it room. */}
       {holyAward && !isTeacherPreview && (
-        <div className="fixed left-2 top-[4.5rem] z-40 w-32 sm:w-36"><AwardPlaque award={holyAward} compact /></div>
+        <div className="fixed left-2 top-[4.5rem] z-40 w-56 sm:w-64"><AwardPlaque award={holyAward} compact /></div>
       )}
       <OnlineStatusWidget
         rosterPath={SHRINE_ROSTER_PATH}

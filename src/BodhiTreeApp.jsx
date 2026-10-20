@@ -869,7 +869,7 @@ export default function BodhiTreeApp({ entryRequest, onExit }) {
       </button>
 
       {joyAward && !isTeacherMode && (
-        <div className="fixed right-2 top-16 z-40 w-32 sm:w-36"><AwardPlaque award={joyAward} compact /></div>
+        <div className="fixed right-2 top-16 z-40 w-56 sm:w-64"><AwardPlaque award={joyAward} compact /></div>
       )}
       {!isTeacherMode && (
         <>
