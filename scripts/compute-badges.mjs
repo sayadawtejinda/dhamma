@@ -38,16 +38,8 @@ if (existsSync(ssDir)) {
 }
 // Abhidhamma boards
 const abhi = (readJson('classSnapshots/abhidhamma.json') || {}).classes || {};
-// Dhammaschool: lessons answered
-const dsDone = {};
-const dsDir = join(ROOT, 'classSnapshots', 'dhammaschool');
-if (existsSync(dsDir)) {
-  for (const f of readdirSync(dsDir).filter(x => x.endsWith('.json'))) {
-    for (const a of (readJson(`classSnapshots/dhammaschool/${f}`) || {}).answers || []) {
-      if (a.studentName && a.lessonId) (dsDone[a.studentName] = dsDone[a.studentName] || new Set()).add(a.lessonId);
-    }
-  }
-}
+// Dhammaschool: the chapters each student finished, and which chapters make up each grade (classSnapshots/dhammaschool-progress.json)
+const dsProgress = readJson('classSnapshots/dhammaschool-progress.json') || { lessonsByClass: {}, completions: {} };
 
 const BASIC_VOWELS = ['B-listen-1', 'B-listen-2', 'B-click-1', 'B-click-2', 'B-click-3'];
 const out = {};
@@ -88,23 +80,21 @@ for (const st of students) {
   if (co && (co.completedGames || []).length >= 6) got.push('consonants-6');
   const an = animals.get(n);
   if (an && (an.trophyWins || 0) >= 5) got.push('animals-master');
-  // Smart Study
+  // Smart Study: lessons finished, all classes together
   const ss = ssDone[n] || {};
   let ssTotal = 0;
-  for (const [cid, set] of Object.entries(ss)) {
-    ssTotal += set.size;
-    if ((classLessons[cid] || 0) >= 3 && set.size >= classLessons[cid]) got.push(`ss-class:${cid}`);
-  }
-  at(ssTotal, [[10, 'ss-10'], [50, 'ss-50'], [100, 'ss-100']]);
-  // Abhidhamma
+  for (const set of Object.values(ss)) ssTotal += set.size;
+  at(ssTotal, [[10, 'ss-10'], [25, 'ss-25'], [50, 'ss-50'], [100, 'ss-100'], [200, 'ss-200']]);
+  // Abhidhamma: lessons finished, all classes together
   let abTotal = 0;
-  for (const [cid, c] of Object.entries(abhi)) {
-    const done = (c.students || {})[n] || 0;
-    abTotal += done;
-    if ((c.totalLessons || 0) >= 3 && done >= c.totalLessons) got.push(`abhi-class:${cid}`);
+  for (const c of Object.values(abhi)) abTotal += (c.students || {})[n] || 0;
+  at(abTotal, [[10, 'abhi-10'], [30, 'abhi-30'], [60, 'abhi-60'], [100, 'abhi-100']]);
+  // Dhammaschool: chapters finished, and every finished grade
+  const dsSet = new Set(dsProgress.completions[n] || []);
+  at(dsSet.size, [[5, 'ds-5'], [20, 'ds-20'], [50, 'ds-50'], [100, 'ds-100']]);
+  for (const [grade, lessonIds] of Object.entries(dsProgress.lessonsByClass || {})) {
+    if (lessonIds.length >= 5 && lessonIds.every(id => dsSet.has(id))) got.push(`ds-grade:${grade}`);
   }
-  at(abTotal, [[10, 'abhi-10'], [30, 'abhi-30']]);
-  at((dsDone[n] || new Set()).size, [[5, 'ds-5'], [20, 'ds-20']]);
   if (got.length >= 20) got.push('all-rounder');
   const valid = got.filter(id => BADGE_DEFS.some(b => b.id === id) || dynamicBadge(id));
   if (valid.length) out[n] = valid;

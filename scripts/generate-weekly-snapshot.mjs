@@ -24,7 +24,7 @@ import { writeFileSync, mkdirSync, readFileSync, readdirSync, existsSync } from 
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { firebaseConfig, appId } from '../src/firebaseConfig.js';
-import { refreshClassSnapshots, refreshClassDocSnapshots, refreshAbhidhammaClassFiles, CLASS_DIR } from './class-snapshots.mjs';
+import { refreshClassSnapshots, refreshClassDocSnapshots, refreshAbhidhammaClassFiles, refreshDhammaschoolProgress, CLASS_DIR } from './class-snapshots.mjs';
 import { refreshContentSnapshots, refreshAnnouncementsSnapshot, refreshAvatarSnapshot, refreshScheduleSnapshot } from './content-snapshots.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -401,6 +401,7 @@ async function main() {
     await refreshAnnouncementsSnapshot(db, appId);
     await refreshClassDocSnapshots(db, appId);
     await refreshAbhidhammaClassFiles(db);
+    await refreshDhammaschoolProgress(db);
   }
   if (want('content')) {
     await refreshContentSnapshots(db);

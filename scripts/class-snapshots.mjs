@@ -185,6 +185,27 @@ export async function refreshClassDocSnapshots(db, appId) {
   return written;
 }
 
+// ---- Dhammaschool progress: which chapters make up each grade and which chapters each student finished -------------------
+// public/classSnapshots/dhammaschool-progress.json = { generatedAt, lessonsByClass: { 'GRADE-1': [lessonId...] }, completions: { name: [lessonId...] } }
+// Used for the Dhammaschool badges (no Firebase read in the app). ~200 lesson documents + the completions; weekly only.
+export async function refreshDhammaschoolProgress(db) {
+  const DS = 'artifacts/dhammaschool-app/public/data';
+  const lessons = await getDocs(collection(db, `${DS}/lessons`));
+  const lessonsByClass = {};
+  lessons.docs.forEach(d => { const c = d.data().classId; if (c) (lessonsByClass[c] = lessonsByClass[c] || []).push(d.id); });
+  Object.values(lessonsByClass).forEach(l => l.sort());
+  const comps = await getDocs(collection(db, `${DS}/lesson_completions`));
+  const completions = {};
+  comps.docs.forEach(d => { const x = d.data(); if (x.studentName && x.lessonId) (completions[x.studentName] = completions[x.studentName] || new Set()).add(x.lessonId); });
+  const out = Object.fromEntries(Object.entries(completions).sort(([a], [b]) => (a < b ? -1 : 1)).map(([k, v]) => [k, [...v].sort()]));
+  mkdirSync(CLASS_DIR, { recursive: true });
+  const file = join(CLASS_DIR, 'dhammaschool-progress.json');
+  let old = null;
+  try { const j = JSON.parse(readFileSync(file, 'utf8')); old = JSON.stringify({ l: j.lessonsByClass, c: j.completions }); } catch (e) { /* none yet */ }
+  if (old !== JSON.stringify({ l: lessonsByClass, c: out })) writeFileSync(file, JSON.stringify({ generatedAt: new Date().toISOString(), lessonsByClass, completions: out }));
+  console.log(`Dhammaschool progress: ${Object.keys(lessonsByClass).length} grades, ${comps.size} completions`);
+}
+
 // ---- Each Abhidhamma class (its lessons with all four age versions) as a plain file ---------------------------------------
 // A lesson is about 55 KB (all four versions), 1-2 MB a class, 12 MB for all classes -- far too much to send out of Firestore
 // to every student who opens a class. This writes public/classSnapshots/abhidhamma-class/{CLASS}.json =
