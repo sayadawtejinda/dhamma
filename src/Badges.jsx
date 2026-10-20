@@ -1,5 +1,5 @@
 import React, { useEffect, useId, useState } from 'react';
-import { BADGE_GROUPS, badgeMeta } from './badgeDefs';
+import { BADGE_GROUPS, badgeMeta, ladderOf, ladderRank } from './badgeDefs';
 import { LEVEL_BADGES_SVG } from './bodhiLevels';
 import { useBadgeData, givenOf } from './badgeData';
 
@@ -228,11 +228,16 @@ const SHELF_KEY = 'badgeShelfOpen';
 export function BadgeShelf({ name, profile = null, title = '🎖️ Badges', compact = false }) {
   const badges = useBadges(name, profile);
   const [open, setOpen] = useState(() => { try { return localStorage.getItem(SHELF_KEY) !== '0'; } catch (e) { return true; } });
-  const [picked, setPicked] = useState(null);
+  const [picked, setPicked] = useState(null); // the ladder whose badges are all shown
   const toggle = () => { setOpen(o => { try { localStorage.setItem(SHELF_KEY, o ? '0' : '1'); } catch (e) { /* ignore */ } return !o; }); };
   if (badges.length === 0) return null;
   const rank = { gold: 0, silver: 1, bronze: 2 };
-  const groups = compact ? [{ id: 'all-in-one', title: '', items: badges }] : BADGE_GROUPS.map(g => ({ ...g, items: badges.filter(b => b.group === g.id) })).filter(g => g.items.length > 0);
+  // one badge per ladder: the highest one; a tap shows the lower ones too
+  const ladders = new Map();
+  badges.forEach(b => { const k = ladderOf(b.id); (ladders.get(k) || ladders.set(k, []).get(k)).push(b); });
+  ladders.forEach(list => list.sort((a, b) => ladderRank(a.id) - ladderRank(b.id)));
+  const tops = [...ladders.values()].map(list => ({ ...list[list.length - 1], _ladder: ladderOf(list[0].id), _count: list.length }));
+  const groups = compact ? [{ id: 'all-in-one', title: '', items: tops }] : BADGE_GROUPS.map(g => ({ ...g, items: tops.filter(b => b.group === g.id) })).filter(g => g.items.length > 0);
   const chip = 'bg-white/85 backdrop-blur-sm shadow rounded-2xl';
   return (
     <div className="mb-6 pb-16">
@@ -246,15 +251,26 @@ export function BadgeShelf({ name, profile = null, title = '🎖️ Badges', com
               {!compact && <p className={`inline-block ${chip} px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-amber-800 mb-1`}>{g.title}</p>}
               <div className="flex flex-wrap gap-1.5">
                 {g.items.slice().sort((a, b) => (rank[a.metal] ?? 3) - (rank[b.metal] ?? 3)).map(b => (
-                  <button key={b.id} type="button" onClick={() => setPicked(picked === b.id ? null : b.id)} className={`flex flex-col items-center w-[66px] px-1 pt-1.5 pb-1 ${chip} focus:outline-none`} title={`${b.name} — ${b.desc}`}>
+                  <button key={b.id} type="button" onClick={() => setPicked(picked === b._ladder ? null : b._ladder)} className={`relative flex flex-col items-center w-[66px] px-1 pt-1.5 pb-1 ${chip} focus:outline-none`} title={`${b.name} — ${b.desc}`}>
                     <BadgeSvg badge={b} size={compact ? 42 : 50} />
+                    {b._count > 1 && <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-amber-600 text-white text-[10px] font-extrabold leading-[18px] text-center shadow">{b._count}</span>}
                     <span className="text-[9px] font-bold text-amber-900 text-center leading-tight mt-0.5 break-words">{b.name}</span>
                   </button>
                 ))}
               </div>
             </div>
           ))}
-          {picked && (() => { const b = badges.find(x => x.id === picked); return b ? <p className={`inline-block ${chip} px-3 py-1 text-xs font-semibold text-amber-900`}>🎖️ {b.name} — {b.desc}</p> : null; })()}
+          {picked && ladders.get(picked) && (
+            <div className={`w-full ${chip} px-2 py-2 flex flex-wrap gap-1.5 items-start`}>
+              {ladders.get(picked).map(b => (
+                <div key={b.id} className="flex flex-col items-center w-[84px]" title={b.desc}>
+                  <BadgeSvg badge={b} size={46} />
+                  <span className="text-[10px] font-extrabold text-amber-900 text-center leading-tight">{b.name}</span>
+                  <span className="text-[9px] text-gray-500 text-center leading-tight">{b.desc}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

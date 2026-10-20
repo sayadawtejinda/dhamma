@@ -142,3 +142,20 @@ export const dynamicBadge = (id) => {
 
 const BY_ID = new Map(BADGE_DEFS.map(b => [b.id, b]));
 export const badgeMeta = (id) => BY_ID.get(id) || dynamicBadge(id);
+
+// A "ladder" = badges of one kind in climbing order (Trophy Rookie -> ... -> Trophy Immortal). The shelf shows only the highest one a
+// student has (a tap opens the whole ladder), and the teacher gives a whole ladder at once, lowest first.
+export const ladderOf = (id) => {
+  if (id.startsWith('bodhi-level:')) { const p = id.split(':'); return `bodhi-level:${p.length >= 3 ? p[1] : 2026}`; }
+  if (id.startsWith('bodhi-year:') || id.startsWith('ds-grade:')) return id;
+  if (id.startsWith('shrine-visits')) return 'shrine-visits';
+  if (/^nature-\d+$/.test(id)) return 'trees';
+  if (id.startsWith('vowels-')) return 'vowels';
+  if (id.startsWith('numbers-')) return 'numbers';
+  if (id === 'poem-master') return 'poems';
+  if (id === 'reader-master') return 'reader';
+  return id.replace(/-\d+$/, '');
+};
+const ORDER = new Map(BADGE_DEFS.map((b, i) => [b.id, i]));
+// climbing order inside a ladder (Bodhi levels by level, the rest by their place in the list above)
+export const ladderRank = (id) => (id.startsWith('bodhi-level:') ? Number(id.split(':').pop()) : (ORDER.get(id) ?? 0));

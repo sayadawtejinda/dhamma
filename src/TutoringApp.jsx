@@ -6,7 +6,7 @@ import { BadgeShelf } from './Badges';
 import BadgeCeremony from './BadgeCeremony';
 import { useBadgeData } from './badgeData';
 import { useTopThree, awardsFor, AWARDS, HOLY_AWARDS, JOY_AWARDS } from './Awards';
-import { badgeMeta, BADGE_DEFS, BADGE_GROUPS } from './badgeDefs';
+import { badgeMeta, BADGE_DEFS, BADGE_GROUPS, ladderOf, ladderRank } from './badgeDefs';
 import { STAGE_NAMES } from './bodhiLevels';
 import ParamiReportEditor from './ParamiReportEditor';
 import { startLiveWatchListener, setLiveWatch, useLiveWatch, liveWatchUntilMs } from './liveWatch';
@@ -11460,10 +11460,19 @@ function BadgeApprovals({ students, sessions }) {
     const given = s.badgesGiven || {};
     const items = [];
     awardsFor(top, { name: s.name, id: s.id }).forEach(a => { if (given[`award-${a.kind}`] !== a.tier) items.push({ award: true, kind: a.kind, tier: a.tier, title: a.info.en, sub: `${a.kind === 'trophy' ? 'Most trophies' : a.kind === 'holy' ? 'Most lotus flowers' : 'Most classes attended'} · place ${a.tier}`, weight: -1 }); });
+    // badges of one kind (a ladder) are given together, lowest first: ONE line per ladder, the highest waiting badge named
+    const ladders = new Map();
     ((data.earned.students || {})[s.name] || []).forEach(id => {
       if (given[id]) return;
       const b = badgeMeta(id);
-      if (b) items.push({ award: false, id, title: b.name, sub: b.desc, weight: badgeWeight(b), metal: b.metal });
+      if (!b) return;
+      const k = ladderOf(id);
+      (ladders.get(k) || ladders.set(k, []).get(k)).push({ id, b, rank: ladderRank(id) });
+    });
+    ladders.forEach(list => {
+      list.sort((x, y) => x.rank - y.rank);
+      const top = list[list.length - 1];
+      items.push({ award: false, id: top.id, ids: list.map(x => x.id), title: top.b.name, sub: list.length > 1 ? `${list.map(x => x.b.name).join(' → ')}` : top.b.desc, weight: badgeWeight(top.b), metal: top.b.metal });
     });
     return items.sort((a, b) => a.weight - b.weight);
   };
@@ -11477,8 +11486,8 @@ function BadgeApprovals({ students, sessions }) {
   const give = async (s, items) => {
     setBusy(prev => ({ ...prev, [s.id]: true }));
     try {
-      const upd = { badgesNew: arrayUnion(...items.map(it => (it.award ? `a:${it.kind}:${it.tier}` : `b:${it.id}`))) };
-      items.forEach(it => { if (it.award) upd[`badgesGiven.award-${it.kind}`] = it.tier; else upd[`badgesGiven.${it.id}`] = Date.now(); });
+      const upd = { badgesNew: arrayUnion(...items.flatMap(it => (it.award ? [`a:${it.kind}:${it.tier}`] : (it.ids || [it.id]).map(id => `b:${id}`)))) };
+      items.forEach(it => { if (it.award) upd[`badgesGiven.award-${it.kind}`] = it.tier; else (it.ids || [it.id]).forEach(id => { upd[`badgesGiven.${id}`] = Date.now(); }); });
       await updateDoc(doc(db, `${publicDataPath}/students`, s.id), upd);
     } catch (e) { console.error('Could not give the badge:', e); alert('Could not give the badge. Please try again.'); }
     setBusy(prev => ({ ...prev, [s.id]: false }));
