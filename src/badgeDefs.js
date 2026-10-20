@@ -34,9 +34,14 @@ export const BADGE_DEFS = [
   { id: 'trophy-400', group: 'trophy', shape: 'rosette', metal: 'gold', icon: '🏆', name: 'Trophy Grandmaster', desc: '400 trophies', master: true },
   { id: 'trophy-500', group: 'trophy', shape: 'crest', metal: 'gold', icon: '💎', name: 'Trophy Immortal', desc: '500 trophies', master: true },
   // coming to class: football
+  { id: 'weeks-1', group: 'attend', shape: 'soccer', metal: 'bronze', icon: '', name: 'First Kick', desc: 'Came to class for 1 week (counted from 2026)' },
+  { id: 'weeks-5', group: 'attend', shape: 'soccer', metal: 'bronze', icon: '', name: 'Rookie Player', desc: 'Came to class in 5 weeks' },
   { id: 'weeks-10', group: 'attend', shape: 'soccer', metal: 'bronze', icon: '', name: 'Regular Player', desc: 'Came to class in 10 weeks' },
-  { id: 'weeks-25', group: 'attend', shape: 'soccer', metal: 'silver', icon: '', name: 'Star Player', desc: 'Came to class in 25 weeks' },
+  { id: 'weeks-20', group: 'attend', shape: 'soccer', metal: 'silver', icon: '', name: 'Team Player', desc: 'Came to class in 20 weeks' },
+  { id: 'weeks-30', group: 'attend', shape: 'soccer', metal: 'silver', icon: '', name: 'Star Player', desc: 'Came to class in 30 weeks' },
   { id: 'weeks-50', group: 'attend', shape: 'soccer', metal: 'gold', icon: '', name: 'Team Captain', desc: 'Came to class in 50 weeks', master: true },
+  { id: 'weeks-100', group: 'attend', shape: 'soccer', metal: 'gold', icon: '', name: 'Club Legend', desc: 'Came to class in 100 weeks', master: true },
+  { id: 'weeks-200', group: 'attend', shape: 'soccer', metal: 'gold', icon: '🏆', name: 'Hall of Famer', desc: 'Came to class in 200 weeks', master: true },
   // hearts
   { id: 'hearts-5', group: 'heart', shape: 'heart', metal: 'bronze', icon: '💕', name: 'Warm Heart', desc: '5 hearts received' },
   { id: 'hearts-20', group: 'heart', shape: 'heart', metal: 'silver', icon: '💖', name: 'Dear Friend', desc: '20 hearts received' },

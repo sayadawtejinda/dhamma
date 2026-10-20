@@ -9,7 +9,7 @@ import { useBadgeData, givenOf } from './badgeData';
 
 // The badges a student HAS = the ones the teacher has given (see badgeData.js). `profile` is the student's own live record when we
 // have it (their Home page); a friend looking at someone else's Home sees the weekly copy of what was given.
-export function useBadges(name, profile) {
+export function useBadges(name, profile, all = false) {
   const data = useBadgeData();
   if (!data || !name) return [];
   const given = givenOf(data, name, profile);
@@ -18,6 +18,7 @@ export function useBadges(name, profile) {
   // gold yearly badge); every yearly badge is kept
   const nowYear = new Date().getFullYear();
   const top = Math.max(-1, ...list.filter(b => b.shape === 'bodhi' && b.year === nowYear).map(b => b.level));
+  if (all) return list; // the shelf keeps them all: it shows the highest and opens the rest on a tap
   return list.filter(b => b.shape !== 'bodhi' || (b.year === nowYear && b.level === top));
 }
 
@@ -226,7 +227,7 @@ export function BadgeSvg({ badge, size = 56 }) {
 // can be folded away (remembered on this device) with the button above it.
 const SHELF_KEY = 'badgeShelfOpen';
 export function BadgeShelf({ name, profile = null, title = '🎖️ Badges', compact = false }) {
-  const badges = useBadges(name, profile);
+  const badges = useBadges(name, profile, true);
   const [open, setOpen] = useState(() => { try { return localStorage.getItem(SHELF_KEY) !== '0'; } catch (e) { return true; } });
   const [picked, setPicked] = useState(null); // the ladder whose badges are all shown
   const toggle = () => { setOpen(o => { try { localStorage.setItem(SHELF_KEY, o ? '0' : '1'); } catch (e) { /* ignore */ } return !o; }); };
@@ -235,7 +236,15 @@ export function BadgeShelf({ name, profile = null, title = '🎖️ Badges', com
   // one badge per ladder: the highest one; a tap shows the lower ones too
   const ladders = new Map();
   badges.forEach(b => { const k = ladderOf(b.id); (ladders.get(k) || ladders.set(k, []).get(k)).push(b); });
-  ladders.forEach(list => list.sort((a, b) => ladderRank(a.id) - ladderRank(b.id)));
+  ladders.forEach((list, k) => {
+    list.sort((a, b) => ladderRank(a.id) - ladderRank(b.id));
+    // a Bodhi level reached means every level before it was reached too: fill them in
+    if (k.startsWith('bodhi-level:')) {
+      const year = k.split(':')[1];
+      for (let lv = 0; lv < ladderRank(list[list.length - 1].id); lv++) { const id = `bodhi-level:${year}:${lv}`; if (!list.some(x => x.id === id)) { const m = badgeMeta(id); if (m) list.push(m); } }
+      list.sort((a, b) => ladderRank(a.id) - ladderRank(b.id));
+    }
+  });
   const tops = [...ladders.values()].map(list => ({ ...list[list.length - 1], _ladder: ladderOf(list[0].id), _count: list.length }));
   const groups = compact ? [{ id: 'all-in-one', title: '', items: tops }] : BADGE_GROUPS.map(g => ({ ...g, items: tops.filter(b => b.group === g.id) })).filter(g => g.items.length > 0);
   const chip = 'bg-white/85 backdrop-blur-sm shadow rounded-2xl';

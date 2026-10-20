@@ -66,7 +66,9 @@ for (const st of students) {
   const bodhi = levelForWeeks(yw[THIS_YEAR] || 0);
   if (bodhi >= 0) got.push(`bodhi-level:${THIS_YEAR}:${bodhi}`);
   for (let y = 2026; y < THIS_YEAR; y++) { const l = levelForWeeks(yw[y] || 0); if (l >= 0) got.push(`bodhi-year:${y}:${l}`); }
-  at(weekly[st.id] || 0, [[10, 'weeks-10'], [25, 'weeks-25'], [50, 'weeks-50']]);
+  // weeks of coming to class, counted from 2026 on (earlier weeks are not counted)
+  const weeksSince2026 = Object.entries(yw).filter(([y]) => Number(y) >= 2026).reduce((n, [, v]) => n + v, 0);
+  at(weeksSince2026, [[1, 'weeks-1'], [5, 'weeks-5'], [10, 'weeks-10'], [20, 'weeks-20'], [30, 'weeks-30'], [50, 'weeks-50'], [100, 'weeks-100'], [200, 'weeks-200']]);
   at(st.heartsReceived || 0, [[5, 'hearts-5'], [20, 'hearts-20'], [50, 'hearts-50'], [100, 'hearts-100'], [200, 'hearts-200'], [300, 'hearts-300'], [500, 'hearts-500']]);
   const sh = shrine.get(n);
   if (sh) {
