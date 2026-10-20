@@ -54,13 +54,16 @@ export const BADGE_DEFS = [
   { id: 'shrine-visits-50', group: 'shrine', shape: 'feet', metal: 'gold', icon: '', name: 'Altar Explorer', desc: 'Visited 50 friends\' Shrine Rooms' },
   { id: 'shrine-visits-75', group: 'shrine', shape: 'feet', metal: 'gold', icon: '', name: 'Pilgrim of Friendship', desc: 'Visited 75 friends\' Shrine Rooms', master: true },
   // nature & avatar
-  { id: 'nature-gift-1', group: 'nature', shape: 'gift', metal: 'bronze', icon: '', name: 'First Gift', desc: 'Sent a Nature World gift to a friend' },
-  { id: 'nature-gift-3', group: 'nature', shape: 'gift', metal: 'silver', icon: '', name: 'Generous Friend', desc: 'Sent Nature World gifts to 3 friends' },
-  { id: 'nature-gift-5', group: 'nature', shape: 'gift', metal: 'gold', icon: '', name: 'Gift Giver', desc: 'Sent Nature World gifts to 5 friends', master: true },
+  { id: 'nature-gift-5', group: 'nature', shape: 'gift', metal: 'bronze', icon: '', name: 'Little Gifter', desc: 'Sent Nature World gifts to 5 friends' },
+  { id: 'nature-gift-15', group: 'nature', shape: 'gift', metal: 'silver', icon: '', name: 'Generous Friend', desc: 'Sent Nature World gifts to 15 friends' },
+  { id: 'nature-gift-30', group: 'nature', shape: 'gift', metal: 'gold', icon: '', name: 'Gift Giver', desc: 'Sent Nature World gifts to 30 friends' },
+  { id: 'nature-gift-50', group: 'nature', shape: 'burst', metal: 'gold', icon: '🎁', name: 'Gift Star', desc: 'Sent Nature World gifts to 50 friends', master: true },
+  { id: 'nature-gift-100', group: 'nature', shape: 'rosette', metal: 'gold', icon: '🎁', name: 'Heart of Giving', desc: 'Sent Nature World gifts to 100 friends', master: true },
+  { id: 'nature-gift-200', group: 'nature', shape: 'crest', metal: 'gold', icon: '💝', name: 'Dana Master', desc: 'Sent Nature World gifts to 200 friends', master: true },
   { id: 'nature-5', group: 'nature', shape: 'tree', metal: 'bronze', icon: '', name: 'Gardener', desc: 'Planted 8 trees' },
   { id: 'nature-15', group: 'nature', shape: 'tree', metal: 'silver', icon: '', name: 'Tree Tender', desc: 'Planted 15 trees' },
-  { id: 'nature-12', group: 'nature', shape: 'tree', metal: 'gold', icon: '', name: 'Forest Keeper', desc: 'Planted 20 trees', master: true },
-  { id: 'nature-25', group: 'nature', shape: 'leaf', metal: 'gold', icon: '🌳', name: 'Grove Guardian', desc: 'Planted 25 trees', master: true },
+  { id: 'nature-12', group: 'nature', shape: 'tree', metal: 'gold', icon: '', name: 'Forest Keeper', desc: 'Planted 30 trees', master: true },
+  { id: 'nature-25', group: 'nature', shape: 'leaf', metal: 'gold', icon: '🌳', name: 'Grove Guardian', desc: 'Planted 60 trees', master: true },
   { id: 'avatar-10', group: 'nature', shape: 'shirt', metal: 'silver', icon: '', name: 'Stylist', desc: 'Owns 20 Avatar items' },
   { id: 'avatar-25', group: 'nature', shape: 'shirt', metal: 'gold', icon: '', name: 'Fashion Star', desc: 'Owns 35 Avatar items', master: true },
   // poems: singing
@@ -102,11 +105,11 @@ export const BADGE_DEFS = [
   { id: 'deeds-300', group: 'festival', shape: 'heart', metal: 'gold', icon: '💛', name: 'Heart of Gold', desc: '300 good deeds in the festivals', master: true },
   { id: 'deeds-500', group: 'festival', shape: 'crown', metal: 'gold', icon: '', name: 'Sadhu Master', desc: '500 good deeds in the festivals', master: true },
   // festivals: keeping the traditions (lighting the festival lamps)
-  { id: 'lamps-10', group: 'festival', shape: 'lamp', metal: 'bronze', icon: '', name: 'Lamp Lighter', desc: 'Lit 10 festival lamps' },
-  { id: 'lamps-25', group: 'festival', shape: 'lamp', metal: 'silver', icon: '', name: 'Keeper of the Flame', desc: 'Lit 25 festival lamps' },
-  { id: 'lamps-50', group: 'festival', shape: 'lamp', metal: 'gold', icon: '', name: 'Festival Light', desc: 'Lit 50 festival lamps' },
-  { id: 'lamps-100', group: 'festival', shape: 'lamp', metal: 'gold', icon: '', name: 'Guardian of Tradition', desc: 'Lit 100 festival lamps', master: true },
-  { id: 'lamps-200', group: 'festival', shape: 'burst', metal: 'gold', icon: '🪔', name: 'Light of the Dhamma', desc: 'Lit 200 festival lamps', master: true },
+  { id: 'lamps-10', group: 'festival', shape: 'lamp', metal: 'bronze', icon: '', name: 'Lamp Lighter', desc: '10 festival traditions (lamps, pumpkins, water...)' },
+  { id: 'lamps-50', group: 'festival', shape: 'lamp', metal: 'silver', icon: '', name: 'Keeper of the Flame', desc: '50 festival traditions' },
+  { id: 'lamps-100', group: 'festival', shape: 'lamp', metal: 'gold', icon: '', name: 'Festival Light', desc: '100 festival traditions' },
+  { id: 'lamps-200', group: 'festival', shape: 'burst', metal: 'gold', icon: '🪔', name: 'Guardian of Tradition', desc: '200 festival traditions', master: true },
+  { id: 'lamps-500', group: 'festival', shape: 'crest', metal: 'gold', icon: '🪔', name: 'Light of the Dhamma', desc: '500 festival traditions', master: true },
   // special
   { id: 'all-rounder', group: 'all', shape: 'burst', metal: 'gold', icon: '🌟', name: 'All-Rounder', desc: 'Earned 20 badges', master: true },
 ];
