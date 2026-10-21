@@ -11583,6 +11583,12 @@ function BadgeApprovals({ students, sessions }) {
                   <optgroup label="Bodhi Tree gold yearly badge (given at the end of a year)">
                     {STAGE_NAMES.map((n, i) => <option key={`bodhiy${i}`} value={`b:bodhi-year:${new Date().getFullYear()}:${i}`}>{new Date().getFullYear()} · {n}</option>)}
                   </optgroup>
+                  <optgroup label="Years with us (given by hand to students studying since 2020)">
+                    {Array.from({ length: new Date().getFullYear() - 2019 }, (_, i) => 2020 + i).flatMap(y => [
+                      <option key={`yr${y}`} value={`b:year-${y}`}>Dhamma Year {y}</option>,
+                      ...(y > 2020 ? [<option key={`yrs${y}`} value={`years:${y}`}>All years 2020 to {y}</option>] : []),
+                    ])}
+                  </optgroup>
                   <optgroup label="Top-three honours (the ceremony; the honour itself shows only while the student really holds that place)">
                     {['trophy', 'holy', 'joy'].flatMap(k => [1, 2, 3].map(t => <option key={`${k}${t}`} value={`a:${k}:${t}`}>{AWARD_LISTS[k][t - 1].en} (place {t})</option>))}
                   </optgroup>
@@ -11594,6 +11600,14 @@ function BadgeApprovals({ students, sessions }) {
                     if (!st || !manualBadge) return;
                     const [type, a, b] = manualBadge.split(':');
                     const given = st.badgesGiven || {};
+                    if (type === 'years') {
+                      // every year from 2020 up to the chosen one, lowest first, the ones not given yet
+                      const ids = Array.from({ length: Number(a) - 2019 }, (_, i) => `year-${2020 + i}`).filter(id => !given[id]);
+                      if (ids.length === 0) { alert('All these years were already given to this student.'); return; }
+                      await give(st, ids.map(id => ({ award: false, id })));
+                      setManualBadge('');
+                      return;
+                    }
                     if (type === 'b' && given[manualBadge.slice(2)]) { alert('This badge was already given to this student.'); return; }
                     await give(st, [type === 'a' ? { award: true, kind: a, tier: Number(b) } : { award: false, id: manualBadge.slice(2) }]);
                     setManualBadge('');

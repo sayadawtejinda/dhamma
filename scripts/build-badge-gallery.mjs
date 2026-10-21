@@ -44,11 +44,14 @@ for (const grp of defs.BADGE_GROUPS) {
 // the Bodhi Tree: ten levels (this year), the gold yearly badge, one badge for every finished Dhammaschool grade
 const year = new Date().getFullYear();
 const bodhi = STAGE_NAMES.map((_, i) => defs.badgeMeta(`bodhi-level:${year}:${i}`));
+const yearsWithUs = [2020, 2021, 2022, 2023, 2024, 2025, 2026].map(y => defs.badgeMeta(`year-${y}`));
 const bodhiYear = STAGE_NAMES.map((_, i) => defs.badgeMeta(`bodhi-year:${year - 1}:${i}`));
 const cardDyn = (b) => `<div class="card">${svg(b)}<b>${esc(b.name)}</b><span class="d">${esc(b.desc)}</span><span class="id">${esc(b.id)}</span><span class="n">earned ${earnedCount[b.id] || 0} · given ${givenCount[b.id] || 0}</span></div>`;
 total += bodhi.length + bodhiYear.length;
 body += `<h2>Bodhi Tree (levels this year, ${year})</h2><div class="ladder"><div class="lt">bodhi-level · 10 steps (each level is a badge of its own)</div><div class="row">${bodhi.map(cardDyn).join('')}</div></div>`;
 body += `<h2>Bodhi Tree — gold yearly badge (EXAMPLE shown as ${year - 1}: kept for later, nothing is given for it yet; ${year} will be given when the year ends)</h2><div class="ladder"><div class="row">${bodhiYear.map(cardDyn).join('')}</div></div>`;
+body += `<h2>Years with us (you give these by hand: Badges to give → Give any badge by hand)</h2><div class="ladder"><div class="lt">one for every year a student has studied with you (2020 on) · shown with the Bodhi gold yearly badges</div><div class="row">${yearsWithUs.map(cardDyn).join('')}</div></div>`;
+total += yearsWithUs.length;
 body += `<h2>Dhammaschool grades (5 steps in each grade: 8, 16, 24, 32, 40 chapters)</h2>`;
 for (let g = 1; g <= 5; g++) { const steps = [1, 2, 3, 4, 5].map(k => defs.badgeMeta(`ds-grade:GRADE-${g}:${k}`)); total += 5; body += `<div class="ladder"><div class="lt">Grade ${g} · 5 steps</div><div class="row">${steps.map(cardDyn).join('')}</div></div>`; }
 

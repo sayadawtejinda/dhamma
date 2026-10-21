@@ -199,6 +199,22 @@ export function BadgeSvg({ badge, size = 56 }) {
       </div>
     );
   }
+  if (badge.shape === 'yearmedal') {
+    // a gold medal with the year in the middle (for the years a student has studied with the teacher)
+    const g = METALS.gold;
+    return (
+      <svg viewBox="0 0 100 100" width={size} height={size} role="img" aria-label={badge.name} style={{ filter: 'drop-shadow(0 2px 2px rgba(0,0,0,.35))' }}>
+        <defs><linearGradient id={`ym-${uid}`} x1="0.1" y1="0" x2="0.9" y2="1"><stop offset="0" stopColor={g.light} /><stop offset="0.5" stopColor={g.mid} /><stop offset="1" stopColor={g.dark} /></linearGradient></defs>
+        <polygon points={star(50, 50, 24, 48, 43)} fill={`url(#ym-${uid})`} stroke={g.edge} strokeWidth="2" strokeLinejoin="round" />
+        <circle cx="50" cy="50" r="36" fill="none" stroke={g.edge} strokeWidth="2" />
+        <circle cx="50" cy="50" r="32" fill="#fff6cf" fillOpacity="0.55" stroke={g.dark} strokeWidth="1" />
+        <text x="50" y="30" textAnchor="middle" fontSize="8" fontWeight="800" fill={g.edge} letterSpacing="1.5">DHAMMA</text>
+        <text x="50" y="56" textAnchor="middle" fontSize="25" fontWeight="900" fill="#6b4700" style={{ fontFamily: 'Georgia, serif' }}>{badge.year}</text>
+        <text x="50" y="72" textAnchor="middle" fontSize="8" fontWeight="800" fill={g.edge} letterSpacing="1.5">STUDENT</text>
+        <polygon points="86,6 88.5,13 96,15.5 88.5,18 86,25 83.5,18 76,15.5 83.5,13" fill="#fff" stroke={g.edge} strokeWidth="0.8" />
+      </svg>
+    );
+  }
   const m = METALS[badge.metal] || METALS.gold;
   const gid = `bg-${uid}`;
   const centerY = badge.shape === 'rosette' ? 46 : badge.shape === 'scroll' ? 52 : 54;

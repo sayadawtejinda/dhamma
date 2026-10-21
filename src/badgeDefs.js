@@ -171,6 +171,13 @@ export const dynamicBadge = (id) => {
   }
   // Dhammaschool: five steps in every grade (8, 16, 24, 32, 40 of its 40 chapters). 'ds-grade:GRADE-3:2' = step 2 of Grade 3;
   // the old 'ds-grade:GRADE-3' (no step) is the last step. Every grade has its own number mark and its own look for the last step.
+  // A year of studying with the teacher (from 2020): 'year-2020'. Given by the teacher by hand, one for every year; shown with the Bodhi
+  // gold yearly badges.
+  if (/^year-\d{4}$/.test(id)) {
+    const y = Number(id.slice(5));
+    if (y < 2019 || y > 2100) return null;
+    return { id, group: 'attend', shape: 'yearmedal', year: y, metal: 'gold', icon: '', name: `Dhamma Year ${y}`, desc: `Studying with the teacher in ${y}`, master: true };
+  }
   if (id.startsWith('ds-grade:')) {
     const parts = id.slice(9).split(':');
     const g = parts[0];
@@ -196,6 +203,7 @@ export const badgeMeta = (id) => BY_ID.get(id) || dynamicBadge(id);
 export const ladderOf = (id) => {
   if (id.startsWith('bodhi-level:')) { const p = id.split(':'); return `bodhi-level:${p.length >= 3 ? p[1] : 2026}`; }
   if (id.startsWith('bodhi-year:')) return id;
+  if (id.startsWith('year-')) return 'years';
   if (id.startsWith('ds-grade:')) return `ds-grade:${id.split(':')[1]}`;
   if (id.startsWith('shrine-visits')) return 'shrine-visits';
   if (/^nature-\d+$/.test(id)) return 'trees';
@@ -208,4 +216,4 @@ export const ladderOf = (id) => {
 };
 const ORDER = new Map(BADGE_DEFS.map((b, i) => [b.id, i]));
 // climbing order inside a ladder (Bodhi levels by level, the rest by their place in the list above)
-export const ladderRank = (id) => (id.startsWith('bodhi-level:') ? Number(id.split(':').pop()) : id.startsWith('ds-grade:') ? (id.split(':').length > 2 ? Number(id.split(':')[2]) : 5) : (ORDER.get(id) ?? 0));
+export const ladderRank = (id) => (id.startsWith('year-') ? Number(id.slice(5)) : id.startsWith('bodhi-level:') ? Number(id.split(':').pop()) : id.startsWith('ds-grade:') ? (id.split(':').length > 2 ? Number(id.split(':')[2]) : 5) : (ORDER.get(id) ?? 0));
