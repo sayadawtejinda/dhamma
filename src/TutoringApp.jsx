@@ -976,7 +976,8 @@ function fetchWeeklySnapshot() {
 // --- Components ---
 
 function ConfirmationModal({ 
-  isOpen, onClose, onConfirm, title, message, confirmText = "Delete", confirmColor = "bg-red-600 hover:bg-red-700" 
+  isOpen, onClose, onConfirm, title, message, confirmText = "Delete", confirmColor = "bg-red-600 hover:bg-red-700",
+  secondText = null, onSecond = null, secondColor = "bg-indigo-600 hover:bg-indigo-700"   // an optional middle choice
 }) {
   if (!isOpen) return null;
   return (
@@ -984,10 +985,15 @@ function ConfirmationModal({
       <div className="bg-white p-6 rounded-xl shadow-2xl w-full max-w-sm mx-4">
         <h3 className="text-xl font-semibold mb-4 text-gray-900">{title}</h3>
         <div className="text-gray-700 mb-6 whitespace-pre-wrap">{message}</div>
-        <div className="flex justify-end space-x-3">
+        <div className="flex justify-end flex-wrap gap-2">
           <button onClick={onClose} className="px-5 py-2 rounded-lg bg-gray-200 text-gray-800 hover:bg-gray-300">
             Cancel
           </button>
+          {secondText && onSecond && (
+            <button onClick={onSecond} className={`px-5 py-2 rounded-lg text-white font-semibold ${secondColor} shadow-md`}>
+              {secondText}
+            </button>
+          )}
           <button onClick={onConfirm} className={`px-5 py-2 rounded-lg text-white font-semibold ${confirmColor} shadow-md`}>
             {confirmText}
           </button>
@@ -2780,9 +2786,14 @@ Each one will see the Teacher in their Visitors list, with a gift waiting to ope
     // dates on the fly (see recurringScheduleCollection). No recurrenceId,
     // no end date: it just keeps applying every week until the teacher
     // edits or deletes it.
-    const executeAdd = async () => {
+    // The student already comes on other days / at another time: ask what the new slot means, so the schedule never keeps an old time by
+    // mistake and the attendance coins know how many classes a week the student really has (the answer is saved on the slot).
+    const existingSlots = (!groupMembers && studentUid && studentUid !== 'offline') ? recurringSchedule.filter(r => r.studentUid === studentUid) : [];
+    const slotText = (r) => `${DAY_NAMES[r.dayOfWeek]} ${r.startTime}-${r.endTime}`;
+    const executeAdd = async (replaceSlots = [], confirmedAs = null) => {
       try {
-        const slotFields = { dayOfWeek: Number(scheduleDayOfWeek), startTime: manualStartTime, endTime: manualEndTime, createdAt: Timestamp.now(), updatedAt: Timestamp.now() };
+        for (const old of replaceSlots) await deleteDoc(doc(db, `${publicDataPath}/recurringSchedule`, old.id));
+        const slotFields = { dayOfWeek: Number(scheduleDayOfWeek), startTime: manualStartTime, endTime: manualEndTime, createdAt: Timestamp.now(), updatedAt: Timestamp.now(), ...(confirmedAs ? { confirmedAs } : {}) };
         if (groupMembers) {
           let batch = writeBatch(db);
           let opCount = 0;
@@ -2814,6 +2825,40 @@ Each one will see the Teacher in their Visitors list, with a gift waiting to ope
         console.error("Error adding to schedule:", error);
       }
     };
+
+    if (existingSlots.length > 0) {
+      const sameDay = existingSlots.filter(r => r.dayOfWeek === Number(scheduleDayOfWeek));
+      const list = existingSlots.map(slotText).join(', ');
+      const n = existingSlots.length + 1;
+      setShowConfirmModal(sameDay.length > 0 ? {
+        isOpen: true,
+        title: `${studentName} already has a ${DAY_NAMES[scheduleDayOfWeek]} class`,
+        message: `Now: ${list}
+New: ${DAY_NAMES[scheduleDayOfWeek]} ${manualStartTime}-${manualEndTime}
+
+Is the class time CHANGED (replace the old one), or are there TWO classes on ${DAY_NAMES[scheduleDayOfWeek]}? (Two on the same day count as one for the attendance coins.)`,
+        confirmText: 'Time changed: replace old',
+        confirmColor: 'bg-emerald-500 hover:bg-emerald-600',
+        onConfirm: () => { executeAdd(sameDay, 'replaced'); setShowConfirmModal({ isOpen: false }); },
+        secondText: 'Keep both',
+        secondColor: 'bg-indigo-600 hover:bg-indigo-700',
+        onSecond: () => { executeAdd([], 'two-same-day'); setShowConfirmModal({ isOpen: false }); },
+      } : {
+        isOpen: true,
+        title: `${studentName} already has a weekly class`,
+        message: `Now: ${list}
+New: ${DAY_NAMES[scheduleDayOfWeek]} ${manualStartTime}-${manualEndTime}
+
+Does the student come ${n} times a week now, or is this a NEW day instead of the old one?`,
+        confirmText: `${n} classes a week: keep both`,
+        confirmColor: 'bg-emerald-500 hover:bg-emerald-600',
+        onConfirm: () => { executeAdd([], `${n}-a-week`); setShowConfirmModal({ isOpen: false }); },
+        secondText: 'Replace the old one(s)',
+        secondColor: 'bg-amber-600 hover:bg-amber-700',
+        onSecond: () => { executeAdd(existingSlots, 'replaced'); setShowConfirmModal({ isOpen: false }); },
+      });
+      return;
+    }
 
     setShowConfirmModal({
       isOpen: true,
@@ -5111,6 +5156,7 @@ ${toSend.map(l => '• ' + l.title).join(', ')}`
         onConfirm={showConfirmModal.onConfirm} title={showConfirmModal.title}
         message={showConfirmModal.message} confirmText={showConfirmModal.confirmText}
         confirmColor={showConfirmModal.confirmColor}
+        secondText={showConfirmModal.secondText} onSecond={showConfirmModal.onSecond} secondColor={showConfirmModal.secondColor}
       />
       <ConfirmationModal 
         isOpen={showDeleteModal.isOpen} onClose={closeDeleteModal}
