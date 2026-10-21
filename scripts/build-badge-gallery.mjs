@@ -22,6 +22,7 @@ const OFF = new Set(['all-rounder', 'numbers-1', 'numbers-2', 'numbers-3', 'numb
 const vite = await createServer({ root: ROOT, server: { middlewareMode: true }, appType: 'custom', logLevel: 'error' });
 const { BadgeSvg } = await vite.ssrLoadModule('/src/Badges.jsx');
 const defs = await vite.ssrLoadModule('/src/badgeDefs.js');
+const aw = await vite.ssrLoadModule('/src/Awards.jsx');
 const { STAGE_NAMES } = await vite.ssrLoadModule('/src/bodhiLevels.js');
 const svg = (b, size = 72) => renderToStaticMarkup(React.createElement(BadgeSvg, { badge: b, size }));
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
@@ -52,6 +53,19 @@ body += `<h2>Bodhi Tree (levels this year, ${year})</h2><div class="ladder"><div
 body += `<h2>Bodhi Tree — gold yearly badge (EXAMPLE shown as ${year - 1}: kept for later, nothing is given for it yet; ${year} will be given when the year ends)</h2><div class="ladder"><div class="row">${bodhiYear.map(cardDyn).join('')}</div></div>`;
 body += `<h2>Years with us (you give these by hand: Badges to give → Give any badge by hand)</h2><div class="ladder"><div class="lt">one for every year a student has studied with you (2020 on) · shown with the Bodhi gold yearly badges</div><div class="row">${yearsWithUs.map(cardDyn).join('')}</div></div>`;
 total += yearsWithUs.length;
+// the top-three honours (cup / Dhamma wheel / sun): the plaque as it shows in the Avatar, Shrine Room and Bodhi Tree, and the emblem
+const KINDS = [['trophy', 'Most trophies', aw.AWARDS, 'Avatar room (right under the wallet) and Home'], ['holy', 'Most lotus flowers in the Shrine Room', aw.HOLY_AWARDS, 'Shrine Room (left corner)'], ['joy', 'Most classes attended (this year)', aw.JOY_AWARDS, 'Bodhi Tree (right corner)']];
+body += `<h2>Top-three honours (you give these by hand, during class; each shows only while the student really holds that place)</h2>`;
+for (const [kind, what, list, where] of KINDS) {
+  const items = list.map((info, i) => {
+    const award = { kind, tier: i + 1, name: 'Student name', count: kind === 'holy' ? 1500 - i * 200 : kind === 'joy' ? 58 - i * 2 : 369 - i * 6, info, generatedAt: new Date().toISOString() };
+    const plaque = renderToStaticMarkup(React.createElement('div', { style: { width: 250 } }, React.createElement(aw.AwardPlaque, { award, compact: true })));
+    const emblem = renderToStaticMarkup(React.createElement(aw.AwardEmblem, { kind, tier: i + 1, size: 80 }));
+    return `<div class="card wide">${emblem}<b>${esc(info.en)}</b><span class="d">place ${i + 1}</span>${plaque}</div>`;
+  });
+  total += 3;
+  body += `<div class="ladder"><div class="lt">${esc(what)} · shown in: ${esc(where)}</div><div class="row">${items.join('')}</div></div>`;
+}
 body += `<h2>Dhammaschool grades (5 steps in each grade: 8, 16, 24, 32, 40 chapters)</h2>`;
 for (let g = 1; g <= 5; g++) { const steps = [1, 2, 3, 4, 5].map(k => defs.badgeMeta(`ds-grade:GRADE-${g}:${k}`)); total += 5; body += `<div class="ladder"><div class="lt">Grade ${g} · 5 steps</div><div class="row">${steps.map(cardDyn).join('')}</div></div>`; }
 
@@ -63,7 +77,7 @@ h1{margin:0 0 4px}h2{margin:28px 0 6px;border-bottom:2px solid #d9c38a;padding-b
 .row{display:flex;flex-wrap:wrap;gap:10px;align-items:stretch}
 .card{width:150px;background:#fff;border-radius:14px;box-shadow:0 1px 4px rgba(0,0,0,.18);padding:10px 8px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:3px}
 .card b{font-size:13px}.d{font-size:11px;color:#666}.id{font-size:10px;color:#aaa;font-family:monospace}.n{font-size:11px;font-weight:700;color:#2f7d4f}
-.off{opacity:.55;outline:2px dashed #c0392b}.off .n{color:#c0392b}
+.card.wide{width:290px}.off{opacity:.55;outline:2px dashed #c0392b}.off .n{color:#c0392b}
 </style></head><body><h1>🎖️ All badges</h1><div class="sum">${total} badges. ✦ = master (sparkle). "earned" = students who have enough now; "given" = the ones you have approved. Dashed red = switched off for now. Built ${new Date().toLocaleString('en-US')}.</div>${body}</body></html>`;
 writeFileSync(join(ROOT, 'badge-gallery.html'), html);
 console.log(`Wrote badge-gallery.html (${total} badges)`);
