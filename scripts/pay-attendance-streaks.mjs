@@ -104,6 +104,7 @@ async function main() {
   const pay = []; // { uid, name, n, coins }
   due.forEach(c => {
     const st = students[c.uid] || { n: 0, last: 0 };
+    if (st.skipDay && st.skipDay === c.day) { students[c.uid] = st; return; } // this class was already paid by hand (a test), do not count it twice
     const came = c.override === 'attended' || (c.override !== 'absent' && attendedDays.has(`${c.uid}_${c.day}`));
     if (came) {
       st.n += 1; st.last = c.start;
