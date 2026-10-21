@@ -1,7 +1,7 @@
 import { listenWithHistory, listenLessonsWithHistory, loadStudentHistory } from './studentHistory';
 import { isOnlineStatusDay, isParamiClassTime } from './presenceDay';
 import { PeekName, AvatarThumb } from './AvatarPeek';
-import { useAwards, AwardEmblem, HallOfExcellence } from './Awards';
+import { useAwards, AwardEmblem, HallOfExcellence, saveGivenCopy } from './Awards';
 import { BadgeShelf } from './Badges';
 import BadgeCeremony from './BadgeCeremony';
 import { useBadgeData } from './badgeData';
@@ -7644,6 +7644,8 @@ function StudentDashboard({ user, studentProfile, studentUid, announcements, onO
   }, [studentUid, studentProfile?.isActive, studentProfile?.autoDeactivatedReason]);
 
   const myAwards = useAwards({ id: studentUid, name: studentProfile?.name, profile: studentProfile });
+  // keep a copy of what the teacher gave on this device, for the apps that only see the weekly file (see saveGivenCopy in Awards.jsx)
+  useEffect(() => { if (studentUid !== VISITOR_UID && studentProfile?.name && studentProfile.badgesGiven) saveGivenCopy(studentProfile.name, studentProfile.badgesGiven); }, [studentProfile?.name, studentProfile?.badgesGiven, studentUid]);
   // badges the teacher has just given: a short celebration for each, once (they are taken off the list when seen)
   const [ceremonySeen, setCeremonySeen] = useState(() => new Set());
   const pendingCeremony = (Array.isArray(studentProfile?.badgesNew) ? studentProfile.badgesNew : []).filter(e => !ceremonySeen.has(e)); // top-3 honours (from the weekly files, no read)

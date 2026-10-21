@@ -75,10 +75,17 @@ export function awardsFor(top, { name, id } = {}) {
 }
 
 // The awards a student HAS (the teacher gave them, and they still hold that place): `profile` = their own live record when known.
+// The student's own Home page keeps a copy of what was given to them on THIS device (a live record it already has: no read), so the
+// Avatar, Shrine Room and Bodhi Tree -- which only have the weekly file -- show an award the day it is given, not a week later.
+const GIVEN_CACHE = 'badgesGivenCopy:';
+export const saveGivenCopy = (name, given) => { try { if (name) localStorage.setItem(GIVEN_CACHE + name, JSON.stringify(given || {})); } catch (e) { /* ignore */ } };
+const readGivenCopy = (name) => { try { return name ? JSON.parse(localStorage.getItem(GIVEN_CACHE + name) || 'null') : null; } catch (e) { return null; } };
+
 export function useAwards({ name, id, profile } = {}) {
   const top = useTopThree();
   const data = useBadgeData();
-  const given = givenOf(data, name, profile);
+  const copy = !profile ? readGivenCopy(name) : null;
+  const given = copy ? { ...givenOf(data, name, profile), ...copy } : givenOf(data, name, profile);
   return awardsFor(top, { name, id }).filter(a => given[`award-${a.kind}`] === a.tier).map(a => ({ ...a, generatedAt: top.generatedAt }));
 }
 
