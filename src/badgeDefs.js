@@ -172,9 +172,11 @@ export const dynamicBadge = (id) => {
     const parts = id.split(':');
     const isYear = parts[0] === 'bodhi-year';
     const year = parts.length >= 3 ? Number(parts[1]) : 2026;
-    const i = Number(parts[parts.length - 1]);
+    // 'bodhi-year:2026:8:37' = the year, the level the student finished it on, and the weeks of coming to class that year
+    const i = isYear ? Number(parts[2]) : Number(parts[parts.length - 1]);
     if (!(i >= 0 && i < STAGE_NAMES.length) || !year) return null;
-    if (isYear) return { id, group: 'attend', shape: 'bodhiyear', level: i, year, metal: 'gold', icon: '', name: `${year} ${STAGE_NAMES[i]}`, desc: `Level ${i + 1} · gold ${year}`, master: true };
+    // From 2026 on a year's medal IS the Bodhi Tree's last level of that year (gold, with the year), and it records the weeks of coming to class
+    if (isYear) { const weeks = Number(parts[3]) || 0; return { id, group: 'attend', shape: 'bodhiyear', level: i, year, metal: 'gold', icon: '', name: `Dhamma Year ${year}`, desc: `${STAGE_NAMES[i]} · level ${i + 1}${weeks ? ` · ${weeks} weeks` : ''}`, master: true }; }
     return { id, group: 'attend', shape: 'bodhi', level: i, year, metal: 'gold', icon: '', name: STAGE_NAMES[i], desc: `Level ${i + 1} · ${WEEK_MILESTONES[i]} week${WEEK_MILESTONES[i] > 1 ? 's' : ''}`, master: i === STAGE_NAMES.length - 1 };
   }
   // Dhammaschool: five steps in every grade (8, 16, 24, 32, 40 of its 40 chapters). 'ds-grade:GRADE-3:2' = step 2 of Grade 3;
@@ -210,8 +212,7 @@ export const badgeMeta = (id) => BY_ID.get(id) || dynamicBadge(id);
 // student has (a tap opens the whole ladder), and the teacher gives a whole ladder at once, lowest first.
 export const ladderOf = (id) => {
   if (id.startsWith('bodhi-level:')) { const p = id.split(':'); return `bodhi-level:${p.length >= 3 ? p[1] : 2026}`; }
-  if (id.startsWith('bodhi-year:')) return id;
-  if (id.startsWith('year-')) return 'years';
+  if (id.startsWith('bodhi-year:') || id.startsWith('year-')) return 'years'; // all the Dhamma Year medals (2020 on) are one set
   if (id.startsWith('ds-grade:')) return `ds-grade:${id.split(':')[1]}`;
   if (id.startsWith('shrine-visits')) return 'shrine-visits';
   if (/^nature-\d+$/.test(id)) return 'trees';
@@ -223,4 +224,4 @@ export const ladderOf = (id) => {
 };
 const ORDER = new Map(BADGE_DEFS.map((b, i) => [b.id, i]));
 // climbing order inside a ladder (Bodhi levels by level, the rest by their place in the list above)
-export const ladderRank = (id) => (id.startsWith('year-') ? Number(id.slice(5)) : id.startsWith('bodhi-level:') ? Number(id.split(':').pop()) : id.startsWith('ds-grade:') ? (id.split(':').length > 2 ? Number(id.split(':')[2]) : 5) : (ORDER.get(id) ?? 0));
+export const ladderRank = (id) => (id.startsWith('year-') ? Number(id.slice(5)) : id.startsWith('bodhi-year:') ? Number(id.split(':')[1]) : id.startsWith('bodhi-level:') ? Number(id.split(':').pop()) : id.startsWith('ds-grade:') ? (id.split(':').length > 2 ? Number(id.split(':')[2]) : 5) : (ORDER.get(id) ?? 0));

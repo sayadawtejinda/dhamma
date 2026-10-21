@@ -67,7 +67,8 @@ for (const st of students) {
   const yw = yearWeeksOf(st.id);
   const bodhi = levelForWeeks(yw[THIS_YEAR] || 0);
   for (let l = 0; l <= bodhi; l++) got.push(`bodhi-level:${THIS_YEAR}:${l}`); // every level reached counts as a badge of its own
-  for (let y = 2026; y < THIS_YEAR; y++) { const l = levelForWeeks(yw[y] || 0); if (l >= 0) got.push(`bodhi-year:${y}:${l}`); }
+  // every finished year (from 2026) gives that year's medal: the last Bodhi level reached, with the year and the weeks of coming to class
+  for (let y = 2026; y < THIS_YEAR; y++) { const l = levelForWeeks(yw[y] || 0); if (l >= 0) got.push(`bodhi-year:${y}:${l}:${yw[y] || 0}`); }
   // weeks of coming to class, counted from 2026 on (earlier weeks are not counted)
   const weeksSince2026 = Object.entries(yw).filter(([y]) => Number(y) >= 2026).reduce((n, [, v]) => n + v, 0);
   at(weeksSince2026, [[1, 'weeks-1'], [5, 'weeks-5'], [10, 'weeks-10'], [20, 'weeks-20'], [30, 'weeks-30'], [50, 'weeks-50'], [100, 'weeks-100'], [200, 'weeks-200']]);

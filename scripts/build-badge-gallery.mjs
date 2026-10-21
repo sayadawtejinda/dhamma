@@ -45,11 +45,11 @@ for (const grp of defs.BADGE_GROUPS) {
 // the Bodhi Tree: ten levels (this year), the gold yearly badge, one badge for every finished Dhammaschool grade
 const year = new Date().getFullYear();
 const bodhi = STAGE_NAMES.map((_, i) => defs.badgeMeta(`bodhi-level:${year}:${i}`));
-const yearsWithUs = [2020, 2021, 2022, 2023, 2024, 2025, 2026].map(y => defs.badgeMeta(`year-${y}`));
+const yearsWithUs = [2020, 2021, 2022, 2023, 2024, 2025].map(y => defs.badgeMeta(`year-${y}`)).concat([defs.badgeMeta(`bodhi-year:2026:8:37`)]);
 const cardDyn = (b) => `<div class="card">${svg(b)}<b>${esc(b.name)}</b><span class="d">${esc(b.desc)}</span><span class="id">${esc(b.id)}</span><span class="n">earned ${earnedCount[b.id] || 0} · given ${givenCount[b.id] || 0}</span></div>`;
 total += bodhi.length;
 body += `<h2>Bodhi Tree (levels this year, ${year})</h2><div class="ladder"><div class="lt">bodhi-level · 10 steps (each level is a badge of its own)</div><div class="row">${bodhi.map(cardDyn).join('')}</div></div>`;
-body += `<h2>Years with us (you give these by hand: Badges to give → Give any badge by hand)</h2><div class="ladder"><div class="lt">one for every year a student has studied with you (2020 on) · shown with the Bodhi gold yearly badges</div><div class="row">${yearsWithUs.map(cardDyn).join('')}</div></div>`;
+body += `<h2>Years with us (you give these by hand: Badges to give → Give any badge by hand)</h2><div class="ladder"><div class="lt">one for every year a student has studied with you · 2020-2025 you give by hand; from 2026 on the medal is the Bodhi Tree's last level of that year (gold, with the year and the weeks of coming to class; the last card is an EXAMPLE: level 9, 37 weeks), worked out when the year ends</div><div class="row">${yearsWithUs.map(cardDyn).join('')}</div></div>`;
 total += yearsWithUs.length;
 // the top-three honours (cup / Dhamma wheel / sun): the plaque as it shows in the Avatar, Shrine Room and Bodhi Tree, and the emblem
 const KINDS = [['trophy', 'Most trophies', aw.AWARDS, 'Avatar room (right under the wallet) and Home'], ['holy', 'Most lotus flowers in the Shrine Room', aw.HOLY_AWARDS, 'Shrine Room (left corner)'], ['joy', 'Most classes attended (this year)', aw.JOY_AWARDS, 'Bodhi Tree (right corner)']];
