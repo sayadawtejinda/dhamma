@@ -133,7 +133,8 @@ for (const st of students) {
   for (const [grade, lessonIds] of Object.entries(dsProgress.lessonsByClass || {})) {
     if (lessonIds.length >= 5 && lessonIds.every(id => dsSet.has(id))) got.push(`ds-grade:${grade}`);
   }
-  if (got.length >= 20) got.push('all-rounder');
+  // All-Rounder is not given for now (the teacher is rethinking it)
+  // if (got.length >= 20) got.push('all-rounder');
   const valid = got.filter(id => BADGE_DEFS.some(b => b.id === id) || dynamicBadge(id));
   if (valid.length) out[n] = valid;
 }
