@@ -138,7 +138,7 @@ export const BADGE_DEFS = [
   { id: 'ds-100', group: 'ds', shape: 'cap', metal: 'gold', icon: '🎓', name: 'Dhammaschool Master', desc: '100 Dhammaschool chapters', master: true },
   { id: 'ds-150', group: 'ds', shape: 'rosette', metal: 'gold', icon: '📖', name: 'Dhammaschool Sage', desc: '150 Dhammaschool chapters', master: true },
   { id: 'ds-200', group: 'ds', shape: 'badge8', metal: 'gold', icon: '🏆', name: 'Dhammaschool Hero', desc: '200 Dhammaschool chapters', master: true },
-  { id: 'ds-250', group: 'ds', shape: 'crown', metal: 'gold', icon: '🪷', name: 'Dhammaschool Legend', desc: '250 Dhammaschool chapters', master: true },
+  { id: 'ds-250', group: 'ds', shape: 'crown', metal: 'gold', icon: '📿', name: 'Dhammaschool Legend', desc: '250 Dhammaschool chapters', master: true },
   // festivals: good deeds (a kind thought, paying respect) -- all festivals together
   { id: 'deeds-5', group: 'festival', shape: 'heart', metal: 'bronze', icon: '🙏', name: 'Kind Heart', desc: '5 good deeds in the festivals' },
   { id: 'deeds-15', group: 'festival', shape: 'diamond', metal: 'silver', icon: '🙏', name: 'Gentle Spirit', desc: '15 good deeds in the festivals' },
