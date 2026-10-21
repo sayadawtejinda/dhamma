@@ -2012,6 +2012,14 @@
       "attendedTotal": 20,
       "partUnits": {
         "po": 5
+      },
+      "abUnits": {
+        "byClass": {
+          "BASIC-ABHIDHAMMA-1": 1,
+          "BASIC-ABHIDHAMMA-2": 1,
+          "BEING GOOD AND BEING KIND": 5
+        },
+        "legacy": 0
       }
     },
     {
@@ -2057,6 +2065,10 @@
       },
       "dsUnits": {
         "GRADE-1": 1
+      },
+      "abUnits": {
+        "byClass": {},
+        "legacy": 4
       }
     },
     {
@@ -2080,6 +2092,12 @@
       "attendedTotal": 34,
       "partUnits": {
         "po": 42
+      },
+      "abUnits": {
+        "byClass": {
+          "DHAMMAPADA-1": 14
+        },
+        "legacy": 0
       }
     },
     {
@@ -2251,7 +2269,13 @@
         "Teacher_name": "Teacher"
       },
       "attendedThisYear": 33,
-      "attendedTotal": 33
+      "attendedTotal": 33,
+      "abUnits": {
+        "byClass": {
+          "BASIC-ABHIDHAMMA-2": 35
+        },
+        "legacy": 143
+      }
     },
     {
       "id": "06858861930495135121",
@@ -2371,6 +2395,10 @@
       "attendedTotal": 29,
       "dsUnits": {
         "GRADE-1": 15
+      },
+      "abUnits": {
+        "byClass": {},
+        "legacy": 14
       }
     },
     {
@@ -2641,7 +2669,11 @@
         "Teacher_count": 6
       },
       "attendedThisYear": 27,
-      "attendedTotal": 27
+      "attendedTotal": 27,
+      "abUnits": {
+        "byClass": {},
+        "legacy": 50
+      }
     },
     {
       "id": "11301375659175373882",
@@ -2736,6 +2768,10 @@
         "GRADE-5": 6,
         "GRADE-3": 40,
         "GRADE-2": 40
+      },
+      "abUnits": {
+        "byClass": {},
+        "legacy": 16
       }
     },
     {

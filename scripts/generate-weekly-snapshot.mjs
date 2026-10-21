@@ -272,6 +272,19 @@ async function main() {
   const attendedAllYears = Object.fromEntries(Object.entries(carry).map(([uid, y]) => [uid, Object.values(y).reduce((a, b) => a + b, 0)]));
   // The teacher-approved cups of the three Reading Myanmar parts (Lesson Bank unit counts on the student's record): cp = Consonant Practice (7),
   // bg = Burmese Consonant Game (19), vl = Myanmar Vowels (Basic 8 + Pro 3 = 11). The badges read these from the weekly file.
+  // Abhidhamma lessons the teacher has confirmed (trophies): { byClass: { 'BASIC-ABHIDHAMMA-2': 35 }, legacy: 143 }. Entries that name their class
+  // ('Abhidhamma Lesson_CLASS', 'Dhammapada Chapter-1') go in byClass; the old ones ('Basic Abhiddhamma-5', 'Basic Abhidhamma & ☸' ...) only give a floor.
+  const abUnitsOf = (s) => {
+    const byClass = {}; let legacy = 0;
+    Object.entries(s.completedUnits || {}).forEach(([k, v]) => {
+      const n = Number(v) || 0; if (!n) return;
+      let m = /^Abhidhamma Lesson_(.+)$/.exec(k);
+      if (m) { byClass[m[1].toUpperCase()] = Math.max(byClass[m[1].toUpperCase()] || 0, n); return; }
+      if (/^Dhammapada Chapter-1$/i.test(k)) { byClass['DHAMMAPADA-1'] = Math.max(byClass['DHAMMAPADA-1'] || 0, n); return; }
+      if (/^Basic Abhi/i.test(k)) legacy = Math.max(legacy, n);
+    });
+    return Object.keys(byClass).length || legacy ? { byClass, legacy } : null;
+  };
   // Dhammaschool chapters the teacher has confirmed (trophies) in each grade: { 'GRADE-1': 40 }
   const dsUnitsOf = (s) => {
     const out = {};
@@ -298,6 +311,7 @@ async function main() {
       attendedTotal: attendedAllYears[s.id] || 0,
       ...(Object.keys(partUnitsOf(s)).length ? { partUnits: partUnitsOf(s) } : {}),
       ...(Object.keys(dsUnitsOf(s)).length ? { dsUnits: dsUnitsOf(s) } : {}),
+      ...(abUnitsOf(s) ? { abUnits: abUnitsOf(s) } : {}),
     }));
 
   // Class-wide month / year attendance totals for the Teacher Dashboard's
