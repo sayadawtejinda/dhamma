@@ -75,6 +75,20 @@ for n, ss in songs_by_norm.items():
     best = max(good, key=lambda c: len(c['text'])) if good else (cands[0] if cands else None)
     conf = 'high' if len(places) == 1 and len(good) == 1 and len(good[0]['text']) > 20 and good[0]['text'].count('\n') >= 1 else 'check'
     for s in ss: res[s['id']] = dict(title=s['t'], conf=conf, places=[c['line'] for c in cands], best=best)
+# ---- spelling differences (ဘုရားအလောင်း / ဘုရားလောင်း, "M07 " prefixes ...): close matches of the title lines
+import difflib
+def norm2(x): return re.sub(r'^[a-z]{1,2}\d+', '', norm(x)) if False else norm(re.sub(r'^\s*[A-Za-z]{1,2}\d+\s*', '', x))
+cand_lines = [i for i, l in enumerate(L) if l and len(l) <= 45 and not is_bullet(l) and (i == 0 or L[i - 1] == '') and i + 1 < len(L) and L[i + 1] != '']
+cand_norm = {i: norm(L[i]) for i in cand_lines}
+for s in songs['songs']:
+    if s.get('n') or s['id'] in res: continue
+    n = norm2(re.sub(r'\(ကာရာအိုကေ\)', '', s['t']))
+    if len(n) < 5: continue
+    sc = sorted(((difflib.SequenceMatcher(None, n, cn).ratio(), i) for i, cn in cand_norm.items()), reverse=True)[:2]
+    if not sc or sc[0][0] < 0.9 or (len(sc) > 1 and sc[1][0] >= 0.9): continue     # one clear candidate only
+    i = sc[0][1]; out, how, j = block(i); t = tidy(out)
+    if i + 1 < len(L) and L[i + 1] != '' and len(t) > 20 and t.count(chr(10)) >= 1:
+        res[s['id']] = dict(title=s['t'], conf='high', places=[i + 1], fuzzy=round(sc[0][0], 2), best=dict(line=i + 1, end=j + 1, how=how, text=t, direct=True))
 high = {k: v for k, v in res.items() if v['conf'] == 'high'}
 print('songs matched', len(res), '| high', len(high), '| to check', len(res) - len(high))
 json.dump(res, open(os.path.join(HERE, 'lyrics_report.json'), 'w', encoding='utf8'), ensure_ascii=False, indent=1)

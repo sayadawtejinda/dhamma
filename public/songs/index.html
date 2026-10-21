@@ -96,12 +96,15 @@ dialog::backdrop{background:rgba(20,6,40,.65);backdrop-filter:blur(3px)}
 .hd{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:6px 0 10px}.hd h2{margin:0;font-size:1.15rem;flex:1}
 .b2{border:1px solid var(--line);background:var(--card);border-radius:10px;padding:6px 14px}.b2.pri{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 #dpl{color:var(--ink);background:var(--bg);padding:16px}#dpl label{display:block;margin:6px 0}#dpl input[type=text]{width:100%;padding:8px;border-radius:9px;border:1px solid var(--line);font:inherit}
+.th{flex:none;width:42px;height:42px;border-radius:9px;object-fit:cover;background:var(--line)}
+.cover{display:block;margin:10px auto 0;max-width:100%;max-height:260px;border-radius:14px;box-shadow:0 6px 20px rgba(0,0,0,.35);cursor:zoom-in;background:rgba(255,255,255,.15)}
+.cover.big{max-height:none;width:100%;cursor:zoom-out}
 .toast{position:fixed;left:50%;bottom:100px;transform:translateX(-50%);background:#2b1745;color:#fff;padding:8px 16px;border-radius:12px;z-index:60;opacity:0;transition:.25s;pointer-events:none;max-width:90vw}
 .toast.on{opacity:1}
 </style>
 </head>
 <body>
-<header class="hero"><button id="theme" title="အလင်း/အမှောင်">🌓</button><div class="wrap"><h1>🎶 ဓမ္မစကူးလ် သီချင်း ကဗျာများ</h1><p id="sub">ဖွင့်ကြည့် · ရှာကြည့် · offline သိမ်းနားထောင်</p></div></header>
+<header class="hero"><button id="theme" title="အလင်း/အမှောင်">🌓</button><button id="imgm" style="position:absolute;right:62px;top:12px;background:rgba(255,255,255,.2);border:0;border-radius:20px;padding:4px 10px;color:#fff;z-index:2" title="ပုံပြ/မပြ (ဒေတာချွေတာရန်)">🖼</button><div class="wrap"><h1>🎶 ဓမ္မစကူးလ် သီချင်း ကဗျာများ</h1><p id="sub">ဖွင့်ကြည့် · ရှာကြည့် · offline သိမ်းနားထောင်</p></div></header>
 <nav class="tabs" id="tabs"><button data-t="songs" class="on">သီချင်းများ</button><button data-t="cols">စုစည်းမှုများ</button><button data-t="arts">အဆိုတော်များ</button><button data-t="lists">♥ စာရင်းများ</button><button data-t="off">⬇ Offline</button></nav>
 <div class="wrap" style="padding:0 14px">
  <div class="bar"><div class="search"><input id="q" type="search" placeholder="သီချင်းအမည်၊ အဆိုတော်၊ စုစည်းမှု ရှာရန်…" autocomplete="off"></div>
@@ -114,7 +117,7 @@ dialog::backdrop{background:rgba(20,6,40,.65);backdrop-filter:blur(3px)}
 <div id="mini"><div class="bar2" id="mbar"></div><button class="ib" id="mprev">⏮</button><button class="ib" id="mpp">▶</button><button class="ib" id="mnext">⏭</button><div class="t"><b id="mt"></b><small id="ma"></small></div></div>
 <dialog id="np"><div class="np" id="npb">
  <div class="top"><button class="ib" id="nclose" title="ပိတ်">✕</button><span class="sp"></span><button class="ib" id="nbg" title="နောက်ခံပြောင်း">🎨</button><button class="ib" id="nshuf" title="ကြုံရာ">🔀</button><button class="ib" id="nrep" title="ပြန်ဆိုမည်">🔁</button></div>
- <div class="body"><h2 id="nt"></h2><p class="art" id="na"></p>
+ <div class="body"><h2 id="nt"></h2><p class="art" id="na"></p><div id="nimg"></div>
   <div class="seek"><span id="ncur">0:00</span><input type="range" id="nseek" min="0" max="1000" value="0"><span id="ndur">0:00</span></div>
   <div class="ctl"><button class="ib" id="nprev">⏮</button><button class="ib big" id="npp">▶</button><button class="ib" id="nnext">⏭</button></div>
   <div class="row2"><button class="btn" id="noff">⬇ offline သိမ်းမည်</button><button class="btn" id="nshare">🔗 လင့်ခ်</button><button class="btn" id="nlist">➕ စာရင်းထဲထည့်</button></div><div class="pr" id="npr" hidden><i></i></div>
@@ -158,7 +161,14 @@ function filtered(){
  else if(so==='artist')l=[...l].sort((a,b)=>(a.a?0:1)-(b.a?0:1)||collator.compare(a.a,b.a)||collator.compare(a.t,b.t));
  else if(so==='long')l=[...l].sort((a,b)=>b.d-a.d);
  return l}
-function songRow(s){return `<div class="song ${CUR&&CUR.id===s.id?'cur':''}" data-id="${s.id}"><button class="pl" data-p="${s.id}">${CUR&&CUR.id===s.id&&!AUD.paused?'⏸':'▶'}</button><div class="mid"><h3>${esc(s.t)}</h3><small>${esc(s.a||'')}${s.a?' · ':''}${esc((COLS[s.c]||{}).name||'')}</small></div><div class="rt">${s.l?'📝 ':''}${OFF.has(s.id)?'⬇ ':''}<br>${fmt(s.d)}</div></div>`}
+let IMGM=lsGet('songsImg','thumb');   // 'thumb' = small pictures (about 10 KB each, loaded only when visible), 'off' = no pictures at all
+const thumb=o=>`img/t/${o.id}.jpg?v=${o.i}`;
+function paintImgBtn(){$('#imgm').textContent=IMGM==='off'?'🖼✕':'🖼';$('#imgm').title=IMGM==='off'?'ပုံမပြပါ (နှိပ်ရင် အသေးလေးပြမည်)':'ပုံအသေးပြနေသည် (နှိပ်ရင် မပြတော့ပါ)'}
+$('#imgm').onclick=()=>{IMGM=IMGM==='off'?'thumb':'off';lsSet('songsImg',IMGM);paintImgBtn();toast(IMGM==='off'?'ပုံ မပြတော့ပါ — ဒေတာ ချွေတာမည်':'ပုံအသေးလေး ပြမည်');render();if($('#np').open&&NP)showCover(NP)};paintImgBtn();
+function showCover(s){const B=$('#nimg');B.innerHTML='';if(!s.i)return;
+ if(IMGM==='off'){B.innerHTML='<button class="btn" id="nimgbtn" style="margin-top:8px">🖼 ပုံကြည့်မည်</button>';$('#nimgbtn').onclick=()=>{B.innerHTML=`<img class="cover big" src="img/${s.id}.jpg?v=${s.i}" alt="">`;$('#nimg img').onclick=()=>showCover(s)}}
+ else{B.innerHTML=`<img class="cover" src="${thumb(s)}" alt="" title="ပုံကြီးကြည့်ရန် နှိပ်ပါ">`;$('#nimg img').onclick=function(){if(this.classList.contains('big')){this.src=thumb(s);this.classList.remove('big')}else{this.src=`img/${s.id}.jpg?v=${s.i}`;this.classList.add('big')}}}}
+function songRow(s){return `<div class="song ${CUR&&CUR.id===s.id?'cur':''}" data-id="${s.id}"><button class="pl" data-p="${s.id}">${CUR&&CUR.id===s.id&&!AUD.paused?'⏸':'▶'}</button>${s.i&&IMGM!=='off'?`<img class="th" loading="lazy" decoding="async" src="${thumb(s)}" alt="">`:''}<div class="mid"><h3>${esc(s.t)}</h3><small>${esc(s.a||'')}${s.a?' · ':''}${esc((COLS[s.c]||{}).name||'')}</small></div><div class="rt">${s.l?'📝 ':''}${OFF.has(s.id)?'⬇ ':''}<br>${fmt(s.d)}</div></div>`}
 function render(){
  $$('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===tab));
  $('.bar').style.display=$('#chips').style.display=tab==='songs'?'':'none';$('#batch').innerHTML='';
@@ -168,7 +178,7 @@ function render(){
   if(l.length&&l.length<=400&&($('#col').value||flt.lyr||$('#q').value)){const need=l.filter(x=>!OFF.has(x.id));if(need.length){$('#batch').innerHTML=`<button class="b2" id="bsave">⬇ ဒီစာရင်း ${mn(need.length)} ပုဒ် offline သိမ်းမည် (${mb(need)})</button>`;$('#bsave').onclick=()=>batchSave(need)}}}
  else if(tab==='lists'){listView()}
  else if(tab==='off'){offView()}
- else if(tab==='cols'){$('#count').textContent='';$('#view').innerHTML='<div class="grid">'+D.collections.filter(c=>SONGS.some(s=>s.c===c.id)).map(c=>{const n=SONGS.filter(s=>s.c===c.id);return `<button class="cc" data-c="${c.id}" style="background:${BG[hash(c.id)%BG.length]}"><b>${esc(c.name)}</b><small>${mn(n.length)} ပုဒ် · ${mn(Math.round(n.reduce((a,s)=>a+s.d,0)/60))} မိနစ်</small></button>`}).join('')+'</div>'}
+ else if(tab==='cols'){$('#count').textContent='';$('#view').innerHTML='<div class="grid">'+D.collections.filter(c=>SONGS.some(s=>s.c===c.id)).map(c=>{const n=SONGS.filter(s=>s.c===c.id);return `<button class="cc" data-c="${c.id}" style="background:${c.i&&IMGM!=='off'?`linear-gradient(0deg,rgba(0,0,0,.65),rgba(0,0,0,.05)),url(${thumb(c)}) center/cover`:BG[hash(c.id)%BG.length]}"><b>${esc(c.name)}</b><small>${mn(n.length)} ပုဒ် · ${mn(Math.round(n.reduce((a,s)=>a+s.d,0)/60))} မိနစ်</small></button>`}).join('')+'</div>'}
  else{const m={};SONGS.forEach(s=>{if(s.a)(m[s.a]=m[s.a]||[]).push(s)});const k=Object.keys(m).sort((a,b)=>collator.compare(a,b));$('#count').textContent=`အဆိုတော် ${mn(k.length)} ဦး`;$('#view').innerHTML='<div class="arts">'+k.map(a=>`<button data-a="${esc(a)}">${esc(a)} <small>${mn(m[a].length)}</small></button>`).join('')+'</div>'}
  markCur()}
 function markCur(){$$('.song').forEach(e=>{const c=CUR&&e.dataset.id===CUR.id;e.classList.toggle('cur',c);const b=e.querySelector('.pl');if(b)b.textContent=c&&!AUD.paused?'⏸':'▶'})}
@@ -264,7 +274,7 @@ let NP=null,LY={};
 async function openSong(id,autoplay){
  NP=SONGS.find(s=>s.id===id);if(!NP)return;
  $('#npb').style.setProperty('--g',bgOf(NP));$('#nt').textContent=NP.t;$('#na').textContent=[NP.a,(COLS[NP.c]||{}).name].filter(Boolean).join(' · ');
- $('#ndur').textContent=fmt(NP.d);history.replaceState(null,'','#'+id);
+ showCover(NP);$('#ndur').textContent=fmt(NP.d);history.replaceState(null,'','#'+id);
  if(!$('#np').open)$('#np').showModal();
  if(autoplay&&(!CUR||CUR.id!==id))play(NP);else paint();
  $('#noff').textContent=OFF.has(id)?'🗑 offline ဖျက်မည်':'⬇ offline သိမ်းမည်';

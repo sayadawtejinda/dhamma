@@ -36,6 +36,24 @@ def load():
 def save(d):
     jw(SONGS, d)
 
+IMG = os.path.join(DATA, '..', 'img')           # public/songs/img/<id>.jpg (big) and img/t/<id>.jpg (small)
+def save_image(oid, blob):
+    """any picture (jpg/png/webp, Gemini output ...) -> a big one (max 1280 px) and a small one (max 240 px), named by the song / collection id.
+    The old picture is replaced, so nothing is left behind."""
+    from PIL import Image, ImageOps
+    import io
+    im = ImageOps.exif_transpose(Image.open(io.BytesIO(blob)))
+    if im.mode in ('RGBA', 'LA', 'P'):
+        im = im.convert('RGBA'); bg = Image.new('RGB', im.size, (255, 255, 255)); bg.paste(im, mask=im.split()[3]); im = bg
+    im = im.convert('RGB')
+    os.makedirs(os.path.join(IMG, 't'), exist_ok=True)
+    big = im.copy(); big.thumbnail((1280, 1280)); big.save(os.path.join(IMG, oid + '.jpg'), quality=82, optimize=True, progressive=True)
+    sm = im.copy(); sm.thumbnail((240, 240)); sm.save(os.path.join(IMG, 't', oid + '.jpg'), quality=72, optimize=True)
+
+def del_image(oid):
+    for p in (os.path.join(IMG, oid + '.jpg'), os.path.join(IMG, 't', oid + '.jpg')):
+        if os.path.exists(p): os.remove(p)
+
 def colname(d, cid):
     return next((c['name'] for c in d['collections'] if c['id'] == cid), '')
 
@@ -152,6 +170,10 @@ class H(BaseHTTPRequestHandler):
             if u.path == '/api/lyrics':
                 p = os.path.join(LYR, q['id'][0] + '.json')
                 return self._send(200, json.dumps({'t': jl(p, {}).get('t', '') if os.path.exists(p) else ''}, ensure_ascii=False))
+            if u.path.startswith('/imgfile/'):
+                p = os.path.abspath(os.path.join(IMG, u.path[9:].replace('/', os.sep)))
+                if p.startswith(os.path.abspath(IMG)) and os.path.exists(p): return self._send(200, open(p, 'rb').read(), 'image/jpeg')
+                return self._send(404, '{}')
             if u.path.startswith('/audio/'): return self._audio(u.path[7:].replace('.mp3', ''))
         except Exception as e:
             return self._send(400, json.dumps({'error': str(e)}))
@@ -161,6 +183,14 @@ class H(BaseHTTPRequestHandler):
         n = int(self.headers.get('Content-Length', 0)); raw = self.rfile.read(n)
         u = urlparse(self.path); q = parse_qs(u.query)
         try:
+            if u.path == '/api/image':          # body = the picture file; ?id=s0001 or c01
+                oid = q['id'][0]
+                if not re.fullmatch(r'[sc]\d+', oid): raise ValueError('bad id')
+                with LOCK:
+                    d = load(); target = next((x for x in d['songs'] if x['id'] == oid), None) or next((c for c in d['collections'] if c['id'] == oid), None)
+                    if not target: raise ValueError('not found')
+                    save_image(oid, raw); target['i'] = int(__import__('time').time()); save(d)
+                return self._send(200, json.dumps({'ok': True, 'i': target['i']}))
             if u.path == '/api/add':
                 s = add_song(unquote(q['name'][0]), raw, unquote(q.get('t', [''])[0]), unquote(q.get('a', [''])[0]), q['c'][0])
                 return self._send(200, json.dumps({'ok': True, 'song': s}, ensure_ascii=False))
@@ -206,6 +236,10 @@ class H(BaseHTTPRequestHandler):
                     d['songs'].append(e)
                     if lyr: jw(os.path.join(LYR, e['id'] + '.json'), {'t': lyr})
                     jw(store, gone, False); save(d); return self._send(200, json.dumps({'ok': True, 'song': e, 'collections': d['collections']}, ensure_ascii=False))
+                if u.path == '/api/imagedel':
+                    oid = body['id']; target = songs.get(oid) or next((c for c in d['collections'] if c['id'] == oid), None)
+                    if target: target.pop('i', None); save(d)
+                    del_image(oid); return self._send(200, json.dumps({'ok': True}))
                 if u.path == '/api/colrename':
                     for c in d['collections']:
                         if c['id'] == body['id']: c['name'] = body['name'].strip()

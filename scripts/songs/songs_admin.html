@@ -35,6 +35,10 @@ dialog::backdrop{background:rgba(20,6,40,.5)}.crow{display:flex;gap:6px;align-it
   <div id="form" style="display:none">
    <div class="hint" id="info"></div>
    <audio id="au" controls preload="auto"></audio><label class="hint"><input type="checkbox" id="auto" checked> ရွေးတာနဲ့ ဖွင့်ပါ</label>
+   <div id="imgbox" style="margin:10px 0;padding:8px;border:1px dashed var(--line);border-radius:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <img id="imgprev" style="width:84px;height:84px;object-fit:cover;border-radius:8px;display:none;background:#eee"><span class="hint" id="imgtxt">ပုံမရှိသေး</span>
+    <label class="hint" style="margin:0"><button type="button" onclick="document.getElementById('imgfile').click()">🖼 ပုံရွေး / လဲ</button><input type="file" id="imgfile" accept="image/*" style="display:none"></label>
+    <button type="button" class="bad" id="imgdel">🗑 ပုံဖျက်</button><span class="hint">ပုံကို ဒီနေရာသို့ ဆွဲချ (သို့) Ctrl+V ဖြင့် ကူးထည့်လည်းရ။ အသေး/အကြီး နှစ်မျိုးကို အလိုအလျောက်လုပ်ပြီး နာမည်ကို သီချင်းနံပါတ်နဲ့ ပေးမည်၊ ပုံအဟောင်းကို အစားထိုးမည်။</span></div>
    <label>သီချင်း အမည်</label><input type="text" id="t">
    <label>အဆိုတော်</label><input type="text" id="a" list="artists">
    <datalist id="artists"></datalist>
@@ -70,7 +74,7 @@ $('#list').onclick=e=>{const d=e.target.closest('.it');if(d)openSong(D.songs.fin
 ['#q','#fc','#fna','#fnl','#fal','#fld'].forEach(s=>$(s).addEventListener('input',()=>{shown=300;render()}));
 async function openSong(s){if(dirty&&!confirm('သိမ်းမထားသေးပါ။ ဆက်သွားမလား?'))return;dirty=false;cur=s;$('#empty').style.display='none';$('#form').style.display='block';
  $('#t').value=s.t;$('#a').value=s.a||'';$('#c').value=s.c;$('#newcol').value='';$('#msg').textContent='';
- $('#lok').style.display=s.ld?'':'none';$('#info').innerHTML=`${s.ld?'<b style="color:#b3261e">⚠ ဒီစာသားကို program က ရှာထည့်ထားတာ — စစ်ပြီး မှန်ရင် ✔ နှိပ်ပါ။ </b><br>':''}<b>${s.id}</b> · ${Math.floor(s.d/60)}:${String(s.d%60).padStart(2,'0')} · မူလဖိုင်: ${esc(s._src||'—')}${(s._also||[]).length?'<br>ထပ်နေသော ဖိုဒါများ: '+esc(s._also.join('၊ ')):''}`;
+ $('#lok').style.display=s.ld?'':'none';showImg(s);$('#info').innerHTML=`${s.ld?'<b style="color:#b3261e">⚠ ဒီစာသားကို program က ရှာထည့်ထားတာ — စစ်ပြီး မှန်ရင် ✔ နှိပ်ပါ။ </b><br>':''}<b>${s.id}</b> · ${Math.floor(s.d/60)}:${String(s.d%60).padStart(2,'0')} · မူလဖိုင်: ${esc(s._src||'—')}${(s._also||[]).length?'<br>ထပ်နေသော ဖိုဒါများ: '+esc(s._also.join('၊ ')):''}`;
  $('#links').innerHTML=`လူကြည့်သောစာမျက်နှာ: <a target="_blank" href="https://sayadawtejinda.github.io/dhamma/songs/?admin=1#${s.id}">မှတ်ချက်များ ကြည့်/ဖျက်ရန်</a>`;
  const r=await api('/api/lyrics?id='+s.id);$('#lyr').value=r.t||'';
  const au=$('#au');au.onerror=()=>{if(!au.dataset.fb){au.dataset.fb=1;au.src=D.archive+s.f}};delete au.dataset.fb;au.src='/audio/'+s.id+'.mp3';if($('#auto').checked)au.play().catch(()=>{});
@@ -109,10 +113,19 @@ $('#goneBtn').onclick=()=>showGone('gone');$('#hidBtn').onclick=()=>showGone('hi
 $('#hide').onclick=async()=>{if(!cur||!confirm(`"${cur.t}" ကို website မှာ မပြတော့ဘဲ ဝှက်ထားမလား?\n(နောက်မှ 🙈 ဝှက်ထားသည်များ ကနေ ပြန်ပြနိုင်သည်)`))return;await api('/api/hide',{id:cur.id});D.songs=D.songs.filter(s=>s.id!==cur.id);cur=null;dirty=false;$('#form').style.display='none';$('#empty').style.display='';$('#au').pause();counts();render()};
 $('#glist').onclick=async e=>{const id=e.target.dataset.rs;if(!id)return;const r=await api('/api/restore',{id,store:goneStore});if(r.error){alert(r.error);return}
  D.collections=r.collections;const s=r.song;s._k=norm(s.t+' '+s.a);D.songs.push(s);fillCols();counts();render();e.target.closest('.crow').remove()};
+// pictures (song and collection)
+function showImg(o){const im=$('#imgprev');if(o.i){im.src='/imgfile/t/'+o.id+'.jpg?v='+o.i;im.style.display='';$('#imgtxt').textContent='';}else{im.style.display='none';$('#imgtxt').textContent='ပုံမရှိသေး'}$('#imgdel').style.display=o.i?'':'none'}
+async function putImage(o,file){if(!file||!file.type.startsWith('image/'))return alert('ပုံဖိုင်ကို ရွေးပါ');$('#msg').textContent='⏳ ပုံတင်နေသည်…';const r=await (await fetch('/api/image?id='+o.id,{method:'POST',body:file})).json();if(r.error){$('#msg').textContent='❌ '+r.error;return}o.i=r.i;showImg(o);$('#msg').style.color='var(--ok)';$('#msg').textContent='✅ ပုံ သိမ်းပြီး';render()}
+$('#imgfile').onchange=()=>{if(cur)putImage(cur,$('#imgfile').files[0]);$('#imgfile').value=''};
+$('#imgdel').onclick=async()=>{if(!cur||!confirm('ပုံ ဖျက်မလား?'))return;await api('/api/imagedel',{id:cur.id});delete cur.i;showImg(cur);render()};
+$('#imgbox').addEventListener('dragover',e=>e.preventDefault());$('#imgbox').addEventListener('drop',e=>{e.preventDefault();if(cur&&e.dataTransfer.files[0])putImage(cur,e.dataTransfer.files[0])});
+addEventListener('paste',e=>{if(!cur||document.activeElement&&/INPUT|TEXTAREA/.test(document.activeElement.tagName)&&document.activeElement.type!=='file'&&!(e.clipboardData.files&&e.clipboardData.files.length))return;const f=[...e.clipboardData.files].find(x=>x.type.startsWith('image/'));if(f){e.preventDefault();putImage(cur,f)}});
 // collections
 $('#colBtn').onclick=()=>{const n={};D.songs.forEach(s=>n[s.c]=(n[s.c]||0)+1);
- $('#clist').innerHTML=D.collections.map(c=>`<div class="crow"><input type="text" value="${esc(c.name)}" data-id="${c.id}"><span class="hint">${mn(n[c.id]||0)}</span><button data-r="${c.id}">သိမ်း</button>${n[c.id]?'':`<button class="bad" data-d="${c.id}">ဖျက်</button>`}</div>`).join('');dcol.showModal()};
-$('#clist').onclick=async e=>{const r=e.target.dataset.r,d=e.target.dataset.d;
+ $('#clist').innerHTML=D.collections.map(c=>`<div class="crow"><input type="text" value="${esc(c.name)}" data-id="${c.id}"><span class="hint">${mn(n[c.id]||0)}</span><img src="${c.i?'/imgfile/t/'+c.id+'.jpg?v='+c.i:''}" style="width:34px;height:34px;object-fit:cover;border-radius:6px;${c.i?'':'display:none'}"><button data-pic="${c.id}">🖼</button>${c.i?`<button class="bad" data-picdel="${c.id}">✕🖼</button>`:''}<button data-r="${c.id}">သိမ်း</button>${n[c.id]?'':`<button class="bad" data-d="${c.id}">ဖျက်</button>`}</div>`).join('');dcol.showModal()};
+$('#clist').onclick=async e=>{const r=e.target.dataset.r,d=e.target.dataset.d,pic=e.target.dataset.pic,pd=e.target.dataset.picdel;
+ if(pic){const inp=document.createElement('input');inp.type='file';inp.accept='image/*';inp.onchange=async()=>{const c=D.collections.find(x=>x.id===pic);const f=inp.files[0];if(!f)return;const j=await (await fetch('/api/image?id='+pic,{method:'POST',body:f})).json();if(j.error)return alert(j.error);c.i=j.i;$('#colBtn').click()};inp.click();return}
+ if(pd&&confirm('စုစည်းမှုပုံ ဖျက်မလား?')){await api('/api/imagedel',{id:pd});delete D.collections.find(x=>x.id===pd).i;$('#colBtn').click();return}
  if(r){const v=$(`#clist input[data-id="${r}"]`).value;const x=await api('/api/colrename',{id:r,name:v});D.collections=x.collections;fillCols();render();e.target.textContent='✓'}
  if(d&&confirm('ဒီစုစည်းမှု ဖျက်မလား?')){const x=await api('/api/coldelete',{id:d});if(x.error)alert(x.error);else{D.collections=x.collections;fillCols();$('#colBtn').click()}}};
 // add
