@@ -99,23 +99,18 @@ async function main() {
   sessSnap.docs.forEach(d => { const x = d.data(); if (x.studentUid && x.startTime) attendedDays.add(`${x.studentUid}_${dayKey(x.startTime.toDate())}`); });
 
   // only the classes that ended in this run's window, oldest first
-  // SAFETY: one class per student per day (a dated entry and a weekly slot, or two entries, for the same day count once), and a student
-  // is paid at most as many times a week as the classes scheduled (never more than 2 a week).
+  // SAFETY: one class per student per day (a dated entry and a weekly slot, or two entries, for the same day count once). A student is
+  // paid once for every scheduled class they come to (2 classes a week = 2, 3 classes a week = 3); a scheduled class missed starts again.
   const seenDay = new Set();
   const due = classes.filter(c => c.end > from && c.end <= cutoff).sort((a, b) => a.start - b.start).filter(c => { const k = `${c.uid}_${c.day}`; if (seenDay.has(k)) return false; seenDay.add(k); return true; });
-  const weekOf = (day) => { const [y, m, d] = day.split('-').map(Number); const dt = new Date(y, m - 1, d); dt.setDate(dt.getDate() - ((dt.getDay() + 6) % 7)); return dayKey(dt); };
-  const MAX_PER_WEEK = 2;
   console.log(`${due.length} class(es) ended since ${new Date(from).toISOString()}`);
   const pay = []; // { uid, name, n, coins }
   due.forEach(c => {
     const st = students[c.uid] || { n: 0, last: 0 };
     if (st.skipDay && st.skipDay === c.day) { students[c.uid] = st; return; } // this class was already paid by hand (a test), do not count it twice
-    const wk = weekOf(c.day);
     const came = c.override === 'attended' || (c.override !== 'absent' && attendedDays.has(`${c.uid}_${c.day}`));
-    if (came && st.wk === wk && (st.wn || 0) >= MAX_PER_WEEK) { students[c.uid] = st; console.log(`  ${c.name || c.uid}: already paid ${MAX_PER_WEEK} times in the week of ${wk} -> not paid again`); return; }
     if (came) {
       st.n += 1; st.last = c.start;
-      st.wn = (st.wk === wk ? (st.wn || 0) : 0) + 1; st.wk = wk;
       const coins = Math.min(MAX_COINS, BASE_COINS + STEP_COINS * (st.n - 1));
       pay.push({ uid: c.uid, name: c.name || names[c.uid] || 'Student', n: st.n, coins });
       console.log(`  ${c.name || c.uid}: came (${c.day}) -> class ${st.n} in a row, ${coins} coins`);
