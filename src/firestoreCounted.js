@@ -10,6 +10,8 @@ let state = { day: DAY(), total: 0, by: {} };
 try { const s = JSON.parse(localStorage.getItem(KEY) || 'null'); if (s && s.day === DAY()) state = s; } catch (e) { /* none */ }
 let saveTimer = null;
 let badge = null;
+let visible = false;
+try { localStorage.removeItem('showReads'); } catch (e) { /* the old ?reads=1 switch is gone */ }
 
 const nameOf = (ref) => {
   try {
@@ -51,11 +53,9 @@ function showDetails() {
 }
 
 function paint() {
-  try {
-    if (new URLSearchParams(location.search).get('reads') === '1') localStorage.setItem('showReads', '1');
-    if (new URLSearchParams(location.search).get('reads') === '0') localStorage.removeItem('showReads');
-    if (localStorage.getItem('showReads') !== '1') { if (badge) { badge.remove(); badge = null; } return; }
-  } catch (e) { return; }
+  // The little counter is shown only when the app asks for it: always on the teacher's dashboard, and on a student's screen only while
+  // the teacher has switched it on for that student (students/{uid}.showReads). No link to send, nothing for a student to turn on.
+  if (!visible) { if (badge) { badge.remove(); badge = null; } return; }
   if (!badge) {
     badge = document.createElement('div');
     badge.style.cssText = 'position:fixed;left:4px;bottom:4px;z-index:99999;background:rgba(0,0,0,.75);color:#fff;font:11px monospace;padding:3px 6px;border-radius:6px;cursor:pointer;max-width:70vw';
@@ -67,6 +67,7 @@ function paint() {
 }
 if (typeof window !== 'undefined') {
   window.__reads = () => state;
+  window.__setReadsVisible = (v) => { visible = !!v; paint(); };
   window.__resetReads = () => { state = { day: DAY(), total: 0, by: {} }; try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* ignore */ } paint(); };
   setTimeout(paint, 2000);
 }
