@@ -55,7 +55,7 @@ def run(cmd):
 def publish():
     log = []
     build_summaries.build()
-    paths = ['scripts/library/summaries', 'public/library/data/summaries-index.json'] + ['public/library/data/summaries-%s.json' % k for k in build_summaries.KINDS]
+    paths = ['scripts/library/summaries', 'public/library/data/summaries-index.json', 'public/library/data/sum']
     paths = [p for p in paths if os.path.exists(os.path.join(ROOT, p))]
     o, c = run(['git', 'add', '--'] + paths); log.append(o)
     if c != 0: return 'git add မအောင်မြင်ပါ ❌\n' + o

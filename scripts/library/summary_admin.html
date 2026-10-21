@@ -68,8 +68,8 @@ pre#log{background:#fff;border:1px solid var(--line);border-radius:10px;padding:
 <script>
 const $=s=>document.querySelector(s);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const KN={sermon:'တရားတော်',tape:'တရားခွေ (တစ်ခွေချင်း)',book:'စာအုပ် (PDF)',text:'ဖတ်စာ'};
-let CAT=null,kind='sermon',cur=null,dirty=false;
+const KN={tape:'တရားခွေ (တစ်ခွေချင်း)',book:'စာအုပ် (PDF)',text:'ဖတ်စာ'};
+let CAT=null,kind='tape',cur=null,dirty=false;
 function md(t){const L=t.split('\n');let h='',ul=false;const inl=s=>esc(s).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
  for(const l of L){const m=/^\s*[-*•]\s+(.*)/.exec(l);if(m){if(!ul){h+='<ul>';ul=true}h+='<li>'+inl(m[1])+'</li>';continue}if(ul){h+='</ul>';ul=false}
   if(/^#{1,4}\s/.test(l))h+='<h4>'+inl(l.replace(/^#+\s*/,''))+'</h4>';else if(l.trim())h+='<p>'+inl(l)+'</p>'}
@@ -77,7 +77,7 @@ function md(t){const L=t.split('\n');let h='',ul=false;const inl=s=>esc(s).repla
 async function api(path,body){const r=await fetch(path,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{});return r.json()}
 async function init(){CAT=await api('/api/catalog');$('#kinds').innerHTML=Object.entries(KN).map(([k,v])=>`<button data-k="${k}" class="${k===kind?'on':''}">${v}</button>`).join('');
  $('#kinds').onclick=e=>{const b=e.target.closest('button');if(!b)return;kind=b.dataset.k;[...$('#kinds').children].forEach(x=>x.classList.toggle('on',x===b));render()};render();counts()}
-function counts(){const c=CAT.counts;$('#counts').textContent=`ရေးပြီး — တရား ${c.sermon} · ခွေ ${c.tape} · စာအုပ် ${c.book} · ဖတ်စာ ${c.text}`}
+function counts(){const c=CAT.counts;$('#counts').textContent=`ရေးပြီး — ခွေ ${c.tape} · စာအုပ် ${c.book} · ဖတ်စာ ${c.text}`}
 function render(){const q=$('#q').value.trim().toLowerCase(),no=$('#onlyNo').checked;
  const items=CAT.items.filter(i=>i.kind===kind&&(!q||(i.title+' '+i.sub+' '+i.key).toLowerCase().includes(q))&&(!no||!i.has));
  $('#list').innerHTML=items.slice(0,600).map(i=>`<div class="it ${cur&&cur.kind===i.kind&&cur.key===i.key?'sel':''}" data-k="${esc(i.key)}"><i>${i.has?'✓':''}</i><div>${esc(i.title)}<small>${esc(i.sub||'')}</small></div></div>`).join('')+(items.length>600?`<div class="hint" style="padding:8px">… နောက်ထပ် ${items.length-600} ခု — ရှာပါ</div>`:'');
