@@ -1701,8 +1701,8 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
     catch (error) { console.error("Error dismissing all announcements:", error); }
   };
 
-  // the teacher always sees the little "reads today" counter (it is hidden for everybody else, see firestoreCounted.js)
-  useEffect(() => { try { window.__setReadsVisible && window.__setReadsVisible(true); } catch (e) { /* ignore */ } return () => { try { window.__setReadsVisible && window.__setReadsVisible(false); } catch (e) { /* ignore */ } }; }, []);
+  // the little "reads today" counter is tappable only here, on the teacher's dashboard (see firestoreCounted.js)
+  useEffect(() => { try { window.__setReadsInteractive && window.__setReadsInteractive(true); } catch (e) { /* ignore */ } return () => { try { window.__setReadsInteractive && window.__setReadsInteractive(false); } catch (e) { /* ignore */ } }; }, []);
 
   useEffect(() => {
     const q = query(studentsCollection);
@@ -7009,11 +7009,6 @@ ${toSend.map(l => '• ' + l.title).join(', ')}`
                     </div>
                   )}
                   <div className="flex space-x-3 mt-2 sm:mt-0 items-center">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); updateDoc(doc(db, `${publicDataPath}/students`, student.id), { showReads: !student.showReads }).catch(() => {}); }}
-                      title={student.showReads ? 'The reads counter is ON on the student screen (their numbers show here). Tap to switch off.' : 'Show the reads counter on the student screen and bring their numbers here'}
-                      className={`px-2 py-2 rounded-lg text-xs font-bold border ${student.showReads ? 'bg-sky-100 border-sky-400 text-sky-800' : 'bg-white border-gray-300 text-gray-500'}`}
-                    >📊 {student.showReads ? (student.readStats ? `${student.readStats.total} reads` : 'waiting…') : 'reads'}</button>
                     <button onClick={() => handleToggleStudentActive(student.id, student.isActive)} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-md ${student.isActive ? 'bg-emerald-500 hover:bg-emerald-600 text-white' : 'bg-gray-200 hover:bg-gray-300 text-red-700'}`}>
                       {student.isActive ? 'Active' : 'Deactivated'}
                     </button>
@@ -7623,23 +7618,6 @@ function StudentDashboard({ user, studentProfile, studentUid, announcements, onO
   }, [studentUid, studentProfile?.isActive, studentProfile?.autoDeactivatedReason]);
 
   const myAwards = useAwards({ id: studentUid, name: studentProfile?.name, profile: studentProfile });
-  // When the teacher switches "reads" on for this student, the counter shows on this screen and its numbers are saved (one small write
-  // every 2 minutes) to the student's record, so the teacher can read them without asking the student to send anything.
-  useEffect(() => {
-    const on = !!studentProfile?.showReads && studentUid && studentUid !== VISITOR_UID;
-    try { window.__setReadsVisible && window.__setReadsVisible(on); } catch (e) { /* ignore */ }
-    if (!on) return undefined;
-    const save = () => {
-      try {
-        const r = window.__reads && window.__reads();
-        if (!r) return;
-        updateDoc(doc(db, `${publicDataPath}/students`, studentUid), { readStats: { day: r.day, total: r.total, by: Object.fromEntries(Object.entries(r.by || {}).sort((a, b) => b[1] - a[1]).slice(0, 8)), at: Date.now() } }).catch(() => {});
-      } catch (e) { /* ignore */ }
-    };
-    const first = setTimeout(save, 20000);
-    const timer = setInterval(save, 120000);
-    return () => { clearTimeout(first); clearInterval(timer); try { window.__setReadsVisible && window.__setReadsVisible(false); } catch (e) { /* ignore */ } };
-  }, [studentProfile?.showReads, studentUid]);
   // badges the teacher has just given: a short celebration for each, once (they are taken off the list when seen)
   const [ceremonySeen, setCeremonySeen] = useState(() => new Set());
   const pendingCeremony = (Array.isArray(studentProfile?.badgesNew) ? studentProfile.badgesNew : []).filter(e => !ceremonySeen.has(e)); // top-3 honours (from the weekly files, no read)
