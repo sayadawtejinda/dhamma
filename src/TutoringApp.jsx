@@ -2836,13 +2836,10 @@ Each one will see the Teacher in their Visitors list, with a gift waiting to ope
         message: `Now: ${list}
 New: ${DAY_NAMES[scheduleDayOfWeek]} ${manualStartTime}-${manualEndTime}
 
-Is the class time CHANGED (replace the old one), or are there TWO classes on ${DAY_NAMES[scheduleDayOfWeek]}? (Two on the same day count as one for the attendance coins.)`,
-        confirmText: 'Time changed: replace old',
+A student does not have two classes on the same day, so this looks like a CHANGED time (or a mistake). Replace the old ${DAY_NAMES[scheduleDayOfWeek]} class with the new time? (The old one is deleted.)`,
+        confirmText: 'Replace the old one',
         confirmColor: 'bg-emerald-500 hover:bg-emerald-600',
         onConfirm: () => { executeAdd(sameDay, 'replaced'); setShowConfirmModal({ isOpen: false }); },
-        secondText: 'Keep both',
-        secondColor: 'bg-indigo-600 hover:bg-indigo-700',
-        onSecond: () => { executeAdd([], 'two-same-day'); setShowConfirmModal({ isOpen: false }); },
       } : {
         isOpen: true,
         title: `${studentName} already has a weekly class`,
