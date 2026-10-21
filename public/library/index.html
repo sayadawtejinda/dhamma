@@ -232,7 +232,7 @@ function renderSermons(){
  let l=S.filter(s=>(!cat||s.title.includes(cat))&&(!q||norm(s.title).includes(q)||norm(s.no).includes(q)||s.tracks.some(t=>norm(t[1]).includes(q))||txt(s).includes(q)));
  if(so==='long')l=[...l].sort((a,b)=>total(b)-total(a));if(so==='az')l=[...l].sort((a,b)=>a.title.localeCompare(b.title));
  $('#scount').textContent=`တရားတော် ${mn(l.length)} ပုဒ်`;
- $('#slist').innerHTML=l.length?l.map(s=>`<button class="card" data-id="${s.id}"><div class="num">${esc(s.no.replace('။','')||'＋')}</div><div><h3>${esc(s.title)}</h3><small>🎧 ${mn(s.tracks.length)} ခွေ · ${fmtLong(total(s))}${hasSum('sermon',s.id)?' · <span class="sdot">📝</span>':''}</small>${q&&!norm(s.title).includes(q)&&txt(s).includes(q)?`<br><small style="color:var(--accent)">${snippet(s,q)}</small>`:''}</div></button>`).join(''):'<div class="empty">မတွေ့ပါ</div>';
+ $('#slist').innerHTML=l.length?l.map(s=>`<button class="card" data-id="${s.id}"><div class="num">${esc(s.no.replace('။','')||'＋')}</div><div><h3>${esc(s.title)}</h3><small>🎧 ${mn(s.tracks.length)} ခွေ · ${fmtLong(total(s))}</small>${q&&!norm(s.title).includes(q)&&txt(s).includes(q)?`<br><small style="color:var(--accent)">${snippet(s,q)}</small>`:''}</div></button>`).join(''):'<div class="empty">မတွေ့ပါ</div>';
 }
 $('#slist').onclick=e=>{const c=e.target.closest('.card');if(c)openSermon(+c.dataset.id)};
 $('#sq').oninput=renderSermons;$('#ss').onchange=renderSermons;
@@ -244,12 +244,11 @@ async function openSermon(id){
  $('#dst').textContent=(s.no?s.no+' ':'')+s.title;
  const saved=await Promise.all(s.tracks.map(isSaved));
  const miss=s.expected-s.tracks.length;
- $('#dsb').innerHTML=(s.info?`<div class="hint" style="margin-top:0">${esc(s.info)}</div>`:'')+`<div class="acts"><button class="btn" id="pall">▶ အားလုံးဖွင့်မည်</button><button class="btn alt ${hasSum('sermon',s.id)?'has':''}" id="sumS">📝 အနှစ်ချုပ်</button><button class="btn gold" id="sv">⬇ Offline သိမ်းမည်</button></div>
+ $('#dsb').innerHTML=(s.info?`<div class="hint" style="margin-top:0">${esc(s.info)}</div>`:'')+`<div class="acts"><button class="btn" id="pall">▶ အားလုံးဖွင့်မည်</button><button class="btn gold" id="sv">⬇ Offline သိမ်းမည်</button></div>
  <div class="pr" id="svp" hidden><i></i></div><small style="color:var(--mute)" id="svt">${mn(s.tracks.length)} ခွေ · ${fmtLong(total(s))}${miss>0?` · ⚠ ဖိုင် ${mn(miss)} ခု မတွေ့ပါ`:''}</small><div style="margin-top:10px">`+
  s.tracks.map((t,i)=>`<div class="trk" data-i="${i}"><button data-p="${i}">▶</button><button data-sum="${t[0]}" title="အနှစ်ချုပ်" class="${hasSum('tape',t[0])?'has':''}">📝</button><div class="t"><b>ခွေ ${mn(i+1)} <small>(${esc(t[1])})</small></b><small>${fmt(t[2])} · ${(t[3]/1048576).toFixed(1)} MB ${saved[i]?'· ✅ offline':''}</small>${(s.topics&&s.topics[i+1])?`<div style="font-size:.86rem;margin-top:3px;line-height:1.5">${esc(s.topics[i+1])}</div>`:''}</div><a href="${url(t)}" download="${esc(t[1])}" title="Download">⬇</a></div>`).join('')+'</div>';
  $('#dsb').onclick=e=>{const p=e.target.closest('[data-p]');if(p)playQueue(s,+p.dataset.p)};
  $('#pall').onclick=()=>playQueue(s,0);
- $('#sumS').onclick=()=>showSummary('sermon',s.id,(s.no?s.no+' ':'')+s.title);
  $$('#dsb [data-sum]').forEach(b=>b.onclick=e=>{e.stopPropagation();const i=s.tracks.findIndex(t=>String(t[0])===b.dataset.sum);showSummary('tape',b.dataset.sum,s.title+' — ခွေ '+mn(i+1))});
  $('#sv').onclick=()=>saveOffline(s);
  dsermon.showModal();markNow();
@@ -434,7 +433,7 @@ $('#btl').onclick=e=>{const b=e.target.closest('button');if(!b)return;const p=+b
 $('#btq').oninput=()=>{const q=nt($('#btq').value);$$('#btl button').forEach(b=>b.style.display=!q||nt(b.textContent).includes(q)?'':'none')};
 
 
-// ---------- Summaries (အနှစ်ချုပ်)  - written with scripts/library/summary_admin.py, data in data/summaries-*.json
+// ---------- Summaries (အနှစ်ချုပ်)  - written with scripts/library/summary_admin.py, one small file per summary: data/sum/<kind>/<key>.json (only the opened one is downloaded)
 let SUMX={sermon:[],tape:[],book:[],text:[]};const SUMD={};
 fetch('data/summaries-index.json?v='+DV).then(r=>r.json()).then(j=>{SUMX=j;try{renderSermons();renderBooks();renderTexts()}catch(e){}}).catch(()=>{});
 const hasSum=(k,key)=>(SUMX[k]||[]).includes(String(key));
@@ -444,7 +443,7 @@ function sumMd(t){const inl=x=>esc(x).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');let 
  return h+(ul?'</ul>':'')}
 async function showSummary(kind,key,title){
  $('#dsumt').textContent='📝 '+title;$('#dsumb').innerHTML='<div class="empty">ဖတ်နေသည်…</div>';if(!dsum.open)dsum.showModal();
- try{if(!SUMD[kind])SUMD[kind]=await (await fetch(`data/summaries-${kind}.json?v=${DV}`)).json();const t=SUMD[kind][String(key)];
+ try{const ck=kind+'/'+key;if(!(ck in SUMD))SUMD[ck]=(await (await fetch(`data/sum/${ck}.json?v=${DV}`)).json()).t;const t=SUMD[ck];
   $('#dsumb').innerHTML=t?sumMd(t):'<div class="empty">အနှစ်ချုပ် မရှိသေးပါ — နောက်မှ ထည့်သွင်းပေးပါမည်။</div>'}
  catch(e){$('#dsumb').innerHTML='<div class="empty">အနှစ်ချုပ် မရှိသေးပါ။</div>'}}
 $('#rsum').onclick=()=>{if(curBook)showSummary('book',curBook.id,curBook.title)};
