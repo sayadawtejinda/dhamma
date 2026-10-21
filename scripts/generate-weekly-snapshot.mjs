@@ -319,6 +319,8 @@ async function main() {
       attendedTotal: attendedAllYears[s.id] || 0,
       ...(Object.keys(partUnitsOf(s)).length ? { partUnits: partUnitsOf(s) } : {}),
       ...(Object.keys(dsUnitsOf(s)).length ? { dsUnits: dsUnitsOf(s) } : {}),
+      // the other names this student used in Smart Study classes (a renamed student's old scores are filed under them)
+      ...(Object.values(s.smartStudyNames || {}).filter(x => x && x !== s.name).length ? { aliases: [...new Set(Object.values(s.smartStudyNames).filter(x => x && x !== s.name))] } : {}),
       ...(abUnitsOf(s) ? { abUnits: abUnitsOf(s) } : {}),
       ...(Object.keys(ssUnitsOf(s)).length ? { ssUnits: ssUnitsOf(s) } : {}),
     }));

@@ -114,7 +114,9 @@ for (const st of students) {
   const an = animals.get(n);
   if (false && an) at(an.trophyWins || 0, [[1, 'animals-1'], [3, 'animals-3'], [5, 'animals-master']]);
   // Smart Study: lessons finished, all classes together
-  const ss = ssDone[n] || {};
+  // a renamed student's older scores are filed under the names they used before (smartStudyNames)
+  const ss = {};
+  for (const nm of [n, ...(st.aliases || [])]) for (const [cid, set] of Object.entries(ssDone[nm] || {})) { const into = (ss[cid] = ss[cid] || new Set()); set.forEach(x => into.add(x)); }
   let ssTotal = 0;
   // per class: the board's count, or the lessons the teacher confirmed with trophies ('Smart Study Lesson_CLASS') if that is more
   const ssU = st.ssUnits || {};
@@ -132,7 +134,7 @@ for (const st of students) {
   // the old unnamed entries only give a floor for the total
   const abU = st.abUnits || { byClass: {}, legacy: 0 };
   const abClasses = new Set([...Object.keys(abhi), ...Object.keys(abU.byClass)]);
-  for (const id of abClasses) abTotal += Math.max(((abhi[id] || {}).students || {})[n] || 0, abU.byClass[id] || 0);
+  for (const id of abClasses) abTotal += Math.max(Math.max(...[n, ...(st.aliases || [])].map(nm => ((abhi[id] || {}).students || {})[nm] || 0)), abU.byClass[id] || 0);
   abTotal = Math.max(abTotal, abU.legacy || 0);
   at(abTotal, [[10, 'abhi-10'], [30, 'abhi-30'], [60, 'abhi-60'], [100, 'abhi-100'], [200, 'abhi-200'], [300, 'abhi-300']]);
   // Dhammaschool: chapters finished, and every finished grade
