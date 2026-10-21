@@ -139,7 +139,7 @@ for (const st of students) {
     dsTotal += chapters;
     for (let step = 1; step <= 5; step++) if (chapters >= step * 8) got.push(`ds-grade:${grade}:${step}`);
   }
-  at(dsTotal, [[5, 'ds-5'], [20, 'ds-20'], [50, 'ds-50'], [100, 'ds-100']]);
+  at(dsTotal, [[5, 'ds-5'], [20, 'ds-20'], [50, 'ds-50'], [100, 'ds-100'], [150, 'ds-150'], [200, 'ds-200'], [250, 'ds-250']]);
   // All-Rounder is not given for now (the teacher is rethinking it)
   // if (got.length >= 20) got.push('all-rounder');
   const valid = got.filter(id => BADGE_DEFS.some(b => b.id === id) || dynamicBadge(id));
