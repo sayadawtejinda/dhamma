@@ -1184,6 +1184,9 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   const [giftDay, setGiftDay] = useState({ date: null, count: 0 }); // free gifts picked up today
   // Every friend whose altar I have visited (a gift or not), so the list can mark them done.
   const [visitedFriends, setVisitedFriends] = useState([]);
+  // friends whose visit counts towards the Shrine visit badges: at most 2 new friends a week (so the ladder cannot be finished in one go)
+  const [creditFriends, setCreditFriends] = useState(null); // null = the old record (every visited friend counts)
+  const [creditWeek, setCreditWeek] = useState({ week: null, n: 0 });
   const [visitGiftNote, setVisitGiftNote] = useState(null);
 
   const rosterRef = studentUid ? doc(db, SHRINE_ROSTER_PATH, sanitizeShrineKey(studentName)) : null;
@@ -1216,11 +1219,28 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
       setVisitingData(data);
       if (!isTeacherPreview) {
         collectVisitGifts(targetName, data);
+        const patch = {};
         if (!visitedFriends.includes(targetName)) {
           const nextVisited = [...visitedFriends, targetName].slice(-300);
           setVisitedFriends(nextVisited);
-          persist({ shrineVisitedFriends: nextVisited });
+          patch.shrineVisitedFriends = nextVisited;
         }
+        // the badge credit: this friend counts if the student has not already had 2 credits this week
+        const credited = creditFriends || visitedFriends;
+        if (!credited.includes(targetName)) {
+          const d = new Date(); const mon = new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() + 6) % 7));
+          const weekKey = mon.toLocaleDateString('en-CA');
+          const usedThisWeek = creditWeek.week === weekKey ? creditWeek.n : 0;
+          if (usedThisWeek < 2) {
+            const nextCredit = [...credited, targetName].slice(-300);
+            setCreditFriends(nextCredit);
+            setCreditWeek({ week: weekKey, n: usedThisWeek + 1 });
+            patch.shrineVisitCreditFriends = nextCredit; patch.shrineVisitWeek = weekKey; patch.shrineVisitWeekN = usedThisWeek + 1;
+          } else if (!creditFriends) {
+            setCreditFriends(credited); patch.shrineVisitCreditFriends = credited; // the old record is kept as it was
+          }
+        }
+        if (Object.keys(patch).length) persist(patch);
       }
     } catch (e) {
       console.error('Error visiting Shrine Room:', e);
@@ -1345,6 +1365,8 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
             setGiftFriends(data.shrineGiftFriends || []);
             setGiftDay({ date: data.shrineGiftDay || null, count: data.shrineGiftDayCount || 0 });
             setVisitedFriends(data.shrineVisitedFriends || []);
+            setCreditFriends(Array.isArray(data.shrineVisitCreditFriends) ? data.shrineVisitCreditFriends : null);
+            setCreditWeek({ week: data.shrineVisitWeek || null, n: data.shrineVisitWeekN || 0 });
           }
           if (data.coinBalance == null) persist({ coinBalance: STARTER_COINS });
         } else {

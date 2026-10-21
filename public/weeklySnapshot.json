@@ -1866,6 +1866,9 @@
       "attendedThisYear": 31,
       "partUnits": {
         "bg": 6
+      },
+      "dsUnits": {
+        "GRADE-1": 1
       }
     },
     {
@@ -1907,7 +1910,11 @@
         "Amara_count": 1,
         "daniel the chin_name": "daniel the chin"
       },
-      "attendedThisYear": 36
+      "attendedThisYear": 36,
+      "dsUnits": {
+        "GRADE-1": 40,
+        "GRADE-2": 21
+      }
     },
     {
       "id": "01417196873941367563",
@@ -2017,6 +2024,9 @@
       "attendedThisYear": 22,
       "partUnits": {
         "bg": 19
+      },
+      "dsUnits": {
+        "GRADE-1": 1
       }
     },
     {
@@ -2152,7 +2162,11 @@
         "Teacher_count": 3,
         "Adrian min_count": 4
       },
-      "attendedThisYear": 24
+      "attendedThisYear": 24,
+      "dsUnits": {
+        "GRADE-2": 40,
+        "GRADE-1": 40
+      }
     },
     {
       "id": "06074766434471607048",
@@ -2283,7 +2297,10 @@
         "daniel the chin_count": 1,
         "Ryan_count": 1
       },
-      "attendedThisYear": 29
+      "attendedThisYear": 29,
+      "dsUnits": {
+        "GRADE-1": 15
+      }
     },
     {
       "id": "08181467230011867332",
@@ -2302,7 +2319,11 @@
         "Ryan_count": 1,
         "daniel the chin_name": "daniel the chin"
       },
-      "attendedThisYear": 29
+      "attendedThisYear": 29,
+      "dsUnits": {
+        "GRADE-1": 40,
+        "GRADE-2": 40
+      }
     },
     {
       "id": "08305157728097398468",
@@ -2334,7 +2355,11 @@
         "Teacher_name": "Teacher",
         "Madi_name": "Madi"
       },
-      "attendedThisYear": 34
+      "attendedThisYear": 34,
+      "dsUnits": {
+        "GRADE-2": 24,
+        "GRADE-1": 40
+      }
     },
     {
       "id": "09352906718502329265",
@@ -2414,7 +2439,10 @@
         "Ryan_count": 1,
         "Leon_123_name": "Leon_123"
       },
-      "attendedThisYear": 34
+      "attendedThisYear": 34,
+      "dsUnits": {
+        "GRADE-1": 14
+      }
     },
     {
       "id": "10685412375519437740",
@@ -2480,7 +2508,10 @@
         "Amara_name": "Amara",
         "Amara_count": 1
       },
-      "attendedThisYear": 37
+      "attendedThisYear": 37,
+      "dsUnits": {
+        "GRADE-1": 14
+      }
     },
     {
       "id": "11192846145860761661",
@@ -2589,7 +2620,14 @@
         "Ryan_count": 1,
         "Madi_name": "Madi"
       },
-      "attendedThisYear": 39
+      "attendedThisYear": 39,
+      "dsUnits": {
+        "GRADE-2": 40,
+        "GRADE-3": 40,
+        "GRADE-1": 40,
+        "GRADE-4": 40,
+        "GRADE-5": 6
+      }
     },
     {
       "id": "12150677250216153614",
@@ -2606,7 +2644,11 @@
         "Teacher_name": "Teacher",
         "Ryan_name": "Ryan"
       },
-      "attendedThisYear": 28
+      "attendedThisYear": 28,
+      "dsUnits": {
+        "GRADE-2": 17,
+        "GRADE-1": 40
+      }
     },
     {
       "id": "12170098044770804865",
@@ -2666,7 +2708,12 @@
         "Amara_name": "Amara",
         "Arkar_count": 1
       },
-      "attendedThisYear": 17
+      "attendedThisYear": 17,
+      "dsUnits": {
+        "GRADE-2": 40,
+        "GRADE-1": 40,
+        "GRADE-3": 4
+      }
     },
     {
       "id": "12637613032230631362",
@@ -2679,7 +2726,10 @@
         "Teacher_count": 3,
         "Teacher_name": "Teacher"
       },
-      "attendedThisYear": 21
+      "attendedThisYear": 21,
+      "dsUnits": {
+        "GRADE-2": 3
+      }
     },
     {
       "id": "12674381690116740000",
@@ -2816,7 +2866,12 @@
         "Amara_name": "Amara",
         "Ryan_name": "Ryan"
       },
-      "attendedThisYear": 35
+      "attendedThisYear": 35,
+      "dsUnits": {
+        "GRADE-2": 40,
+        "GRADE-3": 6,
+        "GRADE-1": 40
+      }
     },
     {
       "id": "14366683585434345045",
@@ -2835,7 +2890,11 @@
         "Xandra Han Tun_name": "Xandra Han Tun",
         "Xandra Han Tun_count": 1
       },
-      "attendedThisYear": 15
+      "attendedThisYear": 15,
+      "dsUnits": {
+        "GRADE-2": 40,
+        "GRADE-1": 40
+      }
     },
     {
       "id": "14536940136335309066",
@@ -2887,7 +2946,10 @@
         "Teacher_count": 3,
         "Amara_count": 1
       },
-      "attendedThisYear": 32
+      "attendedThisYear": 32,
+      "dsUnits": {
+        "GRADE-1": 11
+      }
     },
     {
       "id": "15589612097373962855",
@@ -2985,7 +3047,14 @@
         "Lillian_count": 1,
         "Amara_name": "Amara"
       },
-      "attendedThisYear": 38
+      "attendedThisYear": 38,
+      "dsUnits": {
+        "GRADE-3": 40,
+        "GRADE-1": 40,
+        "GRADE-4": 40,
+        "GRADE-5": 3,
+        "GRADE-2": 40
+      }
     },
     {
       "id": "18139451830809456219",
@@ -3027,7 +3096,13 @@
         "daniel the chin_name": "daniel the chin",
         "Amara_count": 1
       },
-      "attendedThisYear": 37
+      "attendedThisYear": 37,
+      "dsUnits": {
+        "GRADE-3": 40,
+        "GRADE-1": 40,
+        "GRADE-4": 40,
+        "GRADE-2": 40
+      }
     },
     {
       "id": "18371634261141600932",

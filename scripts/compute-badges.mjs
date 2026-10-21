@@ -76,7 +76,8 @@ for (const st of students) {
   if (sh) {
     at(sh.lotusCount || 0, [[10, 'lotus-10'], [25, 'lotus-25'], [50, 'lotus-50'], [100, 'lotus-100'], [500, 'lotus-500'], [1000, 'lotus-1000'], [2000, 'lotus-2000'], [3000, 'lotus-3000'], [4000, 'lotus-4000'], [5000, 'lotus-5000']]);
     // Shrine Room: friends visited. Nature World: gifts sent to friends and trees planted.
-    at(new Set(sh.shrineVisitedFriends || []).size, [[2, 'shrine-visits-2'], [10, 'shrine-visits'], [25, 'shrine-visits-25'], [50, 'shrine-visits-50'], [75, 'shrine-visits-75']]);
+    // the visits that count: at most 2 new friends a week (the app keeps this list; an older record counts every visited friend)
+    at(new Set(sh.shrineVisitCreditFriends || sh.shrineVisitedFriends || []).size, [[2, 'shrine-visits-2'], [10, 'shrine-visits'], [25, 'shrine-visits-25'], [50, 'shrine-visits-50'], [75, 'shrine-visits-75'], [100, 'shrine-visits-100'], [125, 'shrine-visits-125'], [150, 'shrine-visits-150']]);
     const nw = sh.natureWorld || {};
     at(new Set(nw.giftedFriends || []).size, [[1, 'nature-gift-1'], [3, 'nature-gift-3'], [10, 'nature-gift-10'], [20, 'nature-gift-20'], [50, 'nature-gift-50'], [100, 'nature-gift-100'], [200, 'nature-gift-200'], [300, 'nature-gift-300']]);
     const trees = nw.placedTrees ? Object.keys(nw.placedTrees).length : 0;
@@ -122,17 +123,23 @@ for (const st of students) {
     at(fd.deeds || 0, [[5, 'deeds-5'], [15, 'deeds-15'], [40, 'deeds-40'], [65, 'deeds-65'], [100, 'deeds-100'], [200, 'deeds-200'], [300, 'deeds-300'], [500, 'deeds-500']]);
     at(fd.lamps || 0, [[10, 'lamps-10'], [50, 'lamps-50'], [100, 'lamps-100'], [200, 'lamps-200'], [500, 'lamps-500']]);
   }
-  at(ssTotal, [[10, 'ss-10'], [25, 'ss-25'], [50, 'ss-50'], [100, 'ss-100'], [200, 'ss-200']]);
+  at(ssTotal, [[10, 'ss-10'], [25, 'ss-25'], [50, 'ss-50'], [100, 'ss-100'], [200, 'ss-200'], [300, 'ss-300']]);
   // Abhidhamma: lessons finished, all classes together
   let abTotal = 0;
   for (const c of Object.values(abhi)) abTotal += (c.students || {})[n] || 0;
-  at(abTotal, [[10, 'abhi-10'], [30, 'abhi-30'], [60, 'abhi-60'], [100, 'abhi-100']]);
+  at(abTotal, [[10, 'abhi-10'], [30, 'abhi-30'], [60, 'abhi-60'], [100, 'abhi-100'], [200, 'abhi-200'], [300, 'abhi-300']]);
   // Dhammaschool: chapters finished, and every finished grade
   const dsSet = new Set(dsProgress.completions[n] || []);
-  at(dsSet.size, [[5, 'ds-5'], [20, 'ds-20'], [50, 'ds-50'], [100, 'ds-100']]);
+  // A grade's chapters = what the student did in the app OR what the teacher confirmed with trophies (students who learned before the app
+  // kept records have no app record but did the work): the larger of the two. Five steps in every grade (8, 16, 24, 32, 40 chapters).
+  let dsTotal = 0;
   for (const [grade, lessonIds] of Object.entries(dsProgress.lessonsByClass || {})) {
-    if (lessonIds.length >= 5 && lessonIds.every(id => dsSet.has(id))) got.push(`ds-grade:${grade}`);
+    const inApp = lessonIds.filter(id => dsSet.has(id)).length;
+    const chapters = Math.max(inApp, (st.dsUnits || {})[grade] || 0);
+    dsTotal += chapters;
+    for (let step = 1; step <= 5; step++) if (chapters >= step * 8) got.push(`ds-grade:${grade}:${step}`);
   }
+  at(dsTotal, [[5, 'ds-5'], [20, 'ds-20'], [50, 'ds-50'], [100, 'ds-100']]);
   // All-Rounder is not given for now (the teacher is rethinking it)
   // if (got.length >= 20) got.push('all-rounder');
   const valid = got.filter(id => BADGE_DEFS.some(b => b.id === id) || dynamicBadge(id));

@@ -272,6 +272,12 @@ async function main() {
   const attendedAllYears = Object.fromEntries(Object.entries(carry).map(([uid, y]) => [uid, Object.values(y).reduce((a, b) => a + b, 0)]));
   // The teacher-approved cups of the three Reading Myanmar parts (Lesson Bank unit counts on the student's record): cp = Consonant Practice (7),
   // bg = Burmese Consonant Game (19), vl = Myanmar Vowels (Basic 8 + Pro 3 = 11). The badges read these from the weekly file.
+  // Dhammaschool chapters the teacher has confirmed (trophies) in each grade: { 'GRADE-1': 40 }
+  const dsUnitsOf = (s) => {
+    const out = {};
+    Object.entries(s.completedUnits || {}).forEach(([k, v]) => { const m = /^Dhamma\s*school.*_(GRADE-\d+)$/i.exec(k); if (m && Number(v) > 0) out[m[1].toUpperCase()] = Math.max(out[m[1].toUpperCase()] || 0, Number(v)); });
+    return out;
+  };
   const partUnitsOf = (s) => {
     const cu = s.completedUnits || {}; const get = (part) => Math.max(0, ...Object.entries(cu).filter(([k]) => k.endsWith(`Reading Myanmar_${part}`)).map(([, v]) => Number(v) || 0));
     const u = { cp: get('consonantpractice'), bg: get('burmesegame'), vl: get('vowelslearning') };
@@ -289,6 +295,7 @@ async function main() {
       attendedThisYear: attendedById[s.id] || 0,
       attendedTotal: attendedAllYears[s.id] || 0,
       ...(Object.keys(partUnitsOf(s)).length ? { partUnits: partUnitsOf(s) } : {}),
+      ...(Object.keys(dsUnitsOf(s)).length ? { dsUnits: dsUnitsOf(s) } : {}),
     }));
 
   // Class-wide month / year attendance totals for the Teacher Dashboard's
