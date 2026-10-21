@@ -117,6 +117,11 @@ export const BADGE_DEFS = [
   { id: 'animals-1', group: 'games', shape: 'paw', metal: 'bronze', icon: '', name: 'Animal Friend', desc: 'Won 1 Animal Sound trophy' },
   { id: 'animals-3', group: 'games', shape: 'paw', metal: 'silver', icon: '', name: 'Animal Lover', desc: 'Won 3 Animal Sound trophies' },
   { id: 'animals-master', group: 'games', shape: 'paw', metal: 'gold', icon: '🐘', name: 'Animal Sound Master', desc: 'Won all 5 Animal Sound trophies', master: true },
+  // Speaking Myanmar Part 3 (Animal Sound Quiz) + Part 4 (Burmese Learning Games) + Part 5 (Interactive Learning Quiz): trophies of the three together
+  { id: 'fun-5', group: 'games', shape: 'target', metal: 'bronze', icon: '🎯', name: 'Game Starter', desc: '5 trophies in the Myanmar quiz games' },
+  { id: 'fun-10', group: 'games', shape: 'rocket', metal: 'silver', icon: '🚀', name: 'Game Player', desc: '10 trophies in the Myanmar quiz games' },
+  { id: 'fun-20', group: 'games', shape: 'golf', metal: 'gold', icon: '⛳', name: 'Game Champion', desc: '20 trophies in the Myanmar quiz games' },
+  { id: 'fun-40', group: 'games', shape: 'crest', metal: 'gold', icon: '🎮', name: 'Game Master', desc: '40 trophies in the Myanmar quiz games', master: true },
   // Smart Study: by the number of lessons finished (all classes together)
   { id: 'ss-10', group: 'ss', shape: 'bulb', metal: 'bronze', icon: '💡', name: 'Quiz Starter', desc: '10 Smart Study lessons' },
   { id: 'ss-25', group: 'ss', shape: 'target', metal: 'silver', icon: '❓', name: 'Quiz Explorer', desc: '25 Smart Study lessons' },

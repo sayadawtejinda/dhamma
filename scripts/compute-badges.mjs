@@ -102,6 +102,9 @@ for (const st of students) {
   if (BASIC_VOWELS.every(x => vg.has(x)) || vlUnits >= 8) got.push('vowels-basic');
   if (PRO_VOWELS.every(x => vg.has(x)) || vlUnits >= 11) got.push('vowels-pro');
   const nu = numbers.get(n);
+  // the three Myanmar quiz games together (Animal Sound, Burmese Learning Games, Interactive Learning Quiz): the trophies the teacher gave
+  // (the Animal Sound app's own win count counts too if it is more)
+  { const pu2 = st.partUnits || {}; const an0 = animals.get(n) || {}; const funTotal = Math.max(pu2.ga || 0, an0.trophyWins || 0) + (pu2.bl || 0) + (pu2.iq || 0); at(funTotal, [[5, 'fun-5'], [10, 'fun-10'], [20, 'fun-20'], [40, 'fun-40']]); }
   // not given for now (the teacher is rethinking badges for number games and Animal Sound)
   if (false && nu) at((nu.completedLevels || []).length, [[1, 'numbers-1'], [2, 'numbers-2'], [3, 'numbers-3'], [4, 'numbers-master']]);
   const co = consonants.get(n);

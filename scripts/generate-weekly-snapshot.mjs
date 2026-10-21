@@ -303,7 +303,9 @@ async function main() {
     const po = Math.max(0, ...Object.entries(cu).filter(([k]) => k === 'Poem' || k.endsWith('_myanmarpoems')).map(([, v]) => Number(v) || 0));
     // rd = Myanmar Reader chapters the teacher has confirmed (half chapters are counted, so it is rounded down)
     const rd = Math.floor(Math.max(0, ...Object.entries(cu).filter(([k]) => /reader/i.test(k)).map(([, v]) => Number(v) || 0)));
-    const u = { cp: get('consonantpractice'), bg: get('burmesegame'), vl: get('vowelslearning'), po, rd };
+    // the three quiz games of Speaking Myanmar (Part 3 Animal Sound, Part 4 Burmese Learning Games, Part 5 Interactive Learning Quiz)
+    const spk = (part) => Math.max(0, ...Object.entries(cu).filter(([k]) => k.endsWith(`Speaking Myanmar_${part}`) || (part === 'animalsound' && k === 'Animal sound')).map(([, v]) => Number(v) || 0));
+    const u = { cp: get('consonantpractice'), bg: get('burmesegame'), vl: get('vowelslearning'), po, rd, ga: spk('animalsound'), bl: spk('burmeselearninggames'), iq: spk('interactivequiz') };
     Object.keys(u).forEach(k => { if (!u[k]) delete u[k]; });
     return u;
   };
