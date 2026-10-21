@@ -89,12 +89,38 @@ function score(){const s=curSec();if(!s){$('#score').textContent='';return}
  $('#score').textContent=all.length?('✔ '+ok.length+' / '+all.length):'(no numbers here)';}
 $('#qz').onclick=()=>{const q=document.body.classList.toggle('quiz');$('#qz').classList.toggle('on',q);score();};
 $('#rv').onclick=()=>{const s=curSec();if(s)s.querySelectorAll('td[data-q]:not(.ok)').forEach(td=>{td.classList.remove('bad');td.classList.add('rev')})};
-$('#rs').onclick=()=>{const s=curSec();if(!s)return;s.querySelectorAll('td[data-q]').forEach(td=>{td.classList.remove('ok','rev','bad');td.querySelector('input').value=''});score();};
+$('#rs').onclick=()=>{const s=curSec();if(!s)return;delete s.dataset.fw;s.querySelectorAll('td[data-q]').forEach(td=>{td.classList.remove('ok','rev','bad');td.querySelector('input').value=''});score();};
+
+/* 🎆 fireworks when every number of a chart is answered correctly (not when "Reveal" is used) */
+function fireworks(){
+ const c=document.createElement('canvas');c.style.cssText='position:fixed;inset:0;width:100%;height:100%;z-index:9999;pointer-events:none';
+ const dpr=devicePixelRatio||1;c.width=innerWidth*dpr;c.height=innerHeight*dpr;document.body.appendChild(c);
+ const g=c.getContext('2d');g.scale(dpr,dpr);
+ const W=innerWidth,H=innerHeight,P=[],cols=['#ffd700','#ff4d4d','#4dd2ff','#7dff6b','#ff7bd5','#ffffff','#ffa500'];
+ let t0=performance.now(),last=t0,next=0,bursts=0;
+ function burst(x,y){const col=cols[Math.random()*cols.length|0],col2=cols[Math.random()*cols.length|0],n=70+Math.random()*40|0;
+  for(let i=0;i<n;i++){const a=Math.PI*2*i/n+Math.random()*.1,v=1.5+Math.random()*4.2;
+   P.push({x,y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,life:1,d:.008+Math.random()*.012,col:Math.random()<.7?col:col2,s:1.5+Math.random()*1.8});}}
+ function frame(now){const dt=Math.min(40,now-last)/16.7;last=now;
+  g.globalCompositeOperation='destination-out';g.fillStyle='rgba(0,0,0,.22)';g.fillRect(0,0,W,H);g.globalCompositeOperation='lighter';
+  if(now-t0>next&&bursts<14){burst(W*(.12+Math.random()*.76),H*(.12+Math.random()*.42));bursts++;next+=260+Math.random()*320;}
+  for(let i=P.length-1;i>=0;i--){const p=P[i];p.vy+=.045*dt;p.vx*=.992;p.x+=p.vx*dt;p.y+=p.vy*dt;p.life-=p.d*dt;
+   if(p.life<=0){P.splice(i,1);continue}
+   g.globalAlpha=Math.max(0,p.life);g.fillStyle=p.col;g.beginPath();g.arc(p.x,p.y,p.s,0,7);g.fill();}
+  g.globalAlpha=1;
+  if(bursts<14||P.length)requestAnimationFrame(frame);else c.remove();}
+ requestAnimationFrame(frame);
+ const m=document.createElement('div');m.textContent='🎉 Sādhu! Sādhu! Sādhu! 🎉';
+ m.style.cssText='position:fixed;left:50%;top:18%;transform:translateX(-50%);z-index:10000;background:#000b;color:#ffd700;font:700 26px/1.3 system-ui,sans-serif;padding:12px 28px;border-radius:14px;pointer-events:none;transition:opacity .8s';
+ document.body.appendChild(m);setTimeout(()=>m.style.opacity=0,3200);setTimeout(()=>m.remove(),4100);}
 document.addEventListener('input',e=>{const i=e.target;if(!i.classList||!i.classList.contains('q'))return;
  const td=i.parentNode,v=i.value.trim().replace(/,/g,'.'),a=i.dataset.a.replace(/,/g,'.');
  td.classList.remove('bad');
  if(v===a){td.classList.add('ok');}else if(v.length>=a.length&&v)td.classList.add('bad');
- score();});
+ score();
+ const sec=curSec();
+ if(sec&&!sec.dataset.fw){const all=sec.querySelectorAll('td[data-q]');
+  if(all.length&&sec.querySelectorAll('td[data-q].ok').length===all.length){sec.dataset.fw='1';fireworks();}}});
 const h=location.hash.slice(1);show(order.includes(h)?h:'slides',false);
 </script>
 </body>
