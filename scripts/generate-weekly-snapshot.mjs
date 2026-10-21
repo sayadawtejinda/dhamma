@@ -295,7 +295,9 @@ async function main() {
     const cu = s.completedUnits || {}; const get = (part) => Math.max(0, ...Object.entries(cu).filter(([k]) => k.endsWith(`Reading Myanmar_${part}`)).map(([, v]) => Number(v) || 0));
     // po = Myanmar Poems: trophies the teacher has confirmed, one per poem (the older entry is just called 'Poem')
     const po = Math.max(0, ...Object.entries(cu).filter(([k]) => k === 'Poem' || k.endsWith('_myanmarpoems')).map(([, v]) => Number(v) || 0));
-    const u = { cp: get('consonantpractice'), bg: get('burmesegame'), vl: get('vowelslearning'), po };
+    // rd = Myanmar Reader chapters the teacher has confirmed (half chapters are counted, so it is rounded down)
+    const rd = Math.floor(Math.max(0, ...Object.entries(cu).filter(([k]) => /reader/i.test(k)).map(([, v]) => Number(v) || 0)));
+    const u = { cp: get('consonantpractice'), bg: get('burmesegame'), vl: get('vowelslearning'), po, rd };
     Object.keys(u).forEach(k => { if (!u[k]) delete u[k]; });
     return u;
   };

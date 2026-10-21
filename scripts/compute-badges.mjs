@@ -92,8 +92,9 @@ for (const st of students) {
   const po = poems.get(n) || {};
   const poemCount = Math.max(new Set(po.completedPoemIds || []).size, Math.min(48, (st.partUnits || {}).po || 0));
   at(poemCount, [[5, 'poems-5'], [10, 'poems-10'], [25, 'poems-25'], [40, 'poems-40'], [48, 'poem-master']]);
-  const rd = reader.get(n);
-  if (rd) at(rd.furthestChapter || 0, [[5, 'reader-5'], [10, 'reader-10'], [15, 'reader-15'], [20, 'reader-20'], [25, 'reader-25'], [29, 'reader-master']]);
+  // Myanmar Reader: the chapter reached in the app, or the chapters the teacher confirmed with trophies (the larger; at most 29)
+  const rd = reader.get(n) || {};
+  at(Math.max(rd.furthestChapter || 0, Math.min(29, (st.partUnits || {}).rd || 0)), [[5, 'reader-5'], [10, 'reader-10'], [15, 'reader-15'], [20, 'reader-20'], [25, 'reader-25'], [29, 'reader-master']]);
   // Myanmar Vowels: Basic (8 trophies) and Pro (3 more = 11) -- from the student's own game record or the teacher-approved count
   const vo = vowels.get(n);
   const vlUnits = (st.partUnits || {}).vl || 0;
