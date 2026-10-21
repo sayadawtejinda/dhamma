@@ -16,8 +16,8 @@ const earnedCount = {}; Object.values(earnedFile).forEach(l => l.forEach(id => {
 const givenCount = {}; Object.values(givenFile).forEach(o => Object.keys(o || {}).forEach(id => { givenCount[id] = (givenCount[id] || 0) + 1; }));
 // switched off in scripts/compute-badges.mjs for now
 // the name shown above each ladder
-const LABELS = { trophy: 'Trophies', weeks: 'Weeks of coming to class', hearts: 'Hearts', lotus: 'Lotus flowers', 'shrine-visits': 'Shrine Room visits', 'nature-gift': 'Nature World gifts', trees: 'Trees planted', avatar: 'Avatar items', poems: 'Myanmar Poems', reader: 'Myanmar Reader chapters', vowels: 'Myanmar Vowels', numbers: 'Number games', cp: 'Consonant Practice (Part 1)', consonants: 'Burmese Consonant Game (Part 2)', animals: 'Animal Sound', ss: 'Smart Study lessons', abhi: 'Abhidhamma lessons', ds: 'Dhammaschool chapters (all grades)', deeds: 'Good deeds', lamps: 'Lamps & traditions', 'all-rounder': 'All-Rounder' };
-const OFF = new Set(['all-rounder', 'numbers-1', 'numbers-2', 'numbers-3', 'numbers-master', 'animals-1', 'animals-3', 'animals-master']);
+const LABELS = { trophy: 'Trophies', weeks: 'Weeks of coming to class', hearts: 'Hearts', lotus: 'Lotus flowers', 'shrine-visits': 'Shrine Room visits', 'nature-gift': 'Nature World gifts', trees: 'Trees planted', avatar: 'Avatar items', poems: 'Myanmar Poems', reader: 'Myanmar Reader chapters', vowels: 'Myanmar Vowels', numbers: 'Number games', cp: 'Consonant Practice (Part 1)', consonants: 'Burmese Consonant Game (Part 2)', animals: 'Animal Sound', ss: 'Smart Study lessons', abhi: 'Abhidhamma lessons', ds: 'Dhammaschool chapters (all grades)', deeds: 'Good deeds', lamps: 'Lamps & traditions', all: 'All-Rounder (badges earned in all)', numbers: 'Number games (16 trophies)' };
+const OFF = new Set([]); // badges switched off in compute-badges.mjs would be listed here
 
 const vite = await createServer({ root: ROOT, server: { middlewareMode: true }, appType: 'custom', logLevel: 'error' });
 const { BadgeSvg } = await vite.ssrLoadModule('/src/Badges.jsx');
@@ -46,11 +46,9 @@ for (const grp of defs.BADGE_GROUPS) {
 const year = new Date().getFullYear();
 const bodhi = STAGE_NAMES.map((_, i) => defs.badgeMeta(`bodhi-level:${year}:${i}`));
 const yearsWithUs = [2020, 2021, 2022, 2023, 2024, 2025, 2026].map(y => defs.badgeMeta(`year-${y}`));
-const bodhiYear = STAGE_NAMES.map((_, i) => defs.badgeMeta(`bodhi-year:${year - 1}:${i}`));
 const cardDyn = (b) => `<div class="card">${svg(b)}<b>${esc(b.name)}</b><span class="d">${esc(b.desc)}</span><span class="id">${esc(b.id)}</span><span class="n">earned ${earnedCount[b.id] || 0} · given ${givenCount[b.id] || 0}</span></div>`;
-total += bodhi.length + bodhiYear.length;
+total += bodhi.length;
 body += `<h2>Bodhi Tree (levels this year, ${year})</h2><div class="ladder"><div class="lt">bodhi-level · 10 steps (each level is a badge of its own)</div><div class="row">${bodhi.map(cardDyn).join('')}</div></div>`;
-body += `<h2>Bodhi Tree — gold yearly badge (EXAMPLE shown as ${year - 1}: kept for later, nothing is given for it yet; ${year} will be given when the year ends)</h2><div class="ladder"><div class="row">${bodhiYear.map(cardDyn).join('')}</div></div>`;
 body += `<h2>Years with us (you give these by hand: Badges to give → Give any badge by hand)</h2><div class="ladder"><div class="lt">one for every year a student has studied with you (2020 on) · shown with the Bodhi gold yearly badges</div><div class="row">${yearsWithUs.map(cardDyn).join('')}</div></div>`;
 total += yearsWithUs.length;
 // the top-three honours (cup / Dhamma wheel / sun): the plaque as it shows in the Avatar, Shrine Room and Bodhi Tree, and the emblem

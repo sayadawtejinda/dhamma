@@ -105,8 +105,8 @@ for (const st of students) {
   // the three Myanmar quiz games together (Animal Sound, Burmese Learning Games, Interactive Learning Quiz): the trophies the teacher gave
   // (the Animal Sound app's own win count counts too if it is more)
   { const pu2 = st.partUnits || {}; const an0 = animals.get(n) || {}; const funTotal = Math.max(pu2.ga || 0, an0.trophyWins || 0) + (pu2.bl || 0) + (pu2.iq || 0); at(funTotal, [[5, 'fun-5'], [10, 'fun-10'], [20, 'fun-20'], [40, 'fun-40']]); }
-  // not given for now (the teacher is rethinking badges for number games and Animal Sound)
-  if (false && nu) at((nu.completedLevels || []).length, [[1, 'numbers-1'], [2, 'numbers-2'], [3, 'numbers-3'], [4, 'numbers-master']]);
+  // Number games: 16 trophies in all (2 per level): units = levels done (the teacher's count), 1 unit = 2 trophies
+  at(Math.max(((st.partUnits || {}).nl || 0), (nu && nu.completedLevels ? nu.completedLevels.length : 0)), [[1, 'numbers-2'], [4, 'numbers-8'], [8, 'numbers-16']]);
   const co = consonants.get(n);
   // Part 1 Consonant Practice: all 7 cups (5, 10, 15, 20, 25, 30, 33 consonants) -- from the student's own game record or the teacher-approved count
   const cpRoster = consonantPractice.get(n);
@@ -114,8 +114,6 @@ for (const st of students) {
   if (new Set((cpRoster && cpRoster.completedGroups) || []).size >= 7 || (pu.cp || 0) >= 7) got.push('cp-33');
   // Part 2 Burmese Consonant Game: trophies won (19 in all)
   at(Math.max(co ? (co.completedGames || []).length : 0, pu.bg || 0), [[5, 'consonants-5'], [19, 'consonants-19']]);
-  const an = animals.get(n);
-  if (false && an) at(an.trophyWins || 0, [[1, 'animals-1'], [3, 'animals-3'], [5, 'animals-master']]);
   // Smart Study: lessons finished, all classes together
   // a renamed student's older scores are filed under the names they used before (smartStudyNames)
   const ss = {};
@@ -152,9 +150,9 @@ for (const st of students) {
     for (let step = 1; step <= 5; step++) if (chapters >= step * 8) got.push(`ds-grade:${grade}:${step}`);
   }
   at(dsTotal, [[5, 'ds-5'], [20, 'ds-20'], [50, 'ds-50'], [100, 'ds-100'], [150, 'ds-150'], [200, 'ds-200'], [250, 'ds-250']]);
-  // All-Rounder is not given for now (the teacher is rethinking it)
-  // if (got.length >= 20) got.push('all-rounder');
   const valid = got.filter(id => BADGE_DEFS.some(b => b.id === id) || dynamicBadge(id));
+  // All-Rounder: 50, 100, 150, 200 badges earned in all
+  [[50, 'all-50'], [100, 'all-100'], [150, 'all-150'], [200, 'all-200']].forEach(([min, id]) => { if (valid.length >= min) valid.push(id); });
   if (valid.length) out[n] = valid;
 }
 // the three places of the three honours (trophies, lotus flowers in the Shrine Room, classes attended)

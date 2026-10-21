@@ -107,16 +107,13 @@ export const BADGE_DEFS = [
   // games
   { id: 'vowels-basic', group: 'letters', shape: 'rocket', metal: 'bronze', icon: '', name: 'Vowel Starter', desc: 'Finished the Basic level of Myanmar Vowels' },
   { id: 'vowels-pro', group: 'letters', shape: 'rocket', metal: 'gold', icon: '', name: 'Vowel Master', desc: 'Finished the Pro level of Myanmar Vowels', master: true },
-  { id: 'numbers-1', group: 'games', shape: 'target', metal: 'bronze', icon: '', name: 'Number Starter', desc: 'Finished 1 number level' },
-  { id: 'numbers-2', group: 'games', shape: 'target', metal: 'silver', icon: '', name: 'Number Learner', desc: 'Finished 2 number levels' },
-  { id: 'numbers-3', group: 'games', shape: 'target', metal: 'gold', icon: '', name: 'Number Whiz', desc: 'Finished 3 number levels' },
-  { id: 'numbers-master', group: 'games', shape: 'golf', metal: 'gold', icon: '', name: 'Hole in One', desc: 'Finished all 4 number levels', master: true },
+  // Number games (Speaking Myanmar Part 2): 16 trophies in all -- 2 trophies, 8 trophies, all 16
+  { id: 'numbers-2', group: 'games', shape: 'target', metal: 'bronze', icon: '🔢', name: 'Number Learner', desc: '2 trophies in the Number games' },
+  { id: 'numbers-8', group: 'games', shape: 'hexagon', metal: 'silver', icon: '➕', name: 'Number Whiz', desc: '8 trophies in the Number games' },
+  { id: 'numbers-16', group: 'games', shape: 'golf', metal: 'gold', icon: '🎯', name: 'Hole in One', desc: 'All 16 trophies in the Number games', master: true },
   { id: 'cp-33', group: 'letters', shape: 'quill', metal: 'gold', icon: '✍️', name: 'Consonant Champion', desc: 'Finished Consonant Practice: all 33 consonants (7 cups)' },
   { id: 'consonants-5', group: 'letters', shape: 'quill', metal: 'silver', icon: '', name: 'Consonant Explorer', desc: 'Won 5 trophies in the Burmese Consonant Game' },
   { id: 'consonants-19', group: 'letters', shape: 'quill', metal: 'gold', icon: '🏆', name: 'Consonant Master', desc: 'Won all 19 trophies in the Burmese Consonant Game', master: true },
-  { id: 'animals-1', group: 'games', shape: 'paw', metal: 'bronze', icon: '', name: 'Animal Friend', desc: 'Won 1 Animal Sound trophy' },
-  { id: 'animals-3', group: 'games', shape: 'paw', metal: 'silver', icon: '', name: 'Animal Lover', desc: 'Won 3 Animal Sound trophies' },
-  { id: 'animals-master', group: 'games', shape: 'paw', metal: 'gold', icon: '🐘', name: 'Animal Sound Master', desc: 'Won all 5 Animal Sound trophies', master: true },
   // Speaking Myanmar Part 3 (Animal Sound Quiz) + Part 4 (Burmese Learning Games) + Part 5 (Interactive Learning Quiz): trophies of the three together
   { id: 'fun-5', group: 'games', shape: 'target', metal: 'bronze', icon: '🎯', name: 'Game Starter', desc: '5 trophies in the Myanmar quiz games' },
   { id: 'fun-10', group: 'games', shape: 'rocket', metal: 'silver', icon: '🚀', name: 'Game Player', desc: '10 trophies in the Myanmar quiz games' },
@@ -160,7 +157,10 @@ export const BADGE_DEFS = [
   { id: 'lamps-200', group: 'festival', shape: 'burst', metal: 'gold', icon: '🪔', name: 'Guardian of Tradition', desc: '200 festival traditions', master: true },
   { id: 'lamps-500', group: 'festival', shape: 'crest', metal: 'gold', icon: '🪔', name: 'Light of the Dhamma', desc: '500 festival traditions', master: true },
   // special
-  { id: 'all-rounder', group: 'all', shape: 'burst', metal: 'gold', icon: '🌟', name: 'All-Rounder', desc: 'Earned 20 badges', master: true },
+  { id: 'all-50', group: 'all', shape: 'rosette', metal: 'bronze', icon: '🌟', name: 'All-Rounder', desc: 'Earned 50 badges' },
+  { id: 'all-100', group: 'all', shape: 'burst', metal: 'silver', icon: '🌟', name: 'All-Star', desc: 'Earned 100 badges', master: true },
+  { id: 'all-150', group: 'all', shape: 'crest', metal: 'gold', icon: '🌠', name: 'Super All-Rounder', desc: 'Earned 150 badges', master: true },
+  { id: 'all-200', group: 'all', shape: 'crown', metal: 'gold', icon: '🌠', name: 'Grand All-Rounder', desc: 'Earned 200 badges', master: true },
 ];
 
 // one badge per Dhammaschool grade: finishing every chapter of the grade (id 'ds-grade:GRADE-3')
@@ -218,7 +218,6 @@ export const ladderOf = (id) => {
   if (id.startsWith('vowels-')) return 'vowels';
   if (id.startsWith('numbers-')) return 'numbers';
   if (id === 'poem-master') return 'poems';
-  if (id === 'animals-master') return 'animals';
   if (id === 'reader-master') return 'reader';
   return id.replace(/-\d+$/, '');
 };

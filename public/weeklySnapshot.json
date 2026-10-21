@@ -1829,7 +1829,8 @@
         "po": 18,
         "ga": 1,
         "bl": 2,
-        "iq": 1
+        "iq": 1,
+        "nl": 2
       }
     },
     {
@@ -1851,7 +1852,8 @@
         "rd": 18,
         "ga": 2,
         "bl": 2,
-        "iq": 1
+        "iq": 1,
+        "nl": 4
       },
       "ssUnits": {
         "TADINGYUT": 1,
@@ -1887,7 +1889,8 @@
         "rd": 29,
         "ga": 0,
         "bl": 1,
-        "iq": 0
+        "iq": 0,
+        "nl": 2
       },
       "ssUnits": {
         "TADINGYUT": 10,
@@ -1918,7 +1921,8 @@
         "rd": 29,
         "ga": 1,
         "bl": 1,
-        "iq": 0
+        "iq": 0,
+        "nl": 2
       },
       "dsUnits": {
         "GRADE-1": 1
@@ -2069,7 +2073,8 @@
         "rd": 19,
         "ga": 5,
         "bl": 2,
-        "iq": 1
+        "iq": 1,
+        "nl": 4
       },
       "ssUnits": {
         "RESPECT": 1,
@@ -2156,7 +2161,8 @@
         "rd": 3,
         "ga": 2,
         "bl": 4,
-        "iq": 4
+        "iq": 4,
+        "nl": 1
       },
       "ssUnits": {
         "BUDDHA GUNA": 5,
@@ -2187,7 +2193,8 @@
       "attendedTotal": 22,
       "partUnits": {
         "bg": 19,
-        "rd": 29
+        "rd": 29,
+        "nl": 2
       },
       "dsUnits": {
         "GRADE-1": 1
@@ -2227,7 +2234,8 @@
         "rd": 16,
         "ga": 2,
         "bl": 2,
-        "iq": 2
+        "iq": 2,
+        "nl": 4
       },
       "abUnits": {
         "byClass": {
@@ -2261,7 +2269,8 @@
         "rd": 23,
         "ga": 1,
         "bl": 0,
-        "iq": 0
+        "iq": 0,
+        "nl": 4
       },
       "ssUnits": {
         "METTA": 3,
@@ -2287,7 +2296,8 @@
         "rd": 19,
         "ga": 2,
         "bl": 2,
-        "iq": 2
+        "iq": 2,
+        "nl": 2
       },
       "ssUnits": {
         "RESPECT": 3,
@@ -2404,7 +2414,8 @@
         "rd": 11,
         "ga": 2,
         "bl": 2,
-        "iq": 1
+        "iq": 1,
+        "nl": 4
       },
       "ssUnits": {
         "RESPECT": 7,
@@ -2464,7 +2475,8 @@
         "rd": 4,
         "ga": 1,
         "bl": 2,
-        "iq": 0
+        "iq": 0,
+        "nl": 2
       },
       "ssUnits": {
         "TADINGYUT": 10
@@ -2519,7 +2531,8 @@
         "rd": 2,
         "ga": 2,
         "bl": 4,
-        "iq": 2
+        "iq": 2,
+        "nl": 1
       },
       "ssUnits": {
         "RESPECT": 4,
@@ -2549,7 +2562,8 @@
         "rd": 16,
         "ga": 1,
         "bl": 2,
-        "iq": 1
+        "iq": 1,
+        "nl": 2
       },
       "ssUnits": {
         "TADINGYUT": 7,
@@ -2586,7 +2600,8 @@
         "rd": 15,
         "ga": 2,
         "bl": 2,
-        "iq": 1
+        "iq": 1,
+        "nl": 4
       },
       "ssUnits": {
         "TADINGYUT": 10,
@@ -2805,7 +2820,8 @@
         "po": 14,
         "ga": 1,
         "bl": 0,
-        "iq": 0
+        "iq": 0,
+        "nl": 2
       },
       "ssUnits": {
         "MINGALA": 9,
@@ -2833,7 +2849,8 @@
         "rd": 11,
         "ga": 3,
         "bl": 1,
-        "iq": 1
+        "iq": 1,
+        "nl": 1
       },
       "ssUnits": {
         "RESPECT": 4,
@@ -2872,6 +2889,9 @@
         "TADINGYUT": 8,
         "RESPECT": 3,
         "BUDDHA GUNA": 5
+      },
+      "partUnits": {
+        "nl": 4
       }
     },
     {
@@ -2906,7 +2926,8 @@
         "rd": 11,
         "ga": 3,
         "bl": 2,
-        "iq": 1
+        "iq": 1,
+        "nl": 2
       },
       "ssUnits": {
         "TADINGYUT": 5,
@@ -2939,7 +2960,8 @@
       "partUnits": {
         "bg": 5,
         "po": 48,
-        "rd": 22
+        "rd": 22,
+        "nl": 2
       },
       "ssUnits": {
         "METTA": 4,
@@ -2978,7 +3000,10 @@
       },
       "aliases": [
         "leon_123"
-      ]
+      ],
+      "partUnits": {
+        "nl": 2
+      }
     },
     {
       "id": "11192846145860761661",
@@ -3002,7 +3027,8 @@
         "rd": 15,
         "ga": 1,
         "bl": 2,
-        "iq": 0
+        "iq": 0,
+        "nl": 2
       },
       "ssUnits": {
         "METTA": 9,
@@ -3055,7 +3081,8 @@
         "rd": 12,
         "ga": 1,
         "bl": 2,
-        "iq": 1
+        "iq": 1,
+        "nl": 1
       },
       "ssUnits": {
         "RESPECT": 5,
@@ -3131,7 +3158,8 @@
         "rd": 18,
         "ga": 0,
         "bl": 1,
-        "iq": 0
+        "iq": 0,
+        "nl": 2
       },
       "ssUnits": {
         "MINGALA": 2,
@@ -3176,6 +3204,9 @@
       "ssUnits": {
         "TADINGYUT": 7,
         "RESPECT": 7
+      },
+      "partUnits": {
+        "nl": 2
       }
     },
     {
@@ -3250,7 +3281,8 @@
         "rd": 14,
         "ga": 0,
         "bl": 0,
-        "iq": 2
+        "iq": 2,
+        "nl": 2
       },
       "ssUnits": {
         "METTA": 4,
@@ -3370,7 +3402,8 @@
       "attendedTotal": 27,
       "partUnits": {
         "po": 44,
-        "rd": 17
+        "rd": 17,
+        "nl": 2
       },
       "ssUnits": {
         "MINGALA": 3,
@@ -3401,7 +3434,8 @@
         "rd": 4,
         "ga": 2,
         "bl": 2,
-        "iq": 3
+        "iq": 3,
+        "nl": 4
       },
       "ssUnits": {
         "RESPECT": 2,
@@ -3432,7 +3466,8 @@
         "rd": 8,
         "ga": 3,
         "bl": 2,
-        "iq": 3
+        "iq": 3,
+        "nl": 2
       },
       "ssUnits": {
         "METTA": 10,
@@ -3466,7 +3501,8 @@
         "rd": 4,
         "ga": 1,
         "bl": 2,
-        "iq": 1
+        "iq": 1,
+        "nl": 3
       },
       "ssUnits": {
         "BUDDHA GUNA": 5
@@ -3495,7 +3531,8 @@
         "po": 24,
         "ga": 2,
         "bl": 2,
-        "iq": 2
+        "iq": 2,
+        "nl": 1
       },
       "ssUnits": {
         "RESPECT": 6,
@@ -3602,7 +3639,8 @@
         "rd": 5,
         "ga": 2,
         "bl": 0,
-        "iq": 0
+        "iq": 0,
+        "nl": 2
       },
       "ssUnits": {
         "METTA": 3,
@@ -3633,7 +3671,8 @@
         "po": 20,
         "ga": 1,
         "bl": 4,
-        "iq": 1
+        "iq": 1,
+        "nl": 4
       },
       "ssUnits": {
         "RESPECT": 1,
@@ -3666,7 +3705,8 @@
         "GRADE-1": 11
       },
       "partUnits": {
-        "po": 2
+        "po": 2,
+        "nl": 2
       },
       "ssUnits": {
         "RESPECT": 4,
@@ -3693,7 +3733,8 @@
         "rd": 22,
         "ga": 1,
         "bl": 1,
-        "iq": 0
+        "iq": 0,
+        "nl": 4
       },
       "ssUnits": {
         "TADINGYUT": 3,
@@ -3723,7 +3764,8 @@
         "rd": 24,
         "ga": 1,
         "bl": 0,
-        "iq": 1
+        "iq": 1,
+        "nl": 1
       },
       "ssUnits": {
         "TADINGYUT": 6,
@@ -3752,7 +3794,8 @@
         "rd": 3,
         "ga": 1,
         "bl": 1,
-        "iq": 1
+        "iq": 1,
+        "nl": 1
       },
       "ssUnits": {
         "METTA": 10,
@@ -3914,7 +3957,8 @@
         "rd": 9,
         "ga": 1,
         "bl": 2,
-        "iq": 1
+        "iq": 1,
+        "nl": 1
       },
       "ssUnits": {
         "METTA": 6,
@@ -3967,7 +4011,10 @@
         "Teacher_count": 3
       },
       "attendedThisYear": 0,
-      "attendedTotal": 0
+      "attendedTotal": 0,
+      "partUnits": {
+        "nl": 1
+      }
     },
     {
       "id": "AgOxDpk7u2RE4bx7n3cQgdcTOxr2",
