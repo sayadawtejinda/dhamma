@@ -13,6 +13,7 @@ LYR = os.path.join(DATA, 'lyr')
 SONGS = os.path.join(DATA, 'songs.json')
 META = os.path.join(HERE, 'songs_meta.json')          # where each song came from (not public)
 PLAN = os.path.join(HERE, 'upload_plan.json')
+HIDDEN = os.path.join(HERE, 'songs_hidden.json')       # songs hidden from the public page (kept only on this computer, never committed)
 GONE = os.path.join(HERE, 'songs_deleted.json')       # deleted songs (the audio stays on archive.org, nothing else points to it)
 STAGE = os.path.join(os.path.expanduser('~'), 'Downloads', 'songs_stage')
 PORT = 8803
@@ -42,8 +43,20 @@ def run(cmd):
     r = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, encoding='utf8', errors='replace')
     return (r.stdout + r.stderr).strip(), r.returncode
 
+def archive_missing():
+    """songs of songs.json whose audio file is not (completely) on archive.org yet"""
+    import internetarchive as ia
+    have = {f['name']: int(f.get('size', 0)) for f in ia.get_item('dhamma-school-songs').files}
+    return [s for s in load()['songs'] if have.get(s['f']) != s['z']]
+
 def publish():
     log = []
+    try:
+        miss = archive_missing()
+    except Exception as e:
+        return 'archive.org ကို စစ်မရပါ ❌ (အင်တာနက် စစ်ပါ)\n' + str(e)
+    if miss:
+        return 'archive.org ပေါ် မရောက်သေးသော သီချင်း %d ပုဒ် ရှိနေသေးသည် ❌ — upload ပြီးမှ တင်ပါ။\n(ဥပမာ: %s)' % (len(miss), ', '.join(m['t'] for m in miss[:3]))
     paths = [p for p in ['public/songs', 'scripts/songs/songs_meta.json', 'scripts/songs/songs_deleted.json'] if os.path.exists(os.path.join(ROOT, p))]
     o, c = run(['git', 'add', '--'] + paths); log.append(o)
     if c != 0: return 'git add မအောင်မြင်ပါ ❌\n' + o
@@ -74,7 +87,7 @@ def add_song(filename, blob, title, artist, col):
     """new song: keep as mp3 (converted if needed) in the staging folder, upload it to archive.org, add it to songs.json"""
     with LOCK:
         d = load()
-        n = max([int(s['id'][1:]) for s in d['songs']] + [int(k[1:]) for k in jl(GONE, {})] + [0]) + 1
+        n = max([int(s['id'][1:]) for s in d['songs']] + [int(k[1:]) for k in list(jl(GONE, {})) + list(jl(HIDDEN, {}))] + [0]) + 1
         sid = 's%04d' % n
         ext = os.path.splitext(filename)[1].lower() or '.mp3'
         raw = os.path.join(STAGE, sid + '.raw' + ext)
@@ -135,7 +148,7 @@ class H(BaseHTTPRequestHandler):
                     if m: s['_src'] = m.get('src', ''); s['_also'] = m.get('also', [])
                 return self._send(200, json.dumps(d, ensure_ascii=False))
             if u.path == '/api/gone':
-                return self._send(200, json.dumps(jl(GONE, {}), ensure_ascii=False))
+                return self._send(200, json.dumps(jl(HIDDEN if q.get('store', [''])[0] == 'hidden' else GONE, {}), ensure_ascii=False))
             if u.path == '/api/lyrics':
                 p = os.path.join(LYR, q['id'][0] + '.json')
                 return self._send(200, json.dumps({'t': jl(p, {}).get('t', '') if os.path.exists(p) else ''}, ensure_ascii=False))
@@ -173,16 +186,18 @@ class H(BaseHTTPRequestHandler):
                             s.pop('l', None)
                     if body.get('lyricsOk'): s.pop('ld', None)
                     save(d); return self._send(200, json.dumps({'ok': True, 'song': s, 'collections': d['collections']}, ensure_ascii=False))
-                if u.path == '/api/delete':
+                if u.path in ('/api/delete', '/api/hide'):
+                    store = HIDDEN if u.path == '/api/hide' else GONE
                     sid = body['id']; s = songs.pop(sid)
                     d['songs'] = [x for x in d['songs'] if x['id'] != sid]
-                    gone = jl(GONE, {}); e = dict(s); e['_col'] = colname(d, s['c']); e['_src'] = jl(META, {}).get(sid, {}).get('src', '')
+                    gone = jl(store, {}); e = dict(s); e['_col'] = colname(d, s['c']); e['_src'] = jl(META, {}).get(sid, {}).get('src', '')
                     p = os.path.join(LYR, sid + '.json')
                     if os.path.exists(p): e['_lyr'] = jl(p, {}).get('t', ''); os.remove(p)
-                    gone[sid] = e; jw(GONE, gone, False)
+                    gone[sid] = e; jw(store, gone, False)
                     save(d); return self._send(200, json.dumps({'ok': True}))
-                if u.path == '/api/restore':        # bring a deleted song back (its audio is still on archive.org)
-                    gone = jl(GONE, {}); e = gone.pop(body['id'])
+                if u.path == '/api/restore':        # bring a deleted / hidden song back (its audio is still on archive.org)
+                    store = HIDDEN if body.get('store') == 'hidden' else GONE
+                    gone = jl(store, {}); e = gone.pop(body['id'])
                     lyr = e.pop('_lyr', ''); e.pop('_src', None); col = e.pop('_col', '')
                     if not any(c['id'] == e['c'] for c in d['collections']):
                         c2 = next((c for c in d['collections'] if c['name'] == col), None)
@@ -190,7 +205,7 @@ class H(BaseHTTPRequestHandler):
                         else: d['collections'].append(dict(id=e['c'], name=col or e['c']))
                     d['songs'].append(e)
                     if lyr: jw(os.path.join(LYR, e['id'] + '.json'), {'t': lyr})
-                    jw(GONE, gone, False); save(d); return self._send(200, json.dumps({'ok': True, 'song': e, 'collections': d['collections']}, ensure_ascii=False))
+                    jw(store, gone, False); save(d); return self._send(200, json.dumps({'ok': True, 'song': e, 'collections': d['collections']}, ensure_ascii=False))
                 if u.path == '/api/colrename':
                     for c in d['collections']:
                         if c['id'] == body['id']: c['name'] = body['name'].strip()

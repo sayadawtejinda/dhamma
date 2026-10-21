@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="my"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>🎶 သီချင်း စီမံရန်</title>
+<style>
+:root{--bg:#f7f1fc;--card:#fff;--ink:#2b1745;--mute:#7b6896;--line:#e0d2f2;--acc:#7b3fb8;--ok:#1d7a3c;--bad:#b3261e}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 "Pyidaungsu","Noto Sans Myanmar","Myanmar Text",system-ui,sans-serif;height:100vh;display:flex;flex-direction:column}
+header{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 14px;background:linear-gradient(135deg,#3b1a66,#7b3fb8);color:#fff}
+header b{flex:1;font-size:1.05rem}
+button{font:inherit;cursor:pointer;border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:9px;padding:6px 13px}
+button.pri{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:600}button.bad{color:var(--bad)}header button{background:rgba(255,255,255,.18);border-color:transparent;color:#fff}
+main{flex:1;display:flex;min-height:0}
+#side{width:min(420px,42%);border-right:1px solid var(--line);display:flex;flex-direction:column;background:var(--card)}
+#side .f{padding:8px;display:flex;gap:6px;flex-wrap:wrap;border-bottom:1px solid var(--line)}
+#side input[type=search]{flex:1;min-width:140px;padding:7px 10px;border:1px solid var(--line);border-radius:9px;font:inherit}
+select,input[type=text],textarea{font:inherit;padding:7px 10px;border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--ink);max-width:100%}
+#list{flex:1;overflow:auto}
+.it{display:flex;gap:8px;padding:6px 10px;border-bottom:1px solid #f0e8f8;cursor:pointer;align-items:center}.it:hover{background:#f6effb}.it.sel{background:#e9dcf7}
+.it i{width:16px;font-style:normal;color:var(--ok)}.it div{flex:1;min-width:0}.it small{display:block;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.it .na{color:var(--bad);font-size:.8em}
+#ed{flex:1;overflow:auto;padding:14px 18px}
+#ed label{display:block;margin:10px 0 3px;font-weight:600;font-size:.9rem}
+#ed input[type=text],#ed select{width:100%}#ed textarea{width:100%;height:42vh;font-size:1.05rem;line-height:1.9}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0}
+.hint{color:var(--mute);font-size:.85rem}#msg{font-weight:600}
+audio{width:100%;margin-top:6px}
+dialog{border:0;border-radius:14px;padding:16px;box-shadow:0 12px 50px rgba(0,0,0,.4);max-width:96vw;width:560px}
+dialog::backdrop{background:rgba(20,6,40,.5)}.crow{display:flex;gap:6px;align-items:center;margin:4px 0}.crow input{flex:1}
+</style></head><body>
+<header><b>🎶 သီချင်း စီမံရန်</b><span id="counts" class="hint" style="color:#e8d9ff"></span><button id="addBtn">➕ သီချင်းအသစ်</button><button id="colBtn">📁 စုစည်းမှုများ</button><button id="goneBtn">♻ ဖျက်ပြီးသားများ</button><button id="hidBtn">🙈 ဝှက်ထားသည်များ</button><button id="cmBtn">💬 မှတ်ချက်/စာသားပေးပို့ချက်</button><button id="pub">🚀 website သို့ တင်မည်</button></header>
+<main>
+ <div id="side"><div class="f"><input type="search" id="q" placeholder="အမည်၊ အဆိုတော်၊ ဖိုင်နာမည် ရှာရန်…"><select id="fc"><option value="">စုစည်းမှုအားလုံး</option></select>
+  <label class="hint"><input type="checkbox" id="fna"> အမည်မရှိသေး</label><label class="hint"><input type="checkbox" id="fnl"> စာသားမရှိသေး</label><label class="hint"><input type="checkbox" id="fal"> ထပ်နေသည့်ဖိုဒါပါ</label><label class="hint"><input type="checkbox" id="fld"> စာသားစစ်ရန်</label></div>
+  <div id="list"></div><div class="hint" style="padding:6px 10px" id="lcount"></div></div>
+ <div id="ed"><div class="hint" id="empty">ဘယ်ဘက်က သီချင်းတစ်ပုဒ်ကို ရွေးပါ။</div>
+  <div id="form" style="display:none">
+   <div class="hint" id="info"></div>
+   <audio id="au" controls preload="auto"></audio><label class="hint"><input type="checkbox" id="auto" checked> ရွေးတာနဲ့ ဖွင့်ပါ</label>
+   <label>သီချင်း အမည်</label><input type="text" id="t">
+   <label>အဆိုတော်</label><input type="text" id="a" list="artists">
+   <datalist id="artists"></datalist>
+   <label>စုစည်းမှု (ဖိုဒါ)</label><div class="crow"><select id="c" style="flex:1"></select><input type="text" id="newcol" placeholder="သို့မဟုတ် စုစည်းမှုအသစ်…"></div>
+   <label>စာသား (စာသားမရှိရင် ဗလာထားပါ)</label><textarea id="lyr" placeholder="သီချင်းစာသား… စာပိုဒ်ကို လိုင်းလွတ်ခြားပါ"></textarea>
+   <div class="bar"><button class="pri" id="save">💾 သိမ်းမည် (Ctrl+S)</button><button id="saveNext">💾 သိမ်း၍ နောက်တစ်ပုဒ် ▶</button><button id="lok" title="program က ရှာထည့်ထားတာ မှန်ကြောင်း အတည်ပြု">✔ စာသား မှန်ပြီ</button><button id="hide" title="website မှာ မပြတော့ပါ — နောက်မှ ပြန်ပြနိုင်သည်">🙈 အများပြည်သူကို မပြ</button><button class="bad" id="del">🗑 ဖျက်မည်</button><span id="msg"></span></div>
+   <div class="hint" id="links"></div>
+  </div></div>
+</main>
+<dialog id="dcol"><h3>📁 စုစည်းမှုများ</h3><div id="clist"></div><div class="bar"><button onclick="dcol.close()">ပိတ်မည်</button></div></dialog>
+<dialog id="dgone"><h3 id="gtitle">♻ ဖျက်ပြီးသား သီချင်းများ</h3><div id="glist" style="max-height:60vh;overflow:auto"></div><div class="bar"><button onclick="dgone.close()">ပိတ်မည်</button></div><div class="hint">ပြန်ယူရင် စာသားနှင့်တကွ ပြန်ပေါ်လာမည်။</div></dialog>
+<dialog id="dcm" style="width:min(720px,96vw)"><h3>💬 ကြည့်ရှုသူများ ပေးပို့ထားသည်များ</h3><div class="bar"><label><input type="radio" name="cmk" value="lyrics" checked> 📝 စာသားပေးပို့ချက်သာ</label><label><input type="radio" name="cmk" value="all"> အားလုံး</label><button id="cmReload">🔄</button><span id="cmMsg" class="hint"></span></div><div id="cmList" style="max-height:60vh;overflow:auto"></div><div class="bar"><button onclick="dcm.close()">ပိတ်မည်</button></div><div class="hint">"စာသားအဖြစ်သုံးမည်" ကိုနှိပ်ရင် စာသားကို ထိုသီချင်းရဲ့ စာသားအကွက်ထဲ ထည့်ပေးမည် (မမှန်သေးရင် ပြင်ပြီးမှ သိမ်းပါ)။</div></dialog>
+<dialog id="dadd"><h3>➕ သီချင်းအသစ် ထည့်ရန်</h3><input type="file" id="afile" accept="audio/*" style="width:100%"><label class="hint">အမည်</label><input type="text" id="at" style="width:100%"><label class="hint">အဆိုတော်</label><input type="text" id="aa" style="width:100%"><label class="hint">စုစည်းမှု</label><select id="ac" style="width:100%"></select>
+ <div class="bar"><button class="pri" id="aok">⬆ တင်မည်</button><button onclick="dadd.close()">ပိတ်မည်</button><span id="amsg" class="hint"></span></div><div class="hint">archive.org ပေါ်သို့ တင်ပေးသည် — ဖိုင်ကြီးရင် စောင့်ရမည်။</div></dialog>
+<script>
+const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const MMN='၀၁၂၃၄၅၆၇၈၉';const mn=n=>String(n).replace(/\d/g,d=>MMN[d]);
+const norm=s=>String(s||'').toLowerCase().replace(/[​-‍﻿\s\-_.,။၊()]+/g,'');
+const collator=(()=>{try{return new Intl.Collator('my')}catch(e){return new Intl.Collator()}})();
+let D=null,cur=null,dirty=false,shown=300,LYRS=new Set();
+async function api(p,b){const r=await fetch(p,b?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}:{});return r.json()}
+async function init(){D=await api('/api/data');D.songs.forEach(s=>s._k=norm(s.t+' '+s.a+' '+(s._src||'')));fillCols();render();counts()}
+function colName(id){const c=D.collections.find(x=>x.id===id);return c?c.name:''}
+function fillCols(){const opts=D.collections.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
+ const keep=$('#fc').value;$('#fc').innerHTML='<option value="">စုစည်းမှုအားလုံး</option>'+opts;$('#fc').value=keep;$('#c').innerHTML=opts;$('#ac').innerHTML=opts;
+ $('#artists').innerHTML=[...new Set(D.songs.map(s=>s.a).filter(Boolean))].sort(collator.compare).map(a=>`<option value="${esc(a)}">`).join('')}
+function counts(){const n=D.songs.length;$('#counts').textContent=`သီချင်း ${mn(n)} · အမည်မရှိသေး ${mn(D.songs.filter(s=>s.n).length)} · စာသားပါ ${mn(D.songs.filter(s=>s.l).length)} · စစ်ရန် ${mn(D.songs.filter(s=>s.ld).length)}`}
+function list(){const q=norm($('#q').value),c=$('#fc').value,na=$('#fna').checked,nl=$('#fnl').checked,al=$('#fal').checked;
+ return D.songs.filter(s=>(!c||s.c===c)&&(!q||s._k.includes(q))&&(!na||s.n)&&(!nl||!s.l)&&(!al||(s._also||[]).length)&&(!$('#fld').checked||s.ld))}
+function render(){const l=list();$('#list').innerHTML=l.slice(0,shown).map(s=>`<div class="it ${cur&&cur.id===s.id?'sel':''}" data-id="${s.id}"><i>${s.ld?'⚠':s.l?'📝':''}</i><div>${esc(s.t)}${s.n?' <span class="na">⚠ အမည်ပေးရန်</span>':''}<small>${esc(s.a||'')}${s.a?' · ':''}${esc(colName(s.c))}</small></div></div>`).join('');
+ $('#lcount').innerHTML=`${mn(l.length)} ပုဒ်`+(l.length>shown?` · <button id="more">ထပ်ပြမည်</button>`:'');if($('#more'))$('#more').onclick=()=>{shown+=400;render()}}
+$('#list').onclick=e=>{const d=e.target.closest('.it');if(d)openSong(D.songs.find(s=>s.id===d.dataset.id))};
+['#q','#fc','#fna','#fnl','#fal','#fld'].forEach(s=>$(s).addEventListener('input',()=>{shown=300;render()}));
+async function openSong(s){if(dirty&&!confirm('သိမ်းမထားသေးပါ။ ဆက်သွားမလား?'))return;dirty=false;cur=s;$('#empty').style.display='none';$('#form').style.display='block';
+ $('#t').value=s.t;$('#a').value=s.a||'';$('#c').value=s.c;$('#newcol').value='';$('#msg').textContent='';
+ $('#lok').style.display=s.ld?'':'none';$('#info').innerHTML=`${s.ld?'<b style="color:#b3261e">⚠ ဒီစာသားကို program က ရှာထည့်ထားတာ — စစ်ပြီး မှန်ရင် ✔ နှိပ်ပါ။ </b><br>':''}<b>${s.id}</b> · ${Math.floor(s.d/60)}:${String(s.d%60).padStart(2,'0')} · မူလဖိုင်: ${esc(s._src||'—')}${(s._also||[]).length?'<br>ထပ်နေသော ဖိုဒါများ: '+esc(s._also.join('၊ ')):''}`;
+ $('#links').innerHTML=`လူကြည့်သောစာမျက်နှာ: <a target="_blank" href="https://sayadawtejinda.github.io/dhamma/songs/?admin=1#${s.id}">မှတ်ချက်များ ကြည့်/ဖျက်ရန်</a>`;
+ const r=await api('/api/lyrics?id='+s.id);$('#lyr').value=r.t||'';
+ const au=$('#au');au.onerror=()=>{if(!au.dataset.fb){au.dataset.fb=1;au.src=D.archive+s.f}};delete au.dataset.fb;au.src='/audio/'+s.id+'.mp3';if($('#auto').checked)au.play().catch(()=>{});
+ render()}
+['#t','#a','#c','#newcol','#lyr'].forEach(s=>$(s).addEventListener('input',()=>dirty=true));
+async function save(){if(!cur)return false;const b={id:cur.id,t:$('#t').value,a:$('#a').value,c:$('#c').value,lyrics:$('#lyr').value};if($('#newcol').value.trim())b.newcol=$('#newcol').value;
+ const r=await api('/api/update',b);if(r.error){$('#msg').style.color='var(--bad)';$('#msg').textContent='❌ '+r.error;return false}
+ const s=D.songs.find(x=>x.id===cur.id);Object.assign(s,r.song);if(!r.song.n)delete s.n;if(!r.song.l)delete s.l;s._k=norm(s.t+' '+s.a+' '+(s._src||''));D.collections=r.collections;fillCols();$('#c').value=s.c;$('#newcol').value='';
+ dirty=false;$('#msg').style.color='var(--ok)';$('#msg').textContent='✅ သိမ်းပြီး';counts();render();return true}
+$('#save').onclick=save;
+$('#lok').onclick=async()=>{if(!cur)return;const r=await api('/api/update',{id:cur.id,lyricsOk:true});const s=D.songs.find(x=>x.id===cur.id);delete s.ld;counts();render();$('#msg').style.color='var(--ok)';$('#msg').textContent='✅ စာသား အတည်ပြုပြီး'};
+$('#saveNext').onclick=async()=>{if(await save()){const l=list();const i=l.findIndex(x=>x.id===cur.id);const nx=l[i+1]||l[0];if(nx)openSong(nx)}};
+$('#del').onclick=async()=>{if(!cur||!confirm(`"${cur.t}" ကို ဖျက်မလား?\n(စာသားပါ ဖျက်မည် — website မှာလည်း ပျောက်မည်)`))return;await api('/api/delete',{id:cur.id});D.songs=D.songs.filter(s=>s.id!==cur.id);cur=null;dirty=false;$('#form').style.display='none';$('#empty').style.display='';$('#au').pause();counts();render()};
+addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='s'){e.preventDefault();save()}});
+addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue=''}});
+// viewers' comments / lyrics suggestions (Firestore, same anonymous sign-in as the public page)
+let FBP=null;
+function fbA(){return FBP||(FBP=(async()=>{const V='11.6.1';const A=await import(`https://www.gstatic.com/firebasejs/${V}/firebase-app.js`),Au=await import(`https://www.gstatic.com/firebasejs/${V}/firebase-auth.js`),F=await import(`https://www.gstatic.com/firebasejs/${V}/firebase-firestore.js`);
+ const app=A.initializeApp({apiKey:"AIzaSyCFwHPLW6VnQqgM-ZrisQZZaBLVrm88e9M",authDomain:"myanmardhammaclass.firebaseapp.com",projectId:"myanmardhammaclass",appId:"1:779222889065:web:8afbe9348c3314bef3a8f8"},'songs-admin');
+ await Au.signInAnonymously(Au.getAuth(app));const db=F.getFirestore(app);return {F,col:F.collection(db,'artifacts/dhamma-songs/public/data/song_comments')}})())}
+async function loadCm(){const only=document.querySelector('input[name=cmk]:checked').value==='lyrics';$('#cmMsg').textContent='⏳';$('#cmList').innerHTML='';
+ try{const {F,col}=await fbA();const sn=await F.getDocs(only?F.query(col,F.where('kind','==','lyrics')):col);const items=sn.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.ts||0)-(a.ts||0));
+  $('#cmMsg').textContent=`${mn(items.length)} ခု`;
+  $('#cmList').innerHTML=items.map(c=>{const sg=D.songs.find(x=>x.id===c.song);return `<div style="border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin:6px 0"><b>${sg?esc(sg.t):'<span class="hint">(ဒီသီချင်း ဖျက်ထား/ဝှက်ထား) '+esc(c.song)+'</span>'}</b> ${c.kind==='lyrics'?'<span class="na" style="color:#7b3fb8">📝 စာသား</span>':''}<small class="hint"> · ${esc(c.name||'အမည်မသိ')} · ${c.ts?new Date(c.ts).toLocaleString():''}</small><div style="white-space:pre-wrap;margin:4px 0">${esc(c.text)}</div>${sg?`<button data-use="${c.id}" data-song="${c.song}">📝 စာသားအဖြစ်သုံးမည်</button> `:''}<button class="bad" data-cdel="${c.id}">🗑 ဖျက်</button></div>`}).join('')||'<div class="hint">မရှိပါ</div>';
+  $('#cmList').onclick=async e=>{const u=e.target.dataset.use,dl=e.target.dataset.cdel;
+   if(u){const c=items.find(x=>x.id===u);const sg=D.songs.find(x=>x.id===c.song);dcm.close();await openSong(sg);$('#lyr').value=c.text;dirty=true;$('#msg').style.color='';$('#msg').textContent='ပေးပို့သူ၏ စာသားကို ထည့်ထားသည် — စစ်ပြီး 💾 သိမ်းပါ'}
+   if(dl&&confirm('ဖျက်မလား?')){await F.deleteDoc(F.doc(col,dl));loadCm()}}}
+ catch(e){$('#cmMsg').textContent='❌ '+e.message}}
+$('#cmBtn').onclick=()=>{dcm.showModal();loadCm()};$('#cmReload').onclick=loadCm;document.querySelectorAll('input[name=cmk]').forEach(x=>x.onchange=loadCm);
+// deleted songs: bring back
+let goneStore='gone';
+async function showGone(st){goneStore=st;const g=await api('/api/gone?store='+st);const k=Object.keys(g);
+ $('#gtitle').textContent=st==='hidden'?'🙈 ဝှက်ထားသော သီချင်းများ (website မှာ မပြပါ)':'♻ ဖျက်ပြီးသား သီချင်းများ';
+ $('#glist').innerHTML=k.length?k.map(id=>`<div class="crow"><span style="flex:1">${esc(g[id].t)} <small class="hint">${esc(g[id]._col||'')} · ${id}</small></span><button data-rs="${id}">${st==='hidden'?'👁 ပြန်ပြမည်':'↩ ပြန်ယူ'}</button></div>`).join(''):'<div class="hint">မရှိပါ</div>';dgone.showModal()}
+$('#goneBtn').onclick=()=>showGone('gone');$('#hidBtn').onclick=()=>showGone('hidden');
+$('#hide').onclick=async()=>{if(!cur||!confirm(`"${cur.t}" ကို website မှာ မပြတော့ဘဲ ဝှက်ထားမလား?\n(နောက်မှ 🙈 ဝှက်ထားသည်များ ကနေ ပြန်ပြနိုင်သည်)`))return;await api('/api/hide',{id:cur.id});D.songs=D.songs.filter(s=>s.id!==cur.id);cur=null;dirty=false;$('#form').style.display='none';$('#empty').style.display='';$('#au').pause();counts();render()};
+$('#glist').onclick=async e=>{const id=e.target.dataset.rs;if(!id)return;const r=await api('/api/restore',{id,store:goneStore});if(r.error){alert(r.error);return}
+ D.collections=r.collections;const s=r.song;s._k=norm(s.t+' '+s.a);D.songs.push(s);fillCols();counts();render();e.target.closest('.crow').remove()};
+// collections
+$('#colBtn').onclick=()=>{const n={};D.songs.forEach(s=>n[s.c]=(n[s.c]||0)+1);
+ $('#clist').innerHTML=D.collections.map(c=>`<div class="crow"><input type="text" value="${esc(c.name)}" data-id="${c.id}"><span class="hint">${mn(n[c.id]||0)}</span><button data-r="${c.id}">သိမ်း</button>${n[c.id]?'':`<button class="bad" data-d="${c.id}">ဖျက်</button>`}</div>`).join('');dcol.showModal()};
+$('#clist').onclick=async e=>{const r=e.target.dataset.r,d=e.target.dataset.d;
+ if(r){const v=$(`#clist input[data-id="${r}"]`).value;const x=await api('/api/colrename',{id:r,name:v});D.collections=x.collections;fillCols();render();e.target.textContent='✓'}
+ if(d&&confirm('ဒီစုစည်းမှု ဖျက်မလား?')){const x=await api('/api/coldelete',{id:d});if(x.error)alert(x.error);else{D.collections=x.collections;fillCols();$('#colBtn').click()}}};
+// add
+$('#addBtn').onclick=()=>{$('#amsg').textContent='';dadd.showModal()};
+$('#afile').onchange=()=>{const f=$('#afile').files[0];if(f&&!$('#at').value)$('#at').value=f.name.replace(/\.[^.]+$/,'')};
+$('#aok').onclick=async()=>{const f=$('#afile').files[0];if(!f)return;$('#aok').disabled=true;$('#amsg').textContent='⏳ တင်နေသည်… (စောင့်ပါ)';
+ const q=`name=${encodeURIComponent(f.name)}&t=${encodeURIComponent($('#at').value)}&a=${encodeURIComponent($('#aa').value)}&c=${$('#ac').value}`;
+ try{const r=await (await fetch('/api/add?'+q,{method:'POST',body:f})).json();if(r.error)throw new Error(r.error);const s=r.song;s._k=norm(s.t+' '+s.a);D.songs.push(s);counts();render();$('#amsg').textContent='✅ ပြီး';dadd.close();openSong(s)}
+ catch(e){$('#amsg').textContent='❌ '+e.message}$('#aok').disabled=false};
+$('#pub').onclick=async()=>{if(dirty&&!confirm('လက်ရှိ မသိမ်းရသေးပါ။ မသိမ်းဘဲ တင်မလား?'))return;$('#pub').disabled=true;$('#pub').textContent='⏳ တင်နေသည်…';const r=await api('/api/publish',{});$('#pub').disabled=false;$('#pub').textContent='🚀 website သို့ တင်မည်';alert(r.log)};
+init();
+</script></body></html>
