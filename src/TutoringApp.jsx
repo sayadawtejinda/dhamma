@@ -955,7 +955,17 @@ const teacherConfigDoc = doc(configCollection, 'teacher');
 // browser's memory, and the profile listener + greeting are skipped for it.
 const VISITOR_STUDENT_ID = '0000';
 const VISITOR_UID = 'visitor';
-const ssProgressCache = new Map(); // `${studentUid}|${classId}` -> { at, total, cls }: a student's Smart Study counts for the Send Action panel
+// the Smart Study class files on GitHub (kept in memory once loaded)
+let ssFileListPromise = null;
+const ssClassFilePromises = new Map();
+const loadSmartStudyFileList = (base) => {
+  if (!ssFileListPromise) ssFileListPromise = fetch(`${base}classSnapshots/smartstudy-class/_classes.json`).then(r => (r.ok ? r.json() : { classes: [] })).then(j => (j.classes || []).map(c => c.id)).catch(() => { ssFileListPromise = null; return []; });
+  return ssFileListPromise;
+};
+const loadSmartStudyClassFile = (base, id) => {
+  if (!ssClassFilePromises.has(id)) ssClassFilePromises.set(id, fetch(`${base}classSnapshots/smartstudy/${encodeURIComponent(encodeURIComponent(id))}.json`).then(r => (r.ok ? r.json() : null)).then(j => (j && j.scores) || []).catch(() => { ssClassFilePromises.delete(id); return []; }));
+  return ssClassFilePromises.get(id);
+};
 const makeVisitorProfile = () => ({
   name: 'Visitor', displayId: VISITOR_STUDENT_ID, isActive: true, isVisitor: true,
   trophyCount: 0, earnedTrophies: {}, completedUnits: {}, heartsReceived: 0, heartsGivenCount: 0,
@@ -1946,9 +1956,10 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
   // never loads all Smart Study lesson content up front). ---
   // Fetch this student's SmartStudy completion counts whenever the
   // student/lesson/class selection changes in Send Action.
-  // The effect below used to run again every time ANY student's record or the Lesson Bank changed (while students are in class their
-  // records change all the time), and each run read all of that student's Smart Study scores again (thousands of reads). It now runs
-  // only when the chosen student / lesson / class really changes, and the answer is kept for 10 minutes.
+  // How many Smart Study lessons the chosen student has finished (the Send Action panel). It is counted from the class files on GitHub
+  // (classSnapshots/smartstudy/*.json, up to a week old) -- NO Firebase read at all. What a student finished today shows next week, or
+  // when the student reports it. (This used to read the student's scores from Firebase and ran again whenever any student's record
+  // changed: thousands of reads while a class was on.)
   const ssStudentKey = (() => { const st = students.find(x => x.id === selectedStudentUid); return st ? `${st.id}|${st.name}|${JSON.stringify(st.smartStudyNames || {})}` : ''; })();
   const ssLessonIsSmart = !!lessonBank.find(l => l.id === selectedBankLessonId)?.link?.startsWith('smartstudy://');
   useEffect(() => {
@@ -1958,67 +1969,29 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
     if (!lesson?.link?.startsWith('smartstudy://')) return;
     const student = students.find(s => s.id === selectedStudentUid);
     if (!student) return;
-    const cacheKey = `${student.id}|${sendSmartStudyClassId || ''}`;
-    const hit = ssProgressCache.get(cacheKey);
-    if (hit && Date.now() - hit.at < 10 * 60 * 1000) { setSsStudentTotalCount(hit.total); if (sendSmartStudyClassId) setSsStudentClassCount(hit.cls); return; }
     let isMounted = true;
     (async () => {
       try {
-        // Enumerate every class this student is actually linked to, and the
-        // exact alias name used in each, straight from classRoster's
-        // `tutoringStudentUid` link -- this is the definitive source (every
-        // roster doc records which tutoring student it belongs to and what
-        // name they registered under in Smart Study for that class), rather
-        // than guessing from `smartStudyNames`, which can be missing an old
-        // alias entirely. Guessing from a possibly-incomplete name list is
-        // exactly what made this total visibly jump (e.g. 21 then 61) as
-        // more names got discovered across re-renders.
-        const rosterSnap = await getDocs(query(
-          collection(db, 'artifacts', appId, 'public', 'data', 'classRoster'),
-          where('tutoringStudentUid', '==', student.id)
-        ));
-        const classAliasPairs = rosterSnap.docs
-          .map(d => ({ classId: d.data().classId, name: d.data().studentName }))
-          .filter(p => p.classId && p.name);
-        // Belt-and-suspenders: also always check the student's current name
-        // directly (no classId restriction) in case a class was never
-        // linked via roster at all.
-        const namesToTryDirectly = [...new Set([student.name, ...Object.values(student.smartStudyNames || {})].filter(Boolean))];
-
-        const distinctClassLesson = new Set(); // all-class total
-        const distinctForClass = new Set();    // per-class (selected class)
-        const addResults = (snap, classIdHint) => {
-          snap.docs.forEach(d => {
-            const cId = classIdHint || d.data().classId;
-            const lId = d.data().lessonId;
-            if (cId && lId) {
-              distinctClassLesson.add(`${cId}-${lId}`);
-              if (sendSmartStudyClassId && cId === sendSmartStudyClassId) distinctForClass.add(lId);
-            }
+        const names = new Set([student.name, ...Object.values(student.smartStudyNames || {})].filter(Boolean));
+        const base = import.meta.env.BASE_URL;
+        const classList = await loadSmartStudyFileList(base);
+        const files = await Promise.all(classList.map(id => loadSmartStudyClassFile(base, id)));
+        const distinctClassLesson = new Set();
+        const distinctForClass = new Set();
+        files.forEach((scores, k) => {
+          const cId = classList[k];
+          (scores || []).forEach(sc => {
+            if (!names.has(sc.studentName) || !sc.lessonId) return;
+            distinctClassLesson.add(`${cId}-${sc.lessonId}`);
+            if (sendSmartStudyClassId && cId === sendSmartStudyClassId) distinctForClass.add(sc.lessonId);
           });
-        };
-        for (const { classId, name } of classAliasPairs) {
-          const snap = await getDocs(query(
-            collection(db, 'artifacts', appId, 'public', 'data', 'scores'),
-            where('classId', '==', classId),
-            where('studentName', '==', name)
-          ));
-          addResults(snap, classId);
-        }
-        for (const name of namesToTryDirectly) {
-          const snap = await getDocs(query(
-            collection(db, 'artifacts', appId, 'public', 'data', 'scores'),
-            where('studentName', '==', name)
-          ));
-          addResults(snap, null);
-        }
-        ssProgressCache.set(cacheKey, { at: Date.now(), total: distinctClassLesson.size, cls: distinctForClass.size });
+        });
         if (isMounted) {
           setSsStudentTotalCount(distinctClassLesson.size);
           if (sendSmartStudyClassId) setSsStudentClassCount(distinctForClass.size);
         }
       } catch (e) {
-        console.error('Error fetching SmartStudy student completions:', e);
+        console.error('Error counting SmartStudy student completions:', e);
       }
     })();
     return () => { isMounted = false; };
