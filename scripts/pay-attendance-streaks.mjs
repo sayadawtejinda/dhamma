@@ -21,6 +21,13 @@ import { getFirestore, collection, query, where, getDocs, getDoc, doc, setDoc, s
 import { firebaseConfig, appId } from '../src/firebaseConfig.js';
 
 const DRY = process.argv.includes('--dry');
+// --retro: for the FIRST time, count every scheduled class from --from=DATE (e.g. the start of the year), and pay each student ONE gift box with
+// the total for the streak they are in right now (counted from their last missed class). Then the normal daily run carries on from there.
+const RETRO = process.argv.includes('--retro');
+// --seed: the same counting from --from=DATE, but NOTHING is paid for the past: only each student's streak so far is saved, so the next
+// classes pay by the level the streak has reached (a student on 12 in a row gets 475 for the next class, not 100).
+const SEED = process.argv.includes('--seed');
+const catchUp = (n) => { let sum = 0; for (let k = 1; k <= n; k++) sum += Math.min(MAX_COINS, BASE_COINS + STEP_COINS * (k - 1)); return sum; };
 const BASE_COINS = 100;
 const STEP_COINS = 25;
 const MAX_COINS = 500; // the reward stops growing at 500 coins
@@ -42,7 +49,7 @@ async function main() {
   let state = snap.exists() ? snap.data() : null;
   // a dry run can pretend the programme started on a given day:  --dry --from=2026-10-12
   const fromArg = (process.argv.find(x => x.startsWith('--from=')) || '').slice(7);
-  if (DRY && fromArg) state = { startedAtMs: Date.parse(fromArg), processedThroughMs: Date.parse(`${fromArg}T00:00:00`) , students: {} };
+  if ((DRY || RETRO || SEED) && fromArg) state = { startedAtMs: Date.parse(fromArg), processedThroughMs: Date.parse(`${fromArg}T00:00:00`) , students: {} };
   if (!state || !state.processedThroughMs) {
     const startedAtMs = startOfDay(new Date());
     console.log(`Starting the programme: classes from ${new Date(startedAtMs).toString()} on count.`);
@@ -110,6 +117,28 @@ async function main() {
     students[c.uid] = st;
   });
 
+  if (SEED && !DRY) {
+    await setDoc(STATE, { startedAtMs: state.startedAtMs, processedThroughMs: cutoff, students, updatedAt: serverTimestamp() });
+    const inStreak = Object.values(students).filter(v => v.n > 0).length;
+    console.log(`Seeded: ${inStreak} students are in a streak; nothing was paid for the past. The next classes pay by the level each streak has reached.`);
+    return;
+  }
+  if (RETRO || (DRY && process.argv.includes('--summary'))) {
+    // one line per student who is in a streak now: how many classes in a row, and the one catch-up gift that would be paid
+    const rows = Object.entries(students).filter(([, v]) => v.n > 0).map(([u, v]) => ({ uid: u, name: names[u] || u, n: v.n, coins: catchUp(v.n) })).sort((a, b) => b.n - a.n || (a.name < b.name ? -1 : 1));
+    rows.forEach(r => console.log(`${String(r.n).padStart(3)} in a row | ${String(r.coins).padStart(6)} coins | ${r.name}`));
+    console.log(`${rows.length} students in a streak, ${rows.reduce((n, r) => n + r.coins, 0)} coins in all`);
+    if (DRY) { console.log('(dry run: nothing written)'); return; }
+    // pay: state first (so it can never be paid twice), then ONE gift per student
+    await setDoc(STATE, { startedAtMs: state.startedAtMs, processedThroughMs: cutoff, students, updatedAt: serverTimestamp() }, { merge: true });
+    for (const r of rows) {
+      const message = `🔥 ${r.n} classes in a row! Great attendance!`.slice(0, 80);
+      await setDoc(doc(collection(db, GIFTS)), { studentUid: r.uid, studentName: r.name, coins: r.coins, message, createdAt: serverTimestamp(), expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000 });
+      await setDoc(doc(db, `${P}/students`, r.uid), { hasTeacherGift: true }, { merge: true });
+    }
+    console.log(`Paid ${rows.length} catch-up gift(s).`);
+    return;
+  }
   if (DRY) {
     const top = Object.entries(students).filter(([, v]) => v.n > 0).sort((x, y) => y[1].n - x[1].n).slice(0, 8).map(([u, v]) => `${names[u] || u}: ${v.n}`);
     console.log(`(dry run: nothing written; ${pay.length} reward(s) would be paid, ${pay.reduce((n, p) => n + p.coins, 0)} coins) longest streaks now: ${top.join(' | ')}`);
