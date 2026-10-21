@@ -656,6 +656,7 @@ const DAILY_LOTUS_CAP = 40;
 // free. At most SHRINE_GIFT_MAX unused gifts are held at once.
 const SHRINE_GIFTS_PER_VISIT = 2;
 const SHRINE_GIFT_MAX = 3;
+const SHRINE_GIFTS_PER_DAY = 3; // at most 3 free gifts a day, however many friends are visited
 // Shopping stays open for good -- prices are cheap enough that coin
 // balances aren't worth worrying over, so the earlier "trial period, coins
 // get reset once finalized" plan is off; no reset is coming. Prices may
@@ -1180,6 +1181,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   // which friends have already given me theirs (once each).
   const [giftOfferings, setGiftOfferings] = useState([]);
   const [giftFriends, setGiftFriends] = useState([]);
+  const [giftDay, setGiftDay] = useState({ date: null, count: 0 }); // free gifts picked up today
   // Every friend whose altar I have visited (a gift or not), so the list can mark them done.
   const [visitedFriends, setVisitedFriends] = useState([]);
   const [visitGiftNote, setVisitGiftNote] = useState(null);
@@ -1242,6 +1244,12 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   // doubled up, and no more than SHRINE_GIFT_MAX are held at a time.
   function collectVisitGifts(targetName, data) {
     if (giftFriends.includes(targetName)) return;
+    const today = new Date().toLocaleDateString('en-CA'); // the student's own day (YYYY-MM-DD)
+    const gotToday = giftDay.date === today ? giftDay.count : 0;
+    if (gotToday >= SHRINE_GIFTS_PER_DAY) {
+      setVisitGiftNote(`🎁 You have had today's ${SHRINE_GIFTS_PER_DAY} free gifts. Come back tomorrow!`);
+      return;
+    }
     const room = SHRINE_GIFT_MAX - giftOfferings.length;
     const heldIds = new Set(giftOfferings.map(g => g.id));
     const candidates = Array.from(new Set(Object.values(data.placedItems || {}).map(item => item.id)))
@@ -1255,12 +1263,13 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
       const j = Math.floor(Math.random() * (i + 1));
       [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
     }
-    const picks = candidates.slice(0, Math.min(SHRINE_GIFTS_PER_VISIT, room));
+    const picks = candidates.slice(0, Math.min(SHRINE_GIFTS_PER_VISIT, room, SHRINE_GIFTS_PER_DAY - gotToday));
     const nextGifts = [...giftOfferings, ...picks.map(id => ({ id, from: targetName }))];
     const nextFriends = [...giftFriends, targetName].slice(-300);
     setGiftOfferings(nextGifts);
     setGiftFriends(nextFriends);
-    persist({ shrineGifts: nextGifts, shrineGiftFriends: nextFriends });
+    setGiftDay({ date: today, count: gotToday + picks.length });
+    persist({ shrineGifts: nextGifts, shrineGiftFriends: nextFriends, shrineGiftDay: today, shrineGiftDayCount: gotToday + picks.length });
     setVisitGiftNote(`🎁 ${picks.map(id => `${findOffering(id).emoji || ''} ${findOffering(id).name}`).join(' + ')} → 🛍️ FREE!`);
   }
   // A gift is used up the moment the free purchase is made.
@@ -1334,6 +1343,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
             setLotusDailyCount(data.lotusDailyCount || 0);
             setGiftOfferings(data.shrineGifts || []);
             setGiftFriends(data.shrineGiftFriends || []);
+            setGiftDay({ date: data.shrineGiftDay || null, count: data.shrineGiftDayCount || 0 });
             setVisitedFriends(data.shrineVisitedFriends || []);
           }
           if (data.coinBalance == null) persist({ coinBalance: STARTER_COINS });

@@ -103,6 +103,15 @@ async function loadClassListLight({ forStudent = false } = {}) {
   try { localStorage.setItem(CLASS_LIST_KEY, JSON.stringify({ at: Date.now(), list })); } catch (e) { /* ignore */ }
   return list;
 }
+// The one class that is "open" right now (Auto-Approve ON), read from the tiny classMeta document (kept a minute on the device, and
+// already read when a class is entered). Students are always steered there, whichever way they try to get into a class.
+async function findOpenClassId() {
+  try {
+    const meta = await loadClassMeta();
+    const hit = Object.entries((meta && meta.autoApprove) || {}).find(([, on]) => on === true);
+    return hit ? hit[0] : null;
+  } catch (e) { return null; }
+}
 async function getClassDocCached(classId) {
   // 1. the class as a plain file on GitHub (no Firestore), when it is newer than the teacher's last edit of its lessons; the
   //    contest and the "open class" flag, which change during the week, come from the tiny config/classMeta document
@@ -3689,7 +3698,9 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
     // class "open" (Auto-Approve ON), that's where every student goes —
     // it lets the teacher steer the whole group into one class regardless
     // of which button a student happens to press.
-    const actualTargetId = openClassId || targetId;
+    // (openClassId is only known once the class list has been shown; a student sent straight into their assigned class has not seen it,
+    // so the open class is looked up here too)
+    const actualTargetId = openClassId || (await findOpenClassId()) || targetId;
     localStorage.setItem('lastClassId', actualTargetId);
     localStorage.setItem('lastUserName', enteredName);
     try {
@@ -3721,7 +3732,8 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
   const handleStudentLogin = useCallback(async () => {
     if (!targetClassId || !userName || !studentAgeLevel) { setModal({ message: 'Please enter Class ID, your Name, and select your Age Level.', type: 'error', visible: true }); return; }
     setIsRejected(false); 
-    const enteredClassId = targetClassId.toUpperCase().trim();
+    const typedClassId = targetClassId.toUpperCase().trim();
+    const enteredClassId = (await findOpenClassId()) || typedClassId; // while a class is open, every student goes there
     const enteredName = userName.trim();
     localStorage.setItem('lastClassId', enteredClassId);
     localStorage.setItem('lastUserName', enteredName);
@@ -3922,8 +3934,9 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
   }, [classId, currentUserId]);
 
   const handleSwitchClass = useCallback(async (newIdRaw) => {
-    const newId = (newIdRaw || '').toUpperCase().trim();
-    if (!newId) return;
+    const typedId = (newIdRaw || '').toUpperCase().trim();
+    if (!typedId) return;
+    const newId = (await findOpenClassId()) || typedId; // while a class is open, every student goes there
     setIsLoading(true); setLessons([]); setAllScores([]);
     try {
       const classDocSnap = await getDoc(getClassDocRef(newId));
