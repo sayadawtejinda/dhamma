@@ -7648,6 +7648,10 @@ function StudentDashboard({ user, studentProfile, studentUid, announcements, onO
   useEffect(() => { if (studentUid !== VISITOR_UID && studentProfile?.name && studentProfile.badgesGiven) saveGivenCopy(studentProfile.name, studentProfile.badgesGiven); }, [studentProfile?.name, studentProfile?.badgesGiven, studentUid]);
   // badges the teacher has just given: a short celebration for each, once (they are taken off the list when seen)
   const [ceremonySeen, setCeremonySeen] = useState(() => new Set());
+  // the badges whose celebration was seen are taken off the student's list in ONE write a moment after the last one (a write per badge made
+  // the teacher's live student list read the record again for every badge)
+  const seenToRemoveRef = useRef([]);
+  const seenTimerRef = useRef(null);
   const pendingCeremony = (Array.isArray(studentProfile?.badgesNew) ? studentProfile.badgesNew : []).filter(e => !ceremonySeen.has(e)); // top-3 honours (from the weekly files, no read)
 
   const handleGreetTeacher = async () => {
@@ -10288,7 +10292,12 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           look={studentProfile?.avatarLook}
           onSeen={(entry) => {
             setCeremonySeen(prev => new Set([...prev, entry]));
-            updateDoc(doc(db, `${publicDataPath}/students`, studentUid), { badgesNew: arrayRemove(entry) }).catch(() => {});
+            seenToRemoveRef.current.push(entry);
+            if (seenTimerRef.current) clearTimeout(seenTimerRef.current);
+            seenTimerRef.current = setTimeout(() => {
+              const list = seenToRemoveRef.current.splice(0);
+              if (list.length) updateDoc(doc(db, `${publicDataPath}/students`, studentUid), { badgesNew: arrayRemove(...list) }).catch(() => {});
+            }, 4000);
           }}
         />
       )}
