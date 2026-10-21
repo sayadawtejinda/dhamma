@@ -280,7 +280,9 @@ async function main() {
   };
   const partUnitsOf = (s) => {
     const cu = s.completedUnits || {}; const get = (part) => Math.max(0, ...Object.entries(cu).filter(([k]) => k.endsWith(`Reading Myanmar_${part}`)).map(([, v]) => Number(v) || 0));
-    const u = { cp: get('consonantpractice'), bg: get('burmesegame'), vl: get('vowelslearning') };
+    // po = Myanmar Poems: trophies the teacher has confirmed, one per poem (the older entry is just called 'Poem')
+    const po = Math.max(0, ...Object.entries(cu).filter(([k]) => k === 'Poem' || k.endsWith('_myanmarpoems')).map(([, v]) => Number(v) || 0));
+    const u = { cp: get('consonantpractice'), bg: get('burmesegame'), vl: get('vowelslearning'), po };
     Object.keys(u).forEach(k => { if (!u[k]) delete u[k]; });
     return u;
   };

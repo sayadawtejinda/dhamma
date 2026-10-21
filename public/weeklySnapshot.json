@@ -1813,7 +1813,8 @@
       "attendedTotal": 30,
       "partUnits": {
         "cp": 7,
-        "bg": 4
+        "bg": 4,
+        "po": 18
       }
     },
     {
@@ -1852,7 +1853,8 @@
       "attendedThisYear": 40,
       "attendedTotal": 40,
       "partUnits": {
-        "bg": 6
+        "bg": 6,
+        "po": 36
       }
     },
     {
@@ -1943,7 +1945,8 @@
       "partUnits": {
         "cp": 7,
         "bg": 2,
-        "vl": 4
+        "vl": 4,
+        "po": 41
       }
     },
     {
@@ -1992,7 +1995,8 @@
       "partUnits": {
         "cp": 7,
         "bg": 1,
-        "vl": 3
+        "vl": 3,
+        "po": 37
       }
     },
     {
@@ -2005,7 +2009,10 @@
         "Teacher_name": "Teacher"
       },
       "attendedThisYear": 20,
-      "attendedTotal": 20
+      "attendedTotal": 20,
+      "partUnits": {
+        "po": 5
+      }
     },
     {
       "id": "03482378613444434898",
@@ -2020,7 +2027,8 @@
       "attendedTotal": 39,
       "partUnits": {
         "bg": 5,
-        "vl": 3
+        "vl": 3,
+        "po": 20
       }
     },
     {
@@ -2069,7 +2077,10 @@
         "Teacher_count": 6
       },
       "attendedThisYear": 34,
-      "attendedTotal": 34
+      "attendedTotal": 34,
+      "partUnits": {
+        "po": 42
+      }
     },
     {
       "id": "04234204323460967681",
@@ -2099,7 +2110,10 @@
         "Teacher_name": "Teacher"
       },
       "attendedThisYear": 35,
-      "attendedTotal": 35
+      "attendedTotal": 35,
+      "partUnits": {
+        "po": 36
+      }
     },
     {
       "id": "04382713743183613195",
@@ -2119,7 +2133,8 @@
       "partUnits": {
         "cp": 7,
         "bg": 7,
-        "vl": 6
+        "vl": 6,
+        "po": 44
       }
     },
     {
@@ -2222,7 +2237,8 @@
       "attendedTotal": 29,
       "partUnits": {
         "cp": 7,
-        "vl": 2
+        "vl": 2,
+        "po": 34
       }
     },
     {
@@ -2254,7 +2270,8 @@
       "attendedTotal": 38,
       "partUnits": {
         "bg": 6,
-        "vl": 4
+        "vl": 4,
+        "po": 22
       }
     },
     {
@@ -2271,7 +2288,8 @@
       "attendedThisYear": 35,
       "attendedTotal": 35,
       "partUnits": {
-        "bg": 2
+        "bg": 2,
+        "po": 47
       }
     },
     {
@@ -2298,7 +2316,8 @@
       "attendedThisYear": 29,
       "attendedTotal": 29,
       "partUnits": {
-        "bg": 10
+        "bg": 10,
+        "po": 40
       }
     },
     {
@@ -2460,7 +2479,8 @@
       "partUnits": {
         "cp": 7,
         "bg": 5,
-        "vl": 3
+        "vl": 3,
+        "po": 14
       }
     },
     {
@@ -2475,7 +2495,10 @@
         "Teacher_name": "Teacher"
       },
       "attendedThisYear": 33,
-      "attendedTotal": 33
+      "attendedTotal": 33,
+      "partUnits": {
+        "po": 38
+      }
     },
     {
       "id": "10363880024560530844",
@@ -2527,7 +2550,10 @@
         "Ryan_count": 1
       },
       "attendedThisYear": 32,
-      "attendedTotal": 32
+      "attendedTotal": 32,
+      "partUnits": {
+        "po": 38
+      }
     },
     {
       "id": "11060425178850379550",
@@ -2549,7 +2575,8 @@
       "attendedThisYear": 55,
       "attendedTotal": 55,
       "partUnits": {
-        "bg": 5
+        "bg": 5,
+        "po": 48
       }
     },
     {
@@ -2595,7 +2622,10 @@
         "Teacher_count": 6
       },
       "attendedThisYear": 36,
-      "attendedTotal": 36
+      "attendedTotal": 36,
+      "partUnits": {
+        "po": 48
+      }
     },
     {
       "id": "11204632504995024875",
@@ -2627,7 +2657,8 @@
       "attendedThisYear": 36,
       "attendedTotal": 36,
       "partUnits": {
-        "vl": 1
+        "vl": 1,
+        "po": 50
       }
     },
     {
@@ -2674,7 +2705,8 @@
       "attendedThisYear": 58,
       "attendedTotal": 58,
       "partUnits": {
-        "bg": 5
+        "bg": 5,
+        "po": 48
       }
     },
     {
@@ -2761,7 +2793,10 @@
         "Moana Nguyen_count": 44
       },
       "attendedThisYear": 32,
-      "attendedTotal": 32
+      "attendedTotal": 32,
+      "partUnits": {
+        "po": 40
+      }
     },
     {
       "id": "12505934861142635323",
@@ -2834,7 +2869,8 @@
       "partUnits": {
         "cp": 7,
         "bg": 8,
-        "vl": 11
+        "vl": 11,
+        "po": 47
       }
     },
     {
@@ -2851,7 +2887,10 @@
         "Jaxton Lim_name": "Jaxton Lim"
       },
       "attendedThisYear": 27,
-      "attendedTotal": 27
+      "attendedTotal": 27,
+      "partUnits": {
+        "po": 44
+      }
     },
     {
       "id": "12714103203344387805",
@@ -2867,7 +2906,8 @@
       "partUnits": {
         "cp": 7,
         "bg": 9,
-        "vl": 2
+        "vl": 2,
+        "po": 38
       }
     },
     {
@@ -2887,7 +2927,8 @@
       "attendedTotal": 37,
       "partUnits": {
         "cp": 7,
-        "vl": 1
+        "vl": 1,
+        "po": 24
       }
     },
     {
@@ -2908,7 +2949,10 @@
         "Alyson_count": 1
       },
       "attendedThisYear": 25,
-      "attendedTotal": 25
+      "attendedTotal": 25,
+      "partUnits": {
+        "po": 36
+      }
     },
     {
       "id": "13513403903623688395",
@@ -2926,7 +2970,8 @@
       "partUnits": {
         "cp": 7,
         "bg": 6,
-        "vl": 4
+        "vl": 4,
+        "po": 24
       }
     },
     {
@@ -3004,7 +3049,10 @@
         "Teacher_count": 6
       },
       "attendedThisYear": 31,
-      "attendedTotal": 31
+      "attendedTotal": 31,
+      "partUnits": {
+        "po": 42
+      }
     },
     {
       "id": "15551325004499972988",
@@ -3024,7 +3072,8 @@
       "partUnits": {
         "cp": 7,
         "bg": 6,
-        "vl": 2
+        "vl": 2,
+        "po": 20
       }
     },
     {
@@ -3050,6 +3099,9 @@
       "attendedTotal": 28,
       "dsUnits": {
         "GRADE-1": 11
+      },
+      "partUnits": {
+        "po": 2
       }
     },
     {
@@ -3085,7 +3137,8 @@
       "attendedTotal": 30,
       "partUnits": {
         "cp": 7,
-        "bg": 5
+        "bg": 5,
+        "po": 28
       }
     },
     {
@@ -3105,7 +3158,8 @@
       "attendedTotal": 34,
       "partUnits": {
         "cp": 7,
-        "bg": 3
+        "bg": 3,
+        "po": 2
       }
     },
     {
@@ -3120,7 +3174,8 @@
       "attendedThisYear": 35,
       "attendedTotal": 35,
       "partUnits": {
-        "bg": 5
+        "bg": 5,
+        "po": 38
       }
     },
     {
@@ -3233,7 +3288,10 @@
         "daniel the chin_count": 1
       },
       "attendedThisYear": 27,
-      "attendedTotal": 27
+      "attendedTotal": 27,
+      "partUnits": {
+        "po": 41
+      }
     },
     {
       "id": "78PyDa7UUeYYp00191Fp4LTsSJm1",
@@ -3254,7 +3312,10 @@
       "heartsReceived": 0,
       "heartsFromCounts": {},
       "attendedThisYear": 0,
-      "attendedTotal": 0
+      "attendedTotal": 0,
+      "partUnits": {
+        "po": 1
+      }
     },
     {
       "id": "84xOXG1936OTqqLes5dCev9H3in1",

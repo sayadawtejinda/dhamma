@@ -88,11 +88,10 @@ for (const st of students) {
     Object.entries(sh.avatarOwned || {}).forEach(([cat, arr]) => (Array.isArray(arr) ? arr : []).forEach(x => { if (!FREE.has(`${cat}:${x}`)) owned.add(`${cat}:${x}`); }));
     at(owned.size, [[2, 'avatar-2'], [5, 'avatar-5'], [10, 'avatar-10'], [20, 'avatar-25'], [30, 'avatar-30'], [50, 'avatar-50']]);
   }
-  const po = poems.get(n);
-  if (po) {
-    const c = new Set(po.completedPoemIds || []).size;
-    at(c, [[5, 'poems-5'], [10, 'poems-10'], [25, 'poems-25'], [40, 'poems-40'], [48, 'poem-master']]);
-  }
+  // Myanmar Poems: the app's record, or the trophies the teacher confirmed (students from before the records have only the trophies)
+  const po = poems.get(n) || {};
+  const poemCount = Math.max(new Set(po.completedPoemIds || []).size, Math.min(48, (st.partUnits || {}).po || 0));
+  at(poemCount, [[5, 'poems-5'], [10, 'poems-10'], [25, 'poems-25'], [40, 'poems-40'], [48, 'poem-master']]);
   const rd = reader.get(n);
   if (rd) at(rd.furthestChapter || 0, [[5, 'reader-5'], [10, 'reader-10'], [15, 'reader-15'], [20, 'reader-20'], [25, 'reader-25'], [29, 'reader-master']]);
   // Myanmar Vowels: Basic (8 trophies) and Pro (3 more = 11) -- from the student's own game record or the teacher-approved count
