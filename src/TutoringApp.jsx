@@ -2154,8 +2154,8 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
     return Promise.all(snap.docs.map(async d => {
       let lessonCount = 0;
       try {
-        const lessonsSnap = await getDocs(collection(db, 'artifacts', 'lesson-translator-app-v6', 'public', 'data', 'classes', d.id, 'lessons'));
-        lessonCount = lessonsSnap.size;
+        // a count query: still the live number, but it reads ~1 unit per class instead of every lesson document (about 230 reads)
+        lessonCount = (await getCountFromServer(collection(db, 'artifacts', 'lesson-translator-app-v6', 'public', 'data', 'classes', d.id, 'lessons'))).data().count;
       } catch (e) {}
       return { classId: d.id, lessonCount };
     }));
