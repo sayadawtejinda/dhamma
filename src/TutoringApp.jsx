@@ -955,6 +955,7 @@ const teacherConfigDoc = doc(configCollection, 'teacher');
 // browser's memory, and the profile listener + greeting are skipped for it.
 const VISITOR_STUDENT_ID = '0000';
 const VISITOR_UID = 'visitor';
+const ssProgressCache = new Map(); // `${studentUid}|${classId}` -> { at, total, cls }: a student's Smart Study counts for the Send Action panel
 const makeVisitorProfile = () => ({
   name: 'Visitor', displayId: VISITOR_STUDENT_ID, isActive: true, isVisitor: true,
   trophyCount: 0, earnedTrophies: {}, completedUnits: {}, heartsReceived: 0, heartsGivenCount: 0,
@@ -1945,6 +1946,11 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
   // never loads all Smart Study lesson content up front). ---
   // Fetch this student's SmartStudy completion counts whenever the
   // student/lesson/class selection changes in Send Action.
+  // The effect below used to run again every time ANY student's record or the Lesson Bank changed (while students are in class their
+  // records change all the time), and each run read all of that student's Smart Study scores again (thousands of reads). It now runs
+  // only when the chosen student / lesson / class really changes, and the answer is kept for 10 minutes.
+  const ssStudentKey = (() => { const st = students.find(x => x.id === selectedStudentUid); return st ? `${st.id}|${st.name}|${JSON.stringify(st.smartStudyNames || {})}` : ''; })();
+  const ssLessonIsSmart = !!lessonBank.find(l => l.id === selectedBankLessonId)?.link?.startsWith('smartstudy://');
   useEffect(() => {
     setSsStudentClassCount(null);
     setSsStudentTotalCount(null);
@@ -1952,6 +1958,9 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
     if (!lesson?.link?.startsWith('smartstudy://')) return;
     const student = students.find(s => s.id === selectedStudentUid);
     if (!student) return;
+    const cacheKey = `${student.id}|${sendSmartStudyClassId || ''}`;
+    const hit = ssProgressCache.get(cacheKey);
+    if (hit && Date.now() - hit.at < 10 * 60 * 1000) { setSsStudentTotalCount(hit.total); if (sendSmartStudyClassId) setSsStudentClassCount(hit.cls); return; }
     let isMounted = true;
     (async () => {
       try {
@@ -2003,6 +2012,7 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
           ));
           addResults(snap, null);
         }
+        ssProgressCache.set(cacheKey, { at: Date.now(), total: distinctClassLesson.size, cls: distinctForClass.size });
         if (isMounted) {
           setSsStudentTotalCount(distinctClassLesson.size);
           if (sendSmartStudyClassId) setSsStudentClassCount(distinctForClass.size);
@@ -2012,7 +2022,7 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
       }
     })();
     return () => { isMounted = false; };
-  }, [selectedStudentUid, selectedBankLessonId, sendSmartStudyClassId, lessonBank, students]);
+  }, [selectedStudentUid, selectedBankLessonId, sendSmartStudyClassId, ssStudentKey, ssLessonIsSmart]);
 
   // Dhammaschool app — student progress across the whole selected class
   useEffect(() => {
