@@ -116,7 +116,9 @@ for (const st of students) {
   // Smart Study: lessons finished, all classes together
   const ss = ssDone[n] || {};
   let ssTotal = 0;
-  for (const set of Object.values(ss)) ssTotal += set.size;
+  // per class: the board's count, or the lessons the teacher confirmed with trophies ('Smart Study Lesson_CLASS') if that is more
+  const ssU = st.ssUnits || {};
+  for (const id of new Set([...Object.keys(ss), ...Object.keys(ssU)])) ssTotal += Math.max((ss[id] || new Set()).size, ssU[id] || 0);
   // festivals: good deeds (a kind thought, paying respect) and the festival lamps lit (public/festivalDeeds.json, weekly)
   const fd = (festivalDeeds.students || {})[n];
   if (fd) {

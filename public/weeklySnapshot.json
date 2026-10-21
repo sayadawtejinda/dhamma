@@ -1789,7 +1789,11 @@
         "Teacher_count": 6
       },
       "attendedThisYear": 19,
-      "attendedTotal": 19
+      "attendedTotal": 19,
+      "ssUnits": {
+        "TADINGYUT": 6,
+        "RESPECT": 3
+      }
     },
     {
       "id": "00504188520020246095",
@@ -1798,7 +1802,12 @@
       "heartsReceived": 0,
       "heartsFromCounts": {},
       "attendedThisYear": 13,
-      "attendedTotal": 13
+      "attendedTotal": 13,
+      "ssUnits": {
+        "TADINGYUT": 4,
+        "RESPECT": 2,
+        "BUDDHA GUNA": 2
+      }
     },
     {
       "id": "00580300561450309730",
@@ -1834,6 +1843,11 @@
       "attendedTotal": 41,
       "partUnits": {
         "rd": 18
+      },
+      "ssUnits": {
+        "TADINGYUT": 1,
+        "RESPECT": 4,
+        "METTA": 4
       }
     },
     {
@@ -1859,6 +1873,12 @@
         "bg": 6,
         "po": 36,
         "rd": 29
+      },
+      "ssUnits": {
+        "TADINGYUT": 10,
+        "BUDDHA GUNA": 5,
+        "METTA": 7,
+        "RESPECT": 4
       }
     },
     {
@@ -1884,6 +1904,11 @@
       },
       "dsUnits": {
         "GRADE-1": 1
+      },
+      "ssUnits": {
+        "METTA": 3,
+        "BUDDHA GUNA": 9,
+        "TADINGYUT": 6
       }
     },
     {
@@ -1898,7 +1923,13 @@
         "Teacher_name": "Teacher"
       },
       "attendedThisYear": 9,
-      "attendedTotal": 9
+      "attendedTotal": 9,
+      "ssUnits": {
+        "RESPECT": 5,
+        "BUDDHA GUNA": 5,
+        "METTA": 5,
+        "TADINGYUT": 3
+      }
     },
     {
       "id": "01386355304594994874",
@@ -1910,7 +1941,12 @@
         "Teacher_name": "Teacher"
       },
       "attendedThisYear": 6,
-      "attendedTotal": 6
+      "attendedTotal": 6,
+      "ssUnits": {
+        "BUDDHA GUNA": 8,
+        "TADINGYUT": 6,
+        "RESPECT": 2
+      }
     },
     {
       "id": "01395882295482467615",
@@ -1932,6 +1968,14 @@
       "dsUnits": {
         "GRADE-1": 40,
         "GRADE-2": 21
+      },
+      "ssUnits": {
+        "METTA": 10,
+        "OUTER VICTORIES": 8,
+        "RESPECT": 10,
+        "MINGALA": 3,
+        "TADINGYUT": 10,
+        "KAMMA": 4
       }
     },
     {
@@ -1953,6 +1997,12 @@
         "vl": 4,
         "po": 41,
         "rd": 6
+      },
+      "ssUnits": {
+        "RESPECT": 10,
+        "PARAMI": 10,
+        "BUDDHA GUNA": 1,
+        "TADINGYUT": 10
       }
     },
     {
@@ -1988,6 +2038,11 @@
       "attendedTotal": 41,
       "partUnits": {
         "rd": 19
+      },
+      "ssUnits": {
+        "RESPECT": 1,
+        "METTA": 4,
+        "TADINGYUT": 1
       }
     },
     {
@@ -2007,6 +2062,12 @@
         "vl": 3,
         "po": 37,
         "rd": 7
+      },
+      "ssUnits": {
+        "RESPECT": 10,
+        "TADINGYUT": 2,
+        "PARAMI": 10,
+        "MINGALA": 10
       }
     },
     {
@@ -2031,6 +2092,10 @@
           "BEING GOOD AND BEING KIND": 5
         },
         "legacy": 0
+      },
+      "ssUnits": {
+        "BUDDHA GUNA": 2,
+        "DEVA": 2
       }
     },
     {
@@ -2049,6 +2114,11 @@
         "vl": 3,
         "po": 20,
         "rd": 3
+      },
+      "ssUnits": {
+        "BUDDHA GUNA": 5,
+        "TADINGYUT": 2,
+        "RESPECT": 2
       }
     },
     {
@@ -2082,6 +2152,12 @@
       "abUnits": {
         "byClass": {},
         "legacy": 4
+      },
+      "ssUnits": {
+        "BUDDHA GUNA": 9,
+        "TADINGYUT": 10,
+        "RESPECT": 5,
+        "METTA": 10
       }
     },
     {
@@ -2112,6 +2188,12 @@
           "DHAMMAPADA-1": 14
         },
         "legacy": 0
+      },
+      "ssUnits": {
+        "TADINGYUT": 10,
+        "BUDDHA GUNA": 7,
+        "METTA": 10,
+        "RESPECT": 4
       }
     },
     {
@@ -2131,6 +2213,11 @@
       "attendedTotal": 39,
       "partUnits": {
         "rd": 23
+      },
+      "ssUnits": {
+        "METTA": 3,
+        "TADINGYUT": 6,
+        "RESPECT": 7
       }
     },
     {
@@ -2149,6 +2236,12 @@
       "partUnits": {
         "po": 36,
         "rd": 19
+      },
+      "ssUnits": {
+        "RESPECT": 3,
+        "TADINGYUT": 5,
+        "METTA": 3,
+        "BUDDHA GUNA": 5
       }
     },
     {
@@ -2172,6 +2265,12 @@
         "vl": 6,
         "po": 44,
         "rd": 6
+      },
+      "ssUnits": {
+        "BUDDHA GUNA": 5,
+        "RESPECT": 4,
+        "TADINGYUT": 2,
+        "METTA": 7
       }
     },
     {
@@ -2181,7 +2280,10 @@
       "heartsReceived": 0,
       "heartsFromCounts": {},
       "attendedThisYear": 14,
-      "attendedTotal": 14
+      "attendedTotal": 14,
+      "ssUnits": {
+        "TADINGYUT": 1
+      }
     },
     {
       "id": "04544774042809518688",
@@ -2195,7 +2297,11 @@
         "Madi_name": "Madi"
       },
       "attendedThisYear": 5,
-      "attendedTotal": 5
+      "attendedTotal": 5,
+      "ssUnits": {
+        "RESPECT": 4,
+        "TADINGYUT": 9
+      }
     },
     {
       "id": "05450887827136104788",
@@ -2213,7 +2319,13 @@
         "Teacher_count": 3
       },
       "attendedThisYear": 7,
-      "attendedTotal": 7
+      "attendedTotal": 7,
+      "ssUnits": {
+        "BUDDHA GUNA": 5,
+        "METTA": 10,
+        "RESPECT": 4,
+        "TADINGYUT": 3
+      }
     },
     {
       "id": "05640800844344076883",
@@ -2232,6 +2344,11 @@
       "attendedTotal": 39,
       "partUnits": {
         "rd": 11
+      },
+      "ssUnits": {
+        "RESPECT": 7,
+        "METTA": 2,
+        "TADINGYUT": 5
       }
     },
     {
@@ -2258,6 +2375,10 @@
       "dsUnits": {
         "GRADE-2": 40,
         "GRADE-1": 40
+      },
+      "ssUnits": {
+        "RESPECT": 4,
+        "METTA": 6
       }
     },
     {
@@ -2280,6 +2401,9 @@
         "vl": 2,
         "po": 34,
         "rd": 4
+      },
+      "ssUnits": {
+        "TADINGYUT": 10
       }
     },
     {
@@ -2298,6 +2422,15 @@
           "BASIC-ABHIDHAMMA-2": 35
         },
         "legacy": 143
+      },
+      "ssUnits": {
+        "NEW": 4,
+        "METTA": 10,
+        "RESPECT": 10,
+        "TADINGYUT": 10,
+        "BUDDHA GUNA": 9,
+        "OUTER VICTORIES": 8,
+        "MINGALA": 10
       }
     },
     {
@@ -2320,6 +2453,11 @@
         "vl": 4,
         "po": 22,
         "rd": 2
+      },
+      "ssUnits": {
+        "RESPECT": 4,
+        "TADINGYUT": 7,
+        "BUDDHA GUNA": 5
       }
     },
     {
@@ -2339,6 +2477,11 @@
         "bg": 2,
         "po": 47,
         "rd": 16
+      },
+      "ssUnits": {
+        "TADINGYUT": 7,
+        "RESPECT": 5,
+        "METTA": 6
       }
     },
     {
@@ -2368,6 +2511,11 @@
         "bg": 10,
         "po": 40,
         "rd": 15
+      },
+      "ssUnits": {
+        "TADINGYUT": 10,
+        "METTA": 4,
+        "RESPECT": 6
       }
     },
     {
@@ -2385,6 +2533,11 @@
       "attendedTotal": 54,
       "partUnits": {
         "rd": 13
+      },
+      "ssUnits": {
+        "BUDDHA GUNA": 3,
+        "METTA": 1,
+        "RESPECT": 7
       }
     },
     {
@@ -2397,7 +2550,11 @@
         "Teacher_count": 3
       },
       "attendedThisYear": 18,
-      "attendedTotal": 18
+      "attendedTotal": 18,
+      "ssUnits": {
+        "RESPECT": 2,
+        "TADINGYUT": 7
+      }
     },
     {
       "id": "08112323690613594671",
@@ -2428,6 +2585,10 @@
       "abUnits": {
         "byClass": {},
         "legacy": 14
+      },
+      "ssUnits": {
+        "BUDDHA GUNA": 6,
+        "TADINGYUT": 10
       }
     },
     {
@@ -2452,6 +2613,11 @@
       "dsUnits": {
         "GRADE-2": 40,
         "GRADE-1": 40
+      },
+      "ssUnits": {
+        "RESPECT": 4,
+        "METTA": 10,
+        "TADINGYUT": 10
       }
     },
     {
@@ -2466,7 +2632,11 @@
         "Madi_name": "Madi"
       },
       "attendedThisYear": 4,
-      "attendedTotal": 4
+      "attendedTotal": 4,
+      "ssUnits": {
+        "RESPECT": 3,
+        "TADINGYUT": 4
+      }
     },
     {
       "id": "08698398135077813599",
@@ -2490,6 +2660,11 @@
       "dsUnits": {
         "GRADE-1": 40,
         "GRADE-2": 24
+      },
+      "ssUnits": {
+        "METTA": 5,
+        "TADINGYUT": 5,
+        "RESPECT": 3
       }
     },
     {
@@ -2504,7 +2679,11 @@
         "Madi_name": "Madi"
       },
       "attendedThisYear": 16,
-      "attendedTotal": 16
+      "attendedTotal": 16,
+      "ssUnits": {
+        "TADINGYUT": 3,
+        "BUDDHA GUNA": 5
+      }
     },
     {
       "id": "09608707569725225778",
@@ -2538,6 +2717,13 @@
         "bg": 5,
         "vl": 3,
         "po": 14
+      },
+      "ssUnits": {
+        "MINGALA": 9,
+        "BUDDHA GUNA": 5,
+        "TADINGYUT": 10,
+        "RESPECT": 3,
+        "METTA": 10
       }
     },
     {
@@ -2556,6 +2742,11 @@
       "partUnits": {
         "po": 38,
         "rd": 11
+      },
+      "ssUnits": {
+        "RESPECT": 4,
+        "TADINGYUT": 3,
+        "BUDDHA GUNA": 3
       }
     },
     {
@@ -2583,6 +2774,12 @@
       "attendedTotal": 31,
       "dsUnits": {
         "GRADE-1": 14
+      },
+      "ssUnits": {
+        "METTA": 5,
+        "TADINGYUT": 8,
+        "RESPECT": 3,
+        "BUDDHA GUNA": 5
       }
     },
     {
@@ -2592,7 +2789,10 @@
       "heartsReceived": 0,
       "heartsFromCounts": {},
       "attendedThisYear": 13,
-      "attendedTotal": 13
+      "attendedTotal": 13,
+      "ssUnits": {
+        "METTA": 4
+      }
     },
     {
       "id": "11055575881844874884",
@@ -2612,6 +2812,11 @@
       "partUnits": {
         "po": 38,
         "rd": 11
+      },
+      "ssUnits": {
+        "TADINGYUT": 5,
+        "RESPECT": 4,
+        "METTA": 5
       }
     },
     {
@@ -2637,6 +2842,10 @@
         "bg": 5,
         "po": 48,
         "rd": 22
+      },
+      "ssUnits": {
+        "METTA": 4,
+        "BUDDHA GUNA": 5
       }
     },
     {
@@ -2664,6 +2873,10 @@
       "attendedTotal": 35,
       "dsUnits": {
         "GRADE-1": 14
+      },
+      "ssUnits": {
+        "TADINGYUT": 6,
+        "BUDDHA GUNA": 3
       }
     },
     {
@@ -2686,6 +2899,11 @@
       "partUnits": {
         "po": 48,
         "rd": 15
+      },
+      "ssUnits": {
+        "METTA": 9,
+        "TADINGYUT": 10,
+        "RESPECT": 10
       }
     },
     {
@@ -2706,6 +2924,12 @@
       "abUnits": {
         "byClass": {},
         "legacy": 50
+      },
+      "ssUnits": {
+        "NEW": 4,
+        "BUDDHA GUNA": 9,
+        "TADINGYUT": 10,
+        "MINGALA": 10
       }
     },
     {
@@ -2725,6 +2949,10 @@
         "vl": 1,
         "po": 50,
         "rd": 12
+      },
+      "ssUnits": {
+        "RESPECT": 5,
+        "TADINGYUT": 6
       }
     },
     {
@@ -2739,7 +2967,12 @@
         "Madi_count": 1
       },
       "attendedThisYear": 14,
-      "attendedTotal": 14
+      "attendedTotal": 14,
+      "ssUnits": {
+        "TADINGYUT": 8,
+        "BUDDHA GUNA": 9,
+        "RESPECT": 7
+      }
     },
     {
       "id": "11605406172832584914",
@@ -2754,6 +2987,12 @@
       "attendedTotal": 54,
       "partUnits": {
         "rd": 23
+      },
+      "ssUnits": {
+        "RESPECT": 2,
+        "METTA": 3,
+        "BUDDHA GUNA": 5,
+        "TADINGYUT": 2
       }
     },
     {
@@ -2777,6 +3016,13 @@
         "bg": 5,
         "po": 48,
         "rd": 18
+      },
+      "ssUnits": {
+        "MINGALA": 2,
+        "TADINGYUT": 4,
+        "METTA": 10,
+        "RESPECT": 2,
+        "BUDDHA GUNA": 7
       }
     },
     {
@@ -2810,6 +3056,10 @@
       "abUnits": {
         "byClass": {},
         "legacy": 16
+      },
+      "ssUnits": {
+        "TADINGYUT": 7,
+        "RESPECT": 7
       }
     },
     {
@@ -2832,6 +3082,9 @@
       "dsUnits": {
         "GRADE-2": 17,
         "GRADE-1": 40
+      },
+      "ssUnits": {
+        "RESPECT": 5
       }
     },
     {
@@ -2849,6 +3102,11 @@
         "cp": 7,
         "bg": 6,
         "vl": 1
+      },
+      "ssUnits": {
+        "RESPECT": 1,
+        "TADINGYUT": 10,
+        "METTA": 6
       }
     },
     {
@@ -2871,6 +3129,11 @@
       "partUnits": {
         "po": 40,
         "rd": 14
+      },
+      "ssUnits": {
+        "METTA": 4,
+        "BUDDHA GUNA": 5,
+        "TADINGYUT": 2
       }
     },
     {
@@ -2922,6 +3185,10 @@
       "attendedTotal": 21,
       "dsUnits": {
         "GRADE-2": 3
+      },
+      "ssUnits": {
+        "RESPECT": 4,
+        "TADINGYUT": 1
       }
     },
     {
@@ -2947,6 +3214,12 @@
         "vl": 11,
         "po": 47,
         "rd": 13
+      },
+      "ssUnits": {
+        "TADINGYUT": 5,
+        "RESPECT": 8,
+        "BUDDHA GUNA": 5,
+        "METTA": 8
       }
     },
     {
@@ -2967,6 +3240,12 @@
       "partUnits": {
         "po": 44,
         "rd": 17
+      },
+      "ssUnits": {
+        "MINGALA": 3,
+        "RESPECT": 3,
+        "METTA": 10,
+        "TADINGYUT": 7
       }
     },
     {
@@ -2986,6 +3265,12 @@
         "vl": 2,
         "po": 38,
         "rd": 4
+      },
+      "ssUnits": {
+        "RESPECT": 2,
+        "TADINGYUT": 5,
+        "METTA": 3,
+        "BUDDHA GUNA": 9
       }
     },
     {
@@ -3008,6 +3293,13 @@
         "vl": 1,
         "po": 24,
         "rd": 8
+      },
+      "ssUnits": {
+        "METTA": 10,
+        "BUDDHA": 6,
+        "TADINGYUT": 10,
+        "RESPECT": 8,
+        "BUDDHA GUNA": 7
       }
     },
     {
@@ -3032,6 +3324,9 @@
       "partUnits": {
         "po": 36,
         "rd": 4
+      },
+      "ssUnits": {
+        "BUDDHA GUNA": 5
       }
     },
     {
@@ -3052,6 +3347,11 @@
         "bg": 6,
         "vl": 4,
         "po": 24
+      },
+      "ssUnits": {
+        "RESPECT": 6,
+        "BUDDHA GUNA": 6,
+        "TADINGYUT": 6
       }
     },
     {
@@ -3066,7 +3366,12 @@
         "Teacher_count": 3
       },
       "attendedThisYear": 18,
-      "attendedTotal": 18
+      "attendedTotal": 18,
+      "ssUnits": {
+        "TADINGYUT": 8,
+        "RESPECT": 10,
+        "BUDDHA GUNA": 6
+      }
     },
     {
       "id": "13853615692537432416",
@@ -3091,6 +3396,12 @@
         "GRADE-1": 40,
         "GRADE-3": 6,
         "GRADE-2": 40
+      },
+      "ssUnits": {
+        "RESPECT": 1,
+        "BUDDHA GUNA": 5,
+        "TADINGYUT": 2,
+        "METTA": 3
       }
     },
     {
@@ -3115,6 +3426,10 @@
       "dsUnits": {
         "GRADE-1": 40,
         "GRADE-2": 40
+      },
+      "ssUnits": {
+        "RESPECT": 1,
+        "TADINGYUT": 5
       }
     },
     {
@@ -3133,6 +3448,12 @@
       "partUnits": {
         "po": 42,
         "rd": 5
+      },
+      "ssUnits": {
+        "METTA": 3,
+        "BUDDHA GUNA": 5,
+        "RESPECT": 5,
+        "TADINGYUT": 10
       }
     },
     {
@@ -3155,6 +3476,11 @@
         "bg": 6,
         "vl": 2,
         "po": 20
+      },
+      "ssUnits": {
+        "RESPECT": 1,
+        "BUDDHA GUNA": 5,
+        "TADINGYUT": 10
       }
     },
     {
@@ -3183,6 +3509,11 @@
       },
       "partUnits": {
         "po": 2
+      },
+      "ssUnits": {
+        "RESPECT": 4,
+        "TADINGYUT": 10,
+        "METTA": 10
       }
     },
     {
@@ -3202,6 +3533,11 @@
       "attendedTotal": 38,
       "partUnits": {
         "rd": 22
+      },
+      "ssUnits": {
+        "TADINGYUT": 3,
+        "METTA": 3,
+        "RESPECT": 5
       }
     },
     {
@@ -3224,6 +3560,10 @@
         "bg": 5,
         "po": 28,
         "rd": 24
+      },
+      "ssUnits": {
+        "TADINGYUT": 6,
+        "METTA": 3
       }
     },
     {
@@ -3246,6 +3586,10 @@
         "bg": 3,
         "po": 2,
         "rd": 3
+      },
+      "ssUnits": {
+        "METTA": 10,
+        "TADINGYUT": 10
       }
     },
     {
@@ -3263,6 +3607,12 @@
         "bg": 5,
         "po": 38,
         "rd": 10
+      },
+      "ssUnits": {
+        "METTA": 4,
+        "WASO": 9,
+        "TADINGYUT": 4,
+        "RESPECT": 5
       }
     },
     {
@@ -3306,6 +3656,10 @@
         "GRADE-5": 3,
         "GRADE-3": 40,
         "GRADE-2": 40
+      },
+      "ssUnits": {
+        "RESPECT": 3,
+        "BUDDHA GUNA": 7
       }
     },
     {
@@ -3320,7 +3674,10 @@
         "Madi_name": "Madi"
       },
       "attendedThisYear": 13,
-      "attendedTotal": 13
+      "attendedTotal": 13,
+      "ssUnits": {
+        "BUDDHA GUNA": 4
+      }
     },
     {
       "id": "18185253476078240259",
@@ -3359,6 +3716,12 @@
         "GRADE-4": 40,
         "GRADE-3": 40,
         "GRADE-2": 40
+      },
+      "ssUnits": {
+        "BUDDHA GUNA": 2,
+        "TADINGYUT": 10,
+        "RESPECT": 2,
+        "METTA": 4
       }
     },
     {
@@ -3379,6 +3742,12 @@
       "partUnits": {
         "po": 41,
         "rd": 9
+      },
+      "ssUnits": {
+        "METTA": 6,
+        "RESPECT": 4,
+        "BUDDHA GUNA": 2,
+        "TADINGYUT": 3
       }
     },
     {
@@ -3391,7 +3760,12 @@
         "Teacher_name": "Teacher"
       },
       "attendedThisYear": 6,
-      "attendedTotal": 6
+      "attendedTotal": 6,
+      "ssUnits": {
+        "BUDDHA GUNA": 6,
+        "RESPECT": 3,
+        "TADINGYUT": 8
+      }
     },
     {
       "id": "7xztd5TXWgeipkaoOqqPIAb6bWa2",
@@ -3426,7 +3800,11 @@
       "heartsReceived": 0,
       "heartsFromCounts": {},
       "attendedThisYear": 16,
-      "attendedTotal": 16
+      "attendedTotal": 16,
+      "ssUnits": {
+        "BUDDHA GUNA": 1,
+        "RESPECT": 2
+      }
     },
     {
       "id": "DroWVnsDn0MDndtv57xAYQIRv8g1",
@@ -3438,7 +3816,12 @@
         "Teacher_count": 6
       },
       "attendedThisYear": 6,
-      "attendedTotal": 6
+      "attendedTotal": 6,
+      "ssUnits": {
+        "TADINGYUT": 5,
+        "BUDDHA GUNA": 5,
+        "RESPECT": 4
+      }
     },
     {
       "id": "E78SixkuHYb9CmO46WhC6IaCpul1",
@@ -3454,7 +3837,16 @@
         "Ryan_count": 1
       },
       "attendedThisYear": 39,
-      "attendedTotal": 39
+      "attendedTotal": 39,
+      "ssUnits": {
+        "METTA": 10,
+        "DEVA": 10,
+        "TADINGYUT": 10,
+        "MINGALA": 10,
+        "RESPECT": 10,
+        "BUDDHA GUNA": 9,
+        "BUDDHA": 10
+      }
     },
     {
       "id": "FpkAPqj0QjXg2dT0uE8d4MdmoBI2",
@@ -3463,7 +3855,10 @@
       "heartsReceived": 0,
       "heartsFromCounts": {},
       "attendedThisYear": 0,
-      "attendedTotal": 0
+      "attendedTotal": 0,
+      "ssUnits": {
+        "TADINGYUT": 3
+      }
     },
     {
       "id": "G10evVOtAZX4M2wHgFYSzOWiyGz1",
@@ -3486,7 +3881,12 @@
         "💕_name": "💕"
       },
       "attendedThisYear": 6,
-      "attendedTotal": 6
+      "attendedTotal": 6,
+      "ssUnits": {
+        "BUDDHA GUNA": 9,
+        "RESPECT": 4,
+        "TADINGYUT": 7
+      }
     },
     {
       "id": "N8RfW51UThWfvwxQchp0i6fWbkJ3",
@@ -3500,7 +3900,13 @@
         "Madi_count": 2
       },
       "attendedThisYear": 6,
-      "attendedTotal": 6
+      "attendedTotal": 6,
+      "ssUnits": {
+        "RESPECT": 4,
+        "BUDDHA GUNA": 9,
+        "METTA": 6,
+        "TADINGYUT": 8
+      }
     },
     {
       "id": "PGvzLK0VXZOaqpqAWzNcL6TGoKD2",
@@ -3532,7 +3938,13 @@
         "Teacher_count": 3
       },
       "attendedThisYear": 1,
-      "attendedTotal": 1
+      "attendedTotal": 1,
+      "ssUnits": {
+        "DEVA": 10,
+        "TADINGYUT": 3,
+        "BUDDHA GUNA": 7,
+        "KAMMA": 15
+      }
     },
     {
       "id": "WLuIaqHjQUZaruSAissaw0NhSaY2",
@@ -3548,7 +3960,12 @@
         "Teacher_count": 3
       },
       "attendedThisYear": 5,
-      "attendedTotal": 5
+      "attendedTotal": 5,
+      "ssUnits": {
+        "RESPECT": 5,
+        "METTA": 2,
+        "TADINGYUT": 10
+      }
     },
     {
       "id": "WPo3J3NgZBQ32IGdc61Xy3LUNre2",
@@ -3593,7 +4010,10 @@
       "heartsReceived": 0,
       "heartsFromCounts": {},
       "attendedThisYear": 3,
-      "attendedTotal": 3
+      "attendedTotal": 3,
+      "ssUnits": {
+        "TADINGYUT": 2
+      }
     },
     {
       "id": "qtt3ALbAucWoGQGch7KjBHMZbV02",
@@ -3605,7 +4025,10 @@
         "Teacher_name": "Teacher"
       },
       "attendedThisYear": 4,
-      "attendedTotal": 4
+      "attendedTotal": 4,
+      "ssUnits": {
+        "BUDDHA GUNA": 8
+      }
     },
     {
       "id": "rYySLxcRDZZ1k2r3j4OLmB5xy0u1",
@@ -3617,7 +4040,10 @@
         "Teacher_name": "Teacher"
       },
       "attendedThisYear": 16,
-      "attendedTotal": 16
+      "attendedTotal": 16,
+      "ssUnits": {
+        "BUDDHA GUNA": 9
+      }
     },
     {
       "id": "ryAXl7z6AlR4J6sjzkG3eVgVvp73",

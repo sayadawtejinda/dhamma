@@ -285,6 +285,12 @@ async function main() {
     });
     return Object.keys(byClass).length || legacy ? { byClass, legacy } : null;
   };
+  // Smart Study lessons the teacher has confirmed (trophies) per class: { TADINGYUT: 10 } from 'Smart Study Lesson_TADINGYUT'
+  const ssUnitsOf = (s) => {
+    const out = {};
+    Object.entries(s.completedUnits || {}).forEach(([k, v]) => { const m = /^Smart Study Lesson_(.+)$/.exec(k); if (m && Number(v) > 0) out[m[1]] = Math.max(out[m[1]] || 0, Number(v)); });
+    return out;
+  };
   // Dhammaschool chapters the teacher has confirmed (trophies) in each grade: { 'GRADE-1': 40 }
   const dsUnitsOf = (s) => {
     const out = {};
@@ -314,6 +320,7 @@ async function main() {
       ...(Object.keys(partUnitsOf(s)).length ? { partUnits: partUnitsOf(s) } : {}),
       ...(Object.keys(dsUnitsOf(s)).length ? { dsUnits: dsUnitsOf(s) } : {}),
       ...(abUnitsOf(s) ? { abUnits: abUnitsOf(s) } : {}),
+      ...(Object.keys(ssUnitsOf(s)).length ? { ssUnits: ssUnitsOf(s) } : {}),
     }));
 
   // Class-wide month / year attendance totals for the Teacher Dashboard's
