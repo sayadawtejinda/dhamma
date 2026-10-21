@@ -55,15 +55,23 @@ function showDetails() {
 
 function paint() {
   // The little counter is on every screen, so the teacher sees each student's numbers on Zoom without sending anything. Only the
-  // teacher's dashboard makes it tappable (details / reset); on a student's screen it ignores touches, so nobody opens it by accident.
+  // teacher's dashboard opens the details with one tap; a student has to tap it 3 times quickly, so nobody opens it by accident.
   if (!visible) { if (badge) { badge.remove(); badge = null; } return; }
   if (!badge) {
     badge = document.createElement('div');
     badge.style.cssText = 'position:fixed;left:4px;bottom:4px;z-index:99999;background:rgba(0,0,0,.75);color:#fff;font:11px monospace;padding:3px 6px;border-radius:6px;cursor:pointer;max-width:70vw';
-    badge.onclick = () => { if (interactive) showDetails(); };
+    // the teacher's dashboard: one tap opens the details; a student must tap it 3 times quickly (so a stray tap does nothing, but a
+    // student can still open the box and copy the numbers for the teacher)
+    let taps = [];
+    badge.onclick = () => {
+      if (interactive) { showDetails(); return; }
+      const now = Date.now();
+      taps = taps.filter(x => now - x < 1500); taps.push(now);
+      if (taps.length >= 3) { taps = []; showDetails(); }
+    };
     document.body.appendChild(badge);
   }
-  badge.style.pointerEvents = interactive ? 'auto' : 'none';
+  badge.style.pointerEvents = 'auto';
   const top = Object.entries(state.by).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, v]) => `${k} ${v}`).join(' · ');
   badge.textContent = `reads today: ${state.total}  ${top}`;
 }
