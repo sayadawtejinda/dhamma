@@ -26,10 +26,10 @@ audio{width:100%;margin-top:6px}
 dialog{border:0;border-radius:14px;padding:16px;box-shadow:0 12px 50px rgba(0,0,0,.4);max-width:96vw;width:560px}
 dialog::backdrop{background:rgba(20,6,40,.5)}.crow{display:flex;gap:6px;align-items:center;margin:4px 0}.crow input{flex:1}
 </style></head><body>
-<header><b>🎶 သီချင်း စီမံရန်</b><span id="counts" class="hint" style="color:#e8d9ff"></span><button id="addBtn">➕ သီချင်းအသစ်</button><button id="colBtn">📁 စုစည်းမှုများ</button><button id="goneBtn">♻ ဖျက်ပြီးသားများ</button><button id="hidBtn">🙈 ဝှက်ထားသည်များ</button><button id="cmBtn">💬 မှတ်ချက်/စာသားပေးပို့ချက်</button><select id="pmode" title="🚀 နှိပ်ရင် ဘာတွေ တင်မလဲ" style="padding:5px;border-radius:8px"><option value="lyrics">တင်မည် — စာသားရှိတာသာ</option><option value="all">တင်မည် — အားလုံး</option></select><button id="pub">🚀 website သို့ တင်မည်</button></header>
+<header><b>🎶 သီချင်း စီမံရန်</b><span id="counts" class="hint" style="color:#e8d9ff"></span><button id="addBtn">➕ သီချင်းအသစ်</button><button id="colBtn">📁 စုစည်းမှုများ</button><button id="simBtn">🔎 ဆင်တူစစ်ရန်</button><button id="goneBtn">♻ ဖျက်ပြီးသားများ</button><button id="hidBtn">🙈 ဝှက်ထားသည်များ</button><button id="cmBtn">💬 မှတ်ချက်/စာသားပေးပို့ချက်</button><select id="pmode" title="🚀 နှိပ်ရင် ဘာတွေ တင်မလဲ" style="padding:5px;border-radius:8px"><option value="lyrics">တင်မည် — စာသားရှိတာသာ</option><option value="all">တင်မည် — အားလုံး</option></select><button id="pub">🚀 website သို့ တင်မည်</button></header>
 <main>
  <div id="side"><div class="f"><input type="search" id="q" placeholder="အမည်၊ အဆိုတော်၊ ဖိုင်နာမည် ရှာရန်…"><select id="fc"><option value="">စုစည်းမှုအားလုံး</option></select>
-  <label class="hint"><input type="checkbox" id="fna"> အမည်မရှိသေး</label><label class="hint"><input type="checkbox" id="fnl"> စာသားမရှိသေး</label><label class="hint"><input type="checkbox" id="fal"> ထပ်နေသည့်ဖိုဒါပါ</label><label class="hint"><input type="checkbox" id="fld"> စာသားစစ်ရန်</label></div>
+  <label class="hint"><input type="checkbox" id="fna"> အမည်မရှိသေး</label><select id="fls" title="စာသား အခြေအနေ"><option value="">စာသား — အားလုံး</option><option value="draft">⚠ စစ်ရန်</option><option value="ok">✔ စစ်ပြီး</option><option value="has">📝 စာသားရှိ (အားလုံး)</option><option value="none">စာသားမရှိသေး</option></select><label class="hint"><input type="checkbox" id="fal"> ထပ်နေသည့်ဖိုဒါပါ</label></div>
   <div id="list"></div><div class="hint" style="padding:6px 10px" id="lcount"></div></div>
  <div id="ed"><div class="hint" id="empty">ဘယ်ဘက်က သီချင်းတစ်ပုဒ်ကို ရွေးပါ။</div>
   <div id="form" style="display:none">
@@ -52,6 +52,10 @@ dialog::backdrop{background:rgba(20,6,40,.5)}.crow{display:flex;gap:6px;align-it
   </div></div>
 </main>
 <dialog id="dcol"><h3>📁 စုစည်းမှုများ</h3><div id="clist"></div><div class="bar"><button onclick="dcol.close()">ပိတ်မည်</button></div></dialog>
+<dialog id="dsim" style="width:min(860px,98vw)"><h3>🔎 ခေါင်းစဉ် ဆင်တူသော သီချင်းများ <span id="simMsg" class="hint"></span></h3>
+ <div class="hint">စာလုံးပေါင်းကွဲနေတာ (ဥပမာ အလှုဒါန / အလှူဒါန) တွေကို ရှာပေးသည်။ ▶ နဲ့ နားထောင်ပြီး — <b>🔀 ပေါင်းမည်</b> (တစ်ပုဒ်တည်းဖြစ်လို့ ၁ ပုဒ်ထားမည်၊ နေရာအားလုံးမှာ ဆက်ပြမည်)၊ <b>📚 ဗားရှင်းအဖြစ်စု</b> (အသံမတူဘဲ ခေါင်းစဉ်တစ်ခုအောက်ထည့်)၊ <b>🚫 မဆိုင်ပါ</b> ရွေးပါ။</div>
+ <audio id="simAu" controls style="width:100%;margin:6px 0"></audio>
+ <div id="simList" style="max-height:62vh;overflow:auto"></div><div class="bar"><button onclick="dsim.close()">ပိတ်မည်</button></div></dialog>
 <dialog id="dgone"><h3 id="gtitle">♻ ဖျက်ပြီးသား သီချင်းများ</h3><div id="glist" style="max-height:60vh;overflow:auto"></div><div class="bar"><button onclick="dgone.close()">ပိတ်မည်</button></div><div class="hint">ပြန်ယူရင် စာသားနှင့်တကွ ပြန်ပေါ်လာမည်။</div></dialog>
 <dialog id="dcm" style="width:min(720px,96vw)"><h3>💬 ကြည့်ရှုသူများ ပေးပို့ထားသည်များ</h3><div class="bar"><label><input type="radio" name="cmk" value="pending" checked> ⏳ စစ်ရန်</label><label><input type="radio" name="cmk" value="lyrics"> 📝 စာသားပေးပို့ချက်</label><label><input type="radio" name="cmk" value="all"> အားလုံး</label><button id="cmReload">🔄</button><button id="cmTrust">⭐ ယုံကြည်သူများ</button><button id="cmBlock">🚫 ပိတ်ထားသူများ</button><span id="cmMsg" class="hint"></span></div><div id="cmList" style="max-height:60vh;overflow:auto"></div><div class="bar"><button onclick="dcm.close()">ပိတ်မည်</button></div><div class="hint">"စာသားအဖြစ်သုံးမည်" ကိုနှိပ်ရင် စာသားကို ထိုသီချင်းရဲ့ စာသားအကွက်ထဲ ထည့်ပေးမည် (မမှန်သေးရင် ပြင်ပြီးမှ သိမ်းပါ)။</div></dialog>
 <dialog id="dadd"><h3>➕ သီချင်းအသစ် ထည့်ရန်</h3><input type="file" id="afile" accept="audio/*" style="width:100%"><label class="hint">အမည်</label><input type="text" id="at" style="width:100%"><label class="hint">အဆိုတော်</label><input type="text" id="aa" style="width:100%"><label class="hint">စုစည်းမှု</label><select id="ac" style="width:100%"></select>
@@ -86,13 +90,13 @@ function colName(id){const c=D.collections.find(x=>x.id===id);return c?c.name:''
 function fillCols(){const opts=D.collections.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
  const keep=$('#fc').value;$('#fc').innerHTML='<option value="">စုစည်းမှုအားလုံး</option>'+opts;$('#fc').value=keep;$('#c').innerHTML=opts;$('#ac').innerHTML=opts;
  $('#artists').innerHTML=[...new Set(D.songs.map(s=>s.a).filter(Boolean))].sort(collator.compare).map(a=>`<option value="${esc(a)}">`).join('')}
-function counts(){const n=D.songs.length;$('#counts').textContent=`သီချင်း ${mn(n)} · အမည်မရှိသေး ${mn(D.songs.filter(s=>s.n).length)} · စာသားပါ ${mn(D.songs.filter(s=>s.l).length)} · စစ်ရန် ${mn(D.songs.filter(s=>s.ld).length)}`}
-function list(){const q=norm($('#q').value),c=$('#fc').value,na=$('#fna').checked,nl=$('#fnl').checked,al=$('#fal').checked;
- return D.songs.filter(s=>(!c||s.c===c||(s.x||[]).includes(c))&&(!q||s._k.includes(q))&&(!na||s.n)&&(!nl||!s.l)&&(!al||(s._also||[]).length)&&(!$('#fld').checked||s.ld))}
-function render(){const l=list();$('#list').innerHTML=l.slice(0,shown).map(s=>`<div class="it ${cur&&cur.id===s.id?'sel':''}" data-id="${s.id}"><i>${s.ld?'⚠':s.l?'📝':''}</i><div>${esc(s.t)}${s.n?' <span class="na">⚠ အမည်ပေးရန်</span>':''}<small>${esc(s.a||'')}${s.a?' · ':''}${esc(colName(s.c))}</small></div></div>`).join('');
+function counts(){const n=D.songs.length;$('#counts').textContent=`သီချင်း ${mn(n)} · အမည်မရှိသေး ${mn(D.songs.filter(s=>s.n).length)} · စာသားပါ ${mn(D.songs.filter(s=>s.l).length)} (✔ စစ်ပြီး ${mn(D.songs.filter(s=>s.l&&!s.ld).length)} · ⚠ စစ်ရန် ${mn(D.songs.filter(s=>s.ld).length)})`}
+function list(){const q=norm($('#q').value),c=$('#fc').value,na=$('#fna').checked,fl=$('#fls').value,al=$('#fal').checked;
+ return D.songs.filter(s=>(!c||s.c===c||(s.x||[]).includes(c))&&(!q||s._k.includes(q))&&(!na||s.n)&&(!fl||(fl==='draft'?s.ld:fl==='ok'?(s.l&&!s.ld):fl==='has'?s.l:!s.l))&&(!al||(s._also||[]).length))}
+function render(){const l=list();$('#list').innerHTML=l.slice(0,shown).map(s=>`<div class="it ${cur&&cur.id===s.id?'sel':''}" data-id="${s.id}"><i>${s.ld?'⚠':s.l?'✔':''}</i><div>${esc(s.t)}${s.n?' <span class="na">⚠ အမည်ပေးရန်</span>':''}<small>${esc(s.a||'')}${s.a?' · ':''}${esc(colName(s.c))}</small></div></div>`).join('');
  $('#lcount').innerHTML=`${mn(l.length)} ပုဒ်`+(l.length>shown?` · <button id="more">ထပ်ပြမည်</button>`:'');if($('#more'))$('#more').onclick=()=>{shown+=400;render()}}
 $('#list').onclick=e=>{const d=e.target.closest('.it');if(d)openSong(D.songs.find(s=>s.id===d.dataset.id))};
-['#q','#fc','#fna','#fnl','#fal','#fld'].forEach(s=>$(s).addEventListener('input',()=>{shown=300;render()}));
+['#q','#fc','#fna','#fls','#fal'].forEach(s=>$(s).addEventListener('input',()=>{shown=300;render()}));
 async function openSong(s){if(dirty&&!confirm('သိမ်းမထားသေးပါ။ ဆက်သွားမလား?'))return;dirty=false;cur=s;$('#empty').style.display='none';$('#form').style.display='block';
  $('#t').value=s.t;$('#a').value=s.a||'';$('#c').value=s.c;drawX(s);drawSames(s);$('#vl').value=s.vl||'';$('#kk').checked=!!s.k;$('#newcol').value='';$('#msg').textContent='';
  $('#lok').style.display=s.ld?'':'none';showImg(s);$('#info').innerHTML=`${s.ld?'<b style="color:#b3261e">⚠ ဒီစာသားကို program က ရှာထည့်ထားတာ — စစ်ပြီး မှန်ရင် ✔ နှိပ်ပါ။ </b><br>':''}<b>${s.id}</b> · ${Math.floor(s.d/60)}:${String(s.d%60).padStart(2,'0')} · မူလဖိုင်: ${esc(s._src||'—')}${(s._also||[]).length?'<br>ထပ်နေသော ဖိုဒါများ: '+esc(s._also.join('၊ ')):''}`;
@@ -143,6 +147,26 @@ async function listMails(which){try{const {F,db}=await fbA();const sn=await F.ge
  $('#cmList').innerHTML=`<b>${t}</b>`+(sn.docs.map(d=>`<div class="crow"><span style="flex:1">${esc(d.id)}</span><button data-rm="${which}/${esc(d.id)}">ဖယ်ရှား</button></div>`).join('')||'<div class="hint">မရှိပါ</div>');
  $('#cmList').onclick=async e=>{const r=e.target.dataset.rm;if(!r)return;const [c,id]=r.split('/');await F.deleteDoc(F.doc(db,c,id));listMails(which)}}catch(e){$('#cmMsg').textContent='❌ '+e.message}}
 $('#cmBtn').onclick=()=>{dcm.showModal();loadCm()};$('#cmReload').onclick=loadCm;document.querySelectorAll('input[name=cmk]').forEach(x=>x.onchange=loadCm);$('#cmTrust').onclick=()=>listMails('trusted');$('#cmBlock').onclick=()=>listMails('blocked');
+// similar titles: merge / make versions / not related
+let SIM=[];
+async function reloadAll(){D=await api('/api/data');D.songs.forEach(s=>s._k=norm(s.t+' '+s.a+' '+(s._src||'')));fillCols();render();counts();if(cur){const n=D.songs.find(x=>x.id===cur.id);if(n)openSongSoft();else{cur=null;$('#form').style.display='none';$('#empty').style.display=''}}}
+async function loadSim(){$('#simList').innerHTML='⏳';const r=await api('/api/similar');SIM=r.groups;drawSim()}
+function drawSim(){$('#simMsg').textContent='('+mn(SIM.length)+' အုပ်စု)';
+ $('#simList').innerHTML=SIM.map((g,i)=>{const kp=g.items.findIndex(x=>x.l&&!x.lf);const k0=kp>=0?kp:0;
+  return `<div class="sg" data-i="${i}" style="border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin:8px 0">
+  <div class="crow"><span class="hint">ခေါင်းစဉ်</span><input type="text" data-title value="${esc(g.items[k0].t)}"></div>
+  ${g.items.map((x,j)=>`<div class="crow" style="font-size:.9rem"><label title="ဒါကို ထားမည်"><input type="radio" name="k${i}" value="${x.id}" ${j===k0?'checked':''}> ထား</label><label title="ပေါင်း/စုရန် ရွေး"><input type="checkbox" data-sel="${x.id}" checked> ပါ</label><button data-play="${x.id}">▶</button><span style="flex:1">${esc(x.t)} · ${Math.floor(x.d/60)}:${String(x.d%60).padStart(2,'0')} · ${esc(x.cols.join(' / '))} ${x.k?'🎤':''} <span class="hint">${x.ld?'⚠ စာသားစစ်ရန်':x.l?'✔ စာသားရှိ'+(x.lf?' (ချိတ်)':''):'စာသားမရှိ'}${x.g?' · ဗားရှင်း '+esc(x.vl||''):''}</span></span></div>`).join('')}
+  <div class="bar"><button data-act="merge">🔀 ပေါင်းမည်</button><button data-act="group">📚 ဗားရှင်းအဖြစ်စု</button><button data-act="ignore">🚫 မဆိုင်ပါ</button></div></div>`}).join('')||'<div class="hint">ဆင်တူတာ မကျန်တော့ပါ ✓</div>'}
+$('#simBtn').onclick=()=>{dsim.showModal();loadSim()};
+$('#simList').onclick=async e=>{const p=e.target.dataset.play;if(p){const au=$('#simAu');au.dataset.fb='';au.onerror=()=>{if(!au.dataset.fb){au.dataset.fb=1;const s=D.songs.find(x=>x.id===p);au.src=D.archive+s.f;au.play().catch(()=>{})}};au.src='/audio/'+p+'.mp3';au.play().catch(()=>{});return}
+ const act=e.target.dataset.act;if(!act)return;const box=e.target.closest('.sg'),i=+box.dataset.i,g=SIM[i];
+ const keep=box.querySelector('input[type=radio]:checked').value,sel=[...box.querySelectorAll('[data-sel]:checked')].map(x=>x.dataset.sel).filter(x=>x!==keep),title=box.querySelector('[data-title]').value.trim();
+ if(act==='ignore'){await api('/api/ignoresimilar',{ids:g.items.map(x=>x.id)});SIM.splice(i,1);drawSim();return}
+ if(!sel.length)return alert('ပေါင်းမယ့် သီချင်း (ဘေးက "ပါ" ကိုရွေး) မရှိပါ');
+ if(act==='merge'){if(!confirm(`ရွေးထားတဲ့ ${sel.length} ပုဒ်ကို ဖယ်ပြီး ၁ ပုဒ်တည်း ထားမလား? (နေရာတွေအားလုံးမှာ ဆက်ပြမည်၊ ♻ ဖျက်ပြီးသားများ ထဲက ပြန်ယူလို့ရ)`))return;
+  const r=await api('/api/merge',{keep,remove:sel,title});if(r.error)return alert(r.error)}
+ if(act==='group'){const cur0=g.items.find(x=>x.id===keep);if(title&&title!==cur0.t)await api('/api/update',{id:keep,t:title});const r=await api('/api/group',{id:keep,to:sel});if(r.error)return alert(r.error)}
+ await reloadAll();loadSim()};
 // deleted songs: bring back
 let goneStore='gone';
 async function showGone(st){goneStore=st;const g=await api('/api/gone?store='+st);const k=Object.keys(g);

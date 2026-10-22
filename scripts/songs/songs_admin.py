@@ -2,6 +2,7 @@
 Start it with  start_songs_admin.bat  (double-click).  A page opens at http://127.0.0.1:8803  (only this computer can open it).
 Everything is saved in public/songs/data/ (songs.json + lyr/<id>.json); "publish" puts it on GitHub.
 """
+import unicodedata, collections, difflib
 import os, re, sys, json, shutil, subprocess, threading, webbrowser, mimetypes
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs, unquote
@@ -53,6 +54,31 @@ def save_image(oid, blob):
 def del_image(oid):
     for p in (os.path.join(IMG, oid + '.jpg'), os.path.join(IMG, 't', oid + '.jpg')):
         if os.path.exists(p): os.remove(p)
+
+IGN = os.path.join(HERE, 'similar_ignore.json')            # groups of similar titles the teacher said "not related"
+
+def skel(t):
+    """title reduced to its consonants and digits (no vowel signs, tone marks, medials): spelling variants of one title give the same key"""
+    t = re.sub(r'\((?:ကာရာအိုကေ|LP\s*\d+|G\d+\s*,\s*L\d+)\)', '', t)
+    t = re.sub(r'^\s*[A-Za-z]{1,2}\d+\s*', '', t)
+    t = t.translate(str.maketrans('၀၁၂၃၄၅၆၇၈၉', '0123456789'))
+    return ''.join(c for c in unicodedata.normalize('NFC', t).lower() if unicodedata.category(c)[0] in 'LN' and not ('\u102b' <= c <= '\u103e'))
+
+def similar():
+    d = load(); ign = set(jl(IGN, [])); cn = {c['id']: c['name'] for c in d['collections']}
+    b = collections.defaultdict(list)
+    for s in d['songs']:
+        if s.get('n'): continue
+        k = skel(s['t'])
+        if len(k) >= 4: b[k].append(s)
+    out = []
+    for k, v in b.items():
+        if len(v) < 2 or len({x.get('g') or x['id'] for x in v}) == 1: continue
+        key = ','.join(sorted(x['id'] for x in v))
+        if key in ign: continue
+        out.append(dict(key=key, items=[dict(id=x['id'], t=x['t'], a=x.get('a', ''), d=x['d'], cols=[cn.get(i, '') for i in [x['c'], *x.get('x', [])]], l=x.get('l'), ld=x.get('ld'), lf=x.get('lf'), g=x.get('g'), vl=x.get('vl'), k=x.get('k')) for x in sorted(v, key=lambda s: (-(1 if s.get('l') else 0), -s['d']))]))
+    out.sort(key=lambda g: (-len(g['items']), g['items'][0]['t']))
+    return out
 
 def colname(d, cid):
     return next((c['name'] for c in d['collections'] if c['id'] == cid), '')
@@ -212,6 +238,8 @@ class H(BaseHTTPRequestHandler):
                     m = meta.get(s['id'])
                     if m: s['_src'] = m.get('src', ''); s['_also'] = m.get('also', [])
                 return self._send(200, json.dumps(d, ensure_ascii=False))
+            if u.path == '/api/similar':
+                return self._send(200, json.dumps({'groups': similar()}, ensure_ascii=False))
             if u.path == '/api/publishmode':
                 return self._send(200, json.dumps({'mode': publish_mode(), 'count': len(published_view(load(), publish_mode())['songs'])}))
             if u.path == '/api/gone':
@@ -314,6 +342,43 @@ class H(BaseHTTPRequestHandler):
                     d['songs'].append(e)
                     if lyr: jw(os.path.join(LYR, e['id'] + '.json'), {'t': lyr})
                     jw(store, gone, False); save(d); return self._send(200, json.dumps({'ok': True, 'song': e, 'collections': d['collections']}, ensure_ascii=False))
+                if u.path == '/api/ignoresimilar':
+                    ign = jl(IGN, []); k = ','.join(sorted(body['ids']))
+                    if k not in ign: ign.append(k)
+                    jw(IGN, ign, False); return self._send(200, json.dumps({'ok': True}))
+                if u.path == '/api/merge':            # the same song listed twice: keep one, the others go to the deleted list; every collection stays
+                    keep = songs[body['keep']]; gone = jl(GONE, {}); meta = jl(META, {})
+                    for rid in body['remove']:
+                        if rid == keep['id'] or rid not in songs: continue
+                        r = songs[rid]
+                        xs = set(keep.get('x', [])) | {r['c'], *r.get('x', [])}; xs.discard(keep['c'])
+                        if xs: keep['x'] = sorted(xs)
+                        pr = os.path.join(LYR, rid + '.json'); pk = os.path.join(LYR, keep['id'] + '.json')
+                        own_r = r.get('l') and not r.get('lf'); e = dict(r)
+                        if own_r:
+                            if not keep.get('l'):
+                                shutil.copyfile(pr, pk); keep['l'] = 1; keep.pop('lf', None)
+                                if r.get('ld'): keep['ld'] = 1
+                            e['_lyr'] = jl(pr, {}).get('t', '')
+                            if os.path.exists(pr): os.remove(pr)
+                        owner = keep.get('lf') or keep['id']
+                        for x in d['songs']:
+                            if x.get('lf') == rid:                                # songs that used the removed copy's lyrics
+                                if x['id'] == keep['id']: continue
+                                if keep.get('l'): x['lf'] = owner
+                                else: x.pop('lf', None); x.pop('l', None); x.pop('ld', None)
+                        kg = keep.get('g') or keep['id']
+                        for x in d['songs']:
+                            if x.get('g') == rid and x['id'] != rid: x['g'] = kg; keep['g'] = kg      # its other versions become versions of the kept song
+                        e['_col'] = colname(d, r['c']); e['_src'] = meta.get(rid, {}).get('src', ''); e['_dupOf'] = keep['id']
+                        gone[rid] = e; d['songs'] = [x for x in d['songs'] if x['id'] != rid]; songs.pop(rid)
+                    if body.get('title', '').strip():
+                        keep['t'] = body['title'].strip(); keep.pop('n', None)
+                        for x in d['songs']:
+                            if keep.get('g') and x.get('g') == keep['g']: x['t'] = keep['t']
+                    for x in d['songs']:
+                        if x.get('g') and sum(1 for y in d['songs'] if y.get('g') == x['g']) < 2: x.pop('g', None); x.pop('vl', None)
+                    jw(GONE, gone, False); save(d); return self._send(200, json.dumps({'ok': True}))
                 if u.path == '/api/group':            # body['to'] become versions of song body['id'] (same title, lyrics shared)
                     rep = songs[body['id']]; g = rep.get('g') or rep['id']; rep['g'] = g
                     owner = songs[rep.get('lf') or rep['id']]
