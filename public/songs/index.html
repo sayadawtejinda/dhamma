@@ -338,7 +338,7 @@ async function loadCm(force){const id=NP.id;if(cmLoaded===id&&!force)return;cmLo
   B.innerHTML=form+`<div id="clist">${items.map(c=>cmItem(c,user)).join('')||'<p style="opacity:.8">မှတ်ချက် မရှိသေးပါ</p>'}</div>`;
   if($('#clink'))$('#clink').onclick=async()=>{const em=$('#cemail').value.trim();if(!/^\S+@\S+\.\S+$/.test(em))return toast('အီးမေးလ် မမှန်ပါ');$('#clink').disabled=true;
    try{await Au.sendSignInLinkToEmail(auth,em,{url:BLOG||(location.origin+location.pathname),handleCodeInApp:true});lsSet('songsEmail',em);B.innerHTML='<p>✉ '+esc(em)+' သို့ လင့်ပို့ပြီးပါပြီ။ အီးမေးလ် (Spam ထဲပါ ကြည့်ပါ) ထဲက လင့်ကို နှိပ်ပါ၊ ပြီးရင် ဒီစာမျက်နှာက မှတ်ချက်ရေးလို့ရပါမယ်။</p>'}
-   catch(e){toast('လင့်မပို့နိုင်ပါ');$('#clink').disabled=false}};
+   catch(e){console.error('sign-in link',e);toast('လင့်မပို့နိုင်ပါ ('+(e.code||e.message||'?')+')',7000);$('#clink').disabled=false}};
   if($('#cout'))$('#cout').onclick=async()=>{await Au.signOut(auth);cmLoaded=null;loadCm(true)};
   if($('#csend'))$('#csend').onclick=async()=>{const t=$('#ctext').value.trim();if(!t)return;if(Date.now()-(+lsGet('songsLast',0))<15000)return toast('ခဏစောင့်ပါ');
    const n=$('#cname').value.trim().slice(0,40);lsSet('songsName',n);$('#csend').disabled=true;
