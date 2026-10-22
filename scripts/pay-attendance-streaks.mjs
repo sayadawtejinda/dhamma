@@ -62,10 +62,14 @@ async function main() {
 
   // the classes in the window: dated entries + the weekly slots (for a date that has no dated entry), from the day a slot was created
   const winStart = new Date(from - 24 * 3600 * 1000);
+  const runDays = [];
+  for (let d = startOfDay(new Date(from)); d <= cutoff; d += 24 * 3600 * 1000) { const wd = new Date(d + 12 * 3600 * 1000).getDay(); if (!runDays.includes(wd)) runDays.push(wd); }
+  if (runDays.length === 0) runDays.push(new Date(cutoff).getDay());
   const { Timestamp } = await import('firebase/firestore');
   const [schedSnap, recSnap, sessSnap] = await Promise.all([
     getDocs(query(collection(db, `${P}/teacherSchedule`), where('startTime', '>=', Timestamp.fromDate(winStart)), where('startTime', '<=', Timestamp.fromMillis(cutoff + 24 * 3600 * 1000)))),
-    getDocs(collection(db, `${P}/recurringSchedule`)),
+    // only the weekly slots of the weekdays whose classes can have ended since the last run (not every student's slot every day)
+    getDocs(query(collection(db, `${P}/recurringSchedule`), where('dayOfWeek', 'in', runDays))),
     getDocs(query(collection(db, `${P}/studySessions`), where('startTime', '>=', Timestamp.fromDate(winStart)))),
   ]);
   const real = schedSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(e => e.studentUid && e.studentUid !== 'offline' && e.startTime && e.endTime);
