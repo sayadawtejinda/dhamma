@@ -144,6 +144,10 @@ $('#theme').onclick=()=>{const d=document.documentElement,cur=d.dataset.theme||(
 // pretty backgrounds
 const BG=['linear-gradient(135deg,#3b1a66,#6a2fa8,#c0489a,#f0a63a)','linear-gradient(135deg,#0f4c5c,#1b7f8c,#4fb99f,#f2d492)','linear-gradient(135deg,#7a1f1f,#b4381e,#e8a21a,#fff0b3)','linear-gradient(135deg,#102a5c,#2c5db8,#6aa7ff,#c6e0ff)','linear-gradient(135deg,#1d4d2b,#3a8f4f,#9cd36b,#f4f0a0)','linear-gradient(135deg,#4a1d5c,#a1347f,#ff7b9c,#ffd3a5)','linear-gradient(135deg,#2a1b3d,#44318d,#d83f87,#f8b400)','linear-gradient(135deg,#0b3d3a,#e0a030,#d1495b,#4a1d7a)'];
 const hash=s=>{let h=0;for(const c of String(s))h=(h*31+c.charCodeAt(0))>>>0;return h};
+// two singers of one song: "A၊ B", "A & B", "A, B", "A နှင့် B", "A feat. B" -> each one is listed on his own
+const ASEP=/\s*(?:၊|,|\/|&|\+|\bfeat\.?|\bft\.?|\bFeat\.?|\band\b|\sနှင့်\s)\s*/;
+const artistsOf=s=>s.a?s.a.replace(/\)\s+(?=\S)/g,')၊').split(ASEP).map(x=>x.trim()).filter(Boolean):[];
+const artistText=s=>artistsOf(s).join(' · ');
 const gid=s=>s.g||s.id;      // versions of one song (other recordings, karaoke) share g: the list shows the song once, the versions are inside
 let GRP={},GROUPS=[];
 function buildGroups(){GRP={};SONGS.forEach(s=>{(GRP[gid(s)]=GRP[gid(s)]||[]).push(s)});GROUPS=Object.values(GRP);GROUPS.forEach(a=>a.sort((x,y)=>(x.k?1:0)-(y.k?1:0)||y.d-x.d))}
@@ -177,7 +181,7 @@ function showCover(s){const B=$('#nimg');B.innerHTML='';if(!s.i)return;
  if(IMGM==='off'){B.innerHTML='<button class="btn" id="nimgbtn" style="margin-top:8px">🖼 ပုံကြည့်မည်</button>';$('#nimgbtn').onclick=()=>{B.innerHTML=`<img class="cover big" src="img/${s.id}.jpg?v=${s.i}" alt="">`;$('#nimg img').onclick=()=>showCover(s)}}
  else{B.innerHTML=`<img class="cover" src="${thumb(s)}" alt="" title="ပုံကြီးကြည့်ရန် နှိပ်ပါ">`;$('#nimg img').onclick=function(){if(this.classList.contains('big')){this.src=thumb(s);this.classList.remove('big')}else{this.src=`img/${s.id}.jpg?v=${s.i}`;this.classList.add('big')}}}}
 function songRow(s,flat){const grp=!flat&&GRP[gid(s)]&&GRP[gid(s)].length>1?GRP[gid(s)]:null,isCur=CUR&&(grp?gid(CUR)===gid(s):CUR.id===s.id);
- return `<div class="song ${isCur?'cur':''}" data-id="${s.id}" data-g="${gid(s)}"><button class="pl" data-p="${s.id}">${isCur&&!AUD.paused?'⏸':'▶'}</button>${s.i&&IMGM!=='off'?`<img class="th" loading="lazy" decoding="async" src="${thumb(s)}" alt="">`:''}<div class="mid"><h3>${esc(s.t)}${flat&&s.vl?` <small class="vsm">(${esc(s.vl)})</small>`:''}</h3><small>${grp?`<span class="vsm">🎵 ${grp.map(x=>esc(vlab(x))).join(' · ')}</span><br>`:''}${esc(s.a||'')}${s.a?' · ':''}${esc((COLS[s.c]||{}).name||'')}</small></div><div class="rt">${(grp?grp.some(x=>x.l):s.l)?'📝 ':''}${(grp?grp.some(x=>OFF.has(x.id)):OFF.has(s.id))?'⬇ ':''}<br>${grp?mn(grp.length)+' မျိုး':fmt(s.d)}</div></div>`}
+ return `<div class="song ${isCur?'cur':''}" data-id="${s.id}" data-g="${gid(s)}"><button class="pl" data-p="${s.id}">${isCur&&!AUD.paused?'⏸':'▶'}</button>${s.i&&IMGM!=='off'?`<img class="th" loading="lazy" decoding="async" src="${thumb(s)}" alt="">`:''}<div class="mid"><h3>${esc(s.t)}${flat&&s.vl?` <small class="vsm">(${esc(s.vl)})</small>`:''}</h3><small>${grp?`<span class="vsm">🎵 ${grp.map(x=>esc(vlab(x))).join(' · ')}</span><br>`:''}${esc(artistText(s))}${s.a?' · ':''}${esc((COLS[s.c]||{}).name||'')}</small></div><div class="rt">${(grp?grp.some(x=>x.l):s.l)?'📝 ':''}${(grp?grp.some(x=>OFF.has(x.id)):OFF.has(s.id))?'⬇ ':''}<br>${grp?mn(grp.length)+' မျိုး':fmt(s.d)}</div></div>`}
 function render(){
  $$('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===tab));
  $('.bar').style.display=$('#chips').style.display=tab==='songs'?'':'none';$('#batch').innerHTML='';
@@ -188,7 +192,7 @@ function render(){
  else if(tab==='lists'){listView()}
  else if(tab==='off'){offView()}
  else if(tab==='cols'){$('#count').textContent='';$('#view').innerHTML='<div class="grid">'+D.collections.filter(c=>SONGS.some(s=>inCol(s,c.id))).map(c=>{const n=SONGS.filter(s=>inCol(s,c.id));return `<button class="cc" data-c="${c.id}" style="background:${c.i&&IMGM!=='off'?`linear-gradient(0deg,rgba(0,0,0,.65),rgba(0,0,0,.05)),url(${thumb(c)}) center/cover`:BG[hash(c.id)%BG.length]}"><b>${esc(c.name)}</b><small>${mn(n.length)} ပုဒ် · ${mn(Math.round(n.reduce((a,s)=>a+s.d,0)/60))} မိနစ်</small></button>`}).join('')+'</div>'}
- else{const m={};SONGS.forEach(s=>{if(s.a)(m[s.a]=m[s.a]||[]).push(s)});const k=Object.keys(m).sort((a,b)=>collator.compare(a,b));$('#count').textContent=`အဆိုတော် ${mn(k.length)} ဦး`;$('#view').innerHTML='<div class="arts">'+k.map(a=>`<button data-a="${esc(a)}">${esc(a)} <small>${mn(m[a].length)}</small></button>`).join('')+'</div>'}
+ else{const m={};GROUPS.forEach(a=>{const seen=new Set();a.forEach(s=>artistsOf(s).forEach(n=>{if(!seen.has(n)){seen.add(n);(m[n]=m[n]||[]).push(s)}}))});const k=Object.keys(m).sort((a,b)=>collator.compare(a,b));$('#count').textContent=`အဆိုတော် ${mn(k.length)} ဦး`;$('#view').innerHTML='<div class="arts">'+k.map(a=>`<button data-a="${esc(a)}">${esc(a)} <small>${mn(m[a].length)}</small></button>`).join('')+'</div>'}
  markCur()}
 function markCur(){$$('.song').forEach(e=>{const c=CUR&&(GRP[e.dataset.g]&&GRP[e.dataset.g].length>1&&!e.querySelector('.ctrl')?gid(CUR)===e.dataset.g:e.dataset.id===CUR.id);e.classList.toggle('cur',c);const b=e.querySelector('.pl');if(b)b.textContent=c&&!AUD.paused?'⏸':'▶'})}
 $('#tabs').onclick=e=>{const b=e.target.closest('button');if(!b)return;tab=b.dataset.t;render()};
@@ -259,7 +263,7 @@ async function play(s){CUR=s;if(objUrl){URL.revokeObjectURL(objUrl);objUrl=null}
  const u=await srcFor(s);if(u.startsWith('blob:'))objUrl=u;AUD.src=u;
  try{await AUD.play()}catch(e){toast('ဖွင့်မရပါ — အင်တာနက် စစ်ပါ')}
  lsSet('songsLast',s.id);paint();
- if('mediaSession' in navigator){navigator.mediaSession.metadata=new MediaMetadata({title:s.t,artist:s.a||'ဓမ္မစကူးလ်',album:(COLS[s.c]||{}).name||''});
+ if('mediaSession' in navigator){navigator.mediaSession.metadata=new MediaMetadata({title:s.t,artist:artistText(s)||'ဓမ္မစကူးလ်',album:(COLS[s.c]||{}).name||''});
   navigator.mediaSession.setActionHandler('previoustrack',()=>step(-1));navigator.mediaSession.setActionHandler('nexttrack',()=>step(1));
   navigator.mediaSession.setActionHandler('play',()=>AUD.play());navigator.mediaSession.setActionHandler('pause',()=>AUD.pause())}}
 function toggle(){AUD.paused?AUD.play():AUD.pause()}
@@ -271,7 +275,7 @@ AUD.onended=()=>{if(repeat===1){AUD.currentTime=0;AUD.play()}else{const q=QUEUE.
 AUD.ontimeupdate=()=>{const p=AUD.duration?AUD.currentTime/AUD.duration:0;$('#mbar').style.width=p*100+'%';if(!seeking){$('#nseek').value=p*1000}$('#ncur').textContent=fmt(AUD.currentTime);if(AUD.duration)$('#ndur').textContent=fmt(AUD.duration)};
 let seeking=false;$('#nseek').oninput=()=>{seeking=true;if(AUD.duration)AUD.currentTime=$('#nseek').value/1000*AUD.duration};$('#nseek').onchange=()=>seeking=false;
 function paint(){const m=$('#mini');if(!CUR){m.classList.remove('on');return}m.classList.add('on');m.style.setProperty('--g',bgOf(CUR));
- $('#mt').textContent=CUR.t+(CUR.vl&&GRP[gid(CUR)]&&GRP[gid(CUR)].length>1?' ('+CUR.vl+')':'');$('#ma').textContent=CUR.a||(COLS[CUR.c]||{}).name||'';const ic=AUD.paused?'▶':'⏸';$('#mpp').textContent=ic;$('#npp').textContent=ic;markCur();
+ $('#mt').textContent=CUR.t+(CUR.vl&&GRP[gid(CUR)]&&GRP[gid(CUR)].length>1?' ('+CUR.vl+')':'');$('#ma').textContent=artistText(CUR)||(COLS[CUR.c]||{}).name||'';const ic=AUD.paused?'▶':'⏸';$('#mpp').textContent=ic;$('#npp').textContent=ic;markCur();
  $('#nrep').classList.toggle('on',repeat>0);$('#nrep').textContent=repeat===1?'🔂':'🔁';$('#nshuf').classList.toggle('on',!!shuffle)}
 $('#mpp').onclick=e=>{e.stopPropagation();toggle()};$('#mprev').onclick=e=>{e.stopPropagation();step(-1)};$('#mnext').onclick=e=>{e.stopPropagation();step(1)};
 $('#mini').onclick=()=>{if(CUR)openSong(CUR.id,false)};
@@ -283,7 +287,7 @@ $('#nshuf').onclick=()=>{shuffle^=1;lsSet('songsShuf',shuffle);paint();toast(shu
 let NP=null,LY={};
 async function openSong(id,autoplay){
  NP=SONGS.find(s=>s.id===id);if(!NP)return;
- $('#npb').style.setProperty('--g',bgOf(NP));$('#nt').textContent=NP.t;$('#na').textContent=[NP.a,(COLS[NP.c]||{}).name].filter(Boolean).join(' · ');
+ $('#npb').style.setProperty('--g',bgOf(NP));$('#nt').textContent=NP.t;$('#na').textContent=[artistText(NP),(COLS[NP.c]||{}).name].filter(Boolean).join(' · ');
  const vs=GRP[gid(NP)]||[NP];$('#nver').innerHTML=vs.length>1?vs.map(x=>`<button data-ver="${x.id}" class="${x.id===NP.id?'on':''}">${x.k?'🎤 ':'🎵 '}${esc(vlab(x))}</button>`).join(''):'';
  showCover(NP);$('#ndur').textContent=fmt(NP.d);history.replaceState(null,'','#'+id);
  if(!$('#np').open)$('#np').showModal();

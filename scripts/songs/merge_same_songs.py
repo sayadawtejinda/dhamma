@@ -19,7 +19,7 @@ def norm(t):
     t = t.translate(str.maketrans('၀၁၂၃၄၅၆၇၈၉', '0123456789'))
     return ''.join(c for c in unicodedata.normalize('NFC', t).lower() if unicodedata.category(c)[0] in 'LMN')
 
-def is_karaoke(s): return 'ကာရာအိုကေ' in s['t']
+def is_karaoke(s): return bool(s.get('k')) or 'ကာရာအိုကေ' in s['t']
 
 def groups(d):
     g = collections.defaultdict(list)
