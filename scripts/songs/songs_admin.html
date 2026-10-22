@@ -40,7 +40,8 @@ dialog::backdrop{background:rgba(20,6,40,.5)}.crow{display:flex;gap:6px;align-it
     <label class="hint" style="margin:0"><button type="button" onclick="document.getElementById('imgfile').click()">🖼 ပုံရွေး / လဲ</button><input type="file" id="imgfile" accept="image/*" style="display:none"></label>
     <button type="button" class="bad" id="imgdel">🗑 ပုံဖျက်</button><span class="hint">ပုံကို ဒီနေရာသို့ ဆွဲချ (သို့) Ctrl+V ဖြင့် ကူးထည့်လည်းရ။ အသေး/အကြီး နှစ်မျိုးကို အလိုအလျောက်လုပ်ပြီး နာမည်ကို သီချင်းနံပါတ်နဲ့ ပေးမည်၊ ပုံအဟောင်းကို အစားထိုးမည်။</span></div>
    <label>သီချင်း အမည်</label><input type="text" id="t">
-   <label>အဆိုတော်</label><input type="text" id="a" list="artists">
+   <label>အဆိုတော် (နှစ်ယောက်ဆို ၊ နဲ့ ခြားပါ)</label><input type="text" id="a" list="artists">
+   <label>တေးရေးသူ (စာသား / သီချင်းရေးသူ — သိရင်ထည့်ပါ)</label><input type="text" id="w" list="writers"><datalist id="writers"></datalist>
    <div class="crow" style="margin-top:8px"><span class="hint">ဗားရှင်းအမည် (ဥပမာ အတို၊ အပြည့်၊ ကာရာအိုကေ)</span><input type="text" id="vl" style="max-width:220px"><label class="hint" style="margin:0"><input type="checkbox" id="kk"> ကာရာအိုကေ</label></div>
    <datalist id="artists"></datalist>
    <label>စုစည်းမှု (ဖိုဒါ)</label><div class="crow"><select id="c" style="flex:1"></select><input type="text" id="newcol" placeholder="သို့မဟုတ် စုစည်းမှုအသစ်…"></div>
@@ -96,7 +97,7 @@ function readX(){return [...document.querySelectorAll('#xcols [data-x]:checked')
 function colName(id){const c=D.collections.find(x=>x.id===id);return c?c.name:''}
 function fillCols(){const opts=D.collections.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
  const keep=$('#fc').value;$('#fc').innerHTML='<option value="">စုစည်းမှုအားလုံး</option>'+opts;$('#fc').value=keep;$('#c').innerHTML=opts;$('#ac').innerHTML=opts;
- $('#artists').innerHTML=[...new Set(D.songs.map(s=>s.a).filter(Boolean))].sort(collator.compare).map(a=>`<option value="${esc(a)}">`).join('')}
+ $('#writers').innerHTML=[...new Set(D.songs.map(s=>s.w).filter(Boolean))].sort(collator.compare).map(a=>`<option value="${esc(a)}">`).join('');$('#artists').innerHTML=[...new Set(D.songs.map(s=>s.a).filter(Boolean))].sort(collator.compare).map(a=>`<option value="${esc(a)}">`).join('')}
 function counts(){const n=D.songs.length;$('#counts').textContent=`သီချင်း ${mn(n)} · အမည်မရှိသေး ${mn(D.songs.filter(s=>s.n).length)} · စာသားပါ ${mn(D.songs.filter(s=>s.l).length)} (✔ စစ်ပြီး ${mn(D.songs.filter(s=>s.l&&!s.ld).length)} · ⚠ စစ်ရန် ${mn(D.songs.filter(s=>s.ld).length)})`}
 function list(){const q=norm($('#q').value),c=$('#fc').value,na=$('#fna').checked,fl=$('#fls').value,al=$('#fal').checked;
  return D.songs.filter(s=>(!c||s.c===c||(s.x||[]).includes(c))&&(!q||s._k.includes(q))&&(!na||s.n)&&(!fl||(fl==='draft'?s.ld:fl==='ok'?(s.l&&!s.ld):fl==='has'?s.l:!s.l))&&(!al||(s._also||[]).length))}
@@ -105,16 +106,16 @@ function render(){const l=list();$('#list').innerHTML=l.slice(0,shown).map(s=>`<
 $('#list').onclick=e=>{const d=e.target.closest('.it');if(d)openSong(D.songs.find(s=>s.id===d.dataset.id))};
 ['#q','#fc','#fna','#fls','#fal'].forEach(s=>$(s).addEventListener('input',()=>{shown=300;render()}));
 async function openSong(s){if(dirty&&!confirm('သိမ်းမထားသေးပါ။ ဆက်သွားမလား?'))return;dirty=false;cur=s;$('#empty').style.display='none';$('#form').style.display='block';
- $('#t').value=s.t;$('#a').value=s.a||'';$('#c').value=s.c;drawX(s);drawSames(s);$('#vl').value=s.vl||'';$('#kk').checked=!!s.k;$('#newcol').value='';$('#msg').textContent='';
+ $('#t').value=s.t;$('#a').value=s.a||'';$('#c').value=s.c;drawX(s);drawSames(s);$('#vl').value=s.vl||'';$('#w').value=s.w||'';$('#kk').checked=!!s.k;$('#newcol').value='';$('#msg').textContent='';
  $('#lok').style.display=s.ld?'':'none';showImg(s);$('#info').innerHTML=`${s.ld?'<b style="color:#b3261e">⚠ ဒီစာသားကို program က ရှာထည့်ထားတာ — စစ်ပြီး မှန်ရင် ✔ နှိပ်ပါ။ </b><br>':''}<b>${s.id}</b> · ${Math.floor(s.d/60)}:${String(s.d%60).padStart(2,'0')} · မူလဖိုင်: ${esc(s._src||'—')}${(s._also||[]).length?'<br>ထပ်နေသော ဖိုဒါများ: '+esc(s._also.join('၊ ')):''}`;
  $('#links').innerHTML=`လူကြည့်သောစာမျက်နှာ: <a target="_blank" href="https://sayadawtejinda.github.io/dhamma/songs/#${s.id}">လူကြည့်သော စာမျက်နှာ</a>`;
  const r=await api('/api/lyrics?id='+s.id);$('#lyr').value=r.t||'';
  const au=$('#au');au.onerror=()=>{if(!au.dataset.fb){au.dataset.fb=1;au.src=D.archive+s.f}};delete au.dataset.fb;au.src='/audio/'+s.id+'.mp3';if($('#auto').checked)au.play().catch(()=>{});
  render()}
-['#vl','#kk'].forEach(s=>$(s).addEventListener('input',()=>dirty=true));
+['#vl','#kk','#w'].forEach(s=>$(s).addEventListener('input',()=>dirty=true));
 ['#t','#a','#c','#newcol','#lyr'].forEach(s=>$(s).addEventListener('input',()=>dirty=true));
 $('#c').addEventListener('change',()=>{if(cur){const x=readX();cur.x=x;drawX(cur)}});$('#xcols').addEventListener('change',()=>{dirty=true;xCount()});
-async function save(){if(!cur)return false;const b={id:cur.id,t:$('#t').value,a:$('#a').value,c:$('#c').value,x:readX(),vl:$('#vl').value,k:$('#kk').checked,lyrics:$('#lyr').value};if($('#newcol').value.trim())b.newcol=$('#newcol').value;
+async function save(){if(!cur)return false;const b={id:cur.id,t:$('#t').value,a:$('#a').value,c:$('#c').value,x:readX(),w:$('#w').value,vl:$('#vl').value,k:$('#kk').checked,lyrics:$('#lyr').value};if($('#newcol').value.trim())b.newcol=$('#newcol').value;
  const r=await api('/api/update',b);if(r.error){$('#msg').style.color='var(--bad)';$('#msg').textContent='❌ '+r.error;return false}
  const s=D.songs.find(x=>x.id===cur.id);Object.assign(s,r.song);if(!r.song.n)delete s.n;if(!r.song.l)delete s.l;s._k=norm(s.t+' '+s.a+' '+(s._src||''));D.collections=r.collections;fillCols();$('#c').value=s.c;$('#newcol').value='';
  dirty=false;$('#msg').style.color='var(--ok)';$('#msg').textContent='✅ သိမ်းပြီး';counts();render();return true}

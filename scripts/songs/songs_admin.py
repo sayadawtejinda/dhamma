@@ -317,6 +317,9 @@ class H(BaseHTTPRequestHandler):
                     if body.get('t') is not None and body['t'].strip() and body['t'].strip() != s['t']: s.pop('n', None)     # renamed = no longer "needs a name"
                     for k in ('t', 'a', 'c'):
                         if k in body: s[k] = str(body[k]).strip()
+                    if 'w' in body:
+                        if str(body['w']).strip(): s['w'] = str(body['w']).strip()
+                        else: s.pop('w', None)
                     if 'vl' in body:
                         if body['vl'].strip(): s['vl'] = body['vl'].strip()
                         else: s.pop('vl', None)

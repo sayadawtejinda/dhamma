@@ -119,7 +119,7 @@ dialog::backdrop{background:rgba(20,6,40,.65);backdrop-filter:blur(3px)}
 <div id="mini"><div class="bar2" id="mbar"></div><button class="ib" id="mprev">⏮</button><button class="ib" id="mpp">▶</button><button class="ib" id="mnext">⏭</button><div class="t"><b id="mt"></b><small id="ma"></small></div></div>
 <dialog id="np"><div class="np" id="npb">
  <div class="top"><button class="ib" id="nclose" title="ပိတ်">✕</button><span class="sp"></span><button class="ib" id="nbg" title="နောက်ခံပြောင်း">🎨</button><button class="ib" id="nshuf" title="ကြုံရာ">🔀</button><button class="ib" id="nrep" title="ပြန်ဆိုမည်">🔁</button></div>
- <div class="body"><h2 id="nt"></h2><p class="art" id="na"></p><div class="vers" id="nver"></div><div id="nimg"></div>
+ <div class="body"><h2 id="nt"></h2><p class="art" id="na"></p><p class="art" id="nw" style="margin-top:-4px"></p><div class="vers" id="nver"></div><div id="nimg"></div>
   <div class="seek"><span id="ncur">0:00</span><input type="range" id="nseek" min="0" max="1000" value="0"><span id="ndur">0:00</span></div>
   <div class="ctl"><button class="ib" id="nprev">⏮</button><button class="ib big" id="npp">▶</button><button class="ib" id="nnext">⏭</button></div>
   <div class="row2"><button class="btn" id="noff">⬇ offline သိမ်းမည်</button><button class="btn" id="nshare">🔗 လင့်ခ်</button><button class="btn" id="nlist">➕ စာရင်းထဲထည့်</button></div><div class="pr" id="npr" hidden><i></i></div>
@@ -159,7 +159,7 @@ let D=null,SONGS=[],COLS={},CUR=null,QUEUE=[],tab='songs',flt={lyr:0,off:0,na:0}
 const AUD=new Audio();AUD.preload='none';
 const collator=(()=>{try{return new Intl.Collator('my')}catch(e){return new Intl.Collator()}})();
 fetch('data/songs.json?v='+DV).then(r=>r.json()).then(d=>{D=d;SONGS=d.songs;d.collections.forEach(c=>COLS[c.id]=c);buildGroups();
- SONGS.forEach(s=>{s._k=norm(s.t+' '+s.a+' '+[s.c,...(s.x||[])].map(i=>(COLS[i]||{}).name).join(' '))});
+ SONGS.forEach(s=>{s._k=norm(s.t+' '+s.a+' '+[s.c,...(s.x||[])].map(i=>(COLS[i]||{}).name).join(' ')+' '+(s.w||''))});
  $('#col').innerHTML='<option value="">စုစည်းမှုအားလုံး</option>'+d.collections.filter(c=>SONGS.some(s=>inCol(s,c.id))).map(c=>`<option value="${c.id}">${esc(c.name)} (${mn(SONGS.filter(s=>inCol(s,c.id)).length)})</option>`).join('');
  $('#sub').textContent=`သီချင်း ကဗျာ ${mn(SONGS.length)} ပုဒ် · စုစည်းမှု ${mn(d.collections.length)} ခု`;
  refreshOff().then(()=>{render();const h=location.hash.slice(1);if(h&&SONGS.find(s=>s.id===h))openSong(h,false)});
@@ -289,6 +289,7 @@ async function openSong(id,autoplay){
  NP=SONGS.find(s=>s.id===id);if(!NP)return;
  $('#npb').style.setProperty('--g',bgOf(NP));$('#nt').textContent=NP.t;{const vs0=GRP[gid(NP)]||[NP];const all=[...new Set(vs0.flatMap(artistsOf))];$('#na').textContent=[all.length>1?all.join(' · '):artistText(NP),(COLS[NP.c]||{}).name].filter(Boolean).join(' · ')}
  const vs=GRP[gid(NP)]||[NP];$('#nver').innerHTML=vs.length>1?vs.map(x=>`<button data-ver="${x.id}" class="${x.id===NP.id?'on':''}">${x.k?'🎤 ':'🎵 '}${esc(vlab(x))}</button>`).join(''):'';
+ {const wv=[...new Set((GRP[gid(NP)]||[NP]).map(x=>x.w).filter(Boolean))];$('#nw').textContent=wv.length?'✍ တေးရေး — '+wv.join(' · '):''}
  showCover(NP);$('#ndur').textContent=fmt(NP.d);history.replaceState(null,'','#'+id);
  if(!$('#np').open)$('#np').showModal();
  if(autoplay&&(!CUR||CUR.id!==id))play(NP);else paint();
