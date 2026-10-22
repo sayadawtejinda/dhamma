@@ -311,23 +311,45 @@ $('#noff').onclick=async()=>{const s=NP;
  try{await saveOff(s,p=>pr.firstChild.style.width=(p*100)+'%');$('#noff').textContent='🗑 offline ဖျက်မည်';render();toast('offline သိမ်းပြီးပါပြီ ✓')}
  catch(e){toast('သိမ်းမရပါ — အင်တာနက်/နေရာ စစ်ပါ')}
  pr.hidden=true;$('#noff').disabled=false};
-// ---------------- comments (Firestore, anonymous sign-in: same project as the Dhamma school app)
-const FB={apiKey:"AIzaSyCFwHPLW6VnQqgM-ZrisQZZaBLVrm88e9M",authDomain:"myanmardhammaclass.firebaseapp.com",projectId:"myanmardhammaclass",appId:"1:779222889065:web:8afbe9348c3314bef3a8f8"};
-const APP='dhamma-songs',V='11.6.1';let fbp=null,cmLoaded=null;
-function fb(){return fbp||(fbp=(async()=>{const A=await import(`https://www.gstatic.com/firebasejs/${V}/firebase-app.js`),Au=await import(`https://www.gstatic.com/firebasejs/${V}/firebase-auth.js`),F=await import(`https://www.gstatic.com/firebasejs/${V}/firebase-firestore.js`);
- const app=A.initializeApp(FB,'songs'),auth=Au.getAuth(app);await Au.signInAnonymously(auth);return {F,db:F.getFirestore(app),col:F.collection(F.getFirestore(app),`artifacts/${APP}/public/data/song_comments`)}})())}
-const mine=()=>{try{return JSON.parse(lsGet('songsMine','[]'))}catch(e){return[]}};
-const isAdmin=()=>lsGet('songsAdmin','')==='1'||location.search.includes('admin=1');
-async function loadCm(){const id=NP.id;if(cmLoaded===id)return;cmLoaded=id;const B=$('#cmbody');B.innerHTML='<p>ဖတ်နေသည်…</p>';
- try{const {F,col}=await fb();const sn=await F.getDocs(F.query(col,F.where('song','==',id)));
-  const items=sn.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.ts||0)-(a.ts||0));if(NP.id!==id)return;
-  $('#cmn').textContent=items.length?'('+mn(items.length)+')':'';
-  B.innerHTML=`<input id="cname" maxlength="40" placeholder="နာမည် (မဖြည့်လည်းရ)" value="${esc(lsGet('songsName',''))}"><textarea id="ctext" rows="2" maxlength="3000" placeholder="မှတ်ချက် ရေးပါ… (သီချင်းစာသား သိရင် ဒီမှာ ထည့်ပေးပါ)"></textarea><label style="display:block;margin:4px 0"><input type="checkbox" id="clyr"> 📝 ဒါက ဒီသီချင်းရဲ့ စာသား (စစ်ဆေးပြီး မှန်ရင် သုံးပါ)</label><button class="send" id="csend">ပို့မည်</button><div id="clist">${items.map(c=>cmItem(c)).join('')||'<p style="opacity:.8">မှတ်ချက် မရှိသေးပါ</p>'}</div>`;
-  $('#csend').onclick=async()=>{const t=$('#ctext').value.trim();if(!t)return;const n=$('#cname').value.trim().slice(0,40);lsSet('songsName',n);$('#csend').disabled=true;
-   try{const kind=$('#clyr').checked?'lyrics':'comment';const r=await F.addDoc(col,{song:id,name:n,text:t.slice(0,3000),kind,ts:Date.now()});if(kind==='lyrics')toast('စာသား ပေးပို့ပြီးပါပြီ — ကျေးဇူးတင်ပါသည်');const m=mine();m.push(r.id);lsSet('songsMine',JSON.stringify(m));cmLoaded=null;loadCm()}catch(e){toast('မပို့နိုင်ပါ');$('#csend').disabled=false}};
-  $('#clist').onclick=async e=>{const b=e.target.closest('[data-del]');if(!b||!confirm('ဖျက်မလား?'))return;try{await F.deleteDoc(F.doc(col,b.dataset.del));cmLoaded=null;loadCm()}catch(e2){toast('မဖျက်နိုင်ပါ')}}}
+// ---------------- comments (Firebase project "dhamma-songs", free Spark plan)
+// Writing needs a verified e-mail (sign-in link sent to the mailbox). A new person's comment is shown after the teacher approves it;
+// approved ("trusted") e-mails appear at once; a blocked e-mail can't write any more. E-mail addresses are never shown to the public.
+const FB={apiKey:"AIzaSyAZkNjG9WnRVIn1np1uPFvLZtL_M_Q7Vl0",authDomain:"dhamma-songs.firebaseapp.com",projectId:"dhamma-songs",appId:"1:342644793786:web:e9f64de5f0672d46f4bd83"};
+const V='11.6.1';let fbp=null,cmLoaded=null;
+function fb(){return fbp||(fbp=(async()=>{
+ const A=await import(`https://www.gstatic.com/firebasejs/${V}/firebase-app.js`),Au=await import(`https://www.gstatic.com/firebasejs/${V}/firebase-auth.js`),F=await import(`https://www.gstatic.com/firebasejs/${V}/firebase-firestore.js`);
+ const app=A.initializeApp(FB,'songs'),auth=Au.getAuth(app),db=F.getFirestore(app);
+ if(Au.isSignInWithEmailLink(auth,location.href)){            // the person came back through the link in the e-mail
+  let em=lsGet('songsEmail','');if(!em)em=(prompt('ဝင်ရောက်ရန် သင့်အီးမေးလ်ကို ထပ်ရိုက်ပါ')||'').trim();
+  try{await Au.signInWithEmailLink(auth,em,location.href);lsSet('songsEmail',em);toast('အီးမေးလ်ဖြင့် ဝင်ပြီးပါပြီ ✓')}catch(e){toast('ဝင်မရပါ — လင့်အသစ် ပြန်တောင်းပါ')}
+  const b=new URLSearchParams(location.search).get('b');history.replaceState(null,'',location.pathname+(b?'?b='+encodeURIComponent(b):'')+location.hash)}
+ await auth.authStateReady();
+ return {Au,F,auth,db,col:F.collection(db,'comments')}})())}
+if(/[?&]oobCode=/.test(location.search))fb().then(()=>{if(NP)loadCm(true)});      // finish the sign-in even if the comments are not opened yet
+async function loadCm(force){const id=NP.id;if(cmLoaded===id&&!force)return;cmLoaded=id;const B=$('#cmbody');B.innerHTML='<p>ဖတ်နေသည်…</p>';
+ try{const {F,Au,auth,db,col}=await fb();const user=auth.currentUser;
+  const seen={};const add=sn=>sn.docs.forEach(d=>seen[d.id]={id:d.id,...d.data()});
+  add(await F.getDocs(F.query(col,F.where('song','==',id),F.where('status','==','approved'))));
+  if(user)add(await F.getDocs(F.query(col,F.where('song','==',id),F.where('uid','==',user.uid))));     // my own, also the ones waiting for the teacher
+  const items=Object.values(seen).sort((a,b)=>(b.ts||0)-(a.ts||0));if(!NP||NP.id!==id)return;
+  const ok=items.filter(c=>c.status==='approved').length;$('#cmn').textContent=ok?'('+mn(ok)+')':'';
+  const form=user?`<div class="hint" style="opacity:.85">✉ ${esc(user.email)} <button class="del" id="cout" style="float:none">ထွက်မည်</button></div><input id="cname" maxlength="40" placeholder="နာမည် (မဖြည့်လည်းရ)" value="${esc(lsGet('songsName',''))}"><textarea id="ctext" rows="2" maxlength="3000" placeholder="မှတ်ချက် ရေးပါ… (သီချင်းစာသား သိရင် ဒီမှာ ထည့်ပေးပါ)"></textarea><label style="display:block;margin:4px 0"><input type="checkbox" id="clyr"> 📝 ဒါက ဒီသီချင်းရဲ့ စာသား (စစ်ဆေးပြီး မှန်ရင် သုံးပါ)</label><button class="send" id="csend">ပို့မည်</button><div class="hint" style="opacity:.8;margin-top:4px">ပထမဆုံးရေးတဲ့ မှတ်ချက်ကို စစ်ဆေးပြီးမှ ပြပါမည်။</div>`
+   :`<div class="hint" style="opacity:.9">မှတ်ချက်ရေးရန် အီးမေးလ်ကို အတည်ပြုရပါမည် (စကားဝှက်မလို)။ အီးမေးလ်လိပ်စာကို အများမမြင်ရပါ။</div><input id="cemail" type="email" placeholder="သင့်အီးမေးလ်" value="${esc(lsGet('songsEmail',''))}"><button class="send" id="clink">ဝင်ရန်လင့် ပို့မည်</button>`;
+  B.innerHTML=form+`<div id="clist">${items.map(c=>cmItem(c,user)).join('')||'<p style="opacity:.8">မှတ်ချက် မရှိသေးပါ</p>'}</div>`;
+  if($('#clink'))$('#clink').onclick=async()=>{const em=$('#cemail').value.trim();if(!/^\S+@\S+\.\S+$/.test(em))return toast('အီးမေးလ် မမှန်ပါ');$('#clink').disabled=true;
+   try{await Au.sendSignInLinkToEmail(auth,em,{url:BLOG||(location.origin+location.pathname),handleCodeInApp:true});lsSet('songsEmail',em);B.innerHTML='<p>✉ '+esc(em)+' သို့ လင့်ပို့ပြီးပါပြီ။ အီးမေးလ် (Spam ထဲပါ ကြည့်ပါ) ထဲက လင့်ကို နှိပ်ပါ၊ ပြီးရင် ဒီစာမျက်နှာက မှတ်ချက်ရေးလို့ရပါမယ်။</p>'}
+   catch(e){toast('လင့်မပို့နိုင်ပါ');$('#clink').disabled=false}};
+  if($('#cout'))$('#cout').onclick=async()=>{await Au.signOut(auth);cmLoaded=null;loadCm(true)};
+  if($('#csend'))$('#csend').onclick=async()=>{const t=$('#ctext').value.trim();if(!t)return;if(Date.now()-(+lsGet('songsLast',0))<15000)return toast('ခဏစောင့်ပါ');
+   const n=$('#cname').value.trim().slice(0,40);lsSet('songsName',n);$('#csend').disabled=true;
+   try{const em=user.email.toLowerCase();await F.setDoc(F.doc(db,'commenters',user.uid),{email:em,ts:Date.now()});
+    let tr=false;try{tr=(await F.getDoc(F.doc(db,'trusted',em))).exists()}catch(e){}
+    const kind=$('#clyr').checked?'lyrics':'comment';await F.addDoc(col,{song:id,name:n,text:t.slice(0,3000),kind,ts:Date.now(),uid:user.uid,status:tr?'approved':'pending'});
+    lsSet('songsLast',Date.now());toast(tr?'ပို့ပြီးပါပြီ':'ပို့ပြီးပါပြီ — စစ်ဆေးပြီးမှ ပြပါမည်');cmLoaded=null;loadCm(true)}
+   catch(e){toast('မပို့နိုင်ပါ (ပိတ်ထားခြင်း သို့မဟုတ် အင်တာနက်)');$('#csend').disabled=false}};
+  $('#clist').onclick=async e=>{const b=e.target.closest('[data-del]');if(!b||!confirm('ဖျက်မလား?'))return;try{await F.deleteDoc(F.doc(col,b.dataset.del));cmLoaded=null;loadCm(true)}catch(e2){toast('မဖျက်နိုင်ပါ')}}}
  catch(e){B.innerHTML='<p>မှတ်ချက်များ မဖွင့်နိုင်သေးပါ (အင်တာနက် စစ်ပါ)။</p>';cmLoaded=null}}
-function cmItem(c){const ok=mine().includes(c.id)||isAdmin();return `<div class="item">${ok?`<button class="del" data-del="${c.id}">🗑</button>`:''}<small>${esc(c.name||'အမည်မသိ')} · ${c.ts?new Date(c.ts).toLocaleDateString('my'):''}${c.kind==='lyrics'?' · 📝 စာသားပေးပို့ချက်':''}</small><p>${esc(c.kind==='lyrics'&&c.text.length>200?c.text.slice(0,200)+'…':c.text)}</p></div>`}
+function cmItem(c,user){const mine=user&&c.uid===user.uid;return `<div class="item">${mine?`<button class="del" data-del="${c.id}">🗑</button>`:''}<small>${esc(c.name||'အမည်မသိ')} · ${c.ts?new Date(c.ts).toLocaleDateString('my'):''}${c.kind==='lyrics'?' · 📝 စာသားပေးပို့ချက်':''}${c.status!=='approved'?' · ⏳ စစ်ဆေးဆဲ (သင့်ကိုပဲ မြင်ရသည်)':''}</small><p>${esc(c.kind==='lyrics'&&c.text.length>200?c.text.slice(0,200)+'…':c.text)}</p></div>`}
 $('#cm').addEventListener('toggle',()=>{if($('#cm').open&&NP)loadCm()});
 try{if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js')}catch(e){}
 </script>

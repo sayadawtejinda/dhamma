@@ -53,7 +53,7 @@ dialog::backdrop{background:rgba(20,6,40,.5)}.crow{display:flex;gap:6px;align-it
 </main>
 <dialog id="dcol"><h3>📁 စုစည်းမှုများ</h3><div id="clist"></div><div class="bar"><button onclick="dcol.close()">ပိတ်မည်</button></div></dialog>
 <dialog id="dgone"><h3 id="gtitle">♻ ဖျက်ပြီးသား သီချင်းများ</h3><div id="glist" style="max-height:60vh;overflow:auto"></div><div class="bar"><button onclick="dgone.close()">ပိတ်မည်</button></div><div class="hint">ပြန်ယူရင် စာသားနှင့်တကွ ပြန်ပေါ်လာမည်။</div></dialog>
-<dialog id="dcm" style="width:min(720px,96vw)"><h3>💬 ကြည့်ရှုသူများ ပေးပို့ထားသည်များ</h3><div class="bar"><label><input type="radio" name="cmk" value="lyrics" checked> 📝 စာသားပေးပို့ချက်သာ</label><label><input type="radio" name="cmk" value="all"> အားလုံး</label><button id="cmReload">🔄</button><span id="cmMsg" class="hint"></span></div><div id="cmList" style="max-height:60vh;overflow:auto"></div><div class="bar"><button onclick="dcm.close()">ပိတ်မည်</button></div><div class="hint">"စာသားအဖြစ်သုံးမည်" ကိုနှိပ်ရင် စာသားကို ထိုသီချင်းရဲ့ စာသားအကွက်ထဲ ထည့်ပေးမည် (မမှန်သေးရင် ပြင်ပြီးမှ သိမ်းပါ)။</div></dialog>
+<dialog id="dcm" style="width:min(720px,96vw)"><h3>💬 ကြည့်ရှုသူများ ပေးပို့ထားသည်များ</h3><div class="bar"><label><input type="radio" name="cmk" value="pending" checked> ⏳ စစ်ရန်</label><label><input type="radio" name="cmk" value="lyrics"> 📝 စာသားပေးပို့ချက်</label><label><input type="radio" name="cmk" value="all"> အားလုံး</label><button id="cmReload">🔄</button><button id="cmTrust">⭐ ယုံကြည်သူများ</button><button id="cmBlock">🚫 ပိတ်ထားသူများ</button><span id="cmMsg" class="hint"></span></div><div id="cmList" style="max-height:60vh;overflow:auto"></div><div class="bar"><button onclick="dcm.close()">ပိတ်မည်</button></div><div class="hint">"စာသားအဖြစ်သုံးမည်" ကိုနှိပ်ရင် စာသားကို ထိုသီချင်းရဲ့ စာသားအကွက်ထဲ ထည့်ပေးမည် (မမှန်သေးရင် ပြင်ပြီးမှ သိမ်းပါ)။</div></dialog>
 <dialog id="dadd"><h3>➕ သီချင်းအသစ် ထည့်ရန်</h3><input type="file" id="afile" accept="audio/*" style="width:100%"><label class="hint">အမည်</label><input type="text" id="at" style="width:100%"><label class="hint">အဆိုတော်</label><input type="text" id="aa" style="width:100%"><label class="hint">စုစည်းမှု</label><select id="ac" style="width:100%"></select>
  <div class="bar"><button class="pri" id="aok">⬆ တင်မည်</button><button onclick="dadd.close()">ပိတ်မည်</button><span id="amsg" class="hint"></span></div><div class="hint">archive.org ပေါ်သို့ တင်ပေးသည် — ဖိုင်ကြီးရင် စောင့်ရမည်။</div></dialog>
 <script>
@@ -96,7 +96,7 @@ $('#list').onclick=e=>{const d=e.target.closest('.it');if(d)openSong(D.songs.fin
 async function openSong(s){if(dirty&&!confirm('သိမ်းမထားသေးပါ။ ဆက်သွားမလား?'))return;dirty=false;cur=s;$('#empty').style.display='none';$('#form').style.display='block';
  $('#t').value=s.t;$('#a').value=s.a||'';$('#c').value=s.c;drawX(s);drawSames(s);$('#vl').value=s.vl||'';$('#kk').checked=!!s.k;$('#newcol').value='';$('#msg').textContent='';
  $('#lok').style.display=s.ld?'':'none';showImg(s);$('#info').innerHTML=`${s.ld?'<b style="color:#b3261e">⚠ ဒီစာသားကို program က ရှာထည့်ထားတာ — စစ်ပြီး မှန်ရင် ✔ နှိပ်ပါ။ </b><br>':''}<b>${s.id}</b> · ${Math.floor(s.d/60)}:${String(s.d%60).padStart(2,'0')} · မူလဖိုင်: ${esc(s._src||'—')}${(s._also||[]).length?'<br>ထပ်နေသော ဖိုဒါများ: '+esc(s._also.join('၊ ')):''}`;
- $('#links').innerHTML=`လူကြည့်သောစာမျက်နှာ: <a target="_blank" href="https://sayadawtejinda.github.io/dhamma/songs/?admin=1#${s.id}">မှတ်ချက်များ ကြည့်/ဖျက်ရန်</a>`;
+ $('#links').innerHTML=`လူကြည့်သောစာမျက်နှာ: <a target="_blank" href="https://sayadawtejinda.github.io/dhamma/songs/#${s.id}">လူကြည့်သော စာမျက်နှာ</a>`;
  const r=await api('/api/lyrics?id='+s.id);$('#lyr').value=r.t||'';
  const au=$('#au');au.onerror=()=>{if(!au.dataset.fb){au.dataset.fb=1;au.src=D.archive+s.f}};delete au.dataset.fb;au.src='/audio/'+s.id+'.mp3';if($('#auto').checked)au.play().catch(()=>{});
  render()}
@@ -113,20 +113,36 @@ $('#saveNext').onclick=async()=>{if(await save()){const l=list();const i=l.findI
 $('#del').onclick=async()=>{if(!cur||!confirm(`"${cur.t}" ကို ဖျက်မလား?\n(စာသားပါ ဖျက်မည် — website မှာလည်း ပျောက်မည်)`))return;await api('/api/delete',{id:cur.id});D.songs=D.songs.filter(s=>s.id!==cur.id);cur=null;dirty=false;$('#form').style.display='none';$('#empty').style.display='';$('#au').pause();counts();render()};
 addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='s'){e.preventDefault();save()}});
 addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue=''}});
-// viewers' comments / lyrics suggestions (Firestore, same anonymous sign-in as the public page)
+// viewers' comments / lyrics suggestions (Firebase project "dhamma-songs"); only the teacher's e-mail can moderate (see firestore.rules)
+const ADMIN_MAIL='sayadawtejinda@gmail.com',FBC={apiKey:"AIzaSyAZkNjG9WnRVIn1np1uPFvLZtL_M_Q7Vl0",authDomain:"dhamma-songs.firebaseapp.com",projectId:"dhamma-songs",appId:"1:342644793786:web:e9f64de5f0672d46f4bd83"};
 let FBP=null;
 function fbA(){return FBP||(FBP=(async()=>{const V='11.6.1';const A=await import(`https://www.gstatic.com/firebasejs/${V}/firebase-app.js`),Au=await import(`https://www.gstatic.com/firebasejs/${V}/firebase-auth.js`),F=await import(`https://www.gstatic.com/firebasejs/${V}/firebase-firestore.js`);
- const app=A.initializeApp({apiKey:"AIzaSyCFwHPLW6VnQqgM-ZrisQZZaBLVrm88e9M",authDomain:"myanmardhammaclass.firebaseapp.com",projectId:"myanmardhammaclass",appId:"1:779222889065:web:8afbe9348c3314bef3a8f8"},'songs-admin');
- await Au.signInAnonymously(Au.getAuth(app));const db=F.getFirestore(app);return {F,col:F.collection(db,'artifacts/dhamma-songs/public/data/song_comments')}})())}
-async function loadCm(){const only=document.querySelector('input[name=cmk]:checked').value==='lyrics';$('#cmMsg').textContent='⏳';$('#cmList').innerHTML='';
- try{const {F,col}=await fbA();const sn=await F.getDocs(only?F.query(col,F.where('kind','==','lyrics')):col);const items=sn.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.ts||0)-(a.ts||0));
+ const app=A.initializeApp(FBC,'songs-admin'),auth=Au.getAuth(app),db=F.getFirestore(app);
+ if(Au.isSignInWithEmailLink(auth,location.href)){let em=localStorage.getItem('adminMail')||ADMIN_MAIL;try{await Au.signInWithEmailLink(auth,em,location.href)}catch(e){alert('ဝင်မရပါ: '+e.message)}history.replaceState(null,'',location.pathname)}
+ await auth.authStateReady();return {Au,F,auth,db,col:F.collection(db,'comments')}})())}
+const isTeacher=u=>u&&u.email&&u.email.toLowerCase()===ADMIN_MAIL;
+async function loadCm(){const mode=document.querySelector('input[name=cmk]:checked').value;$('#cmMsg').textContent='⏳';$('#cmList').innerHTML='';
+ try{const {Au,F,auth,db,col}=await fbA();
+  if(!isTeacher(auth.currentUser)){$('#cmMsg').textContent='';$('#cmList').innerHTML=`<div class="hint">ဆရာ့အီးမေးလ် (${ADMIN_MAIL}) နဲ့ ဝင်ရန် လိုပါသည်။</div><button id="cmLogin">✉ ဝင်ရန်လင့် ပို့မည်</button>`;
+   $('#cmLogin').onclick=async()=>{try{await Au.sendSignInLinkToEmail(auth,ADMIN_MAIL,{url:location.origin+'/',handleCodeInApp:true});localStorage.setItem('adminMail',ADMIN_MAIL);$('#cmList').innerHTML='<div class="hint">✉ လင့်ပို့ပြီး — အီးမေးလ်ထဲက လင့်ကို ဒီကွန်ပျူတာမှာ နှိပ်ပါ။ ဖွင့်ထားတဲ့ ဒီစာမျက်နှာ ပိတ်ပြီး ပြန်ဖွင့်ရင် ဝင်ပြီးသား ဖြစ်မည်။</div>'}catch(e){alert('လင့်မပို့နိုင်ပါ: '+e.message)}};return}
+  let q=col;if(mode==='pending')q=F.query(col,F.where('status','==','pending'));else if(mode==='lyrics')q=F.query(col,F.where('kind','==','lyrics'));
+  const sn=await F.getDocs(q);const items=sn.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.ts||0)-(a.ts||0));
+  const mail={};await Promise.all([...new Set(items.map(c=>c.uid))].map(async u=>{try{const d=await F.getDoc(F.doc(db,'commenters',u));mail[u]=d.exists()?d.data().email:''}catch(e){mail[u]=''}}));
   $('#cmMsg').textContent=`${mn(items.length)} ခု`;
-  $('#cmList').innerHTML=items.map(c=>{const sg=D.songs.find(x=>x.id===c.song);return `<div style="border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin:6px 0"><b>${sg?esc(sg.t):'<span class="hint">(ဒီသီချင်း ဖျက်ထား/ဝှက်ထား) '+esc(c.song)+'</span>'}</b> ${c.kind==='lyrics'?'<span class="na" style="color:#7b3fb8">📝 စာသား</span>':''}<small class="hint"> · ${esc(c.name||'အမည်မသိ')} · ${c.ts?new Date(c.ts).toLocaleString():''}</small><div style="white-space:pre-wrap;margin:4px 0">${esc(c.text)}</div>${sg?`<button data-use="${c.id}" data-song="${c.song}">📝 စာသားအဖြစ်သုံးမည်</button> `:''}<button class="bad" data-cdel="${c.id}">🗑 ဖျက်</button></div>`}).join('')||'<div class="hint">မရှိပါ</div>';
-  $('#cmList').onclick=async e=>{const u=e.target.dataset.use,dl=e.target.dataset.cdel;
-   if(u){const c=items.find(x=>x.id===u);const sg=D.songs.find(x=>x.id===c.song);dcm.close();await openSong(sg);$('#lyr').value=c.text;dirty=true;$('#msg').style.color='';$('#msg').textContent='ပေးပို့သူ၏ စာသားကို ထည့်ထားသည် — စစ်ပြီး 💾 သိမ်းပါ'}
-   if(dl&&confirm('ဖျက်မလား?')){await F.deleteDoc(F.doc(col,dl));loadCm()}}}
+  $('#cmList').innerHTML=items.map(c=>{const sg=D.songs.find(x=>x.id===c.song),em=mail[c.uid]||'';return `<div style="border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin:6px 0"><b>${sg?esc(sg.t):'<span class="hint">(ဒီသီချင်း ဖျက်ထား/ဝှက်ထား/မတင်ရသေး) '+esc(c.song)+'</span>'}</b> ${c.kind==='lyrics'?'<span style="color:#7b3fb8">📝 စာသား</span>':''} <span class="na" style="color:${c.status==='approved'?'#1d7a3c':'#b3261e'}">${c.status==='approved'?'ပြထားသည်':'⏳ စစ်ရန်'}</span><small class="hint"> · ${esc(c.name||'အမည်မသိ')} · ${esc(em)} · ${c.ts?new Date(c.ts).toLocaleString():''}</small><div style="white-space:pre-wrap;margin:4px 0">${esc(c.text)}</div>${c.status!=='approved'?`<button data-ok="${c.id}">✅ ခွင့်ပြု</button> <button data-trust="${c.id}" data-em="${esc(em)}">⭐ ခွင့်ပြု + ဒီအီးမေးလ်ကို ယုံကြည်</button> `:''}${sg?`<button data-use="${c.id}" data-song="${c.song}">📝 စာသားအဖြစ်သုံးမည်</button> `:''}<button class="bad" data-cdel="${c.id}">🗑 ဖျက်</button> ${em?`<button class="bad" data-block="${c.id}" data-em="${esc(em)}">🚫 ဒီအီးမေးလ်ကို ပိတ်</button>`:''}</div>`}).join('')||'<div class="hint">မရှိပါ</div>';
+  $('#cmList').onclick=async e=>{const d_=e.target.dataset;
+   if(d_.use){const c=items.find(x=>x.id===d_.use);const sg=D.songs.find(x=>x.id===c.song);dcm.close();await openSong(sg);$('#lyr').value=c.text;dirty=true;$('#msg').style.color='';$('#msg').textContent='ပေးပို့သူ၏ စာသားကို ထည့်ထားသည် — စစ်ပြီး 💾 သိမ်းပါ';return}
+   try{
+    if(d_.ok){await F.updateDoc(F.doc(col,d_.ok),{status:'approved'})}
+    else if(d_.trust){if(d_.em)await F.setDoc(F.doc(db,'trusted',d_.em.toLowerCase()),{ts:Date.now()});await F.updateDoc(F.doc(col,d_.trust),{status:'approved'})}
+    else if(d_.cdel){if(!confirm('ဖျက်မလား?'))return;await F.deleteDoc(F.doc(col,d_.cdel))}
+    else if(d_.block){if(!confirm(d_.em+' ကို ပိတ်မလား? (နောက်ထပ် ရေးလို့မရတော့ပါ)'))return;await F.setDoc(F.doc(db,'blocked',d_.em.toLowerCase()),{ts:Date.now()});await F.deleteDoc(F.doc(col,d_.block))}
+    else return;loadCm()}catch(err){alert('မအောင်မြင်ပါ: '+err.message)}}}
  catch(e){$('#cmMsg').textContent='❌ '+e.message}}
-$('#cmBtn').onclick=()=>{dcm.showModal();loadCm()};$('#cmReload').onclick=loadCm;document.querySelectorAll('input[name=cmk]').forEach(x=>x.onchange=loadCm);
+async function listMails(which){try{const {F,db}=await fbA();const sn=await F.getDocs(F.collection(db,which));const t=which==='blocked'?'🚫 ပိတ်ထားသော အီးမေးလ်များ':'⭐ ယုံကြည်ထားသော အီးမေးလ်များ';
+ $('#cmList').innerHTML=`<b>${t}</b>`+(sn.docs.map(d=>`<div class="crow"><span style="flex:1">${esc(d.id)}</span><button data-rm="${which}/${esc(d.id)}">ဖယ်ရှား</button></div>`).join('')||'<div class="hint">မရှိပါ</div>');
+ $('#cmList').onclick=async e=>{const r=e.target.dataset.rm;if(!r)return;const [c,id]=r.split('/');await F.deleteDoc(F.doc(db,c,id));listMails(which)}}catch(e){$('#cmMsg').textContent='❌ '+e.message}}
+$('#cmBtn').onclick=()=>{dcm.showModal();loadCm()};$('#cmReload').onclick=loadCm;document.querySelectorAll('input[name=cmk]').forEach(x=>x.onchange=loadCm);$('#cmTrust').onclick=()=>listMails('trusted');$('#cmBlock').onclick=()=>listMails('blocked');
 // deleted songs: bring back
 let goneStore='gone';
 async function showGone(st){goneStore=st;const g=await api('/api/gone?store='+st);const k=Object.keys(g);
