@@ -64,6 +64,41 @@ def skel(t):
     t = t.translate(str.maketrans('၀၁၂၃၄၅၆၇၈၉', '0123456789'))
     return ''.join(c for c in unicodedata.normalize('NFC', t).lower() if unicodedata.category(c)[0] in 'LN' and not ('\u102b' <= c <= '\u103e'))
 
+def do_merge(d, songs, body):
+    """the same song listed twice: keep one, the others go to the deleted list; every collection stays, lyrics are kept"""
+    keep = songs[body['keep']]; gone = jl(GONE, {}); meta = jl(META, {})
+    for rid in body['remove']:
+        if rid == keep['id'] or rid not in songs: continue
+        r = songs[rid]
+        xs = set(keep.get('x', [])) | {r['c'], *r.get('x', [])}; xs.discard(keep['c'])
+        if xs: keep['x'] = sorted(xs)
+        pr = os.path.join(LYR, rid + '.json'); pk = os.path.join(LYR, keep['id'] + '.json')
+        own_r = r.get('l') and not r.get('lf'); e = dict(r)
+        if own_r:
+            if not keep.get('l'):
+                shutil.copyfile(pr, pk); keep['l'] = 1; keep.pop('lf', None)
+                if r.get('ld'): keep['ld'] = 1
+            e['_lyr'] = jl(pr, {}).get('t', '')
+            if os.path.exists(pr): os.remove(pr)
+        owner = keep.get('lf') or keep['id']
+        for x in d['songs']:
+            if x.get('lf') == rid:                                # songs that used the removed copy's lyrics
+                if x['id'] == keep['id']: continue
+                if keep.get('l'): x['lf'] = owner
+                else: x.pop('lf', None); x.pop('l', None); x.pop('ld', None)
+        kg = keep.get('g') or keep['id']
+        for x in d['songs']:
+            if x.get('g') == rid and x['id'] != rid: x['g'] = kg; keep['g'] = kg      # its other versions become versions of the kept song
+        e['_col'] = colname(d, r['c']); e['_src'] = meta.get(rid, {}).get('src', ''); e['_dupOf'] = keep['id']
+        gone[rid] = e; d['songs'] = [x for x in d['songs'] if x['id'] != rid]; songs.pop(rid)
+    if body.get('title', '').strip():
+        keep['t'] = body['title'].strip(); keep.pop('n', None)
+        for x in d['songs']:
+            if keep.get('g') and x.get('g') == keep['g']: x['t'] = keep['t']
+    for x in d['songs']:
+        if x.get('g') and sum(1 for y in d['songs'] if y.get('g') == x['g']) < 2: x.pop('g', None); x.pop('vl', None)
+    jw(GONE, gone, False); save(d)
+
 def similar():
     d = load(); ign = set(jl(IGN, [])); cn = {c['id']: c['name'] for c in d['collections']}
     b = collections.defaultdict(list)
@@ -348,39 +383,8 @@ class H(BaseHTTPRequestHandler):
                     ign = jl(IGN, []); k = ','.join(sorted(body['ids']))
                     if k not in ign: ign.append(k)
                     jw(IGN, ign, False); return self._send(200, json.dumps({'ok': True}))
-                if u.path == '/api/merge':            # the same song listed twice: keep one, the others go to the deleted list; every collection stays
-                    keep = songs[body['keep']]; gone = jl(GONE, {}); meta = jl(META, {})
-                    for rid in body['remove']:
-                        if rid == keep['id'] or rid not in songs: continue
-                        r = songs[rid]
-                        xs = set(keep.get('x', [])) | {r['c'], *r.get('x', [])}; xs.discard(keep['c'])
-                        if xs: keep['x'] = sorted(xs)
-                        pr = os.path.join(LYR, rid + '.json'); pk = os.path.join(LYR, keep['id'] + '.json')
-                        own_r = r.get('l') and not r.get('lf'); e = dict(r)
-                        if own_r:
-                            if not keep.get('l'):
-                                shutil.copyfile(pr, pk); keep['l'] = 1; keep.pop('lf', None)
-                                if r.get('ld'): keep['ld'] = 1
-                            e['_lyr'] = jl(pr, {}).get('t', '')
-                            if os.path.exists(pr): os.remove(pr)
-                        owner = keep.get('lf') or keep['id']
-                        for x in d['songs']:
-                            if x.get('lf') == rid:                                # songs that used the removed copy's lyrics
-                                if x['id'] == keep['id']: continue
-                                if keep.get('l'): x['lf'] = owner
-                                else: x.pop('lf', None); x.pop('l', None); x.pop('ld', None)
-                        kg = keep.get('g') or keep['id']
-                        for x in d['songs']:
-                            if x.get('g') == rid and x['id'] != rid: x['g'] = kg; keep['g'] = kg      # its other versions become versions of the kept song
-                        e['_col'] = colname(d, r['c']); e['_src'] = meta.get(rid, {}).get('src', ''); e['_dupOf'] = keep['id']
-                        gone[rid] = e; d['songs'] = [x for x in d['songs'] if x['id'] != rid]; songs.pop(rid)
-                    if body.get('title', '').strip():
-                        keep['t'] = body['title'].strip(); keep.pop('n', None)
-                        for x in d['songs']:
-                            if keep.get('g') and x.get('g') == keep['g']: x['t'] = keep['t']
-                    for x in d['songs']:
-                        if x.get('g') and sum(1 for y in d['songs'] if y.get('g') == x['g']) < 2: x.pop('g', None); x.pop('vl', None)
-                    jw(GONE, gone, False); save(d); return self._send(200, json.dumps({'ok': True}))
+                if u.path == '/api/merge':
+                    do_merge(d, songs, body); return self._send(200, json.dumps({'ok': True}))
                 if u.path == '/api/group':            # body['to'] become versions of song body['id'] (same title, lyrics shared)
                     rep = songs[body['id']]; g = rep.get('g') or rep['id']; rep['g'] = g
                     owner = songs[rep.get('lf') or rep['id']]
