@@ -121,6 +121,8 @@ def archive_missing(songs):
 def publish():
     log = []
     mode = publish_mode(); d = load(); view = published_view(d, mode)
+    lost = [x['t'] for x in d['songs'] if x.get('l') and not os.path.exists(os.path.join(LYR, (x.get('lf') or x['id']) + '.json'))]
+    if lost: return 'စာသားဖိုင် ပျောက်နေသော သီချင်း %d ပုဒ် ရှိသည် ❌ (ဥပမာ: %s) — အရင်ပြင်ပါ။' % (len(lost), ', '.join(lost[:3]))
     try:
         miss = archive_missing(view['songs'])
     except Exception as e:
