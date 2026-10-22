@@ -302,7 +302,9 @@ $('#np').addEventListener('click',e=>{if(e.target===$('#np'))$('#nclose').click(
 $('#nbg').onclick=()=>{const o=(+lsGet('bg_'+NP.id,hash(NP.c+NP.id.slice(0,3))%BG.length)+1)%BG.length;lsSet('bg_'+NP.id,o);$('#npb').style.setProperty('--g',BG[o]);paint()};
 let fz=+lsGet('songsFz',1.06);const setFz=()=>{$('#nlyr').style.fontSize=fz+'rem'};setFz();
 $('#fsp').onclick=()=>{fz=Math.min(2,fz+.12);lsSet('songsFz',fz);setFz()};$('#fsm').onclick=()=>{fz=Math.max(.8,fz-.12);lsSet('songsFz',fz);setFz()};
-$('#nshare').onclick=async()=>{const u=location.origin+location.pathname+'#'+NP.id;try{await navigator.clipboard.writeText(u);toast('လင့်ခ် ကူးပြီးပါပြီ')}catch(e){prompt('ဒီလင့်ခ်ကို ကူးပါ',u)}};
+// when the page is shown inside another site (e.g. a Blogspot page, ?b=<that page's address>) the shared link is that site's link
+const BLOG=(()=>{try{const b=new URLSearchParams(location.search).get('b');return b&&/^https?:\/\//.test(b)?b.split('#')[0]:''}catch(e){return ''}})();
+$('#nshare').onclick=async()=>{const u=(BLOG||(location.origin+location.pathname))+'#'+NP.id;try{await navigator.clipboard.writeText(u);toast('လင့်ခ် ကူးပြီးပါပြီ')}catch(e){prompt('ဒီလင့်ခ်ကို ကူးပါ',u)}};
 $('#noff').onclick=async()=>{const s=NP;
  if(OFF.has(s.id)){await delOff(s);$('#noff').textContent='⬇ offline သိမ်းမည်';render();toast('offline ဖျက်ပြီး');return}
  const pr=$('#npr');pr.hidden=false;$('#noff').disabled=true;
