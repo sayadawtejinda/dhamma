@@ -26,11 +26,12 @@ def dur(d): return mn('%d:%02d' % (d // 60, d % 60))
 def main(apply):
     d = json.load(open(SONGS, encoding='utf8'))
     g = collections.defaultdict(list)
+    lib = {c['id']: c.get('lib', 'main') for c in d['collections']}
     for s in d['songs']:
         if KAR in s['t']: s['k'] = 1
         if s.get('n'): continue
         k = norm(s['t'])
-        if len(k) >= 3: g[k].append(s)
+        if len(k) >= 3: g[(k, lib.get(s['c'], 'main'))].append(s)
     n_groups = 0; n_songs = 0
     for k, v in g.items():
         if len(v) < 2: continue

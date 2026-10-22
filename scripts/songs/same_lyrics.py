@@ -39,6 +39,7 @@ def relabel(d):
 
 def run(apply):
     d = json.load(open(SONGS, encoding='utf8')); by = {s['id']: s for s in d['songs']}
+    LIB = {c['id']: c.get('lib', 'main') for c in d['collections']}
     rows = [(s, key(lyr_text(s))) for s in d['songs'] if s.get('l')]
     rows = [(s, k) for s, k in rows if len(k) >= 30]
     owner_of = lambda s: s.get('lf') or s['id']
@@ -50,6 +51,7 @@ def run(apply):
         for j in range(i + 1, len(rows)):
             a, ka = rows[i]; b, kb = rows[j]
             if owner_of(a) == owner_of(b): parent[find(a['id'])] = find(b['id']); continue
+            if LIB.get(a['c'], 'main') != LIB.get(b['c'], 'main'): continue          # another library: never the same entry
             if abs(len(ka) - len(kb)) > 0.05 * max(len(ka), len(kb)): continue
             if ka == kb or (difflib.SequenceMatcher(None, ka, kb).quick_ratio() > 0.97 and difflib.SequenceMatcher(None, ka, kb, autojunk=False).ratio() >= 0.97):
                 parent[find(a['id'])] = find(b['id'])

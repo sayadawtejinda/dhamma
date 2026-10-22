@@ -102,10 +102,11 @@ def do_merge(d, songs, body):
 def similar():
     d = load(); ign = set(jl(IGN, [])); cn = {c['id']: c['name'] for c in d['collections']}
     b = collections.defaultdict(list)
+    lib = {c['id']: c.get('lib', 'main') for c in d['collections']}
     for s in d['songs']:
         if s.get('n'): continue
         k = skel(s['t'])
-        if len(k) >= 4: b[k].append(s)
+        if len(k) >= 4: b[(k, lib.get(s['c'], 'main'))].append(s)
     out = []
     for k, v in b.items():
         if len(v) < 2 or len({x.get('g') or x['id'] for x in v}) == 1: continue
@@ -128,9 +129,17 @@ def publish_mode():
     m = jl(MODE, {}).get('mode', 'lyrics')
     return m if m in ('lyrics', 'all') else 'lyrics'
 
+def publish_libs():
+    """which libraries go to the public page (the others stay on this computer until the teacher switches them on)"""
+    l = jl(MODE, {}).get('libs')
+    return l if isinstance(l, list) and l else ['main']
+
 def published_view(d, mode):
     """what the public page gets: in 'lyrics' mode only songs with lyrics (and the other versions of such a song);
     the working copy (all songs) stays on this computer"""
+    pl = set(publish_libs()); libof = {c['id']: c.get('lib', 'main') for c in d['collections']}
+    d = dict(d); d['songs'] = [x for x in d['songs'] if libof.get(x['c'], 'main') in pl]
+    d['libs'] = [l for l in d.get('libs', []) if l['id'] in pl] or d.get('libs')
     if mode == 'all': return d
     has = {(x.get('g') or x['id']) for x in d['songs'] if x.get('l')}
     songs = [x for x in d['songs'] if x.get('l') or (x.get('g') or x['id']) in has]
@@ -244,7 +253,7 @@ JUNK_TAG = re.compile(r'^(track\s*\d+|new artist|my recording|unknown(?: artist)
 
 def _clean(t):
     t = t.translate(dict.fromkeys(map(ord, '\u200b\u200c\u200d\ufeff\u2060'), None))
-    if ZAW_RE.search(t) or re.search('[\u1000-\u1021]\u1039[^\u1000-\u1021]', t):          # old Zawgyi file names -> Unicode
+    if ZAW_RE.search(t) or re.search('[\u1000-\u1021]\u1039[^\u1000-\u1021]', t) or re.search('[\u1060-\u1097]', t):          # old Zawgyi file names -> Unicode
         from myanmar import converter
         t = converter.convert(t, 'zawgyi', 'unicode')
     return re.sub(r'\s+', ' ', unicodedata.normalize('NFC', t)).strip()
@@ -301,44 +310,62 @@ def scan_file(name, rel, blob):
 def _next_id(d):
     return max([int(s['id'][1:]) for s in d['songs']] + [int(k[1:]) for k in list(jl(GONE, {})) + list(jl(HIDDEN, {}))] + [0]) + 1
 
-def run_batch(job, items, col, newcol):
+def lib_of_col(d, cid):
+    return next((c.get('lib', 'main') for c in d['collections'] if c['id'] == cid), 'main')
+
+def run_batch(job, items, col, newcol, lib='main'):
+    """items: {tmp,title,artist,w,k,md5,name,lyrics,col,newcol,lib,reuse}.  reuse = {f,z,d}: the same audio file is already on archive.org (no upload)."""
     import internetarchive as ia, imageio_ffmpeg
     job.update(total=len(items), done=0, ok=0, log=[])
     for it in items:
         try:
+            icol = it.get('col') or col; inew = (it.get('newcol') or newcol or '').strip(); ilib = it.get('lib') or lib or 'main'
             with LOCK:
                 d = load()
-                if newcol and not col:
-                    c = next((x for x in d['collections'] if x['name'] == newcol), None)
+                if inew and not icol:
+                    c = next((x for x in d['collections'] if x['name'] == inew and x.get('lib', 'main') == ilib), None)
                     if not c:
-                        c = dict(id='c%02d' % (max([int(x['id'][1:]) for x in d['collections']] + [0]) + 1), name=newcol); d['collections'].append(c); save(d)
-                    col = c['id']
-                sid = 's%04d' % _next_id(d)
-            src = os.path.join(INCOMING, it['tmp']); out = os.path.join(STAGE, sid + '.mp3')
-            if src.lower().endswith('.mp3'): shutil.move(src, out)
+                        c = dict(id='c%02d' % (max([int(x['id'][1:]) for x in d['collections']] + [0]) + 1), name=inew)
+                        if ilib != 'main': c['lib'] = ilib
+                        d['collections'].append(c); save(d)
+                    icol = c['id']
+                sid = it.get('sid') or 's%04d' % _next_id(d)
+            title = (it.get('title') or '').strip(); noname = not title
+            if noname: title = (inew or colname(d, icol)) + ' ' + sid[1:]
+            if it.get('reuse'):
+                rs = it['reuse']; s = dict(id=sid, t=title, a=(it.get('artist') or '').strip(), c=icol, d=rs['d'], z=rs['z'], f=rs['f'])
+                if it.get('tmp'):
+                    try: os.remove(os.path.join(INCOMING, it['tmp']))
+                    except OSError: pass
             else:
-                subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), '-y', '-loglevel', 'error', '-i', src, '-vn', '-codec:a', 'libmp3lame', '-b:a', '128k', out], check=True); os.remove(src)
-            r = ia.upload('dhamma-school-songs', files={sid + '.mp3': out}, retries=10, retries_sleep=20, verbose=False, queue_derive=False)
-            if not all(x.status_code == 200 for x in r): raise RuntimeError('archive.org upload failed')
-            title = (it['title'] or '').strip(); noname = not title
-            if noname: title = (newcol or colname(d, col)) + ' ' + sid[1:]
-            s = dict(id=sid, t=title, a=(it.get('artist') or '').strip(), c=col, d=probe_dur(out), z=os.path.getsize(out), f=sid + '.mp3')
+                out = os.path.join(STAGE, sid + '.mp3')
+                if not it.get('uploaded'):
+                    src = os.path.join(INCOMING, it['tmp'])
+                    if src.lower().endswith('.mp3'): shutil.move(src, out)
+                    else:
+                        subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), '-y', '-loglevel', 'error', '-i', src, '-vn', '-codec:a', 'libmp3lame', '-b:a', '128k', out], check=True); os.remove(src)
+                    r = ia.upload('dhamma-school-songs', files={sid + '.mp3': out}, retries=10, retries_sleep=20, verbose=False, queue_derive=False)
+                    if not all(x.status_code == 200 for x in r): raise RuntimeError('archive.org upload failed')
+                s = dict(id=sid, t=title, a=(it.get('artist') or '').strip(), c=icol, d=probe_dur(out), z=os.path.getsize(out), f=sid + '.mp3')
             if noname: s['n'] = 1
             if it.get('w'): s['w'] = it['w'].strip()
             if it.get('k'): s['k'] = 1
+            if (it.get('lyrics') or '').strip():
+                jw(os.path.join(LYR, sid + '.json'), {'t': it['lyrics'].strip()}); s['l'] = 1
             with LOCK:
-                d = load(); k = title_key(title) if not noname else ''
-                mates = [x for x in d['songs'] if k and len(k) >= 3 and title_key(x['t']) == k] if k else []
-                if mates:                                                           # same title already there: this is one more version of it
+                d = load(); k = title_key(title) if not noname else ''; lb = lib_of_col(d, icol)
+                mates = [x for x in d['songs'] if k and len(k) >= 3 and title_key(x['t']) == k and lib_of_col(d, x['c']) == lb] if k else []
+                if mates:                                                           # same title already there (same library): this is one more version of it
                     g = mates[0].get('g') or mates[0]['id']; s['t'] = mates[0]['t']
                     for x in mates:
                         if not x.get('g'): x['g'] = g
                         if not x.get('vl'): x['vl'] = 'ကာရာအိုကေ' if x.get('k') else '%d:%02d' % (x['d'] // 60, x['d'] % 60)
                     s['g'] = g; s['vl'] = 'ကာရာအိုကေ' if s.get('k') else (s['a'] or '%d:%02d' % (s['d'] // 60, s['d'] % 60))
                     owner = next((x for x in mates if x.get('l')), None)
-                    if owner and s.get('k'): s['lf'] = owner.get('lf') or owner['id']; s['l'] = 1
+                    if owner and s.get('k') and not s.get('l'): s['lf'] = owner.get('lf') or owner['id']; s['l'] = 1
                 d['songs'].append(s); save(d)
-                plan = jl(PLAN, {}); plan[sid + '.mp3'] = out; jw(PLAN, plan, False)
+                if not it.get('reuse'):
+                    plan = jl(PLAN, {}); plan[sid + '.mp3'] = out; jw(PLAN, plan, False)
                 meta = jl(META, {}); meta[sid] = dict(src=it.get('name', ''), also=[], md5=it.get('md5', '')); jw(META, meta, False)
             job['ok'] += 1; job['log'].append('✅ %s — %s' % (sid, title))
         except Exception as e:
@@ -392,7 +419,7 @@ class H(BaseHTTPRequestHandler):
             if u.path == '/api/similar':
                 return self._send(200, json.dumps({'groups': similar()}, ensure_ascii=False))
             if u.path == '/api/publishmode':
-                return self._send(200, json.dumps({'mode': publish_mode(), 'count': len(published_view(load(), publish_mode())['songs'])}))
+                return self._send(200, json.dumps({'mode': publish_mode(), 'libs': publish_libs(), 'count': len(published_view(load(), publish_mode())['songs'])}))
             if u.path == '/api/gone':
                 return self._send(200, json.dumps(jl(HIDDEN if q.get('store', [''])[0] == 'hidden' else GONE, {}), ensure_ascii=False))
             if u.path == '/api/lyrics':
@@ -424,7 +451,7 @@ class H(BaseHTTPRequestHandler):
                 return self._send(200, json.dumps(scan_file(unquote(q['name'][0]), unquote(q.get('rel', [''])[0]), raw), ensure_ascii=False))
             if u.path == '/api/addbatch':
                 b = json.loads(raw or b'{}'); jid = uuid.uuid4().hex[:8]; JOBS[jid] = {'finished': False, 'total': len(b['items']), 'done': 0, 'ok': 0, 'log': []}
-                threading.Thread(target=run_batch, args=(JOBS[jid], b['items'], b.get('c') or '', (b.get('newcol') or '').strip()), daemon=True).start()
+                threading.Thread(target=run_batch, args=(JOBS[jid], b['items'], b.get('c') or '', (b.get('newcol') or '').strip(), b.get('lib') or 'main'), daemon=True).start()
                 return self._send(200, json.dumps({'job': jid}))
             if u.path == '/api/add':
                 s = add_song(unquote(q['name'][0]), raw, unquote(q.get('t', [''])[0]), unquote(q.get('a', [''])[0]), q['c'][0])
@@ -551,9 +578,23 @@ class H(BaseHTTPRequestHandler):
                     oid = body['id']; target = songs.get(oid) or next((c for c in d['collections'] if c['id'] == oid), None)
                     if target: target.pop('i', None); save(d)
                     del_image(oid); return self._send(200, json.dumps({'ok': True}))
+                if u.path == '/api/libadd':           # a new library (a second "song house" in the same page)
+                    libs = d.setdefault('libs', [dict(id='main', name='ဓမ္မစကူးလ် သီချင်း ကဗျာများ')])
+                    lid = re.sub(r'[^a-z0-9]', '', (body.get('id') or '').lower()) or 'lib%d' % (len(libs) + 1)
+                    if any(x['id'] == lid for x in libs): raise ValueError('ဒီအမည်နဲ့ ရှိပြီးသား')
+                    libs.append(dict(id=lid, name=body['name'].strip())); save(d)
+                    return self._send(200, json.dumps({'ok': True, 'libs': libs}, ensure_ascii=False))
+                if u.path == '/api/librename':
+                    for x in d.setdefault('libs', []):
+                        if x['id'] == body['id']: x['name'] = body['name'].strip()
+                    save(d); return self._send(200, json.dumps({'ok': True, 'libs': d['libs']}, ensure_ascii=False))
                 if u.path == '/api/colrename':
                     for c in d['collections']:
-                        if c['id'] == body['id']: c['name'] = body['name'].strip()
+                        if c['id'] == body['id']:
+                            c['name'] = body['name'].strip()
+                            if body.get('lib'):
+                                if body['lib'] == 'main': c.pop('lib', None)
+                                else: c['lib'] = body['lib']
                     save(d); return self._send(200, json.dumps({'ok': True, 'collections': d['collections']}, ensure_ascii=False))
                 if u.path == '/api/coldelete':        # only an empty collection
                     if any(s['c'] == body['id'] for s in d['songs']): return self._send(400, json.dumps({'error': 'သီချင်းများ ရှိနေသေးသည်'}, ensure_ascii=False))
@@ -565,7 +606,8 @@ class H(BaseHTTPRequestHandler):
                     save(d)
                     return self._send(200, json.dumps({'ok': True, 'collections': d['collections']}, ensure_ascii=False))
             if u.path == '/api/publishmode':
-                jw(MODE, {'mode': 'all' if json.loads(raw or b'{}').get('mode') == 'all' else 'lyrics'}, False)
+                bb = json.loads(raw or b'{}'); cur = jl(MODE, {})
+                jw(MODE, {'mode': ('all' if bb.get('mode') == 'all' else 'lyrics') if 'mode' in bb else cur.get('mode', 'lyrics'), 'libs': bb.get('libs') or cur.get('libs') or ['main']}, False)
                 return self._send(200, json.dumps({'ok': True}))
             if u.path == '/api/publish':
                 return self._send(200, json.dumps({'log': publish()}, ensure_ascii=False))

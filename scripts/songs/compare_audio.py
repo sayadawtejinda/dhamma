@@ -54,10 +54,11 @@ def similarity(a, b, max_shift=400):
 
 def candidates(d):
     g = collections.defaultdict(list)
+    lib = {c['id']: c.get('lib', 'main') for c in d['collections']}
     for s in d['songs']:
         if s.get('n') or s.get('k'): continue
         k = A.skel(s['t'])
-        if len(k) >= 4: g[k].append(s)
+        if len(k) >= 4: g[(k, lib.get(s['c'], 'main'))].append(s)
     pairs = []
     for v in g.values():
         for i in range(len(v)):

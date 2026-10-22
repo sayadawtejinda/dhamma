@@ -23,10 +23,11 @@ def is_karaoke(s): return bool(s.get('k')) or 'ကာရာအိုကေ' in s
 
 def groups(d):
     g = collections.defaultdict(list)
+    lib = {c['id']: c.get('lib', 'main') for c in d['collections']}
     for s in d['songs']:
         if s.get('n'): continue
         k = norm(s['t'])
-        if len(k) >= 3: g[(k, is_karaoke(s))].append(s)
+        if len(k) >= 3: g[(k, is_karaoke(s), lib.get(s['c'], 'main'))].append(s)
     return {k: v for k, v in g.items() if len(v) > 1}
 
 def lyr_path(sid): return os.path.join(LYR, sid + '.json')
@@ -35,7 +36,7 @@ def main(apply):
     d = json.load(open(SONGS, encoding='utf8')); gone = json.load(open(GONE, encoding='utf8')) if os.path.exists(GONE) else {}
     meta = json.load(open(META, encoding='utf8')); cn = {c['id']: c['name'] for c in d['collections']}
     merged = 0; report = []; diff = []
-    for (k, kar), v in groups(d).items():
+    for (k, kar, _lib), v in groups(d).items():
         v = sorted(v, key=lambda s: s['d'])
         classes = []
         for s in v:                                  # same song = length within 3 seconds of the first one of the class

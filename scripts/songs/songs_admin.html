@@ -26,9 +26,9 @@ audio{width:100%;margin-top:6px}
 dialog{border:0;border-radius:14px;padding:16px;box-shadow:0 12px 50px rgba(0,0,0,.4);max-width:96vw;width:560px}
 dialog::backdrop{background:rgba(20,6,40,.5)}.crow{display:flex;gap:6px;align-items:center;margin:4px 0}.crow input{flex:1}
 </style></head><body>
-<header><b>🎶 သီချင်း စီမံရန်</b><span id="counts" class="hint" style="color:#e8d9ff"></span><button id="addBtn">➕ သီချင်းအသစ်</button><button id="colBtn">📁 စုစည်းမှုများ</button><button id="simBtn">🔎 ဆင်တူစစ်ရန်</button><button id="goneBtn">♻ ဖျက်ပြီးသားများ</button><button id="hidBtn">🙈 ဝှက်ထားသည်များ</button><button id="cmBtn">💬 မှတ်ချက်/စာသားပေးပို့ချက်</button><select id="pmode" title="🚀 နှိပ်ရင် ဘာတွေ တင်မလဲ" style="padding:5px;border-radius:8px"><option value="lyrics">တင်မည် — စာသားရှိတာသာ</option><option value="all">တင်မည် — အားလုံး</option></select><button id="pub">🚀 website သို့ တင်မည်</button></header>
+<header><b>🎶 သီချင်း စီမံရန်</b><span id="counts" class="hint" style="color:#e8d9ff"></span><button id="addBtn">➕ သီချင်းအသစ်</button><button id="colBtn">📁 စုစည်းမှုများ</button><button id="simBtn">🔎 ဆင်တူစစ်ရန်</button><button id="goneBtn">♻ ဖျက်ပြီးသားများ</button><button id="hidBtn">🙈 ဝှက်ထားသည်များ</button><button id="cmBtn">💬 မှတ်ချက်/စာသားပေးပို့ချက်</button><span id="plibs" title="website ပေါ် ဘယ်စာကြည့်တိုက်တွေ တင်မလဲ"></span><select id="pmode" title="🚀 နှိပ်ရင် ဘာတွေ တင်မလဲ" style="padding:5px;border-radius:8px"><option value="lyrics">တင်မည် — စာသားရှိတာသာ</option><option value="all">တင်မည် — အားလုံး</option></select><button id="pub">🚀 website သို့ တင်မည်</button></header>
 <main>
- <div id="side"><div class="f"><input type="search" id="q" placeholder="အမည်၊ အဆိုတော်၊ ဖိုင်နာမည် ရှာရန်…"><select id="fc"><option value="">စုစည်းမှုအားလုံး</option></select>
+ <div id="side"><div class="f"><input type="search" id="q" placeholder="အမည်၊ အဆိုတော်၊ ဖိုင်နာမည် ရှာရန်…"><select id="flib" title="စာကြည့်တိုက်"></select><select id="fc"><option value="">စုစည်းမှုအားလုံး</option></select>
   <label class="hint"><input type="checkbox" id="fna"> အမည်မရှိသေး</label><select id="fls" title="စာသား အခြေအနေ"><option value="">စာသား — အားလုံး</option><option value="draft">⚠ စစ်ရန်</option><option value="ok">✔ စစ်ပြီး</option><option value="has">📝 စာသားရှိ (အားလုံး)</option><option value="none">စာသားမရှိသေး</option></select><label class="hint"><input type="checkbox" id="fal"> ထပ်နေသည့်ဖိုဒါပါ</label></div>
   <div id="list"></div><div class="hint" style="padding:6px 10px" id="lcount"></div></div>
  <div id="ed"><div class="hint" id="empty">ဘယ်ဘက်က သီချင်းတစ်ပုဒ်ကို ရွေးပါ။</div>
@@ -52,7 +52,7 @@ dialog::backdrop{background:rgba(20,6,40,.5)}.crow{display:flex;gap:6px;align-it
    <div class="hint" id="links"></div>
   </div></div>
 </main>
-<dialog id="dcol"><h3>📁 စုစည်းမှုများ</h3><div id="clist"></div><div class="bar"><button onclick="dcol.close()">ပိတ်မည်</button></div></dialog>
+<dialog id="dcol"><h3>📁 စုစည်းမှုများ</h3><div id="clist"></div><div class="bar"><button id="libNew">➕ စာကြည့်တိုက်အသစ်</button><button onclick="dcol.close()">ပိတ်မည်</button></div></dialog>
 <dialog id="dsim" style="width:min(860px,98vw)"><h3>🔎 ခေါင်းစဉ် ဆင်တူသော သီချင်းများ <span id="simMsg" class="hint"></span></h3>
  <div class="hint">စာလုံးပေါင်းကွဲနေတာ (ဥပမာ အလှုဒါန / အလှူဒါန) တွေကို ရှာပေးသည်။ ▶ နဲ့ နားထောင်ပြီး — <b>🔀 ပေါင်းမည်</b> (တစ်ပုဒ်တည်းဖြစ်လို့ ၁ ပုဒ်ထားမည်၊ နေရာအားလုံးမှာ ဆက်ပြမည်)၊ <b>📚 ဗားရှင်းအဖြစ်စု</b> (အသံမတူဘဲ ခေါင်းစဉ်တစ်ခုအောက်ထည့်)၊ <b>🚫 မဆိုင်ပါ</b> ရွေးပါ။</div>
  <audio id="simAu" controls style="width:100%;margin:6px 0"></audio>
@@ -62,7 +62,7 @@ dialog::backdrop{background:rgba(20,6,40,.5)}.crow{display:flex;gap:6px;align-it
 <dialog id="dnew" style="width:min(960px,98vw)"><h3>➕ သီချင်းအသစ်များ ထည့်ရန် <span id="nmsg" class="hint"></span></h3>
  <div class="hint">ဖိုင်များ (သို့) ဖိုဒါတစ်ခုလုံး ရွေးပါ။ နာမည်၊ အဆိုတော်ကို ဖိုင်နာမည်ကနေ အလိုအလျောက် ပေးသည် (မှားရင် ပြင်နိုင်သည်)။ ထပ်နေသော သီချင်းကို သတိပေးသည်။ wma / aac / wav ကို mp3 ပြောင်းပြီး archive.org ပေါ် တင်ပေးသည်။</div>
  <div class="bar"><label>ဖိုင်များ <input type="file" id="nfiles" multiple accept="audio/*"></label><label>သို့ ဖိုဒါ <input type="file" id="nfolder" webkitdirectory></label>
-  <label>စုစည်းမှု <select id="ncol"></select></label><input type="text" id="nnew" placeholder="သို့မဟုတ် စုစည်းမှုအသစ်အမည်" style="width:220px"></div>
+  <label>စာကြည့်တိုက် <select id="nlib"></select></label><label>စုစည်းမှု <select id="ncol"></select></label><input type="text" id="nnew" placeholder="သို့မဟုတ် စုစည်းမှုအသစ်အမည်" style="width:220px"></div>
  <div style="max-height:52vh;overflow:auto"><table id="ntab" style="width:100%;border-collapse:collapse;font-size:.9rem"></table></div>
  <div class="bar"><button class="pri" id="nup" disabled>⬆ ရွေးထားသည်များ တင်မည်</button><button onclick="dnew.close()">ပိတ်မည်</button><span id="nprog" class="hint"></span></div><div id="nlog" class="hint" style="max-height:18vh;overflow:auto;white-space:pre-wrap"></div></dialog>
 <dialog id="dadd"><h3>➕ သီချင်းအသစ် ထည့်ရန်</h3><input type="file" id="afile" accept="audio/*" style="width:100%"><label class="hint">အမည်</label><input type="text" id="at" style="width:100%"><label class="hint">အဆိုတော်</label><input type="text" id="aa" style="width:100%"><label class="hint">စုစည်းမှု</label><select id="ac" style="width:100%"></select>
@@ -101,16 +101,19 @@ $('#sames').onclick=async e=>{if(e.target.dataset.peek){peek(e.target.dataset.pe
 function openSongSoft(){if(cur){drawSames(cur);render();counts();api('/api/lyrics?id='+cur.id).then(r=>{$('#lyr').value=r.t||''})}}
 function readX(){return [...document.querySelectorAll('#xcols [data-x]:checked')].map(e=>e.dataset.x)}
 function colName(id){const c=D.collections.find(x=>x.id===id);return c?c.name:''}
-function fillCols(){const opts=D.collections.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
+function fillCols(){fillLibs();const opts=D.collections.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
  const keep=$('#fc').value;$('#fc').innerHTML='<option value="">စုစည်းမှုအားလုံး</option>'+opts;$('#fc').value=keep;$('#c').innerHTML=opts;$('#ac').innerHTML=opts;
  $('#writers').innerHTML=[...new Set(D.songs.map(s=>s.w).filter(Boolean))].sort(collator.compare).map(a=>`<option value="${esc(a)}">`).join('');$('#artists').innerHTML=[...new Set(D.songs.map(s=>s.a).filter(Boolean))].sort(collator.compare).map(a=>`<option value="${esc(a)}">`).join('')}
 function counts(){const n=D.songs.length;$('#counts').textContent=`သီချင်း ${mn(n)} · အမည်မရှိသေး ${mn(D.songs.filter(s=>s.n).length)} · စာသားပါ ${mn(D.songs.filter(s=>s.l).length)} (✔ စစ်ပြီး ${mn(D.songs.filter(s=>s.l&&!s.ld).length)} · ⚠ စစ်ရန် ${mn(D.songs.filter(s=>s.ld).length)})`}
+const libs=()=>D.libs&&D.libs.length?D.libs:[{id:'main',name:'ဓမ္မစကူးလ် သီချင်း ကဗျာများ'}];
+const libOfC=id=>{const c=D.collections.find(x=>x.id===id);return (c&&c.lib)||'main'};
+function fillLibs(){const keep=$('#flib').value;$('#flib').innerHTML='<option value="">စာကြည့်တိုက် — နှစ်ခုလုံး</option>'+libs().map(l=>`<option value="${l.id}">${esc(l.name)}</option>`).join('');$('#flib').value=keep}
 function list(){const q=norm($('#q').value),c=$('#fc').value,na=$('#fna').checked,fl=$('#fls').value,al=$('#fal').checked;
- return D.songs.filter(s=>(!c||s.c===c||(s.x||[]).includes(c))&&(!q||s._k.includes(q))&&(!na||s.n)&&(!fl||(fl==='draft'?s.ld:fl==='ok'?(s.l&&!s.ld):fl==='has'?s.l:!s.l))&&(!al||(s._also||[]).length))}
+ return D.songs.filter(s=>(!$('#flib').value||libOfC(s.c)===$('#flib').value)&&(!c||s.c===c||(s.x||[]).includes(c))&&(!q||s._k.includes(q))&&(!na||s.n)&&(!fl||(fl==='draft'?s.ld:fl==='ok'?(s.l&&!s.ld):fl==='has'?s.l:!s.l))&&(!al||(s._also||[]).length))}
 function render(){const l=list();$('#list').innerHTML=l.slice(0,shown).map(s=>`<div class="it ${cur&&cur.id===s.id?'sel':''}" data-id="${s.id}"><i>${s.ld?'⚠':s.l?'✔':''}</i><div>${esc(s.t)}${s.n?' <span class="na">⚠ အမည်ပေးရန်</span>':''}<small>${esc(s.a||'')}${s.a?' · ':''}${esc(colName(s.c))}</small></div></div>`).join('');
  $('#lcount').innerHTML=`${mn(l.length)} ပုဒ်`+(l.length>shown?` · <button id="more">ထပ်ပြမည်</button>`:'');if($('#more'))$('#more').onclick=()=>{shown+=400;render()}}
 $('#list').onclick=e=>{const d=e.target.closest('.it');if(d)openSong(D.songs.find(s=>s.id===d.dataset.id))};
-['#q','#fc','#fna','#fls','#fal'].forEach(s=>$(s).addEventListener('input',()=>{shown=300;render()}));
+['#q','#flib','#fc','#fna','#fls','#fal'].forEach(s=>$(s).addEventListener('input',()=>{shown=300;render()}));
 async function openSong(s){if(dirty&&!confirm('သိမ်းမထားသေးပါ။ ဆက်သွားမလား?'))return;dirty=false;cur=s;$('#empty').style.display='none';$('#form').style.display='block';
  $('#t').value=s.t;$('#a').value=s.a||'';$('#c').value=s.c;drawX(s);drawSames(s);$('#vl').value=s.vl||'';$('#w').value=s.w||'';$('#kk').checked=!!s.k;$('#newcol').value='';$('#msg').textContent='';
  $('#lok').style.display=s.ld?'':'none';showImg(s);$('#info').innerHTML=`${s.ld?'<b style="color:#b3261e">⚠ ဒီစာသားကို program က ရှာထည့်ထားတာ — စစ်ပြီး မှန်ရင် ✔ နှိပ်ပါ။ </b><br>':''}<b>${s.id}</b> · ${Math.floor(s.d/60)}:${String(s.d%60).padStart(2,'0')} · မူလဖိုင်: ${esc(s._src||'—')}${(s._also||[]).length?'<br>ထပ်နေသော ဖိုဒါများ: '+esc(s._also.join('၊ ')):''}`;
@@ -199,15 +202,16 @@ $('#imgdel').onclick=async()=>{if(!cur||!confirm('ပုံ ဖျက်မလ�
 $('#imgbox').addEventListener('dragover',e=>e.preventDefault());$('#imgbox').addEventListener('drop',e=>{e.preventDefault();if(cur&&e.dataTransfer.files[0])putImage(cur,e.dataTransfer.files[0])});
 addEventListener('paste',e=>{if(!cur||document.activeElement&&/INPUT|TEXTAREA/.test(document.activeElement.tagName)&&document.activeElement.type!=='file'&&!(e.clipboardData.files&&e.clipboardData.files.length))return;const f=[...e.clipboardData.files].find(x=>x.type.startsWith('image/'));if(f){e.preventDefault();putImage(cur,f)}});
 // collections
+$('#libNew').onclick=async()=>{const n=prompt('စာကြည့်တိုက်အသစ် အမည် (ဥပမာ ကလေး ကဗျာ သီချင်းများ)');if(!n||!n.trim())return;const id=prompt('အတိုကောက် အမည် (အင်္ဂလိပ် စာလုံး/ဂဏန်း၊ ဥပမာ kids)','');const r=await api('/api/libadd',{id,name:n});if(r.error)return alert(r.error);D.libs=r.libs;fillLibs();$('#colBtn').click()};
 $('#colBtn').onclick=()=>{const n={};D.songs.forEach(s=>{n[s.c]=(n[s.c]||0)+1;(s.x||[]).forEach(i=>n[i]=(n[i]||0)+1)});
- $('#clist').innerHTML=D.collections.map(c=>`<div class="crow"><input type="text" value="${esc(c.name)}" data-id="${c.id}"><span class="hint">${mn(n[c.id]||0)}</span><img src="${c.i?'/imgfile/t/'+c.id+'.jpg?v='+c.i:''}" style="width:34px;height:34px;object-fit:cover;border-radius:6px;${c.i?'':'display:none'}"><button data-pic="${c.id}">🖼</button>${c.i?`<button class="bad" data-picdel="${c.id}">✕🖼</button>`:''}<button data-r="${c.id}">သိမ်း</button>${n[c.id]?'':`<button class="bad" data-d="${c.id}">ဖျက်</button>`}</div>`).join('');dcol.showModal()};
+ $('#clist').innerHTML=D.collections.map(c=>`<div class="crow"><input type="text" value="${esc(c.name)}" data-id="${c.id}"><span class="hint">${mn(n[c.id]||0)}</span><img src="${c.i?'/imgfile/t/'+c.id+'.jpg?v='+c.i:''}" style="width:34px;height:34px;object-fit:cover;border-radius:6px;${c.i?'':'display:none'}"><button data-pic="${c.id}">🖼</button>${c.i?`<button class="bad" data-picdel="${c.id}">✕🖼</button>`:''}<select data-lib="${c.id}" title="စာကြည့်တိုက်">${libs().map(l=>`<option value="${l.id}" ${(c.lib||'main')===l.id?'selected':''}>${esc(l.name)}</option>`).join('')}</select><button data-r="${c.id}">သိမ်း</button>${n[c.id]?'':`<button class="bad" data-d="${c.id}">ဖျက်</button>`}</div>`).join('');dcol.showModal()};
 $('#clist').onclick=async e=>{const r=e.target.dataset.r,d=e.target.dataset.d,pic=e.target.dataset.pic,pd=e.target.dataset.picdel;
  if(pic){const inp=document.createElement('input');inp.type='file';inp.accept='image/*';inp.onchange=async()=>{const c=D.collections.find(x=>x.id===pic);const f=inp.files[0];if(!f)return;const j=await (await fetch('/api/image?id='+pic,{method:'POST',body:f})).json();if(j.error)return alert(j.error);c.i=j.i;$('#colBtn').click()};inp.click();return}
  if(pd&&confirm('စုစည်းမှုပုံ ဖျက်မလား?')){await api('/api/imagedel',{id:pd});delete D.collections.find(x=>x.id===pd).i;$('#colBtn').click();return}
- if(r){const v=$(`#clist input[data-id="${r}"]`).value;const x=await api('/api/colrename',{id:r,name:v});D.collections=x.collections;fillCols();render();e.target.textContent='✓'}
+ if(r){const v=$(`#clist input[data-id="${r}"]`).value;const lb=$(`#clist select[data-lib="${r}"]`).value;const x=await api('/api/colrename',{id:r,name:v,lib:lb});D.collections=x.collections;fillCols();render();e.target.textContent='✓'}
  if(d&&confirm('ဒီစုစည်းမှု ဖျက်မလား?')){const x=await api('/api/coldelete',{id:d});if(x.error)alert(x.error);else{D.collections=x.collections;fillCols();$('#colBtn').click()}}};
 // add
-$('#addBtn').onclick=()=>{$('#ncol').innerHTML='<option value="">— စုစည်းမှု ရွေးပါ —</option>'+D.collections.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');NEW=[];drawNew();$('#nlog').textContent='';$('#nprog').textContent='';dnew.showModal()};
+$('#addBtn').onclick=()=>{$('#nlib').innerHTML=libs().map(l=>`<option value="${l.id}">${esc(l.name)}</option>`).join('');$('#ncol').innerHTML='<option value="">— စုစည်းမှု ရွေးပါ —</option>'+D.collections.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');NEW=[];drawNew();$('#nlog').textContent='';$('#nprog').textContent='';dnew.showModal()};
 // batch add: scan -> table -> upload
 let NEW=[];
 function drawNew(){const t=$('#ntab');t.innerHTML=NEW.length?'<tr class="hint" style="text-align:left"><th>✓</th><th>အမည်</th><th>အဆိုတော်</th><th>အချိန်</th><th>မှတ်ချက်</th></tr>'+NEW.map((x,i)=>`<tr style="border-top:1px solid var(--line)"><td><input type="checkbox" data-i="${i}" data-f="on" ${x.on?'checked':''}></td><td><input type="text" data-i="${i}" data-f="title" value="${esc(x.title)}" placeholder="${x.noname?'(အမည်မသိ — ဖိုဒါအမည် + နံပါတ်)':''}" style="width:100%"></td><td><input type="text" data-i="${i}" data-f="artist" value="${esc(x.artist)}" style="width:100%"></td><td>${Math.floor(x.dur/60)}:${String(x.dur%60).padStart(2,'0')}${x.k?' 🎤':''}</td><td class="hint" style="color:${x.warn?'#b3261e':''}">${esc(x.warn||'')}${x.noname?' ⚠ အမည်ပေးရန်':''}</td></tr>`).join(''):'<tr><td class="hint">ဖိုင် မရွေးရသေးပါ</td></tr>';
@@ -222,7 +226,7 @@ async function scanFiles(files){const list=[...files].filter(f=>/\.(mp3|wma|aac|
 $('#nfiles').onchange=()=>scanFiles($('#nfiles').files);$('#nfolder').onchange=()=>scanFiles($('#nfolder').files);
 $('#nup').onclick=async()=>{const items=NEW.filter(x=>x.on);if(!items.length)return;const col=$('#ncol').value,newcol=$('#nnew').value.trim();if(!col&&!newcol)return alert('စုစည်းမှု ရွေးပါ (သို့) အသစ်အမည်ပေးပါ');
  if(!confirm(`${items.length} ပုဒ်ကို archive.org ပေါ်တင်ပြီး စာရင်းထဲ ထည့်မည်။ ကြာနိုင်သည် — ပိတ်မထားပါနဲ့။ ဆက်မလား?`))return;
- $('#nup').disabled=true;const {job}=await api('/api/addbatch',{items,c:col,newcol});
+ $('#nup').disabled=true;const {job}=await api('/api/addbatch',{items,c:col,newcol,lib:$('#nlib').value});
  const tick=async()=>{const j=await api('/api/job?id='+job);$('#nprog').textContent=`⬆ ${mn(j.done||0)} / ${mn(j.total||0)} တင်ပြီး`;$('#nlog').textContent=(j.log||[]).join('\n');
   if(!j.finished)return setTimeout(tick,2500);$('#nprog').textContent=`ပြီးပါပြီ ✅ ${mn(j.ok)} ပုဒ် ထည့်ပြီး`;NEW=NEW.filter(x=>!x.on);drawNew();await reloadAll()};tick()};
 $('#afile').onchange=()=>{const f=$('#afile').files[0];if(f&&!$('#at').value)$('#at').value=f.name.replace(/\.[^.]+$/,'')};
@@ -231,6 +235,8 @@ $('#aok').onclick=async()=>{const f=$('#afile').files[0];if(!f)return;$('#aok').
  try{const r=await (await fetch('/api/add?'+q,{method:'POST',body:f})).json();if(r.error)throw new Error(r.error);const s=r.song;s._k=norm(s.t+' '+s.a);D.songs.push(s);counts();render();$('#amsg').textContent='✅ ပြီး';dadd.close();openSong(s)}
  catch(e){$('#amsg').textContent='❌ '+e.message}$('#aok').disabled=false};
 $('#pub').onclick=async()=>{if(dirty&&!confirm('လက်ရှိ မသိမ်းရသေးပါ။ မသိမ်းဘဲ တင်မလား?'))return;$('#pub').disabled=true;$('#pub').textContent='⏳ တင်နေသည်…';const r=await api('/api/publish',{});$('#pub').disabled=false;$('#pub').textContent='🚀 website သို့ တင်မည်';alert(r.log)};
-api('/api/publishmode').then(r=>{$('#pmode').value=r.mode});$('#pmode').onchange=async()=>{await api('/api/publishmode',{mode:$('#pmode').value})};
+function drawPL(pl){const l=libs();$('#plibs').innerHTML=l.length>1?l.map(x=>`<label class="hint" style="color:#fff;margin:0 4px"><input type="checkbox" data-pl="${x.id}" ${pl.includes(x.id)?'checked':''}> ${esc(x.name)}</label>`).join(''):''}
+api('/api/publishmode').then(r=>{$('#pmode').value=r.mode;window.PL=r.libs;drawPL(r.libs)});$('#pmode').onchange=async()=>{await api('/api/publishmode',{mode:$('#pmode').value})};
+$('#plibs').onchange=async()=>{const pl=[...document.querySelectorAll('#plibs [data-pl]:checked')].map(e=>e.dataset.pl);if(!pl.length){alert('အနည်းဆုံး စာကြည့်တိုက် တစ်ခု ရွေးပါ');drawPL(window.PL||['main']);return}window.PL=pl;await api('/api/publishmode',{libs:pl})};
 init();
 </script></body></html>

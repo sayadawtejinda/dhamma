@@ -101,12 +101,13 @@ dialog::backdrop{background:rgba(20,6,40,.65);backdrop-filter:blur(3px)}
 .cover.big{max-height:none;width:100%;cursor:zoom-out}
 .vers{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 0}.vers button{border:0;border-radius:999px;padding:4px 14px;background:rgba(255,255,255,.22);color:#fff;font-weight:600}.vers button.on{background:#fff;color:#4a1d7a}
 .vsm{color:var(--accent)!important}
+#libs button{border:0;border-radius:999px;padding:5px 16px;background:rgba(255,255,255,.2);color:#fff;font-weight:600;font:inherit;cursor:pointer}#libs button.on{background:#fff;color:#4a1d7a}
 .toast{position:fixed;left:50%;bottom:100px;transform:translateX(-50%);background:#2b1745;color:#fff;padding:8px 16px;border-radius:12px;z-index:60;opacity:0;transition:.25s;pointer-events:none;max-width:90vw}
 .toast.on{opacity:1}
 </style>
 </head>
 <body>
-<header class="hero"><button id="theme" title="အလင်း/အမှောင်">🌓</button><button id="imgm" style="position:absolute;right:62px;top:12px;background:rgba(255,255,255,.2);border:0;border-radius:20px;padding:4px 10px;color:#fff;z-index:2" title="ပုံပြ/မပြ (ဒေတာချွေတာရန်)">🖼</button><div class="wrap"><h1>🎶 ဓမ္မစကူးလ် သီချင်း ကဗျာများ</h1><p id="sub">ဖွင့်ကြည့် · ရှာကြည့် · offline သိမ်းနားထောင်</p></div></header>
+<header class="hero"><button id="theme" title="အလင်း/အမှောင်">🌓</button><button id="imgm" style="position:absolute;right:62px;top:12px;background:rgba(255,255,255,.2);border:0;border-radius:20px;padding:4px 10px;color:#fff;z-index:2" title="ပုံပြ/မပြ (ဒေတာချွေတာရန်)">🖼</button><div class="wrap"><div id="libs" style="display:none;gap:8px;flex-wrap:wrap;margin:0 0 8px"></div><h1 id="h1">🎶 ဓမ္မစကူးလ် သီချင်း ကဗျာများ</h1><p id="sub">ဖွင့်ကြည့် · ရှာကြည့် · offline သိမ်းနားထောင်</p></div></header>
 <nav class="tabs" id="tabs"><button data-t="songs" class="on">သီချင်းများ</button><button data-t="cols">စုစည်းမှုများ</button><button data-t="arts">အဆိုတော်များ</button><button data-t="lists">♥ စာရင်းများ</button><button data-t="off">⬇ Offline</button></nav>
 <div class="wrap" style="padding:0 14px">
  <div class="bar"><div class="search"><input id="q" type="search" placeholder="သီချင်းအမည်၊ အဆိုတော်၊ စုစည်းမှု ရှာရန်…" autocomplete="off"></div>
@@ -148,6 +149,10 @@ const hash=s=>{let h=0;for(const c of String(s))h=(h*31+c.charCodeAt(0))>>>0;ret
 const ASEP=/\s*(?:၊|,|\/|&|\+|\bfeat\.?|\bft\.?|\bFeat\.?|\band\b|\sနှင့်\s)\s*/;
 const artistsOf=s=>s.a?s.a.replace(/\)\s+(?=\S)/g,')၊').split(ASEP).map(x=>x.trim()).filter(Boolean):[];
 const artistText=s=>artistsOf(s).join(' · ');
+// two libraries in one page (e.g. "main" and "kids"): a collection says which one it belongs to (lib, default 'main'); the switch at the top changes between them
+let LIBS=[{id:'main',name:'ဓမ္မစကူးလ် သီချင်း ကဗျာများ'}],LIB=lsGet('songsLib','main');
+const libOfCol=id=>((COLS[id]||{}).lib)||'main',libOf=s=>libOfCol(s.c);
+const curGroups=()=>GROUPS.filter(a=>libOf(a[0])===LIB);
 const gid=s=>s.g||s.id;      // versions of one song (other recordings, karaoke) share g: the list shows the song once, the versions are inside
 let GRP={},GROUPS=[];
 function buildGroups(){GRP={};SONGS.forEach(s=>{(GRP[gid(s)]=GRP[gid(s)]||[]).push(s)});GROUPS=Object.values(GRP);GROUPS.forEach(a=>a.sort((x,y)=>(x.k?1:0)-(y.k?1:0)||y.d-x.d))}
@@ -158,17 +163,24 @@ function bgOf(s){const o=+lsGet('bg_'+s.id,-1);return BG[o>=0?o%BG.length:hash(s
 let D=null,SONGS=[],COLS={},CUR=null,QUEUE=[],tab='songs',flt={lyr:0,off:0,na:0},shown=150,OFF=new Set();
 const AUD=new Audio();AUD.preload='none';
 const collator=(()=>{try{return new Intl.Collator('my')}catch(e){return new Intl.Collator()}})();
-fetch('data/songs.json?v='+DV).then(r=>r.json()).then(d=>{D=d;SONGS=d.songs;d.collections.forEach(c=>COLS[c.id]=c);buildGroups();
+fetch('data/songs.json?v='+DV).then(r=>r.json()).then(d=>{D=d;SONGS=d.songs;d.collections.forEach(c=>COLS[c.id]=c);buildGroups();setupLibs(d);
  SONGS.forEach(s=>{s._k=norm(s.t+' '+s.a+' '+[s.c,...(s.x||[])].map(i=>(COLS[i]||{}).name).join(' ')+' '+(s.w||''))});
- $('#col').innerHTML='<option value="">စုစည်းမှုအားလုံး</option>'+d.collections.filter(c=>SONGS.some(s=>inCol(s,c.id))).map(c=>`<option value="${c.id}">${esc(c.name)} (${mn(SONGS.filter(s=>inCol(s,c.id)).length)})</option>`).join('');
- $('#sub').textContent=`သီချင်း ကဗျာ ${mn(SONGS.length)} ပုဒ် · စုစည်းမှု ${mn(d.collections.length)} ခု`;
+ paintLib();
  refreshOff().then(()=>{render();const h=location.hash.slice(1);if(h&&SONGS.find(s=>s.id===h))openSong(h,false)});
 }).catch(()=>{$('#view').innerHTML='<div class="empty">အချက်အလက် မရရှိသေးပါ။ အင်တာနက် စစ်ပြီး ပြန်ကြိုးစားပါ။</div>'});
+function setupLibs(d){LIBS=(d.libs&&d.libs.length?d.libs:LIBS).filter(l=>SONGS.some(s=>libOf(s)===l.id));if(!LIBS.length)LIBS=[{id:'main',name:'ဓမ္မစကူးလ် သီချင်း ကဗျာများ'}];
+ const q=new URLSearchParams(location.search).get('lib');if(q&&LIBS.some(l=>l.id===q))LIB=q;if(!LIBS.some(l=>l.id===LIB))LIB=LIBS[0].id}
+function paintLib(){const b=$('#libs');b.style.display=LIBS.length>1?'flex':'none';b.innerHTML=LIBS.map(l=>`<button data-lib="${l.id}" class="${l.id===LIB?'on':''}">${esc(l.name)}</button>`).join('');
+ const cur=LIBS.find(l=>l.id===LIB)||LIBS[0],g=curGroups(),cols=D.collections.filter(c=>(c.lib||'main')===LIB&&SONGS.some(s=>inCol(s,c.id)));
+ $('#h1').textContent='🎶 '+cur.name;document.title=cur.name;
+ $('#sub').textContent=`သီချင်း ${mn(g.length)} ခု · စုစည်းမှု ${mn(cols.length)} ခု`;
+ $('#col').innerHTML='<option value="">စုစည်းမှုအားလုံး</option>'+cols.map(c=>`<option value="${c.id}">${esc(c.name)} (${mn(SONGS.filter(s=>inCol(s,c.id)).length)})</option>`).join('')}
+$('#libs').onclick=e=>{const b=e.target.closest('[data-lib]');if(!b||b.dataset.lib===LIB)return;LIB=b.dataset.lib;lsSet('songsLib',LIB);tab='songs';openList=null;shown=150;$('#q').value='';paintLib();render();scrollTo(0,0)};
 // ---------------- list
 function filtered(){
  const q=norm($('#q').value),c=$('#col').value,so=$('#sort').value;
  let l=[];
- for(const a of GROUPS){if(q&&!a.some(s=>s._k.includes(q)))continue;const m=a.filter(s=>(!c||inCol(s,c))&&(!flt.lyr||s.l)&&(!flt.off||OFF.has(s.id))&&(!flt.na||s.n));if(m.length)l.push(m[0])}
+ for(const a of curGroups()){if(q&&!a.some(s=>s._k.includes(q)))continue;const m=a.filter(s=>(!c||inCol(s,c))&&(!flt.lyr||s.l)&&(!flt.off||OFF.has(s.id))&&(!flt.na||s.n));if(m.length)l.push(m[0])}
  if(so==='title')l=[...l].sort((a,b)=>(a.n?1:0)-(b.n?1:0)||collator.compare(a.t,b.t));
  else if(so==='artist')l=[...l].sort((a,b)=>(a.a?0:1)-(b.a?0:1)||collator.compare(a.a,b.a)||collator.compare(a.t,b.t));
  else if(so==='long')l=[...l].sort((a,b)=>b.d-a.d);
@@ -191,8 +203,8 @@ function render(){
   if(l.length&&l.length<=400&&($('#col').value||flt.lyr||$('#q').value)){const need=l.filter(x=>!OFF.has(x.id));if(need.length){$('#batch').innerHTML=`<button class="b2" id="bsave">⬇ ဒီစာရင်း ${mn(need.length)} ပုဒ် offline သိမ်းမည် (${mb(need)})</button>`;$('#bsave').onclick=()=>batchSave(need)}}}
  else if(tab==='lists'){listView()}
  else if(tab==='off'){offView()}
- else if(tab==='cols'){$('#count').textContent='';$('#view').innerHTML='<div class="grid">'+D.collections.filter(c=>SONGS.some(s=>inCol(s,c.id))).map(c=>{const n=SONGS.filter(s=>inCol(s,c.id));return `<button class="cc" data-c="${c.id}" style="background:${c.i&&IMGM!=='off'?`linear-gradient(0deg,rgba(0,0,0,.65),rgba(0,0,0,.05)),url(${thumb(c)}) center/cover`:BG[hash(c.id)%BG.length]}"><b>${esc(c.name)}</b><small>${mn(n.length)} ပုဒ် · ${mn(Math.round(n.reduce((a,s)=>a+s.d,0)/60))} မိနစ်</small></button>`}).join('')+'</div>'}
- else{const m={};GROUPS.forEach(a=>{const seen=new Set();a.forEach(s=>artistsOf(s).forEach(n=>{if(!seen.has(n)){seen.add(n);(m[n]=m[n]||[]).push(s)}}))});const k=Object.keys(m).sort((a,b)=>collator.compare(a,b));$('#count').textContent=`အဆိုတော် ${mn(k.length)} ဦး`;$('#view').innerHTML='<div class="arts">'+k.map(a=>`<button data-a="${esc(a)}">${esc(a)} <small>${mn(m[a].length)}</small></button>`).join('')+'</div>'}
+ else if(tab==='cols'){$('#count').textContent='';$('#view').innerHTML='<div class="grid">'+D.collections.filter(c=>(c.lib||'main')===LIB&&SONGS.some(s=>inCol(s,c.id))).map(c=>{const n=SONGS.filter(s=>inCol(s,c.id));return `<button class="cc" data-c="${c.id}" style="background:${c.i&&IMGM!=='off'?`linear-gradient(0deg,rgba(0,0,0,.65),rgba(0,0,0,.05)),url(${thumb(c)}) center/cover`:BG[hash(c.id)%BG.length]}"><b>${esc(c.name)}</b><small>${mn(n.length)} ပုဒ် · ${mn(Math.round(n.reduce((a,s)=>a+s.d,0)/60))} မိနစ်</small></button>`}).join('')+'</div>'}
+ else{const m={};curGroups().forEach(a=>{const seen=new Set();a.forEach(s=>artistsOf(s).forEach(n=>{if(!seen.has(n)){seen.add(n);(m[n]=m[n]||[]).push(s)}}))});const k=Object.keys(m).sort((a,b)=>collator.compare(a,b));$('#count').textContent=`အဆိုတော် ${mn(k.length)} ဦး`;$('#view').innerHTML='<div class="arts">'+k.map(a=>`<button data-a="${esc(a)}">${esc(a)} <small>${mn(m[a].length)}</small></button>`).join('')+'</div>'}
  markCur()}
 function markCur(){$$('.song').forEach(e=>{const c=CUR&&(GRP[e.dataset.g]&&GRP[e.dataset.g].length>1&&!e.querySelector('.ctrl')?gid(CUR)===e.dataset.g:e.dataset.id===CUR.id);e.classList.toggle('cur',c);const b=e.querySelector('.pl');if(b)b.textContent=c&&!AUD.paused?'⏸':'▶'})}
 $('#tabs').onclick=e=>{const b=e.target.closest('button');if(!b)return;tab=b.dataset.t;render()};
@@ -287,6 +299,7 @@ $('#nshuf').onclick=()=>{shuffle^=1;lsSet('songsShuf',shuffle);paint();toast(shu
 let NP=null,LY={};
 async function openSong(id,autoplay){
  NP=SONGS.find(s=>s.id===id);if(!NP)return;
+ if(libOf(NP)!==LIB){LIB=libOf(NP);lsSet('songsLib',LIB);paintLib();render()}
  $('#npb').style.setProperty('--g',bgOf(NP));$('#nt').textContent=NP.t;{const vs0=GRP[gid(NP)]||[NP];const all=[...new Set(vs0.flatMap(artistsOf))];$('#na').textContent=[all.length>1?all.join(' · '):artistText(NP),(COLS[NP.c]||{}).name].filter(Boolean).join(' · ')}
  const vs=GRP[gid(NP)]||[NP];$('#nver').innerHTML=vs.length>1?vs.map(x=>`<button data-ver="${x.id}" class="${x.id===NP.id?'on':''}">${x.k?'🎤 ':'🎵 '}${esc(vlab(x))}</button>`).join(''):'';
  {const wv=[...new Set((GRP[gid(NP)]||[NP]).map(x=>x.w).filter(Boolean))];$('#nw').textContent=wv.length?'✍ တေးရေး — '+wv.join(' · '):''}
