@@ -181,7 +181,7 @@ function showCover(s){const B=$('#nimg');B.innerHTML='';if(!s.i)return;
  if(IMGM==='off'){B.innerHTML='<button class="btn" id="nimgbtn" style="margin-top:8px">🖼 ပုံကြည့်မည်</button>';$('#nimgbtn').onclick=()=>{B.innerHTML=`<img class="cover big" src="img/${s.id}.jpg?v=${s.i}" alt="">`;$('#nimg img').onclick=()=>showCover(s)}}
  else{B.innerHTML=`<img class="cover" src="${thumb(s)}" alt="" title="ပုံကြီးကြည့်ရန် နှိပ်ပါ">`;$('#nimg img').onclick=function(){if(this.classList.contains('big')){this.src=thumb(s);this.classList.remove('big')}else{this.src=`img/${s.id}.jpg?v=${s.i}`;this.classList.add('big')}}}}
 function songRow(s,flat){const grp=!flat&&GRP[gid(s)]&&GRP[gid(s)].length>1?GRP[gid(s)]:null,isCur=CUR&&(grp?gid(CUR)===gid(s):CUR.id===s.id);
- return `<div class="song ${isCur?'cur':''}" data-id="${s.id}" data-g="${gid(s)}"><button class="pl" data-p="${s.id}">${isCur&&!AUD.paused?'⏸':'▶'}</button>${s.i&&IMGM!=='off'?`<img class="th" loading="lazy" decoding="async" src="${thumb(s)}" alt="">`:''}<div class="mid"><h3>${esc(s.t)}${flat&&s.vl?` <small class="vsm">(${esc(s.vl)})</small>`:''}</h3><small>${grp?`<span class="vsm">🎵 ${grp.map(x=>esc(vlab(x))).join(' · ')}</span><br>`:''}${esc(artistText(s))}${s.a?' · ':''}${esc((COLS[s.c]||{}).name||'')}</small></div><div class="rt">${(grp?grp.some(x=>x.l):s.l)?'📝 ':''}${(grp?grp.some(x=>OFF.has(x.id)):OFF.has(s.id))?'⬇ ':''}<br>${grp?mn(grp.length)+' မျိုး':fmt(s.d)}</div></div>`}
+ return `<div class="song ${isCur?'cur':''}" data-id="${s.id}" data-g="${gid(s)}"><button class="pl" data-p="${s.id}">${isCur&&!AUD.paused?'⏸':'▶'}</button>${s.i&&IMGM!=='off'?`<img class="th" loading="lazy" decoding="async" src="${thumb(s)}" alt="">`:''}<div class="mid"><h3>${esc(s.t)}${flat&&s.vl?` <small class="vsm">(${esc(s.vl)})</small>`:''}</h3><small>${grp?`<span class="vsm">🎵 ${grp.map(x=>esc(vlab(x))).join(' · ')}</span><br>`:''}${esc(grp?[...new Set(grp.flatMap(artistsOf))].join(' · '):artistText(s))}${(grp?grp.some(x=>x.a):s.a)?' · ':''}${esc((COLS[s.c]||{}).name||'')}</small></div><div class="rt">${(grp?grp.some(x=>x.l):s.l)?'📝 ':''}${(grp?grp.some(x=>OFF.has(x.id)):OFF.has(s.id))?'⬇ ':''}<br>${grp?mn(grp.length)+' မျိုး':fmt(s.d)}</div></div>`}
 function render(){
  $$('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===tab));
  $('.bar').style.display=$('#chips').style.display=tab==='songs'?'':'none';$('#batch').innerHTML='';
@@ -287,7 +287,7 @@ $('#nshuf').onclick=()=>{shuffle^=1;lsSet('songsShuf',shuffle);paint();toast(shu
 let NP=null,LY={};
 async function openSong(id,autoplay){
  NP=SONGS.find(s=>s.id===id);if(!NP)return;
- $('#npb').style.setProperty('--g',bgOf(NP));$('#nt').textContent=NP.t;$('#na').textContent=[artistText(NP),(COLS[NP.c]||{}).name].filter(Boolean).join(' · ');
+ $('#npb').style.setProperty('--g',bgOf(NP));$('#nt').textContent=NP.t;{const vs0=GRP[gid(NP)]||[NP];const all=[...new Set(vs0.flatMap(artistsOf))];$('#na').textContent=[all.length>1?all.join(' · '):artistText(NP),(COLS[NP.c]||{}).name].filter(Boolean).join(' · ')}
  const vs=GRP[gid(NP)]||[NP];$('#nver').innerHTML=vs.length>1?vs.map(x=>`<button data-ver="${x.id}" class="${x.id===NP.id?'on':''}">${x.k?'🎤 ':'🎵 '}${esc(vlab(x))}</button>`).join(''):'';
  showCover(NP);$('#ndur').textContent=fmt(NP.d);history.replaceState(null,'','#'+id);
  if(!$('#np').open)$('#np').showModal();
