@@ -234,6 +234,118 @@ def add_song(filename, blob, title, artist, col):
         plan = jl(PLAN, {}); plan[sid + '.mp3'] = out; jw(PLAN, plan, False)
         return s
 
+# ---------------------------------------------------------------- new songs in a batch (many files at once, names made automatically)
+import hashlib, uuid, unicodedata, time
+INCOMING = os.path.join(STAGE, 'incoming'); os.makedirs(INCOMING, exist_ok=True)
+JOBS = {}
+MMD = '၀၁၂၃၄၅၆၇၈၉'
+ZAW_RE = re.compile('(?:^|[^\u1000-\u1021\u103b-\u103e])\u1031')
+JUNK_TAG = re.compile(r'^(track\s*\d+|new artist|my recording|unknown(?: artist)?|untitled|no\.?\s*\d+.*|\d+|children|chant\d*|rec\d+)$', re.I)
+
+def _clean(t):
+    t = t.translate(dict.fromkeys(map(ord, '\u200b\u200c\u200d\ufeff\u2060'), None))
+    if ZAW_RE.search(t) or re.search('[\u1000-\u1021]\u1039[^\u1000-\u1021]', t):          # old Zawgyi file names -> Unicode
+        from myanmar import converter
+        t = converter.convert(t, 'zawgyi', 'unicode')
+    return re.sub(r'\s+', ' ', unicodedata.normalize('NFC', t)).strip()
+
+def parse_name(filename, folder=''):
+    """title / artist guessed from the file name (and the tags): 01. / ၁။ / (ရ) numbers, 'M04 ', (G5,L29) are removed; 'title - artist' is split"""
+    base = _clean(os.path.splitext(os.path.basename(filename))[0].replace('_', ' '))
+    t = base
+    for _ in range(3):
+        t0 = t
+        t = re.sub(r'^\s*\(?(?:[0-9' + MMD + r']{1,3}|ရ(?=[။)]))\)?\s*[.။)_\-:]*\s*', '', t)
+        t = re.sub(r'^\s*(?:track|Track)\s*\d+\s*', '', t).strip(' _-.')
+        if t == t0: break
+    t = re.sub(r'\s*\(G\d+\s*,\s*L\d+\)', '', t)
+    t = re.sub(r'^\s*[A-Za-z]{1,2}\d*\s+(?=[\u1000-\u109f])', '', t).strip(' _-.')
+    artist = ''
+    m = re.match(r'^(.*\S)\s*[-–]\s*([^-–]{2,45})$', t)
+    if m and not re.fullmatch(r'[\d\s.]+', m.group(2)): t, artist = m.group(1).strip(), m.group(2).strip()
+    return t, artist
+
+def title_key(t):
+    import merge_same_songs as M
+    return M.norm(t)
+
+def scan_file(name, rel, blob):
+    """a file chosen by the teacher: kept in the incoming folder, looked at (length, tags, md5), names guessed, duplicates reported"""
+    tok = uuid.uuid4().hex[:10]; ext = os.path.splitext(name)[1].lower() or '.mp3'
+    path = os.path.join(INCOMING, tok + ext); open(path, 'wb').write(blob)
+    md5 = hashlib.md5(blob).hexdigest(); dur = probe_dur(path)
+    title, artist = parse_name(name)
+    tag_t = tag_a = ''
+    try:
+        from mutagen import File as MFile
+        m = MFile(path, easy=True)
+        if m and m.tags:
+            tag_t = _clean(str((m.tags.get('title') or [''])[0])); tag_a = _clean(str((m.tags.get('artist') or [''])[0]))
+    except Exception: pass
+    junk = lambda x: not x or JUNK_TAG.match(x.strip()) or '?' in x
+    if (not title or re.fullmatch(r'[\w .\-()]{0,6}', title)) and not junk(tag_t): title = parse_name(tag_t + '.mp3')[0] or tag_t
+    if not artist and not junk(tag_a): artist = tag_a
+    folder = rel.split('/')[0] if '/' in rel else ''
+    karaoke = bool(re.search(r'karaoke|ကာရာအိုကေ|instrumental', rel, re.I))
+    d = load(); meta = jl(META, {}); warn = ''; dup = None
+    for sid, mm in meta.items():                                    # the very same file is already in the library
+        if mm.get('md5') == md5 and any(s['id'] == sid for s in d['songs']): dup = sid; warn = 'ဒီအသံဖိုင် ရှိပြီးသား (%s)' % sid; break
+    if not dup:
+        k = title_key(title) if title else ''
+        for s in d['songs']:
+            if k and len(k) >= 3 and title_key(s['t']) == k and abs(s['d'] - dur) <= 3 and bool(s.get('k')) == karaoke:
+                warn = 'ထပ်နေနိုင် — ခေါင်းစဉ်၊ အချိန်တူသော သီချင်း ရှိပြီး (%s)' % s['id']; dup = s['id']; break
+    noname = not title or bool(re.fullmatch(r'[\d\s' + MMD + r'a-zA-Z]{0,6}', title)) and not re.search('[a-zA-Z]{4}', title)
+    return dict(tmp=tok + ext, name=name, folder=folder, title=title, artist=artist, dur=dur, size=len(blob), md5=md5, k=karaoke, noname=noname, dup=dup, warn=warn)
+
+def _next_id(d):
+    return max([int(s['id'][1:]) for s in d['songs']] + [int(k[1:]) for k in list(jl(GONE, {})) + list(jl(HIDDEN, {}))] + [0]) + 1
+
+def run_batch(job, items, col, newcol):
+    import internetarchive as ia, imageio_ffmpeg
+    job.update(total=len(items), done=0, ok=0, log=[])
+    for it in items:
+        try:
+            with LOCK:
+                d = load()
+                if newcol and not col:
+                    c = next((x for x in d['collections'] if x['name'] == newcol), None)
+                    if not c:
+                        c = dict(id='c%02d' % (max([int(x['id'][1:]) for x in d['collections']] + [0]) + 1), name=newcol); d['collections'].append(c); save(d)
+                    col = c['id']
+                sid = 's%04d' % _next_id(d)
+            src = os.path.join(INCOMING, it['tmp']); out = os.path.join(STAGE, sid + '.mp3')
+            if src.lower().endswith('.mp3'): shutil.move(src, out)
+            else:
+                subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), '-y', '-loglevel', 'error', '-i', src, '-vn', '-codec:a', 'libmp3lame', '-b:a', '128k', out], check=True); os.remove(src)
+            r = ia.upload('dhamma-school-songs', files={sid + '.mp3': out}, retries=10, retries_sleep=20, verbose=False, queue_derive=False)
+            if not all(x.status_code == 200 for x in r): raise RuntimeError('archive.org upload failed')
+            title = (it['title'] or '').strip(); noname = not title
+            if noname: title = (newcol or colname(d, col)) + ' ' + sid[1:]
+            s = dict(id=sid, t=title, a=(it.get('artist') or '').strip(), c=col, d=probe_dur(out), z=os.path.getsize(out), f=sid + '.mp3')
+            if noname: s['n'] = 1
+            if it.get('w'): s['w'] = it['w'].strip()
+            if it.get('k'): s['k'] = 1
+            with LOCK:
+                d = load(); k = title_key(title) if not noname else ''
+                mates = [x for x in d['songs'] if k and len(k) >= 3 and title_key(x['t']) == k] if k else []
+                if mates:                                                           # same title already there: this is one more version of it
+                    g = mates[0].get('g') or mates[0]['id']; s['t'] = mates[0]['t']
+                    for x in mates:
+                        if not x.get('g'): x['g'] = g
+                        if not x.get('vl'): x['vl'] = 'ကာရာအိုကေ' if x.get('k') else '%d:%02d' % (x['d'] // 60, x['d'] % 60)
+                    s['g'] = g; s['vl'] = 'ကာရာအိုကေ' if s.get('k') else (s['a'] or '%d:%02d' % (s['d'] // 60, s['d'] % 60))
+                    owner = next((x for x in mates if x.get('l')), None)
+                    if owner and s.get('k'): s['lf'] = owner.get('lf') or owner['id']; s['l'] = 1
+                d['songs'].append(s); save(d)
+                plan = jl(PLAN, {}); plan[sid + '.mp3'] = out; jw(PLAN, plan, False)
+                meta = jl(META, {}); meta[sid] = dict(src=it.get('name', ''), also=[], md5=it.get('md5', '')); jw(META, meta, False)
+            job['ok'] += 1; job['log'].append('✅ %s — %s' % (sid, title))
+        except Exception as e:
+            job['log'].append('❌ %s — %s' % (it.get('title') or it.get('name'), e))
+        job['done'] += 1
+    job['finished'] = True
+
 class H(BaseHTTPRequestHandler):
     def log_message(self, *a): pass
     def _send(self, code, body, ctype='application/json; charset=utf-8', extra=None):
@@ -275,6 +387,8 @@ class H(BaseHTTPRequestHandler):
                     m = meta.get(s['id'])
                     if m: s['_src'] = m.get('src', ''); s['_also'] = m.get('also', [])
                 return self._send(200, json.dumps(d, ensure_ascii=False))
+            if u.path == '/api/job':
+                return self._send(200, json.dumps(JOBS.get(q['id'][0], {}), ensure_ascii=False))
             if u.path == '/api/similar':
                 return self._send(200, json.dumps({'groups': similar()}, ensure_ascii=False))
             if u.path == '/api/publishmode':
@@ -306,6 +420,12 @@ class H(BaseHTTPRequestHandler):
                     if not target: raise ValueError('not found')
                     save_image(oid, raw); target['i'] = int(__import__('time').time()); save(d)
                 return self._send(200, json.dumps({'ok': True, 'i': target['i']}))
+            if u.path == '/api/stage':             # one chosen file (raw body); returns the guessed names
+                return self._send(200, json.dumps(scan_file(unquote(q['name'][0]), unquote(q.get('rel', [''])[0]), raw), ensure_ascii=False))
+            if u.path == '/api/addbatch':
+                b = json.loads(raw or b'{}'); jid = uuid.uuid4().hex[:8]; JOBS[jid] = {'finished': False, 'total': len(b['items']), 'done': 0, 'ok': 0, 'log': []}
+                threading.Thread(target=run_batch, args=(JOBS[jid], b['items'], b.get('c') or '', (b.get('newcol') or '').strip()), daemon=True).start()
+                return self._send(200, json.dumps({'job': jid}))
             if u.path == '/api/add':
                 s = add_song(unquote(q['name'][0]), raw, unquote(q.get('t', [''])[0]), unquote(q.get('a', [''])[0]), q['c'][0])
                 return self._send(200, json.dumps({'ok': True, 'song': s}, ensure_ascii=False))

@@ -59,6 +59,12 @@ dialog::backdrop{background:rgba(20,6,40,.5)}.crow{display:flex;gap:6px;align-it
  <div id="simList" style="max-height:62vh;overflow:auto"></div><div class="bar"><button onclick="dsim.close()">ပိတ်မည်</button></div></dialog>
 <dialog id="dgone"><h3 id="gtitle">♻ ဖျက်ပြီးသား သီချင်းများ</h3><div id="glist" style="max-height:60vh;overflow:auto"></div><div class="bar"><button onclick="dgone.close()">ပိတ်မည်</button></div><div class="hint">ပြန်ယူရင် စာသားနှင့်တကွ ပြန်ပေါ်လာမည်။</div></dialog>
 <dialog id="dcm" style="width:min(720px,96vw)"><h3>💬 ကြည့်ရှုသူများ ပေးပို့ထားသည်များ</h3><div class="bar"><label><input type="radio" name="cmk" value="pending" checked> ⏳ စစ်ရန်</label><label><input type="radio" name="cmk" value="lyrics"> 📝 စာသားပေးပို့ချက်</label><label><input type="radio" name="cmk" value="all"> အားလုံး</label><button id="cmReload">🔄</button><button id="cmTrust">⭐ ယုံကြည်သူများ</button><button id="cmBlock">🚫 ပိတ်ထားသူများ</button><span id="cmMsg" class="hint"></span></div><div id="cmList" style="max-height:60vh;overflow:auto"></div><div class="bar"><button onclick="dcm.close()">ပိတ်မည်</button></div><div class="hint">"စာသားအဖြစ်သုံးမည်" ကိုနှိပ်ရင် စာသားကို ထိုသီချင်းရဲ့ စာသားအကွက်ထဲ ထည့်ပေးမည် (မမှန်သေးရင် ပြင်ပြီးမှ သိမ်းပါ)။</div></dialog>
+<dialog id="dnew" style="width:min(960px,98vw)"><h3>➕ သီချင်းအသစ်များ ထည့်ရန် <span id="nmsg" class="hint"></span></h3>
+ <div class="hint">ဖိုင်များ (သို့) ဖိုဒါတစ်ခုလုံး ရွေးပါ။ နာမည်၊ အဆိုတော်ကို ဖိုင်နာမည်ကနေ အလိုအလျောက် ပေးသည် (မှားရင် ပြင်နိုင်သည်)။ ထပ်နေသော သီချင်းကို သတိပေးသည်။ wma / aac / wav ကို mp3 ပြောင်းပြီး archive.org ပေါ် တင်ပေးသည်။</div>
+ <div class="bar"><label>ဖိုင်များ <input type="file" id="nfiles" multiple accept="audio/*"></label><label>သို့ ဖိုဒါ <input type="file" id="nfolder" webkitdirectory></label>
+  <label>စုစည်းမှု <select id="ncol"></select></label><input type="text" id="nnew" placeholder="သို့မဟုတ် စုစည်းမှုအသစ်အမည်" style="width:220px"></div>
+ <div style="max-height:52vh;overflow:auto"><table id="ntab" style="width:100%;border-collapse:collapse;font-size:.9rem"></table></div>
+ <div class="bar"><button class="pri" id="nup" disabled>⬆ ရွေးထားသည်များ တင်မည်</button><button onclick="dnew.close()">ပိတ်မည်</button><span id="nprog" class="hint"></span></div><div id="nlog" class="hint" style="max-height:18vh;overflow:auto;white-space:pre-wrap"></div></dialog>
 <dialog id="dadd"><h3>➕ သီချင်းအသစ် ထည့်ရန်</h3><input type="file" id="afile" accept="audio/*" style="width:100%"><label class="hint">အမည်</label><input type="text" id="at" style="width:100%"><label class="hint">အဆိုတော်</label><input type="text" id="aa" style="width:100%"><label class="hint">စုစည်းမှု</label><select id="ac" style="width:100%"></select>
  <div class="bar"><button class="pri" id="aok">⬆ တင်မည်</button><button onclick="dadd.close()">ပိတ်မည်</button><span id="amsg" class="hint"></span></div><div class="hint">archive.org ပေါ်သို့ တင်ပေးသည် — ဖိုင်ကြီးရင် စောင့်ရမည်။</div></dialog>
 <script>
@@ -201,7 +207,24 @@ $('#clist').onclick=async e=>{const r=e.target.dataset.r,d=e.target.dataset.d,pi
  if(r){const v=$(`#clist input[data-id="${r}"]`).value;const x=await api('/api/colrename',{id:r,name:v});D.collections=x.collections;fillCols();render();e.target.textContent='✓'}
  if(d&&confirm('ဒီစုစည်းမှု ဖျက်မလား?')){const x=await api('/api/coldelete',{id:d});if(x.error)alert(x.error);else{D.collections=x.collections;fillCols();$('#colBtn').click()}}};
 // add
-$('#addBtn').onclick=()=>{$('#amsg').textContent='';dadd.showModal()};
+$('#addBtn').onclick=()=>{$('#ncol').innerHTML='<option value="">— စုစည်းမှု ရွေးပါ —</option>'+D.collections.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');NEW=[];drawNew();$('#nlog').textContent='';$('#nprog').textContent='';dnew.showModal()};
+// batch add: scan -> table -> upload
+let NEW=[];
+function drawNew(){const t=$('#ntab');t.innerHTML=NEW.length?'<tr class="hint" style="text-align:left"><th>✓</th><th>အမည်</th><th>အဆိုတော်</th><th>အချိန်</th><th>မှတ်ချက်</th></tr>'+NEW.map((x,i)=>`<tr style="border-top:1px solid var(--line)"><td><input type="checkbox" data-i="${i}" data-f="on" ${x.on?'checked':''}></td><td><input type="text" data-i="${i}" data-f="title" value="${esc(x.title)}" placeholder="${x.noname?'(အမည်မသိ — ဖိုဒါအမည် + နံပါတ်)':''}" style="width:100%"></td><td><input type="text" data-i="${i}" data-f="artist" value="${esc(x.artist)}" style="width:100%"></td><td>${Math.floor(x.dur/60)}:${String(x.dur%60).padStart(2,'0')}${x.k?' 🎤':''}</td><td class="hint" style="color:${x.warn?'#b3261e':''}">${esc(x.warn||'')}${x.noname?' ⚠ အမည်ပေးရန်':''}</td></tr>`).join(''):'<tr><td class="hint">ဖိုင် မရွေးရသေးပါ</td></tr>';
+ $('#nup').disabled=!NEW.some(x=>x.on);$('#nmsg').textContent=NEW.length?'('+mn(NEW.length)+' ဖိုင်)':''}
+$('#ntab').addEventListener('input',e=>{const i=e.target.dataset.i,f=e.target.dataset.f;if(i==null)return;NEW[i][f]=f==='on'?e.target.checked:e.target.value;$('#nup').disabled=!NEW.some(x=>x.on)});
+async function scanFiles(files){const list=[...files].filter(f=>/\.(mp3|wma|aac|wav|m4a|ogg|flac)$/i.test(f.name));if(!list.length)return;
+ let n=0;for(const f of list){$('#nprog').textContent=`⏳ ဖတ်နေသည် ${mn(++n)} / ${mn(list.length)} — ${f.name}`;
+  try{const r=await (await fetch('/api/stage?name='+encodeURIComponent(f.name)+'&rel='+encodeURIComponent(f.webkitRelativePath||''),{method:'POST',body:f})).json();r.on=!r.dup;NEW.push(r)}catch(e){$('#nlog').textContent+='❌ '+f.name+' '+e.message+'\n'}
+  drawNew()}
+ $('#nprog').textContent='ဖတ်ပြီး — နာမည်တွေ စစ်ပြီး ⬆ တင်မည် ကိုနှိပ်ပါ';
+ const fo=NEW.find(x=>x.folder);if(fo&&!$('#nnew').value&&!$('#ncol').value){const ex=D.collections.find(c=>c.name===fo.folder);if(ex)$('#ncol').value=ex.id;else $('#nnew').value=fo.folder}}
+$('#nfiles').onchange=()=>scanFiles($('#nfiles').files);$('#nfolder').onchange=()=>scanFiles($('#nfolder').files);
+$('#nup').onclick=async()=>{const items=NEW.filter(x=>x.on);if(!items.length)return;const col=$('#ncol').value,newcol=$('#nnew').value.trim();if(!col&&!newcol)return alert('စုစည်းမှု ရွေးပါ (သို့) အသစ်အမည်ပေးပါ');
+ if(!confirm(`${items.length} ပုဒ်ကို archive.org ပေါ်တင်ပြီး စာရင်းထဲ ထည့်မည်။ ကြာနိုင်သည် — ပိတ်မထားပါနဲ့။ ဆက်မလား?`))return;
+ $('#nup').disabled=true;const {job}=await api('/api/addbatch',{items,c:col,newcol});
+ const tick=async()=>{const j=await api('/api/job?id='+job);$('#nprog').textContent=`⬆ ${mn(j.done||0)} / ${mn(j.total||0)} တင်ပြီး`;$('#nlog').textContent=(j.log||[]).join('\n');
+  if(!j.finished)return setTimeout(tick,2500);$('#nprog').textContent=`ပြီးပါပြီ ✅ ${mn(j.ok)} ပုဒ် ထည့်ပြီး`;NEW=NEW.filter(x=>!x.on);drawNew();await reloadAll()};tick()};
 $('#afile').onchange=()=>{const f=$('#afile').files[0];if(f&&!$('#at').value)$('#at').value=f.name.replace(/\.[^.]+$/,'')};
 $('#aok').onclick=async()=>{const f=$('#afile').files[0];if(!f)return;$('#aok').disabled=true;$('#amsg').textContent='⏳ တင်နေသည်… (စောင့်ပါ)';
  const q=`name=${encodeURIComponent(f.name)}&t=${encodeURIComponent($('#at').value)}&a=${encodeURIComponent($('#aa').value)}&c=${$('#ac').value}`;
