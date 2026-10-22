@@ -324,7 +324,7 @@ class H(BaseHTTPRequestHandler):
                             if x.get('g') == t['id'] and x['id'] != t['id']: x['g'] = g      # versions it had follow it
                         t['g'] = g; t['t'] = rep['t']
                         if not t.get('vl'): t['vl'] = 'ကာရာအိုကေ' if t.get('k') else '%d:%02d' % (t['d'] // 60, t['d'] % 60)
-                        if owner.get('l') and not (t.get('l') and not t.get('lf')):
+                        if owner.get('l') and not (t.get('l') and not t.get('lf')) and (t.get('k') or max(t['d'], owner['d']) <= 5 * max(1, min(t['d'], owner['d']))):
                             t['lf'] = owner['id']; t['l'] = 1
                             if owner.get('ld'): t['ld'] = 1
                     if not rep.get('vl'): rep['vl'] = 'ကာရာအိုကေ' if rep.get('k') else '%d:%02d' % (rep['d'] // 60, rep['d'] % 60)

@@ -43,7 +43,7 @@ def main(apply):
         owner = next((s for s in members if s.get('l') and not s.get('lf')), None)
         for s in members:
             s['t'] = title; s['g'] = rep; s['vl'] = KAR if s.get('k') else dur(s['d'])
-            if owner and s is not owner and not (s.get('l') and not s.get('lf')):
+            if owner and s is not owner and not (s.get('l') and not s.get('lf')) and (s.get('k') or max(s['d'], owner['d']) <= 5 * max(1, min(s['d'], owner['d']))):
                 s['lf'] = owner['id']; s['l'] = 1
                 if owner.get('ld'): s['ld'] = 1
                 else: s.pop('ld', None)
