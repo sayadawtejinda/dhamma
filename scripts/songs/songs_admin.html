@@ -26,7 +26,7 @@ audio{width:100%;margin-top:6px}
 dialog{border:0;border-radius:14px;padding:16px;box-shadow:0 12px 50px rgba(0,0,0,.4);max-width:96vw;width:560px}
 dialog::backdrop{background:rgba(20,6,40,.5)}.crow{display:flex;gap:6px;align-items:center;margin:4px 0}.crow input{flex:1}
 </style></head><body>
-<header><b>🎶 သီချင်း စီမံရန်</b><span id="counts" class="hint" style="color:#e8d9ff"></span><button id="addBtn">➕ သီချင်းအသစ်</button><button id="colBtn">📁 စုစည်းမှုများ</button><button id="goneBtn">♻ ဖျက်ပြီးသားများ</button><button id="hidBtn">🙈 ဝှက်ထားသည်များ</button><button id="cmBtn">💬 မှတ်ချက်/စာသားပေးပို့ချက်</button><button id="pub">🚀 website သို့ တင်မည်</button></header>
+<header><b>🎶 သီချင်း စီမံရန်</b><span id="counts" class="hint" style="color:#e8d9ff"></span><button id="addBtn">➕ သီချင်းအသစ်</button><button id="colBtn">📁 စုစည်းမှုများ</button><button id="goneBtn">♻ ဖျက်ပြီးသားများ</button><button id="hidBtn">🙈 ဝှက်ထားသည်များ</button><button id="cmBtn">💬 မှတ်ချက်/စာသားပေးပို့ချက်</button><select id="pmode" title="🚀 နှိပ်ရင် ဘာတွေ တင်မလဲ" style="padding:5px;border-radius:8px"><option value="lyrics">တင်မည် — စာသားရှိတာသာ</option><option value="all">တင်မည် — အားလုံး</option></select><button id="pub">🚀 website သို့ တင်မည်</button></header>
 <main>
  <div id="side"><div class="f"><input type="search" id="q" placeholder="အမည်၊ အဆိုတော်၊ ဖိုင်နာမည် ရှာရန်…"><select id="fc"><option value="">စုစည်းမှုအားလုံး</option></select>
   <label class="hint"><input type="checkbox" id="fna"> အမည်မရှိသေး</label><label class="hint"><input type="checkbox" id="fnl"> စာသားမရှိသေး</label><label class="hint"><input type="checkbox" id="fal"> ထပ်နေသည့်ဖိုဒါပါ</label><label class="hint"><input type="checkbox" id="fld"> စာသားစစ်ရန်</label></div>
@@ -41,8 +41,11 @@ dialog::backdrop{background:rgba(20,6,40,.5)}.crow{display:flex;gap:6px;align-it
     <button type="button" class="bad" id="imgdel">🗑 ပုံဖျက်</button><span class="hint">ပုံကို ဒီနေရာသို့ ဆွဲချ (သို့) Ctrl+V ဖြင့် ကူးထည့်လည်းရ။ အသေး/အကြီး နှစ်မျိုးကို အလိုအလျောက်လုပ်ပြီး နာမည်ကို သီချင်းနံပါတ်နဲ့ ပေးမည်၊ ပုံအဟောင်းကို အစားထိုးမည်။</span></div>
    <label>သီချင်း အမည်</label><input type="text" id="t">
    <label>အဆိုတော်</label><input type="text" id="a" list="artists">
+   <div class="crow" style="margin-top:8px"><span class="hint">ဗားရှင်းအမည် (ဥပမာ အတို၊ အပြည့်၊ ကာရာအိုကေ)</span><input type="text" id="vl" style="max-width:220px"><label class="hint" style="margin:0"><input type="checkbox" id="kk"> ကာရာအိုကေ</label></div>
    <datalist id="artists"></datalist>
    <label>စုစည်းမှု (ဖိုဒါ)</label><div class="crow"><select id="c" style="flex:1"></select><input type="text" id="newcol" placeholder="သို့မဟုတ် စုစည်းမှုအသစ်…"></div>
+   <details id="xdet" style="margin:10px 0"><summary style="cursor:pointer;font-weight:600;font-size:.9rem">ဒီသီချင်းကို ပြချင်တဲ့ တခြားစုစည်းမှုများ <span id="xcnt" class="hint"></span> <span class="hint">(နှိပ်ပြီး ကြည့်/ပြင်ရန်)</span></summary><div id="xcols" class="hint" style="display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:6px"></div></details>
+   <div id="sames" style="margin:6px 0"></div>
    <label>စာသား (စာသားမရှိရင် ဗလာထားပါ)</label><textarea id="lyr" placeholder="သီချင်းစာသား… စာပိုဒ်ကို လိုင်းလွတ်ခြားပါ"></textarea>
    <div class="bar"><button class="pri" id="save">💾 သိမ်းမည် (Ctrl+S)</button><button id="saveNext">💾 သိမ်း၍ နောက်တစ်ပုဒ် ▶</button><button id="lok" title="program က ရှာထည့်ထားတာ မှန်ကြောင်း အတည်ပြု">✔ စာသား မှန်ပြီ</button><button id="hide" title="website မှာ မပြတော့ပါ — နောက်မှ ပြန်ပြနိုင်သည်">🙈 အများပြည်သူကို မပြ</button><button class="bad" id="del">🗑 ဖျက်မည်</button><span id="msg"></span></div>
    <div class="hint" id="links"></div>
@@ -61,26 +64,46 @@ const collator=(()=>{try{return new Intl.Collator('my')}catch(e){return new Intl
 let D=null,cur=null,dirty=false,shown=300,LYRS=new Set();
 async function api(p,b){const r=await fetch(p,b?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}:{});return r.json()}
 async function init(){D=await api('/api/data');D.songs.forEach(s=>s._k=norm(s.t+' '+s.a+' '+(s._src||'')));fillCols();render();counts()}
+function xCount(){const n=document.querySelectorAll('#xcols [data-x]:checked').length;$('#xcnt').textContent=n?'— '+n+' ခုမှာလည်း ပြထားသည်':'— မရှိ'}
+function drawX(s){$('#xdet').open=false;const p=$('#c').value||s.c;$('#xcols').innerHTML=D.collections.filter(c=>c.id!==p).map(c=>`<label style="display:inline-flex;gap:4px;align-items:center;font-weight:400"><input type="checkbox" data-x="${c.id}" ${(s.x||[]).includes(c.id)?'checked':''}>${esc(c.name)}</label>`).join('');xCount()}
+function nkey(t){t=t.normalize('NFC').replace(/\((?:ကာရာအိုကေ|LP\s*\d+|G\d+\s*,\s*L\d+)\)/g,'').replace(/^\s*[A-Za-z]{1,2}\d+\s*/,'').replace(/[၀-၉]/g,d=>'၀၁၂၃၄၅၆၇၈၉'.indexOf(d));return [...t.toLowerCase()].filter(c=>/[\p{L}\p{M}\p{N}]/u.test(c)).join('')}
+function drawSames(s){const k=nkey(s.t),box=$('#sames');const o=D.songs.filter(x=>x.id!==s.id&&!x.n&&nkey(x.t)===k&&k.length>=3);
+ if(!o.length){box.innerHTML='';return}
+ box.innerHTML='<div class="hint"><b>နာမည်တူ သီချင်းများ</b> — အသံက မတူလည်း စာသားတူရင် ၁ နေရာတည်း ရေးပြီး ကျန်တာကို ချိတ်သုံးနိုင်သည်။</div>'+o.map(x=>{const mine=s.l,his=x.l;
+  const st=x.lf?'(စာသားချိတ်ထား)':x.l?'(စာသားရှိ)':'(စာသားမရှိ)';
+  const same=s.g&&x.g===s.g;
+  const gbtn=same?`<button data-ungroup="${x.id}">✂ ခွဲထုတ်</button>`:`<button data-group="${s.id}" data-to="${x.id}">📚 ဒီခေါင်းစဉ်အောက် ဗားရှင်းအဖြစ်ထည့်</button>`;
+  const btn=(mine&&!his)?`<button data-link="${s.id}" data-to="${x.id}">🔗 ဒီစာသားကို သူလည်းသုံးမည်</button>`:(!mine&&his)?`<button data-link="${x.id}" data-to="${s.id}">🔗 သူ့စာသားကို ဒီမှာလည်းသုံးမည်</button>`:'';
+  return `<div class="crow" style="font-size:.9rem"><span style="flex:1">${esc(x.t)} · ${Math.floor(x.d/60)}:${String(x.d%60).padStart(2,'0')} · ${esc(colName(x.c))} <span class="hint">${st}${same?' · ဗားရှင်းတူ':''}</span></span>${btn}${gbtn}</div>`}).join('')}
+async function reloadFlags(){const dd=await api('/api/data');D.songs.forEach(s=>{const n=dd.songs.find(x=>x.id===s.id);if(n)for(const k of ['t','l','lf','ld','g','vl','k']){if(n[k]===undefined)delete s[k];else s[k]=n[k]}s._k=norm(s.t+' '+s.a+' '+(s._src||''))})}
+$('#sames').onclick=async e=>{const gr=e.target.dataset.group,ug=e.target.dataset.ungroup;
+ if(gr){const r=await api('/api/group',{id:gr,to:[e.target.dataset.to]});if(r.error)return alert(r.error);await reloadFlags();$('#t').value=cur.t;$('#vl').value=cur.vl||'';openSongSoft();return}
+ if(ug){await api('/api/ungroup',{id:ug});await reloadFlags();openSongSoft();return}
+ const l=e.target.dataset.link,t=e.target.dataset.to;if(!l)return;const r=await api('/api/linklyrics',{id:l,to:[t]});if(r.error)return alert(r.error);const dd=await api('/api/data');D.songs.forEach(s=>{const n=dd.songs.find(x=>x.id===s.id);if(n){s.l=n.l;s.lf=n.lf;s.ld=n.ld;if(!n.l)delete s.l;if(!n.lf)delete s.lf;if(!n.ld)delete s.ld}});openSongSoft()}
+function openSongSoft(){if(cur){drawSames(cur);render();counts();api('/api/lyrics?id='+cur.id).then(r=>{$('#lyr').value=r.t||''})}}
+function readX(){return [...document.querySelectorAll('#xcols [data-x]:checked')].map(e=>e.dataset.x)}
 function colName(id){const c=D.collections.find(x=>x.id===id);return c?c.name:''}
 function fillCols(){const opts=D.collections.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
  const keep=$('#fc').value;$('#fc').innerHTML='<option value="">စုစည်းမှုအားလုံး</option>'+opts;$('#fc').value=keep;$('#c').innerHTML=opts;$('#ac').innerHTML=opts;
  $('#artists').innerHTML=[...new Set(D.songs.map(s=>s.a).filter(Boolean))].sort(collator.compare).map(a=>`<option value="${esc(a)}">`).join('')}
 function counts(){const n=D.songs.length;$('#counts').textContent=`သီချင်း ${mn(n)} · အမည်မရှိသေး ${mn(D.songs.filter(s=>s.n).length)} · စာသားပါ ${mn(D.songs.filter(s=>s.l).length)} · စစ်ရန် ${mn(D.songs.filter(s=>s.ld).length)}`}
 function list(){const q=norm($('#q').value),c=$('#fc').value,na=$('#fna').checked,nl=$('#fnl').checked,al=$('#fal').checked;
- return D.songs.filter(s=>(!c||s.c===c)&&(!q||s._k.includes(q))&&(!na||s.n)&&(!nl||!s.l)&&(!al||(s._also||[]).length)&&(!$('#fld').checked||s.ld))}
+ return D.songs.filter(s=>(!c||s.c===c||(s.x||[]).includes(c))&&(!q||s._k.includes(q))&&(!na||s.n)&&(!nl||!s.l)&&(!al||(s._also||[]).length)&&(!$('#fld').checked||s.ld))}
 function render(){const l=list();$('#list').innerHTML=l.slice(0,shown).map(s=>`<div class="it ${cur&&cur.id===s.id?'sel':''}" data-id="${s.id}"><i>${s.ld?'⚠':s.l?'📝':''}</i><div>${esc(s.t)}${s.n?' <span class="na">⚠ အမည်ပေးရန်</span>':''}<small>${esc(s.a||'')}${s.a?' · ':''}${esc(colName(s.c))}</small></div></div>`).join('');
  $('#lcount').innerHTML=`${mn(l.length)} ပုဒ်`+(l.length>shown?` · <button id="more">ထပ်ပြမည်</button>`:'');if($('#more'))$('#more').onclick=()=>{shown+=400;render()}}
 $('#list').onclick=e=>{const d=e.target.closest('.it');if(d)openSong(D.songs.find(s=>s.id===d.dataset.id))};
 ['#q','#fc','#fna','#fnl','#fal','#fld'].forEach(s=>$(s).addEventListener('input',()=>{shown=300;render()}));
 async function openSong(s){if(dirty&&!confirm('သိမ်းမထားသေးပါ။ ဆက်သွားမလား?'))return;dirty=false;cur=s;$('#empty').style.display='none';$('#form').style.display='block';
- $('#t').value=s.t;$('#a').value=s.a||'';$('#c').value=s.c;$('#newcol').value='';$('#msg').textContent='';
+ $('#t').value=s.t;$('#a').value=s.a||'';$('#c').value=s.c;drawX(s);drawSames(s);$('#vl').value=s.vl||'';$('#kk').checked=!!s.k;$('#newcol').value='';$('#msg').textContent='';
  $('#lok').style.display=s.ld?'':'none';showImg(s);$('#info').innerHTML=`${s.ld?'<b style="color:#b3261e">⚠ ဒီစာသားကို program က ရှာထည့်ထားတာ — စစ်ပြီး မှန်ရင် ✔ နှိပ်ပါ။ </b><br>':''}<b>${s.id}</b> · ${Math.floor(s.d/60)}:${String(s.d%60).padStart(2,'0')} · မူလဖိုင်: ${esc(s._src||'—')}${(s._also||[]).length?'<br>ထပ်နေသော ဖိုဒါများ: '+esc(s._also.join('၊ ')):''}`;
  $('#links').innerHTML=`လူကြည့်သောစာမျက်နှာ: <a target="_blank" href="https://sayadawtejinda.github.io/dhamma/songs/?admin=1#${s.id}">မှတ်ချက်များ ကြည့်/ဖျက်ရန်</a>`;
  const r=await api('/api/lyrics?id='+s.id);$('#lyr').value=r.t||'';
  const au=$('#au');au.onerror=()=>{if(!au.dataset.fb){au.dataset.fb=1;au.src=D.archive+s.f}};delete au.dataset.fb;au.src='/audio/'+s.id+'.mp3';if($('#auto').checked)au.play().catch(()=>{});
  render()}
+['#vl','#kk'].forEach(s=>$(s).addEventListener('input',()=>dirty=true));
 ['#t','#a','#c','#newcol','#lyr'].forEach(s=>$(s).addEventListener('input',()=>dirty=true));
-async function save(){if(!cur)return false;const b={id:cur.id,t:$('#t').value,a:$('#a').value,c:$('#c').value,lyrics:$('#lyr').value};if($('#newcol').value.trim())b.newcol=$('#newcol').value;
+$('#c').addEventListener('change',()=>{if(cur){const x=readX();cur.x=x;drawX(cur)}});$('#xcols').addEventListener('change',()=>{dirty=true;xCount()});
+async function save(){if(!cur)return false;const b={id:cur.id,t:$('#t').value,a:$('#a').value,c:$('#c').value,x:readX(),vl:$('#vl').value,k:$('#kk').checked,lyrics:$('#lyr').value};if($('#newcol').value.trim())b.newcol=$('#newcol').value;
  const r=await api('/api/update',b);if(r.error){$('#msg').style.color='var(--bad)';$('#msg').textContent='❌ '+r.error;return false}
  const s=D.songs.find(x=>x.id===cur.id);Object.assign(s,r.song);if(!r.song.n)delete s.n;if(!r.song.l)delete s.l;s._k=norm(s.t+' '+s.a+' '+(s._src||''));D.collections=r.collections;fillCols();$('#c').value=s.c;$('#newcol').value='';
  dirty=false;$('#msg').style.color='var(--ok)';$('#msg').textContent='✅ သိမ်းပြီး';counts();render();return true}
@@ -121,7 +144,7 @@ $('#imgdel').onclick=async()=>{if(!cur||!confirm('ပုံ ဖျက်မလ�
 $('#imgbox').addEventListener('dragover',e=>e.preventDefault());$('#imgbox').addEventListener('drop',e=>{e.preventDefault();if(cur&&e.dataTransfer.files[0])putImage(cur,e.dataTransfer.files[0])});
 addEventListener('paste',e=>{if(!cur||document.activeElement&&/INPUT|TEXTAREA/.test(document.activeElement.tagName)&&document.activeElement.type!=='file'&&!(e.clipboardData.files&&e.clipboardData.files.length))return;const f=[...e.clipboardData.files].find(x=>x.type.startsWith('image/'));if(f){e.preventDefault();putImage(cur,f)}});
 // collections
-$('#colBtn').onclick=()=>{const n={};D.songs.forEach(s=>n[s.c]=(n[s.c]||0)+1);
+$('#colBtn').onclick=()=>{const n={};D.songs.forEach(s=>{n[s.c]=(n[s.c]||0)+1;(s.x||[]).forEach(i=>n[i]=(n[i]||0)+1)});
  $('#clist').innerHTML=D.collections.map(c=>`<div class="crow"><input type="text" value="${esc(c.name)}" data-id="${c.id}"><span class="hint">${mn(n[c.id]||0)}</span><img src="${c.i?'/imgfile/t/'+c.id+'.jpg?v='+c.i:''}" style="width:34px;height:34px;object-fit:cover;border-radius:6px;${c.i?'':'display:none'}"><button data-pic="${c.id}">🖼</button>${c.i?`<button class="bad" data-picdel="${c.id}">✕🖼</button>`:''}<button data-r="${c.id}">သိမ်း</button>${n[c.id]?'':`<button class="bad" data-d="${c.id}">ဖျက်</button>`}</div>`).join('');dcol.showModal()};
 $('#clist').onclick=async e=>{const r=e.target.dataset.r,d=e.target.dataset.d,pic=e.target.dataset.pic,pd=e.target.dataset.picdel;
  if(pic){const inp=document.createElement('input');inp.type='file';inp.accept='image/*';inp.onchange=async()=>{const c=D.collections.find(x=>x.id===pic);const f=inp.files[0];if(!f)return;const j=await (await fetch('/api/image?id='+pic,{method:'POST',body:f})).json();if(j.error)return alert(j.error);c.i=j.i;$('#colBtn').click()};inp.click();return}
@@ -136,5 +159,6 @@ $('#aok').onclick=async()=>{const f=$('#afile').files[0];if(!f)return;$('#aok').
  try{const r=await (await fetch('/api/add?'+q,{method:'POST',body:f})).json();if(r.error)throw new Error(r.error);const s=r.song;s._k=norm(s.t+' '+s.a);D.songs.push(s);counts();render();$('#amsg').textContent='✅ ပြီး';dadd.close();openSong(s)}
  catch(e){$('#amsg').textContent='❌ '+e.message}$('#aok').disabled=false};
 $('#pub').onclick=async()=>{if(dirty&&!confirm('လက်ရှိ မသိမ်းရသေးပါ။ မသိမ်းဘဲ တင်မလား?'))return;$('#pub').disabled=true;$('#pub').textContent='⏳ တင်နေသည်…';const r=await api('/api/publish',{});$('#pub').disabled=false;$('#pub').textContent='🚀 website သို့ တင်မည်';alert(r.log)};
+api('/api/publishmode').then(r=>{$('#pmode').value=r.mode});$('#pmode').onchange=async()=>{await api('/api/publishmode',{mode:$('#pmode').value})};
 init();
 </script></body></html>

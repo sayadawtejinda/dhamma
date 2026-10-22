@@ -61,33 +61,80 @@ def run(cmd):
     r = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, encoding='utf8', errors='replace')
     return (r.stdout + r.stderr).strip(), r.returncode
 
-def archive_missing():
-    """songs of songs.json whose audio file is not (completely) on archive.org yet"""
+MODE = os.path.join(HERE, 'publish_mode.json')      # {"mode": "lyrics"} = only songs that have lyrics go to GitHub, {"mode": "all"} = everything
+
+def publish_mode():
+    m = jl(MODE, {}).get('mode', 'lyrics')
+    return m if m in ('lyrics', 'all') else 'lyrics'
+
+def published_view(d, mode):
+    """what the public page gets: in 'lyrics' mode only songs with lyrics (and the other versions of such a song);
+    the working copy (all songs) stays on this computer"""
+    if mode == 'all': return d
+    has = {(x.get('g') or x['id']) for x in d['songs'] if x.get('l')}
+    songs = [x for x in d['songs'] if x.get('l') or (x.get('g') or x['id']) in has]
+    cols = {c for x in songs for c in [x['c'], *x.get('x', [])]}
+    out = {k: v for k, v in d.items() if k not in ('songs', 'collections')}
+    out['collections'] = [c for c in d['collections'] if c['id'] in cols]
+    ok = {c['id'] for c in out['collections']}
+    out['songs'] = []
+    for x in songs:
+        y = dict(x)
+        if y.get('x'):
+            y['x'] = [i for i in y['x'] if i in ok]
+            if not y['x']: y.pop('x')
+        out['songs'].append(y)
+    return out
+
+def archive_missing(songs):
+    """songs whose audio file is not (completely) on archive.org yet"""
     import internetarchive as ia
     have = {f['name']: int(f.get('size', 0)) for f in ia.get_item('dhamma-school-songs').files}
-    return [s for s in load()['songs'] if have.get(s['f']) != s['z']]
+    return [s for s in songs if have.get(s['f']) != s['z']]
 
 def publish():
     log = []
+    mode = publish_mode(); d = load(); view = published_view(d, mode)
     try:
-        miss = archive_missing()
+        miss = archive_missing(view['songs'])
     except Exception as e:
         return 'archive.org ကို စစ်မရပါ ❌ (အင်တာနက် စစ်ပါ)\n' + str(e)
     if miss:
         return 'archive.org ပေါ် မရောက်သေးသော သီချင်း %d ပုဒ် ရှိနေသေးသည် ❌ — upload ပြီးမှ တင်ပါ။\n(ဥပမာ: %s)' % (len(miss), ', '.join(m['t'] for m in miss[:3]))
-    paths = [p for p in ['public/songs', 'scripts/songs/songs_meta.json', 'scripts/songs/songs_deleted.json'] if os.path.exists(os.path.join(ROOT, p))]
-    o, c = run(['git', 'add', '--'] + paths); log.append(o)
-    if c != 0: return 'git add မအောင်မြင်ပါ ❌\n' + o
-    o, c = run(['git', 'diff', '--cached', '--quiet', '--'] + paths)
+    run(['git', 'reset', '-q'])                                      # nothing else stays staged: only what is listed below is published
+    # the public songs.json (filtered) goes straight into the git index; the working copy is not touched
+    tmp = os.path.join(HERE, 'songs_public.tmp'); jw(tmp, view)
+    sha, c = run(['git', 'hash-object', '-w', tmp]); os.remove(tmp)
+    if c != 0: return 'git hash-object မအောင်မြင်ပါ ❌\n' + sha
+    o, c = run(['git', 'update-index', '--add', '--cacheinfo', '100644,%s,public/songs/data/songs.json' % sha]); log.append(o)
+    if c != 0: return 'git update-index မအောင်မြင်ပါ ❌\n' + o
+    paths = ['public/songs/index.html', 'public/songs/sw.js'] + [str(x) for x in []]
+    # lyrics and pictures of the published songs / collections only
+    ids = [x['id'] for x in view['songs']] + [c['id'] for c in view['collections']]
+    for i_ in ids:
+        for rel in ('public/songs/data/lyr/%s.json' % i_, 'public/songs/img/%s.jpg' % i_, 'public/songs/img/t/%s.jpg' % i_):
+            if os.path.exists(os.path.join(ROOT, rel)): paths.append(rel)
+    tools = [os.path.join('scripts/songs', f) for f in sorted(os.listdir(HERE)) if f.endswith(('.py', '.html'))] + ['start_songs_admin.bat', '.gitignore']
+    paths += [p for p in tools if os.path.exists(os.path.join(ROOT, p))]
+    for k in range(0, len(paths), 200):
+        o, c = run(['git', 'add', '--'] + paths[k:k + 200]); log.append(o)
+        if c != 0: return 'git add မအောင်မြင်ပါ ❌\n' + o
+    # files that were published before but are not published any more (deleted / hidden / not yet allowed)
+    o, c = run(['git', 'ls-tree', '-r', '--name-only', 'HEAD', 'public/songs/data/lyr', 'public/songs/img'])
+    for rel in o.splitlines():
+        if rel and rel not in paths: run(['git', 'rm', '-q', '--cached', '--', rel])
+    for rel in ('scripts/songs/songs_meta.json', 'scripts/songs/songs_deleted.json', 'scripts/songs/lyrics_report.json', 'scripts/songs/catalog_draft.json', 'scripts/songs/upload_plan.json'):
+        run(['git', 'rm', '-q', '--cached', '--ignore-unmatch', '--', rel])        # work files of this computer: not for GitHub
+    o, c = run(['git', 'diff', '--cached', '--quiet'])
     if c == 0: return 'ပြောင်းလဲမှု မရှိပါ (တင်ပြီးသား) ✅'
-    o, c = run(['git', 'commit', '-m', 'Songs: update', '--'] + paths); log.append(o)
+    o, c = run(['git', 'commit', '-m', 'Songs: update (%s)' % mode]); log.append(o)
     if c != 0: return 'commit မအောင်မြင်ပါ ❌\n' + o
     for attempt in range(3):
         o, c = run(['git', 'pull', '--rebase', '--autostash', 'origin', 'main']); log.append(o)
         o, c = run(['git', 'push', 'origin', 'main']); log.append(o)
         if c == 0:
             o2, c2 = run(['git', 'status', '-sb'])
-            if '[ahead' not in o2.splitlines()[0]: return 'တင်ပြီးပါပြီ ✅ (website မှာ ၁-၂ မိနစ်အတွင်း ပေါ်လာမည်)'
+            if '[ahead' not in o2.splitlines()[0]: return 'တင်ပြီးပါပြီ ✅ (%s သီချင်း %d ပုဒ်၊ website မှာ ၁-၂ မိနစ်အတွင်း ပေါ်လာမည်)' % ('စာသားရှိတာသာ' if mode == 'lyrics' else 'အားလုံး', len(view['songs']))
     return 'မအောင်မြင်ပါ ❌\n' + '\n'.join(log)
 
 def probe_dur(p):
@@ -165,10 +212,13 @@ class H(BaseHTTPRequestHandler):
                     m = meta.get(s['id'])
                     if m: s['_src'] = m.get('src', ''); s['_also'] = m.get('also', [])
                 return self._send(200, json.dumps(d, ensure_ascii=False))
+            if u.path == '/api/publishmode':
+                return self._send(200, json.dumps({'mode': publish_mode(), 'count': len(published_view(load(), publish_mode())['songs'])}))
             if u.path == '/api/gone':
                 return self._send(200, json.dumps(jl(HIDDEN if q.get('store', [''])[0] == 'hidden' else GONE, {}), ensure_ascii=False))
             if u.path == '/api/lyrics':
-                p = os.path.join(LYR, q['id'][0] + '.json')
+                sg = next((x for x in load()['songs'] if x['id'] == q['id'][0]), {})
+                p = os.path.join(LYR, (sg.get('lf') or q['id'][0]) + '.json')
                 return self._send(200, json.dumps({'t': jl(p, {}).get('t', '') if os.path.exists(p) else ''}, ensure_ascii=False))
             if u.path.startswith('/imgfile/'):
                 p = os.path.abspath(os.path.join(IMG, u.path[9:].replace('/', os.sep)))
@@ -202,24 +252,52 @@ class H(BaseHTTPRequestHandler):
                     if body.get('t') is not None and body['t'].strip() and body['t'].strip() != s['t']: s.pop('n', None)     # renamed = no longer "needs a name"
                     for k in ('t', 'a', 'c'):
                         if k in body: s[k] = str(body[k]).strip()
+                    if 'vl' in body:
+                        if body['vl'].strip(): s['vl'] = body['vl'].strip()
+                        else: s.pop('vl', None)
+                    if 'k' in body:
+                        if body['k']: s['k'] = 1
+                        else: s.pop('k', None)
+                    if s.get('g'):                                           # all versions of one song have the same title
+                        for x in d['songs']:
+                            if x.get('g') == s['g']: x['t'] = s['t']
+                    if 'x' in body:
+                        ok = {c['id'] for c in d['collections']}
+                        xs = sorted({i for i in body['x'] if i in ok and i != body.get('c', s['c'])})
+                        if xs: s['x'] = xs
+                        else: s.pop('x', None)
                     if 'newcol' in body and body['newcol'].strip():
                         cid = 'c%02d' % (max(int(c['id'][1:]) for c in d['collections']) + 1)
                         d['collections'].append(dict(id=cid, name=body['newcol'].strip())); s['c'] = cid
                     if 'lyrics' in body:
-                        p = os.path.join(LYR, s['id'] + '.json'); t = body['lyrics'].replace('\r\n', '\n').strip()
+                        owner = s.get('lf') or s['id']                       # a song that shares lyrics writes into the owner's file
+                        p = os.path.join(LYR, owner + '.json'); t = body['lyrics'].replace('\r\n', '\n').strip()
+                        users = [x for x in d['songs'] if x.get('lf') == owner] + [songs[owner]]
                         if t:
-                            if not (os.path.exists(p) and jl(p, {}).get('t') == t): s.pop('ld', None)       # edited by hand = no longer a draft
+                            if not (os.path.exists(p) and jl(p, {}).get('t') == t):
+                                for x in users: x.pop('ld', None)           # edited by hand = no longer a draft
                             jw(p, {'t': t}); s['l'] = 1
+                        elif s.get('lf'):                                    # empty text on a linked song = stop sharing
+                            s.pop('lf', None); s.pop('l', None); s.pop('ld', None)
                         else:
-                            s.pop('ld', None)
                             if os.path.exists(p): os.remove(p)
-                            s.pop('l', None)
-                    if body.get('lyricsOk'): s.pop('ld', None)
+                            for x in users: x.pop('l', None); x.pop('ld', None); x.pop('lf', None)
+                    if body.get('lyricsOk'):
+                        for x in d['songs']:
+                            if x['id'] == (s.get('lf') or s['id']) or x.get('lf') == (s.get('lf') or s['id']): x.pop('ld', None)
                     save(d); return self._send(200, json.dumps({'ok': True, 'song': s, 'collections': d['collections']}, ensure_ascii=False))
                 if u.path in ('/api/delete', '/api/hide'):
                     store = HIDDEN if u.path == '/api/hide' else GONE
                     sid = body['id']; s = songs.pop(sid)
                     d['songs'] = [x for x in d['songs'] if x['id'] != sid]
+                    rest_g = [x for x in d['songs'] if x.get('g') == sid]
+                    for x in rest_g: x['g'] = rest_g[0]['id']                 # the next version represents the song
+                    for x in d['songs']:
+                        if x.get('g') and sum(1 for y in d['songs'] if y.get('g') == x['g']) < 2: x.pop('g', None); x.pop('vl', None)
+                    users = [x for x in d['songs'] if x.get('lf') == sid]
+                    if users and os.path.exists(os.path.join(LYR, sid + '.json')):
+                        new = users[0]; shutil.copyfile(os.path.join(LYR, sid + '.json'), os.path.join(LYR, new['id'] + '.json')); new.pop('lf', None)
+                        for x in users[1:]: x['lf'] = new['id']
                     gone = jl(store, {}); e = dict(s); e['_col'] = colname(d, s['c']); e['_src'] = jl(META, {}).get(sid, {}).get('src', '')
                     p = os.path.join(LYR, sid + '.json')
                     if os.path.exists(p): e['_lyr'] = jl(p, {}).get('t', ''); os.remove(p)
@@ -236,6 +314,45 @@ class H(BaseHTTPRequestHandler):
                     d['songs'].append(e)
                     if lyr: jw(os.path.join(LYR, e['id'] + '.json'), {'t': lyr})
                     jw(store, gone, False); save(d); return self._send(200, json.dumps({'ok': True, 'song': e, 'collections': d['collections']}, ensure_ascii=False))
+                if u.path == '/api/group':            # body['to'] become versions of song body['id'] (same title, lyrics shared)
+                    rep = songs[body['id']]; g = rep.get('g') or rep['id']; rep['g'] = g
+                    owner = songs[rep.get('lf') or rep['id']]
+                    for tid in body['to']:
+                        t = songs[tid]
+                        if t['id'] == rep['id']: continue
+                        for x in d['songs']:
+                            if x.get('g') == t['id'] and x['id'] != t['id']: x['g'] = g      # versions it had follow it
+                        t['g'] = g; t['t'] = rep['t']
+                        if not t.get('vl'): t['vl'] = 'ကာရာအိုကေ' if t.get('k') else '%d:%02d' % (t['d'] // 60, t['d'] % 60)
+                        if owner.get('l') and not (t.get('l') and not t.get('lf')):
+                            t['lf'] = owner['id']; t['l'] = 1
+                            if owner.get('ld'): t['ld'] = 1
+                    if not rep.get('vl'): rep['vl'] = 'ကာရာအိုကေ' if rep.get('k') else '%d:%02d' % (rep['d'] // 60, rep['d'] % 60)
+                    save(d); return self._send(200, json.dumps({'ok': True}))
+                if u.path == '/api/ungroup':
+                    s = songs[body['id']]; g = s.pop('g', None)
+                    if g == s['id']:                                           # the representative leaves: the next one becomes it
+                        rest = [x for x in d['songs'] if x.get('g') == g and x['id'] != s['id']]
+                        for x in rest: x['g'] = rest[0]['id']
+                    left = [x for x in d['songs'] if x.get('g') == (g if g != s['id'] else None) and x['id'] != s['id']] if g else []
+                    for x in d['songs']:
+                        if x.get('g') and sum(1 for y in d['songs'] if y.get('g') == x['g']) < 2: x.pop('g', None); x.pop('vl', None)
+                    s.pop('vl', None); save(d); return self._send(200, json.dumps({'ok': True}))
+                if u.path == '/api/linklyrics':        # songs in body['to'] use the lyrics of song body['id'] (same words, another recording)
+                    owner = songs[body['id']]
+                    if owner.get('lf'): owner = songs[owner['lf']]
+                    if not owner.get('l'): raise ValueError('no lyrics to share')
+                    for tid in body['to']:
+                        t = songs[tid]
+                        if t['id'] == owner['id']: continue
+                        p = os.path.join(LYR, tid + '.json')
+                        if os.path.exists(p): os.remove(p)
+                        for x in d['songs']:                                   # songs that were sharing the removed text follow the new owner
+                            if x.get('lf') == tid: x['lf'] = owner['id']
+                        t['lf'] = owner['id']; t['l'] = 1
+                        if owner.get('ld'): t['ld'] = 1
+                        else: t.pop('ld', None)
+                    save(d); return self._send(200, json.dumps({'ok': True}))
                 if u.path == '/api/imagedel':
                     oid = body['id']; target = songs.get(oid) or next((c for c in d['collections'] if c['id'] == oid), None)
                     if target: target.pop('i', None); save(d)
@@ -246,8 +363,16 @@ class H(BaseHTTPRequestHandler):
                     save(d); return self._send(200, json.dumps({'ok': True, 'collections': d['collections']}, ensure_ascii=False))
                 if u.path == '/api/coldelete':        # only an empty collection
                     if any(s['c'] == body['id'] for s in d['songs']): return self._send(400, json.dumps({'error': 'သီချင်းများ ရှိနေသေးသည်'}, ensure_ascii=False))
-                    d['collections'] = [c for c in d['collections'] if c['id'] != body['id']]; save(d)
+                    d['collections'] = [c for c in d['collections'] if c['id'] != body['id']]
+                    for x_ in d['songs']:
+                        if body['id'] in x_.get('x', []):
+                            x_['x'] = [i for i in x_['x'] if i != body['id']]
+                            if not x_['x']: x_.pop('x')
+                    save(d)
                     return self._send(200, json.dumps({'ok': True, 'collections': d['collections']}, ensure_ascii=False))
+            if u.path == '/api/publishmode':
+                jw(MODE, {'mode': 'all' if json.loads(raw or b'{}').get('mode') == 'all' else 'lyrics'}, False)
+                return self._send(200, json.dumps({'ok': True}))
             if u.path == '/api/publish':
                 return self._send(200, json.dumps({'log': publish()}, ensure_ascii=False))
         except Exception as e:

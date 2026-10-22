@@ -99,6 +99,8 @@ dialog::backdrop{background:rgba(20,6,40,.65);backdrop-filter:blur(3px)}
 .th{flex:none;width:42px;height:42px;border-radius:9px;object-fit:cover;background:var(--line)}
 .cover{display:block;margin:10px auto 0;max-width:100%;max-height:260px;border-radius:14px;box-shadow:0 6px 20px rgba(0,0,0,.35);cursor:zoom-in;background:rgba(255,255,255,.15)}
 .cover.big{max-height:none;width:100%;cursor:zoom-out}
+.vers{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 0}.vers button{border:0;border-radius:999px;padding:4px 14px;background:rgba(255,255,255,.22);color:#fff;font-weight:600}.vers button.on{background:#fff;color:#4a1d7a}
+.vsm{color:var(--accent)!important}
 .toast{position:fixed;left:50%;bottom:100px;transform:translateX(-50%);background:#2b1745;color:#fff;padding:8px 16px;border-radius:12px;z-index:60;opacity:0;transition:.25s;pointer-events:none;max-width:90vw}
 .toast.on{opacity:1}
 </style>
@@ -117,7 +119,7 @@ dialog::backdrop{background:rgba(20,6,40,.65);backdrop-filter:blur(3px)}
 <div id="mini"><div class="bar2" id="mbar"></div><button class="ib" id="mprev">⏮</button><button class="ib" id="mpp">▶</button><button class="ib" id="mnext">⏭</button><div class="t"><b id="mt"></b><small id="ma"></small></div></div>
 <dialog id="np"><div class="np" id="npb">
  <div class="top"><button class="ib" id="nclose" title="ပိတ်">✕</button><span class="sp"></span><button class="ib" id="nbg" title="နောက်ခံပြောင်း">🎨</button><button class="ib" id="nshuf" title="ကြုံရာ">🔀</button><button class="ib" id="nrep" title="ပြန်ဆိုမည်">🔁</button></div>
- <div class="body"><h2 id="nt"></h2><p class="art" id="na"></p><div id="nimg"></div>
+ <div class="body"><h2 id="nt"></h2><p class="art" id="na"></p><div class="vers" id="nver"></div><div id="nimg"></div>
   <div class="seek"><span id="ncur">0:00</span><input type="range" id="nseek" min="0" max="1000" value="0"><span id="ndur">0:00</span></div>
   <div class="ctl"><button class="ib" id="nprev">⏮</button><button class="ib big" id="npp">▶</button><button class="ib" id="nnext">⏭</button></div>
   <div class="row2"><button class="btn" id="noff">⬇ offline သိမ်းမည်</button><button class="btn" id="nshare">🔗 လင့်ခ်</button><button class="btn" id="nlist">➕ စာရင်းထဲထည့်</button></div><div class="pr" id="npr" hidden><i></i></div>
@@ -142,21 +144,27 @@ $('#theme').onclick=()=>{const d=document.documentElement,cur=d.dataset.theme||(
 // pretty backgrounds
 const BG=['linear-gradient(135deg,#3b1a66,#6a2fa8,#c0489a,#f0a63a)','linear-gradient(135deg,#0f4c5c,#1b7f8c,#4fb99f,#f2d492)','linear-gradient(135deg,#7a1f1f,#b4381e,#e8a21a,#fff0b3)','linear-gradient(135deg,#102a5c,#2c5db8,#6aa7ff,#c6e0ff)','linear-gradient(135deg,#1d4d2b,#3a8f4f,#9cd36b,#f4f0a0)','linear-gradient(135deg,#4a1d5c,#a1347f,#ff7b9c,#ffd3a5)','linear-gradient(135deg,#2a1b3d,#44318d,#d83f87,#f8b400)','linear-gradient(135deg,#0b3d3a,#e0a030,#d1495b,#4a1d7a)'];
 const hash=s=>{let h=0;for(const c of String(s))h=(h*31+c.charCodeAt(0))>>>0;return h};
+const gid=s=>s.g||s.id;      // versions of one song (other recordings, karaoke) share g: the list shows the song once, the versions are inside
+let GRP={},GROUPS=[];
+function buildGroups(){GRP={};SONGS.forEach(s=>{(GRP[gid(s)]=GRP[gid(s)]||[]).push(s)});GROUPS=Object.values(GRP);GROUPS.forEach(a=>a.sort((x,y)=>(x.k?1:0)-(y.k?1:0)||y.d-x.d))}
+const vlab=s=>s.vl||fmt(s.d);
+const inCol=(s,id)=>s.c===id||(s.x||[]).includes(id);   // one song can belong to more than one collection (field x = the extra ones)
 function bgOf(s){const o=+lsGet('bg_'+s.id,-1);return BG[o>=0?o%BG.length:hash(s.c+s.id.slice(0,3))%BG.length]}
 // ---------------- data
 let D=null,SONGS=[],COLS={},CUR=null,QUEUE=[],tab='songs',flt={lyr:0,off:0,na:0},shown=150,OFF=new Set();
 const AUD=new Audio();AUD.preload='none';
 const collator=(()=>{try{return new Intl.Collator('my')}catch(e){return new Intl.Collator()}})();
-fetch('data/songs.json?v='+DV).then(r=>r.json()).then(d=>{D=d;SONGS=d.songs;d.collections.forEach(c=>COLS[c.id]=c);
- SONGS.forEach(s=>{s._k=norm(s.t+' '+s.a+' '+(COLS[s.c]||{}).name)});
- $('#col').innerHTML='<option value="">စုစည်းမှုအားလုံး</option>'+d.collections.filter(c=>SONGS.some(s=>s.c===c.id)).map(c=>`<option value="${c.id}">${esc(c.name)} (${mn(SONGS.filter(s=>s.c===c.id).length)})</option>`).join('');
+fetch('data/songs.json?v='+DV).then(r=>r.json()).then(d=>{D=d;SONGS=d.songs;d.collections.forEach(c=>COLS[c.id]=c);buildGroups();
+ SONGS.forEach(s=>{s._k=norm(s.t+' '+s.a+' '+[s.c,...(s.x||[])].map(i=>(COLS[i]||{}).name).join(' '))});
+ $('#col').innerHTML='<option value="">စုစည်းမှုအားလုံး</option>'+d.collections.filter(c=>SONGS.some(s=>inCol(s,c.id))).map(c=>`<option value="${c.id}">${esc(c.name)} (${mn(SONGS.filter(s=>inCol(s,c.id)).length)})</option>`).join('');
  $('#sub').textContent=`သီချင်း ကဗျာ ${mn(SONGS.length)} ပုဒ် · စုစည်းမှု ${mn(d.collections.length)} ခု`;
  refreshOff().then(()=>{render();const h=location.hash.slice(1);if(h&&SONGS.find(s=>s.id===h))openSong(h,false)});
 }).catch(()=>{$('#view').innerHTML='<div class="empty">အချက်အလက် မရရှိသေးပါ။ အင်တာနက် စစ်ပြီး ပြန်ကြိုးစားပါ။</div>'});
 // ---------------- list
 function filtered(){
  const q=norm($('#q').value),c=$('#col').value,so=$('#sort').value;
- let l=SONGS.filter(s=>(!c||s.c===c)&&(!q||s._k.includes(q))&&(!flt.lyr||s.l)&&(!flt.off||OFF.has(s.id))&&(!flt.na||s.n));
+ let l=[];
+ for(const a of GROUPS){if(q&&!a.some(s=>s._k.includes(q)))continue;const m=a.filter(s=>(!c||inCol(s,c))&&(!flt.lyr||s.l)&&(!flt.off||OFF.has(s.id))&&(!flt.na||s.n));if(m.length)l.push(m[0])}
  if(so==='title')l=[...l].sort((a,b)=>(a.n?1:0)-(b.n?1:0)||collator.compare(a.t,b.t));
  else if(so==='artist')l=[...l].sort((a,b)=>(a.a?0:1)-(b.a?0:1)||collator.compare(a.a,b.a)||collator.compare(a.t,b.t));
  else if(so==='long')l=[...l].sort((a,b)=>b.d-a.d);
@@ -168,7 +176,8 @@ $('#imgm').onclick=()=>{IMGM=IMGM==='off'?'thumb':'off';lsSet('songsImg',IMGM);p
 function showCover(s){const B=$('#nimg');B.innerHTML='';if(!s.i)return;
  if(IMGM==='off'){B.innerHTML='<button class="btn" id="nimgbtn" style="margin-top:8px">🖼 ပုံကြည့်မည်</button>';$('#nimgbtn').onclick=()=>{B.innerHTML=`<img class="cover big" src="img/${s.id}.jpg?v=${s.i}" alt="">`;$('#nimg img').onclick=()=>showCover(s)}}
  else{B.innerHTML=`<img class="cover" src="${thumb(s)}" alt="" title="ပုံကြီးကြည့်ရန် နှိပ်ပါ">`;$('#nimg img').onclick=function(){if(this.classList.contains('big')){this.src=thumb(s);this.classList.remove('big')}else{this.src=`img/${s.id}.jpg?v=${s.i}`;this.classList.add('big')}}}}
-function songRow(s){return `<div class="song ${CUR&&CUR.id===s.id?'cur':''}" data-id="${s.id}"><button class="pl" data-p="${s.id}">${CUR&&CUR.id===s.id&&!AUD.paused?'⏸':'▶'}</button>${s.i&&IMGM!=='off'?`<img class="th" loading="lazy" decoding="async" src="${thumb(s)}" alt="">`:''}<div class="mid"><h3>${esc(s.t)}</h3><small>${esc(s.a||'')}${s.a?' · ':''}${esc((COLS[s.c]||{}).name||'')}</small></div><div class="rt">${s.l?'📝 ':''}${OFF.has(s.id)?'⬇ ':''}<br>${fmt(s.d)}</div></div>`}
+function songRow(s,flat){const grp=!flat&&GRP[gid(s)]&&GRP[gid(s)].length>1?GRP[gid(s)]:null,isCur=CUR&&(grp?gid(CUR)===gid(s):CUR.id===s.id);
+ return `<div class="song ${isCur?'cur':''}" data-id="${s.id}" data-g="${gid(s)}"><button class="pl" data-p="${s.id}">${isCur&&!AUD.paused?'⏸':'▶'}</button>${s.i&&IMGM!=='off'?`<img class="th" loading="lazy" decoding="async" src="${thumb(s)}" alt="">`:''}<div class="mid"><h3>${esc(s.t)}${flat&&s.vl?` <small class="vsm">(${esc(s.vl)})</small>`:''}</h3><small>${grp?`<span class="vsm">🎵 ${grp.map(x=>esc(vlab(x))).join(' · ')}</span><br>`:''}${esc(s.a||'')}${s.a?' · ':''}${esc((COLS[s.c]||{}).name||'')}</small></div><div class="rt">${(grp?grp.some(x=>x.l):s.l)?'📝 ':''}${(grp?grp.some(x=>OFF.has(x.id)):OFF.has(s.id))?'⬇ ':''}<br>${grp?mn(grp.length)+' မျိုး':fmt(s.d)}</div></div>`}
 function render(){
  $$('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===tab));
  $('.bar').style.display=$('#chips').style.display=tab==='songs'?'':'none';$('#batch').innerHTML='';
@@ -178,10 +187,10 @@ function render(){
   if(l.length&&l.length<=400&&($('#col').value||flt.lyr||$('#q').value)){const need=l.filter(x=>!OFF.has(x.id));if(need.length){$('#batch').innerHTML=`<button class="b2" id="bsave">⬇ ဒီစာရင်း ${mn(need.length)} ပုဒ် offline သိမ်းမည် (${mb(need)})</button>`;$('#bsave').onclick=()=>batchSave(need)}}}
  else if(tab==='lists'){listView()}
  else if(tab==='off'){offView()}
- else if(tab==='cols'){$('#count').textContent='';$('#view').innerHTML='<div class="grid">'+D.collections.filter(c=>SONGS.some(s=>s.c===c.id)).map(c=>{const n=SONGS.filter(s=>s.c===c.id);return `<button class="cc" data-c="${c.id}" style="background:${c.i&&IMGM!=='off'?`linear-gradient(0deg,rgba(0,0,0,.65),rgba(0,0,0,.05)),url(${thumb(c)}) center/cover`:BG[hash(c.id)%BG.length]}"><b>${esc(c.name)}</b><small>${mn(n.length)} ပုဒ် · ${mn(Math.round(n.reduce((a,s)=>a+s.d,0)/60))} မိနစ်</small></button>`}).join('')+'</div>'}
+ else if(tab==='cols'){$('#count').textContent='';$('#view').innerHTML='<div class="grid">'+D.collections.filter(c=>SONGS.some(s=>inCol(s,c.id))).map(c=>{const n=SONGS.filter(s=>inCol(s,c.id));return `<button class="cc" data-c="${c.id}" style="background:${c.i&&IMGM!=='off'?`linear-gradient(0deg,rgba(0,0,0,.65),rgba(0,0,0,.05)),url(${thumb(c)}) center/cover`:BG[hash(c.id)%BG.length]}"><b>${esc(c.name)}</b><small>${mn(n.length)} ပုဒ် · ${mn(Math.round(n.reduce((a,s)=>a+s.d,0)/60))} မိနစ်</small></button>`}).join('')+'</div>'}
  else{const m={};SONGS.forEach(s=>{if(s.a)(m[s.a]=m[s.a]||[]).push(s)});const k=Object.keys(m).sort((a,b)=>collator.compare(a,b));$('#count').textContent=`အဆိုတော် ${mn(k.length)} ဦး`;$('#view').innerHTML='<div class="arts">'+k.map(a=>`<button data-a="${esc(a)}">${esc(a)} <small>${mn(m[a].length)}</small></button>`).join('')+'</div>'}
  markCur()}
-function markCur(){$$('.song').forEach(e=>{const c=CUR&&e.dataset.id===CUR.id;e.classList.toggle('cur',c);const b=e.querySelector('.pl');if(b)b.textContent=c&&!AUD.paused?'⏸':'▶'})}
+function markCur(){$$('.song').forEach(e=>{const c=CUR&&(GRP[e.dataset.g]&&GRP[e.dataset.g].length>1&&!e.querySelector('.ctrl')?gid(CUR)===e.dataset.g:e.dataset.id===CUR.id);e.classList.toggle('cur',c);const b=e.querySelector('.pl');if(b)b.textContent=c&&!AUD.paused?'⏸':'▶'})}
 $('#tabs').onclick=e=>{const b=e.target.closest('button');if(!b)return;tab=b.dataset.t;render()};
 $('#q').oninput=()=>{shown=150;render()};$('#sort').onchange=()=>{shown=150;render()};$('#col').onchange=()=>{shown=150;render()};
 $('#chips').onclick=e=>{const b=e.target.closest('.chip');if(!b)return;flt[b.dataset.f]^=1;b.classList.toggle('on',!!flt[b.dataset.f]);shown=150;render()};
@@ -194,7 +203,7 @@ $('#view').onclick=e=>{
  if(e.target.closest('#lnew')){const n=prompt('စာရင်းအသစ် အမည်');if(n&&n.trim()){LISTS.push({id:'l'+Date.now(),name:n.trim().slice(0,40),ids:[]});saveLists();render()}return}
  if(e.target.closest('#lback')){openList=null;render();return}
  if(e.target.closest('#offclear')){if(confirm('offline သိမ်းထားသမျှ အကုန်ဖျက်မလား?'))clearOff();return}
- const p=e.target.closest('[data-p]');if(p){e.stopPropagation();const s=SONGS.find(x=>x.id===p.dataset.p);if(CUR&&CUR.id===s.id)toggle();else play(s);return}
+ const p=e.target.closest('[data-p]');if(p){e.stopPropagation();const s=SONGS.find(x=>x.id===p.dataset.p);if(CUR&&(CUR.id===s.id||(gid(CUR)===gid(s)&&GRP[gid(s)].length>1&&!p.closest('.ctrl')&&tab==='songs')))toggle();else play(s);return}
  const r=e.target.closest('.song');if(r){openSong(r.dataset.id,true);return}
  const c=e.target.closest('[data-c]');if(c){$('#col').value=c.dataset.c;tab='songs';shown=150;render();scrollTo(0,0);return}
  const a=e.target.closest('[data-a]');if(a){$('#q').value=a.dataset.a;$('#col').value='';tab='songs';shown=150;render();scrollTo(0,0)}};
@@ -217,7 +226,7 @@ try{LISTS=JSON.parse(lsGet('songsLists','null'))}catch(e){}
 if(!Array.isArray(LISTS)||!LISTS.length)LISTS=[{id:'fav',name:'♥ ကြိုက်သည်များ',ids:[]}];
 const saveLists=()=>lsSet('songsLists',JSON.stringify(LISTS));
 const mb=a=>(a.reduce((x,s)=>x+s.z,0)/1048576).toFixed(0).replace(/\d/g,d=>MMN[d])+' MB';
-function rowCtl(s,i,n){return songRow(s).replace('<div class="rt">','<div class="ctrl"><button data-up="'+s.id+'" '+(i?'':'disabled')+'>▲</button><button data-dn="'+s.id+'" '+(i<n-1?'':'disabled')+'>▼</button><button data-rm="'+s.id+'">✕</button></div><div class="rt">')}
+function rowCtl(s,i,n){return songRow(s,true).replace('<div class="rt">','<div class="ctrl"><button data-up="'+s.id+'" '+(i?'':'disabled')+'>▲</button><button data-dn="'+s.id+'" '+(i<n-1?'':'disabled')+'>▼</button><button data-rm="'+s.id+'">✕</button></div><div class="rt">')}
 function listView(){
  if(openList){const L_=LISTS.find(x=>x.id===openList);if(!L_){openList=null;return listView()}
   const songs=L_.ids.map(id=>SONGS.find(s=>s.id===id)).filter(Boolean);QUEUE=songs;$('#count').textContent='';
@@ -233,7 +242,7 @@ $('#dplok').onclick=()=>{const n=$('#dpln').value.trim();if(n){LISTS.push({id:'l
 // ---------------- offline tab + batch saving (only when the user asks: nothing is downloaded by itself)
 function offView(){const l=SONGS.filter(s=>OFF.has(s.id));QUEUE=l;
  $('#count').textContent=l.length?`offline သိမ်းထားသည် ${mn(l.length)} ပုဒ် · ${mb(l)} (internet မရှိလည်း ဖွင့်လို့ရသည်)`:'';
- $('#view').innerHTML=l.length?`<div class="hd"><span style="flex:1"></span><button class="b2" id="offclear">🗑 အကုန်ဖျက်မည်</button></div><div class="list">${l.map(songRow).join('')}</div>`:'<div class="empty">offline သိမ်းထားတာ မရှိသေးပါ။<br>သီချင်းဖွင့်ပြီး ⬇ offline သိမ်းမည် ကိုနှိပ်ပါ။</div>'}
+ $('#view').innerHTML=l.length?`<div class="hd"><span style="flex:1"></span><button class="b2" id="offclear">🗑 အကုန်ဖျက်မည်</button></div><div class="list">${l.map(x=>songRow(x,true)).join('')}</div>`:'<div class="empty">offline သိမ်းထားတာ မရှိသေးပါ။<br>သီချင်းဖွင့်ပြီး ⬇ offline သိမ်းမည် ကိုနှိပ်ပါ။</div>'}
 async function clearOff(){try{await caches.delete(CN)}catch(e){}OFF=new Set();render();toast('offline အားလုံး ဖျက်ပြီး')}
 let batchStop=false;
 async function batchSave(list){
@@ -241,7 +250,7 @@ async function batchSave(list){
  batchStop=false;const B=$('#batch');let n=0;
  for(const s of list){if(batchStop)break;B.innerHTML=`<div class="count">⏳ ${mn(n)} / ${mn(list.length)} — ${esc(s.t)} <button class="b2" id="bstop">ရပ်မည်</button></div><div class="pr" style="background:var(--line)"><i id="bpr" style="background:var(--accent)"></i></div>`;
   $('#bstop').onclick=()=>batchStop=true;
-  try{await saveOff(s,p=>{const b=$('#bpr');if(b)b.style.width=(p*100)+'%'});if(s.l)fetch(`data/lyr/${s.id}.json?v=${DV}`).catch(()=>{})}catch(e){toast('တချို့ မသိမ်းနိုင်ပါ — အင်တာနက် စစ်ပါ');break}
+  try{await saveOff(s,p=>{const b=$('#bpr');if(b)b.style.width=(p*100)+'%'});if(s.l)fetch(`data/lyr/${s.lf||s.id}.json?v=${DV}`).catch(()=>{})}catch(e){toast('တချို့ မသိမ်းနိုင်ပါ — အင်တာနက် စစ်ပါ');break}
   n++}
  B.innerHTML='';render();toast(batchStop?'ရပ်ထားသည်':`offline သိမ်းပြီး ${mn(n)} ပုဒ် ✓`)}
 // ---------------- player
@@ -254,14 +263,15 @@ async function play(s){CUR=s;if(objUrl){URL.revokeObjectURL(objUrl);objUrl=null}
   navigator.mediaSession.setActionHandler('previoustrack',()=>step(-1));navigator.mediaSession.setActionHandler('nexttrack',()=>step(1));
   navigator.mediaSession.setActionHandler('play',()=>AUD.play());navigator.mediaSession.setActionHandler('pause',()=>AUD.pause())}}
 function toggle(){AUD.paused?AUD.play():AUD.pause()}
-function step(d){if(!CUR)return;const q=QUEUE.length?QUEUE:SONGS;let i=q.findIndex(x=>x.id===CUR.id);
+const qIndex=q=>{let i=q.findIndex(x=>x.id===CUR.id);return i>=0?i:q.findIndex(x=>gid(x)===gid(CUR))};
+function step(d){if(!CUR)return;const q=QUEUE.length?QUEUE:GROUPS.map(a=>a[0]);let i=qIndex(q);
  if(shuffle)i=Math.floor(Math.random()*q.length);else i=(i+d+q.length)%q.length;play(q[i])}
-AUD.onended=()=>{if(repeat===1){AUD.currentTime=0;AUD.play()}else{const q=QUEUE.length?QUEUE:SONGS;const i=q.findIndex(x=>x.id===CUR.id);if(repeat===2||shuffle||i<q.length-1)step(1);else paint()}};
+AUD.onended=()=>{if(repeat===1){AUD.currentTime=0;AUD.play()}else{const q=QUEUE.length?QUEUE:GROUPS.map(a=>a[0]);const i=qIndex(q);if(repeat===2||shuffle||i<q.length-1)step(1);else paint()}};
 ['play','pause','playing'].forEach(ev=>AUD.addEventListener(ev,paint));
 AUD.ontimeupdate=()=>{const p=AUD.duration?AUD.currentTime/AUD.duration:0;$('#mbar').style.width=p*100+'%';if(!seeking){$('#nseek').value=p*1000}$('#ncur').textContent=fmt(AUD.currentTime);if(AUD.duration)$('#ndur').textContent=fmt(AUD.duration)};
 let seeking=false;$('#nseek').oninput=()=>{seeking=true;if(AUD.duration)AUD.currentTime=$('#nseek').value/1000*AUD.duration};$('#nseek').onchange=()=>seeking=false;
 function paint(){const m=$('#mini');if(!CUR){m.classList.remove('on');return}m.classList.add('on');m.style.setProperty('--g',bgOf(CUR));
- $('#mt').textContent=CUR.t;$('#ma').textContent=CUR.a||(COLS[CUR.c]||{}).name||'';const ic=AUD.paused?'▶':'⏸';$('#mpp').textContent=ic;$('#npp').textContent=ic;markCur();
+ $('#mt').textContent=CUR.t+(CUR.vl&&GRP[gid(CUR)]&&GRP[gid(CUR)].length>1?' ('+CUR.vl+')':'');$('#ma').textContent=CUR.a||(COLS[CUR.c]||{}).name||'';const ic=AUD.paused?'▶':'⏸';$('#mpp').textContent=ic;$('#npp').textContent=ic;markCur();
  $('#nrep').classList.toggle('on',repeat>0);$('#nrep').textContent=repeat===1?'🔂':'🔁';$('#nshuf').classList.toggle('on',!!shuffle)}
 $('#mpp').onclick=e=>{e.stopPropagation();toggle()};$('#mprev').onclick=e=>{e.stopPropagation();step(-1)};$('#mnext').onclick=e=>{e.stopPropagation();step(1)};
 $('#mini').onclick=()=>{if(CUR)openSong(CUR.id,false)};
@@ -274,13 +284,15 @@ let NP=null,LY={};
 async function openSong(id,autoplay){
  NP=SONGS.find(s=>s.id===id);if(!NP)return;
  $('#npb').style.setProperty('--g',bgOf(NP));$('#nt').textContent=NP.t;$('#na').textContent=[NP.a,(COLS[NP.c]||{}).name].filter(Boolean).join(' · ');
+ const vs=GRP[gid(NP)]||[NP];$('#nver').innerHTML=vs.length>1?vs.map(x=>`<button data-ver="${x.id}" class="${x.id===NP.id?'on':''}">${x.k?'🎤 ':'🎵 '}${esc(vlab(x))}</button>`).join(''):'';
  showCover(NP);$('#ndur').textContent=fmt(NP.d);history.replaceState(null,'','#'+id);
  if(!$('#np').open)$('#np').showModal();
  if(autoplay&&(!CUR||CUR.id!==id))play(NP);else paint();
  $('#noff').textContent=OFF.has(id)?'🗑 offline ဖျက်မည်':'⬇ offline သိမ်းမည်';
  const L=$('#nlyr');L.className='lyr empty';L.textContent=NP.l?'ဖတ်နေသည်…':'စာသား မရှိသေးပါ';
- if(NP.l){try{if(!(id in LY))LY[id]=(await (await fetch(`data/lyr/${id}.json?v=${DV}`)).json()).t;if(NP&&NP.id===id){L.className='lyr';L.textContent=LY[id]}}catch(e){L.textContent='စာသား မရသေးပါ'}}
+ if(NP.l){const lid=NP.lf||id;try{if(!(lid in LY))LY[lid]=(await (await fetch(`data/lyr/${lid}.json?v=${DV}`)).json()).t;if(NP&&NP.id===id){L.className='lyr';L.textContent=LY[lid]}}catch(e){L.textContent='စာသား မရသေးပါ'}}
  $('#cm').open=false;$('#cmbody').innerHTML='';$('#cmn').textContent='';cmLoaded=null}
+$('#nver').onclick=e=>{const b=e.target.closest('[data-ver]');if(b)openSong(b.dataset.ver,true)};
 $('#nclose').onclick=()=>{$('#np').close();history.replaceState(null,'',location.pathname+location.search)};
 $('#np').addEventListener('click',e=>{if(e.target===$('#np'))$('#nclose').click()});
 $('#nbg').onclick=()=>{const o=(+lsGet('bg_'+NP.id,hash(NP.c+NP.id.slice(0,3))%BG.length)+1)%BG.length;lsSet('bg_'+NP.id,o);$('#npb').style.setProperty('--g',BG[o]);paint()};

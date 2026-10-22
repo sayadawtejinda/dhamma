@@ -11,3 +11,10 @@ Paramattha2.txt
 public/library/audio/
 scripts/gemini-key.txt
 scripts/songs/songs_hidden.json
+scripts/songs/songs_meta.json
+scripts/songs/songs_deleted.json
+scripts/songs/lyrics_report.json
+scripts/songs/catalog_draft.json
+scripts/songs/upload_plan.json
+scripts/songs/publish_mode.json
+scripts/songs/songs_public.tmp
