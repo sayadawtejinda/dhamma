@@ -383,6 +383,7 @@ export default function AnimalSoundApp({ entryRequest, onExit, hideOwnOnlineBadg
         const progressRosterRef = studentUid ? rosterDocRefByUid(db, AS_ROSTER_PATH, studentUid) : null;
         const MAX_TROPHY_WINS = 5;
         let trophyWins = 0;
+        let trophyDay = null; // the day (YYYY-MM-DD, the student's own) of the last trophy: at most ONE trophy a day
         let coinBalance = 0;
 
         function awardCoins(delta) {
@@ -425,9 +426,12 @@ export default function AnimalSoundApp({ entryRequest, onExit, hideOwnOnlineBadg
 
         function recordWin() {
             if (trophyWins >= MAX_TROPHY_WINS) return;
+            const today = new Date().toLocaleDateString('en-CA');
+            if (trophyDay === today) return; // already earned today's trophy: the next one comes on another day
+            trophyDay = today;
             trophyWins++;
             if (progressRosterRef) {
-                setDoc(progressRosterRef, { trophyWins }, { merge: true }).catch(() => {});
+                setDoc(progressRosterRef, { trophyWins, trophyDay }, { merge: true }).catch(() => {});
             }
         }
 
@@ -442,6 +446,7 @@ export default function AnimalSoundApp({ entryRequest, onExit, hideOwnOnlineBadg
                 getDoc(progressRosterRef).then(snap => {
                     const data = snap.exists() ? snap.data() : {};
                     trophyWins = Math.min(MAX_TROPHY_WINS, data.trophyWins || 0);
+                    trophyDay = data.trophyDay || null;
                     coinBalance = data.coinBalance || 0;
                     setMyCoinBalance(coinBalance);
                 }).catch(e => console.error('Error loading Animal Sound Quiz progress:', e));
