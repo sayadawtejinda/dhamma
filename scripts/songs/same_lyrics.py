@@ -53,7 +53,7 @@ def run(apply):
             if owner_of(a) == owner_of(b): parent[find(a['id'])] = find(b['id']); continue
             if LIB.get(a['c'], 'main') != LIB.get(b['c'], 'main'): continue          # another library: never the same entry
             if abs(len(ka) - len(kb)) > 0.05 * max(len(ka), len(kb)): continue
-            if ka == kb or (difflib.SequenceMatcher(None, ka, kb).quick_ratio() > 0.97 and difflib.SequenceMatcher(None, ka, kb, autojunk=False).ratio() >= 0.97):
+            if ka == kb:                                  # only the SAME words are shared: versions whose words differ a little keep their own lyrics
                 parent[find(a['id'])] = find(b['id'])
     clusters = collections.defaultdict(set)
     for s, k in rows: clusters[find(s['id'])].add(s['id'])

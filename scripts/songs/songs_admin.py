@@ -99,14 +99,14 @@ def do_merge(d, songs, body):
         if x.get('g') and sum(1 for y in d['songs'] if y.get('g') == x['g']) < 2: x.pop('g', None); x.pop('vl', None)
     jw(GONE, gone, False); save(d)
 
-def similar():
+def similar(only_lib=None):
     d = load(); ign = set(jl(IGN, [])); cn = {c['id']: c['name'] for c in d['collections']}
     b = collections.defaultdict(list)
     lib = {c['id']: c.get('lib', 'main') for c in d['collections']}
     for s in d['songs']:
         if s.get('n'): continue
         k = skel(s['t'])
-        if len(k) >= 4: b[(k, lib.get(s['c'], 'main'))].append(s)
+        if len(k) >= 4 and (not only_lib or lib.get(s['c'], 'main') == only_lib): b[(k, lib.get(s['c'], 'main'))].append(s)
     out = []
     for k, v in b.items():
         if len(v) < 2 or len({x.get('g') or x['id'] for x in v}) == 1: continue
@@ -137,8 +137,8 @@ def publish_libs():
 def published_view(d, mode):
     """what the public page gets: in 'lyrics' mode only songs with lyrics (and the other versions of such a song);
     the working copy (all songs) stays on this computer"""
-    pl = set(publish_libs()); libof = {c['id']: c.get('lib', 'main') for c in d['collections']}
-    d = dict(d); d['songs'] = [x for x in d['songs'] if libof.get(x['c'], 'main') in pl]
+    pl = set(publish_libs()); libof = {c['id']: c.get('lib', 'main') for c in d['collections']}; nopub = {c['id'] for c in d['collections'] if c.get('np')}
+    d = dict(d); d['songs'] = [x for x in d['songs'] if libof.get(x['c'], 'main') in pl and x['c'] not in nopub]        # np = collection the teacher keeps off the public page
     d['libs'] = [l for l in d.get('libs', []) if l['id'] in pl] or d.get('libs')
     if mode == 'all': return d
     has = {(x.get('g') or x['id']) for x in d['songs'] if x.get('l')}
@@ -417,7 +417,7 @@ class H(BaseHTTPRequestHandler):
             if u.path == '/api/job':
                 return self._send(200, json.dumps(JOBS.get(q['id'][0], {}), ensure_ascii=False))
             if u.path == '/api/similar':
-                return self._send(200, json.dumps({'groups': similar()}, ensure_ascii=False))
+                return self._send(200, json.dumps({'groups': similar(q.get('lib', [''])[0] or None)}, ensure_ascii=False))
             if u.path == '/api/publishmode':
                 return self._send(200, json.dumps({'mode': publish_mode(), 'libs': publish_libs(), 'count': len(published_view(load(), publish_mode())['songs'])}))
             if u.path == '/api/gone':
@@ -592,6 +592,9 @@ class H(BaseHTTPRequestHandler):
                     for c in d['collections']:
                         if c['id'] == body['id']:
                             c['name'] = body['name'].strip()
+                            if 'np' in body:
+                                if body['np']: c['np'] = 1
+                                else: c.pop('np', None)
                             if body.get('lib'):
                                 if body['lib'] == 'main': c.pop('lib', None)
                                 else: c['lib'] = body['lib']
