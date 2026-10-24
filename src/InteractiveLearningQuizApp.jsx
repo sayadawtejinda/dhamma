@@ -301,6 +301,19 @@ export default function InteractiveLearningQuizApp({ entryRequest, onExit, hideO
         const MAX_PHASE_TROPHIES = 5;
         const progressRosterRef = studentUid ? rosterDocRefByUid(db, ILQ_ROSTER_PATH, studentUid) : null;
         let completedPhases = [];
+        // At most ONE phase trophy a day: a phase finished after today's trophy waits and is credited on a later day.
+        let pendingPhases = [];
+        let trophyDay = null;
+        const todayKey = () => new Date().toLocaleDateString('en-CA');
+        function releaseOnePending() {
+            if (!pendingPhases.length || trophyDay === todayKey() || completedPhases.length >= MAX_PHASE_TROPHIES) return false;
+            const next = pendingPhases.find(p => !completedPhases.includes(p));
+            pendingPhases = pendingPhases.filter(p => p !== next);
+            if (next == null) return false;
+            completedPhases = [...completedPhases, next];
+            trophyDay = todayKey();
+            return true;
+        }
         let coinBalance = 0;
 
         function awardCoins(delta) {
@@ -363,8 +376,9 @@ export default function InteractiveLearningQuizApp({ entryRequest, onExit, hideO
             if (!progressRosterRef) return;
             if (completedPhases.includes(phase)) return;
             if (completedPhases.length >= MAX_PHASE_TROPHIES) return;
-            completedPhases = [...completedPhases, phase];
-            setDoc(progressRosterRef, { completedPhases }, { merge: true }).catch(() => {});
+            if (!pendingPhases.includes(phase)) pendingPhases = [...pendingPhases, phase];
+            releaseOnePending();
+            setDoc(progressRosterRef, { completedPhases, pendingPhases, trophyDay }, { merge: true }).catch(() => {});
         }
 
         function firstUnfinishedPhase() {
@@ -934,6 +948,9 @@ export default function InteractiveLearningQuizApp({ entryRequest, onExit, hideO
                     if (snap.exists()) {
                         const data = snap.data();
                         completedPhases = Array.isArray(data.completedPhases) ? data.completedPhases : [];
+                        pendingPhases = Array.isArray(data.pendingPhases) ? data.pendingPhases : [];
+                        trophyDay = data.trophyDay || null;
+                        if (releaseOnePending()) setDoc(progressRosterRef, { completedPhases, pendingPhases, trophyDay }, { merge: true }).catch(() => {});
                         coinBalance = data.coinBalance || 0;
                         setMyCoinBalance(coinBalance);
                     }

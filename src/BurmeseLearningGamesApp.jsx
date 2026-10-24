@@ -885,6 +885,9 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
         const WINS_PER_TROPHY = 30;
         const MAX_TROPHIES = 20;
         let totalWins = 0;
+        // At most ONE trophy a day: the wins keep adding up, but a new trophy is released only once a day (the student's own day).
+        let trophyUnitsGiven = 0;
+        let trophyDay = null;
         let coinBalance = 0;
 
         function awardCoins(delta) {
@@ -928,8 +931,10 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
         function recordRoundWin() {
             totalWins++;
             if (!progressRosterRef) return;
-            const trophyUnits = Math.min(MAX_TROPHIES, Math.floor(totalWins / WINS_PER_TROPHY));
-            setDoc(progressRosterRef, { totalWins, trophyUnits }, { merge: true }).catch(() => {});
+            const earned = Math.min(MAX_TROPHIES, Math.floor(totalWins / WINS_PER_TROPHY));
+            const today = new Date().toLocaleDateString('en-CA');
+            if (earned > trophyUnitsGiven && trophyDay !== today) { trophyUnitsGiven += 1; trophyDay = today; }
+            setDoc(progressRosterRef, { totalWins, trophyUnits: trophyUnitsGiven, trophyDay }, { merge: true }).catch(() => {});
         }
 
         if (progressRosterRef) {
@@ -943,6 +948,9 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
                 getDoc(progressRosterRef).then(snap => {
                     const data = snap.exists() ? snap.data() : {};
                     totalWins = data.totalWins || 0;
+                    trophyDay = data.trophyDay || null;
+                    // students from before the daily limit: the trophies they already have stay (the stored count, or what their wins gave)
+                    trophyUnitsGiven = data.trophyUnits != null ? data.trophyUnits : Math.min(MAX_TROPHIES, Math.floor(totalWins / WINS_PER_TROPHY));
                     coinBalance = data.coinBalance || 0;
                     setMyCoinBalance(coinBalance);
                 }).catch(e => console.error('Error loading Burmese Learning Games progress:', e));
