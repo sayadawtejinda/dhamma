@@ -2084,8 +2084,10 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
         const chant = CHANT_ITEMS[chantIndex];
         return (
           <div
-            className="fixed top-20 right-3 z-[10000] max-h-[calc(100vh-6rem)] bg-white rounded-2xl shadow-2xl border-2 border-amber-200 flex flex-col"
-            style={{ width: `${chantPanelWidth}px` }}
+            className="fixed top-20 right-3 z-[10000] bg-white rounded-2xl shadow-2xl border-2 border-amber-200 flex flex-col"
+            // 100vh on an iPad / phone includes the browser's own bars, which pushed the Previous / Next buttons below the screen:
+            // the visible height (dvh) is used where the browser knows it
+            style={{ width: `${chantPanelWidth}px`, maxWidth: 'calc(100vw - 1.5rem)', maxHeight: (typeof CSS !== 'undefined' && CSS.supports && CSS.supports('height', '100dvh')) ? 'calc(100dvh - 6rem)' : 'calc(100vh - 8rem)' }}
           >
             {/* Drag left to widen -- see handleChantResizeStart for why this
                 is a custom handle instead of the CSS resize property. */}
@@ -2098,6 +2100,11 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
             </div>
             <div className="flex justify-between items-center p-4 border-b">
               <h2 className="text-xl font-bold text-amber-700">🙏 Chanting</h2>
+              {/* the same Previous / Next up here, so they can always be reached even if the bottom row is off the screen */}
+              <div className="flex items-center gap-1">
+                <button onClick={() => setChantIndex(i => Math.max(0, i - 1))} disabled={chantIndex === 0} className="w-9 h-9 rounded-lg bg-gray-100 text-gray-700 font-bold disabled:opacity-40" aria-label="Previous chant">←</button>
+                <button onClick={() => setChantIndex(i => Math.min(CHANT_ITEMS.length - 1, i + 1))} disabled={chantIndex === CHANT_ITEMS.length - 1} className="w-9 h-9 rounded-lg bg-amber-500 text-white font-bold disabled:opacity-40" aria-label="Next chant">→</button>
+              </div>
               <button onClick={() => setChantingOpen(false)} className="text-gray-400 hover:text-gray-700 text-2xl leading-none">×</button>
             </div>
 
