@@ -129,6 +129,7 @@ export default function AvatarApp({ entryRequest, onExit }) {
   const [loading, setLoading] = useState(true);
   const [coinBalance, setCoinBalance] = useState(isTeacherPreview ? 500 : 0);
   const [config, setConfig] = useState(DEFAULT_CONFIG);
+  const [giftsOpen, setGiftsOpen] = useState(false); // many gifts: only the newest shows until this is opened
   const [owned, setOwned] = useState({ hair: ['short-black'], outfit: ['blue'], accessory: ['none'], bg: ['sky'], homeBackground: ['default'] });
   const [activeCategory, setActiveCategory] = useState('hair');
   const [toast, setToast] = useState(null);
@@ -565,9 +566,24 @@ export default function AvatarApp({ entryRequest, onExit }) {
         ))}
       </div>
 
-      {/* Shop grid for the active category */}
+      {/* Shop grid for the active category. Festival gifts pile up, so only the NEWEST gift shows; the gift button opens the others. */}
+      {(() => {
+        const list = owned[activeCategory] || [];
+        const n = activeCat.options.filter(o => o.festival && list.includes(o.id)).length;
+        return n > 1 && !isTeacherPreview ? (
+          <button type="button" onClick={() => setGiftsOpen(o => !o)} className="mb-3 px-4 py-1.5 rounded-full text-sm font-bold text-amber-800 bg-amber-100 hover:bg-amber-200 border border-amber-300">
+            🎁 {n} gifts {giftsOpen ? '▲ show only the newest' : '▼ show all'}
+          </button>
+        ) : null;
+      })()}
       <div className="w-full max-w-2xl grid grid-cols-2 sm:grid-cols-3 gap-3">
-        {activeCat.options.filter(o => !o.festival || isTeacherPreview || isOwned(activeCategory, o.id)).sort((a, b) => (b.festival ? 1 : 0) - (a.festival ? 1 : 0)).map(option => {
+        {(() => {
+          const list = owned[activeCategory] || [];
+          const gifts = activeCat.options.filter(o => o.festival && (isTeacherPreview || list.includes(o.id)));
+          // newest = the one added to the owned list last
+          const newest = gifts.slice().sort((a, b) => list.indexOf(b.id) - list.indexOf(a.id))[0];
+          return activeCat.options.filter(o => !o.festival || isTeacherPreview || (isOwned(activeCategory, o.id) && (giftsOpen || isTeacherPreview || gifts.length <= 1 || o === newest || config[activeCategory] === o.id)));
+        })().sort((a, b) => (b.festival ? 1 : 0) - (a.festival ? 1 : 0)).map(option => {
           const owns = isTeacherPreview || isOwned(activeCategory, option.id);
           const equipped = config[activeCategory] === option.id;
           const swatchColor = option.swatch || option.color || '#CFD8DC';

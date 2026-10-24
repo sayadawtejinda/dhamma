@@ -57,6 +57,8 @@ const yearWeeksOf = (uid) => {
 const festivalDeeds = readJson('festivalDeeds.json') || { students: {} };
 const BASIC_VOWELS = ['B-listen-1', 'B-listen-2', 'B-click-1', 'B-click-2', 'B-click-3'];
 const PRO_VOWELS = ['P-listen-1', 'P-listen-2', 'P-click-1'];
+const MAX_PATH = join(dirname(fileURLToPath(import.meta.url)), 'avatarItemsMax.json');
+let avatarMax = {}; try { avatarMax = JSON.parse(readFileSync(MAX_PATH, 'utf8')); } catch (e) { /* first run */ }
 const out = {};
 for (const st of students) {
   const n = st.name;
@@ -87,7 +89,10 @@ for (const st of students) {
     // items the student has GOT (each one once -- wearing one again does not count), without the free starter item of each kind
     const FREE = new Set(['hair:short-black', 'outfit:blue', 'accessory:none', 'bg:sky', 'homeBackground:default']);
     Object.entries(sh.avatarOwned || {}).forEach(([cat, arr]) => (Array.isArray(arr) ? arr : []).forEach(x => { if (!FREE.has(`${cat}:${x}`)) owned.add(`${cat}:${x}`); }));
-    at(owned.size, [[2, 'avatar-2'], [5, 'avatar-5'], [10, 'avatar-10'], [20, 'avatar-25'], [30, 'avatar-30'], [50, 'avatar-50']]);
+    // selling a gift must not take a badge away: the most items a student has ever owned is kept (scripts/avatarItemsMax.json)
+    const prevMax = avatarMax[st.id] || 0;
+    avatarMax[st.id] = Math.max(prevMax, owned.size);
+    at(avatarMax[st.id], [[2, 'avatar-2'], [5, 'avatar-5'], [10, 'avatar-10'], [20, 'avatar-25'], [30, 'avatar-30'], [50, 'avatar-50']]);
   }
   // Myanmar Poems: the app's record, or the trophies the teacher confirmed (students from before the records have only the trophies)
   const po = poems.get(n) || {};
@@ -164,6 +169,7 @@ const awards = {
   holy: top3([...shrine.values()].filter(d => (d.studentName || d.id)), 'lotusCount', x => x.studentName || x.id),
   joy: top3((snap.attendanceRankedList || []).filter(s => !s.isOffline), 'attended', x => x.name, x => x.id),
 };
+writeFileSync(MAX_PATH, JSON.stringify(avatarMax));
 writeFileSync(join(ROOT, 'badges.json'), JSON.stringify({ generatedAt: new Date().toISOString(), students: out, awards }));
 const counts = {};
 Object.values(out).forEach(l => l.forEach(id => { counts[id] = (counts[id] || 0) + 1; }));
