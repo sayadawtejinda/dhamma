@@ -10757,9 +10757,10 @@ function WeeklySchedule({ role, targetStudentUid }) {
     setModalData({ name: studentName, attended: 0, total: 0, loading: true });
     setShowCountModal(true);
 
-    // A student looking at someone else's count: from that student's static history file on GitHub (this year's schedule
-    // and sessions, rewritten weekly) -- nothing is read from Firebase. Only the teacher reads it live.
-    if (role !== 'teacher') {
+    // Anyone looking at a student's count (the teacher too): from that student's static history file on GitHub (this year's schedule
+    // and sessions, rewritten weekly) -- nothing is read from Firebase. (The teacher used to read the student's whole schedule and
+    // every session from Firebase on each tap: about 500 reads.)
+    if (true) {
       try {
         const hist = studentUid && studentUid !== 'offline' ? await loadStudentHistory(studentUid) : null;
         const now = new Date();
@@ -11456,6 +11457,9 @@ const newAccountsClosed = (mode) => mode === 'closed' || (mode !== 'open' && isP
 const HISTORY_KEYS = ['t_sessions14', 't_schedule14'];
 function TeacherRefreshButton() {
   const [, setTick] = useState(0);
+  const [showText, setShowText] = useState(false); // only the 🔄 icon until it is tapped (saves room on a phone)
+  const textTimerRef = useRef(null);
+  const revealText = () => { setShowText(true); if (textTimerRef.current) clearTimeout(textTimerRef.current); textTimerRef.current = setTimeout(() => setShowText(false), 12000); };
   useEffect(() => { const i = setInterval(() => setTick(x => x + 1), 30000); return () => clearInterval(i); }, []);
   const fmt = (at) => (at ? ` · ${new Date(at).toLocaleString('en-US', Date.now() - at > 12 * 3600 * 1000 ? { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' } : { hour: 'numeric', minute: '2-digit' })}` : '');
   const btn = 'px-3 py-1 bg-white border border-gray-300 text-gray-700 rounded-full hover:bg-gray-100 shadow-sm text-sm font-semibold';
@@ -11464,6 +11468,7 @@ function TeacherRefreshButton() {
       {/* Only when you want to see them: the last 14 days of sessions and schedule (about 1,000 reads); at most once an hour. */}
       <button
         onClick={() => {
+          revealText();
           const at = cachedListenUpdatedAt(HISTORY_KEYS);
           if (at && Date.now() - at < 60 * 60 * 1000) { alert(`Sessions and schedule were read ${Math.round((Date.now() - at) / 60000)} minutes ago. They can be read again after one hour (this protects the daily read limit).`); return; }
           refreshCachedListeners(HISTORY_KEYS, 60 * 60 * 1000); setTick(x => x + 1);
@@ -11471,7 +11476,7 @@ function TeacherRefreshButton() {
         className={btn}
         title="Read the last 14 days of sessions and schedule (about 1,000 reads). At most once an hour."
       >
-        🔄 Sessions &amp; schedule{fmt(cachedListenUpdatedAt(HISTORY_KEYS))}
+        🔄{showText ? <> Sessions &amp; schedule{fmt(cachedListenUpdatedAt(HISTORY_KEYS))}</> : null}
       </button>
     </>
   );
