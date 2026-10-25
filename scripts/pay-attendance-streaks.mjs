@@ -108,7 +108,7 @@ async function main() {
   const seenDay = new Set();
   const due = classes.filter(c => c.end > from && c.end <= cutoff).sort((a, b) => a.start - b.start).filter(c => { const k = `${c.uid}_${c.day}`; if (seenDay.has(k)) return false; seenDay.add(k); return true; });
   console.log(`${due.length} class(es) ended since ${new Date(from).toISOString()}`);
-  const pay = []; // { uid, name, n, coins }
+  const pay = []; // { uid, name, n, coins, day }
   due.forEach(c => {
     const st = students[c.uid] || { n: 0, last: 0 };
     if (st.skipDay && st.skipDay === c.day) { students[c.uid] = st; return; } // this class was already paid by hand (a test), do not count it twice
@@ -116,7 +116,7 @@ async function main() {
     if (came) {
       st.n += 1; st.last = c.start;
       const coins = Math.min(MAX_COINS, BASE_COINS + STEP_COINS * (st.n - 1));
-      pay.push({ uid: c.uid, name: c.name || names[c.uid] || 'Student', n: st.n, coins });
+      pay.push({ uid: c.uid, name: c.name || names[c.uid] || 'Student', n: st.n, coins, day: c.day });
       console.log(`  ${c.name || c.uid}: came (${c.day}) -> class ${st.n} in a row, ${coins} coins`);
     } else {
       if (st.n > 0) console.log(`  ${c.name || c.uid}: missed (${c.day}) -> streak of ${st.n} ends`);
@@ -155,6 +155,8 @@ async function main() {
   // save the state FIRST, so a second run can never pay the same class twice
   await setDoc(STATE, { startedAtMs: state.startedAtMs, processedThroughMs: cutoff, students, updatedAt: serverTimestamp() }, { merge: true });
   for (const p of pay) {
+    // the student's own Home page pays the coins AT ONCE when they come to class and writes the day on their record (streakPaidDays): never pay that class again
+    try { const sd = await getDoc(doc(db, `${P}/students`, p.uid)); if (sd.exists() && (sd.data().streakPaidDays || []).includes(p.day)) { console.log(`  ${p.name}: ${p.day} was already paid at once -> skipped`); continue; } } catch (e) { /* pay normally */ }
     const message = (p.n === 1 ? '🌟 You came to class! Keep coming!' : `🔥 ${p.n} classes in a row! Great attendance!`).slice(0, 80);
     await setDoc(doc(collection(db, GIFTS)), { studentUid: p.uid, studentName: p.name, coins: p.coins, message, createdAt: serverTimestamp(), expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000 });
     await setDoc(doc(db, `${P}/students`, p.uid), { hasTeacherGift: true }, { merge: true });

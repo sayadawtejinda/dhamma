@@ -8335,6 +8335,36 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     };
   }, [mySchedule, myRecurringSchedule, mySessions, studentUid]);
 
+  // ---- Attendance coins, paid AT ONCE: the moment today's scheduled class shows as attended (green) on this Home page. The coins are 100 for the first
+  // class of a streak, +25 for every scheduled class attended in a row before it (a red chip ends the streak), at most 500 -- worked out from the same
+  // chips the attendance bar shows, so it costs no read. They arrive as a gift box. The day is written on the student's record (streakPaidDays) first,
+  // so the same class is never paid twice (two tabs, a second visit, or the daily job on GitHub, which skips days written there). ----
+  const streakPayingRef = useRef(null);
+  useEffect(() => {
+    if (!studentUid || studentUid === VISITOR_UID || !studentProfile) return;
+    const entries = attendanceSummary.yearEntries || [];
+    const now = new Date();
+    const keyOf = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const todayKey = keyOf(now);
+    const idx = entries.findIndex(e => keyOf(e.date) === todayKey && e.status === 'attended');
+    if (idx < 0) return;
+    if ((studentProfile.streakPaidDays || []).includes(todayKey) || streakPayingRef.current === todayKey) return;
+    streakPayingRef.current = todayKey;
+    let before = 0;
+    for (let i = idx - 1; i >= 0; i--) { if (entries[i].status === 'attended') before++; else if (entries[i].status === 'absent') break; }
+    const coins = Math.min(500, 100 + 25 * before);
+    const message = (before === 0 ? '🌟 You came to class! Keep coming!' : `🔥 ${before + 1} classes in a row! Great attendance!`).slice(0, 80);
+    const studentRef = doc(db, `${publicDataPath}/students`, studentUid);
+    (async () => {
+      try {
+        await updateDoc(studentRef, { streakPaidDays: arrayUnion(todayKey), hasTeacherGift: true });
+        try {
+          await addDoc(collection(db, 'artifacts/shrine-room-app/public/data/teacherGifts'), { studentUid, studentName: studentProfile.name || 'Student', coins, message, createdAt: serverTimestamp(), expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000 });
+        } catch (e) { await updateDoc(studentRef, { streakPaidDays: arrayRemove(todayKey) }).catch(() => {}); streakPayingRef.current = null; throw e; }
+      } catch (e) { console.error('Attendance coins:', e); }
+    })();
+  }, [attendanceSummary.yearEntries, studentProfile?.streakPaidDays, studentUid]);
+
   // Opens whatever app the current Active Session's lesson link points to,
   // without creating a new session (one already exists) or touching lesson
   // status -- extracted from the Active Session box's own Continue button
