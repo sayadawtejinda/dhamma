@@ -940,7 +940,7 @@ export default function AbhidhammaApp({ entryRequest, onExit, isActive }) {
   // My scores are found by my Tutoring ID only (userId = students/{uid}): one live listener, no search by name. A student whose browser got a
   // new anonymous id part-way (Kevin: 10 lessons under the old id) had those scores moved to the Tutoring id once
   // (scripts/migrate-abhi-scores-userid.mjs), so this single listener sees all of them.
-  const myScoreDocsRef=useRef({user:new Map(),name:new Map()});
+  const myScoreDocsRef=useRef({user:new globalThis.Map(),name:new globalThis.Map()});
   const recomputeMyScores=()=>{
     const all=myScoreDocsRef.current.user;
     let total=0;const byClass={};
@@ -951,7 +951,7 @@ export default function AbhidhammaApp({ entryRequest, onExit, isActive }) {
   useEffect(()=>{
     if(role!=='Student'||!effectiveUserId)return;
     const unsub=onSnapshot(query(abhiScoresRef(),where('userId','==',effectiveUserId)),snap=>{
-      const m=new Map();const byClass={};
+      const m=new globalThis.Map();const byClass={};
       snap.forEach(d=>{const dt=d.data();m.set(d.id,dt);if(dt.classId&&dt.lessonId){(byClass[dt.classId]=byClass[dt.classId]||new Set()).add(dt.lessonId);}});
       myScoreDocsRef.current.user=m;
       setMyDoneIdsByUser(byClass);
