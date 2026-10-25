@@ -102,6 +102,22 @@ dialog::backdrop{background:rgba(20,6,40,.65);backdrop-filter:blur(3px)}
 .vers{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 0}.vers button{border:0;border-radius:999px;padding:4px 14px;background:rgba(255,255,255,.22);color:#fff;font-weight:600}.vers button.on{background:#fff;color:#4a1d7a}
 .vsm{color:var(--accent)!important}
 #libs button{border:0;border-radius:999px;padding:5px 16px;background:rgba(255,255,255,.2);color:#fff;font-weight:600;font:inherit;cursor:pointer}#libs button.on{background:#fff;color:#4a1d7a}
+.sk{flex:none;width:22px;height:22px;accent-color:var(--accent)}
+#selbar{position:fixed;left:0;right:0;bottom:0;z-index:35;display:none;gap:8px;flex-wrap:wrap;align-items:center;padding:10px 14px;background:var(--card);border-top:2px solid var(--accent);box-shadow:0 -6px 22px rgba(0,0,0,.25)}
+#selbar.on{display:flex}#selbar b{flex:1;min-width:140px}
+#printArea{display:none}
+@media print{
+ body>*:not(#printArea){display:none!important}
+ body{background:#fff!important;color:#000!important;padding:0!important}
+ #printArea{display:block}
+ @page{size:A4;margin:18mm 16mm}
+ .pg{page-break-after:always;break-after:page;color:#000;font-family:"Pyidaungsu","Noto Sans Myanmar","Myanmar Text",sans-serif}
+ .pg:last-child{page-break-after:auto;break-after:auto}
+ .pg h1{font-size:24pt;line-height:1.5;margin:0 0 4pt;color:#3b1a66}
+ .pg .sub{font-size:11pt;color:#555;margin:0 0 14pt;line-height:1.7}
+ .pg .ly{font-size:15pt;line-height:2;white-space:pre-wrap;margin:0}
+ .pg .ft{margin-top:18pt;font-size:9pt;color:#888;border-top:1px solid #ccc;padding-top:6pt}
+}
 .toast{position:fixed;left:50%;bottom:100px;transform:translateX(-50%);background:#2b1745;color:#fff;padding:8px 16px;border-radius:12px;z-index:60;opacity:0;transition:.25s;pointer-events:none;max-width:90vw}
 .toast.on{opacity:1}
 </style>
@@ -113,10 +129,12 @@ dialog::backdrop{background:rgba(20,6,40,.65);backdrop-filter:blur(3px)}
  <div class="bar"><div class="search"><input id="q" type="search" placeholder="သီချင်းအမည်၊ အဆိုတော်၊ စုစည်းမှု ရှာရန်…" autocomplete="off"></div>
   <select id="sort"><option value="title">အမည် က–အ</option><option value="artist">အဆိုတော် က–အ</option><option value="orig">မူလအစဉ်</option><option value="long">အရှည်ဆုံး</option></select>
   <select id="col"><option value="">စုစည်းမှုအားလုံး</option></select></div>
- <div class="chips" id="chips"><button class="chip" data-f="lyr">📝 စာသားပါသည်</button><button class="chip" data-f="off">⬇ offline သိမ်းထားသည်</button><button class="chip" data-f="na">⚠ အမည်မရှိသေး</button></div>
+ <div class="chips" id="chips"><button class="chip" data-f="lyr">📝 စာသားပါသည်</button><button class="chip" data-f="off">⬇ offline သိမ်းထားသည်</button><button class="chip" data-f="na">⚠ အမည်မရှိသေး</button><button class="chip" id="selbtn" title="သီချင်းစာသားတွေကို တစ်ခါတည်း PDF ထုတ်ရန်">☑ စာသား PDF ထုတ်ရန်</button></div>
  <div class="count" id="count"></div><div id="batch"></div>
  <div id="view"></div>
 </div>
+<div id="selbar"><b id="selinfo"></b><button class="b2" id="selall">ဒီစာရင်း အားလုံးရွေး</button><button class="b2" id="selclear">ရှင်း</button><button class="b2 pri" id="selpdf">📄 PDF ထုတ်မည်</button><button class="b2" id="selclose">✕</button></div>
+<div id="printArea"></div>
 <div id="mini"><div class="bar2" id="mbar"></div><button class="ib" id="mprev">⏮</button><button class="ib" id="mpp">▶</button><button class="ib" id="mnext">⏭</button><div class="t"><b id="mt"></b><small id="ma"></small></div></div>
 <dialog id="np"><div class="np" id="npb">
  <div class="top"><button class="ib" id="nclose" title="ပိတ်">✕</button><span class="sp"></span><button class="ib" id="nbg" title="နောက်ခံပြောင်း">🎨</button><button class="ib" id="nshuf" title="ကြုံရာ">🔀</button><button class="ib" id="nrep" title="ပြန်ဆိုမည်">🔁</button></div>
@@ -193,12 +211,12 @@ function showCover(s){const B=$('#nimg');B.innerHTML='';if(!s.i)return;
  if(IMGM==='off'){B.innerHTML='<button class="btn" id="nimgbtn" style="margin-top:8px">🖼 ပုံကြည့်မည်</button>';$('#nimgbtn').onclick=()=>{B.innerHTML=`<img class="cover big" src="img/${s.id}.jpg?v=${s.i}" alt="">`;$('#nimg img').onclick=()=>showCover(s)}}
  else{B.innerHTML=`<img class="cover" src="${thumb(s)}" alt="" title="ပုံကြီးကြည့်ရန် နှိပ်ပါ">`;$('#nimg img').onclick=function(){if(this.classList.contains('big')){this.src=thumb(s);this.classList.remove('big')}else{this.src=`img/${s.id}.jpg?v=${s.i}`;this.classList.add('big')}}}}
 function songRow(s,flat){const grp=!flat&&GRP[gid(s)]&&GRP[gid(s)].length>1?GRP[gid(s)]:null,isCur=CUR&&(grp?gid(CUR)===gid(s):CUR.id===s.id);
- return `<div class="song ${isCur?'cur':''}" data-id="${s.id}" data-g="${gid(s)}"><button class="pl" data-p="${s.id}">${isCur&&!AUD.paused?'⏸':'▶'}</button>${s.i&&IMGM!=='off'?`<img class="th" loading="lazy" decoding="async" src="${thumb(s)}" alt="">`:''}<div class="mid"><h3>${esc(s.t)}${flat&&s.vl?` <small class="vsm">(${esc(s.vl)})</small>`:''}</h3><small>${grp?`<span class="vsm">🎵 ${grp.map(x=>esc(vlab(x))).join(' · ')}</span><br>`:''}${esc(grp?[...new Set(grp.flatMap(artistsOf))].join(' · '):artistText(s))}${(grp?grp.some(x=>x.a):s.a)?' · ':''}${esc((COLS[s.c]||{}).name||'')}</small></div><div class="rt">${(grp?grp.some(x=>x.l):s.l)?'📝 ':''}${(grp?grp.some(x=>OFF.has(x.id)):OFF.has(s.id))?'⬇ ':''}<br>${grp?mn(grp.length)+' မျိုး':fmt(s.d)}</div></div>`}
+ return `<div class="song ${isCur?'cur':''}" data-id="${s.id}" data-g="${gid(s)}">${SELMODE&&!flat?`<input type="checkbox" class="sk" ${SEL.has(gid(s))?'checked':''} tabindex="-1">`:''}<button class="pl" data-p="${s.id}">${isCur&&!AUD.paused?'⏸':'▶'}</button>${s.i&&IMGM!=='off'?`<img class="th" loading="lazy" decoding="async" src="${thumb(s)}" alt="">`:''}<div class="mid"><h3>${esc(s.t)}${flat&&s.vl?` <small class="vsm">(${esc(s.vl)})</small>`:''}</h3><small>${grp?`<span class="vsm">🎵 ${grp.map(x=>esc(vlab(x))).join(' · ')}</span><br>`:''}${esc(grp?[...new Set(grp.flatMap(artistsOf))].join(' · '):artistText(s))}${(grp?grp.some(x=>x.a):s.a)?' · ':''}${esc((COLS[s.c]||{}).name||'')}</small></div><div class="rt">${(grp?grp.some(x=>x.l):s.l)?'📝 ':''}${(grp?grp.some(x=>OFF.has(x.id)):OFF.has(s.id))?'⬇ ':''}<br>${grp?mn(grp.length)+' မျိုး':fmt(s.d)}</div></div>`}
 function render(){
  $$('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===tab));
  $('.bar').style.display=$('#chips').style.display=tab==='songs'?'':'none';$('#batch').innerHTML='';
  if(tab==='songs'){const l=filtered();QUEUE=l;$('#count').textContent=`သီချင်း ${mn(l.length)} ပုဒ်`+(l.length?` · စုစုပေါင်း ${Math.round(l.reduce((a,s)=>a+s.d,0)/60)} မိနစ်`.replace(/\d+/,m=>mn(m)):'');
-  $('#view').innerHTML=l.length?`<div class="list">${l.slice(0,shown).map(songRow).join('')}</div>${l.length>shown?`<button class="more" id="more">ထပ်ပြမည် (${mn(l.length-shown)})</button>`:''}`:'<div class="empty">မတွေ့ပါ။</div>';
+  $('#view').innerHTML=l.length?`<div class="list">${l.slice(0,shown).map(x=>songRow(x)).join('')}</div>${l.length>shown?`<button class="more" id="more">ထပ်ပြမည် (${mn(l.length-shown)})</button>`:''}`:'<div class="empty">မတွေ့ပါ။</div>';
   if($('#more'))$('#more').onclick=()=>{shown+=200;render()}
   if(l.length&&l.length<=400&&($('#col').value||flt.lyr||$('#q').value)){const need=l.filter(x=>!OFF.has(x.id));if(need.length){$('#batch').innerHTML=`<button class="b2" id="bsave">⬇ ဒီစာရင်း ${mn(need.length)} ပုဒ် offline သိမ်းမည် (${mb(need)})</button>`;$('#bsave').onclick=()=>batchSave(need)}}}
  else if(tab==='lists'){listView()}
@@ -220,7 +238,7 @@ $('#view').onclick=e=>{
  if(e.target.closest('#lback')){openList=null;render();return}
  if(e.target.closest('#offclear')){if(confirm('offline သိမ်းထားသမျှ အကုန်ဖျက်မလား?'))clearOff();return}
  const p=e.target.closest('[data-p]');if(p){e.stopPropagation();const s=SONGS.find(x=>x.id===p.dataset.p);if(CUR&&(CUR.id===s.id||(gid(CUR)===gid(s)&&GRP[gid(s)].length>1&&!p.closest('.ctrl')&&tab==='songs')))toggle();else play(s);return}
- const r=e.target.closest('.song');if(r){openSong(r.dataset.id,true);return}
+ const r=e.target.closest('.song');if(r){if(SELMODE&&tab==='songs'){toggleSel(r.dataset.g);const k=r.querySelector('.sk');if(k)k.checked=SEL.has(r.dataset.g);selInfo();return}openSong(r.dataset.id,true);return}
  const c=e.target.closest('[data-c]');if(c){$('#col').value=c.dataset.c;tab='songs';shown=150;render();scrollTo(0,0);return}
  const a=e.target.closest('[data-a]');if(a){$('#q').value=a.dataset.a;$('#col').value='';tab='songs';shown=150;render();scrollTo(0,0)}};
 // ---------------- offline (Cache API)
@@ -269,6 +287,38 @@ async function batchSave(list){
   try{await saveOff(s,p=>{const b=$('#bpr');if(b)b.style.width=(p*100)+'%'});if(s.l)fetch(`data/lyr/${s.lf||s.id}.json?v=${DV}`).catch(()=>{})}catch(e){toast('တချို့ မသိမ်းနိုင်ပါ — အင်တာနက် စစ်ပါ');break}
   n++}
  B.innerHTML='';render();toast(batchStop?'ရပ်ထားသည်':`offline သိမ်းပြီး ${mn(n)} ပုဒ် ✓`)}
+
+// ---------------- lyrics of the chosen songs as one PDF (one song = one page): the browser's print dialog "Save as PDF" does the Myanmar text shaping
+let SELMODE=false;const SEL=new Set();
+function selInfo(){$('#selinfo').textContent=`ရွေးထားသည် ${mn(SEL.size)} ပုဒ်`+(SEL.size?'':' — သီချင်းကို နှိပ်ပြီး ရွေးပါ')}
+function toggleSel(g){SEL.has(g)?SEL.delete(g):SEL.add(g)}
+function setSel(on){SELMODE=on;$('#selbar').classList.toggle('on',on);$('#selbtn').classList.toggle('on',on);if(on){tab='songs';selInfo()}else SEL.clear();render()}
+$('#selbtn').onclick=()=>setSel(!SELMODE);$('#selclose').onclick=()=>setSel(false);
+$('#selclear').onclick=()=>{SEL.clear();selInfo();render()};
+$('#selall').onclick=()=>{filtered().forEach(x=>SEL.add(gid(x)));selInfo();render();toast('ဒီစာရင်းထဲက အားလုံး ရွေးပြီး')};
+async function lyricOf(s){const lid=s.lf||s.id;if(!(lid in LY))LY[lid]=(await (await fetch(`data/lyr/${lid}.json?v=${DV}`)).json()).t;return LY[lid]}
+$('#selpdf').onclick=async()=>{
+ if(!SEL.size)return toast('သီချင်း အရင်ရွေးပါ');const B=$('#selpdf');B.disabled=true;B.textContent='⏳ ပြင်ဆင်နေသည်…';
+ try{
+  const pages=[];let skipped=0;
+  const groups=[...SEL].map(g=>GRP[g]).filter(Boolean).filter(a=>libOf(a[0])===LIB);
+  groups.sort((a,b)=>collator.compare(a[0].t,b[0].t));
+  for(const a of groups){const withL=a.filter(x=>x.l);if(!withL.length){skipped++;continue}
+   const seen={};
+   for(const x of withL){let t;try{t=await lyricOf(x)}catch(e){continue}if(!t)continue;const lid=x.lf||x.id;if(seen[lid]){seen[lid].alsos.push(x);continue}seen[lid]={x,t,alsos:[]};pages.push(seen[lid])}
+   const keys=Object.keys(seen);if(keys.length>1)keys.forEach(k=>seen[k].many=true)}
+  if(!pages.length){toast('စာသားပါတဲ့ သီချင်း မရှိပါ');return}
+  const lib=(LIBS.find(l=>l.id===LIB)||LIBS[0]).name;
+  $('#printArea').innerHTML=pages.map(p=>{const x=p.x,all=[x,...p.alsos];
+   const art=[...new Set(all.flatMap(artistsOf))].join(' · ');const wr=[...new Set(all.map(y=>y.w).filter(Boolean))].join(' · ');
+   const sub=[art,wr?'✍ တေးရေး — '+wr:'',(COLS[x.c]||{}).name].filter(Boolean).join('  ·  ');
+   return `<section class="pg"><h1>${esc(x.t)}${p.many&&x.vl?` <small style="font-size:13pt;color:#777">(${esc(all.map(y=>y.vl).filter(Boolean).join(' / ')||x.vl)})</small>`:''}</h1><p class="sub">${esc(sub)}</p><p class="ly">${esc(p.t)}</p><div class="ft">${esc(lib)}</div></section>`}).join('');
+  if(skipped)toast(`စာသားမရှိသေးလို့ ${mn(skipped)} ပုဒ် ချန်ထားသည်`,4500);
+  try{await document.fonts.ready}catch(e){}
+  await new Promise(r=>setTimeout(r,300));
+  toast('print ဝင်းဒိုးမှာ "Save as PDF" (PDF အဖြစ် သိမ်းမည်) ကိုရွေးပါ',5000);
+  window.print();
+ }catch(e){toast('PDF မထုတ်နိုင်ပါ')}finally{B.disabled=false;B.textContent='📄 PDF ထုတ်မည်'}};
 // ---------------- player
 let repeat=+lsGet('songsRep',0),shuffle=+lsGet('songsShuf',0),objUrl=null;
 async function play(s){CUR=s;if(objUrl){URL.revokeObjectURL(objUrl);objUrl=null}
