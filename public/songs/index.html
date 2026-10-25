@@ -191,7 +191,7 @@ function setupLibs(d){LIBS=(d.libs&&d.libs.length?d.libs:LIBS).filter(l=>SONGS.s
 function paintLib(){const b=$('#libs');b.style.display=LIBS.length>1?'flex':'none';b.innerHTML=LIBS.map(l=>`<button data-lib="${l.id}" class="${l.id===LIB?'on':''}">${esc(l.name)}</button>`).join('');
  const cur=LIBS.find(l=>l.id===LIB)||LIBS[0],g=curGroups(),cols=D.collections.filter(c=>(c.lib||'main')===LIB&&SONGS.some(s=>inCol(s,c.id)));
  $('#h1').textContent='🎶 '+cur.name;document.title=cur.name;
- $('#sub').textContent=`သီချင်း ${mn(g.length)} ခု · စုစည်းမှု ${mn(cols.length)} ခု`;
+ $('#sub').textContent=`သီချင်း ${mn(g.length)} ခု · အသံဖိုင် ${mn(g.reduce((n,a)=>n+a.length,0))} ခု · စုစည်းမှု ${mn(cols.length)} ခု`;
  $('#col').innerHTML='<option value="">စုစည်းမှုအားလုံး</option>'+cols.map(c=>`<option value="${c.id}">${esc(c.name)} (${mn(SONGS.filter(s=>inCol(s,c.id)).length)})</option>`).join('')}
 $('#libs').onclick=e=>{const b=e.target.closest('[data-lib]');if(!b||b.dataset.lib===LIB)return;LIB=b.dataset.lib;lsSet('songsLib',LIB);tab='songs';openList=null;shown=150;$('#q').value='';paintLib();render();scrollTo(0,0)};
 // ---------------- list

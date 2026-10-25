@@ -21,7 +21,7 @@ def norm(t):
 
 def strip_kar(t): return re.sub(r'\s*\(' + KAR + r'\)\s*', ' ', t).strip()
 def mn(n): return str(n).translate(str.maketrans('0123456789', MM))
-def dur(d): return mn('%d:%02d' % (d // 60, d % 60))
+def dur(d): return '%d:%02d' % (d // 60, d % 60)
 
 def main(apply):
     d = json.load(open(SONGS, encoding='utf8'))

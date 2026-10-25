@@ -14,7 +14,7 @@ def key(t):
     return ''.join(c for c in unicodedata.normalize('NFC', t).lower() if unicodedata.category(c)[0] in 'LMN')
 
 def mn(n): return str(n).translate(str.maketrans('0123456789', MM))
-def dur(d): return mn('%d:%02d' % (d // 60, d % 60))
+def dur(d): return '%d:%02d' % (d // 60, d % 60)
 
 def lyr_text(s):
     p = os.path.join(LYR, (s.get('lf') or s['id']) + '.json')
