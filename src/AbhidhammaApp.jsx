@@ -937,11 +937,12 @@ export default function AbhidhammaApp({ entryRequest, onExit, isActive }) {
   // depositable again (on reopening, or if the read was slow/failed).
   const [abhiLedgerLoaded,setAbhiLedgerLoaded]=useState(false);
   const abhiCoinBalance=abhiLedgerLoaded?Math.max(0,Math.floor(myAbhiTotalScore/ABHI_POINTS_PER_COIN)-abhiCoinsTransferredOut):0;
-  // My scores are found two ways: by my user id AND by my name. A student whose browser got a new anonymous id part-way (Kevin: 10 lessons
-  // filed under the old id, 10 under the new) must still see ALL of them -- counted once each (by score document), never twice.
+  // My scores are found by my Tutoring ID only (userId = students/{uid}): one live listener, no search by name. A student whose browser got a
+  // new anonymous id part-way (Kevin: 10 lessons under the old id) had those scores moved to the Tutoring id once
+  // (scripts/migrate-abhi-scores-userid.mjs), so this single listener sees all of them.
   const myScoreDocsRef=useRef({user:new Map(),name:new Map()});
   const recomputeMyScores=()=>{
-    const all=new Map([...myScoreDocsRef.current.user,...myScoreDocsRef.current.name]);
+    const all=myScoreDocsRef.current.user;
     let total=0;const byClass={};
     all.forEach(dt=>{total+=dt.score||0;if(dt.classId&&dt.lessonId)(byClass[dt.classId]=byClass[dt.classId]||new Set()).add(dt.lessonId);});
     setMyAbhiTotalScore(total);
@@ -958,16 +959,6 @@ export default function AbhidhammaApp({ entryRequest, onExit, isActive }) {
     });
     return unsub;
   },[role,effectiveUserId]);
-  useEffect(()=>{
-    if(role!=='Student'||!studentProfile?.name)return;
-    return onSnapshot(query(abhiScoresRef(),where('studentName','==',studentProfile.name)),snap=>{
-      const m=new Map();const byClass={};
-      snap.forEach(d=>{const dt=d.data();m.set(d.id,dt);if(dt.classId&&dt.lessonId)(byClass[dt.classId]=byClass[dt.classId]||new Set()).add(dt.lessonId);});
-      myScoreDocsRef.current.name=m;
-      setMyDoneIdsByName(byClass);
-      recomputeMyScores();
-    },err=>console.error('Name score completion track:',err.code));
-  },[role,studentProfile?.name]);
   useEffect(()=>{
     if(role!=='Student'||!studentProfile?.name)return;
     const sanitize=k=>(k||'unknown').trim().replace(/[.$#/\[\]]/g,'_');

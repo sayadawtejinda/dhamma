@@ -683,14 +683,9 @@ const fetchAbhidhammaProgress = async (studentUid, classId, studentName) => {
   if (!studentUid) return result;
   try {
     const ABHI_COL = collection(db, 'artifacts', 'lesson-translator-app-v6', 'public', 'data', 'global_scores');
-    // by the student's id AND by their name: scores filed under an older anonymous id (a student whose browser got a new id part-way) are theirs too
-    const [snapU, snapN] = await Promise.all([
-      getDocs(query(ABHI_COL, where('userId', '==', studentUid))),
-      studentName ? getDocs(query(ABHI_COL, where('studentName', '==', studentName))) : Promise.resolve({ docs: [] }),
-    ]);
-    const seen = new Set();
-    [...snapU.docs, ...snapN.docs].forEach(d => {
-      if (seen.has(d.id)) return; seen.add(d.id);
+    // by the student's Tutoring ID only (older scores filed under another anonymous id were moved to it: scripts/migrate-abhi-scores-userid.mjs)
+    const snapU = await getDocs(query(ABHI_COL, where('userId', '==', studentUid)));
+    snapU.docs.forEach(d => {
       const dt = d.data();
       if (classId && dt.classId && dt.classId !== classId) return;
       result.totalPoints += (Number(dt.score) || 0);

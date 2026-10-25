@@ -722,6 +722,13 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
         // highest score that has already moved it (a point lost and won again does not move it twice).
         const STEP_CONSONANTS = ['က', 'ခ', 'ဂ', 'ဃ', 'င', 'စ', 'ဆ', 'ဇ', 'ဈ', 'ည', 'တ', 'ထ', 'ဒ', 'ဓ', 'န', 'ပ', 'ဖ', 'ဗ', 'ဘ', 'မ', 'ယ', 'ရ', 'လ', 'ဝ', 'သ', 'ဟ', 'အ'];
         let consonantStepDone = 0;
+        let consonantPickedByHand = false; // the student chose a consonant in the picker: keep it for this game, else a random one is chosen
+        function pickRandomConsonant() {
+            const others = STEP_CONSONANTS.filter(c => c !== currentC);
+            currentC = others[Math.floor(Math.random() * others.length)];
+            byId('btn-consonant').textContent = currentC;
+            updateGridsWithConsonant();
+        }
         let currentGameType = null;
         let currentGameLevel = 1;
         
@@ -967,6 +974,9 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
             currentGameLevel = level;
             currentScore = 0;
             consonantStepDone = 0;
+            // each game starts with a random consonant (က - အ) unless the student picked one by hand; chosen BEFORE the question pool is made
+            if (!consonantPickedByHand) pickRandomConsonant();
+            consonantPickedByHand = false;
 
             let targetCount = 25;
             maxLivesForThisGame = 5;
@@ -1096,10 +1106,7 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
             currentScore++;
             if (currentMode === 'B' && currentScore % 5 === 0 && currentScore > consonantStepDone && currentScore < currentTargetScore) {
                 consonantStepDone = currentScore;
-                const at = STEP_CONSONANTS.indexOf(currentC);
-                currentC = STEP_CONSONANTS[(at + 1) % STEP_CONSONANTS.length];
-                byId('btn-consonant').textContent = currentC;
-                updateGridsWithConsonant();
+                pickRandomConsonant(); // a different one, at random, so every letter comes up
             }
             updateProgressUI();
             if (currentScore >= currentTargetScore) {
@@ -1647,6 +1654,7 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
                 btn.textContent = c;
                 btn.onclick = () => {
                     currentC = c;
+                    consonantPickedByHand = true;
                     byId('btn-consonant').textContent = currentC;
                     updateGridsWithConsonant();
                     closeConsonantModal();
