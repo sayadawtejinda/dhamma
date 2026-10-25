@@ -6,6 +6,8 @@ import { getAuth, signInAnonymously } from 'firebase/auth';
 import { getFirestore, collection, getDocs, query, where, doc, setDoc, updateDoc, deleteDoc, getDoc, writeBatch } from 'firebase/firestore';
 import { firebaseConfig, appId } from '../src/firebaseConfig.js';
 const LINK = process.argv.includes('--link');
+// --names="A,B": also link the 'maybe' rows whose roster name is in this list (the teacher has confirmed them)
+const NAMES = ((process.argv.find(a => a.startsWith('--names=')) || '').slice(8)).split(',').map(x => x.trim()).filter(Boolean);
 const A = 'lesson-translator-app-v6';
 const db = getFirestore(initializeApp(firebaseConfig));
 await signInAnonymously(getAuth(db.app));
@@ -37,8 +39,8 @@ for (const r of roster) {
 rows.sort((a, b) => (b.match ? 1 : 0) - (a.match ? 1 : 0) || b.done - a.done);
 rows.forEach(r => console.log(`${(r.match ? '→ ' + r.match.name : '(no match)').padEnd(28)} | ${r.name.padEnd(24)} | lessons ${String(r.done).padStart(3)} | ${r.how || ''} | ${r.classes} | ${r.uid}`));
 console.log(`${rows.length} roster student(s) not on a Tutoring ID; ${rows.filter(r => r.how.startsWith('SURE')).length} sure, ${rows.filter(r => r.how.startsWith('maybe')).length} maybe, ${rows.filter(r => !r.match).length} no match`);
-if (LINK) {
-  for (const r of rows.filter(x => x.how.startsWith('SURE'))) {
+if (LINK || NAMES.length) {
+  for (const r of rows.filter(x => (LINK && x.how.startsWith('SURE')) || (NAMES.includes(x.name) && x.match))) {
     const ts = r.match; const oldUid = r.uid;
     const sc = await getDocs(query(collection(db, `artifacts/${A}/public/data/global_scores`), where('userId', '==', oldUid)));
     const mine = await getDocs(query(collection(db, `artifacts/${A}/public/data/global_scores`), where('userId', '==', ts.id)));
