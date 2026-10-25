@@ -1469,6 +1469,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
       return;
     }
     if (!isTeacherPreview && coinBalance < option.cost) { showToast('Not enough coins.'); return; }
+    if (!window.confirm(`Buy the ${option.name} Buddha image for 🪙 ${option.cost}? Once bought it is yours for ever.`)) return;
     awardCoins(-option.cost);
     const nextOwned = Array.from(new Set([...ownedBuddhas, option.id]));
     setOwnedBuddhas(nextOwned);
@@ -1777,7 +1778,6 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   let guideNeedCost = 0;
   if (!buddha) { guideStage = 'buddha'; guideTargetId = cheapestBuddha?.id || null; guideNeedCost = cheapestBuddha?.cost || 0; }
   else if (filledSlotCount < SLOT_COUNT) { guideStage = 'offer'; guideTargetId = cheapestSlotOffering?.id || null; guideNeedCost = cheapestSlotOffering?.cost || 0; }
-  else if (umbrellaCount < 2) { guideStage = 'offer'; guideTargetId = 'umbrella'; guideNeedCost = UMBRELLA_OPTION.cost; }
   else if (!placedBell) { guideStage = 'bell'; guideTargetId = 'bell'; guideNeedCost = BELL_OPTION.cost; }
   else if (!guideSeen.bell) { guideStage = 'ring'; }
   if (['buddha', 'offer', 'bell'].includes(guideStage) && coinBalance < guideNeedCost) guideStage = 'nocoin';
@@ -2193,7 +2193,11 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
                   shop for it: a dim silhouette until bought (🪙 500, tap to
                   buy), the real Bell once it's placed (tap to ring). */}
               <button
-                onClick={placedBell ? handleRingBell : handleBuyBell}
+                onClick={() => {
+                  if (placedBell) { handleRingBell(); return; }
+                  if (!window.confirm(ownedBell ? 'Place your Bell? Once placed it stays for ever.' : `Buy the Bell for 🪙 ${BELL_OPTION.cost}? Once bought it stays here for ever and cannot be taken down.`)) return;
+                  handleBuyBell();
+                }}
                 title={placedBell ? 'Ring the Bell' : ownedBell ? 'Place your Bell' : `Buy the Bell (🪙 ${BELL_OPTION.cost})`}
                 {...((showRingGuide || (showBuyGuide && guideStage === 'bell')) ? { 'data-guide-target': '1' } : {})}
                 className={`absolute left-[-72px] bottom-[52px] w-20 h-20 flex items-center justify-center rounded-full transition-transform hover:scale-110 ${placedBell ? 'drop-shadow-lg' : 'opacity-30 grayscale hover:opacity-50'} ${ringing ? 'animate-pulse' : ''}`}
@@ -2264,14 +2268,20 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
                   return (
                     <button
                       key={side}
-                      onClick={() => item ? handleRemoveUmbrella(side) : handleBuyUmbrella(side)}
-                      title={item ? 'Remove Golden Umbrella' : `Offer a Golden Umbrella at the Buddha's ${side} hand (🪙 ${UMBRELLA_OPTION.cost})`}
-                      className={`absolute bottom-6 w-[88px] h-[88px] flex items-center justify-center rounded-full transition-transform hover:scale-110 ${side === 'left' ? 'left-[40px]' : 'right-[40px]'} ${item ? 'drop-shadow-lg' : 'opacity-50 hover:opacity-80'}`}
+                      onClick={() => {
+                        if (item) return; // once placed it stays for ever (it was paid for): no taking it down
+                        const placedNow = (placedUmbrellas.left ? 1 : 0) + (placedUmbrellas.right ? 1 : 0);
+                        const free = ownedUmbrellas > placedNow;
+                        if (!window.confirm(free ? 'Place your Golden Umbrella here? Once placed it stays for ever.' : `Buy a Golden Umbrella for 🪙 ${UMBRELLA_OPTION.cost}? Once bought it stays here for ever and cannot be taken down.`)) return;
+                        handleBuyUmbrella(side);
+                      }}
+                      title={item ? 'Golden Umbrella' : `Offer a Golden Umbrella at the Buddha's ${side} hand (🪙 ${UMBRELLA_OPTION.cost})`}
+                      className={`absolute bottom-6 w-[88px] h-[88px] flex items-center justify-center rounded-full transition-transform hover:scale-110 ${side === 'left' ? 'left-[40px]' : 'right-[40px]'} ${item ? 'drop-shadow-lg cursor-default' : 'opacity-40 hover:opacity-70'}`}
                     >
                       {item ? (
                         <span className="w-full h-full" dangerouslySetInnerHTML={{ __html: UMBRELLA_OPTION.svg }} />
                       ) : (
-                        <span className="text-3xl">➕</span>
+                        <span className="w-full h-full opacity-60 grayscale" dangerouslySetInnerHTML={{ __html: UMBRELLA_OPTION.svg }} />
                       )}
                     </button>
                   );
@@ -2434,7 +2444,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
 
             <h3 className="text-sm font-bold text-gray-700 mb-2">Offerings</h3>
             <div className="space-y-2">
-              {OFFERING_OPTIONS.map(option => {
+              {OFFERING_OPTIONS.filter(o => o.id !== 'umbrella').map(option => {
                 const locked = option.requiresBodhiStage != null && option.requiresBodhiStage > bodhiStageIndex;
                 const notDraggable = option.id === 'umbrella';
                 const soldOut = option.id === 'umbrella' && placedUmbrellas.left && placedUmbrellas.right;
