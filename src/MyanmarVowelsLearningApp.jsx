@@ -718,6 +718,10 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
         let currentTargetScore = 25; 
         let maxLivesForThisGame;
         let currentScore = 0;
+        // Basic mode: every 5 points the consonant changes to the next one, က ခ ဂ ... အ (the ကျ ကြ ... kinds are not taught yet). consonantStepDone = the
+        // highest score that has already moved it (a point lost and won again does not move it twice).
+        const STEP_CONSONANTS = ['က', 'ခ', 'ဂ', 'ဃ', 'င', 'စ', 'ဆ', 'ဇ', 'ဈ', 'ည', 'တ', 'ထ', 'ဒ', 'ဓ', 'န', 'ပ', 'ဖ', 'ဗ', 'ဘ', 'မ', 'ယ', 'ရ', 'လ', 'ဝ', 'သ', 'ဟ', 'အ'];
+        let consonantStepDone = 0;
         let currentGameType = null;
         let currentGameLevel = 1;
         
@@ -962,6 +966,7 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
             currentGameType = type;
             currentGameLevel = level;
             currentScore = 0;
+            consonantStepDone = 0;
 
             let targetCount = 25;
             maxLivesForThisGame = 5;
@@ -1089,6 +1094,13 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
             // trophies for it (see recordGameCompleted in gameWin below).
             if (currentGameType !== 'type') awardCoins(10);
             currentScore++;
+            if (currentMode === 'B' && currentScore % 5 === 0 && currentScore > consonantStepDone && currentScore < currentTargetScore) {
+                consonantStepDone = currentScore;
+                const at = STEP_CONSONANTS.indexOf(currentC);
+                currentC = STEP_CONSONANTS[(at + 1) % STEP_CONSONANTS.length];
+                byId('btn-consonant').textContent = currentC;
+                updateGridsWithConsonant();
+            }
             updateProgressUI();
             if (currentScore >= currentTargetScore) {
                 gameWin();
