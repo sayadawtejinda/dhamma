@@ -3004,6 +3004,26 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
         console.error("Error migrating SmartStudy records to new name:", error);
       }
     }
+
+    // Abhidhamma keeps everything of a student under the Tutoring ID (roster rows and quiz scores carry userId = this student's id); only the
+    // NAME written on those documents has to follow the rename (class boards, ranks and the roster list show it).
+    if (oldName && oldName.trim() && oldName.trim() !== trimmedNew) {
+      try {
+        const AB = 'artifacts/lesson-translator-app-v6/public/data';
+        const [abRoster, abScores] = await Promise.all([
+          getDocs(query(collection(db, `${AB}/classRoster`), where('userId', '==', studentId))),
+          getDocs(query(collection(db, `${AB}/global_scores`), where('userId', '==', studentId))),
+        ]);
+        let batch = writeBatch(db); let n = 0;
+        for (const d of [...abRoster.docs, ...abScores.docs]) {
+          batch.update(d.ref, { studentName: trimmedNew, name: trimmedNew });
+          if (++n >= 400) { await batch.commit(); batch = writeBatch(db); n = 0; }
+        }
+        if (n) await batch.commit();
+      } catch (error) {
+        console.error("Error renaming the student in Abhidhamma:", error);
+      }
+    }
   };
 
   const handleRejectNameChange = async (studentId) => {
