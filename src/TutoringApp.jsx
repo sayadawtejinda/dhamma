@@ -678,13 +678,19 @@ const computeClassTrophyMax = (lessonCount) => {
 // instead of by name is reliable across any rename, and doesn't need the
 // multi-alias name matching (abhidhammaNames) the old Link-to-Tutoring system
 // used to paper over name drift with.
-const fetchAbhidhammaProgress = async (studentUid, classId) => {
+const fetchAbhidhammaProgress = async (studentUid, classId, studentName) => {
   const result = { totalPoints: 0, doneLessonIds: new Set() };
   if (!studentUid) return result;
   try {
     const ABHI_COL = collection(db, 'artifacts', 'lesson-translator-app-v6', 'public', 'data', 'global_scores');
-    const snap = await getDocs(query(ABHI_COL, where('userId', '==', studentUid)));
-    snap.docs.forEach(d => {
+    // by the student's id AND by their name: scores filed under an older anonymous id (a student whose browser got a new id part-way) are theirs too
+    const [snapU, snapN] = await Promise.all([
+      getDocs(query(ABHI_COL, where('userId', '==', studentUid))),
+      studentName ? getDocs(query(ABHI_COL, where('studentName', '==', studentName))) : Promise.resolve({ docs: [] }),
+    ]);
+    const seen = new Set();
+    [...snapU.docs, ...snapN.docs].forEach(d => {
+      if (seen.has(d.id)) return; seen.add(d.id);
       const dt = d.data();
       if (classId && dt.classId && dt.classId !== classId) return;
       result.totalPoints += (Number(dt.score) || 0);
@@ -2056,7 +2062,7 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
       .then(snap=>setAbhiTotalCount(snap.size)).catch(()=>setAbhiTotalCount(0));
     if(!selectedStudentUid)return;
     (async()=>{
-      const { totalPoints, doneLessonIds } = await fetchAbhidhammaProgress(selectedStudentUid, sendAbhidhammaClassId);
+      const { totalPoints, doneLessonIds } = await fetchAbhidhammaProgress(selectedStudentUid, sendAbhidhammaClassId, (students.find(s => s.id === selectedStudentUid) || {}).name);
       setAbhiStudentScore(totalPoints);setAbhiStudentCount(doneLessonIds.size);
     })();
   },[sendAbhidhammaClassId,selectedStudentUid]);
@@ -8801,7 +8807,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     if (session.lessonLink?.startsWith('abhidhamma://')) {
       const abhiClassId = session.lessonLink.replace('abhidhamma://', '');
       try {
-        const { totalPoints, doneLessonIds } = await fetchAbhidhammaProgress(studentUid, abhiClassId);
+        const { totalPoints, doneLessonIds } = await fetchAbhidhammaProgress(studentUid, abhiClassId, studentProfile?.name);
         if(totalPoints>0) sink.setScore(`${totalPoints.toLocaleString()} pts`);
         if(doneLessonIds.size>0) sink.setCompleted(String(doneLessonIds.size));
       } catch(e) { console.error('Abhi score fetch:', e); }
@@ -8977,7 +8983,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     if (session.lessonLink?.startsWith('abhidhamma://')) {
       const abhiClassId = session.lessonLink.replace('abhidhamma://','');
       try {
-        const { totalPoints, doneLessonIds } = await fetchAbhidhammaProgress(studentUid, abhiClassId);
+        const { totalPoints, doneLessonIds } = await fetchAbhidhammaProgress(studentUid, abhiClassId, studentProfile?.name);
         if(totalPoints>0) setScore(`${totalPoints.toLocaleString()} pts`);
         if(doneLessonIds.size>0) handleCompletedUnitChange(String(doneLessonIds.size));
       }catch(e){console.error('Abhi redo:',e);}
