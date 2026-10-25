@@ -723,8 +723,18 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
         const STEP_CONSONANTS = ['က', 'ခ', 'ဂ', 'ဃ', 'င', 'စ', 'ဆ', 'ဇ', 'ဈ', 'ည', 'တ', 'ထ', 'ဒ', 'ဓ', 'န', 'ပ', 'ဖ', 'ဗ', 'ဘ', 'မ', 'ယ', 'ရ', 'လ', 'ဝ', 'သ', 'ဟ', 'အ'];
         let consonantStepDone = 0;
         let consonantPickedByHand = false; // the student chose a consonant in the picker: keep it for this game, else a random one is chosen
-        function pickRandomConsonant() {
-            const others = STEP_CONSONANTS.filter(c => c !== currentC);
+        // Pro mode shows different vowel groups for different consonants (see updateGridsWithConsonant), so in the MIDDLE of a game the new consonant
+        // must be of the same kind as the one before it (then the same vowels stay on the board and no question points at a hidden vowel).
+        function consonantKind(c) {
+            if (c === 'အ') return 'a';
+            if (allowedConsonants['i-sound-yi'].includes(c)) return 'i';
+            if (allowedConsonants['e-sound-yi'].includes(c)) return 'e';
+            if (allowedConsonants['ai-sound-yi'].includes(c)) return 'ai';
+            return 'plain';
+        }
+        function pickRandomConsonant(sameKind) {
+            let others = STEP_CONSONANTS.filter(c => c !== currentC && (!sameKind || consonantKind(c) === consonantKind(currentC)));
+            if (others.length === 0) return;
             currentC = others[Math.floor(Math.random() * others.length)];
             byId('btn-consonant').textContent = currentC;
             updateGridsWithConsonant();
@@ -1104,9 +1114,9 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
             // trophies for it (see recordGameCompleted in gameWin below).
             if (currentGameType !== 'type') awardCoins(10);
             currentScore++;
-            if (currentMode === 'B' && currentScore % 5 === 0 && currentScore > consonantStepDone && currentScore < currentTargetScore) {
+            if (currentScore % 5 === 0 && currentScore > consonantStepDone && currentScore < currentTargetScore) {
                 consonantStepDone = currentScore;
-                pickRandomConsonant(); // a different one, at random, so every letter comes up
+                pickRandomConsonant(currentMode === 'P'); // a different one, at random, so every letter comes up (Pro: of the same kind, see above)
             }
             updateProgressUI();
             if (currentScore >= currentTargetScore) {
