@@ -276,6 +276,59 @@ const AbhiClassRoster = ({ userId, classId }) => {
     if(!num){const max=students.filter(s=>s.status==='approved').reduce((m,s)=>Math.max(m,s.studentNumber||0),0);num=max+1;}
     await updateDoc(ref,{status:'approved',name:name||dt.name,pendingName:null,studentNumber:num});
   };
+  // ---- Link a roster student to their Tutoring ID (teacher). Everything of this student that is filed under the old id -- the roster rows in every
+  // class and the quiz scores -- is moved to the Tutoring ID, so the app, the ranks and the trophy requests all see ONE student. ----
+  const [linkFor,setLinkFor]=useState(null);       // the roster row being linked
+  const [linkQuery,setLinkQuery]=useState('');
+  const [tutoringList,setTutoringList]=useState(null); // [{id,name}] from the weekly file (no Firebase read)
+  const [linkBusy,setLinkBusy]=useState(false);
+  const openLink=async(e,row)=>{
+    e.stopPropagation();setLinkFor(row);setLinkQuery('');
+    if(tutoringList)return;
+    try{
+      const r=await fetch(`${import.meta.env.BASE_URL}weeklySnapshot.json`);
+      const j=r.ok?await r.json():null;
+      setTutoringList(((j&&j.trophyList)||[]).filter(x=>x.id&&x.name).map(x=>({id:x.id,name:x.name})).sort((a,b)=>a.name.localeCompare(b.name)));
+    }catch(err){setTutoringList([]);}
+  };
+  const doLink=async(row,ts)=>{
+    const oldUid=row.userId||String(row.id).replace(`${classId}_`,'');
+    if(!oldUid||oldUid===ts.id){setLinkFor(null);return;}
+    try{
+      setLinkBusy(true);
+      const [scoresU,scoresN,rosters]=await Promise.all([
+        getDocs(query(abhiScoresRef(),where('userId','==',oldUid))),
+        getDocs(query(abhiScoresRef(),where('studentName','==',row.studentName))),
+        getDocs(query(abhiRosterRef(),where('userId','==',oldUid))),
+      ]);
+      const scoreDocs=new Map();[...scoresU.docs,...scoresN.docs].forEach(d=>scoreDocs.set(d.id,d));
+      if(!window.confirm(`Link "${row.studentName}" to Tutoring student "${ts.name}"?
+
+${scoreDocs.size} quiz score(s) and ${rosters.size} class roster entr${rosters.size===1?'y':'ies'} will be moved to the Tutoring ID.`)){setLinkBusy(false);return;}
+      // the student may already have scores under the Tutoring ID for the same lesson: those lessons keep the existing score (no double counting)
+      const mine=await getDocs(query(abhiScoresRef(),where('userId','==',ts.id)));
+      const have=new Set(mine.docs.map(d=>`${d.data().classId}|${d.data().lessonId}`));
+      let batch=writeBatch(db),n=0;
+      for(const d of scoreDocs.values()){
+        const dt=d.data();const k=`${dt.classId}|${dt.lessonId}`;
+        if(have.has(k)&&dt.userId!==ts.id)continue;
+        have.add(k);
+        batch.update(d.ref,{userId:ts.id,studentName:ts.name,name:ts.name});
+        if(++n>=400){await batch.commit();batch=writeBatch(db);n=0;}
+      }
+      if(n>0)await batch.commit();
+      for(const rd of rosters.docs){
+        const dt=rd.data();
+        const newRef=abhiRosterDocRef(dt.classId,ts.id);
+        const existing=await getDoc(newRef);
+        if(!existing.exists())await setDoc(newRef,{...dt,userId:ts.id,studentName:ts.name,name:ts.name,tutoringStudentUid:ts.id,linkedToTutoring:true});
+        else await updateDoc(newRef,{tutoringStudentUid:ts.id,linkedToTutoring:true,studentName:ts.name,name:ts.name});
+        if(rd.ref.path!==newRef.path)await deleteDoc(rd.ref);
+      }
+      setLinkFor(null);
+    }catch(err){console.error('Link failed:',err);window.alert('Could not link. Please try again.');}
+    setLinkBusy(false);
+  };
   const removeStu=async(e,id)=>{e.stopPropagation();if(window.confirm('Remove this student?'))try{await deleteDoc(doc(db,P(`classRoster/${id}`)));}catch(err){console.error(err);}};
   // Only one class can be "open" (autoApprove) at a time — turning this one on turns every other
   // class off, so students always land in whichever single class the teacher currently has open,
@@ -351,10 +404,25 @@ const AbhiClassRoster = ({ userId, classId }) => {
               )}
               <span className="font-bold text-gray-300 text-xs w-5 shrink-0">#{s.studentNumber||'?'}</span>
               <span className="flex-1 text-white text-sm font-semibold min-w-0 truncate">{s.studentName}</span>
+              {(s.linkedToTutoring||s.tutoringStudentUid)
+                ?<span className="text-[10px] font-bold text-green-400 shrink-0" title="Linked to the Tutoring ID">✅ linked</span>
+                :<button onClick={e=>openLink(e,s)} className="text-[11px] font-bold text-amber-300 bg-amber-900/40 border border-amber-600/50 rounded-full px-2 py-0.5 shrink-0" title="Link to the student's Tutoring ID">🔗 Link</button>}
               <button onClick={e=>removeStu(e,s.id)} className="p-1 text-gray-600 hover:text-red-400 shrink-0"><Trash2 className="w-3 h-3"/></button>
             </div>
           );
         })}
+        {linkFor&&(
+          <div className="p-3 rounded-lg bg-gray-900 border border-amber-600/50">
+            <div className="flex items-center justify-between mb-2"><span className="text-white text-sm font-bold">🔗 Link "{linkFor.studentName}" to a Tutoring student</span><button onClick={()=>setLinkFor(null)} className="text-gray-400 hover:text-white"><X className="w-4 h-4"/></button></div>
+            <input value={linkQuery} onChange={e=>setLinkQuery(e.target.value)} placeholder="Type the Tutoring name" className="w-full mb-2 px-3 py-1.5 rounded bg-gray-800 border border-gray-600 text-white text-sm"/>
+            {tutoringList===null&&<p className="text-xs text-gray-400">Loading…</p>}
+            <div className="max-h-48 overflow-y-auto space-y-1">
+              {(tutoringList||[]).filter(x=>!linkQuery.trim()||x.name.toLowerCase().includes(linkQuery.trim().toLowerCase())).slice(0,12).map(x=>(
+                <button key={x.id} disabled={linkBusy} onClick={()=>doLink(linkFor,x)} className="block w-full text-left px-3 py-1.5 rounded bg-gray-800 hover:bg-gray-700 text-white text-sm disabled:opacity-50">{x.name}</button>
+              ))}
+            </div>
+          </div>
+        )}
         {approved.length===0&&pending.length===0&&<p className="text-gray-500 text-sm italic text-center py-4">No students yet. Students will appear here when they join.</p>}
       </div>}
     </div>
