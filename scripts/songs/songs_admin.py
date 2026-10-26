@@ -588,6 +588,15 @@ class H(BaseHTTPRequestHandler):
                     for x in d.setdefault('libs', []):
                         if x['id'] == body['id']: x['name'] = body['name'].strip()
                     save(d); return self._send(200, json.dumps({'ok': True, 'libs': d['libs']}, ensure_ascii=False))
+                if u.path == '/api/artistrename':      # one artist's name changed (or joined with another) in every song
+                    old, new = body['old'].strip(), body['new'].strip(); n = 0
+                    for x in d['songs']:
+                        parts = re.split(r'(\s*(?:၊|,|/|&|\+)\s*)', x.get('a') or '')
+                        if old in [q.strip() for q in parts]:
+                            parts = [new if q.strip() == old else q for q in parts]
+                            x['a'] = re.sub(r'\s*၊\s*၊\s*', '၊', ''.join(parts)).strip('၊ '); n += 1
+                        if x.get('vl') == old: x['vl'] = new
+                    save(d); return self._send(200, json.dumps({'ok': True, 'n': n}))
                 if u.path == '/api/colrename':
                     for c in d['collections']:
                         if c['id'] == body['id']:

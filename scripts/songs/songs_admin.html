@@ -29,7 +29,7 @@ audio{width:100%;margin-top:2px}
 dialog{border:0;border-radius:14px;padding:16px;box-shadow:0 12px 50px rgba(0,0,0,.4);max-width:96vw;width:560px}
 dialog::backdrop{background:rgba(20,6,40,.5)}.crow{display:flex;gap:6px;align-items:center;margin:4px 0}.crow input{flex:1}
 </style></head><body>
-<header><b>🎶 သီချင်း စီမံရန်</b><span id="alibs" style="display:inline-flex;gap:6px"></span><span id="counts" class="hint" style="color:#e8d9ff"></span><button id="addBtn">➕ သီချင်းအသစ်</button><button id="colBtn">📁 စုစည်းမှုများ</button><button id="helpBtn">❓ ဘယ်ခလုတ် ဘာလုပ်လဲ</button><button id="simBtn">🔎 ဆင်တူစစ်ရန်</button><button id="goneBtn">♻ ဖျက်ပြီးသားများ</button><button id="hidBtn">🙈 ဝှက်ထားသည်များ</button><button id="cmBtn">💬 မှတ်ချက်/စာသားပေးပို့ချက်</button><span id="plibs" title="website ပေါ် ဘယ်စာကြည့်တိုက်တွေ တင်မလဲ"></span><select id="pmode" title="🚀 နှိပ်ရင် ဘာတွေ တင်မလဲ" style="padding:5px;border-radius:8px"><option value="lyrics">တင်မည် — စာသားရှိတာသာ</option><option value="all">တင်မည် — အားလုံး</option></select><button id="pub">🚀 website သို့ တင်မည်</button></header>
+<header><b>🎶 သီချင်း စီမံရန်</b><span id="alibs" style="display:inline-flex;gap:6px"></span><span id="counts" class="hint" style="color:#e8d9ff"></span><button id="addBtn">➕ သီချင်းအသစ်</button><button id="colBtn">📁 စုစည်းမှုများ</button><button id="artBtn">🎤 အဆိုတော်များ</button><button id="helpBtn">❓ ဘယ်ခလုတ် ဘာလုပ်လဲ</button><button id="simBtn">🔎 ဆင်တူစစ်ရန်</button><button id="goneBtn">♻ ဖျက်ပြီးသားများ</button><button id="hidBtn">🙈 ဝှက်ထားသည်များ</button><button id="cmBtn">💬 မှတ်ချက်/စာသားပေးပို့ချက်</button><span id="plibs" title="website ပေါ် ဘယ်စာကြည့်တိုက်တွေ တင်မလဲ"></span><select id="pmode" title="🚀 နှိပ်ရင် ဘာတွေ တင်မလဲ" style="padding:5px;border-radius:8px"><option value="lyrics">တင်မည် — စာသားရှိတာသာ</option><option value="all">တင်မည် — အားလုံး</option></select><button id="pub">🚀 website သို့ တင်မည်</button></header>
 <main>
  <div id="side"><div class="f"><input type="search" id="q" placeholder="အမည်၊ အဆိုတော်၊ ဖိုင်နာမည် ရှာရန်…"><select id="fc"><option value="">စုစည်းမှုအားလုံး</option></select>
   <label class="hint" title="ဗားရှင်းတူတွေကို တစ်ကြောင်းတည်း ပြ"><input type="checkbox" id="fgrp" checked> 📚 ဗားရှင်းစုပြ</label><label class="hint"><input type="checkbox" id="fna"> အမည်မရှိသေး</label><select id="fls" title="စာသား အခြေအနေ"><option value="">စာသား — အားလုံး</option><option value="draft">⚠ စစ်ရန်</option><option value="ok">✔ စစ်ပြီး</option><option value="has">📝 စာသားရှိ (အားလုံး)</option><option value="none">စာသားမရှိသေး</option></select><label class="hint"><input type="checkbox" id="fal"> ထပ်နေသည့်ဖိုဒါပါ</label></div>
@@ -55,6 +55,7 @@ dialog::backdrop{background:rgba(20,6,40,.5)}.crow{display:flex;gap:6px;align-it
    <div class="hint" id="links"></div>
   </div></div>
 </main>
+<dialog id="dart"><h3>🎤 အဆိုတော်များ</h3><div class="hint">နာမည်မှားရင် ပြင်ပြီး <b>သိမ်း</b> နှိပ်ပါ — သီချင်းအားလုံးမှာ တစ်ပြိုင်နက် ပြောင်းမည်။ တခြားအဆိုတော်နာမည်နဲ့ တူအောင်ပြင်ရင် နှစ်ခုကို ပေါင်းမည်။ သီချင်းအသစ်ထည့်ရင် အဆိုတော်အသစ်က ဒီစာရင်းထဲ အလိုအလျောက် ပေါင်းဝင်မည်။</div><input type="search" id="artq" placeholder="ရှာရန်…" style="width:100%;margin:6px 0"><div id="artlist" style="max-height:60vh;overflow:auto"></div><div class="bar"><button onclick="dart.close()">ပိတ်မည်</button></div></dialog>
 <dialog id="dcol"><h3>📁 စုစည်းမှုများ</h3><div id="clist"></div><div class="bar"><button id="libNew">➕ စာကြည့်တိုက်အသစ်</button><button onclick="dcol.close()">ပိတ်မည်</button></div></dialog>
 <dialog id="dhelp" style="width:min(780px,98vw)"><h3>❓ ဘယ်အခြေအနေမှာ ဘယ်ခလုတ်ကို နှိပ်ရမလဲ</h3>
 <table style="width:100%;border-collapse:collapse;font-size:.92rem">
@@ -275,4 +276,11 @@ function drawPL(pl){const l=libs();$('#plibs').innerHTML=l.length>1?l.map(x=>`<l
 api('/api/publishmode').then(r=>{$('#pmode').value=r.mode;window.PL=r.libs;drawPL(r.libs)});$('#pmode').onchange=async()=>{await api('/api/publishmode',{mode:$('#pmode').value})};
 $('#plibs').onchange=async()=>{const pl=[...document.querySelectorAll('#plibs [data-pl]:checked')].map(e=>e.dataset.pl);if(!pl.length){alert('အနည်းဆုံး စာကြည့်တိုက် တစ်ခု ရွေးပါ');drawPL(window.PL||['main']);return}window.PL=pl;await api('/api/publishmode',{libs:pl})};
 init();
+
+const ASEPA=/\s*(?:၊|,|\/|&|\+)\s*/;
+function drawArt(){const c=new Map();songsHere().forEach(s=>(s.a||'').split(ASEPA).map(x=>x.trim()).filter(Boolean).forEach(a=>c.set(a,(c.get(a)||0)+1)));const q=$('#artq').value.trim().toLowerCase();
+ $('#artlist').innerHTML=[...c].sort((a,b)=>collator.compare(a[0],b[0])).filter(([a])=>!q||a.toLowerCase().includes(q)).map(([a,n])=>`<div class="crow"><input type="text" value="${esc(a)}" data-old="${esc(a)}"><span class="hint">${mn(n)}</span><button data-ar="1">သိမ်း</button></div>`).join('')||'<div class="hint">မရှိပါ</div>'}
+$('#artBtn').onclick=()=>{$('#artq').value='';drawArt();dart.showModal()};$('#artq').oninput=drawArt;
+$('#artlist').onclick=async e=>{if(!e.target.dataset.ar)return;const i=e.target.parentNode.querySelector('input'),nw=i.value.trim(),old=i.dataset.old;if(!nw||nw===old)return;
+ const r=await api('/api/artistrename',{old,new:nw});await reloadAll();drawArt();e.target.textContent='✓ '+mn(r.n)};
 </script></body></html>
