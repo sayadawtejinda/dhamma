@@ -348,11 +348,8 @@ const ClassSwitchModal = ({ classId, value, setValue, onSwitch, onCancel }) => (
       <Award className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
       <h2 className="font-bold text-2xl text-gray-800 mb-2">All Done!</h2>
       <p className="text-gray-600 mb-4">🎉 Congratulations! You have completed all the lessons in Class <span className="font-bold">{classId}</span>.</p>
-      <p className="text-gray-600 mb-4">Would you like to explore lessons in another Class ID?</p>
-      <input type="text" value={value} onChange={(e) => setValue(e.target.value)} placeholder="Enter another Class ID" className="w-full p-3 border border-gray-300 rounded-lg mb-4 text-center" />
       <div className="flex flex-col space-y-3">
-        <Button onClick={() => onSwitch(value)} className="w-full bg-green-500 hover:bg-green-600 shadow-lg shadow-green-300" disabled={!value.trim()}>Go to This Class</Button>
-        <Button onClick={onCancel} className="w-full bg-gray-400 hover:bg-gray-500 shadow-none">Not Now</Button>
+        <Button onClick={onCancel} className="w-full bg-green-500 hover:bg-green-600 shadow-lg shadow-green-300">OK 🎉</Button>
       </div>
     </div>
   </div>
@@ -2454,7 +2451,21 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
         const force = forceFreshRef.current; forceFreshRef.current = false;
         const ttl = force ? 10 * 60 * 1000 : (studentOnly ? 6 : 24) * 60 * 60 * 1000;
         const accept = { accept: (d) => d.classId === classId };
-        const [scoresSnap, heartsSnap, reflSnap, rosterSnap, compSnap] = await Promise.all([
+        // The teacher's class screen is built from the class's files on GitHub (scores, reflections and the hearts / roster / latest completions file),
+        // so opening any class costs no Firebase read. Only a refresh the teacher asks for (the Students tab, an approval, the 🔄) reads live.
+        let teacherFile = null;
+        if (teacherMode && !force) {
+          try {
+            const enc = encodeURIComponent(encodeURIComponent(classId));
+            const [tf, rf] = await Promise.all([
+              fetch(`${import.meta.env.BASE_URL}classSnapshots/smartstudy-teacher/${enc}.json`, { cache: 'no-cache' }).then(r => (r.ok ? r.json() : null)).catch(() => null),
+              fetch(`${import.meta.env.BASE_URL}classSnapshots/smartstudy-reflections/${enc}.json`).then(r => (r.ok ? r.json() : null)).catch(() => null),
+            ]);
+            if (tf && snapshotScores) teacherFile = { ...tf, reflections: (rf && rf.reflections) || [] };
+          } catch (e) { teacherFile = null; }
+        }
+        const fakeSnap = (rows) => ({ docs: rows.map(r => ({ id: r.id, data: () => r })), forEach(cb) { this.docs.forEach(cb); } });
+        const [scoresSnap, heartsSnap, reflSnap, rosterSnap, compSnap] = teacherFile ? [null, fakeSnap(teacherFile.hearts || []), fakeSnap(teacherFile.reflections), fakeSnap(teacherFile.roster || []), fakeSnap(teacherFile.completions || [])] : await Promise.all([
           snapshotScores ? Promise.resolve(null) : cachedGetDocs(`ssScores_${classId}`, query(getScoresCollectionRef(), where("classId", "==", classId)), ttl, accept),
           cachedGetDocs(`ssHearts_${classId}`, query(getStudentHeartsCollectionRef(), where("classId", "==", classId)), ttl, accept),
           studentOnly ? Promise.resolve(null) : cachedGetDocs(`ssRefl_${classId}`, query(getReflectionsCollectionRef(), where("classId", "==", classId)), ttl, accept),

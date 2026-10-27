@@ -81,6 +81,28 @@ export async function refreshClassSnapshots(db, appId, { full = false } = {}) {
   }
   mergeInto(reflByClass, 'smartstudy-reflections', 'reflections');
 
+  // SmartStudy, for the TEACHER's screen: the class's hearts, roster and the latest 100 quiz completions as one small file per class, so opening a class
+  // reads nothing from Firebase (the teacher's Students tab / refresh still read live when the up-to-the-minute roster is needed).
+  mkdirSync(join(CLASS_DIR, 'smartstudy-teacher'), { recursive: true });
+  const plain = (v) => (v && typeof v === 'object' ? (typeof v.toMillis === 'function' ? v.toMillis() : Array.isArray(v) ? v.map(plain) : Object.fromEntries(Object.entries(v).map(([k, x]) => [k, plain(x)]))) : v);
+  const [heartsAll, rosterAll, compAll] = await Promise.all([
+    getDocs(collection(db, `${publicDataPath}/studentHearts`)),
+    getDocs(collection(db, `${publicDataPath}/classRoster`)),
+    getDocs(collection(db, `${publicDataPath}/quizCompletions`)),
+  ]);
+  const tByClass = {};
+  const tAdd = (cid, key, row) => { if (!cid) return; ((tByClass[cid] = tByClass[cid] || { hearts: [], roster: [], completions: [] })[key]).push(row); };
+  heartsAll.docs.forEach(d => tAdd(d.data().classId, 'hearts', plain({ id: d.id, ...d.data() })));
+  rosterAll.docs.forEach(d => tAdd(d.data().classId, 'roster', plain({ id: d.id, ...d.data() })));
+  compAll.docs.forEach(d => tAdd(d.data().classId, 'completions', plain({ id: d.id, ...d.data() })));
+  for (const [cid, t] of Object.entries(tByClass)) {
+    t.completions.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    t.completions = t.completions.slice(0, 100);
+    const file = join(CLASS_DIR, 'smartstudy-teacher', `${encodeURIComponent(cid)}.json`);
+    let old = null; try { const o = JSON.parse(readFileSync(file, 'utf8')); delete o.generatedAt; old = JSON.stringify(o); } catch (e) { /* none yet */ }
+    if (old !== JSON.stringify(t)) { writeFileSync(file, JSON.stringify({ generatedAt, ...t })); filesWritten += 1; }
+  }
+
   // Abhidhamma: lesson counts from a count query (not by reading every lesson); each student's finished
   // lessons kept as a set in the state file, so a new score is just added to its set.
   const ABHI = 'artifacts/lesson-translator-app-v6/public/data';
