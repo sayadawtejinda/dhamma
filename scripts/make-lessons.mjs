@@ -11,7 +11,7 @@
 import { createInterface } from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import { readFileSync, writeFileSync, existsSync, statSync } from 'node:fs';
-import { join, isAbsolute, dirname } from 'node:path';
+import { join, isAbsolute, dirname, basename, extname } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { gemini, loadKey, GEMINI_KEY_FILE, GAP_MS } from './gemini.mjs';
@@ -170,7 +170,8 @@ if (DRY) { rl.close(); process.exit(0); }
 // Abhidhamma: the lesson is the Burmese text itself. Nothing is asked from Gemini here: add-lessons.bat adds the 5
 // picture names to each lesson and then makes the 4 age versions (English text, discussion questions, quiz).
 if (abhi) {
-  const stampA = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
+  // the default name comes from the STORIES file, not from the clock: run it again with the same stories file and it continues where it stopped
+  const stampA = basename(file, extname(file)).replace(/[^\p{L}\p{N}_-]+/gu, '-');
   const outA = await ask('Save the lessons as', `abhidhamma-${stampA}.json`);
   const fileA = isAbsolute(outA) ? outA : join(homedir(), 'Downloads', outA);
   const lessonsA = stories.map((s, i) => ({
@@ -188,7 +189,9 @@ Done: ${lessonsA.length} lesson(s) in ${fileA}`);
 const key = loadKey();
 if (!key) die(`No Gemini key. Save your key as one line in ${GEMINI_KEY_FILE} (get it at https://aistudio.google.com/apikey).`);
 
-const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
+// the default name comes from the STORIES file, not from the clock: run it again with the same stories file and the lessons that are already
+// finished are kept (it carries on after them) instead of everything being made again
+const stamp = basename(file, extname(file)).replace(/[^\p{L}\p{N}_-]+/gu, '-');
 const outName = await ask('Save the lessons as', `lessons-${stamp}.json`);
 const outFile = isAbsolute(outName) ? outName : join(homedir(), 'Downloads', outName);
 let done = [];
