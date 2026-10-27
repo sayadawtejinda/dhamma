@@ -19,15 +19,17 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 HOME = os.path.expanduser('~')
-SHOTS = os.environ.get('LESSON_PICTURES') or os.path.join(HOME, 'Pictures', 'Screenshots')
+SHOTS = os.path.join(HOME, 'Pictures', 'Screenshots')        # sheets may also be waiting here (they are looked for in all three folders)
 DOWNLOADS = os.environ.get('LESSON_DOWNLOADS') or os.path.join(HOME, 'Downloads')
+# the single pictures are saved in Downloads/lesson-pictures (add-lessons.bat reads them from there) and the sheets are moved into its 'sheets' folder
+WORK = os.environ.get('LESSON_PICTURES') or os.path.join(DOWNLOADS, 'lesson-pictures')
 PREFIX = 'gemini_generated'
 KEEP = 5
 
 
 def find_sheets():
     found = []
-    for folder in (SHOTS, DOWNLOADS):
+    for folder in (WORK, SHOTS, DOWNLOADS):
         if not os.path.isdir(folder):
             continue
         for name in os.listdir(folder):
@@ -88,9 +90,9 @@ def main():
     sheets = find_sheets()
     if not sheets:
         print('No sheets found. Put the Gemini pictures (names start with Gemini_Generated) in')
-        print(SHOTS + ' or in Downloads, then run this again.')
+        print(DOWNLOADS + ' (or ' + SHOTS + '), then run this again.')
         return
-    os.makedirs(os.path.join(SHOTS, 'sheets'), exist_ok=True)
+    os.makedirs(os.path.join(WORK, 'sheets'), exist_ok=True)
     print(f'{len(sheets)} sheet(s) found.\n')
     clock = time.time()
     for sheet in sheets:
@@ -112,7 +114,7 @@ def main():
         else:
             print(f'  Found {len(cols)} across x {len(rows)} down = {count} pictures.')
         boxes = [(c0, r0, c1, r1) for (r0, r1) in rows for (c0, c1) in cols]
-        pv_path = os.path.join(SHOTS, 'sheets', '_preview.png')
+        pv_path = os.path.join(WORK, 'sheets', '_preview.png')
         preview(img, boxes, pv_path)
         try:
             if os.environ.get('LESSON_NO_OPEN'):
@@ -148,17 +150,17 @@ def main():
                 continue
             x0, y0, x1, y1 = box
             tile = img.convert('RGB').crop((x0 + 2, y0 + 2, x1 - 2, y1 - 2))
-            out = os.path.join(SHOTS, f'{base}_{n}.png')
+            out = os.path.join(WORK, f'{base}_{n}.png')
             tile.save(out)
             clock += 2  # each piece one step newer than the last, so they stay in story order
             os.utime(out, (clock, clock))
             saved += 1
-        dest = os.path.join(SHOTS, 'sheets', name)
+        dest = os.path.join(WORK, 'sheets', name)
         if os.path.abspath(sheet) != os.path.abspath(dest):
             shutil.move(sheet, dest)
-        print(f'  Saved {saved} pictures in {SHOTS}; the sheet was moved to {os.path.join(SHOTS, "sheets")}.\n')
+        print(f'  Saved {saved} pictures in {WORK}; the sheet was moved to {os.path.join(WORK, "sheets")}.\n')
     try:
-        os.remove(os.path.join(SHOTS, 'sheets', '_preview.png'))
+        os.remove(os.path.join(WORK, 'sheets', '_preview.png'))
     except Exception:
         pass
     print('Done. Next: double-click add-lessons.bat')

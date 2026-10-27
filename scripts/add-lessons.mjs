@@ -23,7 +23,9 @@ import { loadKey, GEMINI_KEY_FILE } from './gemini.mjs';
 import { makeVariant, AGE_GROUPS } from './abhi-variants.mjs';
 
 const DRY = process.argv.includes('--dry');
-const SCREENSHOTS = process.env.LESSON_PICTURES || join(homedir(), 'Pictures', 'Screenshots');
+// The pictures are taken from Downloads\lesson-pictures (where split-sheets.bat puts them) AND from Pictures\Screenshots, oldest first.
+const PICTURE_DIRS = process.env.LESSON_PICTURES ? [process.env.LESSON_PICTURES] : [join(homedir(), 'Downloads', 'lesson-pictures'), join(homedir(), 'Pictures', 'Screenshots')];
+const SCREENSHOTS = PICTURE_DIRS.join(' + ');
 const IMAGE_REPO = 'sayadawtejinda/dhammaschool';
 const REPO_DIR = process.env.LESSON_IMAGE_REPO_DIR || join(homedir(), 'dhammaschool-images');
 const RAW_BASE = (branch) => `https://raw.githubusercontent.com/${IMAGE_REPO}/${branch}/`;
@@ -53,10 +55,11 @@ const readLessons = (file) => {
 
 // ---- the pictures -------------------------------------------------------------------------------------------------
 const listScreenshots = () => {
-  if (!existsSync(SCREENSHOTS)) die(`The folder ${SCREENSHOTS} does not exist.`);
-  return readdirSync(SCREENSHOTS)
-    .filter(f => /\.(png|jpg|jpeg)$/i.test(f) && statSync(join(SCREENSHOTS, f)).isFile())
-    .sort((a, b) => statSync(join(SCREENSHOTS, a)).mtimeMs - statSync(join(SCREENSHOTS, b)).mtimeMs || (a < b ? -1 : 1));
+  const dirs = PICTURE_DIRS.filter(d => existsSync(d));
+  if (dirs.length === 0) die(`None of these folders exists: ${SCREENSHOTS}`);
+  // full paths; a sheet that is still waiting to be split (Gemini_Generated_Image_xxxx.jpg, no _number at the end) is not a picture; the 'sheets' folder is not read
+  return dirs.flatMap(d => readdirSync(d).filter(f => /\.(png|jpg|jpeg)$/i.test(f) && !/^gemini_generated_image_[a-z0-9]+\.(png|jpg|jpeg)$/i.test(f) && statSync(join(d, f)).isFile()).map(f => join(d, f)))
+    .sort((a, b) => statSync(a).mtimeMs - statSync(b).mtimeMs || (a < b ? -1 : 1));
 };
 
 function prepareRepo(digits) {
@@ -168,7 +171,7 @@ if (!(await ask('\nGo ahead? (y/n)', 'y')).toLowerCase().startsWith('y')) die('N
 
 // 1. pictures -> GitHub
 if (needed) {
-  use.forEach((f, i) => copyFileSync(join(SCREENSHOTS, f), join(REPO_DIR, newNames[i])));
+  use.forEach((f, i) => copyFileSync(f, join(REPO_DIR, newNames[i])));
   try {
     git(['add', ...newNames]);
     git(['commit', '-m', `Add lesson pictures ${newNames[0]} - ${newNames[newNames.length - 1]}`]);
@@ -215,7 +218,7 @@ if (which === 'smartstudy') {
 
 // 3. the used screenshots are now safe on GitHub: delete them from the computer
 if (needed) {
-  use.forEach(f => unlinkSync(join(SCREENSHOTS, f)));
+  use.forEach(f => unlinkSync(f));
   console.log(`🗑️ The ${needed} used screenshot(s) were deleted from ${SCREENSHOTS}.`);
 }
 // 4. Abhidhamma: the 4 age versions (English text, discussion questions, quiz) -- what the app's Generate button does

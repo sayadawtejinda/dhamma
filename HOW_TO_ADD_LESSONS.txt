@@ -36,7 +36,7 @@
   Gemini ကနေ ရတဲ့ ပုံအချပ် (ပုံ ၆ ပုံပါတဲ့ တစ်ချပ်) တွေကို တစ်ပုံချင်း ခွဲပါတယ်။
   - အချပ်တွေက  Pictures\Screenshots  ဒါမှမဟုတ်  Downloads  ထဲမှာ  Gemini_Generated... နာမည်နဲ့ ရှိနေရမယ်
   - ပုံ ၆ ပုံထဲက မလိုတဲ့ ၁ ပုံကို နံပါတ်ရိုက်ပြီး ဖယ်ပါ (ပုံ ၅ ပုံပဲ ရှိရင် Enter)
-  - ခွဲပြီး Pictures\Screenshots ထဲ ဇာတ်လမ်းအစဉ်လိုက် ထည့်ပေးပါမယ်။ မူရင်းအချပ်ကို  Screenshots\sheets  ထဲ ရွှေ့ထားပြီး မဖျက်ပါ
+  - ခွဲပြီး Downloads\lesson-pictures ထဲ ဇာတ်လမ်းအစဉ်လိုက် ထည့်ပေးပါမယ်။ မူရင်းအချပ်ကို  Screenshots\sheets  ထဲ ရွှေ့ထားပြီး မဖျက်ပါ
   - ကိုယ်တိုင်ရိုက်ထားတဲ့ screenshot ပုံတွေ ရှိရင် ဒီအဆင့်ကို ကျော်ပါ
 
 --------------------------------------------------------------------------------
@@ -50,7 +50,7 @@
     "Lessons file name" — အဆင့် 1 က .json ဖိုင်နာမည်
     Summary ပြပါမယ် → "Go ahead? (y/n)" → y
   အလိုအလျောက် လုပ်ပေးတာ:
-    1. Pictures\Screenshots ထဲက ပုံတွေကို အဟောင်းဆုံးကနေ သုံးပြီး ဂဏန်းဆက်ပြီး နာမည်ပြောင်း (SmartStudy ၄ လုံး၊ Abhidhamma ၆ လုံး)
+    1. Downloads\lesson-pictures ထဲက ပုံတွေကို အဟောင်းဆုံးကနေ သုံးပြီး ဂဏန်းဆက်ပြီး နာမည်ပြောင်း (SmartStudy ၄ လုံး၊ Abhidhamma ၆ လုံး)
     2. GitHub  sayadawtejinda/dhammaschool  ကို တင်
     3. lesson ထဲက ပုံလင့်တွေ ထည့်ပြီး lesson တွေကို SmartStudy / Abhidhamma ထဲ ထည့်
     4. တင်ပြီး အဆင်ပြေမှ သုံးပြီးသား screenshot တွေကို ကွန်ပျူတာထဲက ဖျက် (အကုန်ပြီးမှ)
@@ -72,7 +72,7 @@
 ပြဿနာရှိရင်
 
   - "I could not find ..." — ဖိုင်နာမည် မှန်လား၊ Downloads / Desktop / Documents / project folder ထဲ ရှိလား စစ်ပါ
-  - "N more picture(s) are needed" — Pictures\Screenshots ထဲ ပုံ ပိုထည့်ပါ
+  - "N more picture(s) are needed" — Downloads\lesson-pictures ထဲ ပုံ ပိုထည့်ပါ
   - Gemini 429 / quota — ခဏစောင့်ပြီး (မနက်ဖြန်) ထပ် run (နာမည်တူ ဖိုင်ထည့်ပါ)
   - ပုံတင်တာ မအောင်ရင် — ကွန်ပျူတာမှာ git ဝင်ပြီး GitHub account နဲ့ ချိတ်ထားလား စစ်ပါ
   - နောက်ထပ်ပုံစံတွေ မှားနေရင် Claude ကို HOW_TO_ADD_LESSONS.txt ကို ပြောပြီး ပြောပါ
