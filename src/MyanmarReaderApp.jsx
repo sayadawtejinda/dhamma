@@ -2581,6 +2581,7 @@ const closeQAPanel = () => {
               return;
           }
           interruptPlayback();
+          setIsSpellMode(false); setAutoReadMode(true); // keyboard practice reads the whole word: way 2
           setIsPracticeMode(true);
           setPracticeStep(0);
           setCurrentKeys([]);
@@ -4065,20 +4066,16 @@ useEffect(() => {
             </button>
             
             <button
-              onClick={() => setShowSpellModeConfirm(true)}
+              onClick={() => { const spell = !isSpellMode; setIsSpellMode(spell); setAutoReadMode(!spell); }}
               disabled={isLocked}
-              title="Reading way: 1 = spell it out, 2 = read the whole word"
+              title="Reading way: 1 = spell it out, 2 = read the whole word (tap to change)"
               className={`flex items-center justify-center gap-2 px-6 rounded-xl font-bold text-lg transition-all duration-300 h-[60px] ${
                 isSpellMode
                   ? 'bg-blue-600 text-white shadow-[0_0_20px_rgba(59,130,246,0.9)] ring-4 ring-blue-300 scale-105 border-transparent'
                   : 'bg-blue-500 hover:bg-blue-600 text-white shadow-lg hover:shadow-xl active:scale-95 border-b-4 border-blue-700'
               }`}
             >
-              <Play fill="currentColor" size={24} className={`${isSpellMode ? 'animate-pulse text-blue-50 drop-shadow-md' : ''}`} />
-              {/* both ways are always written on the button; the one in use is the white chip */}
-              {[1, 2].map(n => (
-                <span key={n} className={`w-9 h-9 flex items-center justify-center rounded-lg text-xl font-black ${((n === 1) === isSpellMode) ? 'bg-white text-blue-700 shadow' : 'bg-blue-800/40 text-blue-100'}`}>{n}</span>
-              ))}
+              <span className="text-3xl font-black w-8 text-center">{isSpellMode ? 1 : 2}</span>
             </button>
             <button
               onClick={togglePracticeMode}
