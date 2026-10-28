@@ -3936,6 +3936,8 @@ const TripleSetQuiz = ({ lesson, onExit, showRomanization, dictionary, matchingG
 // --- Student Dashboard ---
 
 // ---- Coins earned in the lessons, poems, games and quizzes ------------------------------------
+// The coins stay in this app's own wallet (the student's row in this app's roster) and reach the Shrine Room only when the
+// student taps the 🪙 beside their name and deposits them, like in the other apps.
 // Pressing a lesson / poem button pays 9 coins; a right answer in a game or quiz pays 14; a wrong answer
 // takes 1 coin back (never below 0). Nothing is written per press: the amounts are added up here and saved
 // together a few seconds later (and when the page is hidden or left). Guards: button presses closer than 2
@@ -3948,6 +3950,7 @@ const WRONG_ANSWER_COINS = -1;
 const LESSON_DAILY_COIN_CAP = 1500;
 const LESSON_MIN_GAP_MS = 2000;
 let lessonCoinStudent = '';
+let lessonCoinUid = null; // the student's id: their coins are kept in this app's own roster row until they deposit them
 let lessonCoinPending = 0;
 let lessonCoinUsed = null; // coins already earned today, loaded once
 let lessonCoinTimer = null;
@@ -3972,7 +3975,8 @@ async function flushLessonCoins() {
     lessonCoinPending = 0;
     let lessonCoinSaved = null;
     try {
-        const ref = doc(db, SHRINE_ROSTER_PATH, shrineKeyOf(name));
+        if (!lessonCoinUid) { lessonCoinPending += amount; return; }
+        const ref = rosterDocRefByUid(db, ROSTER_PATH, lessonCoinUid);
         const paid = await runTransaction(db, async (tx) => {
             const snap = await tx.get(ref);
             const d = snap.exists() ? snap.data() : {};
@@ -3982,7 +3986,7 @@ async function flushLessonCoins() {
             if (change === 0) return 0;
             const hadBalance = d.coinBalance != null;
             if (!hadBalance && change < 0) return 0;
-            const next = Math.max(0, (hadBalance ? d.coinBalance : 20) + change);
+            const next = Math.max(0, (hadBalance ? d.coinBalance : 0) + change);
             tx.set(ref, { studentName: name, coinBalance: next, lessonCoinsDay: today, lessonCoinsToday: used + Math.max(0, change) }, { merge: true });
             lessonCoinSaved = next;
             return change;
@@ -4009,13 +4013,41 @@ const floatCoinText = (e, text, color) => {
         setTimeout(() => el.remove(), 1000);
     } catch (err) { /* cosmetic only */ }
 };
+// Moves the whole wallet into the Shrine Room (one transaction: the Shrine wallet goes up, this app's wallet goes to 0).
+async function depositLessonCoins() {
+    if (!lessonCoinStudent || !lessonCoinUid) return;
+    await flushLessonCoins();
+    const name = lessonCoinStudent;
+    const ownRef = rosterDocRefByUid(db, ROSTER_PATH, lessonCoinUid);
+    try {
+        const own = await getDoc(ownRef);
+        const depositable = own.exists() ? (own.data().coinBalance || 0) : 0;
+        if (depositable <= 0) { alert('You have no coins to deposit yet.'); return; }
+        if (!window.confirm(`Deposit ${depositable} coin(s) into your Shrine Room wallet?`)) return;
+        const shrineRef = doc(db, SHRINE_ROSTER_PATH, shrineKeyOf(name));
+        const moved = await runTransaction(db, async (tx) => {
+            const [o, sh] = await Promise.all([tx.get(ownRef), tx.get(shrineRef)]);
+            const amount = o.exists() ? (o.data().coinBalance || 0) : 0;
+            if (amount <= 0) return 0;
+            tx.set(shrineRef, { studentName: name, coinBalance: (sh.exists() && sh.data().coinBalance != null ? sh.data().coinBalance : 20) + amount }, { merge: true });
+            tx.set(ownRef, { coinBalance: 0 }, { merge: true });
+            return amount;
+        });
+        lessonCoinShown = lessonCoinPending; emitLessonCoins();
+        if (moved > 0) alert(`🪙 Deposited ${moved} coin(s) into your Shrine Room wallet!`);
+    } catch (e) {
+        console.error('Error depositing coins to Shrine Room:', e);
+        alert('⚠️ Something went wrong depositing your coins. Please try again.');
+    }
+}
 let lessonCoinLoadedFor = '';
 function ensureLessonCoinsLoaded() {
+    if (!lessonCoinUid) return;
     if (lessonCoinUsed !== null && lessonCoinLoadedFor === lessonCoinStudent) return;
     if (lessonCoinLoadedFor && lessonCoinLoadedFor !== lessonCoinStudent) { lessonCoinShown = null; lessonCoinPending = 0; }
     lessonCoinLoadedFor = lessonCoinStudent;
     lessonCoinUsed = 0;
-    getDoc(doc(db, SHRINE_ROSTER_PATH, shrineKeyOf(lessonCoinStudent))).then(snap => {
+    getDoc(rosterDocRefByUid(db, ROSTER_PATH, lessonCoinUid)).then(snap => {
         const d = snap.exists() ? snap.data() : {};
         lessonCoinShown = Math.max(0, (d.coinBalance != null ? d.coinBalance : 0) + lessonCoinPending); emitLessonCoins();
         const used = d.lessonCoinsDay === lessonTodayKey() ? (d.lessonCoinsToday || 0) : 0;
@@ -5247,9 +5279,10 @@ export default function MyanmarSpeakingApp({ entryRequest, onExit, isActive }) {
     // the student leaves the app or changes.
     useEffect(() => {
         lessonCoinStudent = (activeRole === 'student' && isActive) ? studentName : '';
+        lessonCoinUid = lessonCoinStudent ? userId : null;
         if (lessonCoinStudent) ensureLessonCoinsLoaded();
         return () => { flushLessonCoins(); };
-    }, [activeRole, studentName, isActive]);
+    }, [activeRole, studentName, isActive, userId]);
 
     useEffect(() => {
         if (activeRole !== 'student' || !studentName || !userId || !isActive) return;
@@ -5351,6 +5384,7 @@ export default function MyanmarSpeakingApp({ entryRequest, onExit, isActive }) {
                 isTeacherMode={activeRole === 'teacher'}
                 coinBalance={activeRole === 'student' ? coinShown : null}
                 coinIcon="🪙"
+                onCoinClick={activeRole === 'student' ? depositLessonCoins : undefined}
                 panelTitle="🗣️ Students"
             />
 
