@@ -237,6 +237,9 @@ export async function refreshDhammaschoolProgress(db) {
   const lessons = await getDocs(collection(db, `${DS}/lessons`));
   const lessonsByClass = {};
   lessons.docs.forEach(d => { const c = d.data().classId; if (c) (lessonsByClass[c] = lessonsByClass[c] || []).push(d.id); });
+  // the number of PUBLIC lessons per class (what the teacher's Send Action lists), the same way the app counted them
+  const publicCounts = {};
+  lessons.docs.forEach(d => { const x = d.data(); if (!x.isPublic) return; const cid = (x.classId && x.classId.trim()) ? x.classId.trim() : 'GENERAL'; publicCounts[cid] = (publicCounts[cid] || 0) + 1; });
   Object.values(lessonsByClass).forEach(l => l.sort());
   const comps = await getDocs(collection(db, `${DS}/lesson_completions`));
   const completions = {};
@@ -250,13 +253,15 @@ export async function refreshDhammaschoolProgress(db) {
     const dir = join(CLASS_DIR, 'dhammaschool');
     for (const f of readdirSync(dir)) { try { (JSON.parse(readFileSync(join(dir, f), 'utf8')).answers || []).forEach(a => note(a.studentName, a.lessonId)); } catch (e) { /* skip */ } }
   } catch (e) { /* no folder yet */ }
-  try { (await getDocs(collection(db, `${DS}/game_scores`))).docs.forEach(d => note(d.data().studentName, d.data().lessonId)); } catch (e) { /* none */ }
+  // best game score per student per chapter
+  const bestScores = {};
+  try { (await getDocs(collection(db, `${DS}/game_scores`))).docs.forEach(d => { const x = d.data(); note(x.studentName, x.lessonId); if (x.studentName && x.lessonId) { const m = (bestScores[x.studentName] = bestScores[x.studentName] || {}); m[x.lessonId] = Math.max(m[x.lessonId] || 0, Number(x.score) || 0); } }); } catch (e) { /* none */ }
   const participants = Object.fromEntries(Object.entries(taken).sort(([a], [b]) => (a < b ? -1 : 1)).map(([k, v]) => [k, [...v].sort()]));
   mkdirSync(CLASS_DIR, { recursive: true });
   const file = join(CLASS_DIR, 'dhammaschool-progress.json');
   let old = null;
-  try { const j = JSON.parse(readFileSync(file, 'utf8')); old = JSON.stringify({ l: j.lessonsByClass, c: j.completions, p: j.participants }); } catch (e) { /* none yet */ }
-  if (old !== JSON.stringify({ l: lessonsByClass, c: out, p: participants })) writeFileSync(file, JSON.stringify({ generatedAt: new Date().toISOString(), lessonsByClass, completions: out, participants }));
+  try { const j = JSON.parse(readFileSync(file, 'utf8')); old = JSON.stringify({ l: j.lessonsByClass, c: j.completions, p: j.participants, b: j.bestScores, n: j.publicCounts }); } catch (e) { /* none yet */ }
+  if (old !== JSON.stringify({ l: lessonsByClass, c: out, p: participants, b: bestScores, n: publicCounts })) writeFileSync(file, JSON.stringify({ generatedAt: new Date().toISOString(), lessonsByClass, completions: out, participants, bestScores, publicCounts }));
   console.log(`Dhammaschool progress: ${Object.keys(lessonsByClass).length} grades, ${comps.size} completions`);
 }
 

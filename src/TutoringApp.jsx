@@ -985,6 +985,18 @@ function fetchWeeklySnapshot() {
   return weeklySnapshotCache;
 }
 
+// Dhammaschool's chapters per grade, who finished which, best game scores and the public chapter counts, as one file the weekly
+// job writes (classSnapshots/dhammaschool-progress.json). Send Action reads this instead of 100+ Firestore documents per student.
+let dsProgressPromise = null;
+function fetchDhammaschoolProgress() {
+  if (!dsProgressPromise) {
+    dsProgressPromise = fetch(`${import.meta.env.BASE_URL}classSnapshots/dhammaschool-progress.json`, { cache: 'no-cache' })
+      .then(r => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .catch(e => { dsProgressPromise = null; throw e; });
+  }
+  return dsProgressPromise;
+}
+
 // --- Components ---
 
 function ConfirmationModal({ 
@@ -2006,41 +2018,14 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
     if (!student) return;
     (async () => {
       try {
-        // Lessons belonging to this class (classId field on each lesson doc)
-        const lessonsSnap = await getDocs(query(
-          collection(db, 'artifacts', DHAMMASCHOOL_APP_ID, 'public', 'data', 'lessons'),
-          where('classId', '==', sendDhammaschoolClassId)
-        ));
-        const classLessonIds = lessonsSnap.docs.map(d => d.id);
+        // From the weekly file (no Firestore reads): the class's chapters, the ones this student finished, and their best scores.
+        const prog = await fetchDhammaschoolProgress();
+        const classLessonIds = (prog.lessonsByClass || {})[sendDhammaschoolClassId] || [];
         const totalLessons = classLessonIds.length;
-
-        // Dhammaschool app uses its own anonymous Firebase session per device/browser
-        // (separate from TutoringApp's studentUid), so completions must be matched
-        // by studentName, not by a doc ID built from studentUid.
-        const completionsSnap = await getDocs(query(
-          collection(db, 'artifacts', DHAMMASCHOOL_APP_ID, 'public', 'data', 'lesson_completions'),
-          where('studentName', '==', student.name)
-        ));
-        const completedLessonIds = new Set(completionsSnap.docs.map(d => d.data().lessonId).filter(lid => classLessonIds.includes(lid)));
-
-        // One query per lesson (up to 40 for a full class) run in parallel
-        // instead of sequentially -- awaiting each one in turn before
-        // starting the next was the actual reason "Assign Lesson" felt slow
-        // for Dhammaschool (40 round trips back to back instead of at once).
-        const perLessonScores = await Promise.all(classLessonIds.map(async lid => {
-          try {
-            const scoresSnap = await getDocs(query(
-              collection(db, 'artifacts', DHAMMASCHOOL_APP_ID, 'public', 'data', 'game_scores'),
-              where('lessonId', '==', lid),
-              where('studentName', '==', student.name)
-            ));
-            let best = 0;
-            scoresSnap.docs.forEach(d => { best = Math.max(best, Number(d.data().score) || 0); });
-            return best;
-          } catch (e) { return 0; }
-        }));
-        const totalScore = perLessonScores.reduce((sum, s) => sum + s, 0);
-        setDhammaschoolStudentProgress({ completedCount: completedLessonIds.size, totalLessons, score: totalScore });
+        const done = new Set(((prog.completions || {})[student.name] || []).filter(lid => classLessonIds.includes(lid)));
+        const best = (prog.bestScores || {})[student.name] || {};
+        const totalScore = classLessonIds.reduce((sum, lid) => sum + (Number(best[lid]) || 0), 0);
+        setDhammaschoolStudentProgress({ completedCount: done.size, totalLessons, score: totalScore });
       } catch (e) {
         console.error('Dhammaschool progress fetch:', e);
         setDhammaschoolStudentProgress({ completedCount: 0, totalLessons: 0, score: 0 });
@@ -2053,8 +2038,8 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
     setAbhiStudentCount(null);setAbhiStudentScore(null);setAbhiTotalCount(null);
     if(!sendAbhidhammaClassId)return;
     // Load total lesson count for the class
-    getDocs(collection(db,'artifacts','lesson-translator-app-v6','public','data','classes',sendAbhidhammaClassId,'lessons'))
-      .then(snap=>setAbhiTotalCount(snap.size)).catch(()=>setAbhiTotalCount(0));
+    getCountFromServer(collection(db,'artifacts','lesson-translator-app-v6','public','data','classes',sendAbhidhammaClassId,'lessons'))
+      .then(snap=>setAbhiTotalCount(snap.data().count)).catch(()=>setAbhiTotalCount(0));
     if(!selectedStudentUid)return;
     (async()=>{
       const { totalPoints, doneLessonIds } = await fetchAbhidhammaProgress(selectedStudentUid, sendAbhidhammaClassId, (students.find(s => s.id === selectedStudentUid) || {}).name);
@@ -2066,14 +2051,7 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
     if (dhammaschoolClasses !== null) return dhammaschoolClasses;
     setDhammaschoolLoading(true);
     try {
-      const snap = await getDocs(collection(db, 'artifacts', DHAMMASCHOOL_APP_ID, 'public', 'data', 'lessons'));
-      const counts = {};
-      snap.docs.forEach(d => {
-        const data = d.data();
-        if (!data.isPublic) return; // only count lessons the teacher made public
-        const cid = (data.classId && data.classId.trim()) ? data.classId.trim() : 'GENERAL';
-        counts[cid] = (counts[cid] || 0) + 1;
-      });
+      const counts = (await fetchDhammaschoolProgress()).publicCounts || {};
       const list = Object.entries(counts)
         .map(([classId, lessonCount]) => ({ classId, lessonCount }))
         .sort((a, b) => a.classId.localeCompare(b.classId));
@@ -2223,11 +2201,7 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
         // happened for Amara Lin/GRADE-2). Fetch the real count directly
         // here instead of trusting state that might not have caught up.
         try {
-          const liveSnap = await getDocs(query(
-            collection(db, 'artifacts', DHAMMASCHOOL_APP_ID, 'public', 'data', 'lessons'),
-            where('classId', '==', sendDhammaschoolClassId)
-          ));
-          return liveSnap.size;
+          return (((await fetchDhammaschoolProgress()).lessonsByClass || {})[sendDhammaschoolClassId] || []).length;
         } catch (e) {
           console.error('Dhammaschool live lesson-count fetch:', e);
           return null;

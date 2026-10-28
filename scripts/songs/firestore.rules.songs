@@ -1,0 +1,48 @@
+// Firestore rules of the Firebase project "dhamma-songs" (free Spark plan).  Firebase console -> Firestore Database -> Rules -> paste -> Publish.
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function verified() { return signedIn() && request.auth.token.email_verified == true; }
+    function mail()     { return request.auth.token.email.lower(); }
+    function isAdmin()  { return verified() && mail() == 'sayadawtejinda@gmail.com'; }
+    function blocked()  { return exists(/databases/$(database)/documents/blocked/$(mail())); }
+    function trusted()  { return exists(/databases/$(database)/documents/trusted/$(mail())); }
+
+    // comments and lyrics suggestions: everybody can read the approved ones; a verified e-mail can write
+    // (a trusted e-mail is approved at once, any other waits for the teacher); a blocked e-mail can't write
+    match /comments/{id} {
+      allow read: if resource.data.status == 'approved'
+                  || isAdmin()
+                  || (signedIn() && resource.data.uid == request.auth.uid);
+      allow create: if verified() && !blocked()
+                    && request.resource.data.keys().hasOnly(['song', 'name', 'text', 'kind', 'ts', 'uid', 'status'])
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.song is string
+                    && request.resource.data.name is string && request.resource.data.name.size() <= 40
+                    && request.resource.data.text is string && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 3000
+                    && request.resource.data.kind in ['comment', 'lyrics']
+                    && request.resource.data.status == (trusted() ? 'approved' : 'pending');
+      allow update: if isAdmin();
+      allow delete: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+    }
+
+    // who wrote a comment (the e-mail is only for the teacher: never shown in public)
+    match /commenters/{uid} {
+      allow read: if isAdmin();
+      allow create, update: if verified() && request.auth.uid == uid && !blocked()
+                            && request.resource.data.keys().hasOnly(['email', 'ts'])
+                            && request.resource.data.email == mail();
+    }
+
+    // e-mails the teacher trusts / has blocked
+    match /trusted/{email} {
+      allow get: if verified() && mail() == email;
+      allow read, write: if isAdmin();
+    }
+    match /blocked/{email} {
+      allow read, write: if isAdmin();
+    }
+  }
+}

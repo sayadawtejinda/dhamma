@@ -29,12 +29,15 @@ function add(ref, n) {
   const k = nameOf(ref);
   state.total += n;
   state.by[k] = (state.by[k] || 0) + n;
+  // every single read of 30+ documents is written down with the time, so the details box shows WHAT cost a lot and WHEN
+  // (open the screen, press the button, look at the time here)
+  if (n >= 30) { (state.big = state.big || []).push({ t: new Date().toTimeString().slice(0, 8), k, n }); if (state.big.length > 40) state.big.shift(); }
   if (!saveTimer) saveTimer = setTimeout(() => { saveTimer = null; try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* ignore */ } paint(); }, 1500);
 }
 
 // The full list, in a box whose text can be selected, with a Copy button (an alert() could not be copied).
 function showDetails() {
-  const text = 'reads ' + state.day + ': ' + state.total + String.fromCharCode(10) + Object.entries(state.by).sort((x, y) => y[1] - x[1]).map(([k, v]) => k + ': ' + v).join(String.fromCharCode(10));
+  const text = 'reads ' + state.day + ': ' + state.total + String.fromCharCode(10) + Object.entries(state.by).sort((x, y) => y[1] - x[1]).map(([k, v]) => k + ': ' + v).join(String.fromCharCode(10)) + (state.big && state.big.length ? String.fromCharCode(10) + String.fromCharCode(10) + 'BIG READS (30+ at once), newest last:' + String.fromCharCode(10) + state.big.map(b => b.t + '  ' + b.k + ': ' + b.n).join(String.fromCharCode(10)) : '');
   const box = document.createElement('div');
   box.style.cssText = 'position:fixed;left:8px;right:8px;top:8px;z-index:100000;background:#fff;color:#000;border:2px solid #333;border-radius:10px;padding:10px;font:13px monospace;max-height:70vh;overflow:auto;box-shadow:0 4px 20px rgba(0,0,0,.4)';
   const ta = document.createElement('textarea');
@@ -79,7 +82,7 @@ if (typeof window !== 'undefined') {
   window.__reads = () => state;
   window.__setReadsVisible = (v) => { visible = !!v; paint(); };
   window.__setReadsInteractive = (v) => { interactive = !!v; paint(); };
-  window.__resetReads = () => { state = { day: DAY(), total: 0, by: {} }; try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* ignore */ } paint(); };
+  window.__resetReads = () => { state = { day: DAY(), total: 0, by: {}, big: [] }; try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* ignore */ } paint(); };
   setTimeout(paint, 2000);
 }
 
