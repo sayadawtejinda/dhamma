@@ -3403,6 +3403,29 @@ const isNibbanaActive = filter.type === 'sabba-detail' && !!filter.value.isNibba
   };
 
   // Sắc pháp (RUPAS) dot — khi hover hiển thị tooltip (tên + ý nghĩa) gần con trỏ chuột; khi click hiển thị floating tooltip trong 3 giây ở phía trên
+  // Tâm Thông (Abhiññā) = chính tâm thiền thứ năm Sắc giới (id 59 / 69) — hiện bằng một vòng nét đứt giống "Cảnh xúc" để riêng phần Thông
+  const AbhinnaBall = ({ cId }) => {
+    const isKusala = cId === 59;
+    const label = isKusala ? 'Thiện-Thông' : 'D.Tác-Thông';
+    const detail = {
+      name: isKusala ? 'Thông Thiện (Abhiññā) — Tâm Thiện Sắc Giới thiền thứ năm' : 'Thông Duy Tác (Abhiññā) — Tâm Duy Tác Sắc Giới thiền thứ năm',
+      desc: 'Tâm Thông (Abhiññā) không phải là một loại tâm mới: đó chính là tâm thiền thứ năm (Ngũ thiền) của Sắc giới, khi được dùng để phát sinh các thần thông. Thiện Thông ở người phàm/hữu học, Duy Tác Thông ở bậc A-la-hán. Bấm vào vòng này sẽ chỉ ra tâm thiền thứ năm tương ứng.'
+    };
+    const targeted = (filter.type === 'citta' && filter.value === cId) || (detailPick && detailPick.type === 'citta' && detailPick.id === cId) || isCittaContextTargeted(cId);
+    const dimmed = filter.type !== 'none' && !isCittaActive(cId);
+    return (
+      <div className="relative flex-shrink-0">
+        <div
+          onClick={(e) => { e.stopPropagation(); const rect = e.currentTarget.getBoundingClientRect(); selectDetail('citta', cId, detail, rect); }}
+          className={`w-10 h-10 md:w-12 md:h-12 rounded-full cursor-pointer transition-all duration-300 flex items-center justify-center text-center p-0.5 leading-[1.15] shadow-sm flex-shrink-0 bg-white border-2 border-dashed border-slate-400 text-slate-600 ${targeted ? 'ring-4 ring-offset-2 ring-slate-800 scale-110 z-10 shadow-lg font-bold' : ''} ${dimmed ? 'opacity-15 grayscale' : 'hover:scale-105 hover:shadow-md'}`}
+          title={detail.name}
+        >
+          <span className="text-[9px] md:text-[10px] break-words w-full font-medium tracking-tight">{label}</span>
+        </div>
+      </div>
+    );
+  };
+
   const RupaDot = ({ r, dimmed, ringClass, extraClickHandler }) => {
     const isLightBg = r.color.includes('200') || r.color.includes('300') || r.color.includes('400') || r.color.includes('yellow');
     const textClass = isLightBg ? 'text-slate-900 drop-shadow-[0_1px_1px_rgba(255,255,255,0.8)]' : 'text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]';
@@ -3763,6 +3786,8 @@ const NibbanaDot = ({ item }) => (
                           />
                         );
                       })}
+                                      {sub.id === 'rupa-kusala' && <AbhinnaBall cId={59} />}
+                    {sub.id === 'rupa-kiriya' && <AbhinnaBall cId={69} />}
                   </SubGroupBox>
                 ))}
               </MainGroupBox>

@@ -97,6 +97,13 @@ export const PARAMATTHA_STRINGS = {
   vatthu_hadaya_always: { my: 'ဟဒယဝတ္ထု (အမြဲ)', en: 'Hadaya-vatthu (always)', vi: 'Hadaya-vatthu (luôn luôn)' },
   vatthu_hadaya_sometimes: { my: 'ဟဒယဝတ္ထု (ရံခါ)', en: 'Hadaya-vatthu (sometimes)', vi: 'Hadaya-vatthu (đôi khi)' },
   vatthu_vimutta: { my: 'ဝတ္ထုဝိမုတ်', en: 'Vatthu-vimutta', vi: 'Vatthu-vimutta' },
+
+  // --- Abhiññā balls (dashed, in Rūpa-kusala / Rūpa-kiriya) -> they point to the 5th-jhāna citta (id 59 / 69) ---
+  abhinna_kusala_short: { my: 'ကု-အဘိဉာဏ်', en: 'Ku-Abhiññā', vi: 'Ku-Abhiññā' },
+  abhinna_kiriya_short: { my: 'ကြိ-အဘိဉာဏ်', en: 'Kiri-Abhiññā', vi: 'Kiri-Abhiññā' },
+  abhinna_kusala_name: { my: 'ကုသိုလ်အဘိညာဉ် — ရူပကုသိုလ် ပဉ္စမဈာန်စိတ်', en: 'Kusala Abhiññā — 5th-jhāna rūpāvacara kusala citta', vi: 'Kusala Abhiññā — 5th-jhāna rūpāvacara kusala citta' },
+  abhinna_kiriya_name: { my: 'ကြိယာအဘိညာဉ် — ရူပကြိယာ ပဉ္စမဈာန်စိတ်', en: 'Kiriya Abhiññā — 5th-jhāna rūpāvacara kiriya citta', vi: 'Kiriya Abhiññā — 5th-jhāna rūpāvacara kiriya citta' },
+  abhinna_desc: { my: 'အဘိညာဉ်စိတ်သည် စိတ်အသစ်တစ်မျိုး မဟုတ်ပါ။ အဘိညာဉ်ကို ဖြစ်စေရာတွင် သုံးသော ရူပါဝစရ ပဉ္စမဈာန်စိတ်ပင် ဖြစ်သည်။ ကုသိုလ်အဘိညာဉ်မှာ ပုထုဇဉ်/သေက္ခပုဂ္ဂိုလ်၊ ကြိယာအဘိညာဉ်မှာ ရဟန္တာ၏ ပဉ္စမဈာန်ဖြစ်သည်။ ဤအလုံးကို နှိပ်လျှင် ယင်း ပဉ္စမဈာန်စိတ်ကို ညွှန်ပြမည်။', en: 'The abhiññā citta is not a separate citta: it is the 5th-jhāna rūpāvacara citta used to produce the abhiññā. Kusala abhiññā belongs to worldlings / trainees, kiriya abhiññā to arahants. Tapping this ball points to that 5th-jhāna citta.', vi: 'The abhiññā citta is not a separate citta: it is the 5th-jhāna rūpāvacara citta used to produce the abhiññā. Kusala abhiññā belongs to worldlings / trainees, kiriya abhiññā to arahants. Tapping this ball points to that 5th-jhāna citta.' },
 };
 
 // lang: 'my' | 'en' | 'vi'. Falls back to Myanmar (then the raw key) so an

@@ -3568,6 +3568,26 @@ const isNibbanaActive = filter.type === 'sabba-detail' && cittaContext === null 
   };
 
   // ရုပ် (RUPAS) dot — hover လုပ်ရင် mouse pointer အနားမှာ tooltip (နာမည်+အဓိပ္ပါယ်) ပြသည်; click လုပ်ရင် ၃ စက္ကန့် ထိပ်တွင် floating tooltip
+  // အဘိညာဉ်စိတ် = ရူပကုသိုလ်/ရူပကြိယာ ပဉ္စမဈာန်စိတ်ပင် (id 59 / 69) — ဖောဋ္ဌဗ္ဗာရုံ အလုံးလို မျဉ်းပြတ် အလုံးဖြင့် အဘိညာဉ်ကို သီးသန့်ပြသည်
+  const AbhinnaBall = ({ cId }) => {
+    const isKusala = cId === 59;
+    const label = t(isKusala ? 'abhinna_kusala_short' : 'abhinna_kiriya_short', lang);
+    const detail = { name: t(isKusala ? 'abhinna_kusala_name' : 'abhinna_kiriya_name', lang), desc: t('abhinna_desc', lang) };
+    const targeted = (filter.type === 'citta' && filter.value === cId) || (detailPick && detailPick.type === 'citta' && detailPick.id === cId) || isCittaContextTargeted(cId);
+    const dimmed = filter.type !== 'none' && !isCittaActive(cId);
+    return (
+      <div className="relative flex-shrink-0">
+        <div
+          onClick={(e) => { e.stopPropagation(); const rect = e.currentTarget.getBoundingClientRect(); selectDetail('citta', cId, detail, rect); }}
+          className={`w-10 h-10 md:w-12 md:h-12 rounded-full cursor-pointer transition-all duration-300 flex items-center justify-center text-center p-0.5 leading-[1.15] shadow-sm flex-shrink-0 bg-white border-2 border-dashed border-slate-400 text-slate-600 ${targeted ? 'ring-4 ring-offset-2 ring-slate-800 scale-110 z-10 shadow-lg font-bold' : ''} ${dimmed ? 'opacity-15 grayscale' : 'hover:scale-105 hover:shadow-md'}`}
+          title={detail.name}
+        >
+          <span className="text-[9px] md:text-[10px] break-words w-full font-medium tracking-tight">{label}</span>
+        </div>
+      </div>
+    );
+  };
+
   const RupaDot = ({ r, dimmed, ringClass, extraClickHandler }) => {
     const isLightBg = r.color.includes('200') || r.color.includes('300') || r.color.includes('400') || r.color.includes('yellow');
     const textClass = isLightBg ? 'text-slate-900 drop-shadow-[0_1px_1px_rgba(255,255,255,0.8)]' : 'text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]';
@@ -3928,6 +3948,8 @@ const NibbanaDot = ({ item }) => (
                           />
                         );
                       })}
+                                          {sub.id === 'rupa-kusala' && <AbhinnaBall cId={59} />}
+                      {sub.id === 'rupa-kiriya' && <AbhinnaBall cId={69} />}
                     </SubGroupBox>
                   ))}
                 </MainGroupBox>
