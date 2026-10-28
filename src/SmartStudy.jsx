@@ -3260,6 +3260,14 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
   // no modal — this runs without the teacher needing to open that class.
   useEffect(() => {
     if (view !== 'teacherLogin') return;
+    // This reads EVERY student and EVERY approved roster row (thousands of reads), so it runs at most
+    // once a week per browser. A rename in Tutoring already renames Smart Study straight away
+    // (see the rename in TutoringApp.jsx), so this is only a safety net.
+    try {
+      const last = Number(localStorage.getItem('smartstudy_name_sync_at') || 0);
+      if (Date.now() - last < 7 * 24 * 3600 * 1000) return;
+      localStorage.setItem('smartstudy_name_sync_at', String(Date.now()));
+    } catch { /* no storage: run it */ }
     (async () => {
       try {
         const [studentsSnap, rosterSnap] = await Promise.all([
