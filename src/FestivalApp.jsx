@@ -772,6 +772,8 @@ const NEW_SCENE_BG = {
   'thanksgiving-table': 'linear-gradient(180deg,#f7b267 0%,#fbd38d 38%,#e9a45a 70%,#a2602b 100%)',
   'winter-snow': 'linear-gradient(180deg,#0a1a3a 0%,#18386b 45%,#4a78a8 78%,#cfe3f3 100%)',
   'newyear-fireworks': 'linear-gradient(180deg,#02030f 0%,#0b1040 50%,#2a1a5a 82%,#3b1f55 100%)',
+  'cny-lanterns': 'linear-gradient(180deg,#2b0505 0%,#6b0f0f 45%,#b71c1c 80%,#7f1010 100%)',
+  'freedom-sky': 'linear-gradient(180deg,#1a237e 0%,#3f51b5 35%,#ff8a65 70%,#ffe0b2 100%)',
   'forest-monks': 'linear-gradient(180deg,#04120d 0%,#0a2c20 40%,#14492f 75%,#1d5a38 100%)',
   'rohini-river': 'linear-gradient(180deg,#6fc0f2 0%,#b9e3ff 36%,#fbe9b7 64%,#86b872 100%)',
 };
@@ -899,6 +901,95 @@ function NewYearScene({ glow }) {
       {Array.from({ length: 12 }).map((_, i) => <line key={i} x1="200" y1="164" x2="200" y2={i % 3 === 0 ? 172 : 168} stroke="#5d4037" strokeWidth={i % 3 === 0 ? 2.4 : 1.2} transform={`rotate(${i * 30} 200 198)`} />)}
       <path d="M200 198 L200 170" stroke="#3e2723" strokeWidth="3" strokeLinecap="round" /><path d="M200 198 L200 176" stroke="#3e2723" strokeWidth="2" strokeLinecap="round" transform="rotate(4 200 198)" /><circle cx="200" cy="198" r="3" fill="#d32f2f" />
       <rect x="150" y="240" width="100" height="30" rx="4" fill="#1a1440" /><text x="200" y="260" textAnchor="middle" fontSize="15" fontWeight="900" fill="#ffd54f">HAPPY NEW YEAR</text>
+    </svg>
+  );
+}
+
+// Chinese New Year: red lanterns on a string, the lucky character 福 (fu, good fortune), red couplets, gold fireworks and red envelopes.
+function ChineseNewYearScene({ glow }) {
+  const g = 0.45 + glow * 0.55;
+  const bursts = [[70, 62, '#ffd740'], [330, 70, '#ff8a65'], [200, 40, '#ffe082']];
+  const rays = Array.from({ length: 12 }, (_, i) => i * 30);
+  const cjk = { fontFamily: '"Noto Sans SC","Microsoft YaHei",serif' };
+  return (
+    <svg viewBox="0 0 400 270" preserveAspectRatio="xMidYMax meet" className="absolute inset-0 w-full h-full" aria-hidden="true">
+      <defs><radialGradient id="cnyGlow" cx="50%" cy="50%" r="50%"><stop offset="0" stopColor="#ffd740" stopOpacity=".85" /><stop offset="1" stopColor="#ff6f00" stopOpacity="0" /></radialGradient></defs>
+      {bursts.map(([bx, by, c], i) => (
+        <g key={i} transform={`translate(${bx} ${by})`}><g style={{ animation: `fsBurst ${2.8 + i * 0.4}s ease-out ${i * 0.7}s infinite`, transformBox: 'fill-box', transformOrigin: 'center' }}>
+          {rays.map(a => <line key={a} x1="6" y1="0" x2="24" y2="0" stroke={c} strokeWidth="2.2" strokeLinecap="round" transform={`rotate(${a})`} />)}
+        </g></g>
+      ))}
+      {/* the string and the lanterns */}
+      <path d="M-10 16 Q200 44 410 16" fill="none" stroke="#ffd54f" strokeWidth="1.6" />
+      {[[40, 30], [105, 38], [165, 43], [235, 43], [295, 38], [360, 30]].map(([x, y], i) => (
+        <g key={i} transform={`translate(${x} ${y})`}><g style={{ animation: `fsSwing ${2.2 + (i % 3) * 0.5}s ease-in-out infinite`, transformOrigin: '0px 0px' }}>
+          <line x1="0" y1="0" x2="0" y2="8" stroke="#ffd54f" strokeWidth="1.4" />
+          <ellipse cx="0" cy="22" rx="17" ry="14" fill="#e53935" stroke="#b71c1c" strokeWidth="1.2" opacity={g} />
+          <ellipse cx="0" cy="22" rx="9" ry="14" fill="none" stroke="#ff8a80" strokeWidth="1" opacity=".7" />
+          <rect x="-7" y="6" width="14" height="4" rx="1.5" fill="#ffd54f" /><rect x="-7" y="34" width="14" height="4" rx="1.5" fill="#ffd54f" />
+          <line x1="0" y1="38" x2="0" y2="52" stroke="#ffd54f" strokeWidth="1.6" /><line x1="-3" y1="46" x2="3" y2="46" stroke="#ffd54f" strokeWidth="1.2" />
+        </g></g>
+      ))}
+      {/* the lucky diamond with the character 福 */}
+      <circle cx="200" cy="150" r="64" fill="url(#cnyGlow)" opacity={0.15 + glow * 0.5} />
+      <g transform="translate(200 150) rotate(45)"><rect x="-38" y="-38" width="76" height="76" rx="6" fill="#d32f2f" stroke="#ffd54f" strokeWidth="4" /></g>
+      <text x="200" y="166" textAnchor="middle" fontSize="50" fontWeight="900" fill="#ffd54f" style={cjk}>福</text>
+      {/* couplets on both sides */}
+      {[[40, '新'], [330, '年']].map(([x, ch]) => (
+        <g key={ch}><rect x={x} y="96" width="30" height="104" rx="3" fill="#c62828" stroke="#ffd54f" strokeWidth="2" /><text x={x + 15} y="146" textAnchor="middle" fontSize="26" fontWeight="900" fill="#ffd54f" style={cjk}>{ch}</text></g>
+      ))}
+      {/* ground and red envelopes */}
+      <path d="M0 232 Q100 218 200 230 T400 226 L400 270 L0 270 Z" fill="#5d0b0b" />
+      {[[120, 236], [160, 244], [240, 244], [280, 236]].map(([x, y], i) => (
+        <g key={i} transform={`translate(${x} ${y}) rotate(${i % 2 ? 8 : -8})`}><rect x="-12" y="-17" width="24" height="34" rx="3" fill="#e53935" stroke="#ffd54f" strokeWidth="1.4" /><circle cx="0" cy="-3" r="5" fill="#ffd54f" /></g>
+      ))}
+    </svg>
+  );
+}
+
+// Independence Day: a dawn sky, an open cage, doves flying out, a broken chain, the sun rising and fireworks - freedom of the country AND of the mind.
+function FreedomScene({ glow }) {
+  const g = 0.4 + glow * 0.6;
+  const bursts = [[70, 58, '#ef5350'], [330, 52, '#ffffff'], [200, 36, '#64b5f6']];
+  const rays = Array.from({ length: 12 }, (_, i) => i * 30);
+  const dove = (key, x, y, s, d) => (
+    <g key={key} transform={`translate(${x} ${y}) scale(${s})`}><g style={{ animation: `fsBob ${2.4 + d}s ease-in-out infinite` }}>
+      <ellipse cx="0" cy="0" rx="14" ry="6" fill="#fff" stroke="#b0bec5" strokeWidth="1" />
+      <path d="M-4 -2 Q-12 -20 -26 -14 Q-16 -6 -8 2 Z" fill="#eceff1" stroke="#b0bec5" strokeWidth="1" />
+      <path d="M2 -2 Q4 -22 18 -24 Q12 -10 10 2 Z" fill="#fff" stroke="#b0bec5" strokeWidth="1" />
+      <circle cx="13" cy="-4" r="4.6" fill="#fff" stroke="#b0bec5" strokeWidth="1" /><circle cx="14.5" cy="-5" r="1" fill="#37474f" /><path d="M17 -3 L23 -2 L17 -1 Z" fill="#ff9800" />
+    </g></g>
+  );
+  return (
+    <svg viewBox="0 0 400 270" preserveAspectRatio="xMidYMax meet" className="absolute inset-0 w-full h-full" aria-hidden="true">
+      <defs><radialGradient id="frSun" cx="50%" cy="50%" r="50%"><stop offset="0" stopColor="#fff3e0" stopOpacity=".95" /><stop offset="1" stopColor="#ffb74d" stopOpacity="0" /></radialGradient></defs>
+      {bursts.map(([bx, by, c], i) => (
+        <g key={i} transform={`translate(${bx} ${by})`}><g style={{ animation: `fsBurst ${2.8 + i * 0.4}s ease-out ${i * 0.6}s infinite`, transformBox: 'fill-box', transformOrigin: 'center' }}>
+          {rays.map(a => <line key={a} x1="6" y1="0" x2="24" y2="0" stroke={c} strokeWidth="2.2" strokeLinecap="round" transform={`rotate(${a})`} />)}
+        </g></g>
+      ))}
+      {/* the rising sun */}
+      <circle cx="200" cy="170" r="70" fill="url(#frSun)" opacity={0.35 + glow * 0.6} />
+      <circle cx="200" cy="176" r="26" fill="#ffe0b2" opacity={g} />
+      {/* hills */}
+      <path d="M0 196 Q90 170 190 192 T400 186 L400 270 L0 270 Z" fill="#2e5f3e" />
+      <path d="M0 226 Q110 206 210 224 T400 220 L400 270 L0 270 Z" fill="#3b7a4d" />
+      {/* the open cage on a post (left) */}
+      <g transform="translate(34 150)">
+        <rect x="-3" y="48" width="6" height="40" fill="#5d4037" />
+        <path d="M-26 48 L26 48 L26 -2 Q0 -22 -26 -2 Z" fill="none" stroke="#ffd54f" strokeWidth="2.4" strokeLinejoin="round" />
+        {[-16, -8, 0, 8, 16].map(x => <line key={x} x1={x} y1="48" x2={x} y2={x === 0 ? -12 : -5 + Math.abs(x) * 0.2} stroke="#ffd54f" strokeWidth="1.6" />)}
+        <path d="M26 48 L50 40 L50 -8 L26 -2" fill="none" stroke="#ffd54f" strokeWidth="2" strokeLinejoin="round" opacity=".9" />
+        <circle cx="0" cy="-26" r="4" fill="#ffd54f" />
+      </g>
+      {/* the doves flying free */}
+      {dove('d1', 120, 112, 0.9, 0.0)}{dove('d2', 188, 78, 0.8, 0.5)}{dove('d3', 262, 104, 1, 0.9)}{dove('d4', 330, 130, 0.7, 0.3)}
+      {/* a broken chain on the ground (right) */}
+      <g transform="translate(300 214)" fill="none" stroke="#b0bec5" strokeWidth="4.4" strokeLinecap="round">
+        <ellipse cx="0" cy="0" rx="13" ry="7" transform="rotate(-18)" /><ellipse cx="22" cy="-6" rx="13" ry="7" transform="rotate(14 22 -6)" />
+        <ellipse cx="62" cy="6" rx="13" ry="7" transform="rotate(-10 62 6)" strokeDasharray="22 12" /><ellipse cx="86" cy="12" rx="13" ry="7" transform="rotate(20 86 12)" />
+      </g>
+      <text x="200" y="258" textAnchor="middle" fontSize="15" fontWeight="900" fill="#fff8e1" style={{ letterSpacing: 3 }}>FREE AS A DOVE</text>
     </svg>
   );
 }
@@ -1605,6 +1696,10 @@ export default function FestivalApp({ entryRequest, onExit }) {
           <WinterScene glow={glow} />
         ) : festival.scene === 'newyear-fireworks' ? (
           <NewYearScene glow={glow} />
+        ) : festival.scene === 'cny-lanterns' ? (
+          <ChineseNewYearScene glow={glow} />
+        ) : festival.scene === 'freedom-sky' ? (
+          <FreedomScene glow={glow} />
         ) : festival.scene === 'htamane-fire' ? (
           <>
             <HtamaneScene progress={stirProgress} stirring={stirKey > 0} stirKey={stirKey} />

@@ -803,6 +803,162 @@ export const FESTIVALS = [
       ],
     },
   },
+  {
+    id: 'cny-2027',
+    enabled: true,
+    scene: 'cny-lanterns',
+    icon: '🧧',
+    title: 'Chinese New Year: the Lunar New Year',
+    tagline: 'Give red envelopes of good wishes, learn why every custom has a kind meaning, and welcome the Year of the Goat!',
+    // Default dates -- the teacher sets the real ones on the "Festival apps" screen. The New Year of 2027 falls on 6 February.
+    start: '2027-02-05',
+    end: '2027-02-11',
+    // The red envelope (hongbao): grown-ups give children lucky money in a red envelope. Here the student gives red envelopes of good wishes to friends.
+    lamps: {
+      perDay: 10, coins: 5, allLitBonus: 20, style: 'share', icon: '🧧', noun: 'red envelope',
+      button: '🧧 Give Red Envelopes', panelTitle: '🧧 Give Red Envelopes to Friends',
+      panelIntro: 'At Chinese New Year grown-ups give children red envelopes with lucky money and good wishes for the year. Give a red envelope of good wishes to your friends. Each friend once a day, up to 10 friends.',
+      rowButton: '🧧 Give', rowDone: '✅ Given', doneAll: 'All 10 red envelopes given today. Come back tomorrow! 🧧',
+      receiveTitle: 'A red envelope for you!', receiveText: 'gave you a red envelope of good wishes. Happy Lunar New Year! 🧧', receiverCoins: 2,
+    },
+    // Six customs, one a day each: what the custom is and why it is done. Learn them all today to open the gift box.
+    kadaw: {
+      coins: 20,
+      lotus: 1,
+      title: 'Learn the Customs',
+      button: '🏮 Customs',
+      actionLabel: '🏮 I Learned This Custom',
+      doneWord: 'Customs',
+      recipients: [
+        {
+          id: 'reunion', emoji: '🍲', name: 'The Reunion Dinner',
+          prayer: "On New Year's Eve families travel from far away to eat one big dinner together. It is the most important meal of the year, because being together is the happiest thing there is. I thank my family for every meal we share, and I will eat with them with a thankful heart.",
+          blessing: 'May your family always be together, safe and happy. Sadhu! Sadhu! Sadhu!',
+        },
+        {
+          id: 'cleaning', emoji: '🧹', name: 'Sweeping Away Old Bad Luck',
+          prayer: "Before the New Year the whole house is cleaned from top to bottom. People say this sweeps the old bad luck out and makes room for new good luck. (On New Year's Day nobody sweeps, so the luck is not swept out.) I will clean my room, and I will also sweep my mind clean of anger and greed.",
+          blessing: 'A clean room and a clean mind bring a bright new year. Sadhu! Sadhu! Sadhu!',
+        },
+        {
+          id: 'red-envelope', emoji: '🧧', name: 'The Red Envelope',
+          prayer: 'Red is the colour of luck and joy, and it is said to chase bad things away. Grown-ups put lucky money in a red envelope and give it to children, with good wishes for the year. This is dana, giving with a kind heart. I will give something too: a kind word, a smile, or my help.',
+          blessing: 'A giving heart is the luckiest heart. May you be rich in kindness. Sadhu! Sadhu! Sadhu!',
+        },
+        {
+          id: 'lion-dance', emoji: '🦁', name: 'The Lion Dance, Drums and Firecrackers',
+          prayer: 'An old story tells of a monster called Nian who came every New Year. People found that Nian was afraid of red, of loud noise and of light. So they made drums, firecrackers and the lion dance to chase it away. Today it is a happy way to welcome the new year. I will enjoy the drums, and I will stay safe: never touch fireworks, and keep my distance.',
+          blessing: 'May fear stay far away and happiness come close. Be safe and be happy!',
+        },
+        {
+          id: 'elders', emoji: '🙏', name: 'Respecting Grandparents and Elders',
+          prayer: "On New Year's Day the young visit their grandparents and elders first. They bow, say \"Gong xi fa cai\" (wishing you happiness and good fortune) and thank them. In Myanmar we also bow to our parents and elders with respect. I bow to my grandparents, parents and teachers and thank them.",
+          blessing: 'May you be healthy, happy and wise, my dear child. Sadhu! Sadhu! Sadhu!',
+        },
+        {
+          id: 'zodiac', emoji: '🐐', name: 'The Goat and the Twelve Animals',
+          prayer: 'In the Chinese calendar each year has one of twelve animals: the Rat, Ox, Tiger, Rabbit, Dragon, Snake, Horse, Goat, Monkey, Rooster, Dog and Pig. 2027 is the Year of the Goat. The goat is gentle, kind and loves peace. I will try to be gentle and kind this year, like the goat.',
+          blessing: 'May your year be gentle, kind and peaceful. Happy Lunar New Year!',
+        },
+      ],
+    },
+    rewards: [
+      {
+        id: 'cny-2027-robe',
+        category: 'outfit',
+        requires: { type: 'lamps', count: 30 },
+        item: { id: 'festival-cny-2027-robe', name: '🧧 Red and Gold Robe', color: '#C62828', swatch: 'linear-gradient(135deg,#FFC107 50%,#C62828 50%)', pattern: 'checks', cost: 0, festival: true },
+      },
+    ],
+    dailyGift: {
+      bonusCoins: 50,
+      pool: [
+        { category: 'accessory', item: { id: 'festival-cny-2027-lantern', name: '🏮 Red Lantern', kind: 'lantern', color: '#E53935', cost: 0, festival: true } },
+        { category: 'outfit', item: { id: 'festival-cny-2027-blossom', name: '🌸 Plum Blossom Robe', color: '#EC407A', swatch: 'linear-gradient(135deg,#F8BBD0,#EC407A 60%,#B71C1C)', pattern: 'blossoms', cost: 0, festival: true } },
+        { category: 'accessory', item: { id: 'festival-cny-2027-cracker', name: '🎇 Firecracker Sparkler', kind: 'sparkler', color: '#FF5252', cost: 0, festival: true } },
+        { category: 'outfit', item: { id: 'festival-cny-2027-fortune', name: '☁️ Good Fortune Clouds Robe', color: '#D32F2F', swatch: 'linear-gradient(135deg,#FFD54F,#D32F2F 60%,#7F0000)', pattern: 'clouds', cost: 0, festival: true } },
+        { category: 'accessory', item: { id: 'festival-cny-2027-star', name: '⭐ Lucky Gold Star', kind: 'bigstar', color: '#FFC107', cost: 0, festival: true } },
+        { category: 'outfit', item: { id: 'festival-cny-2027-dragon', name: '🐉 Golden Dragon Robe', color: '#B71C1C', swatch: 'linear-gradient(135deg,#FFE082,#F9A825 45%,#B71C1C)', pattern: 'stars', cost: 0, festival: true } },
+      ],
+    },
+  },
+  {
+    id: 'independence-2027',
+    enabled: true,
+    scene: 'freedom-sky',
+    icon: '🕊️',
+    title: 'Independence Day: Free as a Dove',
+    tagline: 'Break the chains, set the doves free, and find the freedom that nobody can give or take away: a mind with nothing tying it down!',
+    // Default dates -- the teacher sets the real ones on the "Festival apps" screen. Independence Day of the United States is 4 July.
+    start: '2027-07-02',
+    end: '2027-07-05',
+    // Ten chains: tap a chain and it breaks and becomes a free dove.
+    lamps: {
+      perDay: 10, coins: 5, allLitBonus: 20, style: 'tap', icon: '🕊️', noun: 'chain',
+      emoji: '⛓️', doneEmoji: '🕊️',
+      rewardText: 'Break {n} chains and set {n} doves free',
+    },
+    // Six ways to be free, one a day each. Freedom is outside (a country) and inside (a mind with nothing tying it down).
+    kadaw: {
+      coins: 20,
+      lotus: 1,
+      title: 'Be Free',
+      button: '🕊️ Be Free',
+      actionLabel: '🕊️ I Let Go',
+      doneWord: 'Freedom',
+      recipients: [
+        {
+          id: 'july-4', emoji: '🎆', name: 'Why We Celebrate 4 July',
+          prayer: 'On 4 July 1776 the people of America announced that they were free: they would no longer be ruled by a faraway king, and every person has the right to live in freedom. Every year there are parades, picnics with family, flags and fireworks. A country becomes free by the courage of many people. I think quietly about what freedom means.',
+          blessing: 'May every country live in peace and freedom. Sadhu! Sadhu! Sadhu!',
+        },
+        {
+          id: 'greed', emoji: '⛓️', name: 'Free from Wanting Too Much',
+          prayer: 'A person can live in a free country and still be tied up inside. A mind that always wants more, more, more is tied by a chain called greed. The Buddha taught that letting go of craving makes the mind light and free. I let go of one thing I always want, and I feel happy with what I have.',
+          blessing: 'A contented heart is the freest heart. May you be light and happy. Sadhu! Sadhu! Sadhu!',
+        },
+        {
+          id: 'anger', emoji: '🔥', name: 'Free from Anger',
+          prayer: 'Anger is a heavy chain. When I am angry, my anger holds me, not the other person. When I breathe slowly, forgive and send loving-kindness, the chain breaks and I am free. I let go of one thing I am angry about.',
+          blessing: 'Forgiveness opens the cage. May your heart be soft and free.',
+        },
+        {
+          id: 'fear', emoji: '🕊️', name: 'Free from Fear and Worry',
+          prayer: 'Fear and worry make a little cage around the mind. A calm breath in and a calm breath out opens the door of the cage, and the mind flies out like a dove. I breathe slowly three times and I let my worries fly away.',
+          blessing: 'A calm mind flies high. May you be brave and peaceful.',
+        },
+        {
+          id: 'others', emoji: '🤝', name: 'Freedom for Everyone',
+          prayer: 'My freedom does not mean I may hurt others. True freedom is for everyone: no person or animal should be bullied, hurt or locked in a cage. I will respect the freedom of other people, and I send loving-kindness to all beings: may all beings be free and happy.',
+          blessing: 'May all beings be free from fear and suffering. Sadhu! Sadhu! Sadhu!',
+        },
+        {
+          id: 'thanks', emoji: '🙏', name: 'Gratitude for Peace',
+          prayer: 'Many people worked, studied, helped others and even gave up their own comfort so that others could live in peace and freedom. I thank them, my teachers and my family who give me the freedom to learn, and I will use my freedom to do good.',
+          blessing: 'A grateful heart uses its freedom well. Sadhu! Sadhu! Sadhu!',
+        },
+      ],
+    },
+    rewards: [
+      {
+        id: 'independence-2027-robe',
+        category: 'outfit',
+        requires: { type: 'lamps', count: 30 },
+        item: { id: 'festival-independence-2027-robe', name: '🌟 Stars of Freedom Robe', color: '#1A237E', swatch: 'linear-gradient(135deg,#3949AB,#1A237E 55%,#C62828)', pattern: 'stars', cost: 0, festival: true },
+      },
+    ],
+    dailyGift: {
+      bonusCoins: 50,
+      pool: [
+        { category: 'accessory', item: { id: 'festival-independence-2027-dove', name: '🕊️ Free Dove', kind: 'dove', color: '#FFFFFF', cost: 0, festival: true } },
+        { category: 'outfit', item: { id: 'festival-independence-2027-stripes', name: '🟥 Red and White Robe', color: '#C62828', swatch: 'linear-gradient(135deg,#FFFFFF 50%,#C62828 50%)', pattern: 'checks', cost: 0, festival: true } },
+        { category: 'accessory', item: { id: 'festival-independence-2027-star', name: '⭐ Blue Star', kind: 'bigstar', color: '#1E88E5', cost: 0, festival: true } },
+        { category: 'outfit', item: { id: 'festival-independence-2027-fireworks', name: '🎆 Fireworks Robe', color: '#283593', swatch: 'linear-gradient(135deg,#7986CB,#1A237E 55%,#EF5350)', pattern: 'fireworks', cost: 0, festival: true } },
+        { category: 'accessory', item: { id: 'festival-independence-2027-sparkler', name: '🎇 Sparkler', kind: 'sparkler', color: '#E53935', cost: 0, festival: true } },
+        { category: 'outfit', item: { id: 'festival-independence-2027-sky', name: '☁️ Open Sky Robe', color: '#42A5F5', swatch: 'linear-gradient(135deg,#E3F2FD,#42A5F5 60%,#1565C0)', pattern: 'clouds', cost: 0, festival: true } },
+      ],
+    },
+  },
 ];
 
 import { useEffect, useState } from 'react';
