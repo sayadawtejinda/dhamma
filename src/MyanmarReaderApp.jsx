@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { readerTrophyCount, readerProgressFromTrophies } from './readerProgress';
-import { Play, Volume2, VolumeX, Lock, Delete, RotateCcw, BookOpen, DownloadCloud, FileText, Library, Settings, X, Plus, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Play, Volume2, VolumeX, Lock, Delete, RotateCcw, BookOpen, DownloadCloud, FileText, Settings, X, Plus, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { collection, doc, getDoc, getDocs, setDoc, updateDoc, onSnapshot, query, where, serverTimestamp, increment, Timestamp } from 'firebase/firestore';
 import { auth, db } from './firebase';
@@ -4062,7 +4062,7 @@ useEffect(() => {
               title={`Change Lesson (${LESSONS.length} lines)`}
               className="flex items-center justify-center gap-2 bg-indigo-500 hover:bg-indigo-600 disabled:bg-indigo-300 disabled:cursor-not-allowed text-white px-5 py-4 rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transition-all active:scale-95 border-b-4 border-indigo-700 h-[60px]"
             >
-              <Library size={24} />
+              <span className="text-2xl font-black">{appMode === 'lesson' && currentLessonIndex >= 0 ? `(${currentLessonIndex + 1}/${LESSONS.length})` : LESSONS.length}</span>
             </button>
             
             <button
