@@ -9169,7 +9169,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       if (unitCount > 0 && maxAvailable > 0) {
         const deservedSoFar = Math.min(maxAvailable, Math.floor((newHighestUnit * maxAvailable) / unitCount));
         amount = Math.max(0, deservedSoFar - previouslyEarned);
-        if (isMyanmarPoemsUrl(session.lessonLink)) amount = Math.min(1, amount);
+        if (isMyanmarPoemsUrl(session.lessonLink) || isAnimalSoundUrl(session.lessonLink)) amount = Math.min(1, amount);
       }
     }
     const requestWaiting = studentProfile.trophyRequested === true;
@@ -9404,7 +9404,8 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           let autoAmount = Math.max(0, deservedSoFar - previouslyEarned);
           // Poems: one trophy per report, however many new poems were recited; any
           // others still waiting come with the next report (they stay counted).
-          if (isMyanmarPoemsUrl(targetSession.lessonLink)) autoAmount = Math.min(1, autoAmount);
+          // Animal Sound Quiz (Part 3): the same, one trophy at a time (5 in all).
+          if (isMyanmarPoemsUrl(targetSession.lessonLink) || isAnimalSoundUrl(targetSession.lessonLink)) autoAmount = Math.min(1, autoAmount);
           if (autoAmount > 0) {
             studentUpdateData.trophyRequested = true;
             studentUpdateData.requestedTrophyAmount = autoAmount;
