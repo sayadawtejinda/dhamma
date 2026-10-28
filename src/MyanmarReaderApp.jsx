@@ -3379,8 +3379,12 @@ useEffect(() => {
                  <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
                      <Play size={32} fill="currentColor" />
                  </div>
-                 <h3 className="text-2xl font-bold mb-2 text-gray-800">Switch to Reading Mode?</h3>
-                 <p className="text-gray-500 mb-6 font-medium">Do you want to switch to spelling/reading mode?</p>
+                 <h3 className="text-2xl font-bold mb-2 text-gray-800">Switch to way {isSpellMode ? 2 : 1}?</h3>
+                 <p className="text-gray-500 mb-2 font-medium">There are two ways to read:</p>
+                 <div className="text-left mb-6 space-y-1 font-semibold">
+                     <p className={isSpellMode ? 'text-blue-700' : 'text-gray-500'}>1 = Spell it out, letter by letter{isSpellMode ? ' (now)' : ''}</p>
+                     <p className={!isSpellMode ? 'text-blue-700' : 'text-gray-500'}>2 = Read the whole word{!isSpellMode ? ' (now)' : ''}</p>
+                 </div>
                  <div className="flex justify-center gap-4">
                      <button onClick={() => setShowSpellModeConfirm(false)} className="px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold transition-colors">Cancel</button>
                      <button onClick={() => {
@@ -4063,7 +4067,7 @@ useEffect(() => {
             <button
               onClick={() => setShowSpellModeConfirm(true)}
               disabled={isLocked}
-              title="Toggle Spell Mode"
+              title="Reading way: 1 = spell it out, 2 = read the whole word"
               className={`flex items-center justify-center gap-2 px-6 rounded-xl font-bold text-lg transition-all duration-300 h-[60px] ${
                 isSpellMode
                   ? 'bg-blue-600 text-white shadow-[0_0_20px_rgba(59,130,246,0.9)] ring-4 ring-blue-300 scale-105 border-transparent'
@@ -4071,6 +4075,7 @@ useEffect(() => {
               }`}
             >
               <Play fill="currentColor" size={24} className={`${isSpellMode ? 'animate-pulse text-blue-50 drop-shadow-md' : ''}`} />
+              <span className="text-2xl font-black">{isSpellMode ? 1 : 2}</span>
             </button>
             <button
               onClick={togglePracticeMode}
@@ -4238,6 +4243,21 @@ playSheetBClip(sheetBAudio, colIdx >= 15 ? SHEET_B_AUDIO2 : SHEET_B_AUDIO, t, du
     </div>
   </div>
 )}
+              {isPracticeMode && (
+                <div className="flex items-center justify-center gap-3" title="Reading way">
+                  {[1, 2].map(n => {
+                    const active = (n === 1) === isSpellMode;
+                    return (
+                      <button
+                        key={n}
+                        disabled={isLocked}
+                        onClick={() => { const spell = n === 1; setIsSpellMode(spell); setAutoReadMode(!spell); }}
+                        className={`w-14 h-14 rounded-2xl text-2xl font-black transition-all ${active ? 'bg-blue-600 text-white ring-4 ring-blue-300 scale-110 shadow-lg' : 'bg-gray-200 text-gray-500 hover:bg-gray-300'}`}
+                      >{n}</button>
+                    );
+                  })}
+                </div>
+              )}
               {keyboardTab === 'modifiers' ? (
                 <div className="bg-orange-50 p-4 rounded-2xl border border-orange-100">
                   <div className="grid grid-cols-5 md:grid-cols-8 lg:grid-cols-10 gap-3">
