@@ -103,6 +103,20 @@ async function loadClassListLight({ forStudent = false } = {}) {
   try { localStorage.setItem(CLASS_LIST_KEY, JSON.stringify({ at: Date.now(), list })); } catch (e) { /* ignore */ }
   return list;
 }
+// The Tutoring students (active or waiting) as a static file the weekly job writes (studentNames.json): the link screens read this
+// instead of the whole students collection. `fresh` reads Firestore instead, for a student added after the last weekly build.
+let studentNamesPromise = null;
+async function loadTutoringStudentList(fresh = false) {
+  if (!fresh) {
+    if (!studentNamesPromise) studentNamesPromise = fetch(`${import.meta.env.BASE_URL}studentNames.json?v=${Date.now()}`).then(r => (r.ok ? r.json() : null)).then(j => (j && Array.isArray(j.students) ? j.students : null)).catch(() => null);
+    const list = await studentNamesPromise;
+    if (list) return list;
+  }
+  const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'students'));
+  return snap.docs
+    .map(d => ({ id: d.id, name: d.data().name, displayId: d.data().displayId, isActive: d.data().isActive }))
+    .filter(s => s.name && (s.isActive === true || s.isActive === 'pending'));
+}
 // The one class that is "open" right now (Auto-Approve ON), read from the tiny classMeta document (kept a minute on the device, and
 // already read when a class is entered). Students are always steered there, whichever way they try to get into a class.
 async function findOpenClassId() {
@@ -909,13 +923,10 @@ const TeacherDashboard = React.memo(({
   const [showBulkMatch, setShowBulkMatch] = useState(false);
   const [bulkLinking, setBulkLinking] = useState(false);
 
-  const loadTutoringStudents = async () => {
-    if (tutoringStudents !== null) return;
+  const loadTutoringStudents = async (fresh = false) => {
+    if (tutoringStudents !== null && !fresh) return;
     try {
-      const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'students'));
-      const list = snap.docs
-        .map(d => ({ id: d.id, name: d.data().name, displayId: d.data().displayId, isActive: d.data().isActive }))
-        .filter(s => s.name && (s.isActive === true || s.isActive === 'pending'));
+      const list = [...(await loadTutoringStudentList(fresh))];
       list.sort((a, b) => a.name.localeCompare(b.name));
       setTutoringStudents(list);
     } catch (err) {
@@ -934,23 +945,9 @@ const TeacherDashboard = React.memo(({
     // the teacher actually opens this tab, so a just-approved or just-
     // completed student shows up right away instead of possibly minutes
     // late.
+    // (No Tutoring-name check here any more: it read the whole students list on every opening. A rename in Tutoring
+    // already renames Smart Study straight away -- see the rename in TutoringApp.jsx.)
     if (setClassRefreshKey) setClassRefreshKey(k => k + 1);
-    (async () => {
-      try {
-        const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'students'));
-        const nameById = {};
-        snap.docs.forEach(d => { nameById[d.id] = d.data().name; });
-        const alreadyLinked = sortedApprovedStudents.filter(s => s.linkedToTutoring && s.tutoringStudentUid);
-        for (const s of alreadyLinked) {
-          const currentTutoringName = nameById[s.tutoringStudentUid];
-          if (currentTutoringName && currentTutoringName !== s.studentName) {
-            await onLinkStudent(s.studentName, currentTutoringName, s.tutoringStudentUid);
-          }
-        }
-      } catch (err) {
-        console.error('Error syncing Tutoring name changes:', err);
-      }
-    })();
   }, [activeTab]);
 
   const pendingStudents = classRoster.filter(s => s.status === 'pending');
@@ -1229,7 +1226,10 @@ const TeacherDashboard = React.memo(({
                           {tutoringStudents === null ? (
                             <p className="text-sm text-gray-500 p-2">Loading students...</p>
                           ) : filteredTutoringStudents.length === 0 ? (
-                            <p className="text-sm text-gray-500 p-2">No matching students found.</p>
+                            <div className="p-2 text-sm text-gray-500">
+                              No matching students found.
+                              <button onClick={() => loadTutoringStudents(true)} className="block mt-1 text-blue-600 underline">Just added a student? Read the live list</button>
+                            </div>
                           ) : (
                             <div className="max-h-48 overflow-y-auto space-y-1">
                               {filteredTutoringStudents.map(ts => (
@@ -3069,7 +3069,7 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
         getDocs(query(collection(db, 'artifacts', appId, 'public', 'data', 'scores'), where('classId', '==', classId))),
         getDocs(query(collection(db, 'artifacts', appId, 'public', 'data', 'quizCompletions'), where('classId', '==', classId))),
         getDocs(query(getRosterCollectionRef(), where('classId', '==', classId), where('status', '==', 'approved'))),
-        getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'students')),
+        loadTutoringStudentList(),
       ]);
       // While we're already fetching these fresh, use them to replace this
       // screen's own allScores/completionsList too -- fixes the leaderboard
@@ -3084,10 +3084,9 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
       ].filter(n => n && !approvedNames.has(n.toLowerCase())));
 
       let tutoringByName = {};
-      tSnap.docs.forEach(d => {
-        const n = (d.data().name || '').trim().toLowerCase();
-        const active = d.data().isActive === true || d.data().isActive === 'pending';
-        if (n && active) tutoringByName[n] = d.id;
+      tSnap.forEach(s => {
+        const n = (s.name || '').trim().toLowerCase();
+        if (n) tutoringByName[n] = s.id;
       });
 
       const approvedNow = [];
@@ -3253,41 +3252,8 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
     }
   }, [classId, renameStudentEverywhere]);
 
-  // Background sync — whenever the teacher is on the Choose Class screen,
-  // quietly re-check every already-linked student across EVERY class (not
-  // just whichever one happens to be open) against their current Tutoring
-  // name, and rename them here if Tutoring has since changed. No spinner,
-  // no modal — this runs without the teacher needing to open that class.
-  useEffect(() => {
-    if (view !== 'teacherLogin') return;
-    // This reads EVERY student and EVERY approved roster row (thousands of reads), so it runs at most
-    // once a week per browser. A rename in Tutoring already renames Smart Study straight away
-    // (see the rename in TutoringApp.jsx), so this is only a safety net.
-    try {
-      const last = Number(localStorage.getItem('smartstudy_name_sync_at') || 0);
-      if (Date.now() - last < 7 * 24 * 3600 * 1000) return;
-      localStorage.setItem('smartstudy_name_sync_at', String(Date.now()));
-    } catch { /* no storage: run it */ }
-    (async () => {
-      try {
-        const [studentsSnap, rosterSnap] = await Promise.all([
-          getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'students')),
-          getDocs(query(getRosterCollectionRef(), where('status', '==', 'approved')))
-        ]);
-        const nameById = {};
-        studentsSnap.docs.forEach(d => { nameById[d.id] = d.data().name; });
-        const linked = rosterSnap.docs.map(d => d.data()).filter(s => s.linkedToTutoring && s.tutoringStudentUid && s.classId && s.studentName);
-        for (const s of linked) {
-          const currentTutoringName = nameById[s.tutoringStudentUid];
-          if (currentTutoringName && currentTutoringName !== s.studentName) {
-            await renameStudentEverywhere(s.classId, s.studentName, currentTutoringName, s.tutoringStudentUid);
-          }
-        }
-      } catch (err) {
-        console.error('Error syncing Tutoring names across all classes:', err);
-      }
-    })();
-  }, [view, renameStudentEverywhere]);
+  // (The old "Choose Class" background name check is gone: it read every student and every approved roster row each time. A rename in
+  // Tutoring already renames Smart Study straight away -- see the rename in TutoringApp.jsx.)
 
   const handleUnlinkStudent = useCallback(async (studentName) => {
     if (!classId || !studentName) return;

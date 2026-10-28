@@ -353,6 +353,8 @@ async function main() {
   try { const cfg = await getDoc(doc(db, `${publicDataPath}/config/teacher`)); hiddenOfflineNames = (cfg.exists() && cfg.data().hiddenOfflineNames) || []; } catch (e) { /* none */ }
   const snapshot = { generatedAt: new Date().toISOString(), hiddenOfflineNames, attendanceRankedList, attendanceMonthlyRankedList, trophyList, attendanceTotals };
   writeFileSync(OUT_PATH, JSON.stringify(snapshot, null, 2));
+  // The list of Tutoring students (active or waiting) that Smart Study's "Link to Tutoring" screens read, so they need no Firestore read.
+  writeFileSync(join(__dirname, '..', 'public', 'studentNames.json'), JSON.stringify({ generatedAt: new Date().toISOString(), students: students.filter(s => s.name && (s.isActive === true || s.isActive === 'pending')).map(s => ({ id: s.id, name: s.name, displayId: s.displayId || null, isActive: s.isActive })) }));
 
   // ---- Per-student "weeks attended" (all time), for the Bodhi Tree and Shrine Room ----
   // Both used to read a student's whole schedule + whole session history every time
