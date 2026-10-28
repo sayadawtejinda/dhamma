@@ -4067,7 +4067,7 @@ useEffect(() => {
             
             <button
               onClick={() => setShowSpellModeConfirm(true)}
-              disabled={isLocked}
+              disabled={isLocked || isPracticeMode} // keyboard practice always uses way 2
               title="Reading way: 1 = spell it out, 2 = read the whole word (tap to change)"
               className={`flex items-center justify-center gap-2 px-6 rounded-xl font-bold text-lg transition-all duration-300 h-[60px] ${
                 isSpellMode
@@ -4243,21 +4243,6 @@ playSheetBClip(sheetBAudio, colIdx >= 15 ? SHEET_B_AUDIO2 : SHEET_B_AUDIO, t, du
     </div>
   </div>
 )}
-              {isPracticeMode && (
-                <div className="flex items-center justify-center gap-3" title="Reading way">
-                  {[1, 2].map(n => {
-                    const active = (n === 1) === isSpellMode;
-                    return (
-                      <button
-                        key={n}
-                        disabled={isLocked}
-                        onClick={() => { const spell = n === 1; setIsSpellMode(spell); setAutoReadMode(!spell); }}
-                        className={`w-14 h-14 rounded-2xl text-2xl font-black transition-all ${active ? 'bg-blue-600 text-white ring-4 ring-blue-300 scale-110 shadow-lg' : 'bg-gray-200 text-gray-500 hover:bg-gray-300'}`}
-                      >{n}</button>
-                    );
-                  })}
-                </div>
-              )}
               {keyboardTab === 'modifiers' ? (
                 <div className="bg-orange-50 p-4 rounded-2xl border border-orange-100">
                   <div className="grid grid-cols-5 md:grid-cols-8 lg:grid-cols-10 gap-3">
