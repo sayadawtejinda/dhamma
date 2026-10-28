@@ -4393,29 +4393,17 @@ function renderClickableWords(text) {
                     .filter(l => (l.classId && l.classId.trim() ? l.classId.trim() : 'GENERAL') === classId)
                     .map(l => l.id);
 
+                // Who is in the class comes from the weekly file (classSnapshots/dhammaschool-progress.json: everyone who finished a chapter,
+                // played a game or wrote an answer), plus the roster rows below -- reading the answers / scores / completions
+                // collections in full here cost thousands of reads every time the list was opened.
                 const names = new Set();
                 if (classLessonIds.length > 0) {
-                    // game_scores / lesson_completions / answers are queried in full and
-                    // filtered client-side by lessonId membership, since Firestore doesn't
-                    // support "IN" with many values reliably. Includes "answers" (discussion
-                    // participation) too, so students who only discussed but never played a
-                    // game/quiz still show up in the roster.
-                    const [scoresSnap, compSnap, answersSnap] = await withTimeout(Promise.all([
-                        getDocs(collection(db, PATHS.scores)),
-                        getDocs(collection(db, PATHS.completions)),
-                        getDocs(collection(db, PATHS.answers))
-                    ]), 12000, 'scores/completions/answers');
-                    scoresSnap.docs.forEach(d => {
-                        const data = d.data();
-                        if (classLessonIds.includes(data.lessonId) && data.studentName) names.add(data.studentName);
-                    });
-                    compSnap.docs.forEach(d => {
-                        const data = d.data();
-                        if (classLessonIds.includes(data.lessonId) && data.studentName) names.add(data.studentName);
-                    });
-                    answersSnap.docs.forEach(d => {
-                        const data = d.data();
-                        if (classLessonIds.includes(data.lessonId) && data.studentName) names.add(data.studentName);
+                    const lessonSet = new Set(classLessonIds);
+                    const r = await withTimeout(fetch(`${import.meta.env.BASE_URL}classSnapshots/dhammaschool-progress.json`, { cache: 'no-cache' }), 12000, 'the class file');
+                    if (!r.ok) throw new Error(`The class file could not be loaded (HTTP ${r.status})`);
+                    const prog = await r.json();
+                    [prog.completions || {}, prog.participants || {}].forEach(group => {
+                        Object.entries(group).forEach(([name, lids]) => { if (name && lids.some(l => lessonSet.has(l))) names.add(name); });
                     });
                 }
 
@@ -4426,6 +4414,7 @@ function renderClickableWords(text) {
                     rosterSnap.docs.forEach(d => {
                         const data = d.data();
                         if (data.linkedToTutoring) rosterLinkStatus[data.studentName] = true;
+                        if (data.studentName && data.classId === classId) names.add(data.studentName);
                     });
                 } catch (e) { console.error('Error loading roster link status:', e); }
 
@@ -4483,8 +4472,14 @@ function renderClickableWords(text) {
             let loadError = null;
             if (cachedTutoringStudents === null) {
                 try {
-                    const snap = await getDocs(collection(db, TUTORING_STUDENTS_PATH));
-                    cachedTutoringStudents = snap.docs.map(d => ({ id: d.id, name: d.data().name || '(no name)', displayId: d.data().displayId || '' }));
+                    // the student list is a file on GitHub (studentNames.json, rebuilt weekly); Firestore only if the file cannot be loaded
+                    let fromFile = null;
+                    try { const r = await fetch(`${import.meta.env.BASE_URL}studentNames.json`, { cache: 'no-cache' }); if (r.ok) fromFile = (await r.json()).students; } catch (e) { /* use Firestore below */ }
+                    if (fromFile) cachedTutoringStudents = fromFile.map(d => ({ id: d.id, name: d.name || '(no name)', displayId: d.displayId || '' }));
+                    else {
+                        const snap = await getDocs(collection(db, TUTORING_STUDENTS_PATH));
+                        cachedTutoringStudents = snap.docs.map(d => ({ id: d.id, name: d.data().name || '(no name)', displayId: d.data().displayId || '' }));
+                    }
                 } catch (e) {
                     console.error('Error loading Tutoring students:', e);
                     cachedTutoringStudents = null; // don't cache a failure — allow retry next time

@@ -3024,6 +3024,30 @@ const handleSendStarAnnouncement = async (studentUid, durationWeeks, message) =>
         console.error("Error renaming the student in Abhidhamma:", error);
       }
     }
+
+    // Dhammaschool keeps scores, completions and answers under the student's NAME, and the roster row (the Tutoring link) under
+    // "CLASS_name". Following the rename here means a linked student stays linked and nothing has to be linked again.
+    if (oldName && oldName.trim() && oldName.trim() !== trimmedNew) {
+      try {
+        const DS = `artifacts/${DHAMMASCHOOL_APP_ID}/public/data`;
+        const snaps = await Promise.all(['game_scores', 'lesson_completions', 'answers'].map(c => getDocs(query(collection(db, `${DS}/${c}`), where('studentName', '==', oldName)))));
+        let batch = writeBatch(db); let n = 0;
+        for (const d of snaps.flatMap(s => s.docs)) {
+          batch.update(d.ref, { studentName: trimmedNew });
+          if (++n >= 400) { await batch.commit(); batch = writeBatch(db); n = 0; }
+        }
+        if (n) await batch.commit();
+        const dsRoster = await getDocs(query(collection(db, `${DS}/roster`), where('studentName', '==', oldName)));
+        for (const d of dsRoster.docs) {
+          const x = d.data();
+          if (!x.classId) continue; // only the class link rows; a student's own wallet row is keyed another way
+          await setDoc(doc(db, `${DS}/roster`, `${x.classId}_${trimmedNew}`), { ...x, studentName: trimmedNew, linkedToTutoring: true, tutoringStudentUid: studentId }, { merge: true });
+          await deleteDoc(d.ref);
+        }
+      } catch (error) {
+        console.error("Error renaming the student in Dhammaschool:", error);
+      }
+    }
   };
 
   const handleRejectNameChange = async (studentId) => {

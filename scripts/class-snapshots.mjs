@@ -8,7 +8,7 @@
 // rebuild from scratch happens once a month (or with --full) because edits and deletions are not seen by
 // the incremental read. The state of the last run is kept in public/classSnapshots/_state.json.
 import { collection, query, where, getDocs, getCountFromServer, Timestamp } from 'firebase/firestore';
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -242,11 +242,21 @@ export async function refreshDhammaschoolProgress(db) {
   const completions = {};
   comps.docs.forEach(d => { const x = d.data(); if (x.studentName && x.lessonId) (completions[x.studentName] = completions[x.studentName] || new Set()).add(x.lessonId); });
   const out = Object.fromEntries(Object.entries(completions).sort(([a], [b]) => (a < b ? -1 : 1)).map(([k, v]) => [k, [...v].sort()]));
+  // Everyone who has played a game or written an answer, with the chapters: the teacher's class list is built from this file (no Firestore read).
+  // Answers come from the per-lesson files already on disk; the game scores are a handful of documents.
+  const taken = {};
+  const note = (name, lid) => { if (name && lid) (taken[name] = taken[name] || new Set()).add(lid); };
+  try {
+    const dir = join(CLASS_DIR, 'dhammaschool');
+    for (const f of readdirSync(dir)) { try { (JSON.parse(readFileSync(join(dir, f), 'utf8')).answers || []).forEach(a => note(a.studentName, a.lessonId)); } catch (e) { /* skip */ } }
+  } catch (e) { /* no folder yet */ }
+  try { (await getDocs(collection(db, `${DS}/game_scores`))).docs.forEach(d => note(d.data().studentName, d.data().lessonId)); } catch (e) { /* none */ }
+  const participants = Object.fromEntries(Object.entries(taken).sort(([a], [b]) => (a < b ? -1 : 1)).map(([k, v]) => [k, [...v].sort()]));
   mkdirSync(CLASS_DIR, { recursive: true });
   const file = join(CLASS_DIR, 'dhammaschool-progress.json');
   let old = null;
-  try { const j = JSON.parse(readFileSync(file, 'utf8')); old = JSON.stringify({ l: j.lessonsByClass, c: j.completions }); } catch (e) { /* none yet */ }
-  if (old !== JSON.stringify({ l: lessonsByClass, c: out })) writeFileSync(file, JSON.stringify({ generatedAt: new Date().toISOString(), lessonsByClass, completions: out }));
+  try { const j = JSON.parse(readFileSync(file, 'utf8')); old = JSON.stringify({ l: j.lessonsByClass, c: j.completions, p: j.participants }); } catch (e) { /* none yet */ }
+  if (old !== JSON.stringify({ l: lessonsByClass, c: out, p: participants })) writeFileSync(file, JSON.stringify({ generatedAt: new Date().toISOString(), lessonsByClass, completions: out, participants }));
   console.log(`Dhammaschool progress: ${Object.keys(lessonsByClass).length} grades, ${comps.size} completions`);
 }
 
