@@ -3380,8 +3380,7 @@ useEffect(() => {
                  <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
                      <Play size={32} fill="currentColor" />
                  </div>
-                 <h3 className="text-2xl font-bold mb-2 text-gray-800">Switch to way {isSpellMode ? 2 : 1}?</h3>
-                 <p className="text-gray-700 mb-3 font-bold">စာဖတ်နည်း {isSpellMode ? 'ဒုတိယနည်း (2)' : 'ပထမနည်း (1)'} ကို ပြောင်းမလား?</p>
+                 <h3 className="text-2xl font-bold mb-2 text-gray-800">Switch to the {isSpellMode ? 'second' : 'first'} way of reading (way {isSpellMode ? 2 : 1})?</h3>
                  <p className="text-gray-500 mb-2 font-medium">There are two ways to read:</p>
                  <div className="text-left mb-6 space-y-1 font-semibold">
                      <p className={isSpellMode ? 'text-blue-700' : 'text-gray-500'}>1 = Spell it out, letter by letter{isSpellMode ? ' (now)' : ''}</p>
