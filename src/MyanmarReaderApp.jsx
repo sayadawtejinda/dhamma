@@ -3381,6 +3381,7 @@ useEffect(() => {
                      <Play size={32} fill="currentColor" />
                  </div>
                  <h3 className="text-2xl font-bold mb-2 text-gray-800">Switch to way {isSpellMode ? 2 : 1}?</h3>
+                 <p className="text-gray-700 mb-3 font-bold">စာဖတ်နည်း {isSpellMode ? 'ဒုတိယနည်း (2)' : 'ပထမနည်း (1)'} ကို ပြောင်းမလား?</p>
                  <p className="text-gray-500 mb-2 font-medium">There are two ways to read:</p>
                  <div className="text-left mb-6 space-y-1 font-semibold">
                      <p className={isSpellMode ? 'text-blue-700' : 'text-gray-500'}>1 = Spell it out, letter by letter{isSpellMode ? ' (now)' : ''}</p>
@@ -4066,7 +4067,7 @@ useEffect(() => {
             </button>
             
             <button
-              onClick={() => { const spell = !isSpellMode; setIsSpellMode(spell); setAutoReadMode(!spell); }}
+              onClick={() => setShowSpellModeConfirm(true)}
               disabled={isLocked}
               title="Reading way: 1 = spell it out, 2 = read the whole word (tap to change)"
               className={`flex items-center justify-center gap-2 px-6 rounded-xl font-bold text-lg transition-all duration-300 h-[60px] ${
