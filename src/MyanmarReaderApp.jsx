@@ -4075,7 +4075,10 @@ useEffect(() => {
               }`}
             >
               <Play fill="currentColor" size={24} className={`${isSpellMode ? 'animate-pulse text-blue-50 drop-shadow-md' : ''}`} />
-              <span className="text-2xl font-black">{isSpellMode ? 1 : 2}</span>
+              {/* both ways are always written on the button; the one in use is the white chip */}
+              {[1, 2].map(n => (
+                <span key={n} className={`w-9 h-9 flex items-center justify-center rounded-lg text-xl font-black ${((n === 1) === isSpellMode) ? 'bg-white text-blue-700 shadow' : 'bg-blue-800/40 text-blue-100'}`}>{n}</span>
+              ))}
             </button>
             <button
               onClick={togglePracticeMode}
