@@ -4326,6 +4326,9 @@ useEffect(() => {
                     <span className="text-pink-600">Student</span> Learning Hub
                 </h1>
             </div>
+            <p className="mb-4 text-sm md:text-base font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                🪙 How to earn coins: press a lesson or poem button = +{LESSON_PRESS_COINS} · right answer in a game or quiz = +{RIGHT_ANSWER_COINS} · wrong answer = {WRONG_ANSWER_COINS}. Up to {LESSON_DAILY_COIN_CAP} coins a day.
+            </p>
             
             <div className={`p-4 rounded-xl shadow-lg mb-8 transition duration-300 ${showRomanization ? 'bg-indigo-200' : 'bg-pink-200'}`}>
                 <div className="flex justify-between items-center flex-wrap gap-4">
