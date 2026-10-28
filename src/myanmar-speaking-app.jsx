@@ -3952,6 +3952,16 @@ let lessonCoinPending = 0;
 let lessonCoinUsed = null; // coins already earned today, loaded once
 let lessonCoinTimer = null;
 let lessonCoinLastPress = 0;
+// The balance shown beside the student's name (same as the other apps): read once, then moved by every coin earned, and set to the
+// exact saved amount after each save.
+let lessonCoinShown = null;
+const lessonCoinListeners = new Set();
+const emitLessonCoins = () => lessonCoinListeners.forEach(f => { try { f(); } catch (e) { /* ignore */ } });
+function useLessonCoinBalance() {
+    const [, bump] = useState(0);
+    useEffect(() => { const f = () => bump(n => n + 1); lessonCoinListeners.add(f); return () => lessonCoinListeners.delete(f); }, []);
+    return lessonCoinShown;
+}
 const lessonTodayKey = () => { const d = new Date(); return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; };
 const shrineKeyOf = (name) => (name || 'unknown').trim().replace(/[.$#/\[\]]/g, '_');
 async function flushLessonCoins() {
@@ -3960,6 +3970,7 @@ async function flushLessonCoins() {
     const amount = lessonCoinPending;
     if (!name || amount === 0) return;
     lessonCoinPending = 0;
+    let lessonCoinSaved = null;
     try {
         const ref = doc(db, SHRINE_ROSTER_PATH, shrineKeyOf(name));
         const paid = await runTransaction(db, async (tx) => {
@@ -3973,8 +3984,10 @@ async function flushLessonCoins() {
             if (!hadBalance && change < 0) return 0;
             const next = Math.max(0, (hadBalance ? d.coinBalance : 20) + change);
             tx.set(ref, { studentName: name, coinBalance: next, lessonCoinsDay: today, lessonCoinsToday: used + Math.max(0, change) }, { merge: true });
+            lessonCoinSaved = next;
             return change;
         });
+        if (lessonCoinSaved != null) { lessonCoinShown = lessonCoinSaved + lessonCoinPending; emitLessonCoins(); }
         if (amount > 0 && paid < amount) lessonCoinUsed = LESSON_DAILY_COIN_CAP; // the day's limit is reached
     } catch (e) {
         console.error('Could not save the lesson coins:', e);
@@ -3996,11 +4009,15 @@ const floatCoinText = (e, text, color) => {
         setTimeout(() => el.remove(), 1000);
     } catch (err) { /* cosmetic only */ }
 };
+let lessonCoinLoadedFor = '';
 function ensureLessonCoinsLoaded() {
-    if (lessonCoinUsed !== null) return;
+    if (lessonCoinUsed !== null && lessonCoinLoadedFor === lessonCoinStudent) return;
+    if (lessonCoinLoadedFor && lessonCoinLoadedFor !== lessonCoinStudent) { lessonCoinShown = null; lessonCoinPending = 0; }
+    lessonCoinLoadedFor = lessonCoinStudent;
     lessonCoinUsed = 0;
     getDoc(doc(db, SHRINE_ROSTER_PATH, shrineKeyOf(lessonCoinStudent))).then(snap => {
         const d = snap.exists() ? snap.data() : {};
+        lessonCoinShown = Math.max(0, (d.coinBalance != null ? d.coinBalance : 0) + lessonCoinPending); emitLessonCoins();
         const used = d.lessonCoinsDay === lessonTodayKey() ? (d.lessonCoinsToday || 0) : 0;
         lessonCoinUsed = Math.max(lessonCoinUsed || 0, used);
     }).catch(() => {});
@@ -4008,6 +4025,7 @@ function ensureLessonCoinsLoaded() {
 function queueLessonCoins(amount, e) {
     if (amount > 0 && lessonCoinUsed + lessonCoinPending + amount > LESSON_DAILY_COIN_CAP) return false;
     lessonCoinPending += amount;
+    if (lessonCoinShown != null) { lessonCoinShown = Math.max(0, lessonCoinShown + amount); emitLessonCoins(); }
     if (amount > 0) { try { if (e && e.clientX != null) spawnFlyingCoins({ x: e.clientX, y: e.clientY }, amount >= 14 ? 5 : 3, '🪙', true); } catch (err) { /* cosmetic only */ } }
     else floatCoinText(e, `${amount} 🪙`, '#dc2626');
     if (!lessonCoinTimer) lessonCoinTimer = setTimeout(flushLessonCoins, 8000);
@@ -5099,6 +5117,7 @@ export default function MyanmarSpeakingApp({ entryRequest, onExit, isActive }) {
 
     // Roles: null (selection screen), 'student', 'teacher_auth', 'teacher'
     const [activeRole, setActiveRole] = useState(() => deepLinkStudentName ? 'student' : null);
+    const coinShown = useLessonCoinBalance();
     const [dbTeacherPasscode, setDbTeacherPasscode] = useState(null);
     const [studentName, setStudentName] = useState(() => deepLinkStudentName || '');
 
@@ -5228,6 +5247,7 @@ export default function MyanmarSpeakingApp({ entryRequest, onExit, isActive }) {
     // the student leaves the app or changes.
     useEffect(() => {
         lessonCoinStudent = (activeRole === 'student' && isActive) ? studentName : '';
+        if (lessonCoinStudent) ensureLessonCoinsLoaded();
         return () => { flushLessonCoins(); };
     }, [activeRole, studentName, isActive]);
 
@@ -5329,6 +5349,8 @@ export default function MyanmarSpeakingApp({ entryRequest, onExit, isActive }) {
                 rosterPath={ROSTER_PATH}
                 studentName={activeRole === 'teacher' ? null : studentName}
                 isTeacherMode={activeRole === 'teacher'}
+                coinBalance={activeRole === 'student' ? coinShown : null}
+                coinIcon="🪙"
                 panelTitle="🗣️ Students"
             />
 
