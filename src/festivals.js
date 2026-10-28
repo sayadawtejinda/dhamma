@@ -959,6 +959,83 @@ export const FESTIVALS = [
       ],
     },
   },
+  {
+    id: 'tabaung-sand-2027',
+    enabled: true,
+    scene: 'sand-stupa',
+    icon: '🛕',
+    title: 'Tabaung: Sand Pagoda Festival',
+    tagline: 'Pile the sand, handful by handful, and build a little pagoda together. Every grain is a good deed, and the pagoda is built in the heart!',
+    // Default dates -- the teacher sets the real ones on the "Festival apps" screen. The full moon of Tabaung falls around 22 March 2027.
+    start: '2027-03-20',
+    end: '2027-03-23',
+    // Ten handfuls of sand: tap one and it is added to the pagoda.
+    lamps: {
+      perDay: 10, coins: 5, allLitBonus: 20, style: 'tap', icon: '🛕', noun: 'handful of sand',
+      emoji: '🤲', doneEmoji: '🛕',
+      rewardText: 'Pile {n} handfuls of sand and build the pagoda',
+    },
+    // Six lessons, one a day each: the sand pagoda, the Buddha's homecoming, and the Dhamma behind building it.
+    kadaw: {
+      coins: 20,
+      lotus: 1,
+      title: 'Build the Pagoda in the Heart',
+      button: '🛕 Build the Pagoda',
+      actionLabel: '🛕 I Add a Handful',
+      doneWord: 'Sand Pagoda',
+      recipients: [
+        {
+          id: 'why-sand', emoji: '🏖️', name: 'Why We Build Sand Pagodas',
+          prayer: 'In the month of Tabaung, at the full moon, people in Myanmar gather on the sandy banks of rivers and the sea. Families, friends and neighbours pile up sand into little pagodas, decorate them with flags and flowers, and make wishes. A pagoda made of sand is easy to build, and everyone can join, young and old, rich and poor. I think of one good wish for the world.',
+          blessing: 'Many hands, one pagoda. May all your good wishes come true. Sadhu! Sadhu! Sadhu!',
+        },
+        {
+          id: 'homecoming', emoji: '🏡', name: 'The Buddha Comes Home',
+          prayer: 'After the Buddha became enlightened, he went back to his home city of Kapilavatthu to see his father, King Suddhodana, his family and the Sakyan people. He taught them the Dhamma, and many of his relatives, including his son Rahula, became followers. Going home to share the Dhamma with the people we love is a great kindness. I think of how I can share one good thing with my family.',
+          blessing: 'May every home be filled with Dhamma and love. Sadhu! Sadhu! Sadhu!',
+        },
+        {
+          id: 'grain', emoji: '⏳', name: 'Every Grain Counts',
+          prayer: 'One grain of sand is tiny. But a handful, then another, then another, and a whole pagoda stands up! Good deeds are just like this: a small kindness, a kind word, a bit of help every day, grows into a big mountain of merit. I will do one small good deed today, and I will not say it is too little.',
+          blessing: 'Little by little, a great pagoda rises. Sadhu! Sadhu! Sadhu!',
+        },
+        {
+          id: 'together', emoji: '🤝', name: 'Building Together',
+          prayer: 'Nobody can build the sand pagoda alone. One brings water, one pats the sand, one makes the flag, and everyone is happy together. Working together makes the work light and the heart warm. I will help someone with their work today and share what I have.',
+          blessing: 'May we always work together in harmony and kindness.',
+        },
+        {
+          id: 'share-merit', emoji: '🌍', name: 'Sharing the Merit',
+          prayer: 'When the pagoda is finished, people say Sadhu and share the merit with all beings: parents, teachers, friends, animals, and those who cannot be seen. Sharing merit does not make it less; it makes it grow, like lighting a thousand candles from one candle. I now share the merit of my good deeds with every being.',
+          blessing: 'May all beings share this merit and be happy and free from suffering. Sadhu! Sadhu! Sadhu!',
+        },
+        {
+          id: 'impermanence', emoji: '🌊', name: 'The Pagoda the Tide Takes Away',
+          prayer: 'When the tide comes in, the sand pagoda melts away. This is a quiet lesson: all things change and nothing stays the same forever. But the good deeds we did, the kindness and the merit, cannot be washed away. So I do not cling to things; I keep the good in my heart.',
+          blessing: 'May you understand change with a calm and light heart. Sadhu! Sadhu! Sadhu!',
+        },
+      ],
+    },
+    rewards: [
+      {
+        id: 'tabaung-sand-2027-robe',
+        category: 'outfit',
+        requires: { type: 'lamps', count: 30 },
+        item: { id: 'festival-tabaung-sand-2027-robe', name: '🛕 Sand Pagoda Robe', color: '#C9A227', swatch: 'linear-gradient(135deg,#FFF3C4,#E0B84C 55%,#A8761B)', pattern: 'clouds', cost: 0, festival: true },
+      },
+    ],
+    dailyGift: {
+      bonusCoins: 50,
+      pool: [
+        { category: 'accessory', item: { id: 'festival-tabaung-sand-2027-star', name: '⭐ Pagoda Top Star', kind: 'bigstar', color: '#FFC107', cost: 0, festival: true } },
+        { category: 'outfit', item: { id: 'festival-tabaung-sand-2027-sandy', name: '🏖️ Sandy Beach Robe', color: '#E6C27A', swatch: 'linear-gradient(135deg,#FFF3C4,#E6C27A 60%,#B88A3B)', pattern: 'checks', cost: 0, festival: true } },
+        { category: 'accessory', item: { id: 'festival-tabaung-sand-2027-lantern', name: '🏮 Golden Lantern', kind: 'lantern', color: '#FFB300', cost: 0, festival: true } },
+        { category: 'outfit', item: { id: 'festival-tabaung-sand-2027-blossom', name: '🌸 Flower Offering Robe', color: '#F48FB1', swatch: 'linear-gradient(135deg,#FCE4EC,#F48FB1 60%,#AD1457)', pattern: 'blossoms', cost: 0, festival: true } },
+        { category: 'accessory', item: { id: 'festival-tabaung-sand-2027-sparkler', name: '✨ Merit Sparkler', kind: 'sparkler', color: '#FFD54F', cost: 0, festival: true } },
+        { category: 'outfit', item: { id: 'festival-tabaung-sand-2027-sky', name: '🌅 Evening Sky Robe', color: '#FB8C00', swatch: 'linear-gradient(135deg,#FFE0B2,#FB8C00 60%,#6A1B9A)', pattern: 'clouds', cost: 0, festival: true } },
+      ],
+    },
+  },
 ];
 
 import { useEffect, useState } from 'react';

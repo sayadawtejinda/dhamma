@@ -774,6 +774,7 @@ const NEW_SCENE_BG = {
   'newyear-fireworks': 'linear-gradient(180deg,#02030f 0%,#0b1040 50%,#2a1a5a 82%,#3b1f55 100%)',
   'cny-lanterns': 'linear-gradient(180deg,#2b0505 0%,#6b0f0f 45%,#b71c1c 80%,#7f1010 100%)',
   'freedom-sky': 'linear-gradient(180deg,#1a237e 0%,#3f51b5 35%,#ff8a65 70%,#ffe0b2 100%)',
+  'sand-stupa': 'linear-gradient(180deg,#3b2a6b 0%,#c0577a 38%,#ffa45c 68%,#f6d99a 100%)',
   'forest-monks': 'linear-gradient(180deg,#04120d 0%,#0a2c20 40%,#14492f 75%,#1d5a38 100%)',
   'rohini-river': 'linear-gradient(180deg,#6fc0f2 0%,#b9e3ff 36%,#fbe9b7 64%,#86b872 100%)',
 };
@@ -990,6 +991,53 @@ function FreedomScene({ glow }) {
         <ellipse cx="62" cy="6" rx="13" ry="7" transform="rotate(-10 62 6)" strokeDasharray="22 12" /><ellipse cx="86" cy="12" rx="13" ry="7" transform="rotate(20 86 12)" />
       </g>
       <text x="200" y="258" textAnchor="middle" fontSize="15" fontWeight="900" fill="#fff8e1" style={{ letterSpacing: 3 }}>FREE AS A DOVE</text>
+    </svg>
+  );
+}
+
+// Tabaung: a sand pagoda on the river bank at sunset, with flags, flowers, little sand mounds, and merit lights rising as the glow grows.
+function SandStupaScene({ glow }) {
+  const g = 0.4 + glow * 0.6;
+  const flags = [[150, 150, '#e53935'], [168, 140, '#fdd835'], [232, 140, '#43a047'], [250, 150, '#1e88e5']];
+  const lights = [[70, 120], [110, 86], [300, 92], [340, 126], [200, 60]];
+  return (
+    <svg viewBox="0 0 400 270" preserveAspectRatio="xMidYMax meet" className="absolute inset-0 w-full h-full" aria-hidden="true">
+      <defs><radialGradient id="sdGlow" cx="50%" cy="50%" r="50%"><stop offset="0" stopColor="#fff3c4" stopOpacity=".9" /><stop offset="1" stopColor="#ffb74d" stopOpacity="0" /></radialGradient></defs>
+      {/* the setting sun and its glow around the pagoda */}
+      <circle cx="200" cy="140" r="100" fill="url(#sdGlow)" opacity={0.2 + glow * 0.6} />
+      <circle cx="330" cy="168" r="22" fill="#ffe0b2" opacity=".85" />
+      {/* the river */}
+      <path d="M0 196 Q100 186 200 194 T400 190 L400 270 L0 270 Z" fill="#4a7fb0" opacity=".85" />
+      <path d="M20 210 Q60 206 100 210 M230 214 Q280 208 340 214" stroke="#bbdefb" strokeWidth="1.6" fill="none" strokeLinecap="round" opacity=".7" />
+      {/* the sandy bank */}
+      <path d="M0 236 Q90 214 200 222 T400 218 L400 270 L0 270 Z" fill="#e8c47a" />
+      <path d="M0 250 Q120 236 220 246 T400 242 L400 270 L0 270 Z" fill="#d6ae5e" />
+      {/* flags on strings */}
+      <path d="M150 150 Q200 170 250 150" fill="none" stroke="#fff8e1" strokeWidth="1.2" />
+      {flags.map(([x, y, c], i) => (
+        <g key={i} transform={`translate(${x} ${y})`}><g style={{ animation: `fsSwing ${2 + i * 0.3}s ease-in-out infinite`, transformOrigin: '0px 0px' }}>
+          <path d="M0 0 L12 3 L0 10 Z" fill={c} />
+        </g></g>
+      ))}
+      {/* the sand pagoda in tiers */}
+      <g>
+        <path d="M130 224 L270 224 L252 202 L148 202 Z" fill="#e0b85c" stroke="#a8761b" strokeWidth="1.4" />
+        <path d="M152 202 L248 202 L236 182 L164 182 Z" fill="#ecc872" stroke="#a8761b" strokeWidth="1.4" />
+        <path d="M168 182 L232 182 L222 164 L178 164 Z" fill="#f2d487" stroke="#a8761b" strokeWidth="1.4" />
+        <path d="M200 70 Q226 124 230 164 L170 164 Q174 124 200 70 Z" fill="#f6dc94" stroke="#a8761b" strokeWidth="1.6" />
+        <path d="M200 70 Q190 124 188 164" fill="none" stroke="#fff8e1" strokeWidth="2" opacity=".6" />
+        {[180, 148, 120, 96].map((y, i) => <line key={i} x1={200 - (y - 60) * 0.22} y1={y} x2={200 + (y - 60) * 0.22} y2={y} stroke="#a8761b" strokeWidth="1.3" />)}
+        <line x1="200" y1="70" x2="200" y2="50" stroke="#a8761b" strokeWidth="2.4" />
+        <circle cx="200" cy="46" r="6" fill="#ffd54f" stroke="#a8761b" strokeWidth="1.2" opacity={g} />
+      </g>
+      {/* little sand mounds waiting to be added */}
+      {[[64, 232], [100, 240], [304, 236], [342, 242]].map(([x, y], i) => (
+        <path key={i} d={`M${x - 16} ${y} Q${x} ${y - 20} ${x + 16} ${y} Z`} fill="#dcb255" stroke="#b88a35" strokeWidth="1" />
+      ))}
+      {/* merit lights rising from the pagoda */}
+      {lights.map(([x, y], i) => (
+        <circle key={i} cx={x} cy={y} r="3.2" fill="#fff59d" style={{ animation: `fsBob ${2 + i * 0.4}s ease-in-out infinite` }} opacity={0.3 + glow * 0.7} />
+      ))}
     </svg>
   );
 }
@@ -1700,6 +1748,8 @@ export default function FestivalApp({ entryRequest, onExit }) {
           <ChineseNewYearScene glow={glow} />
         ) : festival.scene === 'freedom-sky' ? (
           <FreedomScene glow={glow} />
+        ) : festival.scene === 'sand-stupa' ? (
+          <SandStupaScene glow={glow} />
         ) : festival.scene === 'htamane-fire' ? (
           <>
             <HtamaneScene progress={stirProgress} stirring={stirKey > 0} stirKey={stirKey} />
