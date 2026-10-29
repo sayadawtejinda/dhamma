@@ -8,6 +8,7 @@ import { localizePaticca, paticcaText } from './paramatthaPaticcaNames';
 import { vithiText } from './paramatthaVithiNames';
 import { localizePuggala, localizeSutiPati, headText } from './paramatthaPuggalaNames';
 import { localizeNibbanaGuna, localizeAtthaPannatti, localizeSaddaPannatti, nibbanaText } from './paramatthaNibbanaNames';
+import { localizeSabba } from './paramatthaSabbaNames';
 
 // --- Data Definitions ---
 
@@ -1496,7 +1497,7 @@ const SABBA_SACCA = [
   { id: 'saccavimutta', name: 'သစ္စာဝိမုတ်', cittaIds: LOKUTTARA_JAVANA_ALL_IDS, cetasikaIds: UPADANAKKHANDHA_VIMUTTA_CETASIKA_IDS,
     note: 'ကြွင်းသော မဂ်စိတ္တုပ္ပါဒ် (၂၉)ခု [= မဂ္ဂင်(၈)မှလွဲ စေတသိက်(၂၈)+မဂ်စိတ်(၁)]၊ ဖိုလ်စိတ္တုပ္ပါဒ် (၃၇)ခု [= စေတသိက်(၃၆)+ဖိုလ်စိတ်(၁)] တို့သည် သစ္စာဟူသော အရေအတွက်မှ လွတ်၏။' },
 ];
-const SABBA_GROUPS = [
+const SABBA_GROUPS_MY = [
   { id: 'khandha', name: 'ခန္ဓာ (၅)', items: SABBA_KHANDHA },
   { id: 'upadanakkhandha', name: 'ဥပါဒါနက္ခန္ဓာ (၅)', items: SABBA_UPADANAKKHANDHA },
   { id: 'ayatana', name: 'အာယတန (၁၂)', items: SABBA_AYATANA },
@@ -1725,6 +1726,7 @@ export default function App({ lang = 'my', initialPage = null, onPageChange = nu
   const ATTHA_PANNATTI = useMemo(() => localizeAtthaPannatti(ATTHA_PANNATTI_MY, lang), [lang]);
   const SADDA_PANNATTI = useMemo(() => localizeSaddaPannatti(SADDA_PANNATTI_MY, lang), [lang]);
   const nx = (my) => nibbanaText(my, lang);
+  const SABBA_GROUPS = useMemo(() => localizeSabba(SABBA_GROUPS_MY, lang), [lang]);
   const CITTA_LAYOUT = useMemo(() => localizeCittaLayout(CITTA_LAYOUT_MY, lang), [lang]);
   const CETASIKA_LAYOUT = useMemo(() => localizeCetasikaLayout(CETASIKA_LAYOUT_MY, lang), [lang]);
   // Pali technical-term lists whose display "name" depends on lang (Roman
