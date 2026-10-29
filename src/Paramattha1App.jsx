@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { t } from './paramatthaStrings';
 import { localizeCittas, localizeLokuttara8 } from './paramatthaCittaNames';
 import { localizeCetasikas, localizeCittaLayout, localizeCetasikaLayout } from './paramatthaCetasikaNames';
+import { localizeRupas, localizeKalapaGroups, rupaText } from './paramatthaRupaNames';
 
 // --- Data Definitions ---
 
@@ -641,7 +642,7 @@ const RUPA_DESCS = {
   28: "ရုပ်အစစ်တို့၏ ပျက်ခြင်းသဘော (ပျက်မှု=ဘင်ကာလ) (လက္ခဏရုပ်)။",
 };
 
-const RUPAS = [
+const RUPAS_MY = [
   ...["ပထဝီ", "တေဇော", "အာပေါ", "ဝါယော"].map((name, i) => ({ id: i + 1, name, group: 'mahabhuta', color: 'bg-amber-600', desc: RUPA_DESCS[i + 1] })),
   ...["စက္ခု", "သောတ", "ဃာန", "ဇိဝှာ", "ကာယ"].map((name, i) => ({ id: i + 5, name, group: 'upadaya', subGroup: 'pasada', color: 'bg-amber-300', desc: RUPA_DESCS[i + 5] })),
   ...["ရူပါရုံ", "သဒ္ဒါရုံ", "ဂန္ဓာရုံ", "ရသာရုံ"].map((name, i) => ({ id: i + 10, name, group: 'upadaya', subGroup: 'gocara', color: 'bg-amber-300', desc: RUPA_DESCS[i + 10] })),
@@ -708,7 +709,7 @@ const AHARAJA_KALAPAS = [
   { id: 'lahutadi-ekadasaka-a', name: 'လဟုတာဒိဧကာဒသကကလာပ်', rupaIds: [...SUDDHATTHAKA_IDS, ...VIKARA3_IDS] },
 ];
 
-const KALAPA_GROUPS = [
+const KALAPA_GROUPS_MY = [
   { id: 'kammaja', name: 'ကမ္မဇကလာပ် (၉)', items: KAMMAJA_KALAPAS, color: 'rose' },
   { id: 'cittaja', name: 'စိတ္တဇကလာပ် (၆)', items: CITTAJA_KALAPAS, color: 'indigo' },
   { id: 'utuja', name: 'ဥတုဇကလာပ် (၄)', items: UTUJA_KALAPAS, color: 'emerald' },
@@ -1223,7 +1224,7 @@ const AKUSALA_COLOR_MAP = {
   red:     { active: 'bg-red-700 text-white border-red-700',      idle: 'bg-red-50 text-red-700 border-red-300 hover:bg-red-100' },
 };
 
-// ဣန္ဒြေ/အာဟာရ စသည်တို့ထဲက ရုပ်ဆိုင်ရာ အစိတ်အပိုင်းများကို RUPAS panel ဘက်မှာလည်း highlight လုပ်ပြနိုင်ရန်
+// ဣန္ဒြေ/အာဟာရ စသည်တို့ထဲက ရုပ်ဆိုင်ရာ အစိတ်အပိုင်းများကို RUPAS_MY panel ဘက်မှာလည်း highlight လုပ်ပြနိုင်ရန်
 // (cakkhu, sota, ghana, jivha, kaya, itthibhava, purisabhava, jivita rupa)
 const INDRIYA_RUPA_IDS = [5, 6, 7, 8, 9, 14, 15, 17];
 const DVIHETU_JAVANA_18_IDS = [1,2,3,4,5,6,7,8, 9,10, 33,34,37,38, 49,50,53,54];
@@ -1418,7 +1419,7 @@ const BODHIPAKKHIYA_CATEGORIES = [
 // သဗ္ဗသင်္ဂဟ - ခန္ဓာ/ဥပါဒါနက္ခန္ဓာ/အာယတန/ဓာတ်/သစ္စာ ၅-အုပ်စု
 // ALL_CITTA_IDS ကို ဖိုင် အပေါ်ပိုင်း (BHUMI_31 data ရှေ့) မှာ ရွှေ့ကြေညာထားပြီးဖြစ်သည်
 const SANKHARAKKHANDHA_IDS = CETASIKAS_MY.map(ct => ct.id).filter(id => id !== 2 && id !== 3);
-const ALL_RUPA_IDS = RUPAS.filter(r => !r.virtual).map(r => r.id); // ဖောဋ္ဌဗ္ဗာရုံ ကိုယ်စားပြု virtual id (29,30,31) များကို ထုတ်ထား — ရုပ် (၂၈) ပါးသာ
+const ALL_RUPA_IDS = RUPAS_MY.filter(r => !r.virtual).map(r => r.id); // ဖောဋ္ဌဗ္ဗာရုံ ကိုယ်စားပြု virtual id (29,30,31) များကို ထုတ်ထား — ရုပ် (၂၈) ပါးသာ
 const DHAMMAYATANA_SUKHUMA_RUPA_IDS = [2,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28]; // သုခုမရုပ် (၁၆) ပါး
 const LOKIYA_CITTA_IDS = CITTAS_MY.filter(c => c.id <= 81).map(c => c.id);
 const MAGGANGA8_IDS = [52, 8, 47, 48, 49, 11, 29, 5];
@@ -1704,6 +1705,9 @@ export default function App({ lang = 'my', initialPage = null, onPageChange = nu
   const CITTAS = useMemo(() => localizeCittas(CITTAS_MY, lang), [lang]);
   const LOKUTTARA_8 = useMemo(() => localizeLokuttara8(LOKUTTARA_8_MY, lang), [lang]);
   const CETASIKAS = useMemo(() => localizeCetasikas(CETASIKAS_MY, lang), [lang]);
+  const RUPAS = useMemo(() => localizeRupas(RUPAS_MY, lang), [lang]);
+  const KALAPA_GROUPS = useMemo(() => localizeKalapaGroups(KALAPA_GROUPS_MY, lang), [lang]);
+  const rx = (my) => rupaText(my, lang);
   const CITTA_LAYOUT = useMemo(() => localizeCittaLayout(CITTA_LAYOUT_MY, lang), [lang]);
   const CETASIKA_LAYOUT = useMemo(() => localizeCetasikaLayout(CETASIKA_LAYOUT_MY, lang), [lang]);
   // Pali technical-term lists whose display "name" depends on lang (Roman
@@ -4269,9 +4273,9 @@ const NibbanaDot = ({ item }) => (
   </div>
   <div className="flex flex-col">
   
-    <MainGroupBox title="မဟာဘုတ် (၄)">
+    <MainGroupBox title={rx("မဟာဘုတ် (၄)")}>
     <div className="text-[10px] md:text-[15px] font-semibold text-slate-400 px-2 pt-1">
-      နိပ္ဖန္နရုပ် (သဘာဝရုပ်,သလက္ခဏရုပ်,ရူပရုပ်,သမ္မသနရုပ်) (၁၈)
+      {rx('နိပ္ဖန္နရုပ် (သဘာဝရုပ်,သလက္ခဏရုပ်,ရူပရုပ်,သမ္မသနရုပ်) (၁၈)')}
     </div>
       <div className="flex flex-wrap gap-2 p-2 bg-slate-50 items-center">
       
@@ -4284,15 +4288,15 @@ const NibbanaDot = ({ item }) => (
     </MainGroupBox>
 
     
-    <MainGroupBox title="ဥပါဒါယရုပ် (၂၄)">
+    <MainGroupBox title={rx("ဥပါဒါယရုပ် (၂၄)")}>
       <div className="flex flex-col">
         {[
-          { subGroup: 'pasada', title: 'ပသာဒရုပ် (၅)' },
-          { subGroup: 'gocara', title: 'ဝိသယရုပ် (၇)', withPhotthabba: true },
-          { subGroup: 'bhava', title: 'ဘာဝရုပ် (၂)' },
-          { subGroup: 'hadaya', title: 'ဟဒယရုပ် (၁)' },
-          { subGroup: 'jivita', title: 'ဇီဝိတရုပ် (၁)' },
-          { subGroup: 'ahara', title: 'အာဟာရရုပ် (၁)' },
+          { subGroup: 'pasada', title: rx('ပသာဒရုပ် (၅)') },
+          { subGroup: 'gocara', title: rx('ဝိသယရုပ် (၇)'), withPhotthabba: true },
+          { subGroup: 'bhava', title: rx('ဘာဝရုပ် (၂)') },
+          { subGroup: 'hadaya', title: rx('ဟဒယရုပ် (၁)') },
+          { subGroup: 'jivita', title: rx('ဇီဝိတရုပ် (၁)') },
+          { subGroup: 'ahara', title: rx('အာဟာရရုပ် (၁)') },
         ].map(row => (
           <div key={row.subGroup} className="flex flex-row items-center justify-between p-1.5 md:p-2 border-b last:border-b-0 border-slate-100">
             <div className="flex flex-wrap gap-1 md:gap-1.5 flex-1 items-center">
@@ -4305,7 +4309,7 @@ const NibbanaDot = ({ item }) => (
                 return (
                   <RupaDot
                     key="r-photthabba"
-                    r={{ id: 'photthabba', name: 'ဖောဋ္ဌဗ္ဗာရုံ', color: photthabbaOn ? 'bg-amber-100 border-2 border-amber-500' : 'bg-white border-2 border-dashed border-slate-400', desc: photthabbaRef ? photthabbaRef.desc : '' }}
+                    r={{ id: 'photthabba', name: rx('ဖောဋ္ဌဗ္ဗာရုံ'), color: photthabbaOn ? 'bg-amber-100 border-2 border-amber-500' : 'bg-white border-2 border-dashed border-slate-400', desc: photthabbaRef ? photthabbaRef.desc : '' }}
                     dimmed={false}
                     ringClass={photthabbaOn ? 'ring-4 ring-amber-300 scale-110 text-amber-700' : 'text-slate-500'}
                     extraClickHandler={(rect) => {
@@ -4318,7 +4322,7 @@ const NibbanaDot = ({ item }) => (
                       setPhotthabbaOn(prev => !prev);
                       if (tooltipTimerRef.current) { clearTimeout(tooltipTimerRef.current); tooltipTimerRef.current = null; }
                       if (willTurnOn && photthabbaRef) {
-                        setActiveDetail({ name: 'ဖောဋ္ဌဗ္ဗာရုံ', desc: photthabbaRef.desc || '' });
+                        setActiveDetail({ name: rx('ဖောဋ္ဌဗ္ဗာရုံ'), desc: photthabbaRef.desc || '' });
                         setTooltipPos(rect ? { x: rect.left + rect.width / 2, y: rect.top } : null);
                         tooltipTimerRef.current = setTimeout(() => {
                           setActiveDetail({ name: "", desc: "" });
@@ -4340,13 +4344,13 @@ const NibbanaDot = ({ item }) => (
         ))}
 
         <div className="text-[10px] md:text-[15px] font-semibold text-slate-400 px-1.5 md:px-2 pt-2 border-t border-slate-100">
-          အနိပ္ဖန္နရုပ် (အသဘာဝရုပ်) (၁၀)
+          {rx('အနိပ္ဖန္နရုပ် (အသဘာဝရုပ်) (၁၀)')}
         </div>
 
         {[
-          { ids: [19], title: 'ပရိစ္ဆေဒရုပ် (၁)' },
-          { ids: [23, 24], title: 'ဝိညတ်ရုပ် (၂)' },
-          { ids: [20, 21, 22], title: 'ဝိကာရရုပ် (၃)' },
+          { ids: [19], title: rx('ပရိစ္ဆေဒရုပ် (၁)') },
+          { ids: [23, 24], title: rx('ဝိညတ်ရုပ် (၂)') },
+          { ids: [20, 21, 22], title: rx('ဝိကာရရုပ် (၃)') },
         ].map(row => (
           <div key={row.title} className="flex flex-row items-center justify-between p-1.5 md:p-2 border-b last:border-b-0 border-slate-100">
             <div className="flex flex-wrap gap-1 md:gap-1.5 flex-1 items-center">
@@ -4364,15 +4368,15 @@ const NibbanaDot = ({ item }) => (
         <div className="flex flex-row items-center justify-between p-1.5 md:p-2">
         
           <div className="flex flex-wrap gap-1 md:gap-1.5 flex-1 items-center">
-          <span className="text-[9px] md:text-[10px] font-semibold text-slate-500">ဇာတိရုပ်</span>
+          <span className="text-[9px] md:text-[10px] font-semibold text-slate-500">{rx('ဇာတိရုပ်')}</span>
             {(() => {
               const lakkhanaItems = RUPAS.filter(r => r.subGroup === 'lakkhana');
               const renderLakkhanaDot = (r) => {
                 const dimmed = rupaFilterActive && !isRupaActive(r.id);
                 return <RupaDot key={`r-${r.id}`} r={r} dimmed={dimmed} />;
               };
-              const jatiRupas = lakkhanaItems.filter(r => r.name === 'ဥပစယ' || r.name === 'သန္တတိ');
-              const otherRupas = lakkhanaItems.filter(r => r.name !== 'ဥပစယ' && r.name !== 'သန္တတိ');
+              const jatiRupas = lakkhanaItems.filter(r => r.id === 25 || r.id === 26);
+              const otherRupas = lakkhanaItems.filter(r => r.id !== 25 && r.id !== 26);
               return (
                 <>
                   <div className="flex flex-col items-center gap-1">
@@ -4387,7 +4391,7 @@ const NibbanaDot = ({ item }) => (
             })()}
           </div>
           <div className="text-[10px] md:text-[11px] font-semibold text-slate-600 shrink-0 ml-2 text-right w-16 md:w-24 leading-snug">
-            လက္ခဏရုပ် (၄)
+            {rx('လက္ခဏရုပ် (၄)')}
           </div>
         </div>
       </div>
