@@ -1727,6 +1727,7 @@ export default function App({ lang = 'my', initialPage = null, onPageChange = nu
   const ATTHA_PANNATTI = useMemo(() => localizeAtthaPannatti(ATTHA_PANNATTI_MY, lang), [lang]);
   const SADDA_PANNATTI = useMemo(() => localizeSaddaPannatti(SADDA_PANNATTI_MY, lang), [lang]);
   const nx = (my) => nibbanaText(my, lang);
+  const nd = (n) => (lang === 'en' ? String(n) : toMyanmar(n));
   const SABBA_GROUPS = useMemo(() => localizeSabba(SABBA_GROUPS_MY, lang), [lang]);
   const AKUSALA_CATEGORIES = useMemo(() => localizeAkusala(AKUSALA_CATEGORIES_MY, lang), [lang]);
   const MISSAKA_CATEGORIES = useMemo(() => localizeMissaka(MISSAKA_CATEGORIES_MY, lang), [lang]);
@@ -2840,7 +2841,7 @@ const isNibbanaActive = filter.type === 'sabba-detail' && cittaContext === null 
         <button
           ref={btnRef}
           onClick={() => { if (isActiveFilter && onClear) { onClear(); } else { onToggle(); } }}
-          title={isActiveFilter ? 'ထပ်နှိပ်ပါက မူလဇယားသို့ ပြန်သွားမည် (refresh)' : undefined}
+          title={isActiveFilter ? (lang === 'en' ? 'Click again to return to the original table (refresh)' : 'ထပ်နှိပ်ပါက မူလဇယားသို့ ပြန်သွားမည် (refresh)') : undefined}
           className={`text-[10px] px-2.5 py-1 rounded-full font-semibold transition-colors border whitespace-nowrap max-w-[140px] truncate ${
             isActiveFilter || isOpen ? 'bg-slate-700 text-white border-slate-700' : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'
           }`}
@@ -2880,7 +2881,7 @@ const isNibbanaActive = filter.type === 'sabba-detail' && cittaContext === null 
         <button
           ref={btnRef}
           onClick={() => { if (isActiveFilter) { clearFilter(); } else { setOpenMenu(prev => prev === 'sabba-sangaha' ? null : 'sabba-sangaha'); } }}
-          title={isActiveFilter ? 'ထပ်နှိပ်ပါက မူလဇယားသို့ ပြန်သွားမည် (refresh)' : undefined}
+          title={isActiveFilter ? (lang === 'en' ? 'Click again to return to the original table (refresh)' : 'ထပ်နှိပ်ပါက မူလဇယားသို့ ပြန်သွားမည် (refresh)') : undefined}
           className={`text-[10px] px-2.5 py-1 rounded-full font-semibold transition-colors border whitespace-nowrap max-w-[140px] truncate ${
             isActiveFilter || isOpen ? 'bg-slate-700 text-white border-slate-700' : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'
           }`}
@@ -2955,7 +2956,7 @@ const isNibbanaActive = filter.type === 'sabba-detail' && cittaContext === null 
         <button
           ref={btnRef}
           onClick={() => { if (isActiveFilter) { setSelectedKalapa(null); } else { setOpenMenu(prev => prev === 'kalapa' ? null : 'kalapa'); } }}
-          title={isActiveFilter ? 'ထပ်နှိပ်ပါက မူလဇယားသို့ ပြန်သွားမည် (refresh)' : undefined}
+          title={isActiveFilter ? (lang === 'en' ? 'Click again to return to the original table (refresh)' : 'ထပ်နှိပ်ပါက မူလဇယားသို့ ပြန်သွားမည် (refresh)') : undefined}
           className={`text-[10px] px-2.5 py-1 rounded-full font-semibold transition-colors border whitespace-nowrap max-w-[140px] truncate ${
             isActiveFilter || isOpen ? 'bg-slate-700 text-white border-slate-700' : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'
           }`}
@@ -3063,7 +3064,7 @@ const isNibbanaActive = filter.type === 'sabba-detail' && cittaContext === null 
         <button
           ref={btnRef}
           onClick={() => { if (filter.type === 'akusala-cat' || filter.type === 'akusala-name') { clearFilter(); } else { setOpenMenu(prev => prev === 'akusala-cat' ? null : 'akusala-cat'); } }}
-          title={isActiveFilter ? 'ထပ်နှိပ်ပါက မူလဇယားသို့ ပြန်သွားမည် (refresh)' : undefined}
+          title={isActiveFilter ? (lang === 'en' ? 'Click again to return to the original table (refresh)' : 'ထပ်နှိပ်ပါက မူလဇယားသို့ ပြန်သွားမည် (refresh)') : undefined}
           className={`text-[10px] px-2.5 py-1 rounded-full font-semibold transition-colors border whitespace-nowrap max-w-[140px] truncate ${
             isActiveFilter || isOpen ? 'bg-slate-700 text-white border-slate-700' : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'
           }`}
@@ -3168,7 +3169,7 @@ const isNibbanaActive = filter.type === 'sabba-detail' && cittaContext === null 
         <button
           ref={btnRef}
           onClick={() => { if (isActiveFilter) { clearFilter(); } else { setOpenMenu(prev => prev === 'missaka-cat' ? null : 'missaka-cat'); } }}
-          title={isActiveFilter ? 'ထပ်နှိပ်ပါက မူလဇယားသို့ ပြန်သွားမည် (refresh)' : undefined}
+          title={isActiveFilter ? (lang === 'en' ? 'Click again to return to the original table (refresh)' : 'ထပ်နှိပ်ပါက မူလဇယားသို့ ပြန်သွားမည် (refresh)') : undefined}
           className={`text-[10px] px-2.5 py-1 rounded-full font-semibold transition-colors border whitespace-nowrap max-w-[140px] truncate ${
             isActiveFilter || isOpen ? 'bg-slate-700 text-white border-slate-700' : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'
           }`}
@@ -3262,7 +3263,7 @@ const isNibbanaActive = filter.type === 'sabba-detail' && cittaContext === null 
         <button
           ref={btnRef}
           onClick={() => { if (isActiveFilter) { clearFilter(); } else { setOpenMenu(prev => prev === 'bodhi-cat' ? null : 'bodhi-cat'); } }}
-          title={isActiveFilter ? 'ထပ်နှိပ်ပါက မူလဇယားသို့ ပြန်သွားမည် (refresh)' : undefined}
+          title={isActiveFilter ? (lang === 'en' ? 'Click again to return to the original table (refresh)' : 'ထပ်နှိပ်ပါက မူလဇယားသို့ ပြန်သွားမည် (refresh)') : undefined}
           className={`text-[10px] px-2.5 py-1 rounded-full font-semibold transition-colors border whitespace-nowrap max-w-[140px] truncate ${
             isActiveFilter || isOpen ? 'bg-slate-700 text-white border-slate-700' : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'
           }`}
@@ -3364,7 +3365,7 @@ const isNibbanaActive = filter.type === 'sabba-detail' && cittaContext === null 
         <button
           ref={btnRef}
           onClick={() => { if (isActiveFilter) { setSelectedSamutthana(null); } else { setOpenMenu(prev => prev === 'samutthana' ? null : 'samutthana'); } }}
-          title={isActiveFilter ? 'ထပ်နှိပ်ပါက မူလဇယားသို့ ပြန်သွားမည် (refresh)' : undefined}
+          title={isActiveFilter ? (lang === 'en' ? 'Click again to return to the original table (refresh)' : 'ထပ်နှိပ်ပါက မူလဇယားသို့ ပြန်သွားမည် (refresh)') : undefined}
           className={`text-[10px] px-2.5 py-1 rounded-full font-semibold transition-colors border whitespace-nowrap max-w-[140px] truncate ${
             isActiveFilter || isOpen ? 'bg-slate-700 text-white border-slate-700' : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'
           }`}
@@ -3500,14 +3501,14 @@ const isNibbanaActive = filter.type === 'sabba-detail' && cittaContext === null 
             <span 
               className="absolute bottom-0.5 left-1.5 right-1.5 h-[3px] rounded-full"
               style={{ backgroundColor: vedanaColor }}
-              title={`ဝေဒနာ - ${VEDANA_TYPES.find(v => v.id === getCittaVedana(item))?.name || ''}`}
+              title={`${lang === 'en' ? 'Vedanā' : 'ဝေဒနာ'} - ${VEDANA_TYPES.find(v => v.id === getCittaVedana(item))?.name || ''}`}
             />
           )}
         </div>
         {markers.sampayutta !== null && !isDimmed && (
           <span 
             className={`absolute -top-1 -left-1 w-3 h-3 rounded-full ring-1 ring-white z-10 ${markers.sampayutta ? 'bg-sky-500' : 'bg-zinc-400'}`}
-            title={markers.sampayutta ? 'သမ္ပယုတ်' : 'ဝိပ္ပယုတ်'}
+            title={lang === 'en' ? (markers.sampayutta ? 'Sampayutta' : 'Vippayutta') : (markers.sampayutta ? 'သမ္ပယုတ်' : 'ဝိပ္ပယုတ်')}
           />
         )}
       </div>
@@ -3736,7 +3737,7 @@ const NibbanaDot = ({ item }) => (
           <div className={`flex flex-col items-end shrink-0 ml-2 ${alignTop ? 'gap-1.5' : ''}`}>
             <div 
               className={`text-[10px] md:text-[11px] font-semibold cursor-pointer transition-colors text-right w-16 md:w-24 leading-snug ${isActive ? 'text-blue-800' : 'text-slate-600 hover:text-blue-600'}`}
-              title={`${title} ကို ရွေးချယ်ရန် နှိပ်ပါ`}
+              title={lang === 'en' ? `Click to select ${title}` : `${title} ကို ရွေးချယ်ရန် နှိပ်ပါ`}
             >
               {title}
             </div>
@@ -3756,7 +3757,7 @@ const NibbanaDot = ({ item }) => (
           {filter.type !== 'none' && (
             <button 
               onClick={clearFilter}
-              title="ရွေးချယ်မှု ပယ်ဖျက်ရန်"
+              title={lang === 'en' ? 'Clear selection' : 'ရွေးချယ်မှု ပယ်ဖျက်ရန်'}
               className="w-7 h-7 flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600 text-white transition-colors text-sm"
             >
               ✕
@@ -3793,30 +3794,30 @@ const NibbanaDot = ({ item }) => (
             className="cursor-move select-none text-white/70 px-1 text-xs tracking-widest"
             onMouseDown={handleNavDragStart}
             onTouchStart={handleNavDragStart}
-            title="ဆွဲရွှေ့ရန်"
+            title={lang === 'en' ? 'Drag to move' : 'ဆွဲရွှေ့ရန်'}
           >
             ⠿⠿
           </div>
           <button
             onClick={() => navPrev()}
-            title="ရှေ့"
+            title={lang === 'en' ? 'Previous' : 'ရှေ့'}
             className="w-8 h-8 flex items-center justify-center rounded-full bg-white/20 hover:bg-white/30 text-white text-base font-bold transition-colors"
           >
             ‹
           </button>
           <span className="text-[11px] text-white px-1.5 font-semibold tabular-nums whitespace-nowrap">
-            {toMyanmar(navCtx.idx + 1)}/{toMyanmar(navCtx.list.length)}
+            {nd(navCtx.idx + 1)}/{nd(navCtx.list.length)}
           </span>
           <button
             onClick={() => navNext()}
-            title="နောက်"
+            title={lang === 'en' ? 'Next' : 'နောက်'}
             className="w-8 h-8 flex items-center justify-center rounded-full bg-white/20 hover:bg-white/30 text-white text-base font-bold transition-colors"
           >
             ›
           </button>
           <button
             onClick={clearFilter}
-            title="ပိတ်ရန်"
+            title={lang === 'en' ? 'Close' : 'ပိတ်ရန်'}
             className="w-6 h-6 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/25 text-white text-xs transition-colors ml-0.5"
           >
             ✕
@@ -4016,7 +4017,7 @@ const NibbanaDot = ({ item }) => (
                   const sourceData = lokuttaraExpanded ? CITTAS : LOKUTTARA_8;
                   const subTitle = lokuttaraExpanded
                     ? sub.title
-                    : (sub.id === 'magga' ? 'မဂ်စိတ် (၄)' : 'ဖိုလ်စိတ် (၄)');
+                    : (lang === 'en' ? (sub.id === 'magga' ? 'Magga cittas (4)' : 'Phala cittas (4)') : (sub.id === 'magga' ? 'မဂ်စိတ် (၄)' : 'ဖိုလ်စိတ် (၄)'));
                   return (
                     <SubGroupBox 
                       key={sub.id} 
@@ -4172,7 +4173,7 @@ const NibbanaDot = ({ item }) => (
             {showCetasikaBadge && (
               <div className="absolute top-16 md:top-14 left-1/2 -translate-x-1/2 z-30 pointer-events-none">
                 <div className="text-4xl md:text-5xl font-extrabold text-emerald-700 leading-none tabular-nums drop-shadow-md">
-                  {toMyanmar(activeCetasikaCount)}
+                  {nd(activeCetasikaCount)}
                 </div>
               </div>
             )}
@@ -4238,7 +4239,7 @@ const NibbanaDot = ({ item }) => (
                               </div>
                               <div 
                                 className={`text-[10px] md:text-[11px] font-semibold text-right cursor-pointer transition-colors shrink-0 w-16 md:w-24 leading-snug ${subActive ? 'text-blue-800' : 'text-slate-600 hover:text-blue-600'}`}
-                                title={`${sub.title} ကို ရွေးချယ်ရန် နှိပ်ပါ`}
+                                title={lang === 'en' ? `Click to select ${sub.title}` : `${sub.title} ကို ရွေးချယ်ရန် နှိပ်ပါ`}
                               >
                                 {sub.title}
                               </div>
@@ -4261,7 +4262,7 @@ const NibbanaDot = ({ item }) => (
   {rupaFilterActive && (
     <div className="absolute top-8 md:top-9 left-1/2 -translate-x-1/2 z-30 pointer-events-none">
       <div className="text-3xl md:text-4xl font-extrabold text-amber-700 leading-none tabular-nums drop-shadow-md">
-        {toMyanmar(activeRupaCategory.rupaIds.length)}
+        {nd(activeRupaCategory.rupaIds.length)}
       </div>
     </div>
   )}
@@ -4430,9 +4431,9 @@ const NibbanaDot = ({ item }) => (
       <button
         onClick={() => { if (vithiOpen) { setVithiOpen(false); clearFilter(); } else { openVithiPanel(); } }}
         className="fixed bottom-4 right-4 z-40 bg-indigo-700 hover:bg-indigo-800 text-white rounded-full w-14 h-14 shadow-lg flex flex-col items-center justify-center text-[10px] font-bold leading-tight transition-colors"
-        title="ဘဝတစ်ခုလုံး စိတ်အစဉ် (ဝီထိ) ပြရန်/ဖျောက်ရန်"
+        title={lang === 'en' ? 'Show / hide the citta sequence of a whole life (vīthi)' : 'ဘဝတစ်ခုလုံး စိတ်အစဉ် (ဝီထိ) ပြရန်/ဖျောက်ရန်'}
       >
-        <span>ဝီထိ</span>
+        <span>{lang === 'en' ? 'Vīthi' : 'ဝီထိ'}</span>
         <span className="text-sm">{vithiOpen ? '✕' : '▶'}</span>
       </button>
 
