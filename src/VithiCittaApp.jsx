@@ -1,6 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import VithiCittaMyanmarCore from './VithiCitta1App.jsx';
 import VithiCittaVietnameseVersion from './VithiCitta2App.jsx';
+import { startVithiEnglish } from './vithiCittaEnglish.js';
+
+// English (partial): the Myanmar component rendered as-is, with a display layer on top that swaps known Myanmar
+// words for Roman Pali / English (the component's logic still runs on the Myanmar strings). See
+// src/vithiCittaEnglish.js; whatever is not in its dictionary yet stays in Myanmar.
+function VithiCittaEnglishVersion(props) {
+  const ref = useRef(null);
+  useEffect(() => startVithiEnglish(ref.current), []);
+  return <div ref={ref}><VithiCittaMyanmarCore {...props} /></div>;
+}
 
 // Both language versions are separate, fully independent components (unlike
 // Paramattha's Myanmar/English lang-dict migration) -- an edit to one will
@@ -8,12 +18,13 @@ import VithiCittaVietnameseVersion from './VithiCitta2App.jsx';
 // precedent this mirrors.
 const LANGUAGES = [
   { key: 'my', label: 'မြန်မာ', Component: VithiCittaMyanmarCore },
+  { key: 'en', label: 'English (partial)', Component: VithiCittaEnglishVersion },
   { key: 'vi', label: 'Tiếng Việt', Component: VithiCittaVietnameseVersion },
 ];
 
 export default function VithiCittaApp() {
   // No separate "choose a language" page -- the 🌐 button below cycles
-  // straight through LANGUAGES in place (my -> vi -> my -> ...).
+  // straight through LANGUAGES in place (my -> en -> vi -> my -> ...).
   const [langIdx, setLangIdx] = useState(0);
   const current = LANGUAGES[langIdx];
   const Active = current.Component;
