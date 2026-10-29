@@ -828,7 +828,7 @@ const getDhatuBaseLabel = (t) => {
   if (t.includes("ကာယဝတ္ထု")) return "ကာယဓာတ်";
   return "ဓမ္မဓာတ်";
 };
-function App() {
+function App({ initialPage = null, onPageChange = null } = {}) {
   const [showNidanaMenu, setShowNidanaMenu] = useState(false);
   const [selectedNidana, setSelectedNidana] = useState(null);
 const [nidanaViewMode, setNidanaViewMode] = useState('cause'); // 'cause' | 'effect'
@@ -856,10 +856,10 @@ const [rupaRupaAyState, setRupaRupaAyState] = useState({ causeIdx: 0, effectIdx:
   "ဇာတိပစ္စယာ ဇရာမရဏံ..",
   ];
 
-  const [currentLifeOffset, setCurrentLifeOffset] = useState(0);
-  const [activePhase, setActivePhase] = useState('patisandhi');
+  const [currentLifeOffset, setCurrentLifeOffset] = useState(() => initialPage?.currentLifeOffset ?? 0);
+  const [activePhase, setActivePhase] = useState(() => initialPage?.activePhase ?? 'patisandhi');
 
-  const [puggalaByLife, setPuggalaByLife] = useState({ 0: 'tihetuka_kama' });
+  const [puggalaByLife, setPuggalaByLife] = useState(() => initialPage?.puggalaByLife ?? { 0: 'tihetuka_kama' });
   const [lifeLocks, setLifeLocks] = useState({ 0: false });
   const [isBhavangaAuto, setIsBhavangaAuto] = useState(true);
 
@@ -872,14 +872,23 @@ const [rupaRupaAyState, setRupaRupaAyState] = useState({ causeIdx: 0, effectIdx:
   const [showBhavangaMenu, setShowBhavangaMenu] = useState(false);
   const [expandedBhavangaGroup, setExpandedBhavangaGroup] = useState(null);
 
-  const [activeVithi, setActiveVithi] = useState('cakkhu');
-  const [javanaGroupId, setJavanaGroupId] = useState('akusala_lobha');
+  const [activeVithi, setActiveVithi] = useState(() => initialPage?.activeVithi ?? 'cakkhu');
+  const [javanaGroupId, setJavanaGroupId] = useState(() => initialPage?.javanaGroupId ?? 'akusala_lobha');
   const [javanaSubIndex, setJavanaSubIndex] = useState(0);
   const [lokuttaraJhanaIndex, setLokuttaraJhanaIndex] = useState(0);
   const [rupaArammanaIndex, setRupaArammanaIndex] = useState(0);
 
-  const [bhavangaGroupId, setBhavangaGroupId] = useState('maha_vipaka');
+  const [bhavangaGroupId, setBhavangaGroupId] = useState(() => initialPage?.bhavangaGroupId ?? 'maha_vipaka');
   const [bhavangaSubIndex, setBhavangaSubIndex] = useState(0);
+
+  // Reports the current top-level "page" (phase/vithi/javana-group/bhavanga-group/
+  // life-offset/puggala-by-life) up to the language-switcher wrapper so it can be
+  // fed back in as `initialPage` if the user switches language and lands back on
+  // this same component (or the other language's sibling, seeded with these
+  // language-neutral ids). See src/VithiCittaApp.jsx.
+  useEffect(() => {
+    onPageChange?.({ activePhase, activeVithi, javanaGroupId, bhavangaGroupId, currentLifeOffset, puggalaByLife });
+  }, [activePhase, activeVithi, javanaGroupId, bhavangaGroupId, currentLifeOffset, puggalaByLife]);
   
   const [selectedArammana, setSelectedArammana] = useState(DHAMMARAMMANA_RUPA[0].options[0]);
   const [kayaArammanaIndex, setKayaArammanaIndex] = useState(0);
@@ -6070,7 +6079,7 @@ const getDhatuBaseLabel = (t) => {
   if (t.includes("Thân căn")) return "Thân giới";
   return "Pháp giới";
 };
-function App() {
+function App({ initialPage = null, onPageChange = null } = {}) {
   const [showNidanaMenu, setShowNidanaMenu] = useState(false);
   const [selectedNidana, setSelectedNidana] = useState(null);
 const [nidanaViewMode, setNidanaViewMode] = useState('cause'); // 'cause' | 'effect'
@@ -6098,10 +6107,10 @@ const [rupaRupaAyState, setRupaRupaAyState] = useState({ causeIdx: 0, effectIdx:
   "Sanh duyên Lão tử.. (Jātipaccayā jarāmaraṇaṃ..)",
   ];
 
-  const [currentLifeOffset, setCurrentLifeOffset] = useState(0); 
-  const [activePhase, setActivePhase] = useState('patisandhi');
+  const [currentLifeOffset, setCurrentLifeOffset] = useState(() => initialPage?.currentLifeOffset ?? 0);
+  const [activePhase, setActivePhase] = useState(() => initialPage?.activePhase ?? 'patisandhi');
 
-  const [puggalaByLife, setPuggalaByLife] = useState({ 0: 'tihetuka_kama' });
+  const [puggalaByLife, setPuggalaByLife] = useState(() => initialPage?.puggalaByLife ?? { 0: 'tihetuka_kama' });
   const [lifeLocks, setLifeLocks] = useState({ 0: false });
   const [isBhavangaAuto, setIsBhavangaAuto] = useState(true);
 
@@ -6114,14 +6123,23 @@ const [rupaRupaAyState, setRupaRupaAyState] = useState({ causeIdx: 0, effectIdx:
   const [showBhavangaMenu, setShowBhavangaMenu] = useState(false);
   const [expandedBhavangaGroup, setExpandedBhavangaGroup] = useState(null);
 
-  const [activeVithi, setActiveVithi] = useState('cakkhu');
-  const [javanaGroupId, setJavanaGroupId] = useState('akusala_lobha');
+  const [activeVithi, setActiveVithi] = useState(() => initialPage?.activeVithi ?? 'cakkhu');
+  const [javanaGroupId, setJavanaGroupId] = useState(() => initialPage?.javanaGroupId ?? 'akusala_lobha');
   const [javanaSubIndex, setJavanaSubIndex] = useState(0);
   const [lokuttaraJhanaIndex, setLokuttaraJhanaIndex] = useState(0);
   const [rupaArammanaIndex, setRupaArammanaIndex] = useState(0);
 
-  const [bhavangaGroupId, setBhavangaGroupId] = useState('maha_vipaka');
+  const [bhavangaGroupId, setBhavangaGroupId] = useState(() => initialPage?.bhavangaGroupId ?? 'maha_vipaka');
   const [bhavangaSubIndex, setBhavangaSubIndex] = useState(0);
+
+  // Reports the current top-level "page" (phase/vithi/javana-group/bhavanga-group/
+  // life-offset/puggala-by-life) up to the language-switcher wrapper so it can be
+  // fed back in as `initialPage` if the user switches language and lands back on
+  // this same component (or the other language's sibling, seeded with these
+  // language-neutral ids). See src/VithiCittaApp.jsx.
+  useEffect(() => {
+    onPageChange?.({ activePhase, activeVithi, javanaGroupId, bhavangaGroupId, currentLifeOffset, puggalaByLife });
+  }, [activePhase, activeVithi, javanaGroupId, bhavangaGroupId, currentLifeOffset, puggalaByLife]);
   
   const [selectedArammana, setSelectedArammana] = useState(DHAMMARAMMANA_RUPA[0].options[0]);
   const [kayaArammanaIndex, setKayaArammanaIndex] = useState(0);
@@ -10484,9 +10502,703 @@ const curType = _VT2[nidanaCycleIndex % _VT2.length];
 }
 return App;
 })();
+      const { startVithiEnglish } = (function () {
+// Generated: English for the lakkhaṇa / rasa / paccupaṭṭhāna / padaṭṭhāna boxes (cetasikas and cittas) of Vithi Citta.
+const DICT_PHRASES = {
+ "အာရုံကို တွေ့ထိခြင်းသဘော": "The nature of touching the object",
+ "အာရုံ-ဝိညာဏ်ကို ပွတ်ချုပ်ထိခိုက်ခြင်း": "Impact: the striking together of object and consciousness",
+ "ဝတ္ထု+အာရုံ+ဝိညာဏ် (၃)ပါးတို့၏ ပေါင်းဆုံခြင်း": "The coming together of the three: base, object and consciousness",
+ "ထင်ခြင်းသို့ ရောက်ရှိလာသော အာရုံ": "An object that has come into range",
+ "သမ္ပယုတ်တရားတို့ကို အာရုံ၌ စေ့ဆော်ခြင်းသဘော": "The nature of urging the associated states toward the object",
+ "ပေါင်းစုရုံးစည်းခြင်း": "Gathering together (co-ordinating)",
+ "စီမံတတ်သော သဘောတရား": "The nature of arranging / directing",
+ "ယှဉ်ဖက်သမ္ပယုတ်တရား": "The associated states (sampayutta dhammas)",
+ "အာရုံ၌ မရွေ့မလည် တည်ခြင်းသဘော": "The nature of staying unshaken on the object",
+ "သဟဇာတ်တရားတို့ကို ပေါင်းစုခြင်း": "Binding the co-nascent states together",
+ "ငြိမ်သက်သော သဘောတရား": "The nature of calm",
+ "များသောအားဖြင့် သုခဝေဒနာ": "Usually sukha-vedanā",
+ "သဟဇာတ်တရားတို့ကို စောင့်ရှောက်ခြင်းသဘော": "The nature of guarding the co-nascent states",
+ "သဟဇာတ်တရားတို့ကို ဖြစ်စေခြင်း": "Making the co-nascent states occur",
+ "တည်အောင်ထားတတ်သော သဘောတရား": "The nature of establishing (keeping going)",
+ "မိမိသည် မျှစေအပ်သောတရား": "The states that are to be kept alive",
+ "အာရုံသို့ ဖြောင့်ဖြောင့်မတ်မတ် သွားစေခြင်းသဘော": "The nature of directing the mind straight to the object",
+ "အာရုံနှင့် ယှဉ်စပ်စေခြင်း": "Yoking the mind to the object",
+ "အာရုံဘက်သို့ မျက်နှာမူတတ်သော သဘော": "Facing toward the object",
+ "အာရုံ၌ စိတ်ကို ရှေးရှူတင်ပေးခြင်းသဘော": "The nature of lifting the mind onto the object",
+ "အာရုံကို ရှေးဦးအစစွာ တီးခေါက်ခြင်း": "First striking at the object",
+ "စိတ်ကို ရှေးရှူ ဆွဲဆောင်သွားတတ်သော သဘော": "Leading the mind onward",
+ "အာရုံကို အဖန်ဖန် သုံးသပ်ဆင်ခြင်ခြင်းသဘော": "The nature of examining the object again and again",
+ "အဖန်ဖန် ယှဉ်ကပ်စေခြင်း": "Keeping the mind connected with the object again and again",
+ "စိတ်ကို အစဉ်မပြတ်အောင် ဖွဲ့စပ်တတ်သော သဘော": "Keeping the mind continuous (unbroken)",
+ "အာရုံကို သန္နိဋ္ဌာန်ကျ ဆုံးဖြတ်ချက်ချခြင်းသဘော": "The nature of firmly deciding about the object",
+ "ဝိစိကိစ္ဆာ၏ ဆန့်ကျင်ဘက် ဖြစ်ခြင်း": "Being the opposite of vicikicchā (doubt)",
+ "အာရုံကို ဆုံးဖြတ်တတ်သော သဘောတရား": "The nature of deciding the object",
+ "ဆုံးဖြတ်အပ်သော အာရုံဓမ္မ": "The object that is to be decided",
+ "လွန်စွာ လုံ့လပြုခြင်းသဘော": "The nature of making a strong effort",
+ "သဟဇာတ်တရားတို့ကို အားပေးထောက်ပံ့ခြင်း": "Supporting and upholding the co-nascent states",
+ "မဆုတ်နစ်တတ်သော သဘောတရား": "The nature of not giving way",
+ "သံဝေဂဉာဏ်": "Saṃvega (a sense of urgency)",
+ "အာရုံကို နှစ်သက်ခြင်း သဘော": "The nature of delighting in the object",
+ "ကိုယ်စိတ်နှစ်ပါးကို နှစ်သက်ပြည့်ဖြိုး ပွားတိုးစေခြင်း": "Refreshing and increasing body and mind",
+ "ရွှင်လန်းတက်ကြွစေတတ်သော သဘောတရား": "The nature of joyful elation",
+ "အာရုံကို ပြုလုပ်လိုခြင်းသဘော": "The nature of wishing to do (wanting) the object",
+ "အာရုံကို ရှာမှီးခြင်း": "Searching for the object",
+ "အာရုံကို လိုလားတောင့်တမှုသဘောတရား": "The nature of longing for the object",
+ "အလိုရှိအပ်သော အာရုံ": "The object that is wished for",
+ "သဘာဝမှန်ကို ဟုတ်တိုင်းမှန်စွာ မသိမမြင်နိုင်ခြင်း": "The nature of not knowing the true nature as it really is",
+ "အာရုံ၏ သဘောမှန်ကို ဖုံးလွှမ်းခြင်း": "Covering the true nature of the object",
+ "မသင့်မလျော်သော ပဋိပတ်ကျင့်စဉ်ကို ဖြစ်စေတတ်သည်": "Causing wrong practice",
+ "အယောနိသောမနသိကာရ": "Ayoniso manasikāra",
+ "အကုသိုလ်တရားတို့ကို မစက်ဆုပ်ခြင်းသဘော": "The nature of not feeling disgust at unwholesome states",
+ "မရှက်သော အခြင်းအရာအားဖြင့် ပြုခြင်း": "Acting without shame",
+ "မကောင်းမှုမှ မတွန့်ဆုတ်တတ်သော သဘော": "Not shrinking back from evil",
+ "မိမိကိုယ်ကို မရိုသေခြင်း": "Lack of respect for oneself",
+ "အကုသိုလ်တရားတို့ကို မကြောက်ရွံ့ခြင်းသဘော": "The nature of not fearing unwholesome states",
+ "မထိတ်လန့်သော အခြင်းအရာအားဖြင့် ပြုခြင်း": "Acting without fear of wrongdoing",
+ "သူတစ်ပါးတို့၌ မရိုသေခြင်း": "Lack of respect for others",
+ "စိတ် မငြိမ်သက်ခြင်းသဘောတရား": "The nature of restlessness of mind",
+ "စိတ်ငြိမ်ဝပ်စွာ မတည်တံ့ခြင်း": "Not staying settled and calm",
+ "စိတ် မရပ်မတည် တုန်လှုပ်တတ်သည့်သဘော": "The nature of a mind that is unsteady and agitated",
+ "အာရုံကို ငါ့ဟာဟူ၍ စွဲယူခြင်းသဘော": "The nature of grasping the object as 'mine'",
+ "အာရုံ၌ အလွန်ငြိကပ်ခြင်း": "Sticking fast to the object",
+ "အာရုံကို မစွန့်လွှတ်နိုင်ခြင်း သဘော": "Being unable to let go of the object",
+ "သာယာဖွယ် သုဘဟု ရှုမြင်တတ်သော ဒိဋ္ဌိ": "Diṭṭhi that sees things as pleasant and beautiful",
+ "နိစ္စ သုခ အတ္တ သုဘဟု မှားမှားယွင်းယွင်း နှလုံးသွင်းခြင်းသဘော": "The nature of wrongly taking things to be permanent, pleasant, self and beautiful",
+ "မှားသောအားဖြင့် သုံးသပ်ခြင်း": "Wrongly interpreting",
+ "စွဲမြဲစွာ နှလုံးသွင်းတတ်သော သဘော": "The nature of firmly holding the view",
+ "အရိယာတို့ကို ဖူးမြင်ခြင်းငှာ အလိုမရှိသူဖြစ်ခြင်း": "Not wishing to see the noble ones",
+ "ထောင်လွှား တက်ကြွခြင်းသဘော": "The nature of haughtiness and arrogance",
+ "သမ္ပယုတ်တရားတို့ကို ချီးမြှောက်ခြင်း": "Exalting the associated states",
+ "အရာရာတွင် အသာယူလိုသည့် သဘောတရား": "The nature of wanting to be superior in everything",
+ "ဒိဋ္ဌိနှင့် မယှဉ်သော လောဘ": "Lobha dissociated from diṭṭhi",
+ "စိတ် ရုန့်ရင်း ခက်ထန်ကြမ်းတမ်းခြင်းသဘော": "The nature of harshness and ferocity of mind",
+ "ကိုယ်စိတ်ကို ပြင်းစွာ လောင်ကျွမ်းခြင်း": "Burning body and mind fiercely",
+ "အကျိုးစီးပွားကို ဖျက်ဆီးတတ်သော သဘော": "Destroying one's own welfare",
+ "အာဃာတဝတ္ထု": "The grounds of resentment (āghāta-vatthu)",
+ "သူတစ်ပါးတို့၏ စည်းစိမ်တို့ကို ငြူစူခြင်းသဘော": "The nature of envy of others' prosperity",
+ "မမွေ့လျော်နိုင်ခြင်း": "Being unable to rejoice in it",
+ "မျက်နှာလွှဲတတ်သော သဘောတရား": "Turning away",
+ "သူတစ်ပါးတို့၏ စည်းစိမ်": "The prosperity of others",
+ "မိမိ၏ စည်းစိမ်တို့ကို လျှို့ဝှက်ခြင်းသဘော": "The nature of hiding one's own prosperity",
+ "သူတစ်ပါးတို့နှင့် ဆက်ဆံမှုကို သည်းမခံနိုင်ခြင်း": "Being unable to bear sharing it with others",
+ "တွန့်တိုခြင်းသဘောတရား": "The nature of stinginess",
+ "မိမိ၏ စည်းစိမ်ဥစ္စာ": "One's own wealth and property",
+ "နောင်တတစ်ဖန် ပူပန်ခြင်းသဘော": "The nature of repeated remorse",
+ "အဖန်တလဲလဲ ဝမ်းနည်းခြင်း စိုးရိမ်ခြင်း": "Repeatedly grieving and worrying",
+ "စိတ်နှလုံးပူပန်လျက် အဖန်ဖန် အောက်မေ့ခြင်း": "Repeatedly brooding with an anxious heart",
+ "ပြုပြီး ဒုစရိုက်၊ မပြုလိုက်မိသော သုစရိုက်": "Misconduct done and good conduct left undone",
+ "အားမထုတ်ခြင်းသဘော = အားတက်သရော မရှိခြင်းသဘော": "The nature of lack of effort = lack of enthusiasm",
+ "ဝီရိယကို ဖျက်ဆီးခြင်း": "Destroying vīriya",
+ "ဆုတ်နစ်တတ်သော သဘောတရား": "The nature of sinking down",
+ "ပျင်းရိခြင်း": "Laziness",
+ "မခံ့ညားသည်၏ အဖြစ်ဟူသော သဘော": "The nature of unwieldiness",
+ "ဝိညာဏ် ဒွါရတို့ကို ပိတ်ထားခြင်း": "Closing the doors of consciousness",
+ "အာရုံကို ယူခြင်း၌ တွန့်ဆုတ်တတ်သော သဘောတရား": "The nature of shrinking from taking the object",
+ "ယုံမှားခြင်းသဘော": "The nature of doubting",
+ "စိတ်၏ တုန်လှုပ်ခြင်း": "Wavering of the mind",
+ "အာရုံကို မဆုံးဖြတ်နိုင်ခြင်း": "Being unable to decide about the object",
+ "သဒ္ဓေယျဝတ္ထုကို ယုံကြည်ခြင်းသဘော": "The nature of having confidence in what is worthy of confidence",
+ "သမ္ပယုတ်တရားတို့ကို ကြည်လင်စေခြင်း": "Making the associated states clear and bright",
+ "မနောက်ကျုသည်၏ အဖြစ်ဟူသော သဘောတရား": "The nature of being free from stain",
+ "ယုံကြည်ထိုက်သော သဒ္ဓေယျဝတ္ထု": "An object worthy of confidence",
+ "အာရုံ၌ မြဲစွာ အောက်မေ့စေခြင်းသဘော": "The nature of firmly keeping the object in mind",
+ "မေ့လျော့ခြင်း ပမာဒကို ဖျက်ဆီးခြင်း": "Destroying forgetfulness and heedlessness",
+ "စိတ်ကို စောင့်ရှောက်တတ်သော သဘောတရား": "The nature of guarding the mind",
+ "မြဲမြံသော အမှတ်သညာ": "Firm perception (saññā)",
+ "မကောင်းမှုမှ စက်ဆုပ်ခြင်းသဘော": "The nature of disgust at evil",
+ "ရှက်သော အခြင်းအရာအားဖြင့် မကောင်းမှုတို့ကို မပြုခြင်း": "Not doing evil through shame",
+ "မကောင်းမှုမှ တွန့်ဆုတ်တတ်သော သဘော": "Shrinking back from evil",
+ "မိမိကိုယ်ကို ရိုသေလေးစားခြင်း": "Respect and regard for oneself",
+ "မကောင်းမှုမှ ထိတ်လန့်ခြင်းသဘော": "The nature of dread of evil",
+ "ထိတ်လန့်သော အခြင်းအရာအားဖြင့် မကောင်းမှုတို့ကို မပြုခြင်း": "Not doing evil through fear of it",
+ "သူတစ်ပါးကို ရိုသေလေးစားခြင်း": "Respect and regard for others",
+ "အာရုံ၌ စိတ်၏ မတပ်မက်ခြင်းသဘော": "The nature of the mind not being greedy for the object",
+ "မသိမ်းပိုက်ခြင်း": "Not taking hold of it",
+ "အာရုံ၌ မငြိကပ်လိုသော သဘော": "The wish not to cling to the object",
+ "ယောနိသောမနသိကာရ": "Yoniso manasikāra",
+ "သတ္တဝါတို့၏ အကျိုးစီးပွားကို ကျင့်သော အခြင်းအရာအားဖြင့် ဖြစ်ခြင်း လက္ခဏာရှိ၏": "The nature of acting for the welfare of beings",
+ "သတ္တဝါတို့၏ အကျိုးစီးပွားကို ကပ်၍ ဆောင်ခြင်း ရှိ၏": "Bringing welfare to beings",
+ "ရန်ငြိုးဖွဲ့ခြင်းကို ပယ်ဖျောက်တတ်သော သဘောတရားဟု ဉာဏ်အား ထင်တတ်၏": "Removing resentment: it appears to wisdom as that which dispels ill will",
+ "သတ္တဝါတို့၏ မြတ်နိုးဖွယ်ရာ မနာပကိုသာ ရှုမြင်တတ်သော ယောနိသောမနသိကာရ": "Yoniso manasikāra that sees only what is lovable in beings",
+ "သတ္တဝါတို့၌ အလယ်အလတ်သဘောရှိသော လျစ်လျူရှုခြင်းဟူသော အခြင်းအရာအားဖြင့် ဖြစ်ခြင်းသဘော": "The nature of neutrality toward beings",
+ "မုန်းခြင်း ချစ်ခြင်းသို့ မကျရောက်ဘဲ ညီမျှသည်၏ အဖြစ်ကိုသာ ရှုခြင်း": "Seeing evenly, without falling into hatred or love",
+ "သတ္တဝါတို့၌ မုန်းခြင်း ချစ်ခြင်းတို့ကို ငြိမ်းစေခြင်းကို ဖြစ်စေတတ်၏": "It brings about the calming of hatred and love toward beings",
+ "ကံသာလျှင် မိမိ၏ ကိုယ်ပိုင်ဥစ္စာ ရှိသည်၏ အဖြစ်ကို ရှုတတ်သော ဉာဏ်": "The knowledge that sees 'beings are owners of their kamma'",
+ "စေတသိက်ပူတို့ကို ငြိမ်းအေးစေခြင်းသဘော": "The nature of calming the heat of the cetasikas",
+ "စေတသိက်ပူတို့ကို ဖျက်ဆီးခြင်း": "Crushing the heat of the cetasikas",
+ "စေတသိက်တို့၏ ငြိမ်သက် အေးမြသော သဘော": "The nature of calm, coolness of the cetasikas",
+ "စိတ်ပူတို့ကို ငြိမ်းအေးစေခြင်းသဘော": "The nature of calming the heat of the citta",
+ "စိတ်ပူတို့ကို ဖျက်ဆီးခြင်း": "Crushing the heat of the citta",
+ "စိတ်၏ ငြိမ်သက် အေးမြသော သဘော": "The nature of calm, coolness of the citta",
+ "စေတသိက်တို့၏ လေးလံမှုကို ငြိမ်းအေးစေခြင်းသဘော": "The nature of calming the heaviness of the cetasikas",
+ "စေတသိက်တို့၏ လေးလံမှုကို ဖျက်ဆီးခြင်း": "Crushing the heaviness of the cetasikas",
+ "မလေးမလံ မနှေးကန်သည့် သဘော": "The nature of lightness, not sluggish",
+ "စိတ်၏ လေးလံမှုကို ငြိမ်းအေးစေခြင်းသဘော": "The nature of calming the heaviness of the citta",
+ "စိတ်၏ လေးလံမှုကို ဖျက်ဆီးခြင်း": "Crushing the heaviness of the citta",
+ "စေတသိက်တို့၏ ခက်ထန်ခိုင်မာမှုကို ငြိမ်းအေးစေခြင်း": "Calming the stiffness and hardness of the cetasikas",
+ "စေတသိက်တို့၏ ခက်ထန်ခိုင်မာမှုကို ဖျက်ဆီးခြင်း": "Crushing the stiffness and hardness of the cetasikas",
+ "မထိခိုက်သောသဘော": "The nature of non-resistance",
+ "စိတ်၏ ခက်ထန်ခိုင်မာမှုကို ငြိမ်းအေးစေခြင်း": "Calming the stiffness and hardness of the citta",
+ "စိတ်၏ ခက်ထန်ခိုင်မာမှုကို ဖျက်ဆီးခြင်း": "Crushing the stiffness and hardness of the citta",
+ "စေတသိက်တို့၏ မခံ့ညားမှုကို ငြိမ်းအေးစေခြင်း": "Calming the unwieldiness of the cetasikas",
+ "မခံ့ညားမှုကို ဖျက်ဆီးခြင်း": "Crushing unwieldiness",
+ "အာရုံပြုခြင်း၏ပြည့်စုံကြောင်းသဘော": "The nature of success in taking an object",
+ "စိတ်၏ မခံ့ညားမှုကို ငြိမ်းအေးစေခြင်း": "Calming the unwieldiness of the citta",
+ "စေတသိက်တို့၏ မနာဖျားခြင်းသဘော": "The nature of healthiness of the cetasikas",
+ "နာဖျားခြင်းကို ဖျက်ဆီးခြင်း": "Crushing sickness",
+ "အပြစ်အနာကင်းသော သဘော": "The nature of being free from fault and disease",
+ "စိတ်၏ မနာဖျားခြင်းသဘော": "The nature of healthiness of the citta",
+ "စေတသိက်တို့၏ ဖြောင့်မတ်ခြင်းသဘော": "The nature of straightness of the cetasikas",
+ "ကောက်ကျစ်မှုတို့ကို ဖျက်ဆီးခြင်း": "Crushing crookedness",
+ "မကောက်ကျစ်သည့်သဘော": "The nature of not being crooked",
+ "စိတ်၏ ဖြောင့်မတ်ခြင်းသဘော": "The nature of straightness of the citta",
+ "သဘာဝလက္ခဏာကို ထိုးထွင်းသိခြင်းသဘော": "The nature of penetrating the true characteristics",
+ "ဆီမီးကဲ့သို့ အာရုံကို ထွန်းပြခြင်း လင်းစေခြင်း": "Lighting up the object like a lamp, making it bright",
+ "မတွေဝေသော အခြင်းအရာ အားဖြင့် ဖြစ်ခြင်းသဘော": "The nature of non-confusion",
+ "သမာဓိ": "Samādhi",
+ "အာရုံကို အမှတ်ပြု၍ သိခြင်း": "Perceiving and recognising the object",
+ "ရှေးအမှတ်ဖြင့် နောက်ထပ်သိခြင်း": "Recognising again by means of the earlier mark",
+ "အမှတ်နိမိတ်အတိုင်း အာရုံကို နှလုံးသွင်းခြင်း": "Attending to the object according to the mark",
+ "ထင်လာတိုင်းသော အာရုံ": "The object just as it appears",
+ "ဣဋ္ဌာရုံကို ခံစားခြင်းသဘော": "The nature of experiencing a desirable object",
+ "အာရုံကို သုံးဆောင်ခံစားခြင်း": "Experiencing the object",
+ "သာယာဖွယ် သဘောတရား": "A pleasant nature",
+ "ပဿဒ္ဓိ": "Passaddhi",
+ "အလယ်အလတ် မဇ္ဈတ္တာရုံကို အလယ်အလတ် လျစ်လျူခံစားခြင်း": "The nature of experiencing a neutral object neutrally",
+ "မတိုးပွားစေလွန်း မညှိုးကြုံစေလွန်းခြင်း": "Neither increasing nor withering",
+ "ပီတိကင်းသောစိတ်": "A mind free of pīti",
+ "အနိဋ္ဌာရုံကို ခံစားခြင်းသဘော": "The nature of experiencing an undesirable object",
+ "စိတ်၌မှီသော နှိပ်စက်တတ်သော သဘောတရား": "A tormenting nature that depends on the mind",
+ "ဟဒယဝတ္ထု": "Hadayavatthu",
+ "အနိဋ္ဌဖောဋ္ဌဗ္ဗာရုံ၏ အရသာကို ခံစားခြင်းသဘော": "Experiencing the taste of an undesirable tangible object",
+ "သမ္ပယုတ်တရားတို့ကို ညှိုးနွမ်းစေခြင်း": "Withering the associated states",
+ "ကိုယ်၌ဖြစ်သော ဆင်းရဲသော သဘောတရား": "A painful nature arising in the body",
+ "ကာယိန္ဒြေ": "Kāyindriya",
+ "ဣဋ္ဌဖောဋ္ဌဗ္ဗာရုံ၏ အရသာကို ခံစားခြင်းသဘော": "Experiencing the taste of a desirable tangible object",
+ "သမ္ပယုတ်တရားတို့ကို လွန်စွာ တိုးပွားစေခြင်း": "Greatly increasing the associated states",
+ "ကိုယ်၌ဖြစ်သော သာယာအပ်သော သဘောတရား": "A pleasant nature arising in the body",
+ "ဝစီဒုစရိုက်၏ တည်ရာဝတ္ထုတို့ကို မလွန်ကျူးခြင်းသဘော": "The nature of not transgressing the grounds of verbal misconduct",
+ "ဝစီဒုစရိုက်၏ တည်ရာဝတ္ထုမှ တွန့်ဆုတ်ခြင်း": "Shrinking back from the grounds of verbal misconduct",
+ "ဝစီဒုစရိုက်ကို မပြုမကျင့် ရှောင်ကြဉ်သော သဘောတရား": "Abstaining from verbal misconduct",
+ "သဒ္ဓါ, ဟိရီ, ဩတ္တပ္ပ": "Saddhā, hirī, ottappa",
+ "ကာယဒုစရိုက်၏ တည်ရာဝတ္ထုတို့ကို မလွန်ကျူးခြင်းသဘော": "The nature of not transgressing the grounds of bodily misconduct",
+ "ကာယဒုစရိုက်မှ တွန့်ဆုတ်ခြင်း": "Shrinking back from bodily misconduct",
+ "ကာယဒုစရိုက်ကို မပြုကျင့်သောသဘောတရား": "Not practising bodily misconduct",
+ "မိစ္ဆာဇီဝကို မလွန်ကျူးခြင်းသဘော": "The nature of not transgressing wrong livelihood",
+ "မိစ္ဆာဇီဝမှ တွန့်ဆုတ်ခြင်း": "Shrinking back from wrong livelihood",
+ "မိစ္ဆာဇီဝကို မပြုကျင့်သော သဘောတရား": "Not practising wrong livelihood",
+ "သတ္တဝါတို့၏ ဆင်းရဲဒုက္ခကို ပယ်ရှားလိုသော အခြင်းအရာအားဖြင့် ဖြစ်ခြင်းသဘော": "The nature of wishing to remove the suffering of beings",
+ "သူတစ်ပါးတို့၏ ဆင်းရဲဒုက္ခကို သည်းမခံနိုင်ခြင်း": "Being unable to bear the suffering of others",
+ "သတ္တဝါတို့ကို မညှဉ်းဆဲခြင်းကို ရှေးရှု ဖြစ်စေတတ်၏": "Bringing about non-harming of beings",
+ "ဆင်းရဲဒုက္ခခံနေရသော သတ္တဝါတို့အပေါ် ယောနိသောမနသိကာရ": "Yoniso manasikāra toward beings who are suffering",
+ "သုခိတသတ္တဝါတို့၏ စည်းစိမ်ဥစ္စာ ကုံလုံပြည့်စုံသည်ကို ကြည်ရွှင်ဝမ်းမြောက်ခြင်းသဘော": "The nature of rejoicing in the success and prosperity of happy beings",
+ "သုခိတသတ္တဝါတို့၏ စည်းစိမ်ဥစ္စာ ကုံလုံပြည့်စုံသည်ကို မငြူစူခြင်း": "Not being envious of the prosperity of happy beings",
+ "မမွေ့လျော် မနှစ်သက်ခြင်းကို ပယ်ဖျောက်သော သဘောတရား": "Dispelling discontent and dislike",
+ "သုခိတသတ္တဝါတို့၏ စည်းစိမ်ဥစ္စာကို အသင့်ရှုနိုင်သော ယောနိသောမနသိကာရ": "Yoniso manasikāra that sees the prosperity of happy beings in the right way",
+ "အာရုံကို သိခြင်း = အာရုံကို ရယူခြင်းသဘော": "Knowing the object = taking the object",
+ "အာရုံကို သိမှု၌ ပဓာန ရှေ့သွားခေါင်းဆောင်ဖြစ်ခြင်း": "Being the forerunner and leader in knowing the object",
+ "စိတ်အစဉ်အဆက် မပြတ်ရအောင် ဖွဲ့စပ်တတ်သော သဘောတရား": "Joining the stream of consciousness so that it does not break",
+ "အတိတ်ဘဝ မရဏာသန္နဇောသည် ယူအပ်ခဲ့သော ကံ-ကမ္မနိမိတ်-ဂတိနိမိတ် တစ်မျိုးမျိုးကို ရယူခြင်းသဘော": "Taking one of the kamma / kamma-nimitta / gati-nimitta taken by the maraṇāsanna javana of the past life",
+ "ရှေ့ဘဝစိတ်အစဉ်နှင့် နောက်ဘဝစိတ်အစဉ်ကို ဆက်စပ်ပေးခြင်း": "Linking the stream of consciousness of the former life with that of the next life",
+ "ဘဝနှစ်ခုကို ဆက်စပ်ပေးတတ်သော သဘောတရား": "Linking the two lives",
+ "ယှဉ်ဖက် စေတသိက် နာမ် + မှီရာဝတ္ထုရုပ်": "The associated cetasikas (nāma) + the base rūpa",
+ "အတိတ်ဘဝ မရဏာသန္နဇောသည် ယူအပ်ခဲ့သော အာရုံ တစ်မျိုးမျိုးကို ရယူခြင်းသဘော": "Taking one of the objects taken by the maraṇāsanna javana of the past life",
+ "ရှေ့နောက် စိတ်အစဉ် မပြတ်ရအောင် ဘဝ၏အကြောင်းတရားအဖြစ် တည်နေခြင်း": "Staying as the condition of existence so that the stream of consciousness does not break, before and after",
+ "စိတ်အစဉ်ကို ဆက်စပ်ပေးတတ်သော သဘောတရား": "Linking the stream of consciousness",
+ "ရူပါရုံ စသည့် အာရုံတို့ကို သိခြင်းသဘော = ရယူခြင်းသဘော": "Knowing objects such as visible form = taking them",
+ "ရူပါရုံစသည့် ပဉ္စာရုံကို နှလုံးသွင်းခြင်း = ဆင်ခြင်ခြင်း": "Attending to the five sense objects such as visible form = adverting",
+ "အာရုံဘက်သို့ ရှေးရှူ မျက်နှာမူသည့် သဘောတရား": "Turning to face the object",
+ "ဘဝင်စိတ် ချုပ်ပျက်သွားခြင်း": "The passing away of the bhavaṅga citta",
+ "စက္ခုဝတ္ထုကို မှီဖြစ်၍ ရူပါရုံကို သိခြင်းသဘော": "Arising depending on the eye-base, knowing visible form",
+ "ရူပါရုံ အရောင်မျှကိုသာ သိခြင်း": "Knowing only the colour of visible form",
+ "ရူပါရုံဘက်သို့ ရှေးရှူမျက်နှာမူသည့် သဘောတရား": "Facing toward visible form",
+ "အာဝဇ္ဇန်းစိတ် ကင်းချုပ်ခြင်း": "The ceasing of the avajjana citta",
+ "သောတဝတ္ထုကို မှီဖြစ်၍ သဒ္ဒါရုံကို သိခြင်းသဘော": "Arising depending on the ear-base, knowing sound",
+ "သဒ္ဒါရုံ အသံမျှကိုသာ သိခြင်း": "Knowing only the sound",
+ "သဒ္ဒါရုံဘက်သို့ ရှေးရှူမျက်နှာမူသည့် သဘောတရား": "Facing toward sound",
+ "အာဝဇ္ဇန်းစိတ်၏ ကင်းချုပ်ခြင်း": "The ceasing of the avajjana citta",
+ "ဃာနဝတ္ထုကို မှီဖြစ်၍ ဂန္ဓာရုံကို သိခြင်းသဘော": "Arising depending on the nose-base, knowing smell",
+ "ဂန္ဓာရုံ = အနံ့မျှကိုသာ သိခြင်း": "Knowing only the smell",
+ "ဂန္ဓာရုံဘက်သို့ ရှေးရှူမျက်နှာမူသည့် သဘောတရား": "Facing toward smell",
+ "ဇိဝှါဝတ္ထုကို မှီဖြစ်၍ ရသာရုံကို သိခြင်းသဘော": "Arising depending on the tongue-base, knowing taste",
+ "ရသာရုံ = အရသာမျှကိုသာ သိခြင်း": "Knowing only the taste",
+ "ရသာရုံဘက်သို့ ရှေးရှူမျက်နှာမူသည့် သဘောတရား": "Facing toward taste",
+ "ကာယဝတ္ထုကို မှီဖြစ်၍ ဖောဋ္ဌဗ္ဗာရုံကို သိခြင်းသဘော": "Arising depending on the body-base, knowing the tangible",
+ "ဖောဋ္ဌဗ္ဗာရုံ = အတွေ့အထိမျှကိုသာ သိခြင်း": "Knowing only the touch",
+ "ဖောဋ္ဌဗ္ဗာရုံဘက်သို့ ရှေးရှူမျက်နှာမူသည့် သဘောတရား": "Facing toward the tangible",
+ "ရူပါရုံစသည်ကို သိခြင်းသဘော": "Knowing objects such as visible form",
+ "ရူပါရုံစသည့် အာရုံကို လက်ခံခြင်း": "Receiving objects such as visible form",
+ "ရူပါရုံစသည့်အာရုံကို လက်ခံတတ်သော သဘောတရား": "Receiving objects such as visible form",
+ "စက္ခုဝိညာဏ်စသည်တို့၏ ကင်းချုပ်ခြင်း": "The ceasing of cakkhuviññāṇa and the like",
+ "အာရုံ (၆)ပါးကို သိခြင်းသဘော": "Knowing the six objects",
+ "အာရုံကို စူးစမ်းခြင်း": "Investigating the object",
+ "အာရုံကို စူးစမ်းတတ်သော သဘောတရား": "Investigating the object",
+ "မှီရာ ဟဒယဝတ္ထုရုပ်": "The hadayavatthu base",
+ "ပဉ္စဒွါရ၌ အာရုံကို ဆုံးဖြတ်ခြင်း": "Determining the object at the five doors",
+ "ပဉ္စဒွါရ၌ အာရုံကို ဆုံးဖြတ်တတ်သော သဘောတရား": "Determining the object at the five doors",
+ "သန္တီရဏစိတ်၏ ချုပ်ပျက်ခြင်း": "The ceasing of santīraṇa",
+ "အပြစ်မရှိခြင်း ကောင်းသောအကျိုးကို ပေးခြင်းသဘော": "Being without fault, giving good results",
+ "အကုသိုလ်ကို ဖျက်ဆီးခြင်း": "Destroying the unwholesome",
+ "ဖြူစင်သော သဘောတရား": "A pure nature",
+ "အပြစ်နှင့်တကွဖြစ်ခြင်း မကောင်းသော အကျိုးရှိခြင်းသဘော": "Being blameworthy, giving bad results",
+ "အကျိုးမဲ့ကို ဖြစ်စေခြင်း": "Producing what is not beneficial",
+ "စိတ်အစဉ်ကို ညစ်နွမ်းစေတတ်သော သဘောတရား": "Defiling the stream of the mind",
+ "ဇောယူသည့် အာရုံကိုပင် လိုက်၍ အာရုံယူခြင်း": "Taking the same object that the javana took, following it",
+ "ဇောယူသည့် အာရုံကိုပင် လိုက်၍ အာရုံယူတတ်သော သဘောတရား": "Taking the same object that the javana took, following it",
+ "ဇောစိတ်၏ ချုပ်ပျက်သွားခြင်း": "The ceasing of the javana",
+ "မနောဒွါရ၌ ထင်လာသော အာရုံကို ဆင်ခြင်ခြင်း": "Adverting to the object that has appeared at the mind-door",
+ "မနောဒွါရ၌ ထင်လာသော အာရုံကို ဆင်ခြင်တတ်သော သဘောတရား": "Adverting to the object that has appeared at the mind-door",
+ "ဘဝင်အယဉ် ကင်းချုပ်ခြင်း": "The cessation of the bhavaṅga stream",
+ "ရဟန္တာအရှင်မြတ်တို့၏ သန္တာန်၌သာ ပြုံးရွှင်ခြင်းကို ဖြစ်စေခြင်း": "Producing a smile only in the continuum of Arahants",
+ "ပြုံးရွှင်ခြင်းကို ဖြစ်စေတတ်သော သဘောတရား": "Causing a smile",
+ "ဧကန်အားဖြင့် မှီရာဖြစ်သော ဟဒယဝတ္ထု": "The hadayavatthu, which is certainly its base",
+ "အတိတ်ဘဝ မရဏာသန္နဇောသည် ယူအပ်ခဲ့သော အာရုံ တစ်မျိုးမျိုးကို သိခြင်းသဘော": "Knowing one of the objects taken by the maraṇāsanna javana of the past life",
+ "ဘဝမှ ရွေ့လျောခြင်း": "Moving away from the existence",
+ "ဘဝမှ ရွေ့လျောတတ်သော သဘောတရား": "Moving away from the existence",
+ "ဘဝင်၊ တဒါရုံ သို့မဟုတ် ဇော၏ ချုပ်ပျက်ခြင်း": "The ceasing of the bhavaṅga, tadārammaṇa or javana",
+ "မလိုက်လျောသော ဇောနှင့် ဘဝင်အကြား ဆက်သွယ်ပေးခြင်းသဘော": "Connecting between a non-fitting javana and the bhavaṅga",
+ "ဧည့်သည်ဘဝင်အဖြစ် ကြားဝင်ဆောင်ရွက်ခြင်း": "Intervening as a 'visiting' bhavaṅga",
+ "အာရုံဟောင်းကို ပြန်လည်ယူငင်သည့် သဘောတရား": "Taking up the old object again",
+ "မလိုက်လျောသော ဇောနှင့် ဘဝင်": "A non-fitting javana and the bhavaṅga"
+};
+
+// More English for the Vithi Citta display layer (see vithiCittaEnglish.js): whole phrases, single words, and
+// small building blocks ("morphs") that are used to read Pali compounds written without spaces, e.g.
+// စက္ခုသမ္ဖဿဇာဝေဒနာ = cakkhu + samphassa + jā + vedanā.
+
+const MORE_PHRASES = {
+  'စတုဇရုပ်များရှိ ဩဇာ': 'The ojā in catuja rūpas', 'တိဇရုပ်များရှိ ဩဇာ': 'The ojā in tija rūpas', 'ကမ္မဇရုပ်များရှိ ဩဇာ': 'The ojā in kammaja rūpas',
+  'ကမ္မဇရုပ် မဖြစ်ပေါ်ပါ': 'No kammaja rūpa arises',
+  'မဂ်ကို ဆင်ခြင်ခြင်း': 'Reviewing the magga', 'ဖိုလ်ကို ဆင်ခြင်ခြင်း': 'Reviewing the phala', 'နိဗ္ဗာန်ကို ဆင်ခြင်ခြင်း': 'Reviewing Nibbāna',
+  'ပယ်အပ်ပြီးသော ကိလေသာကို ဆင်ခြင်ခြင်း': 'Reviewing the defilements already abandoned', 'ကြွင်းကျန်သော ကိလေသာကို ဆင်ခြင်ခြင်း': 'Reviewing the remaining defilements',
+  'ပဋိသန္ဓေအခါ ဖြစ်သော ရုပ်ကလာပ် ၃-မျိုး': 'Three kinds of rūpa-kalāpa arising at the time of paṭisandhi',
+  'ပထမဘဝင်မှစ၍ ပဝတ္တိအခါ ဖြစ်သော ရုပ်ကလာပ် ၅-မျိုး': 'Five kinds of rūpa-kalāpa arising in the pavatti period, from the first bhavaṅga onward',
+  'ဟဒယဝတ္ထု (မနောဒွါရ) ၌ ဖြစ်သော ရုပ် ၆၃-မျိုး': 'The 63 kinds of rūpa arising in the hadayavatthu (manodvāra)',
+  'စက္ခုဝတ္ထု (မျက်စိ) ၌ ဖြစ်သော ရုပ် ၆၃-မျိုး': 'The 63 kinds of rūpa arising in the cakkhuvatthu (eye)',
+  'သောတဝတ္ထု (နား) ၌ ဖြစ်သော ရုပ် ၆၃-မျိုး': 'The 63 kinds of rūpa arising in the sotavatthu (ear)',
+  'ဃာနဝတ္ထု (နှာခေါင်း) ၌ ဖြစ်သော ရုပ် ၆၃-မျိုး': 'The 63 kinds of rūpa arising in the ghānavatthu (nose)',
+  'ဇိဝှါဝတ္ထု (လျှာ) ၌ ဖြစ်သော ရုပ် ၆၃-မျိုး': 'The 63 kinds of rūpa arising in the jivhāvatthu (tongue)',
+  'ကာယဝတ္ထု (ကိုယ်) ၌ ဖြစ်သော ရုပ် ၅၃-မျိုး': 'The 53 kinds of rūpa arising in the kāyavatthu (body)',
+  'နိရောဓသမာပတ် (အချိန်ကြာမြင့်စွာ ဝင်စားခြင်း)': 'Nirodha-samāpatti (dwelling in it for a long time)',
+  'ပထမာရုပ္ပဝိညာဏ်၏ မရှိခြင်းဟူသော နတ္ထိဘောဝပညတ်': 'Natthibhāva-paññatti: the non-existence of the first arūpa consciousness',
+  'ကသိုဏ်းပုဂ္ဂိုလ်မှ နုတ်ပယ်အပ်သော ကောင်းကင်ပညတ်': 'Space-paññatti, removed from the kasiṇa object',
+  '(ဥပေက္ခာဗြဟ္မစိုရ်) သတ္တဝါပညတ်': '(Upekkhā brahmavihāra) satta-paññatti',
+  '(မေတ္တာ,ကရုဏာ,မုဒိတာ) သတ္တဝါပညတ်': '(Mettā, karuṇā, muditā) satta-paññatti',
+  'မုဒိတာ၏ အာရုံ (သုခိတသတ္တဝါ)': 'Object of muditā (happy beings)',
+  'ကရုဏာ၏ အာရုံ (ဒုက္ခိတသတ္တဝါ)': 'Object of karuṇā (suffering beings)',
+  'ကရုဏာ၏ အာရုံ': 'Object of karuṇā', 'မုဒိတာ၏ အာရုံ': 'Object of muditā',
+  'သမ္မာဝါစာ၏ အာရုံ': 'Object of sammā-vācā', 'သမ္မာကမ္မန္တ၏ အာရုံ': 'Object of sammā-kammanta', 'သမ္မာအာဇီဝ၏ အာရုံ': 'Object of sammā-ājīva',
+  'အာရုံပြင်ဆင်ရန်': 'Set up the object', 'အာရုံကို ပြင်ဆင်ရန်': 'Set up the object', 'အာရုံ ရိုက်ထည့်ပါ...': 'Type in an object...',
+  'ပုဂ္ဂိုလ် ရွေးရန်': 'Choose the person', 'ဘဝင်စိတ် ရွေးရန်': 'Choose the bhavaṅga citta',
+  'ရုပ်အတု (၁၀) မျိုး': 'The 10 kinds of non-concrete rūpa', 'ရုပ်အစစ် (၁၁) မျိုး': 'The 11 kinds of concrete rūpa',
+  'သင်္ခါရက္ခန္ဓာ ၂-မျိုးပြောင်းနိုင်သည်': 'The saṅkhārakkhandha can change between 2 kinds',
+  'အပ္ပမညာ အာရုံ (၂) မျိုး': 'The 2 objects of appamaññā', 'ဝိရတီ အာရုံ (၃) မျိုး': 'The 3 objects of virati',
+  'မန္ဒပည နှင့် တိက္ခပည': 'Manda-paññā and tikkha-paññā', 'မန္ဒပည (ပရိကံ ပါသည်)': 'Manda-paññā (with parikamma)',
+  'တိက္ခပည (ပရိကံ မပါ)': 'Tikkha-paññā (without parikamma)',
+  'အတိတ်ဘဝ မရဏသန္နဇောအာရုံ': 'Object of the maraṇāsanna javana of the past life',
+  'နောင်ဘဝ အတိတ်ဘဝ မရဏသန္နဇောအာရုံ': 'Next life: object of the maraṇāsanna javana of the past life',
+  'ကံ/ကမ္မနိမိတ်/ဂတိနိမိတ် (ဗဟိရာ ဓမ္မာယတန)': 'Kamma / kamma-nimitta / gati-nimitta (external dhammāyatana)',
+  'ကုသိုလ်/အကုသိုလ်ကံ': 'Wholesome / unwholesome kamma',
+  'ကသိုဏ်းနိမိတ် စသည်': 'Kasiṇa nimitta and so on', 'ကသိုဏ်း (၁၀-ပါး)ပဋိဘာဂနိမိတ်': 'The 10 kasiṇa paṭibhāga-nimittas',
+  'အသုဘပဋိဘာဂနိမိတ်': 'Asubha paṭibhāga-nimitta', 'အရိုးစုပဋိဘာဂနိမိတ်': 'Skeleton paṭibhāga-nimitta', 'အာနာပါနပဋိဘာဂနိမိတ်': 'Ānāpāna paṭibhāga-nimitta',
+  'ဤစိတ်ကြောင့် မဖြစ်ပါ': 'Not produced by this citta',
+  'ကမ္မဇရုပ် မဖြစ်ပေါ်ပါ': 'No kammaja rūpa arises', 'စိတ္တဇရုပ် မဖြစ်ပေါ်ပါ': 'No cittaja rūpa arises',
+  'အာဟာရဇရုပ် မဖြစ်ပေါ်သေးပါ / မရှိပါ': 'No āhāraja rūpa has arisen yet / none',
+  'မရှိသေးပါ / မရှိပါ': 'None yet / none', '(အရူပဘုံ၌ ရုပ်မရှိပါ)': '(There is no rūpa in the arūpa realm)',
+  'ပဋိသန္ဓေစိတ် ဖြစ်ပေါ်ခြင်း': 'Arising of the paṭisandhi citta',
+  'ပဋိသန္ဓေ ဒွိဇရုပ် (ကမ္မဇ + ဥတုဇ)': 'Paṭisandhi: dvija rūpa (kammaja + utuja)',
+  'ပထမဘဝင် တိဇရုပ် (ကမ္မဇ + စိတ္တဇ + ဥတုဇ)': 'First bhavaṅga: tija rūpa (kammaja + cittaja + utuja)',
+  'နောင်ဘဝ ပဋိသန္ဓေ': 'Next life: paṭisandhi', 'နောင်ဘဝ ဝီထိမုတ်': 'Next life: vīthimutta', 'နောင်ဘဝ ဘဝနိကန္တိ': 'Next life: bhavanikanti',
+  'ရှေးရှေးမနောသမ္ဖဿ': 'Earlier manosamphassa', 'ရှေးရှေးဘဝင်မနောသမ္ဖဿ': 'Earlier bhavaṅga-manosamphassa', 'ဘဝင်မနောသမ္ဖဿ': 'Bhavaṅga-manosamphassa',
+  'အတိတ်ကမ္မဝိညာဏ်': 'Past kamma-viññāṇa', 'ပထမာရုပ္ပဝိညာဏ်': 'First arūpa viññāṇa', 'တတိယာရုပ္ပဝိညာဏ်': 'Third arūpa viññāṇa',
+  'သဟဇာတဝိညာဏ်': 'Co-nascent viññāṇa', '← သဟဇာတဝိညာဏ်': '← Co-nascent viññāṇa', 'အတူဖြစ်ဝိညာဏ်': 'Co-arising viññāṇa',
+  'သင်္ခါရ၊ ကံ': 'Saṅkhāra, kamma', 'သင်္ခါရအာရုံ': 'Saṅkhāra object', 'အဝိဇ္ဇာ၊ တဏှာ၊ ဥပါဒါန်': 'Avijjā, taṇhā, upādāna',
+  'အဝိဇ္ဇာ/တဏှာ မနောဒွါရဝီထိ': 'Avijjā / taṇhā manodvāra vīthi',
+  'ပစ္စုပ္ပန်အကြောင်းတရား': 'Present causes', 'အတိတ်အကြောင်းတရား': 'Past causes', 'အကြောင်းတရား': 'Causes',
+  'ကြွင်းကျန်သော ကိလေသာ': 'Remaining defilements', 'ပယ်အပ်ပြီးသော ကိလေသာ': 'Defilements already abandoned',
+  'မဟာဘုတ်လေးပါး': 'The four great elements',
+  'ပစ္စုပ္ပန် ရူပါရုံ': 'Present rūpārammaṇa', 'ပစ္စုပ္ပန် သဒ္ဒါရုံ': 'Present saddārammaṇa', 'ပစ္စုပ္ပန် ဂန္ဓာရုံ': 'Present gandhārammaṇa',
+  'ပစ္စုပ္ပန် ရသာရုံ': 'Present rasārammaṇa', 'ပစ္စုပ္ပန် ဖောဋ္ဌဗ္ဗာရုံ': 'Present phoṭṭhabbārammaṇa',
+  'ပစ္စုပ္ပန် ဖောဋ္ဌဗ္ဗာရုံ (ပထဝီဓာတ်)': 'Present phoṭṭhabbārammaṇa (pathavī-dhātu)',
+  'ပစ္စုပ္ပန် ဖောဋ္ဌဗ္ဗာရုံ (တေဇောဓာတ်)': 'Present phoṭṭhabbārammaṇa (tejo-dhātu)',
+  'ပစ္စုပ္ပန် ဖောဋ္ဌဗ္ဗာရုံ (ဝါယောဓာတ်)': 'Present phoṭṭhabbārammaṇa (vāyo-dhātu)',
+  'ထဒ္ဓပထဝီ (ခက်မာသော ပထဝီ)': 'Thaddha pathavī (hard earth element)', 'ထဒ္ဓပထဝီ (ခိုင်မာသော ပထဝီ)': 'Thaddha pathavī (firm earth element)',
+  'ဝါတ (လေ)': 'Vāta (wind)', 'အာပေါ (ရေ)': 'Āpo (water)', 'အာလောက (အလင်းရောင်)': 'Āloka (light)', 'အာကာသ (ဟာလာဟင်းလင်းဖြစ်ခြင်း)': 'Ākāsa (empty space)',
+  'တိဇရုပ်များရှိ တေဇောဓာတ်(ဥတု)': 'The tejo-dhātu (utu) in tija rūpas', 'စတုဇရုပ်များရှိ တေဇောဓာတ်(ဥတု)': 'The tejo-dhātu (utu) in catuja rūpas',
+  'ကမ္မဇရုပ်များရှိ တေဇောဓာတ်(ဥတု)': 'The tejo-dhātu (utu) in kammaja rūpas',
+  'နာမ် → မနာယတန': 'Nāma → manāyatana', 'ရုပ် → မနာယတန': 'Rūpa → manāyatana', 'နာမ်ရုပ် → မနာယတန': 'Nāma-rūpa → manāyatana',
+  'နာမ် → ရုပ်အာယတန': 'Nāma → rūpa-āyatana', 'ရုပ် → ရုပ်အာယတန': 'Rūpa → rūpa-āyatana',
+  'ရုပ်အာယတန ၅-ပါး ▶': 'The 5 rūpa-āyatanas ▶', 'ရုပ်အာယတန (စက္ခုစသည်)': 'Rūpa-āyatanas (cakkhu and so on)',
+  'စက္ခာယတန (= စက္ခုဝတ္ထု)': 'Cakkhāyatana (= cakkhuvatthu)', 'သောတာယတန (= သောတဝတ္ထု)': 'Sotāyatana (= sotavatthu)',
+  'ဃာနာယတန (= ဃာနဝတ္ထု)': 'Ghānāyatana (= ghānavatthu)', 'ဇိဝှါယတန (= ဇိဝှါဝတ္ထု)': 'Jivhāyatana (= jivhāvatthu)',
+  'ကာယာယတန (= ကာယဝတ္ထု)': 'Kāyāyatana (= kāyavatthu)', 'ဟဒယဝတ္ထု (ဓမ္မာယတန)': 'Hadayavatthu (dhammāyatana)',
+  'ပဋိစ္စသမုပ္ပါဒ် ပထမနည်း': 'Paṭiccasamuppāda, first method', 'ပဋိစ္စသမုပ္ပါဒ် ပဉ္စမနည်း': 'Paṭiccasamuppāda, fifth method',
+  '← ပဝတ္တိကာလ ရုပ်ကလာပ်': '← Rūpa-kalāpas of the pavatti period', 'ပဋိသန္ဓေကမ္မဇရုပ် (၃၀)': 'Paṭisandhi kammaja rūpa (30)',
+  'ကမ္မဇရုပ် ၃၀': 'Kammaja rūpa 30', 'ကမ္မဇရုပ် (၃၀)': 'Kammaja rūpa (30)', 'စိတ္တဇရုပ် ၈': 'Cittaja rūpa 8',
+  'အာရုံ ၆-ပါး': 'The six objects', 'ရုပ်နာမ် (၂) ပါး': 'The two: rūpa and nāma', 'ဓာတ် (၁၈) ပါး': 'The 18 dhātus', 'အာယတန (၁၂) ပါး': 'The 12 āyatanas',
+  'နာမ်ခန္ဓာ (၄) ပါး': 'The four nāmakkhandhas', 'ခန္ဓာ (၅) ပါး': 'The five khandhas',
+  'သင်္ခါရက္ခန္ဓာ (စေတနာ)': 'Saṅkhārakkhandha (cetanā)', 'သင်္ခါရက္ခန္ဓာ (ကြွင်း စေတသိက်များ)': 'Saṅkhārakkhandha (the remaining cetasikas)',
+  'အကုသလဝိပါက် ဥပေက္ခာသန္တီရဏ': 'Akusala-vipāka Upekkhā-santīraṇa',
+  'အဟိတ်ကုသလဝိပါက် သောမနဿသန္တီရဏ': 'Ahetuka kusala-vipāka Somanassa-santīraṇa',
+  'အဟိတ်ကုသလဝိပါက် ဥပေက္ခာသန္တီရဏ': 'Ahetuka kusala-vipāka Upekkhā-santīraṇa',
+  'လောဘမူ ဒိဋ္ဌိဂတသမ္ပယုတ်': 'Lobha-mūla diṭṭhigata-sampayutta',
+  'အမည်နာမအာရုံ': 'Name-object (nāma-paññatti)',
+  'အတိပရိတ္တာရုံ ၂': 'Ati-parittārammaṇa 2', 'အတိပရိတ္တာရုံ ၃': 'Ati-parittārammaṇa 3', 'အတိပရိတ္တာရုံ ၄': 'Ati-parittārammaṇa 4',
+  'အတိပရိတ္တာရုံ ၅': 'Ati-parittārammaṇa 5', 'အတိပရိတ္တာရုံ ၆': 'Ati-parittārammaṇa 6',
+  'အတိပရိတ္တာရုံ ၁ (မောဃဝါရ)': 'Ati-parittārammaṇa 1 (mogha round)',
+  'မဟန္တာရုံ ၁ (ဇဝနဝါရ)': 'Mahantārammaṇa 1 (javana round)', 'မဟန္တာရုံ ၂ (ဇဝနဝါရ)': 'Mahantārammaṇa 2 (javana round)',
+  'ပရိတ္တာရုံ ၁ (ဝုဋ္ဌောဝါရ)': 'Parittārammaṇa 1 (voṭṭho round)',
+  'ပရိတ္တာရုံ ၂': 'Parittārammaṇa 2', 'ပရိတ္တာရုံ ၃': 'Parittārammaṇa 3', 'ပရိတ္တာရုံ ၄': 'Parittārammaṇa 4', 'ပရိတ္တာရုံ ၅': 'Parittārammaṇa 5', 'ပရိတ္တာရုံ ၆': 'Parittārammaṇa 6',
+  'ဒိဋ္ဌုပါဒါန်/အတ္တဝါဒုပါဒါန်': 'Diṭṭhupādāna / Attavādupādāna',
+  'ပြန်စရန်': 'Restart', 'ဖိဆွဲ၍ ရွှေ့ပါ': 'Press and drag to move',
+  'ပယ်ဖျက်မည်': 'Delete', 'သိမ်းမည်': 'Save', 'ပိတ်မည်': 'Close', 'ရပ်မည်': 'Pause',
+};
+
+const MORE_WORDS = {
+  'မဖြစ်ပေါ်ပါ': '(does not arise)', 'မဖြစ်ပေါ်သေးပါ': '(has not arisen yet)', 'အရူပဘုံ': 'Arūpa realm', 'အာဟာရ': 'Āhāra', 'အကြောင်းတရား': 'causes',
+  'ဟသိတုပ္ပါဒ်': 'Hasituppāda', 'နိရောဓသမာပတ်': 'Nirodha-samāpatti', 'အဓိဋ္ဌာန်ဝီထိ': 'Adhiṭṭhāna vīthi', 'ဘုရားရှင်': 'the Buddha',
+  'အာဂန္တုကဘဝင်': 'Āgantuka-bhavaṅga', 'လဟုတာ': 'Lahutā', 'မုဒုတာ': 'Mudutā', 'ကမ္မညတာ': 'Kammaññatā', 'ပါဂုညတာ': 'Pāguññatā', 'ဥဇုကတာ': 'Ujukatā', 'ပဿဒ္ဓိ': 'Passaddhi',
+  'ကမ္မနိမိတ်': 'Kamma-nimitta', 'ဂတိနိမိတ်': 'Gati-nimitta',
+  'ကံ': 'Kamma', 'ဖဿ': 'Phassa', 'ကာယ': 'Kāya', 'ဃာန': 'Ghāna', 'ဇော': 'Javana', 'မဂ်': 'Magga', 'ဟဒယ': 'Hadaya', 'ဩဇာ': 'Ojā',
+  'ဇရတာ': 'Jaratā', 'မရှိ': 'none', 'မရှိပါ': 'none', 'သောက': 'Soka', 'ဥတုဇ': 'Utuja', 'ဥပစယ': 'Upacaya', 'ဥပစာရ': 'Upacāra', 'ဥပစာ': 'Upacāra',
+  'ကမ္မဇ': 'Kammaja', 'စက္ခု': 'Cakkhu', 'သောတ': 'Sota', 'ဇိဝှါ': 'Jivhā', 'ပရိကံ': 'Parikamma', 'ဖိုလ်': 'Phala', 'သမ္ဖဿ': 'Samphassa',
+  'ဥပါဒ်': 'Uppāda', 'ကမ္မဘဝ': 'Kammabhava', 'စိတ္တဇ': 'Cittaja', 'ဇရာမရဏ': 'Jarāmaraṇa', 'နိရောဓ': 'Nirodha', 'နေဝသညာ': 'Nevasaññā',
+  'ပရိဒေဝ': 'Parideva', 'ဘဝတဏှာ': 'Bhavataṇhā', 'မနာယတန': 'Manāyatana', 'ရသတဏှာ': 'Rasataṇhā', 'ရသဓာတ်': 'Rasadhātu', 'ရသာယတန': 'Rasāyatana',
+  'ရသာရုံ': 'Rasārammaṇa', 'သန္တတိ': 'Santati', 'အနုလုံ': 'Anuloma', 'အပ္ပနာ': 'Appanā', 'အာဟာရဇ': 'Āhāraja', 'ဥပါယာသ': 'Upāyāsa',
+  'ကာမတဏှာ': 'Kāmataṇhā', 'ကာယဓာတ်': 'Kāyadhātu', 'ကာယာယတန': 'Kāyāyatana', 'ဂေါတြဘု': 'Gotrabhū', 'ဃာနဓာတ်': 'Ghānadhātu', 'ဃာနာယတန': 'Ghānāyatana',
+  'တိဇရုပ်': 'Tija rūpa', 'ဒိဇရုပ်': 'Dvija rūpa', 'ရူပတဏှာ': 'Rūpataṇhā', 'ရူပဓာတ်': 'Rūpadhātu', 'ရူပါယတန': 'Rūpāyatana', 'ရူပါရုံ': 'Rūpārammaṇa',
+  'ဝေါဒါန်': 'Vodāna', 'သင်္ခါရ': 'Saṅkhāra', 'အဘိနဝဘဝ': 'Abhinava-bhava', 'အဝိဇ္ဇာ': 'Avijjā', 'ဧကဇရုပ်': 'Ekaja rūpa', 'ဩဇာရုပ်': 'Ojā rūpa',
+  'ကာယဝိညတ်': 'Kāyaviññatti', 'ဂန္ဓတဏှာ': 'Gandhataṇhā', 'ဂန္ဓဓာတ်': 'Gandhadhātu', 'ဂန္ဓာယတန': 'Gandhāyatana', 'ဂန္ဓာရုံ': 'Gandhārammaṇa',
+  'စက္ခာယတန': 'Cakkhāyatana', 'စတုဇရုပ်': 'Catuja rūpa', 'ဇိဝှါယတန': 'Jivhāyatana', 'ဓမ္မတဏှာ': 'Dhammataṇhā', 'ဓမ္မဓာတ်': 'Dhammadhātu',
+  'ဓမ္မာယတန': 'Dhammāyatana', 'ဓမ္မာရုံ': 'Dhammārammaṇa', 'နာမ်ရုပ်': 'Nāma-rūpa', 'နိဗ္ဗာန်': 'Nibbāna', 'ဘဝင်စိတ်': 'Bhavaṅga citta',
+  'မနောဒွါရ': 'Manodvāra', 'မနောဓာတ်': 'Manodhātu', 'ဝစီဝိညတ်': 'Vacīviññatti', 'ဝိဘဝတဏှာ': 'Vibhavataṇhā', 'သဒ္ဒတဏှာ': 'Saddataṇhā',
+  'သဒ္ဒဓာတ်': 'Saddadhātu', 'သဒ္ဒါယတန': 'Saddāyatana', 'သဒ္ဒါရုံ': 'Saddārammaṇa', 'သောတဓာတ်': 'Sotadhātu', 'သောတာယတန': 'Sotāyatana',
+  'အနိစ္စတာ': 'Aniccatā', 'ဣဋ္ဌာရုံ': 'Iṭṭhārammaṇa', 'ဂ္ဂဟဏ': 'gahaṇa', 'စက္ခုဓာတ်': 'Cakkhudhātu', 'ဇိဝှါဓာတ်': 'Jivhādhātu',
+  'ဇီဝိတရုပ်': 'Jīvita rūpa', 'ဘဝင်္ဂစလန': 'Bhavaṅga-calana', 'မဟာကိရိယာ': 'Mahā-kiriya', 'ရုပ်အာယတန': 'Rūpa-āyatana', 'အာကာသဓာတ်': 'Ākāsa-dhātu',
+  'အာပေါဓာတ်': 'Āpo-dhātu', 'အာဝဇ္ဇန်း': 'Āvajjana', 'ဥပပတ္တိဘဝ': 'Upapatti-bhava', 'ကမ္မဝိညာဏ်': 'Kamma-viññāṇa', 'ကာမုပါဒါန်': 'Kāmupādāna',
+  'စက္ခုဝတ္ထု': 'Cakkhuvatthu', 'သောတဝတ္ထု': 'Sotavatthu', 'ဃာနဝတ္ထု': 'Ghānavatthu', 'ဇိဝှါဝတ္ထု': 'Jivhāvatthu', 'ကာယဝတ္ထု': 'Kāyavatthu',
+  'စက္ခုသမ္ဖဿ': 'Cakkhusamphassa', 'သောတသမ္ဖဿ': 'Sotasamphassa', 'ဃာနသမ္ဖဿ': 'Ghānasamphassa', 'ဇိဝှါသမ္ဖဿ': 'Jivhāsamphassa',
+  'ကာယသမ္ဖဿ': 'Kāyasamphassa', 'မနောသမ္ဖဿ': 'Manosamphassa', 'ရူပက္ခန္ဓာ': 'Rūpakkhandha',
+  'ပဋိသန္ဓေဝိညာဏ်': 'Paṭisandhi-viññāṇa', 'ဘဝင်ဝိညာဏ်': 'Bhavaṅga-viññāṇa', 'စုတိဝိညာဏ်': 'Cuti-viññāṇa', 'သမ္ပဋိစ္ဆိုင်းဝိညာဏ်': 'Sampaṭicchana-viññāṇa',
+  'သန္တီရဏဝိညာဏ်': 'Santīraṇa-viññāṇa', 'တဒါရုံဝိညာဏ်': 'Tadārammaṇa-viññāṇa', 'ဝုဋ္ဌောစိတ်': 'Voṭṭho citta',
+  'ပဉ္စဒွါရာဝဇ္ဇန်းစိတ်': 'Pañcadvārāvajjana citta', 'မနောဒွါရာဝဇ္ဇန်းစိတ်': 'Manodvārāvajjana citta',
+  'စက္ခုဝိညာဏဓာတ်': 'Cakkhuviññāṇadhātu', 'သောတဝိညာဏဓာတ်': 'Sotaviññāṇadhātu', 'ဃာနဝိညာဏဓာတ်': 'Ghānaviññāṇadhātu', 'ဇိဝှါဝိညာဏဓာတ်': 'Jivhāviññāṇadhātu',
+  'ကာယဝိညာဏဓာတ်': 'Kāyaviññāṇadhātu', 'မနောဝိညာဏဓာတ်': 'Manoviññāṇadhātu',
+  'စက္ခုအကြည်ဓာတ်': 'Cakkhu-pasāda dhātu', 'သောတအကြည်ဓာတ်': 'Sota-pasāda dhātu', 'ဃာနအကြည်ဓာတ်': 'Ghāna-pasāda dhātu',
+  'ဇိဝှါအကြည်ဓာတ်': 'Jivhā-pasāda dhātu', 'ကာယအကြည်ဓာတ်': 'Kāya-pasāda dhātu',
+  'ပုရိသဘာဝရုပ်': 'Purisabhāva rūpa', 'ဣတ္ထိဘာဝရုပ်': 'Itthibhāva rūpa', 'ဟဒယဝတ္ထုရုပ်': 'Hadayavatthu rūpa',
+  'ကာယသမ္ဖဿဇာဝေဒနာ': 'Kāyasamphassajā vedanā', 'ဃာနသမ္ဖဿဇာဝေဒနာ': 'Ghānasamphassajā vedanā', 'စက္ခုသမ္ဖဿဇာဝေဒနာ': 'Cakkhusamphassajā vedanā',
+  'ဇိဝှါသမ္ဖဿဇာဝေဒနာ': 'Jivhāsamphassajā vedanā', 'မနောသမ္ဖဿဇာဝေဒနာ': 'Manosamphassajā vedanā', 'သောတသမ္ဖဿဇာဝေဒနာ': 'Sotasamphassajā vedanā',
+  'ကာယသမ္ဖဿဇာ': 'Kāyasamphassajā', 'ဃာနသမ္ဖဿဇာ': 'Ghānasamphassajā', 'စက္ခုသမ္ဖဿဇာ': 'Cakkhusamphassajā', 'ဇိဝှါသမ္ဖဿဇာ': 'Jivhāsamphassajā',
+  'မနောသမ္ဖဿဇာ': 'Manosamphassajā', 'သောတသမ္ဖဿဇာ': 'Sotasamphassajā',
+  'ဖောဋ္ဌဗ္ဗတဏှာ': 'Phoṭṭhabbataṇhā', 'ဖောဋ္ဌဗ္ဗဓာတ်': 'Phoṭṭhabbadhātu', 'ဖောဋ္ဌဗ္ဗာယတန': 'Phoṭṭhabbāyatana', 'ဖောဋ္ဌဗ္ဗာရုံ': 'Phoṭṭhabbārammaṇa',
+  'ဒိဋ္ဌိဂတသမ္ပယုတ်': 'diṭṭhigata-sampayutta',
+  'ပထမအတိတ်ဘဝ': 'First past life', 'နာမ်တရားများ': 'Nāma dhammas', 'ပဉ္စဒွါရဝီထိ': 'Pañcadvāra vīthi',
+  'ကာမာဝစရ': 'Kāmāvacara', 'သင်္ခါရ မနောဒွါရဝီထိ': 'Saṅkhāra manodvāra vīthi',
+  'နာမဂ္ဂဟဏ': 'Nāma-gahaṇa', 'သမူဟဂ္ဂဟဏ': 'Samūha-gahaṇa', 'အတီတဂ္ဂဟဏ': 'Atīta-gahaṇa', 'အတ္ထဂ္ဂဟဏ': 'Attha-gahaṇa',
+  'ပစ္စဝေက္ခဏာ': 'Paccavekkhaṇā', 'ဘဝနိကန္တိ': 'Bhavanikanti', 'ဥပါဒါန်': 'Upādāna',
+  'ဝိရတီ': 'Virati', 'အပ္ပမညာ': 'Appamaññā', 'ကသိုဏ်း': 'Kasiṇa', 'ပညတ်': 'paññatti',
+  'ရုပ်ကလာပ်': 'Rūpa-kalāpa', 'ရုပ်ကလာပ်များ': 'Rūpa-kalāpas', 'သုဒ္ဓဋ္ဌကကလာပ်': 'Suddhaṭṭhaka-kalāpa', 'ဒသကကလာပ်': 'Dasaka-kalāpa',
+  'နဝကကလာပ်': 'Navaka-kalāpa', 'ကာယဒသကကလာပ်': 'Kāyadasaka-kalāpa', 'ဘာဝဒသကကလာပ်': 'Bhāvadasaka-kalāpa', 'ဇီဝိတနဝကလာပ်': 'Jīvitanavaka-kalāpa',
+  'စိတ္တဇ': 'Cittaja', 'ဟဒယဒသကကလာပ်': 'Hadayadasaka-kalāpa', 'စက္ခုဒသကကလာပ်': 'Cakkhudasaka-kalāpa', 'သောတဒသကကလာပ်': 'Sotadasaka-kalāpa',
+  'ဃာနဒသကကလာပ်': 'Ghānadasaka-kalāpa', 'ဇိဝှါဒသကကလာပ်': 'Jivhādasaka-kalāpa', 'ဥတုဇ': 'Utuja',
+  'ပထဝီ': 'Pathavī', 'အာပေါ': 'Āpo', 'တေဇော': 'Tejo', 'ဝါယော': 'Vāyo', 'အဆင်း': 'Vaṇṇa', 'အနံ့': 'Gandha', 'အရသာ': 'Rasa', 'ဘာဝ': 'Bhāva', 'ဣတ္ထိ': 'itthi', 'ပုရိသ': 'purisa',
+  'ဟဒယဝတ္ထုရုပ်': 'Hadayavatthu rūpa', 'အချိန်': 'time',
+  'လုံး': 'items', 'ဖြစ်သော': '', 'ရုပ်': 'rūpa', 'ကြောင့်': 'caused by', 'မျိုးသော': 'kinds of', 'ဝီထိများ': 'vīthis', 'အပေါင်းအစုအာရုံ': 'Collection-object',
+  'အဓိပ္ပါယ်အာရုံ': 'Meaning-object', 'အတိတ်': 'Past', 'ပစ္စုပ္ပန်': 'Present', 'နောင်': 'Next', 'ပဉ္စဒွါရအာရုံ': 'pañcadvāra object',
+  'ပထမ': 'First', 'ဒုတိယ': 'Second', 'တတိယ': 'Third', 'စတုတ္ထ': 'Fourth', 'ပဉ္စမ': 'Fifth',
+  'ကိုလေသာ': 'defilement', 'ကိလေသာ': 'defilement',
+  'ထင်ရှားသော': 'clear', 'မထင်ရှားသော': 'unclear', 'အရိုး': 'bone',
+  'မူ': 'mūla', 'ဇော': 'Javana',
+  'ကြည့်ရန်': 'to view', 'ပြင်ဆင်ရန်': 'to set up', 'ဆင်ခြင်ခြင်း': 'reviewing',
+  'ဝေဒနာ': 'Vedanā',
+};
+
+// Building blocks for compounds without spaces (value = lower-case Roman Pali).
+const MORPHS = {
+  'ကာယ': 'kāya', 'ဃာန': 'ghāna', 'ဇိဝှါ': 'jivhā', 'စက္ခု': 'cakkhu', 'သောတ': 'sota', 'ရူပ': 'rūpa', 'ရုပ်': 'rūpa', 'သဒ္ဒ': 'sadda',
+  'ဂန္ဓ': 'gandha', 'ရသ': 'rasa', 'ဖောဋ္ဌဗ္ဗ': 'phoṭṭhabba', 'ဓမ္မ': 'dhamma', 'မနော': 'mano', 'မန': 'mana', 'ဝတ္ထု': 'vatthu',
+  'ဝိညာဏ': 'viññāṇa', 'ဝိညာဏ်': 'viññāṇa', 'ဓာတ်': 'dhātu', 'အာယတန': 'āyatana', 'တဏှာ': 'taṇhā', 'သမ္ဖဿ': 'samphassa', 'ဇာ': 'jā',
+  'ဝေဒနာ': 'vedanā', 'ဒွါရ': 'dvāra', 'ဝီထိ': 'vīthi', 'အကြည်': 'pasāda', 'ကံ': 'kamma', 'စိတ္တ': 'citta', 'စိတ်': 'citta', 'ဥတု': 'utu',
+  'အာဟာရ': 'āhāra', 'ကမ္မ': 'kamma', 'ဇ': 'ja', 'ဒသက': 'dasaka', 'နဝက': 'navaka', 'ကလာပ်': 'kalāpa', 'သုဒ္ဓဋ္ဌက': 'suddhaṭṭhaka',
+  'ဒွိ': 'dvi', 'တိ': 'ti', 'စတု': 'catu', 'ဧက': 'eka', 'အဋ္ဌက': 'aṭṭhaka', 'ရူပါ': 'rūpā', 'သဒ္ဒါ': 'saddā', 'ဂန္ဓာ': 'gandhā', 'ရသာ': 'rasā',
+  'ဖောဋ္ဌဗ္ဗာ': 'phoṭṭhabbā', 'ဓမ္မာ': 'dhammā', 'ရုံ': 'rammaṇa', 'ဝိညာဏဓာတ်': 'viññāṇadhātu', 'သဟဇာတ': 'sahajāta', 'ပဋိသန္ဓေ': 'paṭisandhi',
+  'ဘဝင်': 'bhavaṅga', 'စုတိ': 'cuti', 'ဇော': 'javana', 'တဒါရုံ': 'tadārammaṇa', 'အာရုံ': 'ārammaṇa', 'အကုသိုလ်': 'akusala', 'ကုသိုလ်': 'kusala',
+  'ဝိပါက်': 'vipāka', 'ကိရိယာ': 'kiriya', 'မဟာ': 'mahā', 'အဟိတ်': 'ahetuka', 'အရူပ': 'arūpa', 'ရူပါဝစရ': 'rūpāvacara', 'ဈာန်': 'jhāna',
+  'မဂ်': 'magga', 'ဖိုလ်': 'phala', 'သင်္ခါရ': 'saṅkhāra', 'ခန္ဓ': 'khandha', 'က္ခန္ဓာ': 'kkhandha', 'နာမ': 'nāma', 'ဘာဝ': 'bhāva',
+  'ပစ္စယာ': 'paccayā', 'အဝိဇ္ဇာ': 'avijjā', 'ဥပါဒါန်': 'upādāna', 'ဘဝ': 'bhava', 'ဇာတိ': 'jāti', 'ဇရာမရဏ': 'jarāmaraṇa',
+};
+
+// English (Roman-script Pali) display layer for the Vithi Citta page (VithiCitta1App.jsx).
+//
+// That component builds most of its labels from Myanmar strings that are ALSO used as keys in its logic
+// (cetasika names, getBase("ဥပေက္ခာ ဝေဒနာ"), .includes(...) tests ...), so nothing in the component is renamed.
+// Instead the English view watches the rendered DOM and swaps known Myanmar words for Roman Pali / English, in
+// text nodes and in title/placeholder attributes. Anything not in the dictionary yet stays in Myanmar, so the
+// translation can grow part by part (see the comments on each block below).
+//
+// Pali technical terms are written in Roman script and not translated; only free text gets English prose.
+
+const MM_DIGITS = { '၀': '0', '၁': '1', '၂': '2', '၃': '3', '၄': '4', '၅': '5', '၆': '6', '၇': '7', '၈': '8', '၉': '9' };
+const HAS_MM = /[က-႟]/;
+
+
+// Whole-string phrases (matched on the trimmed text of a node / attribute).
+const PHRASES = {
+  ...DICT_PHRASES,
+  ...MORE_PHRASES,
+  // tooltips and controls
+  'ဤဘဝအတွက် ပုဂ္ဂိုလ်ပြောင်းလဲခွင့် ဖွင့်ထားသည်': 'Changing the person type is unlocked for this life',
+  'ဤဘဝအတွက် ပုဂ္ဂိုလ်ပြောင်းလဲခွင့် ပိတ်ထားသည်': 'Changing the person type is locked for this life',
+  'ပဋိစ္စသမုပ္ပါဒ် ပထမနည်း': 'Paṭiccasamuppāda, first method',
+  'ပဋိစ္စသမုပ္ပါဒ် ဒုတိယနည်း': 'Paṭiccasamuppāda, second method',
+  'ပဋိစ္စသမုပ္ပါဒ် တတိယနည်း': 'Paṭiccasamuppāda, third method',
+  'ပဋိစ္စသမုပ္ပါဒ် စတုတ္ထနည်း': 'Paṭiccasamuppāda, fourth method',
+  'ပဋိစ္စသမုပ္ပါဒ် ပဉ္စမနည်း': 'Paṭiccasamuppāda, fifth method',
+  'ပုဂ္ဂိုလ်အလိုက် အလိုအလျောက် သတ်မှတ်မည်': 'Set automatically according to the person type',
+  'အာရုံပြင်ဆင်ရန် ၂-ချက်နှိပ်ပါ': 'Double-click to set up the object',
+  'မရဏသန္နဇောဝီထိပြောင်းရန် နှိပ်ပါ': 'Click to change the maraṇāsanna javana vīthi',
+  'ခန္ဓာ (၅) ပါး': 'The five khandhas',
+  'ရုပ်ကလာပ်များ ကြည့်ရန် နှိပ်ပါ': 'Click to view the rūpa kalāpas',
+  'ခန္ဓာငါးပါးကို တစ်လှည့်စီ ပြပေးရန်': 'Show the five khandhas one at a time',
+  'ဖိဆွဲ၍ ရွှေ့ပါ': 'Press and drag to move',
+  'ပြန်စရန်': 'Restart',
+  'စတင်ရန်': 'Start',
+  'ရပ်မည်': 'Pause',
+  'နားလည်ပါပြီ': 'Got it',
+  'နောက်ဆုတ်ရန်': 'Step back',
+  'ရှေ့ဆက်ရန်': 'Step forward',
+  'ဥပါဒ်': 'Uppāda',
+  'ဌီ': 'Ṭhiti',
+  'ဘင်': 'Bhaṅga',
+  // lives
+  'ပထမအတိတ်ဘဝ': 'First past life',
+  'ဒုတိယအတိတ်ဘဝ': 'Second past life',
+  'တတိယအတိတ်ဘဝ': 'Third past life',
+  'ပစ္စုပ္ပန်ဘဝ': 'Present life',
+  'ပထမအနာဂတ်ဘဝ': 'First future life',
+  'ဒုတိယအနာဂတ်ဘဝ': 'Second future life',
+  'တတိယအနာဂတ်ဘဝ': 'Third future life',
+  'ပဋိသန္ဓေ/ဘဝင်/စုတိစိတ် ၁၉-ပါး': 'The 19 paṭisandhi / bhavaṅga / cuti cittas',
+  'ကံ/ကမ္မနိမိတ်/ဂတိနိမိတ်': 'Kamma / Kamma-nimitta / Gati-nimitta',
+  'ပစ္စုပ္ပန်ဘဝ ကံ/ကမ္မနိမိတ်/ဂတိနိမိတ်': 'Present-life Kamma / Kamma-nimitta / Gati-nimitta',
+  'ဝီထိမုတ်စိတ်': 'Vīthimutta citta',
+  'ရုပ်တရား': 'Rūpa dhammas',
+  'နာမ်တရားများ': 'Nāma dhammas',
+  'အသိစိတ်': 'Citta (consciousness)',
+  'မှီရာဝတ္ထု': 'Base (vatthu)',
+};
+
+// Single words (and a few fixed compounds). Split on spaces/brackets/slashes; a word with a hyphen that is not
+// listed whole is translated part by part.
+const WORDS = {
+  // --- the 52 cetasikas (names as written in the app) ---
+  'ဖဿ': 'Phassa', 'သောမနဿ': 'Somanassa', 'ဥပေက္ခာ': 'Upekkhā', 'ဒေါမနဿ': 'Domanassa', 'ဒုက္ခ': 'Dukkha', 'သုခ': 'Sukha',
+  'ဝေဒနာ': 'Vedanā', 'သညာ': 'Saññā', 'စေတနာ': 'Cetanā', 'ဧကဂ္ဂတာ': 'Ekaggatā', 'ဇီဝိတ': 'Jīvita', 'မနသိကာရ': 'Manasikāra',
+  'ဝိတက်': 'Vitakka', 'ဝိစာရ': 'Vicāra', 'အဓိမောက္ခ': 'Adhimokkha', 'ဝီရိယ': 'Vīriya', 'ပီတိ': 'Pīti', 'ဆန္ဒ': 'Chanda',
+  'မောဟ': 'Moha', 'အဟိရိက': 'Ahirika', 'အနောတ္တပ္ပ': 'Anottappa', 'ဥဒ္ဓစ္စ': 'Uddhacca', 'လောဘ': 'Lobha', 'ဒိဋ္ဌိ': 'Diṭṭhi',
+  'မာန': 'Māna', 'ဒေါသ': 'Dosa', 'ဣဿာ': 'Issā', 'မစ္ဆရိယ': 'Macchariya', 'ကုက္ကုစ္စ': 'Kukkucca', 'ထိန': 'Thina', 'မိဒ္ဓ': 'Middha',
+  'ဝိစိကိစ္ဆာ': 'Vicikicchā', 'သဒ္ဓါ': 'Saddhā', 'သတိ': 'Sati', 'ဟိရီ': 'Hirī', 'ဩတ္တပ္ပ': 'Ottappa', 'အလောဘ': 'Alobha',
+  'အဒေါသ': 'Adosa', 'တတြမဇ္ဈတ္တတာ': 'Tatramajjhattatā',
+  'ကာယပဿဒ္ဓိ': 'Kāyapassaddhi', 'စိတ္တပဿဒ္ဓိ': 'Cittapassaddhi', 'ကာယလဟုတာ': 'Kāyalahutā', 'စိတ္တလဟုတာ': 'Cittalahutā',
+  'ကာယမုဒုတာ': 'Kāyamudutā', 'စိတ္တမုဒုတာ': 'Cittamudutā', 'ကာယကမ္မညတာ': 'Kāyakammaññatā', 'စိတ္တကမ္မညတာ': 'Cittakammaññatā',
+  'ကာယပါဂုညတာ': 'Kāyapāguññatā', 'စိတ္တပါဂုညတာ': 'Cittapāguññatā', 'ကာယုဇုကတာ': 'Kāyujukatā', 'စိတ္တုဇုကတာ': 'Cittujukatā',
+  'သမ္မာဝါစာ': 'Sammāvācā', 'သမ္မာကမ္မန္တ': 'Sammākammanta', 'သမ္မာအာဇီဝ': 'Sammāājīva', 'ကရုဏာ': 'Karuṇā', 'မုဒိတာ': 'Muditā',
+  'ပညာ': 'Paññā',
+  // --- cetasika groups ---
+  'သဗ္ဗစိတ္တ': 'Sabbacitta', 'ပကိဏ်း': 'Pakiṇṇaka', 'သောဘဏ': 'Sobhana', 'နာနာကဒါစိ': 'Nānākadāci', 'အကုသိုလ်': 'Akusala',
+  'ကုသိုလ်': 'Kusala', 'ဝိပါက်': 'Vipāka', 'ကိရိယာ': 'Kiriya', 'စိတ်': 'citta', 'စေတသိက်': 'Cetasika',
+  // --- citta name words ---
+  'ဉာဏသမ္ပယုတ်': 'ñāṇa-sampayutta', 'ဉာဏဝိပ္ပယုတ်': 'ñāṇa-vippayutta', 'ဒိဋ္ဌိသမ္ပယုတ်': 'diṭṭhi-sampayutta',
+  'ဒိဋ္ဌိဝိပ္ပယုတ်': 'diṭṭhi-vippayutta', 'ပဋိဃသမ္ပယုတ်': 'paṭigha-sampayutta', 'ဝိစိကိစ္ဆာသမ္ပယုတ်': 'vicikicchā-sampayutta',
+  'ဥဒ္ဓစ္စသမ္ပယုတ်': 'uddhacca-sampayutta', 'အသင်္ခါရိက': 'asaṅkhārika', 'သသင်္ခါရိက': 'sasaṅkhārika',
+  'သန္တီရဏ': 'Santīraṇa', 'အကုသလဝိပါက်': 'akusala-vipāka', 'ကုသလဝိပါက်': 'kusala-vipāka', 'ဟသိတုပ္ပါဒ်စိတ်': 'Hasituppāda citta',
+  'ဟသိတုပ္ပါဒ်ဇော': 'Hasituppāda javana',
+  'ပထမဈာန်': 'First jhāna', 'ဒုတိယဈာန်': 'Second jhāna', 'တတိယဈာန်': 'Third jhāna', 'စတုတ္ထဈာန်': 'Fourth jhāna', 'ပဉ္စမဈာန်': 'Fifth jhāna',
+  'အာကာသာနဉ္စာယတန': 'Ākāsānañcāyatana', 'ဝိညာဏဉ္စာယတန': 'Viññāṇañcāyatana', 'အာကိဉ္စညာယတန': 'Ākiñcaññāyatana',
+  'နေဝသညာနာသညာယတန': 'Nevasaññānāsaññāyatana',
+  'သောတာပတ္တိမဂ်': 'Sotāpatti-magga', 'သကဒါဂါမိမဂ်': 'Sakadāgāmi-magga', 'အနာဂါမိမဂ်': 'Anāgāmi-magga', 'အရဟတ္တမဂ်': 'Arahatta-magga',
+  'သောတာပတ္တိဖိုလ်': 'Sotāpatti-phala', 'သကဒါဂါမိဖိုလ်': 'Sakadāgāmi-phala', 'အနာဂါမိဖိုလ်': 'Anāgāmi-phala', 'အရဟတ္တဖိုလ်': 'Arahatta-phala',
+  'အဘိညာဉ်': 'Abhiññā',
+  // --- javana / vipāka groups ---
+  'လောဘမူဇော': 'Lobha-mūla javana', 'ဒေါသမူဇော': 'Dosa-mūla javana', 'မောဟမူဇော': 'Moha-mūla javana',
+  'မဟာကုသိုလ်ဇော': 'Mahā-kusala javana', 'မဟာကိရိယာဇော': 'Mahā-kiriya javana',
+  'ရူပါဝစရ': 'Rūpāvacara', 'အရူပါဝစရ': 'Arūpāvacara', 'ကုသိုလ်ဇော': 'kusala javana', 'ကိရိယာဇော': 'kiriya javana',
+  'အဟိတ်ဝိပါက်': 'Ahetuka-vipāka', 'မဟာဝိပါက်': 'Mahā-vipāka', 'ရူပါဝစရဝိပါက်': 'Rūpāvacara-vipāka', 'အရူပါဝစရဝိပါက်': 'Arūpāvacara-vipāka',
+  'လောဘမူ': 'Lobha-mūla', 'ဒေါသမူ': 'Dosa-mūla', 'မောဟမူ': 'Moha-mūla',
+  'ဇော': 'Javana', 'သင်္ခါရဝီထိ': 'Saṅkhāra vīthi',
+  // --- process cittas ---
+  'ဘဝင်္ဂစလန': 'Bhavaṅga-calana', 'ဘဝင်္ဂုပစ္ဆေဒ': 'Bhavaṅgupaccheda', 'မနောဒွါရာဝဇ္ဇန်း': 'Manodvārāvajjana',
+  'ပဉ္စဒွါရာဝဇ္ဇန်း': 'Pañcadvārāvajjana', 'သမ္ပဋိစ္ဆိုင်း': 'Sampaṭicchana', 'တဒါရုံ': 'Tadārammaṇa', 'ဘဝင်': 'Bhavaṅga',
+  'ပဋိသန္ဓေ': 'Paṭisandhi', 'ပဝတ္တိ': 'Pavatti', 'စုတိ': 'Cuti', 'စုတိစိတ်': 'Cuti citta', 'ဝုဋ္ဌော': 'Voṭṭho',
+  'အာရုံ': 'Ārammaṇa', 'ရုပ်': 'Rūpa', 'နာမ်': 'Nāma',
+  'ဟဒယဝတ္ထု': 'Hadayavatthu', 'စက္ခုဝတ္ထု': 'Cakkhuvatthu', 'သောတဝတ္ထု': 'Sotavatthu', 'ဃာနဝတ္ထု': 'Ghānavatthu',
+  'ဇိဝှါဝတ္ထု': 'Jivhāvatthu', 'ကာယဝတ္ထု': 'Kāyavatthu',
+  'ကမ္မဇရုပ်': 'Kammaja rūpa', 'စိတ္တဇရုပ်': 'Cittaja rūpa', 'ဥတုဇရုပ်': 'Utuja rūpa', 'အာဟာရဇရုပ်': 'Āhāraja rūpa',
+  'ကလာပ်': 'kalāpa',
+  // --- persons / realms ---
+  'ပုဂ္ဂိုလ်': 'person', 'ပုထုဇဉ်': 'puthujjana', 'ဒုဂ္ဂတိအဟိတ်': 'Duggati-ahetuka', 'သုဂတိအဟိတ်': 'Sugati-ahetuka',
+  'ဒွိဟိတ်': 'Dvihetuka', 'တိဟိတ်': 'Tihetuka', 'သောတာပန်': 'Sotāpanna', 'သကဒါဂါမ်': 'Sakadāgāmī', 'အနာဂါမ်': 'Anāgāmī',
+  'ရဟန္တာ': 'Arahant', 'ဒုဂ္ဂတိဘုံသား': 'Duggati-realm beings', 'ကာမာဝစရသုဂတိဘုံသား': 'Kāmāvacara sugati-realm beings',
+  'ရူပါဝစရဘုံသား': 'Rūpāvacara-realm', 'အရူပါဝစရဘုံသား': 'Arūpāvacara-realm',
+  // --- vīthi types and object strength (Pavatti page) ---
+  'ဝီထိအမျိုးအစား': 'Vīthi types',
+  'စက္ခုဒွါရဝီထိ': 'Cakkhudvāra vīthi', 'သောတဒွါရဝီထိ': 'Sotadvāra vīthi', 'ဃာနဒွါရဝီထိ': 'Ghānadvāra vīthi',
+  'ဇိဝှါဒွါရဝီထိ': 'Jivhādvāra vīthi', 'ကာယဒွါရဝီထိ': 'Kāyadvāra vīthi', 'မနောဒွါရဝီထိ': 'Manodvāra vīthi',
+  'အာဒိကမ္မိကဈာနဝီထိ': 'Ādikammika jhāna vīthi', 'ဈာန်ဝင်စားခြင်း': 'Jhāna attainment', 'မဂ်ဝီထိ': 'Magga vīthi',
+  'ဖိုလ်ဝီထိ': 'Phala vīthi', 'အဘိညာဉ်ဝီထိ': 'Abhiññā vīthi', 'ကာမဇော': 'Kāma javana',
+  'စက္ခုဝိညာဏ်': 'Cakkhuviññāṇa', 'သောတဝိညာဏ်': 'Sotaviññāṇa', 'ဃာနဝိညာဏ်': 'Ghānaviññāṇa', 'ဇိဝှါဝိညာဏ်': 'Jivhāviññāṇa',
+  'ကာယဝိညာဏ်': 'Kāyaviññāṇa', 'အတီတဘဝင်': 'Atīta-bhavaṅga',
+  'အတိဣဋ္ဌာရုံ': 'Ati-iṭṭhārammaṇa', 'ဣဋ္ဌာရုံ': 'Iṭṭhārammaṇa', 'ဣဋ္ဌမဇ္ဈတ္တာရုံ': 'Iṭṭhamajjhattārammaṇa', 'အနိဋ္ဌာရုံ': 'Aniṭṭhārammaṇa',
+  'အတိမဟန္တာရုံ': 'Atimahantārammaṇa', 'မဟန္တာရုံ': 'Mahantārammaṇa', 'ပရိတ္တာရုံ': 'Parittārammaṇa', 'အတိပရိတ္တာရုံ': 'Atiparittārammaṇa',
+  'အတိဝိဘူတာရုံ': 'Ati-vibhūtārammaṇa', 'ဝိဘူတာရုံ': 'Vibhūtārammaṇa', 'အဝိဘူတာရုံ': 'Avibhūtārammaṇa', 'အတိအဝိဘူတာရုံ': 'Ati-avibhūtārammaṇa',
+  'တဒါရမ္မဏဝါရ': 'tadārammaṇa round', 'ဇဝနဝါရ': 'javana round', 'ဝုဋ္ဌောဝါရ': 'voṭṭho round', 'မောဃဝါရ': 'mogha round',
+  'ဇောမစောသောဝါရ': 'javana-not-reached round',
+  'လက္ခဏာ': 'Lakkhaṇa (characteristic)', 'ရသ': 'Rasa (function)', 'ပစ္စုပဋ္ဌာန်': 'Paccupaṭṭhāna (manifestation)', 'ပဒဋ္ဌာန်': 'Padaṭṭhāna (proximate cause)',
+  // --- lives, rūpa origins, nidāna, khandha ---
+  'အတိတ်ဘဝ': 'Past life', 'နောင်ဘဝ': 'Next life', 'အနာဂတ်ဘဝ': 'Future life', 'မရဏာသန္န': 'Maraṇāsanna',
+  'ကံကြောင့်ဖြစ်သော': 'Kamma-born', 'စိတ်ကြောင့်ဖြစ်သော': 'Citta-born', 'ဥတုကြောင့်ဖြစ်သော': 'Utu-born', 'အာဟာရကြောင့်ဖြစ်သော': 'Āhāra-born',
+  'အဟိတ်ကုသလဝိပါက်': 'Ahetuka kusala-vipāka', 'အဟိတ်အကုသလဝိပါက်': 'Ahetuka akusala-vipāka', 'သောမနဿသန္တီရဏ': 'Somanassa Santīraṇa',
+  'အာရုံအနုအရင့်': 'object strength', 'ပြောင်းရန်': 'to change', 'နှိပ်ပါ': 'click', 'စိတ်ကြိုက်': 'Free', 'ရွေးချယ်နိုင်သည်': 'choice is possible',
+  'ကြွင်း': 'remaining', 'စေတသိက်များ': 'cetasikas',
+  'အဝိဇ္ဇာပစ္စယာ': 'Avijjāpaccayā', 'သင်္ခါရာ': 'saṅkhārā', 'သင်္ခါရပစ္စယာ': 'Saṅkhārapaccayā', 'ဝိညာဏံ': 'viññāṇaṃ',
+  'ဝိညာဏပစ္စယာ': 'Viññāṇapaccayā', 'နာမရူပံ': 'nāmarūpaṃ', 'နာမရူပပစ္စယာ': 'Nāmarūpapaccayā', 'သဠာယတနံ': 'saḷāyatanaṃ',
+  'သဠာယတနပစ္စယာ': 'Saḷāyatanapaccayā', 'ဖဿော': 'phasso', 'ဖဿပစ္စယာ': 'Phassapaccayā', 'ဝေဒနာပစ္စယာ': 'Vedanāpaccayā',
+  'တဏှာ': 'taṇhā', 'တဏှာပစ္စယာ': 'Taṇhāpaccayā', 'ဥပါဒါနံ': 'upādānaṃ', 'ဥပါဒါနပစ္စယာ': 'Upādānapaccayā', 'ဘဝေါ': 'bhavo',
+  'ဘဝပစ္စယာ': 'Bhavapaccayā', 'ဇာတိ': 'jāti', 'ဇာတိပစ္စယာ': 'Jātipaccayā', 'ဇရာမရဏံ': 'jarāmaraṇaṃ', 'ဇရာမရဏံ..': 'jarāmaraṇaṃ..',
+  'ရူပက္ခန္ဓာ': 'Rūpakkhandha', 'နာမ်ခန္ဓာ': 'Nāmakkhandha', 'ဝိညာဏက္ခန္ဓာ': 'Viññāṇakkhandha', 'ဝေဒနာက္ခန္ဓာ': 'Vedanākkhandha',
+  'သညာက္ခန္ဓာ': 'Saññākkhandha', 'သင်္ခါရက္ခန္ဓာ': 'Saṅkhārakkhandha', 'အာယတန': 'Āyatana',
+  // --- counters ---
+  'မျိုး': 'kinds', 'ပါး': 'kinds',
+};
+
+Object.assign(WORDS, MORE_WORDS);
+const KEYS = new Set(Object.keys(WORDS));
+
+// Read a Pali compound written without spaces by cutting it into known building blocks (longest first).
+// Returns null unless the WHOLE token can be read, so a half-known word is left in Myanmar.
+const MORPH = { ...MORPHS };
+for (const [k, v] of Object.entries(WORDS)) if (!MORPH[k] && /^[A-ZĀĪŪṬḌṆḶṂṄÑ][^\s-]*$/.test(v)) MORPH[k] = v.charAt(0).toLowerCase() + v.slice(1);
+let MORPH_KEYS = Object.keys(MORPH).sort((a, b) => b.length - a.length);
+const segCache = new Map();
+
+// Let another page (e.g. Paramattha) add its own phrases / words to the same display layer.
+function extendEnglish(phrases = {}, words = {}) {
+  Object.assign(PHRASES, phrases);
+  Object.assign(WORDS, words);
+  for (const [k, v] of Object.entries(words)) if (/^[A-ZĀĪŪṬḌṆḶṂṄÑ][^\s-]*$/.test(v)) MORPH[k] = v.charAt(0).toLowerCase() + v.slice(1);
+  for (const k of Object.keys(words)) KEYS.add(k);
+  MORPH_KEYS = Object.keys(MORPH).sort((a, b) => b.length - a.length);
+  segCache.clear();
+}
+function segment(t) {
+  if (segCache.has(t)) return segCache.get(t);
+  const memo = new Map();
+  const go = (i) => {
+    if (i === t.length) return [];
+    if (memo.has(i)) return memo.get(i);
+    let res = null;
+    for (const k of MORPH_KEYS) {
+      if (t.startsWith(k, i)) {
+        const rest = go(i + k.length);
+        if (rest) { res = [MORPH[k], ...rest]; break; }
+      }
+    }
+    memo.set(i, res);
+    return res;
+  };
+  const parts = go(0);
+  const out = parts ? parts.join('').replace(/^./, (c) => c.toUpperCase()) : null;
+  segCache.set(t, out);
+  return out;
+}
+const DELIM = /(\s+|[()[\]/,:;+—–]|။)/;
+
+function word(t) {
+  if (WORDS[t] !== undefined) return WORDS[t];
+  if (t.includes('-')) {
+    const parts = t.split('-');
+    if (parts.some((p) => KEYS.has(p))) return parts.map((p) => (WORDS[p] !== undefined ? WORDS[p] : p)).join('-');
+  }
+  if (HAS_MM.test(t) && !/^[၀-၉]+$/.test(t)) {
+    const seg = segment(t);
+    if (seg) return seg;
+  }
+  return t;
+}
+
+function vithiEnglish(s) {
+  if (!s || !HAS_MM.test(s)) return s;
+  const trimmed = s.trim();
+  const lead = s.slice(0, s.indexOf(trimmed));
+  const trail = s.slice(lead.length + trimmed.length);
+  if (PHRASES[trimmed] !== undefined) return lead + PHRASES[trimmed] + trail;
+  let x = s
+    .replace(/([၀-၉]+)-(မျိုး|ပါး)/g, '$1 kinds')
+    .replace(/([၀-၉]+)။/g, '$1.')
+    .replace(/([၀-၉]+) ဘဝမြောက် /g, 'Life no. $1: ')
+    .replace(/([၀-၉]+) မျိုးသော ဝီထိများ/g, '$1 kinds of vīthis')
+    .replace(/([၀-၉]+)-ဈာန်/g, '$1-jhāna');
+  x = x.split(DELIM).map(word).join('');
+  return x.replace(/[၀-၉]/g, (d) => MM_DIGITS[d]);
+}
+
+const ATTRS = ['title', 'placeholder', 'aria-label'];
+
+function fixText(node) {
+  const v = node.nodeValue;
+  if (v && HAS_MM.test(v)) {
+    const o = vithiEnglish(v);
+    if (o !== v) node.nodeValue = o;
+  }
+}
+function fixElement(el) {
+  for (const a of ATTRS) {
+    const v = el.getAttribute && el.getAttribute(a);
+    if (v && HAS_MM.test(v)) {
+      const o = vithiEnglish(v);
+      if (o !== v) el.setAttribute(a, o);
+    }
+  }
+}
+function walk(root) {
+  if (root.nodeType === 3) return fixText(root);
+  if (root.nodeType !== 1) return;
+  fixElement(root);
+  const tw = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT);
+  let n = tw.nextNode();
+  while (n) {
+    if (n.nodeType === 3) fixText(n); else fixElement(n);
+    n = tw.nextNode();
+  }
+}
+
+// Start translating everything under `root` (and anything React adds or changes later). Returns a stop function.
+function startVithiEnglish(root) {
+  walk(root);
+  const mo = new MutationObserver((list) => {
+    for (const m of list) {
+      if (m.type === 'characterData') fixText(m.target);
+      else if (m.type === 'attributes') fixElement(m.target);
+      else m.addedNodes.forEach(walk);
+    }
+  });
+  mo.observe(root, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ATTRS });
+  return () => mo.disconnect();
+}
+
+return { startVithiEnglish };
+})();
+      // English (partial): the Myanmar component with a display layer on top (see src/vithiCittaEnglish.js).
+      function VithiCittaEn(props) {
+        const ref = useRef(null);
+        useEffect(() => startVithiEnglish(ref.current), []);
+        return <div ref={ref}><VithiCittaMy {...props} /></div>;
+      }
 
       const LANGUAGES = [
         { key: 'my', label: 'မြန်မာ', Component: VithiCittaMy },
+        { key: 'en', label: 'English (partial)', Component: VithiCittaEn },
         { key: 'vi', label: 'Tiếng Việt', Component: VithiCittaVi },
       ];
 

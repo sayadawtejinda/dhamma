@@ -27,6 +27,15 @@ function wrapAsIIFE(source) {
   return `(function () {\n${body}\nreturn App;\n})()`;
 }
 
+// The English version = the Myanmar component + the display layer in src/vithiCittaEnglish*.js. Those are ES
+// modules (import/export), so here they are joined into one plain script that returns the two functions used.
+function bundleEnglishLayer() {
+  const strip = (f) => readFileSync(join(root, 'src', f), 'utf8')
+    .replace(/^import[^\n]*\n/gm, '')
+    .replace(/^export (const|function|let) /gm, '$1 ');
+  return `(function () {\n${strip('vithiCittaEnglishDict.js')}\n${strip('vithiCittaEnglishMore.js')}\n${strip('vithiCittaEnglish.js')}\nreturn { startVithiEnglish };\n})()`;
+}
+
 const myanmarSrc = wrapAsIIFE(readFileSync(join(root, 'src/VithiCitta1App.jsx'), 'utf8'));
 const vietnameseSrc = wrapAsIIFE(readFileSync(join(root, 'src/VithiCitta2App.jsx'), 'utf8'));
 
@@ -71,9 +80,17 @@ const html = `<!doctype html>
 
       const VithiCittaMy = ${myanmarSrc};
       const VithiCittaVi = ${vietnameseSrc};
+      const { startVithiEnglish } = ${bundleEnglishLayer()};
+      // English (partial): the Myanmar component with a display layer on top (see src/vithiCittaEnglish.js).
+      function VithiCittaEn(props) {
+        const ref = useRef(null);
+        useEffect(() => startVithiEnglish(ref.current), []);
+        return <div ref={ref}><VithiCittaMy {...props} /></div>;
+      }
 
       const LANGUAGES = [
         { key: 'my', label: 'မြန်မာ', Component: VithiCittaMy },
+        { key: 'en', label: 'English (partial)', Component: VithiCittaEn },
         { key: 'vi', label: 'Tiếng Việt', Component: VithiCittaVi },
       ];
 
