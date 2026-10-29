@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { t } from './paramatthaStrings';
+import { localizeCittas, localizeLokuttara8 } from './paramatthaCittaNames';
 
 // --- Data Definitions ---
 
@@ -9,7 +10,7 @@ function toMyanmar(num) {
   return String(num).split('').map(ch => (ch >= '0' && ch <= '9') ? digits[ch.charCodeAt(0) - 48] : ch).join('');
 }
 
-const CITTAS = [
+const CITTAS_MY = [
   // အကုသိုလ် (၁၂)
   ...[
     "သောမနဿသဟဂုတ် ဒိဋ္ဌိဂတသမ္ပယုတ် အသင်္ခါရိက စိတ်", "သောမနဿသဟဂုတ် ဒိဋ္ဌိဂတသမ္ပယုတ် သသင်္ခါရိက စိတ်", "သောမနဿသဟဂုတ် ဒိဋ္ဌိဂတဝိပ္ပယုတ် အသင်္ခါရိက စိတ်", "သောမနဿသဟဂုတ် ဒိဋ္ဌိဂတဝိပ္ပယုတ် သသင်္ခါရိက စိတ်", 
@@ -87,7 +88,7 @@ const CITTAS = [
 ];
 
 // လောကုတ္တရာစိတ် (၄၀) ကို ဈာန်မခွဲဘဲ (၈) ပါးအနေနဲ့ ပြသရန်
-const LOKUTTARA_8 = [
+const LOKUTTARA_8_MY = [
   { id: 82, name: "သောတာပတ္တိမဂ်စိတ်", shortName: "သောမဂ်", subGroup: 'magga', type: 'kusala', color: 'bg-purple-600' },
   { id: 87, name: "သကဒါဂါမိမဂ်စိတ်", shortName: "သကမဂ်", subGroup: 'magga', type: 'kusala', color: 'bg-purple-600' },
   { id: 92, name: "အနာဂါမိမဂ်စိတ်", shortName: "အနာမဂ်", subGroup: 'magga', type: 'kusala', color: 'bg-purple-600' },
@@ -794,7 +795,7 @@ const RUPA_SAMUTTHANA_TYPES = [
 ];
 // ALL_CITTA_IDS ကို BHUMI_31 data (အောက်ပါ OTHER_NOBLE_7_IDS) ထက်ရှေ့ သုံးမယ့်အတွက် ဒီနေရာမှာ ရှေ့ထွက်ကြေညာထားသည်
 // (မူရင်း "သဗ္ဗသင်္ဂဟ" အပိုင်းက declaration ကို ဖျက်ထားပြီးဖြစ်သည်)
-const ALL_CITTA_IDS = CITTAS.map(c => c.id);
+const ALL_CITTA_IDS = CITTAS_MY.map(c => c.id);
 
 // ၃၁-ဘုံအတွက် citta id အုပ်စုများ — "ဘုံတစ်ခုစီ၌ ဖြစ်နိုင်သောစိတ်"
 // တိကျစွာ ပြန်လည်တည်ဆောက်ထားသည်
@@ -1418,7 +1419,7 @@ const BODHIPAKKHIYA_CATEGORIES = [
 const SANKHARAKKHANDHA_IDS = CETASIKAS.map(ct => ct.id).filter(id => id !== 2 && id !== 3);
 const ALL_RUPA_IDS = RUPAS.filter(r => !r.virtual).map(r => r.id); // ဖောဋ္ဌဗ္ဗာရုံ ကိုယ်စားပြု virtual id (29,30,31) များကို ထုတ်ထား — ရုပ် (၂၈) ပါးသာ
 const DHAMMAYATANA_SUKHUMA_RUPA_IDS = [2,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28]; // သုခုမရုပ် (၁၆) ပါး
-const LOKIYA_CITTA_IDS = CITTAS.filter(c => c.id <= 81).map(c => c.id);
+const LOKIYA_CITTA_IDS = CITTAS_MY.filter(c => c.id <= 81).map(c => c.id);
 const MAGGANGA8_IDS = [52, 8, 47, 48, 49, 11, 29, 5];
 
 const SABBA_KHANDHA = [
@@ -1482,7 +1483,7 @@ const SABBA_SACCA = [
   { id: 'dukkhasacca', name: 'ဒုက္ခသစ္စာ', cittaIds: LOKIYA_CITTA_IDS, cetasikaIds: CETASIKAS.map(ct => ct.id).filter(id => id !== 18), rupaIds: ALL_RUPA_IDS },
   { id: 'samudayasacca', name: 'သမုဒယသစ္စာ', cetasikaIds: [18] },
   { id: 'nirodhasacca', name: 'နိရောဓသစ္စာ', isNibbana: true },
-  { id: 'maggasacca', name: 'မဂ္ဂသစ္စာ', cittaIds: CITTAS.filter(c => c.subGroup === 'magga').map(c => c.id), cetasikaIds: MAGGANGA8_IDS },
+  { id: 'maggasacca', name: 'မဂ္ဂသစ္စာ', cittaIds: CITTAS_MY.filter(c => c.subGroup === 'magga').map(c => c.id), cetasikaIds: MAGGANGA8_IDS },
   // သစ္စာဝိမုတ် — မဂ်စိတ်၏ မဂ္ဂင်(၈)မှလွဲ ကျန်စေတသိက်(၂၈)+မဂ်စိတ်(၁) = ၂၉ (တစ်ခုစီ)၊
   // ဖိုလ်စိတ်၏ စေတသိက်(၃၆)+ဖိုလ်စိတ်(၁) = ၃၇ (တစ်ခုစီ) တို့သည် သစ္စာလေးပါးမှ လွတ်ကြ၏
   { id: 'saccavimutta', name: 'သစ္စာဝိမုတ်', cittaIds: LOKUTTARA_JAVANA_ALL_IDS, cetasikaIds: UPADANAKKHANDHA_VIMUTTA_CETASIKA_IDS,
@@ -1505,13 +1506,13 @@ const PATICCA_12 = [
     cetasikaIds: [4] },
   { id: 'vinnana', name: 'ဝိညာဏ်', color: '#f59e0b',
     desc: 'ပဋိသန္ဓေစိတ် (၁၉)ခုနှင့် ပဝတ္တိအခါ လောကီဝိပါက်စိတ် (၃၂)ခု ပေါင်း ဝိညာဏ်ဟု ခေါ်သည်။',
-    cittaIds: CITTAS.filter(c => c.type === 'vipaka' && c.id <= 81).map(c => c.id) },
+    cittaIds: CITTAS_MY.filter(c => c.type === 'vipaka' && c.id <= 81).map(c => c.id) },
   { id: 'namarupa', name: 'နာမ်ရုပ်', color: '#eab308',
     desc: 'လောကီဝိပါက်စိတ်နှင့် ယှဉ်သော စေတသိက် (နာမ်) နှင့် ကမ္မဇရုပ် (ရုပ်) ပေါင်း နာမ်ရုပ် (ခန့်မှန်း - ကျယ်ပြန့်စွာ ချိတ်ဆက်ထားသည်)။',
     cetasikaIds: CETASIKAS.map(c => c.id), rupaIds: KAMMAJA_ALL_IDS },
   { id: 'salayatana', name: 'သဠာယတန', color: '#84cc16',
     desc: 'အဇ္ဈတ္တိကာယတန (၆)ပါး — စက္ခု/သောတ/ဃာန/ဇိဝှါ/ကာယ ပသာဒရုပ် (၅) + မနာယတန (ဝိပါက်စိတ်)။',
-    rupaIds: [5, 6, 7, 8, 9], cittaIds: CITTAS.filter(c => c.type === 'vipaka' && c.id <= 81).map(c => c.id) },
+    rupaIds: [5, 6, 7, 8, 9], cittaIds: CITTAS_MY.filter(c => c.type === 'vipaka' && c.id <= 81).map(c => c.id) },
   { id: 'phassa', name: 'ဖဿ', color: '#22c55e',
     desc: 'လောကီဝိပါက်စိတ် (၃၂)ခုနှင့် ယှဉ်သော ဖဿစေတသိက် (၃၂)ခု။',
     cetasikaIds: [1] },
@@ -1602,7 +1603,7 @@ function hasPiti(id) {
   if ([1, 2, 3, 4].includes(id)) return true; // လောဘမူ သောမနဿ (၃,၄ ပါဝင်၊ ၅,၆ မပါ)
   if (id === 26 || id === 30) return true; // သန္တီရဏ-သော၊ ဟသိတုပ္ပါဒ်
   if (id >= 31 && id <= 54) { // ကာမသောဘဏ
-    const c = CITTAS.find(x => x.id === id);
+    const c = CITTAS_MY.find(x => x.id === id);
     return c ? getCittaVedana(c) === 'somanassa' : false;
   }
   if (id >= 70 && id <= 81) return false; // အရူပ
@@ -1698,7 +1699,11 @@ function checkAssociation(cId, ctId) {
 }
 
 export default function App({ lang = 'my', initialPage = null, onPageChange = null } = {}) {
+  // citta names/short names per language (ids, groups and colours stay shared)
+  const CITTAS = useMemo(() => localizeCittas(CITTAS_MY, lang), [lang]);
+  const LOKUTTARA_8 = useMemo(() => localizeLokuttara8(LOKUTTARA_8_MY, lang), [lang]);
   // Pali technical-term lists whose display "name" depends on lang (Roman
+
   // Pali for en/vi, Myanmar script for my) but whose "id"s -- used
   // everywhere else in this file for filtering/lookups -- never change.
   const VEDANA_TYPES = useMemo(() => [

@@ -9,7 +9,9 @@ import VietnameseVersion from './Paramattha2App.jsx';
 // actually been migrated (everything else falls back to Myanmar -- see the
 // fallback logic in paramatthaStrings.js's t()).
 //
-// 'en' is NOT added to LANGUAGES below yet -- translation coverage is still
+// (2026-10-28: 'en' IS now offered, labelled partial -- citta names, dropdown labels
+// and the Abhiññā balls are English; the long explanations still fall back to Myanmar.)
+// Old note: 'en' was NOT added to LANGUAGES below yet -- translation coverage is still
 // tiny (a handful of dropdown labels as of the commit that added this
 // comment), so flipping it on now would show real students mostly-Myanmar
 // text under an "English" button, which is worse than not offering English
@@ -23,6 +25,7 @@ import VietnameseVersion from './Paramattha2App.jsx';
 // NOT automatically appear there.
 const LANGUAGES = [
   { key: 'my', label: 'မြန်မာ', Component: (props) => <ParamatthaCore {...props} lang="my" /> },
+  { key: 'en', label: 'English (partial)', Component: (props) => <ParamatthaCore {...props} lang="en" /> },
   { key: 'vi', label: 'Tiếng Việt', Component: VietnameseVersion },
 ];
 
