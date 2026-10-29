@@ -1964,22 +1964,81 @@ const hasPreSamphassa = (isNamaKhandha || isViññana) && (
     if (targetIdx !== -1) setCurrentIndex(targetIdx);
   }, [selectedNidana, nidana2SubMode, nidanaViewMode, nidanaCycleIndex, activePhase, vithiData.length]);
 
-  // Deeper language-neutral snapshot (which citta node, sub-variations, which cetasika/citta box is open),
-  // merged into the wrapper's page state and restored once on mount so a language switch lands on the
-  // same spot. Cetasika is stored as its position in CETASIKA_DICT (same order in every language), -1 = the citta box.
+  // Deeper language-neutral snapshot (which citta node, sub-variations, nidana/paticca/khandha view, which
+  // cetasika/citta/base box is open), merged into the wrapper's page state and restored in stages on mount so a
+  // language switch lands on the same spot. Cetasika is stored as its position in CETASIKA_DICT (same order in
+  // every language), -1 = the citta box. Paticca re-locks the node from the saved phase/index (the locked node
+  // holds language-specific strings, so it is rebuilt rather than copied).
   const _cetKeys = Object.keys(CETASIKA_DICT);
+  const _restoring = initialPage?.idx != null;
+  const [snapReady, setSnapReady] = useState(!_restoring);
+  const _latest = useRef(null);
+  _latest.current = { activeNode: vithiData[currentIndex] || vithiData[0] };
+  const _arammanaFlat = DHAMMARAMMANA_RUPA.flatMap(g => g.options);
   useEffect(() => {
+    if (!snapReady) return;
     const cet = selectedCetasika == null ? null : selectedCetasika === "Tâm" ? -1 : _cetKeys.indexOf(selectedCetasika);
-    onPageChange?.({ idx: currentIndex, jsub: javanaSubIndex, bsub: bhavangaSubIndex, pdv: pancaDvaraVariation, mkv: manoKamaVariation, apv: appanaVariation, cuv: cutiVariation, pcv: pastCutiVariation, tcy: tadaCycleIndex, cet });
-  }, [currentIndex, javanaSubIndex, bhavangaSubIndex, pancaDvaraVariation, manoKamaVariation, appanaVariation, cutiVariation, pastCutiVariation, tadaCycleIndex, selectedCetasika]);
+    onPageChange?.({
+      idx: currentIndex, jsub: javanaSubIndex, bsub: bhavangaSubIndex, pdv: pancaDvaraVariation, mkv: manoKamaVariation,
+      apv: appanaVariation, cuv: cutiVariation, pcv: pastCutiVariation, tcy: tadaCycleIndex, cet,
+      nid: selectedNidana, nvm: nidanaViewMode, nci: nidanaCycleIndex, n2: nidana2SubMode, n3: nidana3SubMode,
+      n4: nidana4CycleIdx, n5: nidana5SubMode, n10e: nidana10EffectIdx, n10b: nidana10BaseOffset,
+      snm: showNidanaMenu, sad: showAyatanaDetail, rra: rupaRupaAyState, dm: displayMode, kv: khandhaViewIndex,
+      lji: lokuttaraJhanaIndex, rai: rupaArammanaIndex, kai: kayaArammanaIndex, aqi: aramQIndex,
+      auto: isBhavangaAuto, locks: lifeLocks, avs: avijjaStateByLife, sks: sankharaStateByLife,
+      arm: _arammanaFlat.indexOf(selectedArammana), baseBox: selectedBaseForModal != null,
+      pstep: paticcaStep, pkh: paticcaKhandha, psav: paticcaSavedState, psc: sankharaOnlyCetana,
+      spm: showPuggalaMenu, sbm: showBhavangaMenu, epg: expandedPuggalaGroup, ebg: expandedBhavangaGroup,
+    });
+  }, [snapReady, currentIndex, javanaSubIndex, bhavangaSubIndex, pancaDvaraVariation, manoKamaVariation, appanaVariation, cutiVariation, pastCutiVariation, tadaCycleIndex, selectedCetasika,
+      selectedNidana, nidanaViewMode, nidanaCycleIndex, nidana2SubMode, nidana3SubMode, nidana4CycleIdx, nidana5SubMode, nidana10EffectIdx, nidana10BaseOffset,
+      showNidanaMenu, showAyatanaDetail, rupaRupaAyState, displayMode, khandhaViewIndex, lokuttaraJhanaIndex, rupaArammanaIndex, kayaArammanaIndex, aramQIndex,
+      isBhavangaAuto, lifeLocks, avijjaStateByLife, sankharaStateByLife, selectedArammana, selectedBaseForModal,
+      paticcaStep, paticcaKhandha, paticcaSavedState, sankharaOnlyCetana, showPuggalaMenu, showBhavangaMenu, expandedPuggalaGroup, expandedBhavangaGroup]);
   useEffect(() => {
     const p = initialPage;
     if (!p || p.idx == null) return;
+    const timers = [];
+    const later = (fn, ms) => timers.push(setTimeout(fn, ms));
+    const inPaticca = p.pstep > 0 && p.psav;
     setJavanaSubIndex(p.jsub ?? 0); setBhavangaSubIndex(p.bsub ?? 0);
     setPancaDvaraVariation(p.pdv ?? 0); setManoKamaVariation(p.mkv ?? 0); setAppanaVariation(p.apv ?? 0);
     setCutiVariation(p.cuv ?? 0); setPastCutiVariation(p.pcv ?? 0); setTadaCycleIndex(p.tcy ?? 0);
-    setCurrentIndex(p.idx);
+    setNidanaViewMode(p.nvm ?? 'cause'); setNidanaCycleIndex(p.nci ?? 0); setNidana2SubMode(p.n2 ?? null); setNidana3SubMode(p.n3 ?? null);
+    setNidana4CycleIdx(p.n4 ?? 0); setNidana5SubMode(p.n5 ?? 'cause'); setNidana10EffectIdx(p.n10e ?? 0); setNidana10BaseOffset(p.n10b ?? 0);
+    setShowAyatanaDetail(!!p.sad); setRupaRupaAyState(p.rra ?? { causeIdx: 0, effectIdx: 0 });
+    setLokuttaraJhanaIndex(p.lji ?? 0); setRupaArammanaIndex(p.rai ?? 0); setKayaArammanaIndex(p.kai ?? 0); setAramQIndex(p.aqi ?? 0);
+    setIsBhavangaAuto(p.auto ?? true); setLifeLocks(p.locks ?? { 0: false });
+    setAvijjaStateByLife(p.avs ?? {}); setSankharaStateByLife(p.sks ?? {});
+    if (p.arm >= 0 && _arammanaFlat[p.arm]) setSelectedArammana(_arammanaFlat[p.arm]);
+    setShowPuggalaMenu(!!p.spm); setShowBhavangaMenu(!!p.sbm); setExpandedPuggalaGroup(p.epg ?? null); setExpandedBhavangaGroup(p.ebg ?? null);
     if (p.cet != null) setSelectedCetasika(p.cet === -1 ? "Tâm" : (_cetKeys[p.cet] ?? null));
+    setCurrentIndex(inPaticca ? p.psav.index : p.idx);
+    if (inPaticca) setActivePhase(p.psav.phase);
+    // Second stage: after the app's own phase/nidana effects have settled.
+    later(() => {
+      if (inPaticca) setCurrentIndex(p.psav.index);
+      if (p.nid != null) setSelectedNidana(p.nid);
+      setShowNidanaMenu(!!p.snm);
+    }, 300);
+    later(() => {
+      if (inPaticca) {
+        const node = _latest.current.activeNode;
+        setPaticcaSavedState(p.psav);
+        setPaticcaLockedNodeData({ ...node }); setPaticcaOriginalNodeData(node); setPaticcaCittaName(node.name);
+        setPaticcaKhandha(p.pkh ?? 0); setSankharaOnlyCetana(!!p.psc);
+      }
+      setKhandhaViewIndex(p.kv ?? 0); setDisplayMode(p.dm ?? 'rupa-nama');
+    }, 700);
+    later(() => {
+      if (inPaticca) { setActivePhase(p.activePhase); setPaticcaStep(p.pstep); }
+    }, 1000);
+    later(() => {
+      setCurrentIndex(p.idx);
+      if (p.baseBox && _latest.current.activeNode.base) setSelectedBaseForModal(_latest.current.activeNode.base);
+      setSnapReady(true);
+    }, inPaticca ? 1500 : 1000);
+    return () => timers.forEach(clearTimeout);
   }, []);
   const activeNode = vithiData[currentIndex] || vithiData[0] || { name: "", cetasikas: [], count: 0, cetasikaOnlyCount: 0 };
 
