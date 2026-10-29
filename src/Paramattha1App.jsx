@@ -3,6 +3,7 @@ import { t } from './paramatthaStrings';
 import { localizeCittas, localizeLokuttara8 } from './paramatthaCittaNames';
 import { localizeCetasikas, localizeCittaLayout, localizeCetasikaLayout } from './paramatthaCetasikaNames';
 import { localizeRupas, localizeKalapaGroups, rupaText } from './paramatthaRupaNames';
+import { localizeBhumi, bhumiText, bhumiLifeLabel } from './paramatthaBhumiNames';
 
 // --- Data Definitions ---
 
@@ -876,7 +877,7 @@ const ARUPA_BHUMI_RUPA_IDS = []; // အရူပဘုံ - ရုပ် လု�
 // ၃၁-ဘုံ (ဘဝဂြိုသ်စက်ဝန်း) — အပါယဘုံ(၄) + ကာမသုဂတိဘုံ(၇) + ရူပဗြဟ္မာ့ဘုံ(၁၆) + အရူပဗြဟ္မာ့ဘုံ(၄) = ၃၁
 // အောက်ဆုံးမှ အပေါ်ဆုံးသို့ (ascending — အပါယ်ကနေ စတင်ပြီး အရူပအထိ) စီထားသည်
 // item တစ်ခုစီကို နှိပ်လိုက်ရင် ဆိုင်ရာဘုံ၏ ဖြစ်နိုင်သောစိတ် (citta-multi) ကို citta/cetasika panel ဖြင့် highlight ပြသည်
-const BHUMI_31 = [
+const BHUMI_31_MY = [
   { group: 'arupa', name: 'အရူပဗြဟ္မာ့ဘုံ (၄)', color: 'violet', items: [
     { name: 'နေဝသညာနာသညာယတနဘုံ', life: 'ကမ္ဘာ ၈၄,၀၀၀-ကပ်', cittaIds: arupaBhumiCittas(3, 77), rupaIds: ARUPA_BHUMI_RUPA_IDS },
     { name: 'အာကိဉ္စညာယတနဘုံ', life: 'ကမ္ဘာ ၆၀,၀၀၀-ကပ်', cittaIds: arupaBhumiCittas(2, 76), rupaIds: ARUPA_BHUMI_RUPA_IDS },
@@ -1708,6 +1709,8 @@ export default function App({ lang = 'my', initialPage = null, onPageChange = nu
   const RUPAS = useMemo(() => localizeRupas(RUPAS_MY, lang), [lang]);
   const KALAPA_GROUPS = useMemo(() => localizeKalapaGroups(KALAPA_GROUPS_MY, lang), [lang]);
   const rx = (my) => rupaText(my, lang);
+  const BHUMI_31 = useMemo(() => localizeBhumi(BHUMI_31_MY, lang), [lang]);
+  const bx = (my) => bhumiText(my, lang);
   const CITTA_LAYOUT = useMemo(() => localizeCittaLayout(CITTA_LAYOUT_MY, lang), [lang]);
   const CETASIKA_LAYOUT = useMemo(() => localizeCetasikaLayout(CETASIKA_LAYOUT_MY, lang), [lang]);
   // Pali technical-term lists whose display "name" depends on lang (Roman
@@ -4416,9 +4419,9 @@ const NibbanaDot = ({ item }) => (
       <button
         onClick={() => { if (bhumiOpen) { setBhumiOpen(false); clearFilter(); } else { setBhumiOpen(true); } }}
         className="fixed bottom-4 right-24 z-40 bg-emerald-700 hover:bg-emerald-800 text-white rounded-full w-14 h-14 shadow-lg flex flex-col items-center justify-center text-[10px] font-bold leading-tight transition-colors"
-        title="၃၁-ဘုံ ဇယား ပြရန်/ဖျောက်ရန်"
+        title={bx("၃၁-ဘုံ ဇယား ပြရန်/ဖျောက်ရန်")}
       >
-        <span>၃၁ဘုံ</span>
+        <span>{bx('၃၁ဘုံ')}</span>
         <span className="text-sm">{bhumiOpen ? '✕' : '▶'}</span>
       </button>
 
@@ -4441,7 +4444,7 @@ const NibbanaDot = ({ item }) => (
             onMouseDown={handleBhumiDragStart}
             onTouchStart={handleBhumiDragStart}
           >
-            <span className="text-sm font-bold">၃၁-ဘုံ</span>
+            <span className="text-sm font-bold">{bx('၃၁-ဘုံ')}</span>
             <button
               onClick={() => { setBhumiOpen(false); clearFilter(); }}
               className="text-white/80 hover:text-white text-lg leading-none px-1"
@@ -4473,7 +4476,7 @@ const NibbanaDot = ({ item }) => (
                       setPhotthabbaOn(false);
                       setSelectedKalapa(null);
                       setSelectedSamutthana(null);
-                      setActiveDetail({ name: it.name, desc: it.life ? `သက်တမ်း — ${it.life}` : '' });
+                      setActiveDetail({ name: it.name, desc: it.life ? `${bhumiLifeLabel(lang)}${it.life}` : '' });
                       setTooltipPos({ x: rect.left + rect.width / 2, y: rect.top });
                       if (tooltipTimerRef.current) { clearTimeout(tooltipTimerRef.current); tooltipTimerRef.current = null; }
                       tooltipTimerRef.current = setTimeout(() => {
