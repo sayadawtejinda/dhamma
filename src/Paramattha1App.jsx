@@ -5,6 +5,7 @@ import { localizeCetasikas, localizeCittaLayout, localizeCetasikaLayout } from '
 import { localizeRupas, localizeKalapaGroups, rupaText } from './paramatthaRupaNames';
 import { localizeBhumi, bhumiText, bhumiLifeLabel } from './paramatthaBhumiNames';
 import { localizePaticca, paticcaText } from './paramatthaPaticcaNames';
+import { vithiText } from './paramatthaVithiNames';
 
 // --- Data Definitions ---
 
@@ -1714,6 +1715,7 @@ export default function App({ lang = 'my', initialPage = null, onPageChange = nu
   const bx = (my) => bhumiText(my, lang);
   const PATICCA_12 = useMemo(() => localizePaticca(PATICCA_12_MY, lang), [lang]);
   const px = (my) => paticcaText(my, lang);
+  const vx = (my) => vithiText(my, lang);
   const CITTA_LAYOUT = useMemo(() => localizeCittaLayout(CITTA_LAYOUT_MY, lang), [lang]);
   const CETASIKA_LAYOUT = useMemo(() => localizeCetasikaLayout(CETASIKA_LAYOUT_MY, lang), [lang]);
   // Pali technical-term lists whose display "name" depends on lang (Roman
@@ -3564,7 +3566,7 @@ const isNibbanaActive = filter.type === 'sabba-detail' && cittaContext === null 
       <div className="flex flex-col items-center gap-1 shrink-0">
         <div 
           onClick={handleClick}
-          title={clickable ? 'နှိပ်ပြီး ဆိုင်ရာ စိတ်/စေတသိက်များကို ကြည့်ပါ' : undefined}
+          title={clickable ? vx('နှိပ်ပြီး ဆိုင်ရာ စိတ်/စေတသိက်များကို ကြည့်ပါ') : undefined}
           className={`
             relative flex items-center justify-center text-center p-0.5 shadow-sm transition-transform
             ${item.header ? 'px-3 h-9 md:h-10 rounded-lg' : 'w-11 h-11 md:w-12 md:h-12 rounded-full'}
@@ -3575,11 +3577,11 @@ const isNibbanaActive = filter.type === 'sabba-detail' && cittaContext === null 
         >
           {item.isAtita && item.atitaIndex && (
             <span className="absolute -top-1.5 -left-1.5 w-4 h-4 rounded-full bg-amber-500 text-white text-[9px] font-bold flex items-center justify-center shadow ring-1 ring-white">
-              {toMyanmar(item.atitaIndex)}
+              {lang === 'en' ? item.atitaIndex : toMyanmar(item.atitaIndex)}
             </span>
           )}
           <span className={`text-white leading-[1.05] drop-shadow-[0_1px_1px_rgba(0,0,0,0.6)] whitespace-nowrap ${item.header ? 'text-[9px] md:text-[10px] font-bold' : 'text-[8px] md:text-[9px] font-medium'}`}>
-            {displayLabel}
+            {vx(displayLabel)}
           </span>
         </div>
       </div>
@@ -4645,7 +4647,7 @@ const NibbanaDot = ({ item }) => (
             onMouseDown={handleVithiDragStart}
             onTouchStart={handleVithiDragStart}
           >
-            <span className="text-[11px] md:text-xs font-semibold truncate pr-2">{vithiClickLabel || vithiCenterGroup || '—'}</span>
+            <span className="text-[11px] md:text-xs font-semibold truncate pr-2">{vx(vithiClickLabel || vithiCenterGroup || '—')}</span>
             <button onClick={() => { setVithiOpen(false); clearFilter(); }} className="text-white/80 hover:text-white text-lg leading-none px-1 shrink-0">✕</button>
           </div>
           <div 
