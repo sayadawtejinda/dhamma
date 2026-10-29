@@ -4,6 +4,7 @@ import { localizeCittas, localizeLokuttara8 } from './paramatthaCittaNames';
 import { localizeCetasikas, localizeCittaLayout, localizeCetasikaLayout } from './paramatthaCetasikaNames';
 import { localizeRupas, localizeKalapaGroups, rupaText } from './paramatthaRupaNames';
 import { localizeBhumi, bhumiText, bhumiLifeLabel } from './paramatthaBhumiNames';
+import { localizePaticca, paticcaText } from './paramatthaPaticcaNames';
 
 // --- Data Definitions ---
 
@@ -1500,7 +1501,7 @@ const SABBA_GROUPS = [
   { id: 'sacca', name: 'သစ္စာ (၄)', items: SABBA_SACCA },
 ];
 
-const PATICCA_12 = [
+const PATICCA_12_MY = [
   { id: 'avijja', name: 'အဝိဇ္ဇာ', color: '#ef4444',
     desc: 'သစ္စာလေးပါး၊ ပုဗ္ဗန္တ၊ အပရန္တ၊ ပဋိစ္စသမုပ္ပါဒ် အစရှိသော ဌာန (၈)၌ တွေဝေသော မောဟ။',
     cetasikaIds: [14] },
@@ -1711,6 +1712,8 @@ export default function App({ lang = 'my', initialPage = null, onPageChange = nu
   const rx = (my) => rupaText(my, lang);
   const BHUMI_31 = useMemo(() => localizeBhumi(BHUMI_31_MY, lang), [lang]);
   const bx = (my) => bhumiText(my, lang);
+  const PATICCA_12 = useMemo(() => localizePaticca(PATICCA_12_MY, lang), [lang]);
+  const px = (my) => paticcaText(my, lang);
   const CITTA_LAYOUT = useMemo(() => localizeCittaLayout(CITTA_LAYOUT_MY, lang), [lang]);
   const CETASIKA_LAYOUT = useMemo(() => localizeCetasikaLayout(CETASIKA_LAYOUT_MY, lang), [lang]);
   // Pali technical-term lists whose display "name" depends on lang (Roman
@@ -4428,9 +4431,9 @@ const NibbanaDot = ({ item }) => (
       <button
         onClick={() => { if (paticcaOpen) { setPaticcaOpen(false); clearFilter(); } else { setPaticcaOpen(true); setSelectedPaticcaId(null); } }}
         className="fixed bottom-4 right-44 z-40 bg-violet-700 hover:bg-violet-800 text-white rounded-full w-14 h-14 shadow-lg flex flex-col items-center justify-center text-[10px] font-bold leading-tight transition-colors"
-        title="ပဋိစ္စသမုပ္ပါဒ် (၁၂) ဇယား ပြရန်/ဖျောက်ရန်"
+        title={px("ပဋိစ္စသမုပ္ပါဒ် (၁၂) ဇယား ပြရန်/ဖျောက်ရန်")}
       >
-        <span>ပဋိစ္စ</span>
+        <span>{px('ပဋိစ္စ')}</span>
         <span className="text-sm">{paticcaOpen ? '✕' : '▶'}</span>
       </button>
 
@@ -4534,7 +4537,7 @@ const NibbanaDot = ({ item }) => (
             onMouseDown={handlePaticcaDragStart}
             onTouchStart={handlePaticcaDragStart}
           >
-            <span className="text-sm font-bold">ပဋိစ္စသမုပ္ပါဒ် (အင်္ဂါ ၁၂ ပါး)</span>
+            <span className="text-sm font-bold">{px('ပဋိစ္စသမုပ္ပါဒ် (အင်္ဂါ ၁၂ ပါး)')}</span>
             <button
               onClick={() => { setPaticcaOpen(false); clearFilter(); }}
               className="text-white/80 hover:text-white text-lg leading-none px-1"
@@ -4615,8 +4618,8 @@ const NibbanaDot = ({ item }) => (
                 </text>
               ))}
               <circle cx="170" cy="170" r="72" fill="#f8fafc" stroke="#cbd5e1" strokeWidth="1.5" />
-              <text x="170" y="164" textAnchor="middle" fontSize="12" fontWeight="700" fill="#334155">ပဋိစ္စ-</text>
-              <text x="170" y="180" textAnchor="middle" fontSize="12" fontWeight="700" fill="#334155">သမုပ္ပါဒ်</text>
+              <text x="170" y="164" textAnchor="middle" fontSize="12" fontWeight="700" fill="#334155">{px('ပဋိစ္စ-')}</text>
+              <text x="170" y="180" textAnchor="middle" fontSize="12" fontWeight="700" fill="#334155">{px('သမုပ္ပါဒ်')}</text>
             </svg>
             {selectedPaticcaId && (() => {
               const item = PATICCA_12.find(x => x.id === selectedPaticcaId);
