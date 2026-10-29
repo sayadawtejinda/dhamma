@@ -150,8 +150,18 @@ const KEYS = new Set(Object.keys(WORDS));
 // Returns null unless the WHOLE token can be read, so a half-known word is left in Myanmar.
 const MORPH = { ...MORPHS };
 for (const [k, v] of Object.entries(WORDS)) if (!MORPH[k] && /^[A-ZĀĪŪṬḌṆḶṂṄÑ][^\s-]*$/.test(v)) MORPH[k] = v.charAt(0).toLowerCase() + v.slice(1);
-const MORPH_KEYS = Object.keys(MORPH).sort((a, b) => b.length - a.length);
+let MORPH_KEYS = Object.keys(MORPH).sort((a, b) => b.length - a.length);
 const segCache = new Map();
+
+// Let another page (e.g. Paramattha) add its own phrases / words to the same display layer.
+export function extendEnglish(phrases = {}, words = {}) {
+  Object.assign(PHRASES, phrases);
+  Object.assign(WORDS, words);
+  for (const [k, v] of Object.entries(words)) if (/^[A-ZĀĪŪṬḌṆḶṂṄÑ][^\s-]*$/.test(v)) MORPH[k] = v.charAt(0).toLowerCase() + v.slice(1);
+  for (const k of Object.keys(words)) KEYS.add(k);
+  MORPH_KEYS = Object.keys(MORPH).sort((a, b) => b.length - a.length);
+  segCache.clear();
+}
 function segment(t) {
   if (segCache.has(t)) return segCache.get(t);
   const memo = new Map();

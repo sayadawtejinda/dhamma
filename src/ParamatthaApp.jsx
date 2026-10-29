@@ -1,6 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import ParamatthaCore from './Paramattha1App.jsx';
 import VietnameseVersion from './Paramattha2App.jsx';
+import { startVithiEnglish, extendEnglish } from './vithiCittaEnglish.js';
+import { PARAMATTHA_PHRASES, PARAMATTHA_WORDS } from './paramatthaEnglishExtra.js';
+
+// English: the component itself already shows Roman Pali for everything that was migrated; a small display layer
+// (shared with the Vithi Citta page) covers the few Myanmar labels left in the rūpa menus.
+extendEnglish(PARAMATTHA_PHRASES, PARAMATTHA_WORDS);
+function ParamatthaEnglish(props) {
+  const ref = useRef(null);
+  useEffect(() => startVithiEnglish(ref.current), []);
+  return <div ref={ref}><ParamatthaCore {...props} lang="en" /></div>;
+}
 
 // Paramattha1App.jsx is being migrated, section by section, from hardcoded
 // Myanmar text to a lang-aware dictionary (see src/paramatthaStrings.js) --
@@ -25,7 +36,7 @@ import VietnameseVersion from './Paramattha2App.jsx';
 // NOT automatically appear there.
 const LANGUAGES = [
   { key: 'my', label: 'မြန်မာ', Component: (props) => <ParamatthaCore {...props} lang="my" /> },
-  { key: 'en', label: 'English (partial)', Component: (props) => <ParamatthaCore {...props} lang="en" /> },
+  { key: 'en', label: 'English (partial)', Component: ParamatthaEnglish },
   { key: 'vi', label: 'Tiếng Việt', Component: VietnameseVersion },
 ];
 
