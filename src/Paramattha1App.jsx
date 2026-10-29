@@ -9,6 +9,7 @@ import { vithiText } from './paramatthaVithiNames';
 import { localizePuggala, localizeSutiPati, headText } from './paramatthaPuggalaNames';
 import { localizeNibbanaGuna, localizeAtthaPannatti, localizeSaddaPannatti, nibbanaText } from './paramatthaNibbanaNames';
 import { localizeSabba } from './paramatthaSabbaNames';
+import { localizeAkusala, localizeMissaka, localizeBodhipakkhiya } from './paramatthaSangahaNames';
 
 // --- Data Definitions ---
 
@@ -1130,7 +1131,7 @@ const CETASIKA_LAYOUT_MY = [
 // အကုသလသင်္ဂဟ - အကုသိုလ်စေတသိက်များကို အုပ်စု (၁၀) မျိုးအလိုက် ပြန်စုစည်းထားသော ခွဲခြမ်းမှု
 // (cetasikaIds သည် CETASIKAS_MY array ထဲက id များဖြစ်ပြီး၊ တစ်ခုတည်းသော cetasika ကို ဓမ္မအမည်များစွာက ကိုယ်စားပြုရာမှာ
 // ထပ်နေတတ်သည် — ဥပမာ ကာမာသဝနှင့် ဘဝါသဝ နှစ်ခုစလုံးသည် "လောဘ" cetasika (id 18) ချည်းသာဖြစ်သည်)
-const AKUSALA_CATEGORIES = [
+const AKUSALA_CATEGORIES_MY = [
   { id: 'asava', name: 'အာသဝ (၄)', cetasikaIds: [14, 18, 19], color: 'rose', desc: 'ရှေးအဘို့ကို မထင်မမြင်ဖြစ်၍ ကြာမြင့်စွာ ထုံတတ်သော၊ သို့မဟုတ် အနာမှ ယိုသကဲ့သို့ အာရုံတို့၌ ယိုစီးတတ်သော၊ ဘဝဂ်နှင့် ဂေါတြဘူတိုင်အောင် နှံ့၍ ဖြစ်တတ်သော အကုသိုလ်တရား (၄) ပါး။', names: [
     { name: 'ကာမာသဝ', cetasikaId: 18, desc: 'ကာမဂုဏ် ငါးပါးတို့၌ လိုချင်တပ်မက်သော လောဘစေတသိက်။' },
     { name: 'ဘဝါသဝ', cetasikaId: 18, desc: 'ရူပဘုံ၊ အရူပဘုံတို့၌ တပ်နှစ်သက်သော လောဘစေတသိက် (ဈာန်ဘဝ၌ တပ်ခြင်း)။' },
@@ -1255,7 +1256,7 @@ const JAVANA_SOBHANA_IDS = [
 const MICCHA_MAGGA_CITTA_IDS = Array.from({ length: 12 }, (_, i) => i + 1);
 // အကုသိုလ်စိတ် (၁၂) မှ ဝိစိကိစ္ဆာစိတ် (id 11) ကို ထုတ်ထားသော (၁၁)ပါး
 const MICCHA_SAMADHI_CITTA_IDS = MICCHA_MAGGA_CITTA_IDS.filter(id => id !== 11);
-const MISSAKA_CATEGORIES = [
+const MISSAKA_CATEGORIES_MY = [
   { id: 'hetu6', name: 'ဟိတ် (၆)', color: 'rose', cetasikaIds: [18, 21, 14, 32, 33, 52],
     desc: 'မိမိနှင့်ယှဉ်သော တရားတို့ကို ခိုင်ခံ့တည်တံ့စေတတ်သော အမြစ်ကဲ့သို့သော တရား (၆) ပါး။',
     names: [
@@ -1354,7 +1355,7 @@ const MISSAKA_CATEGORIES = [
 ];
 
 // ဗောဓိပက္ခိယသင်္ဂဟ (၃၇) - အုပ်စု (၇)
-const BODHIPAKKHIYA_CATEGORIES = [
+const BODHIPAKKHIYA_CATEGORIES_MY = [
   { id: 'satipatthana', name: 'သတိပဋ္ဌာန် (၄)', color: 'rose', cetasikaIds: [29], cittaIds: JAVANA_SOBHANA_IDS,
     desc: 'ကိုယ်/ဝေဒနာ/စိတ်/ဓမ္မ အာရုံလေးမျိုး၌ သတိဖြင့် အဖန်တလဲလဲ အောက်မေ့ခြင်း — သတိစေတသိက်တစ်ခုတည်း ယူသောကိစ္စအားဖြင့် (၄) ပါးအပြားရှိသည်။',
     names: [
@@ -1727,6 +1728,9 @@ export default function App({ lang = 'my', initialPage = null, onPageChange = nu
   const SADDA_PANNATTI = useMemo(() => localizeSaddaPannatti(SADDA_PANNATTI_MY, lang), [lang]);
   const nx = (my) => nibbanaText(my, lang);
   const SABBA_GROUPS = useMemo(() => localizeSabba(SABBA_GROUPS_MY, lang), [lang]);
+  const AKUSALA_CATEGORIES = useMemo(() => localizeAkusala(AKUSALA_CATEGORIES_MY, lang), [lang]);
+  const MISSAKA_CATEGORIES = useMemo(() => localizeMissaka(MISSAKA_CATEGORIES_MY, lang), [lang]);
+  const BODHIPAKKHIYA_CATEGORIES = useMemo(() => localizeBodhipakkhiya(BODHIPAKKHIYA_CATEGORIES_MY, lang), [lang]);
   const CITTA_LAYOUT = useMemo(() => localizeCittaLayout(CITTA_LAYOUT_MY, lang), [lang]);
   const CETASIKA_LAYOUT = useMemo(() => localizeCetasikaLayout(CETASIKA_LAYOUT_MY, lang), [lang]);
   // Pali technical-term lists whose display "name" depends on lang (Roman
