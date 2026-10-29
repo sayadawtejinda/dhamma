@@ -7,6 +7,7 @@ import { localizeBhumi, bhumiText, bhumiLifeLabel } from './paramatthaBhumiNames
 import { localizePaticca, paticcaText } from './paramatthaPaticcaNames';
 import { vithiText } from './paramatthaVithiNames';
 import { localizePuggala, localizeSutiPati, headText } from './paramatthaPuggalaNames';
+import { localizeNibbanaGuna, localizeAtthaPannatti, localizeSaddaPannatti, nibbanaText } from './paramatthaNibbanaNames';
 
 // --- Data Definitions ---
 
@@ -591,7 +592,7 @@ const CETASIKAS_MY = [
   { id: 52, name: "ပညိန္ဒြေ", subGroup: 'panna', color: 'bg-blue-400', desc: "ပရမတ္ထဓမ္မတို့၏ သဘောမှန်ကို ထွင်းဖောက်သိမြင်ခြင်း၊ သစ္စာလေးပါး အမှန်တရားကို ထွင်းဖောက်သိမြင်ခြင်းသဘော။" }
 ];
 
-const ATTHA_PANNATTI = [
+const ATTHA_PANNATTI_MY = [
   { id: 1, name: "သဏ္ဌာနပညတ်", desc: "မဟာဘုတ်များ ဖောက်ပြန်သည့် ပုံသဏ္ဌာန်ကို စွဲ၍ ခေါ်ဝေါ် ပညတ်အပ်သော တောင်၊ မြေ၊ မြစ် စသည်။" },
   { id: 2, name: "သမူဟပညတ်", desc: "သစ်၊ ဝါး စသော အဆောက်အဦးတို့၏ ပေါင်းစပ်မှုကို စွဲ၍ ခေါ်ဝေါ် ပညတ်အပ်သော ဇရပ်၊ အိမ်၊ လှည်း၊ ရထား စသည်။" },
   { id: 3, name: "သတ္တပညတ်", desc: "ခန္ဓာငါးပါးအပေါင်းကို စွဲ၍ ခေါ်ဝေါ် ပညတ်အပ်သော လူ၊ နတ်၊ ကျား၊ မ ပုဂ္ဂိုလ် စသည်။" },
@@ -600,7 +601,7 @@ const ATTHA_PANNATTI = [
   { id: 6, name: "ကသိဏနိမိတ္တာဒိပညတ်", desc: "ပွားများအားထုတ်အပ်သော မဟာဘုတ်စသည်ကို စွဲ၍ ခေါ်ဝေါ် ပညတ်အပ်သော ပထဝီကသိုဏ်းနိမိတ် စသည်။" },
 ];
 
-const SADDA_PANNATTI = [
+const SADDA_PANNATTI_MY = [
   { id: 1, name: "ဝိဇ္ဇမာနပညတ်", desc: "ပရမတ္ထအားဖြင့် ထင်ရှားရှိသော ဖဿ၊ နာမ်၊ ရူပ် စသော အနက်ကို ခေါ်ဝေါ်သော သဒ္ဒပညတ်။" },
   { id: 2, name: "အဝိဇ္ဇမာနပညတ်", desc: "ပရမတ္ထအားဖြင့် ထင်ရှားမရှိသော မောင်ဝ၊ ဘူမိ၊ ပဗ္ဗတ စသော အနက်ကို ခေါ်ဝေါ်သော သဒ္ဒပညတ်။" },
   { id: 3, name: "ဝိဇ္ဇမာနေန အဝိဇ္ဇမာနပညတ်", desc: "ပရမတ္ထအားဖြင့် ထင်ရှားရှိသည်ဖြစ်၍ ထင်ရှားမရှိသော ဆဠဘိညာ (အဘိညာဉ်ရှင်) ကဲ့သို့ အနက်ကို သိစေသော သဒ္ဒပညတ်။" },
@@ -608,7 +609,7 @@ const SADDA_PANNATTI = [
   { id: 5, name: "ဝိဇ္ဇမာနေန ဝိဇ္ဇမာနပညတ်", desc: "ပရမတ္ထအားဖြင့် ထင်ရှားရှိသောအနက် ၂-ပါးကိုပင် စက္ခုဝိညာဏ် ကဲ့သို့ သိစေသော သဒ္ဒပညတ်။" },
   { id: 6, name: "အဝိဇ္ဇမာနေန အဝိဇ္ဇမာနပညတ်", desc: "ပရမတ္ထအားဖြင့် ထင်ရှားမရှိသောအနက် ၂-ပါးကို ရာဇပုတ္တာ ကဲ့သို့ သိစေသော သဒ္ဒပညတ်။" },
 ];
-const NIBBANA_GUNA = [
+const NIBBANA_GUNA_MY = [
   { id: 1, name: "အစ္စုတံ", desc: "စုတေ ရွေ့လျောခြင်း မရှိသောတရား။" },
   { id: 2, name: "အစ္စန္တံ", desc: "စုတိဟုဆိုအပ်သော အဆုံးကို လွန်သောတရား။" },
   { id: 3, name: "အသင်္ခတံ", desc: "ကံ၊ စိတ်၊ ဥတု၊ အာဟာရ တည်းဟူသော အကြောင်းတရားတို့ မပြုပြင်အပ်သောတရား။" },
@@ -1720,6 +1721,10 @@ export default function App({ lang = 'my', initialPage = null, onPageChange = nu
   const PUGGALA_CITTA_TYPES = useMemo(() => localizePuggala(PUGGALA_CITTA_TYPES_MY, lang), [lang]);
   const SUTI_PATI_TYPES = useMemo(() => localizeSutiPati(SUTI_PATI_TYPES_MY, lang), [lang]);
   const hx = (my) => headText(my, lang);
+  const NIBBANA_GUNA = useMemo(() => localizeNibbanaGuna(NIBBANA_GUNA_MY, lang), [lang]);
+  const ATTHA_PANNATTI = useMemo(() => localizeAtthaPannatti(ATTHA_PANNATTI_MY, lang), [lang]);
+  const SADDA_PANNATTI = useMemo(() => localizeSaddaPannatti(SADDA_PANNATTI_MY, lang), [lang]);
+  const nx = (my) => nibbanaText(my, lang);
   const CITTA_LAYOUT = useMemo(() => localizeCittaLayout(CITTA_LAYOUT_MY, lang), [lang]);
   const CETASIKA_LAYOUT = useMemo(() => localizeCetasikaLayout(CETASIKA_LAYOUT_MY, lang), [lang]);
   // Pali technical-term lists whose display "name" depends on lang (Roman
@@ -3651,7 +3656,7 @@ const isNibbanaActive = filter.type === 'sabba-detail' && cittaContext === null 
     }}
     className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-teal-300 hover:bg-teal-400 cursor-pointer flex items-center justify-center text-center p-0.5 leading-tight text-[8px] md:text-[9px] font-medium text-slate-900 shadow-sm transition-all hover:scale-105 flex-shrink-0"
   >
-    {item.name}
+    {item.short || item.name}
   </div>
 );
 const NibbanaDot = ({ item }) => (
@@ -4041,7 +4046,7 @@ const NibbanaDot = ({ item }) => (
     isNibbanaActive ? 'border-amber-500 bg-amber-50 ring-4 ring-amber-300 scale-[1.02]' : 'border-slate-300 bg-slate-50'
   } ${nibbanaDimmed ? 'opacity-15 grayscale' : ''}`}
 >
-  <div className="text-lg md:text-xl font-extrabold text-amber-700 tracking-wide">နိဗ္ဗာန်</div>
+  <div className="text-lg md:text-xl font-extrabold text-amber-700 tracking-wide">{nx('နိဗ္ဗာန်')}</div>
   
   <div className="mt-3 flex flex-wrap gap-1.5 justify-center" onClick={(e) => e.stopPropagation()}>
     {NIBBANA_GUNA.map(item => <NibbanaDot key={`ng-${item.id}`} item={item} />)}
@@ -4054,16 +4059,16 @@ const NibbanaDot = ({ item }) => (
     isPannattiActive ? 'border-teal-500 bg-teal-50 ring-4 ring-teal-300 scale-[1.02]' : 'border-slate-300 bg-slate-50'
   } ${pannattiDimmed ? 'opacity-15 grayscale' : ''}`}
 >
-  <div className="text-lg md:text-xl font-extrabold text-teal-700 tracking-wide">ပညတ်</div>
+  <div className="text-lg md:text-xl font-extrabold text-teal-700 tracking-wide">{nx('ပညတ်')}</div>
     <div className="mt-3 flex flex-col gap-2" onClick={(e) => e.stopPropagation()}>
     <div className="flex flex-row items-center gap-2">
-      <span className="text-[10px] md:text-[11px] font-semibold text-teal-700 w-20 md:w-24 text-right shrink-0">အတ္ထပညတ် (၆)</span>
+      <span className="text-[10px] md:text-[11px] font-semibold text-teal-700 w-20 md:w-24 text-right shrink-0">{nx('အတ္ထပညတ် (၆)')}</span>
       <div className="flex flex-wrap gap-1.5 justify-center flex-1">
         {ATTHA_PANNATTI.map(item => <PannattiDot key={`ap-${item.id}`} item={item} />)}
       </div>
     </div>
     <div className="flex flex-row items-center gap-2">
-      <span className="text-[10px] md:text-[11px] font-semibold text-teal-700 w-20 md:w-24 text-right shrink-0">သဒ္ဒပညတ် (၆)</span>
+      <span className="text-[10px] md:text-[11px] font-semibold text-teal-700 w-20 md:w-24 text-right shrink-0">{nx('သဒ္ဒပညတ် (၆)')}</span>
       <div className="flex flex-wrap gap-1.5 justify-center flex-1">
         {SADDA_PANNATTI.map(item => <PannattiDot key={`sp-${item.id}`} item={item} />)}
       </div>
