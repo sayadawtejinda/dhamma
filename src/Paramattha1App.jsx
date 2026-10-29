@@ -6,6 +6,7 @@ import { localizeRupas, localizeKalapaGroups, rupaText } from './paramatthaRupaN
 import { localizeBhumi, bhumiText, bhumiLifeLabel } from './paramatthaBhumiNames';
 import { localizePaticca, paticcaText } from './paramatthaPaticcaNames';
 import { vithiText } from './paramatthaVithiNames';
+import { localizePuggala, localizeSutiPati, headText } from './paramatthaPuggalaNames';
 
 // --- Data Definitions ---
 
@@ -983,7 +984,7 @@ const PUGGALA_ARAHANT_KAMA_IDS = [...DVIPANCA_10_IDS, ...SAMPATICCHANA_2_IDS, ..
 const PUGGALA_ARAHANT_RUPA_IDS = [...CAKKHU_SOTA_VINNANA_4_IDS, ...SAMPATICCHANA_2_IDS, ...SANTIRANA_ALL_3_IDS, ...AVAJJANA_2_IDS, ...HASITUPPADA_1_IDS, ...MAHA_KIRIYA_8_IDS, ...RUPA_KIRIYA_5_IDS, ...ARUPA_KIRIYA_4_IDS, ...PHALA_ARAHATTA_1_IDS]; // 30
 const PUGGALA_ARAHANT_ARUPA_IDS = [...MANODVARAVAJJANA_1_IDS, ...MAHA_KIRIYA_8_IDS, ...ARUPA_KIRIYA_4_IDS, ...PHALA_ARAHATTA_1_IDS]; // 14
 
-const PUGGALA_CITTA_TYPES = [
+const PUGGALA_CITTA_TYPES_MY = [
   { id: 'duggati', name: 'ဒုဂ္ဂတိပုဂ္ဂိုလ် (၃၇)', cittaIds: PUGGALA_DUGGATI_IDS },
   { id: 'sugati-ahetuka', name: 'သုဂတိ အဟိတ်ပုဂ္ဂိုလ် (၄၁)', cittaIds: PUGGALA_SUGATI_AHETUKA_IDS },
   { id: 'dvihetuka', name: 'ဒွိဟိတ်ပုဂ္ဂိုလ် (၄၁)', cittaIds: PUGGALA_SUGATI_AHETUKA_IDS },
@@ -1016,7 +1017,7 @@ const SUTI_ID_VINNANANCA_FOLLOW = [75, 76, 77, ...KAMA_TIHETU_PATISANDHI_4]; // 
 const SUTI_ID_AKINCANNA_FOLLOW = [76, 77, ...KAMA_TIHETU_PATISANDHI_4]; // ၆
 const SUTI_ID_NEVASANNA_FOLLOW = [77, ...KAMA_TIHETU_PATISANDHI_4]; // ၅
 
-const SUTI_PATI_TYPES = [
+const SUTI_PATI_TYPES_MY = [
   { id: 'ahetu', name: 'အဟိတ်', cittaIds: SUTI_ID_AHETU_DVIHETU, note: 'ကြွင်းကျန်သည့် အဟိတ်စုတိနောင် ကာမပဋိသန္ဓေ ၁၀-ခုသာ နှောင်းသည်။' },
   { id: 'dvihetu', name: 'ဒွိဟိတ်', cittaIds: SUTI_ID_AHETU_DVIHETU, note: 'ကြွင်းကျန်သည့် ဒွိဟိတ်စုတိနောင် ကာမပဋိသန္ဓေ ၁၀-ခုသာ နှောင်းသည်။' },
   { id: 'tihetu', name: 'တိဟိတ်', cittaIds: SUTI_ID_TIHETU_ALL19, note: 'ကာမတိဟိတ်စုတိနောင် ပဋိသန္ဓေအားလုံး နှောင်းသည် — ပဋိသန္ဓေစိတ် ၁၉-ပါး + အသညပဋိသန္ဓေ (ဇီဝိတနဝကကလာပ်၊ စိတ်မပါ)။' },
@@ -1716,6 +1717,9 @@ export default function App({ lang = 'my', initialPage = null, onPageChange = nu
   const PATICCA_12 = useMemo(() => localizePaticca(PATICCA_12_MY, lang), [lang]);
   const px = (my) => paticcaText(my, lang);
   const vx = (my) => vithiText(my, lang);
+  const PUGGALA_CITTA_TYPES = useMemo(() => localizePuggala(PUGGALA_CITTA_TYPES_MY, lang), [lang]);
+  const SUTI_PATI_TYPES = useMemo(() => localizeSutiPati(SUTI_PATI_TYPES_MY, lang), [lang]);
+  const hx = (my) => headText(my, lang);
   const CITTA_LAYOUT = useMemo(() => localizeCittaLayout(CITTA_LAYOUT_MY, lang), [lang]);
   const CETASIKA_LAYOUT = useMemo(() => localizeCetasikaLayout(CETASIKA_LAYOUT_MY, lang), [lang]);
   // Pali technical-term lists whose display "name" depends on lang (Roman
@@ -3737,7 +3741,7 @@ const NibbanaDot = ({ item }) => (
       {/* Header & Stats Dashboard */}
       <header className="bg-slate-800 text-white p-3 shadow-md z-20 sticky top-0">
         <div className="max-w-[1400px] mx-auto flex flex-row justify-between items-center gap-3">
-          <h1 className="text-lg md:text-xl font-bold">အဘိဓမ္မာ ပရမတ္ထတရား (၄) ပါး</h1>
+          <h1 className="text-lg md:text-xl font-bold">{hx('အဘိဓမ္မာ ပရမတ္ထတရား (၄) ပါး')}</h1>
           {filter.type !== 'none' && (
             <button 
               onClick={clearFilter}
@@ -3821,15 +3825,15 @@ const NibbanaDot = ({ item }) => (
                <h2 
                  className="text-base font-bold text-slate-700 cursor-pointer select-none hover:text-blue-600 transition-colors"
                  onClick={() => setLokuttaraExpanded(prev => !prev)}
-                 title="လောကုတ္တရာ အကျယ်/အကျဉ်း ပြောင်းရန် နှိပ်ပါ"
+                 title={hx("လောကုတ္တရာ အကျယ်/အကျဉ်း ပြောင်းရန် နှိပ်ပါ")}
                >
-                 {lokuttaraExpanded ? 'စိတ် အကျယ် (၁၂၁) ပါး' : 'စိတ် အကျဉ်း (၈၉) ပါး'}
+                 {lokuttaraExpanded ? hx('စိတ် အကျယ် (၁၂၁) ပါး') : hx('စိတ် အကျဉ်း (၈၉) ပါး')}
                </h2>
 
             {/* Akusala/Missaka/Bodhipakkhiya/Sabba Filters — ခလုတ်ကို နှိပ်မှသာ subcategory ဆွဲချပြသည် */}
             <div className="flex flex-wrap gap-1.5 items-start">
               <DropButton
-                label="ပုဂ္ဂလစိတ်"
+                label={hx("ပုဂ္ဂလစိတ်")}
                 activeLabel={filter.type === 'puggala' ? PUGGALA_CITTA_TYPES.find(p => p.id === filter.value)?.name : null}
                 isOpen={openMenu === 'puggala'}
                 isActiveFilter={filter.type === 'puggala'}
@@ -3851,7 +3855,7 @@ const NibbanaDot = ({ item }) => (
                 ))}
               </DropButton>
               <DropButton
-                label="စုတိ-ပဋိ"
+                label={hx("စုတိ-ပဋိ")}
                 activeLabel={filter.type === 'suti-pati' ? SUTI_PATI_TYPES.find(p => p.id === filter.value)?.name : null}
                 isOpen={openMenu === 'suti-pati'}
                 isActiveFilter={filter.type === 'suti-pati'}
@@ -3882,15 +3886,15 @@ const NibbanaDot = ({ item }) => (
           {showCittaBadge && (
             <div className="absolute top-16 md:top-14 left-1/2 -translate-x-1/2 z-30 pointer-events-none">
               <div className="text-4xl md:text-5xl font-extrabold text-blue-700 leading-none tabular-nums drop-shadow-md">
-                {toMyanmar(activeCittaCount)}
+                {lang === 'en' ? activeCittaCount : toMyanmar(activeCittaCount)}
               </div>
             </div>
           )}
           <div className="flex flex-col">
             {(kamaGroupsVisible || mahaggataGroupsVisible) && (
-            <VerticalWrap title="လောကီစိတ် (၈၁)">
+            <VerticalWrap title={hx("လောကီစိတ် (၈၁)")}>
               {kamaGroupsVisible && (
-              <VerticalWrap title="ကာမစိတ် (၅၄)">
+              <VerticalWrap title={hx("ကာမစိတ် (၅၄)")}>
                 {CITTA_LAYOUT.slice(0, 3).map((group, idx) => {
                   const visibleSubs = group.subGroups.filter(sub => isCittaSubGroupVisible(sub.id));
                   if (visibleSubs.length === 0) return null;
@@ -3942,7 +3946,7 @@ const NibbanaDot = ({ item }) => (
               )}
 
               {mahaggataGroupsVisible && (
-              <VerticalWrap title="မဟဂ္ဂုတ်စိတ် (၂၇)">
+              <VerticalWrap title={hx("မဟဂ္ဂုတ်စိတ် (၂၇)")}>
               {CITTA_LAYOUT.slice(3, 5).map((group, idx) => {
                 const visibleSubs = group.subGroups.filter(sub => isCittaSubGroupVisible(sub.id));
                 if (visibleSubs.length === 0) return null;
@@ -3993,7 +3997,7 @@ const NibbanaDot = ({ item }) => (
                     className="cursor-pointer hover:text-blue-300 transition-colors"
                     onClick={(e) => { e.stopPropagation(); setLokuttaraExpanded(prev => !prev); }}
                   >
-                    {lokuttaraExpanded ? 'လောကုတ္တရာစိတ် အကျယ် (၄၀)' : 'လောကုတ္တရာစိတ် (၈)ပါး'}
+                    {lokuttaraExpanded ? hx('လောကုတ္တရာစိတ် အကျယ် (၄၀)') : hx('လောကုတ္တရာစိတ် (၈)ပါး')}
                   </span>
                 }
               >
@@ -4076,7 +4080,7 @@ const NibbanaDot = ({ item }) => (
           <div className="relative bg-white rounded-xl shadow-sm p-2 flex-1">
             <div className="sticky top-0 bg-white z-10 pb-2 border-b mb-3 relative">
               <div className="absolute top-0 left-0 pointer-events-none">
-                <h2 className="text-base font-bold text-slate-700">စေတသိက် (၅၂) ပါး</h2>
+                <h2 className="text-base font-bold text-slate-700">{hx('စေတသိက် (၅၂) ပါး')}</h2>
               </div>
               <div className="flex justify-end items-center flex-wrap gap-2">
                 <div className="flex flex-wrap gap-1.5 justify-end">
