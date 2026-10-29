@@ -48,7 +48,7 @@ export default function VithiCittaApp() {
       >
         🌐 {current.label}
       </button>
-      <Active initialPage={pageState} onPageChange={setPageState} />
+      <Active initialPage={pageState} onPageChange={(s) => setPageState(p => ({ ...p, ...s }))} />
     </div>
   );
 }

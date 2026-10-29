@@ -1985,6 +1985,23 @@ useEffect(() => {
     });
     if (targetIdx !== -1) setCurrentIndex(targetIdx);
 }, [selectedNidana, nidana2SubMode, nidanaViewMode, nidanaCycleIndex, activePhase, vithiData.length]);
+  // Deeper language-neutral snapshot (which citta node, sub-variations, which cetasika/citta box is open),
+  // merged into the wrapper's page state and restored once on mount so a language switch lands on the
+  // same spot. Cetasika is stored as its position in CETASIKA_DICT (same order in every language), -1 = the citta box.
+  const _cetKeys = Object.keys(CETASIKA_DICT);
+  useEffect(() => {
+    const cet = selectedCetasika == null ? null : selectedCetasika === "အသိစိတ်" ? -1 : _cetKeys.indexOf(selectedCetasika);
+    onPageChange?.({ idx: currentIndex, jsub: javanaSubIndex, bsub: bhavangaSubIndex, pdv: pancaDvaraVariation, mkv: manoKamaVariation, apv: appanaVariation, cuv: cutiVariation, pcv: pastCutiVariation, tcy: tadaCycleIndex, cet });
+  }, [currentIndex, javanaSubIndex, bhavangaSubIndex, pancaDvaraVariation, manoKamaVariation, appanaVariation, cutiVariation, pastCutiVariation, tadaCycleIndex, selectedCetasika]);
+  useEffect(() => {
+    const p = initialPage;
+    if (!p || p.idx == null) return;
+    setJavanaSubIndex(p.jsub ?? 0); setBhavangaSubIndex(p.bsub ?? 0);
+    setPancaDvaraVariation(p.pdv ?? 0); setManoKamaVariation(p.mkv ?? 0); setAppanaVariation(p.apv ?? 0);
+    setCutiVariation(p.cuv ?? 0); setPastCutiVariation(p.pcv ?? 0); setTadaCycleIndex(p.tcy ?? 0);
+    setCurrentIndex(p.idx);
+    if (p.cet != null) setSelectedCetasika(p.cet === -1 ? "အသိစိတ်" : (_cetKeys[p.cet] ?? null));
+  }, []);
   const activeNode = vithiData[currentIndex] || vithiData[0] || { name: "", cetasikas: [], count: 0, cetasikaOnlyCount: 0 };
 
   const vipakaKeywords = ["ဝိပါက်", "ပဋိသန္ဓေ", "ဘဝင်", "စုတိ", "သမ္ပဋိစ္ဆိုင်း", "သန္တီရဏ", "တဒါရုံ",

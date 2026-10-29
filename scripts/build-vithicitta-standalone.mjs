@@ -96,6 +96,7 @@ const html = `<!doctype html>
 
       function VithiCittaApp() {
         const [lang, setLang] = useState(null);
+        const [pageState, setPageState] = useState(null);
         if (!lang) {
           return (
             <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
@@ -121,7 +122,7 @@ const html = `<!doctype html>
               className="fixed top-3 left-3 z-[10000] bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold px-3 py-2 rounded-full shadow-lg">
               🌐 {LANGUAGES.find(l => l.key === lang)?.label}
             </button>
-            <Active />
+            <Active initialPage={pageState} onPageChange={(s) => setPageState(p => ({ ...p, ...s }))} />
           </div>
         );
       }
