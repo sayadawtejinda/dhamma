@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { t } from './paramatthaStrings';
 import { localizeCittas, localizeLokuttara8 } from './paramatthaCittaNames';
+import { localizeCetasikas, localizeCittaLayout, localizeCetasikaLayout } from './paramatthaCetasikaNames';
 
 // --- Data Definitions ---
 
@@ -509,7 +510,7 @@ const KAMA_JAVANA_IDS = [
 ];
 const NIRODHA_PHALA_IDS = Array.from({length:10}, (_, i) => i + 112); // အနာဂါမိဖိုလ်(၅)+အရဟတ္တဖိုလ်(၅)
 
-const CETASIKAS = [
+const CETASIKAS_MY = [
   // သဗ္ဗစိတ္တသာဓာရဏ (၇)
   { id: 1, name: "ဖဿ", subGroup: 'sabba', color: 'bg-yellow-400', desc: "အာရုံကို တွေ့ထိသော အခြင်းအရာအားဖြင့် ဖြစ်ခြင်းသဘော (လက္ခဏ)၊ အာရုံနှင့် အသိစိတ်ကို ဆက်စပ်ပေးခြင်းသဘော (ရသ)။" },
   { id: 2, name: "ဝေဒနာ", subGroup: 'sabba', color: 'bg-yellow-400', desc: "အာရုံ၏ အရသာကို ခံစားခြင်းသဘော။" },
@@ -1102,7 +1103,7 @@ const VIRATI_CYCLE_STATES = [
 ];
 
 // --- Layout & Grouping Structures ---
-const CITTA_LAYOUT = [
+const CITTA_LAYOUT_MY = [
   { title: "အကုသိုလ်စိတ် (၁၂)", subGroups: [{ title: "လောဘမူစိတ် (၈)", id: "lobha" }, { title: "ဒေါသမူစိတ် (၂)", id: "dosa" }, { title: "မောဟမူစိတ် (၂)", id: "moha" }] },
   { title: "အဟိတ်စိတ် (၁၈)", subGroups: [{ title: "အကုသလဝိပါက် (၇)", id: "akusala-vipaka" }, { title: "အဟိတ်ကုသလဝိပါက် (၈)", id: "kusala-vipaka" }, { title: "အဟိတ်ကြိယာ (၃)", id: "ahetuka-kiriya" }] },
   { title: "ကာမသောဘဏစိတ် (၂၄)", subGroups: [{ title: "မဟာကုသိုလ် (၈)", id: "maha-kusala" }, { title: "မဟာဝိပါက် (၈)", id: "maha-vipaka" }, { title: "မဟာကြိယာ (၈)", id: "maha-kiriya" }] },
@@ -1111,7 +1112,7 @@ const CITTA_LAYOUT = [
   { title: "လောကုတ္တရာစိတ် အကျယ် (၄၀)", subGroups: [{ title: "မဂ်စိတ် (၂၀)", id: "magga" }, { title: "ဖိုလ်စိတ် (၂၀)", id: "phala" }] }
 ];
 
-const CETASIKA_LAYOUT = [
+const CETASIKA_LAYOUT_MY = [
   { title: "အညသမာန်းစေတသိက် (၁၃)", subGroups: [{ title: "သဗ္ဗစိတ္တသာဓာရဏ (၇)", id: "sabba" }, { title: "ပကိဏ္ဏက (၆)", id: "pakinnaka" }] },
   { title: "အကုသိုလ်စေတသိက် (၁၄)", subGroups: [{ title: "မောဟစတုက္က (၄)", id: "moha-catukka" }, { title: "လောဘတ္တိက (၃)", id: "lobha-tika" }, { title: "ဒေါသစတုက္က (၄)", id: "dosa-catukka" }, { title: "ထိနမိဒ္ဓ (၂)", id: "thina-middha" }, { title: "ဝိစိကိစ္ဆာ (၁)", id: "vicikiccha" }] },
   { title: "သောဘဏစေတသိက် (၂၅)", subGroups: [{ title: "သောဘဏသာဓာရဏ (၁၉)", id: "sobhana-sadharana" }, { title: "ဝိရတီ (၃)", id: "virati" }, { title: "အပ္ပမညာ (၂)", id: "appamanna" }, { title: "ပညိန္ဒြေ (၁)", id: "panna" }] }
@@ -1120,7 +1121,7 @@ const CETASIKA_LAYOUT = [
 // JATI_TYPES moved inside App() below as a lang-aware useMemo value.
 
 // အကုသလသင်္ဂဟ - အကုသိုလ်စေတသိက်များကို အုပ်စု (၁၀) မျိုးအလိုက် ပြန်စုစည်းထားသော ခွဲခြမ်းမှု
-// (cetasikaIds သည် CETASIKAS array ထဲက id များဖြစ်ပြီး၊ တစ်ခုတည်းသော cetasika ကို ဓမ္မအမည်များစွာက ကိုယ်စားပြုရာမှာ
+// (cetasikaIds သည် CETASIKAS_MY array ထဲက id များဖြစ်ပြီး၊ တစ်ခုတည်းသော cetasika ကို ဓမ္မအမည်များစွာက ကိုယ်စားပြုရာမှာ
 // ထပ်နေတတ်သည် — ဥပမာ ကာမာသဝနှင့် ဘဝါသဝ နှစ်ခုစလုံးသည် "လောဘ" cetasika (id 18) ချည်းသာဖြစ်သည်)
 const AKUSALA_CATEGORIES = [
   { id: 'asava', name: 'အာသဝ (၄)', cetasikaIds: [14, 18, 19], color: 'rose', desc: 'ရှေးအဘို့ကို မထင်မမြင်ဖြစ်၍ ကြာမြင့်စွာ ထုံတတ်သော၊ သို့မဟုတ် အနာမှ ယိုသကဲ့သို့ အာရုံတို့၌ ယိုစီးတတ်သော၊ ဘဝဂ်နှင့် ဂေါတြဘူတိုင်အောင် နှံ့၍ ဖြစ်တတ်သော အကုသိုလ်တရား (၄) ပါး။', names: [
@@ -1416,7 +1417,7 @@ const BODHIPAKKHIYA_CATEGORIES = [
 
 // သဗ္ဗသင်္ဂဟ - ခန္ဓာ/ဥပါဒါနက္ခန္ဓာ/အာယတန/ဓာတ်/သစ္စာ ၅-အုပ်စု
 // ALL_CITTA_IDS ကို ဖိုင် အပေါ်ပိုင်း (BHUMI_31 data ရှေ့) မှာ ရွှေ့ကြေညာထားပြီးဖြစ်သည်
-const SANKHARAKKHANDHA_IDS = CETASIKAS.map(ct => ct.id).filter(id => id !== 2 && id !== 3);
+const SANKHARAKKHANDHA_IDS = CETASIKAS_MY.map(ct => ct.id).filter(id => id !== 2 && id !== 3);
 const ALL_RUPA_IDS = RUPAS.filter(r => !r.virtual).map(r => r.id); // ဖောဋ္ဌဗ္ဗာရုံ ကိုယ်စားပြု virtual id (29,30,31) များကို ထုတ်ထား — ရုပ် (၂၈) ပါးသာ
 const DHAMMAYATANA_SUKHUMA_RUPA_IDS = [2,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28]; // သုခုမရုပ် (၁၆) ပါး
 const LOKIYA_CITTA_IDS = CITTAS_MY.filter(c => c.id <= 81).map(c => c.id);
@@ -1457,7 +1458,7 @@ const SABBA_AYATANA = [
   { id: 'rasayatana', name: 'ရသာယတန', rupaIds: [13] },
   { id: 'photthabbayatana', name: 'ဖောဋ္ဌဗ္ဗာယတန', rupaIds: [1, 2, 4] },
   { id: 'manayatana', name: 'မနာယတန', cittaIds: ALL_CITTA_IDS },
-  { id: 'dhammayatana', name: 'ဓမ္မာယတန', cetasikaIds: CETASIKAS.map(ct => ct.id), rupaIds: DHAMMAYATANA_SUKHUMA_RUPA_IDS, isNibbana: true, noCitta: true },
+  { id: 'dhammayatana', name: 'ဓမ္မာယတန', cetasikaIds: CETASIKAS_MY.map(ct => ct.id), rupaIds: DHAMMAYATANA_SUKHUMA_RUPA_IDS, isNibbana: true, noCitta: true },
 ];
 const SABBA_DHATU = [
   { id: 'cakkhudhatu', name: 'စက္ခုဓာတ်', rupaIds: [5] },
@@ -1477,10 +1478,10 @@ const SABBA_DHATU = [
   { id: 'kayavinnanadhatu', name: 'ကာယဝိညာဏဓာတ်', cittaIds: [17, 24] },
   { id: 'manodhatu', name: 'မနောဓာတ်', cittaIds: [28, 18, 25] },
   { id: 'manovinnanadhatu', name: 'မနောဝိညာဏဓာတ်', cittaIds: ALL_CITTA_IDS.filter(id => ![13,20,14,21,15,22,16,23,17,24,28,18,25].includes(id)) },
-  { id: 'dhammadhatu', name: 'ဓမ္မဓာတ်', cetasikaIds: CETASIKAS.map(ct => ct.id), rupaIds: DHAMMAYATANA_SUKHUMA_RUPA_IDS, isNibbana: true, noCitta: true },
+  { id: 'dhammadhatu', name: 'ဓမ္မဓာတ်', cetasikaIds: CETASIKAS_MY.map(ct => ct.id), rupaIds: DHAMMAYATANA_SUKHUMA_RUPA_IDS, isNibbana: true, noCitta: true },
 ];
 const SABBA_SACCA = [
-  { id: 'dukkhasacca', name: 'ဒုက္ခသစ္စာ', cittaIds: LOKIYA_CITTA_IDS, cetasikaIds: CETASIKAS.map(ct => ct.id).filter(id => id !== 18), rupaIds: ALL_RUPA_IDS },
+  { id: 'dukkhasacca', name: 'ဒုက္ခသစ္စာ', cittaIds: LOKIYA_CITTA_IDS, cetasikaIds: CETASIKAS_MY.map(ct => ct.id).filter(id => id !== 18), rupaIds: ALL_RUPA_IDS },
   { id: 'samudayasacca', name: 'သမုဒယသစ္စာ', cetasikaIds: [18] },
   { id: 'nirodhasacca', name: 'နိရောဓသစ္စာ', isNibbana: true },
   { id: 'maggasacca', name: 'မဂ္ဂသစ္စာ', cittaIds: CITTAS_MY.filter(c => c.subGroup === 'magga').map(c => c.id), cetasikaIds: MAGGANGA8_IDS },
@@ -1509,7 +1510,7 @@ const PATICCA_12 = [
     cittaIds: CITTAS_MY.filter(c => c.type === 'vipaka' && c.id <= 81).map(c => c.id) },
   { id: 'namarupa', name: 'နာမ်ရုပ်', color: '#eab308',
     desc: 'လောကီဝိပါက်စိတ်နှင့် ယှဉ်သော စေတသိက် (နာမ်) နှင့် ကမ္မဇရုပ် (ရုပ်) ပေါင်း နာမ်ရုပ် (ခန့်မှန်း - ကျယ်ပြန့်စွာ ချိတ်ဆက်ထားသည်)။',
-    cetasikaIds: CETASIKAS.map(c => c.id), rupaIds: KAMMAJA_ALL_IDS },
+    cetasikaIds: CETASIKAS_MY.map(c => c.id), rupaIds: KAMMAJA_ALL_IDS },
   { id: 'salayatana', name: 'သဠာယတန', color: '#84cc16',
     desc: 'အဇ္ဈတ္တိကာယတန (၆)ပါး — စက္ခု/သောတ/ဃာန/ဇိဝှါ/ကာယ ပသာဒရုပ် (၅) + မနာယတန (ဝိပါက်စိတ်)။',
     rupaIds: [5, 6, 7, 8, 9], cittaIds: CITTAS_MY.filter(c => c.type === 'vipaka' && c.id <= 81).map(c => c.id) },
@@ -1530,7 +1531,7 @@ const PATICCA_12 = [
     cetasikaIds: [4] },
   { id: 'jati', name: 'ဇာတိ', color: '#6366f1',
     desc: 'နိပ္ဖန္နရုပ်နှင့် နာမက္ခန္ဓာတို့၏ အသစ်ဖြစ်ပေါ်လာခြင်း (ခန့်မှန်း - ကျယ်ပြန့်စွာ ချိတ်ဆက်ထားသည်)။',
-    cittaIds: ALL_CITTA_IDS, cetasikaIds: CETASIKAS.map(c => c.id), rupaIds: ALL_RUPA_IDS },
+    cittaIds: ALL_CITTA_IDS, cetasikaIds: CETASIKAS_MY.map(c => c.id), rupaIds: ALL_RUPA_IDS },
   { id: 'jaramarana', name: 'ဇရာမရဏ', color: '#8b5cf6',
     desc: 'နိပ္ဖန္နရုပ်၊ နာမက္ခန္ဓာတို့၏ ရင့်ခြင်း (ဇရာ) နှင့် ပျက်ခြင်း (မရဏ) — လက္ခဏရုပ် ဇရတာ/အနိစ္စတာ။',
     rupaIds: [27, 28] },
@@ -1702,6 +1703,9 @@ export default function App({ lang = 'my', initialPage = null, onPageChange = nu
   // citta names/short names per language (ids, groups and colours stay shared)
   const CITTAS = useMemo(() => localizeCittas(CITTAS_MY, lang), [lang]);
   const LOKUTTARA_8 = useMemo(() => localizeLokuttara8(LOKUTTARA_8_MY, lang), [lang]);
+  const CETASIKAS = useMemo(() => localizeCetasikas(CETASIKAS_MY, lang), [lang]);
+  const CITTA_LAYOUT = useMemo(() => localizeCittaLayout(CITTA_LAYOUT_MY, lang), [lang]);
+  const CETASIKA_LAYOUT = useMemo(() => localizeCetasikaLayout(CETASIKA_LAYOUT_MY, lang), [lang]);
   // Pali technical-term lists whose display "name" depends on lang (Roman
 
   // Pali for en/vi, Myanmar script for my) but whose "id"s -- used
