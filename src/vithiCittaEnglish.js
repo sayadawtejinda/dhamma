@@ -11,8 +11,13 @@
 const MM_DIGITS = { '၀': '0', '၁': '1', '၂': '2', '၃': '3', '၄': '4', '၅': '5', '၆': '6', '၇': '7', '၈': '8', '၉': '9' };
 const HAS_MM = /[က-႟]/;
 
+import { DICT_PHRASES } from './vithiCittaEnglishDict.js';
+import { MORE_PHRASES, MORE_WORDS, MORPHS } from './vithiCittaEnglishMore.js';
+
 // Whole-string phrases (matched on the trimmed text of a node / attribute).
 const PHRASES = {
+  ...DICT_PHRASES,
+  ...MORE_PHRASES,
   // tooltips and controls
   'ဤဘဝအတွက် ပုဂ္ဂိုလ်ပြောင်းလဲခွင့် ဖွင့်ထားသည်': 'Changing the person type is unlocked for this life',
   'ဤဘဝအတွက် ပုဂ္ဂိုလ်ပြောင်းလဲခွင့် ပိတ်ထားသည်': 'Changing the person type is locked for this life',
@@ -120,11 +125,54 @@ const WORDS = {
   'အတိဝိဘူတာရုံ': 'Ati-vibhūtārammaṇa', 'ဝိဘူတာရုံ': 'Vibhūtārammaṇa', 'အဝိဘူတာရုံ': 'Avibhūtārammaṇa', 'အတိအဝိဘူတာရုံ': 'Ati-avibhūtārammaṇa',
   'တဒါရမ္မဏဝါရ': 'tadārammaṇa round', 'ဇဝနဝါရ': 'javana round', 'ဝုဋ္ဌောဝါရ': 'voṭṭho round', 'မောဃဝါရ': 'mogha round',
   'ဇောမစောသောဝါရ': 'javana-not-reached round',
+  'လက္ခဏာ': 'Lakkhaṇa (characteristic)', 'ရသ': 'Rasa (function)', 'ပစ္စုပဋ္ဌာန်': 'Paccupaṭṭhāna (manifestation)', 'ပဒဋ္ဌာန်': 'Padaṭṭhāna (proximate cause)',
+  // --- lives, rūpa origins, nidāna, khandha ---
+  'အတိတ်ဘဝ': 'Past life', 'နောင်ဘဝ': 'Next life', 'အနာဂတ်ဘဝ': 'Future life', 'မရဏာသန္န': 'Maraṇāsanna',
+  'ကံကြောင့်ဖြစ်သော': 'Kamma-born', 'စိတ်ကြောင့်ဖြစ်သော': 'Citta-born', 'ဥတုကြောင့်ဖြစ်သော': 'Utu-born', 'အာဟာရကြောင့်ဖြစ်သော': 'Āhāra-born',
+  'အဟိတ်ကုသလဝိပါက်': 'Ahetuka kusala-vipāka', 'အဟိတ်အကုသလဝိပါက်': 'Ahetuka akusala-vipāka', 'သောမနဿသန္တီရဏ': 'Somanassa Santīraṇa',
+  'အာရုံအနုအရင့်': 'object strength', 'ပြောင်းရန်': 'to change', 'နှိပ်ပါ': 'click', 'စိတ်ကြိုက်': 'Free', 'ရွေးချယ်နိုင်သည်': 'choice is possible',
+  'ကြွင်း': 'remaining', 'စေတသိက်များ': 'cetasikas',
+  'အဝိဇ္ဇာပစ္စယာ': 'Avijjāpaccayā', 'သင်္ခါရာ': 'saṅkhārā', 'သင်္ခါရပစ္စယာ': 'Saṅkhārapaccayā', 'ဝိညာဏံ': 'viññāṇaṃ',
+  'ဝိညာဏပစ္စယာ': 'Viññāṇapaccayā', 'နာမရူပံ': 'nāmarūpaṃ', 'နာမရူပပစ္စယာ': 'Nāmarūpapaccayā', 'သဠာယတနံ': 'saḷāyatanaṃ',
+  'သဠာယတနပစ္စယာ': 'Saḷāyatanapaccayā', 'ဖဿော': 'phasso', 'ဖဿပစ္စယာ': 'Phassapaccayā', 'ဝေဒနာပစ္စယာ': 'Vedanāpaccayā',
+  'တဏှာ': 'taṇhā', 'တဏှာပစ္စယာ': 'Taṇhāpaccayā', 'ဥပါဒါနံ': 'upādānaṃ', 'ဥပါဒါနပစ္စယာ': 'Upādānapaccayā', 'ဘဝေါ': 'bhavo',
+  'ဘဝပစ္စယာ': 'Bhavapaccayā', 'ဇာတိ': 'jāti', 'ဇာတိပစ္စယာ': 'Jātipaccayā', 'ဇရာမရဏံ': 'jarāmaraṇaṃ', 'ဇရာမရဏံ..': 'jarāmaraṇaṃ..',
+  'ရူပက္ခန္ဓာ': 'Rūpakkhandha', 'နာမ်ခန္ဓာ': 'Nāmakkhandha', 'ဝိညာဏက္ခန္ဓာ': 'Viññāṇakkhandha', 'ဝေဒနာက္ခန္ဓာ': 'Vedanākkhandha',
+  'သညာက္ခန္ဓာ': 'Saññākkhandha', 'သင်္ခါရက္ခန္ဓာ': 'Saṅkhārakkhandha', 'အာယတန': 'Āyatana',
   // --- counters ---
   'မျိုး': 'kinds', 'ပါး': 'kinds',
 };
 
+Object.assign(WORDS, MORE_WORDS);
 const KEYS = new Set(Object.keys(WORDS));
+
+// Read a Pali compound written without spaces by cutting it into known building blocks (longest first).
+// Returns null unless the WHOLE token can be read, so a half-known word is left in Myanmar.
+const MORPH = { ...MORPHS };
+for (const [k, v] of Object.entries(WORDS)) if (!MORPH[k] && /^[A-ZĀĪŪṬḌṆḶṂṄÑ][^\s-]*$/.test(v)) MORPH[k] = v.charAt(0).toLowerCase() + v.slice(1);
+const MORPH_KEYS = Object.keys(MORPH).sort((a, b) => b.length - a.length);
+const segCache = new Map();
+function segment(t) {
+  if (segCache.has(t)) return segCache.get(t);
+  const memo = new Map();
+  const go = (i) => {
+    if (i === t.length) return [];
+    if (memo.has(i)) return memo.get(i);
+    let res = null;
+    for (const k of MORPH_KEYS) {
+      if (t.startsWith(k, i)) {
+        const rest = go(i + k.length);
+        if (rest) { res = [MORPH[k], ...rest]; break; }
+      }
+    }
+    memo.set(i, res);
+    return res;
+  };
+  const parts = go(0);
+  const out = parts ? parts.join('').replace(/^./, (c) => c.toUpperCase()) : null;
+  segCache.set(t, out);
+  return out;
+}
 const DELIM = /(\s+|[()[\]/,:;+—–]|။)/;
 
 function word(t) {
@@ -132,6 +180,10 @@ function word(t) {
   if (t.includes('-')) {
     const parts = t.split('-');
     if (parts.some((p) => KEYS.has(p))) return parts.map((p) => (WORDS[p] !== undefined ? WORDS[p] : p)).join('-');
+  }
+  if (HAS_MM.test(t) && !/^[၀-၉]+$/.test(t)) {
+    const seg = segment(t);
+    if (seg) return seg;
   }
   return t;
 }
@@ -144,7 +196,10 @@ export function vithiEnglish(s) {
   if (PHRASES[trimmed] !== undefined) return lead + PHRASES[trimmed] + trail;
   let x = s
     .replace(/([၀-၉]+)-(မျိုး|ပါး)/g, '$1 kinds')
-    .replace(/([၀-၉]+)။/g, '$1.');
+    .replace(/([၀-၉]+)။/g, '$1.')
+    .replace(/([၀-၉]+) ဘဝမြောက် /g, 'Life no. $1: ')
+    .replace(/([၀-၉]+) မျိုးသော ဝီထိများ/g, '$1 kinds of vīthis')
+    .replace(/([၀-၉]+)-ဈာန်/g, '$1-jhāna');
   x = x.split(DELIM).map(word).join('');
   return x.replace(/[၀-၉]/g, (d) => MM_DIGITS[d]);
 }
