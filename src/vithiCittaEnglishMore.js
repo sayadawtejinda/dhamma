@@ -3,6 +3,10 @@
 // စက္ခုသမ္ဖဿဇာဝေဒနာ = cakkhu + samphassa + jā + vedanā.
 
 export const MORE_PHRASES = {
+  'စတုဇရုပ်များရှိ ဩဇာ': 'The ojā in catuja rūpas', 'တိဇရုပ်များရှိ ဩဇာ': 'The ojā in tija rūpas', 'ကမ္မဇရုပ်များရှိ ဩဇာ': 'The ojā in kammaja rūpas',
+  'ကမ္မဇရုပ် မဖြစ်ပေါ်ပါ': 'No kammaja rūpa arises',
+  'မဂ်ကို ဆင်ခြင်ခြင်း': 'Reviewing the magga', 'ဖိုလ်ကို ဆင်ခြင်ခြင်း': 'Reviewing the phala', 'နိဗ္ဗာန်ကို ဆင်ခြင်ခြင်း': 'Reviewing Nibbāna',
+  'ပယ်အပ်ပြီးသော ကိလေသာကို ဆင်ခြင်ခြင်း': 'Reviewing the defilements already abandoned', 'ကြွင်းကျန်သော ကိလေသာကို ဆင်ခြင်ခြင်း': 'Reviewing the remaining defilements',
   'ပဋိသန္ဓေအခါ ဖြစ်သော ရုပ်ကလာပ် ၃-မျိုး': 'Three kinds of rūpa-kalāpa arising at the time of paṭisandhi',
   'ပထမဘဝင်မှစ၍ ပဝတ္တိအခါ ဖြစ်သော ရုပ်ကလာပ် ၅-မျိုး': 'Five kinds of rūpa-kalāpa arising in the pavatti period, from the first bhavaṅga onward',
   'ဟဒယဝတ္ထု (မနောဒွါရ) ၌ ဖြစ်သော ရုပ် ၆၃-မျိုး': 'The 63 kinds of rūpa arising in the hadayavatthu (manodvāra)',
@@ -87,6 +91,8 @@ export const MORE_PHRASES = {
 };
 
 export const MORE_WORDS = {
+  'မဖြစ်ပေါ်ပါ': '(does not arise)', 'မဖြစ်ပေါ်သေးပါ': '(has not arisen yet)', 'အရူပဘုံ': 'Arūpa realm', 'အာဟာရ': 'Āhāra', 'အကြောင်းတရား': 'causes',
+  'ဟသိတုပ္ပါဒ်': 'Hasituppāda', 'နိရောဓသမာပတ်': 'Nirodha-samāpatti', 'အဓိဋ္ဌာန်ဝီထိ': 'Adhiṭṭhāna vīthi', 'ဘုရားရှင်': 'the Buddha',
   'အာဂန္တုကဘဝင်': 'Āgantuka-bhavaṅga', 'လဟုတာ': 'Lahutā', 'မုဒုတာ': 'Mudutā', 'ကမ္မညတာ': 'Kammaññatā', 'ပါဂုညတာ': 'Pāguññatā', 'ဥဇုကတာ': 'Ujukatā', 'ပဿဒ္ဓိ': 'Passaddhi',
   'ကမ္မနိမိတ်': 'Kamma-nimitta', 'ဂတိနိမိတ်': 'Gati-nimitta',
   'ကံ': 'Kamma', 'ဖဿ': 'Phassa', 'ကာယ': 'Kāya', 'ဃာန': 'Ghāna', 'ဇော': 'Javana', 'မဂ်': 'Magga', 'ဟဒယ': 'Hadaya', 'ဩဇာ': 'Ojā',
