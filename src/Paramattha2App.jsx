@@ -3549,6 +3549,48 @@ const NibbanaDot = ({ item }) => (
     );
   };
 
+  // Deeper language-neutral snapshot: the active filter (ids), context citta, selected kalapa/samutthana/bhumi chip/
+  // paticca node, sabba item, vithi cycle indexes and floating-panel positions. Objects that hold translated text are
+  // stored by id (or flat index) and looked up again in the new language's data; restored once on mount.
+  const _restoring = initialPage?.f !== undefined;
+  const [snapReady, setSnapReady] = useState(!_restoring);
+  const _flatBhumi = () => BHUMI_31.flatMap(g => g.subgroups ? g.subgroups.flatMap(sg => sg.items) : (g.items || []));
+  const _flatSamutthana = () => RUPA_SAMUTTHANA_TYPES.flatMap(g => [g, ...(g.sub || [])]);
+  const _flatKalapa = () => KALAPA_GROUPS.flatMap(g => g.items);
+  const _flatSabba = () => SABBA_GROUPS.flatMap(g => g.items);
+  useEffect(() => {
+    if (!snapReady) return;
+    const f = filter.type === 'sabba-detail' ? { type: 'sabba-detail', sid: filter.value?.id } : filter;
+    onPageChange?.({
+      f, cc: cittaContext, nm: nanakadaciMode, dp: detailPick, svf: saccaVimuttaFocus, vci: viratiCycleIndex,
+      lke: lokuttaraExpanded, pho: photthabbaOn, kal: selectedKalapa?.id ?? null, sam: selectedSamutthana?.id ?? null,
+      bhi: selectedBhumiItem ? _flatBhumi().findIndex(it => it.name === selectedBhumiItem.name) : -1,
+      pat: selectedPaticcaId, pvi: pancaVariantIdx, pdi: pancaDoorIdx, mti: manoTypeIdx, mvi: manoVariantIdx, vai: vithiActiveIdx,
+      bp: bhumiPos, pp: paticcaPos, vp: vithiPos,
+    });
+  }, [snapReady, filter, cittaContext, nanakadaciMode, detailPick, saccaVimuttaFocus, viratiCycleIndex, lokuttaraExpanded, photthabbaOn,
+      selectedKalapa, selectedSamutthana, selectedBhumiItem, selectedPaticcaId, pancaVariantIdx, pancaDoorIdx, manoTypeIdx, manoVariantIdx, vithiActiveIdx,
+      bhumiPos, paticcaPos, vithiPos]);
+  useEffect(() => {
+    const p = initialPage;
+    if (!p || p.f === undefined) return;
+    let f = p.f;
+    if (f.type === 'sabba-detail') {
+      const pat = typeof f.sid === 'string' && f.sid.startsWith('paticca-') ? PATICCA_12.find(x => String(x.id) === f.sid.slice(8)) : null;
+      const it = pat ? { id: f.sid, name: pat.name, note: pat.desc, cetasikaIds: pat.cetasikaIds, cittaIds: pat.cittaIds, rupaIds: pat.rupaIds } : _flatSabba().find(x => x.id === f.sid);
+      f = it ? { type: 'sabba-detail', value: it } : { type: 'none', value: null };
+    }
+    setFilter(f);
+    setCittaContext(p.cc ?? null); setNanakadaciMode(p.nm ?? null); setDetailPick(p.dp ?? null); setSaccaVimuttaFocus(p.svf ?? null);
+    setViratiCycleIndex(p.vci ?? 0); setLokuttaraExpanded(!!p.lke); setPhotthabbaOn(!!p.pho);
+    setSelectedKalapa(p.kal != null ? (_flatKalapa().find(x => x.id === p.kal) ?? null) : null);
+    setSelectedSamutthana(p.sam != null ? (_flatSamutthana().find(x => x.id === p.sam) ?? null) : null);
+    setSelectedBhumiItem(p.bhi >= 0 ? (_flatBhumi()[p.bhi] ?? null) : null);
+    setSelectedPaticcaId(p.pat ?? null);
+    setPancaVariantIdx(p.pvi ?? 0); setPancaDoorIdx(p.pdi ?? 0); setManoTypeIdx(p.mti ?? 0); setManoVariantIdx(p.mvi ?? 0); setVithiActiveIdx(p.vai ?? null);
+    if (p.bp) setBhumiPos(p.bp); if (p.pp) setPaticcaPos(p.pp); if (p.vp) setVithiPos(p.vp);
+    setSnapReady(true);
+  }, []);
   return (
     <div className="min-h-screen bg-slate-100 text-slate-800 font-sans flex flex-col">
       {/* Header & Stats Dashboard */}
