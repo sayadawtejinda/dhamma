@@ -2244,7 +2244,180 @@ const hasPreSamphassa = (isNamaKhandha || isViññana) && (
       return baseStyle + "bg-slate-100 text-slate-400 border-slate-200 opacity-40 grayscale";
   };
 
-  const displayLifeOffset = currentLifeOffset; // the header no longer follows the clicked node
+  // Which role (cause / effect) a node plays in the open paṭicca-samuppāda view; null = not part of it.
+  const nidanaHlOf = (node, idx) => {
+  if (selectedNidana === null) return null;
+  if (selectedNidana === 0) {
+    if (nidanaViewMode === 'cause' && node.isAvijjaNode) return 'cause';
+    if (nidanaViewMode === 'effect' && node.isSankharaNode) return 'effect';
+  }
+  if (selectedNidana === 1) {
+    if (nidanaViewMode === 'cause' && node.isSankharaNode) return 'cause';
+    if (nidanaViewMode === 'effect') {
+      const _VT=['Kiết sanh','Hữu phần','Tử tâm','Nhãn thức','Nhĩ thức','Tỷ thức','Thiệt thức','Thân thức','Tiếp thâu','Quan sát','Đồng sở duyên'];
+const cur = _VT[nidanaCycleIndex % _VT.length];
+      if (node.name === cur || node.name.includes(cur)) {
+        if (cur === 'Hữu phần') {
+    if (!node.isBhavangaNode) return null;
+    const patIdx = vithiData.findIndex(n => n.name === 'Kiết sanh');
+    if (activePhase === 'patisandhi') return (patIdx !== -1 && idx >= patIdx) ? 'effect' : null;
+    if (activePhase === 'cuti') return (patIdx === -1 || idx < patIdx) ? 'effect' : null;
+    return 'effect';
+} else { return 'effect'; }
+      }
+    }
+  }
+  const _VCYC = ['Kiết sanh','Hữu phần','Tử tâm','Nhãn thức','Nhĩ thức','Tỷ thức','Thiệt thức','Thân thức','Tiếp thâu','Quan sát','Đồng sở duyên'];
+  if (selectedNidana === 2 && nidana2SubMode === 'kamma') {
+    if (nidanaViewMode === 'cause' && node.isSankharaNode) return 'cause';
+    if (nidanaViewMode === 'effect') {
+      const cur = _VCYC[nidanaCycleIndex % _VCYC.length];
+      if (node.name === cur || node.name.includes(cur)) {
+        if (cur === 'Hữu phần') {
+    if (!node.isBhavangaNode) return null;
+    const patIdx = vithiData.findIndex(n => n.name === 'Kiết sanh');
+    if (activePhase === 'patisandhi') return (patIdx !== -1 && idx >= patIdx) ? 'effect' : null;
+    if (activePhase === 'cuti') return (patIdx === -1 || idx < patIdx) ? 'effect' : null;
+    return 'effect';
+} else { return 'effect'; }
+      }
+    }
+  }
+  if ((selectedNidana === 2 && nidana2SubMode === 'sahajata') || (selectedNidana === 3 && nidana3SubMode === 'nama_mana')) {
+    if (idx === currentIndex) return 'cause';
+  }
+  if (selectedNidana === 5) {
+    const N5_SRC = ['Nhãn thức','Nhĩ thức','Tỷ thức','Thiệt thức','Thân thức','Hữu phần dứt dòng'];
+    const N5_PV = ['Nhãn môn lộ tâm','Nhĩ môn lộ tâm','Tỷ môn lộ tâm','Thiệt môn lộ tâm','Thân môn lộ tâm'];
+    const _ci5 = nidanaCycleIndex % 6;
+    if (nidana5SubMode === 'cause') {
+      if (node.name.includes(N5_SRC[_ci5]) || node.name === N5_SRC[_ci5]) return 'cause';
+    }
+    if (nidana5SubMode === 'effect') {
+      if (_ci5 < 5) {
+        const _inV = node.vithi?.includes(N5_PV[_ci5]);
+        const _isVin = node.name.includes(N5_SRC[_ci5]);
+        const _isMano = node.vithi?.includes('Ý môn') || node.vithi?.includes('Bắt cảnh');
+        if ((_inV && !_isVin) || _isMano) return 'effect';
+      } else {
+        const _upIdx = vithiData.findIndex(n => n.name === 'Hữu phần dứt dòng');
+        if (_upIdx !== -1 && idx > _upIdx && (node.vithi?.includes('Ý môn') || node.vithi?.includes('Bắt cảnh'))) return 'effect';
+      }
+    }
+  }
+  if (selectedNidana === 3 && nidana3SubMode === 'nama_rupa_ay') {
+  if (idx === currentIndex) return 'cause';
+  if (idx === currentIndex - 1 && currentIndex - 1 >= 0) return 'effect';
+}
+  if (selectedNidana === 3 && (nidana3SubMode === 'rupa_mana' || nidana3SubMode === 'namarupa_mana')) {
+    const _cutiIdx = vithiData.findIndex(n => n.name === "Tử tâm");
+    if (idx === currentIndex) return 'effect';
+    const curName = vithiData[currentIndex]?.name || "";
+    const isPVin = ["Nhãn thức","Nhĩ thức","Tỷ thức","Thiệt thức","Thân thức"].some(v => curName.includes(v));
+    if (isPVin) {
+        let atitaIdx = -1;
+        for (let i = currentIndex - 1; i >= 0; i--) {
+            if (vithiData[i]?.name === "Hữu phần vừa qua") { atitaIdx = i; break; }
+        }
+        if (atitaIdx !== -1 && idx === atitaIdx) return 'cause';
+    } else {
+        const _curName2 = vithiData[currentIndex]?.name || "";
+        if (_curName2 === "Kiết sanh") {
+            // Kiết sanh = ကမ္မဇရုပ်သာ မှီ၊ ရှေ့ပြောင်းစိတ် မရှိ၊ highlight မပြ
+        } else {
+            const _cutiIdx2 = vithiData.findIndex(n => n.name === "Tử tâm");
+            if (_cutiIdx2 !== -1 && currentIndex >= _cutiIdx2 - 16 && currentIndex <= _cutiIdx2) {
+                if (idx === _cutiIdx2 - 17) return 'cause';
+            } else {
+                if (currentIndex - 1 >= 0 && idx === currentIndex - 1) return 'cause';
+            }
+        }
+    }
+}
+if (selectedNidana === 4) {
+    if (idx === currentIndex) return 'effect';
+  }
+  if (selectedNidana === 6) {
+    const N6_PV = ['Nhãn môn lộ tâm','Nhĩ môn lộ tâm','Tỷ môn lộ tâm','Thiệt môn lộ tâm','Thân môn lộ tâm'];
+    const N6_SRC = ['Nhãn thức','Nhĩ thức','Tỷ thức','Thiệt thức','Thân thức','Hữu phần dứt dòng'];
+    const _ci6 = nidanaCycleIndex % 6;
+    if (nidana5SubMode === 'cause') {
+      if (_ci6 < 5) {
+        const _inV = node.vithi?.includes(N6_PV[_ci6]);
+        const _isVin = node.name.includes(N6_SRC[_ci6]);
+        const _isMano = node.vithi?.includes('Ý môn') || node.vithi?.includes('Bắt cảnh');
+        if ((_inV && !_isVin) || _isMano) return 'cause';
+      } else {
+        const _upIdx6 = vithiData.findIndex(n => n.name === 'Hữu phần dứt dòng');
+        if (_upIdx6 !== -1 && idx > _upIdx6 && (node.vithi?.includes('Ý môn') || node.vithi?.includes('Bắt cảnh'))) return 'cause';
+      }
+    }
+    if (nidana5SubMode === 'effect') {
+      if (node.isAvijjaNode && node.avijjaIdx === 0) return 'effect';
+    }
+  }
+  if (selectedNidana === 7) {
+    if (nidanaViewMode === 'cause' && node.isAvijjaNode && node.avijjaIdx === 0) return 'cause';
+    if (nidanaViewMode === 'effect' && node.isAvijjaNode && node.avijjaIdx === 1) return 'effect';
+  }
+  if (selectedNidana === 8) {
+  if (nidana4CycleIdx === 0) {
+    if (nidanaViewMode === 'cause' && node.isAvijjaNode && node.avijjaIdx === 1) return 'cause';
+    if (nidanaViewMode === 'effect' && node.isSankharaNode) return 'effect';
+  } else {
+    if (nidanaViewMode === 'cause' && node.isSankharaNode) return 'cause';
+    if (nidanaViewMode === 'effect' && node.name === 'Kiết sanh') return 'effect';
+  }
+}
+if (selectedNidana === 9) {
+  if (selectedNidana === 10) {
+  const N10_EFFECTS = ["Lão tử","Sầu","Bi","Khổ","Ưu","Não"];
+  const curEff = N10_EFFECTS[nidana10EffectIdx % 6];
+  if (nidanaViewMode === 'cause') {
+    const allPat = vithiData.reduce((acc,n,i)=>n.name==='Kiết sanh'?[...acc,i]:acc,[]);
+    const lastPat = allPat[allPat.length-1];
+    if (lastPat !== undefined && idx === lastPat) return 'cause';
+  }
+  if (nidanaViewMode === 'effect') {
+    if (curEff === 'Lão tử' && node.name === 'Tử tâm') return 'effect';
+    if (['Sầu','Bi','Ưu','Não'].includes(curEff) && node.isJavanaNode && node.vithi?.includes('Ý môn')) return 'effect';
+    if (curEff === 'Khổ' && node.name.includes('Thân thức')) return 'effect';
+  }
+}
+  if (nidanaViewMode === 'cause' && node.isSankharaNode) return 'cause';
+  if (nidanaViewMode === 'effect' && node.name === 'Kiết sanh') return 'effect';
+}
+if (selectedNidana === 10) {
+  const N10_EFFECTS = ["Lão tử","Sầu","Bi","Khổ","Ưu","Não"];
+  const curEff = N10_EFFECTS[nidana10EffectIdx % 6];
+  if (nidanaViewMode === 'cause') {
+    const allPat = vithiData.reduce((acc,n,i)=>n.name==='Kiết sanh'?[...acc,i]:acc,[]);
+    const lastPat = allPat[allPat.length-1];
+    if (lastPat !== undefined && idx === lastPat) return 'cause';
+  }
+  if (nidanaViewMode === 'effect') {
+    if (curEff === 'Lão tử' && node.name === 'Tử tâm') return 'effect';
+    if (['Sầu','Bi','Ưu','Não'].includes(curEff) && node.isJavanaNode && node.vithi?.includes('Ý môn')) return 'effect';
+    if (curEff === 'Khổ' && node.name.includes('Thân thức')) return 'effect';
+  }
+}
+  };
+  // The header only follows the life of the shown node while a cause-effect view (paṭicca-samuppāda) is open: its causes
+  // (avijjā, taṇhā, upādāna, saṅkhāra, kamma) belong to the life before the centre life, jāti/jarā-maraṇa to the one after it.
+  const displayLifeOffset = (() => {
+    if (selectedNidana === null && !(paticcaStep > 0)) return currentLifeOffset;
+    const dIdx = vithiData.findIndex(n => n.isLifeDividerBefore);
+    if (dIdx === -1) return currentLifeOffset;
+    let marked = [];
+    if (selectedNidana !== null) marked = vithiData.map((n, i) => nidanaHlOf(n, i) ? i : -1).filter(i => i >= 0);
+    else if (paticcaStep === 1) marked = vithiData.map((n, i) => n.isAvijjaNode ? i : -1).filter(i => i >= 0);
+    else if (paticcaStep === 2) marked = vithiData.map((n, i) => n.isSankharaNode ? i : -1).filter(i => i >= 0);
+    else marked = [currentIndex];
+    if (marked.length === 0) return currentLifeOffset;
+    if (activePhase === 'patisandhi' && marked.every(i => i < dIdx)) return currentLifeOffset - 1;
+    if (activePhase === 'cuti' && marked.every(i => i >= dIdx)) return currentLifeOffset + 1;
+    return currentLifeOffset;
+  })();
 
   const isPaticcaActiveInRender = paticcaStep > 0;
   const rupaNodeInRender = (isPaticcaActiveInRender && paticcaKhandha === 1 && paticcaLockedNodeData)
@@ -2643,163 +2816,7 @@ const hasPreSamphassa = (isNamaKhandha || isViññana) && (
               else if (node.isCutiNode) tooltipText = "Nhấp chuột để thay đổi lộ cận tử";
               else if (node.specificName) tooltipText = `${node.specificName}`;
              
-             const nidanaHlType = (() => {
-  if (selectedNidana === null) return null;
-  if (selectedNidana === 0) {
-    if (nidanaViewMode === 'cause' && node.isAvijjaNode) return 'cause';
-    if (nidanaViewMode === 'effect' && node.isSankharaNode) return 'effect';
-  }
-  if (selectedNidana === 1) {
-    if (nidanaViewMode === 'cause' && node.isSankharaNode) return 'cause';
-    if (nidanaViewMode === 'effect') {
-      const _VT=['Kiết sanh','Hữu phần','Tử tâm','Nhãn thức','Nhĩ thức','Tỷ thức','Thiệt thức','Thân thức','Tiếp thâu','Quan sát','Đồng sở duyên'];
-const cur = _VT[nidanaCycleIndex % _VT.length];
-      if (node.name === cur || node.name.includes(cur)) {
-        if (cur === 'Hữu phần') {
-    if (!node.isBhavangaNode) return null;
-    const patIdx = vithiData.findIndex(n => n.name === 'Kiết sanh');
-    if (activePhase === 'patisandhi') return (patIdx !== -1 && idx >= patIdx) ? 'effect' : null;
-    if (activePhase === 'cuti') return (patIdx === -1 || idx < patIdx) ? 'effect' : null;
-    return 'effect';
-} else { return 'effect'; }
-      }
-    }
-  }
-  const _VCYC = ['Kiết sanh','Hữu phần','Tử tâm','Nhãn thức','Nhĩ thức','Tỷ thức','Thiệt thức','Thân thức','Tiếp thâu','Quan sát','Đồng sở duyên'];
-  if (selectedNidana === 2 && nidana2SubMode === 'kamma') {
-    if (nidanaViewMode === 'cause' && node.isSankharaNode) return 'cause';
-    if (nidanaViewMode === 'effect') {
-      const cur = _VCYC[nidanaCycleIndex % _VCYC.length];
-      if (node.name === cur || node.name.includes(cur)) {
-        if (cur === 'Hữu phần') {
-    if (!node.isBhavangaNode) return null;
-    const patIdx = vithiData.findIndex(n => n.name === 'Kiết sanh');
-    if (activePhase === 'patisandhi') return (patIdx !== -1 && idx >= patIdx) ? 'effect' : null;
-    if (activePhase === 'cuti') return (patIdx === -1 || idx < patIdx) ? 'effect' : null;
-    return 'effect';
-} else { return 'effect'; }
-      }
-    }
-  }
-  if ((selectedNidana === 2 && nidana2SubMode === 'sahajata') || (selectedNidana === 3 && nidana3SubMode === 'nama_mana')) {
-    if (idx === currentIndex) return 'cause';
-  }
-  if (selectedNidana === 5) {
-    const N5_SRC = ['Nhãn thức','Nhĩ thức','Tỷ thức','Thiệt thức','Thân thức','Hữu phần dứt dòng'];
-    const N5_PV = ['Nhãn môn lộ tâm','Nhĩ môn lộ tâm','Tỷ môn lộ tâm','Thiệt môn lộ tâm','Thân môn lộ tâm'];
-    const _ci5 = nidanaCycleIndex % 6;
-    if (nidana5SubMode === 'cause') {
-      if (node.name.includes(N5_SRC[_ci5]) || node.name === N5_SRC[_ci5]) return 'cause';
-    }
-    if (nidana5SubMode === 'effect') {
-      if (_ci5 < 5) {
-        const _inV = node.vithi?.includes(N5_PV[_ci5]);
-        const _isVin = node.name.includes(N5_SRC[_ci5]);
-        const _isMano = node.vithi?.includes('Ý môn') || node.vithi?.includes('Bắt cảnh');
-        if ((_inV && !_isVin) || _isMano) return 'effect';
-      } else {
-        const _upIdx = vithiData.findIndex(n => n.name === 'Hữu phần dứt dòng');
-        if (_upIdx !== -1 && idx > _upIdx && (node.vithi?.includes('Ý môn') || node.vithi?.includes('Bắt cảnh'))) return 'effect';
-      }
-    }
-  }
-  if (selectedNidana === 3 && nidana3SubMode === 'nama_rupa_ay') {
-  if (idx === currentIndex) return 'cause';
-  if (idx === currentIndex - 1 && currentIndex - 1 >= 0) return 'effect';
-}
-  if (selectedNidana === 3 && (nidana3SubMode === 'rupa_mana' || nidana3SubMode === 'namarupa_mana')) {
-    const _cutiIdx = vithiData.findIndex(n => n.name === "Tử tâm");
-    if (idx === currentIndex) return 'effect';
-    const curName = vithiData[currentIndex]?.name || "";
-    const isPVin = ["Nhãn thức","Nhĩ thức","Tỷ thức","Thiệt thức","Thân thức"].some(v => curName.includes(v));
-    if (isPVin) {
-        let atitaIdx = -1;
-        for (let i = currentIndex - 1; i >= 0; i--) {
-            if (vithiData[i]?.name === "Hữu phần vừa qua") { atitaIdx = i; break; }
-        }
-        if (atitaIdx !== -1 && idx === atitaIdx) return 'cause';
-    } else {
-        const _curName2 = vithiData[currentIndex]?.name || "";
-        if (_curName2 === "Kiết sanh") {
-            // Kiết sanh = ကမ္မဇရုပ်သာ မှီ၊ ရှေ့ပြောင်းစိတ် မရှိ၊ highlight မပြ
-        } else {
-            const _cutiIdx2 = vithiData.findIndex(n => n.name === "Tử tâm");
-            if (_cutiIdx2 !== -1 && currentIndex >= _cutiIdx2 - 16 && currentIndex <= _cutiIdx2) {
-                if (idx === _cutiIdx2 - 17) return 'cause';
-            } else {
-                if (currentIndex - 1 >= 0 && idx === currentIndex - 1) return 'cause';
-            }
-        }
-    }
-}
-if (selectedNidana === 4) {
-    if (idx === currentIndex) return 'effect';
-  }
-  if (selectedNidana === 6) {
-    const N6_PV = ['Nhãn môn lộ tâm','Nhĩ môn lộ tâm','Tỷ môn lộ tâm','Thiệt môn lộ tâm','Thân môn lộ tâm'];
-    const N6_SRC = ['Nhãn thức','Nhĩ thức','Tỷ thức','Thiệt thức','Thân thức','Hữu phần dứt dòng'];
-    const _ci6 = nidanaCycleIndex % 6;
-    if (nidana5SubMode === 'cause') {
-      if (_ci6 < 5) {
-        const _inV = node.vithi?.includes(N6_PV[_ci6]);
-        const _isVin = node.name.includes(N6_SRC[_ci6]);
-        const _isMano = node.vithi?.includes('Ý môn') || node.vithi?.includes('Bắt cảnh');
-        if ((_inV && !_isVin) || _isMano) return 'cause';
-      } else {
-        const _upIdx6 = vithiData.findIndex(n => n.name === 'Hữu phần dứt dòng');
-        if (_upIdx6 !== -1 && idx > _upIdx6 && (node.vithi?.includes('Ý môn') || node.vithi?.includes('Bắt cảnh'))) return 'cause';
-      }
-    }
-    if (nidana5SubMode === 'effect') {
-      if (node.isAvijjaNode && node.avijjaIdx === 0) return 'effect';
-    }
-  }
-  if (selectedNidana === 7) {
-    if (nidanaViewMode === 'cause' && node.isAvijjaNode && node.avijjaIdx === 0) return 'cause';
-    if (nidanaViewMode === 'effect' && node.isAvijjaNode && node.avijjaIdx === 1) return 'effect';
-  }
-  if (selectedNidana === 8) {
-  if (nidana4CycleIdx === 0) {
-    if (nidanaViewMode === 'cause' && node.isAvijjaNode && node.avijjaIdx === 1) return 'cause';
-    if (nidanaViewMode === 'effect' && node.isSankharaNode) return 'effect';
-  } else {
-    if (nidanaViewMode === 'cause' && node.isSankharaNode) return 'cause';
-    if (nidanaViewMode === 'effect' && node.name === 'Kiết sanh') return 'effect';
-  }
-}
-if (selectedNidana === 9) {
-  if (selectedNidana === 10) {
-  const N10_EFFECTS = ["Lão tử","Sầu","Bi","Khổ","Ưu","Não"];
-  const curEff = N10_EFFECTS[nidana10EffectIdx % 6];
-  if (nidanaViewMode === 'cause') {
-    const allPat = vithiData.reduce((acc,n,i)=>n.name==='Kiết sanh'?[...acc,i]:acc,[]);
-    const lastPat = allPat[allPat.length-1];
-    if (lastPat !== undefined && idx === lastPat) return 'cause';
-  }
-  if (nidanaViewMode === 'effect') {
-    if (curEff === 'Lão tử' && node.name === 'Tử tâm') return 'effect';
-    if (['Sầu','Bi','Ưu','Não'].includes(curEff) && node.isJavanaNode && node.vithi?.includes('Ý môn')) return 'effect';
-    if (curEff === 'Khổ' && node.name.includes('Thân thức')) return 'effect';
-  }
-}
-  if (nidanaViewMode === 'cause' && node.isSankharaNode) return 'cause';
-  if (nidanaViewMode === 'effect' && node.name === 'Kiết sanh') return 'effect';
-}
-if (selectedNidana === 10) {
-  const N10_EFFECTS = ["Lão tử","Sầu","Bi","Khổ","Ưu","Não"];
-  const curEff = N10_EFFECTS[nidana10EffectIdx % 6];
-  if (nidanaViewMode === 'cause') {
-    const allPat = vithiData.reduce((acc,n,i)=>n.name==='Kiết sanh'?[...acc,i]:acc,[]);
-    const lastPat = allPat[allPat.length-1];
-    if (lastPat !== undefined && idx === lastPat) return 'cause';
-  }
-  if (nidanaViewMode === 'effect') {
-    if (curEff === 'Lão tử' && node.name === 'Tử tâm') return 'effect';
-    if (['Sầu','Bi','Ưu','Não'].includes(curEff) && node.isJavanaNode && node.vithi?.includes('Ý môn')) return 'effect';
-    if (curEff === 'Khổ' && node.name.includes('Thân thức')) return 'effect';
-  }
-}
-})();
+             const nidanaHlType = nidanaHlOf(node, idx);
               const isPaticcaTarget = (paticcaStep === 1 && node.isAvijjaNode) || 
                         (paticcaStep === 2 && node.isSankharaNode) || 
                         ((paticcaStep === 3 || paticcaStep === 4 || paticcaStep === 5 || paticcaStep === 7) && isActive && paticcaStep !== 0) ||
