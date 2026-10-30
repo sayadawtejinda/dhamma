@@ -6,6 +6,7 @@ import {
   Sun, Apple, X, Info, Brain, Target, Zap, Layers, ChevronDown, ChevronUp,
   Maximize, Minimize, RefreshCcw, Timer, ActivitySquare, BookOpen, ExternalLink
 } from 'lucide-react';
+import { kotthasaSvg } from './kotthasaBody.js'; // KB
 
 //
 const rupa28 = {
@@ -351,8 +352,8 @@ const kotthasaData = {
       { id: 'p13', name: 'Membranes (kilomaka)', count: 53, kalapas: kalapas53, icon: Mountain },
       { id: 'p14', name: 'Spleen (pihaka)', count: 53, kalapas: kalapas53, icon: Mountain },
       { id: 'p15', name: 'Lungs (papphāsa)', count: 53, kalapas: kalapas53, icon: Mountain },
-      { id: 'p16', name: 'Large intestine (anta)', count: 53, kalapas: kalapas53, icon: Mountain },
-      { id: 'p17', name: 'Small intestine (antaguṇa)', count: 53, kalapas: kalapas53, icon: Mountain },
+      { id: 'p16', name: 'Intestines (anta)', count: 53, kalapas: kalapas53, icon: Mountain },
+      { id: 'p17', name: 'Mesentery (antaguṇa)', count: 53, kalapas: kalapas53, icon: Mountain },
       { id: 'p18', name: 'Undigested food (udariya)', count: 8, kalapas: kalapas8, icon: Wheat, desc: 'Only the 8 kinds of utuja ojaṭṭhamaka rūpa are present.' },
       { id: 'p19', name: 'Excrement (karīsa)', count: 8, kalapas: kalapas8, icon: Droplets, desc: 'Only the 8 kinds of utuja ojaṭṭhamaka rūpa are present.' },
       { id: 'p20', name: 'Brain (matthaluṅga)', count: 53, kalapas: kalapas53, icon: Brain },
@@ -603,6 +604,11 @@ export default function App({ initialPage = null, onPageChange = null } = {}) {
           </div>
           
           <div className="p-6 overflow-y-auto">
+            {/* KB-START */}
+            {kotthasaSvg(item.id) && (
+              <div className="mb-4 bg-white border border-slate-200 rounded-xl p-2 flex justify-center" style={{ height: 300 }} dangerouslySetInnerHTML={{ __html: kotthasaSvg(item.id) }} />
+            )}
+            {/* KB-END */}
             {item.desc && (
               <div className="flex items-start gap-2 mb-4 text-blue-800 bg-blue-50 p-4 rounded-lg border border-blue-100">
                 <Info size={20} className="mt-0.5 flex-shrink-0" />

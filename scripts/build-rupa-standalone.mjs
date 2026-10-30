@@ -29,6 +29,8 @@ function wrapAsIIFE(source) {
 
 const myanmarSrc = wrapAsIIFE(readFileSync(join(root, 'src/Rupa1App.jsx'), 'utf8'));
 const vietnameseSrc = wrapAsIIFE(readFileSync(join(root, 'src/Rupa2App.jsx'), 'utf8'));
+// the 32-parts body pictures (imported by the Rupa pages; imports are stripped above, so it is inlined once)
+const bodySrc = readFileSync(join(root, 'src/kotthasaBody.js'), 'utf8').replace(/^export (function|const)/gm, '$1');
 const englishSrc = wrapAsIIFE(readFileSync(join(root, 'src/Rupa3App.jsx'), 'utf8'));
 
 const html = `<!doctype html>
@@ -70,6 +72,7 @@ const html = `<!doctype html>
       // LucideReact UMD global instead.
       const { Eye, Ear, Mountain, Droplets, Flame, Wind, Palette, Flower2, Utensils, Wheat, Activity, User, Heart, Cloud, Sun, Apple, X, Info, Brain, Target, Zap, Layers, ChevronDown, ChevronUp, Maximize, Minimize, RefreshCcw, Timer, ActivitySquare, BookOpen, ExternalLink } = LucideReact;
 
+      ${bodySrc}
       const RupaMy = ${myanmarSrc};
       const RupaVi = ${vietnameseSrc};
       const RupaEn = ${englishSrc};

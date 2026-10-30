@@ -5,6 +5,7 @@ import {
   Sun, Apple, X, Info, Brain, Target, Zap, Layers, ChevronDown, ChevronUp,
   Maximize, Minimize, RefreshCcw, Timer, ActivitySquare, BookOpen, ExternalLink
 } from 'lucide-react';
+import { kotthasaSvg } from './kotthasaBody.js'; // KB
 
 // --- ရုပ် (၂၈) ပါး အသေးစိတ် အချက်အလက်များ (Rupa 28 Details) ---
 const rupa28 = {
@@ -602,6 +603,11 @@ export default function App({ initialPage = null, onPageChange = null } = {}) {
           </div>
           
           <div className="p-6 overflow-y-auto">
+            {/* KB-START */}
+            {kotthasaSvg(item.id) && (
+              <div className="mb-4 bg-white border border-slate-200 rounded-xl p-2 flex justify-center" style={{ height: 300 }} dangerouslySetInnerHTML={{ __html: kotthasaSvg(item.id) }} />
+            )}
+            {/* KB-END */}
             {item.desc && (
               <div className="flex items-start gap-2 mb-4 text-blue-800 bg-blue-50 p-4 rounded-lg border border-blue-100">
                 <Info size={20} className="mt-0.5 flex-shrink-0" />
