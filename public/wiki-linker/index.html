@@ -37,6 +37,8 @@
   .tip ul { margin:4px 0 0; padding-left:20px; }
   #review { background:var(--bg); border:1px solid var(--line); border-radius:12px; padding:20px; max-height:500px; overflow-y:auto; font-size:18px; line-height:2; white-space:pre-wrap; margin-bottom:16px; }
   .lk { cursor:pointer; padding:2px 6px; border-radius:6px; font-weight:700; user-select:none; }
+  .lk.ws.on { background:#d97706; }
+  .cyc { font-size:11px; background:#fef3c7; color:#92400e; border-radius:6px; padding:1px 5px; margin-left:3px; cursor:pointer; user-select:none; }
   .lk.on { background:var(--accent); color:#fff; } .lk.off { color:#cbd5e1; text-decoration:line-through; }
   #final { height:450px; background:#0f172a; color:#e0e7ff; font:14px/1.6 ui-monospace, Consolas, monospace; resize:none; }
   .big { width:100%; padding:14px; font-size:16px; }
@@ -69,6 +71,17 @@
           <div id="kwlist"></div>
         </div>
       </div>
+
+      <div class="card" style="margin-top:20px">
+        <h2>Wikisource လင့်များ</h2>
+        <div id="wsStatus" class="label" style="text-transform:none; letter-spacing:0">တင်နေသည်...</div>
+        <textarea id="wsPaste" rows="4" style="margin-top:8px" placeholder="လင့်အသစ်များကို ဒီမှာ paste လုပ်ပါ (တစ်ကြောင်းချင်းစီ)&#10;* [https://my.wikisource.org/wiki/စာမျက်နှာ#ခေါင်းစဉ် ခေါင်းစဉ်]"></textarea>
+        <button class="primary big" id="wsAddBtn" style="margin-top:8px">+ လင့်များ ထည့်မည်</button>
+        <div class="row" style="margin-top:8px">
+          <button class="plain small" id="wsExportBtn">⬇ ကိုယ်ပိုင်လင့် Backup</button>
+          <button class="plain small" id="wsClearBtn">ကိုယ်ပိုင်လင့် ဖျက်မည်</button>
+        </div>
+      </div>
     </div>
 
     <div>
@@ -87,6 +100,11 @@
 
       <div class="card hidden" id="vReview">
         <div class="top"><h2 style="margin:0">ရလဒ်ကို စစ်ဆေးပါ</h2><button class="x" data-back>✕</button></div>
+        <div class="row" style="margin-bottom:10px; align-items:center">
+          <div id="wsInfo" class="label" style="text-transform:none; letter-spacing:0; flex:2"></div>
+          <button class="plain small" id="wsOff">Wikisource အားလုံးပိတ်</button>
+          <button class="plain small" id="wsOn">အားလုံးဖွင့်</button>
+        </div>
         <div id="review"></div>
         <div class="row">
           <button class="plain big" data-back>ပြန်ပြင်မည်</button>
@@ -116,6 +134,87 @@ let links = [];
 const $ = id => document.getElementById(id);
 const uid = () => Math.random().toString(36).slice(2, 11);
 const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+// Wikisource heading links (built from the "လင့်များ" sheet by scripts/build_wiki_links.py) + the user's own pasted ones
+const CKEY = 'wikiLinker.customLinks.v1';
+let wsBase = 'https://my.wikisource.org/wiki/';
+let wsData = null;       // {base, pages:[{p, h:[display | [display, anchor]]}]}
+let customLinks = [];    // [{display, url}]
+let wsIndex = new Map(); // display -> [[page, anchor] | [null, fullUrl]]
+
+const urlOf = e => e[0] === null ? e[1] : wsBase + e[0] + (e[1] ? '#' + e[1] : '');
+const pageOf = e => e[0] === null ? e[1].replace(/^https?:\/\/[^/]+\/wiki\//, '').split('#')[0] : e[0];
+
+function loadCustom() {
+  try { customLinks = JSON.parse(localStorage.getItem(CKEY)) || []; } catch (e) { customLinks = []; }
+}
+function saveCustom() {
+  try { localStorage.setItem(CKEY, JSON.stringify(customLinks)); }
+  catch (e) { alert('Browser ထဲ သိမ်း၍မရပါ — Backup သိမ်းထားပါ'); }
+}
+function rebuildWsIndex() {
+  wsIndex = new Map();
+  const add = (display, e) => {
+    const a = wsIndex.get(display);
+    if (a) a.push(e); else wsIndex.set(display, [e]);
+  };
+  customLinks.forEach(c => add(c.display, [null, c.url]));
+  if (wsData) wsData.pages.forEach(pg => pg.h.forEach(h => {
+    if (typeof h === 'string') add(h, [pg.p, h.replace(/ /g, '_')]);
+    else add(h[0], [pg.p, h[1]]);
+  }));
+  const n = wsData ? wsData.pages.reduce((s, p) => s + p.h.length, 0) : 0;
+  $('wsStatus').textContent = wsData
+    ? `Sheet မှ လင့် ${n.toLocaleString()} ခု + ကိုယ်ပိုင် ${customLinks.length} ခု`
+    : `Sheet လင့်များ မတင်နိုင်ပါ (ကိုယ်ပိုင် ${customLinks.length} ခု)`;
+}
+async function loadWs() {
+  try {
+    const r = await fetch('wikisource-links.json');
+    if (!r.ok) throw new Error(r.status);
+    wsData = await r.json();
+    wsBase = wsData.base || wsBase;
+  } catch (e) { wsData = null; }
+  rebuildWsIndex();
+  updateGo();
+}
+
+// "* [URL display]", "[URL display]" or "URL display" -> {display, url}
+function parseLinkLine(line) {
+  const m = line.trim().match(/^\*?\s*\[?\s*(https?:\/\/\S+)\s+(.+?)\s*\]?\s*$/);
+  if (!m) return null;
+  const url = m[1].replace(/\]$/, '');
+  const display = m[2].replace(/\]$/, '').trim();
+  return display.length >= 2 ? { display, url } : null;
+}
+$('wsAddBtn').onclick = () => {
+  const lines = $('wsPaste').value.split(/\r?\n/);
+  const have = new Set(customLinks.map(c => c.display + '\n' + c.url));
+  let n = 0, bad = 0;
+  for (const ln of lines) {
+    if (!ln.trim()) continue;
+    const c = parseLinkLine(ln);
+    if (!c) { bad++; continue; }
+    const k = c.display + '\n' + c.url;
+    if (have.has(k)) continue;
+    have.add(k); customLinks.push(c); n++;
+  }
+  saveCustom(); rebuildWsIndex();
+  $('wsPaste').value = '';
+  alert(`လင့်အသစ် ${n} ခု ထည့်ပြီးပါပြီ` + (bad ? ` (ဖတ်မရသော စာကြောင်း ${bad} ကြောင်း ကျော်ခဲ့သည်)` : ''));
+};
+$('wsExportBtn').onclick = () => {
+  const txt = customLinks.map(c => `* [${c.url} ${c.display}]`).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([txt], { type: 'text/plain' }));
+  a.download = 'wiki-linker-custom-links.txt';
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+$('wsClearBtn').onclick = () => {
+  if (!customLinks.length || !confirm(`ကိုယ်ပိုင်လင့် ${customLinks.length} ခု ဖျက်မလား? (Sheet မှ လင့်များ မပျက်ပါ)`)) return;
+  customLinks = []; saveCustom(); rebuildWsIndex();
+};
 
 function load() {
   try { keywords = JSON.parse(localStorage.getItem(KEY)) || []; } catch (e) { keywords = []; }
@@ -151,7 +250,7 @@ function renderKeywords() {
   }
   updateGo();
 }
-function updateGo() { $('goBtn').disabled = !$('input').value || !keywords.length; }
+function updateGo() { $('goBtn').disabled = !$('input').value || (!keywords.length && !wsIndex.size); }
 
 $('kwlist').addEventListener('click', e => {
   const ed = e.target.closest('[data-edit]'), del = e.target.closest('[data-del]');
@@ -206,6 +305,16 @@ function show(v) {
 }
 document.querySelectorAll('[data-back]').forEach(b => b.onclick = () => { $('input').value = text; show('input'); updateGo(); });
 
+// Burmese has no spaces between words: a heading only counts when it is not cut out of the middle of a longer word
+// (previous char is not a Myanmar letter, next char is not a dependent vowel/sign)
+function wordEdge(t, at, len) {
+  const prev = at > 0 ? t[at - 1] : '';
+  const next = t[at + len] || '';
+  if (prev && /[က-၉ၐ-႟]/.test(prev)) return false;
+  if (next && /[ါ-ှ]/.test(next)) return false;
+  return true;
+}
+
 function processToLinks() {
   let t = $('input').value;
   t = t.replace(/\[[၀-၉\d\s၊,]+\]/g, '');
@@ -221,6 +330,9 @@ function processToLinks() {
     if (m[2]) pre.add(m[2].trim());
     ranges.push({ start: m.index, end: m.index + m[0].length });
   }
+
+  const extLink = /\[https?:\/\/[^\]]*\]/g;
+  while ((m = extLink.exec(t)) !== null) ranges.push({ start: m.index, end: m.index + m[0].length });
 
   const kws = keywords.map(k => {
     if (k.word.includes('|')) {
@@ -255,13 +367,37 @@ function processToLinks() {
     }
   });
 
+  // Wikisource headings found in the text: keyword links win, then longer headings first
+  const wsFound = [];
+  wsIndex.forEach((urls, display) => {
+    if (pre.has(display) || done.has(display)) return;
+    let from = 0, at;
+    while ((at = t.indexOf(display, from)) !== -1) {
+      from = at + 1;
+      if (ranges.some(r => at >= r.start && at < r.end)) continue;
+      if (!wordEdge(t, at, display.length)) continue;
+      let overlap = false;
+      for (let i = at; i < at + display.length; i++) if (occ.has(i)) { overlap = true; break; }
+      if (!overlap) { wsFound.push({ display, index: at, urls }); break; }
+    }
+  });
+  wsFound.sort((a, b) => b.display.length - a.display.length);
+  wsFound.forEach(w => {
+    for (let i = w.index; i < w.index + w.display.length; i++) if (occ.has(i)) return;
+    for (let i = w.index; i < w.index + w.display.length; i++) occ.add(i);
+    // only unambiguous, reasonably long headings start switched on; the rest are one click away
+    final.push({ ws: true, urls: w.urls, ci: 0, display: w.display, index: w.index, active: w.urls.length === 1 && w.display.length >= 5, id: uid() });
+  });
+  final.sort((a, b) => a.index - b.index);
+
   text = t; links = final;
   renderReview();
   show('review');
 }
 $('goBtn').onclick = processToLinks;
 
-const linkMarkup = l => l.target !== l.display ? `[[${l.target}|${l.display}]]` : `[[${l.display}]]`;
+const linkMarkup = l => l.ws ? `[${urlOf(l.urls[l.ci])} ${l.display}]`
+  : l.target !== l.display ? `[[${l.target}|${l.display}]]` : `[[${l.display}]]`;
 
 function renderReview() {
   const byIndex = new Map(links.map(l => [l.index, l]));
@@ -269,7 +405,16 @@ function renderReview() {
   while (i < text.length) {
     const l = byIndex.get(i);
     if (l) {
-      html += `<span class="lk ${l.active ? 'on' : 'off'}" data-id="${l.id}">${esc(l.active ? linkMarkup(l) : l.display)}</span>`;
+      if (l.ws) {
+        const e = l.urls[l.ci];
+        html += `<span class="lk ws ${l.active ? 'on' : 'off'}" data-id="${l.id}" title="${esc(urlOf(e))}">${esc(l.display)}</span>`;
+        if (l.urls.length > 1) {
+          const pg = pageOf(e);
+          html += `<span class="cyc" data-cyc="${l.id}" title="${esc(pg)}">⇄ ${l.ci + 1}/${l.urls.length} ${esc(pg.length > 22 ? pg.slice(0, 22) + '…' : pg)}</span>`;
+        }
+      } else {
+        html += `<span class="lk ${l.active ? 'on' : 'off'}" data-id="${l.id}">${esc(l.active ? linkMarkup(l) : l.display)}</span>`;
+      }
       i += l.display.length;
     } else {
       let j = i + 1;
@@ -279,8 +424,20 @@ function renderReview() {
     }
   }
   $('review').innerHTML = html;
+  const ws = links.filter(l => l.ws);
+  $('wsInfo').textContent = `[[ ]] လင့် ${links.length - ws.length} ခု · Wikisource လင့် ${ws.filter(l => l.active).length}/${ws.length} ခု (လိမ္မော်ရောင်)`;
 }
+const setAllWs = on => { links.forEach(l => { if (l.ws) l.active = on; }); renderReview(); };
+$('wsOff').onclick = () => setAllWs(false);
+$('wsOn').onclick = () => setAllWs(true);
 $('review').addEventListener('click', e => {
+  const cy = e.target.closest('.cyc');
+  if (cy) {
+    const l = links.find(x => x.id === cy.dataset.cyc);
+    l.ci = (l.ci + 1) % l.urls.length; l.active = true;
+    renderReview();
+    return;
+  }
   const s = e.target.closest('.lk');
   if (!s) return;
   const l = links.find(x => x.id === s.dataset.id);
@@ -307,6 +464,7 @@ $('copyBtn').onclick = async () => {
 $('newBtn').onclick = () => { text = ''; $('input').value = ''; updateGo(); show('input'); };
 
 load(); renderKeywords();
+loadCustom(); loadWs();
 </script>
 </body>
 </html>
