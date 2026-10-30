@@ -2461,15 +2461,16 @@ if (selectedNidana === 10) {
              <ChevronLeft className="w-4 h-4"/>
            </button>
            {[-1, 0, 1].map(d => {
-             const L = displayLifeOffset + d;
+             const L = currentLifeOffset + d; // the centre life stays in the middle
+             const isHl = d === displayLifeOffset - currentLifeOffset; // life the shown causes/effects belong to
              const isCurLife = d === 0;
              const _ep = (activeNode.isAvijjaNode || activeNode.isSankharaNode) ? 'pavatti' : activeNode.name === PHASES[0].label || activeNode.name === 'ပဋိသန္ဓေ' ? 'patisandhi' : activePhase;
              return (
                <React.Fragment key={d}>
                  {d !== -1 && <ChevronRight className="w-3 h-3 text-slate-600 shrink-0 self-center"/>}
-                 <div className={`flex-1 min-w-0 rounded-lg px-1.5 py-1 border transition-colors ${isCurLife ? 'border-emerald-500/60 bg-slate-800' : 'border-slate-700 bg-slate-900/60'}`}>
+                 <div className={`flex-1 min-w-0 rounded-lg px-1.5 py-1 border transition-colors ${isCurLife ? 'border-emerald-500/60 bg-slate-800' : isHl ? 'border-emerald-500/40 bg-slate-800/70' : 'border-slate-700 bg-slate-900/60'}`}>
                    <div className="flex items-center justify-center gap-1">
-                     <div className={`font-black text-[10px] md:text-sm tracking-wide text-center truncate ${isCurLife ? 'text-emerald-400' : 'text-slate-400'}`}>{getLifeName(L)}</div>
+                     <div className={`font-black text-[10px] md:text-sm tracking-wide text-center truncate ${isCurLife ? 'text-emerald-400' : isHl ? 'text-emerald-300' : 'text-slate-400'}`}>{getLifeName(L)}</div>
                      {isCurLife && (
                        <button 
                   onClick={() => toggleLifeLock(currentLifeOffset)} 
@@ -2485,7 +2486,7 @@ if (selectedNidana === 10) {
                        <button key={ph.id}
                          disabled={!(isCurLife || (d === -1 && ph.id === 'cuti') || (d === 1 && ph.id === 'patisandhi'))}
                          onClick={() => { setActivePhase(d === -1 ? 'patisandhi' : d === 1 ? 'cuti' : ph.id); setCurrentIndex(0); setIsPlaying(false); setPaticcaStep(0); }}
-                         className={`flex-1 min-w-0 truncate text-[9px] md:text-[11px] font-bold rounded py-0.5 transition-colors disabled:opacity-40 disabled:cursor-default ${isCurLife && _ep === ph.id ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-300 enabled:hover:bg-slate-600'}`}>
+                         className={`flex-1 min-w-0 truncate text-[9px] md:text-[11px] font-bold rounded py-0.5 transition-colors disabled:opacity-40 disabled:cursor-default ${isHl && (d === 0 ? _ep === ph.id : d === -1 ? ph.id === 'pavatti' : ph.id === 'patisandhi') ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-300 enabled:hover:bg-slate-600'}`}>
                          {ph.label}
                        </button>
                      ))}
