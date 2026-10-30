@@ -140,8 +140,11 @@
           <datalist id="pgList"></datalist>
           <div class="label" style="margin:12px 0 4px">စကားလုံးများ (တစ်ကြောင်းချင်းစီ)</div>
           <textarea id="words" rows="5" placeholder="နိရောဓသမာပတ်ကို ပြဆိုချက်&#10;နိဂုံးကို ပြဆိုချက်"></textarea>
+          <div class="label" style="margin:12px 0 4px">စာအုပ်/စာမျက်နှာ ကိုယ်တိုင်အတွက် လင့်စာ (မထည့်လည်းရ)</div>
+          <input type="text" id="pgTitle" placeholder="ဥပမာ- နိဒါန်း  (# မပါသော လင့်ဖြစ်မည်)" autocomplete="off">
           <button class="primary big" id="wAddBtn" style="margin-top:10px">+ ထည့်မည်</button>
-          <div class="note">လင့်ကို အလိုအလျောက် ဖန်တီးပေးပါမည်။ စာမျက်နှာအမည်ကို နောက်တစ်ခါလည်း မှတ်ထားပေးပါမည်။</div>
+          <div class="note">လင့်ကို အလိုအလျောက် ဖန်တီးပေးပါမည် (ကွက်လပ်များ → _)။ စာမျက်နှာအမည်ကို နောက်တစ်ခါလည်း မှတ်ထားပေးပါမည်။
+            Anchor က ခေါင်းစဉ်နဲ့ မတူရင် <code>ပြမည့်စာ|anchor_ပုံစံ</code> ဟု ရေးပါ။</div>
           <textarea id="wOut" class="out hidden" rows="4" readonly style="margin-top:12px"></textarea>
           <button class="plain small hidden" id="wOutCopy" style="margin-top:8px">ထွက်လာသော လင့်အားလုံး ကူးမည်</button>
           <div class="row" style="margin-top:14px">
@@ -455,16 +458,22 @@ $('results').addEventListener('click', async e => {
   setTimeout(() => { b.textContent = old; b.classList.remove('done'); }, 1500);
 });
 
-function addEntries(page, words) {
+// words: "heading" or "heading|anchor" per item; pageTitle: link text for the page itself (no "#")
+function addEntries(page, words, pageTitle) {
   const p = pageNorm(page);
-  const have = new Set([...wsBase, ...wsMine].map(e => e.p + '\n' + e.a));
+  const have = new Set([...wsBase, ...wsMine].map(e => e.p + '\n' + e.a + '\n' + e.d));
   const added = [];
   let dup = 0;
+  const entries = [];
+  if (pageTitle && pageTitle.trim()) entries.push({ p, d: pageTitle.trim().replace(/\s+/g, ' '), a: '' });
   for (const raw of words) {
-    const d = raw.trim().replace(/\s+/g, ' ');
+    const [dRaw, aRaw] = raw.split('|');
+    const d = dRaw.trim().replace(/\s+/g, ' ');
     if (!d) continue;
-    const e = { p, d, a: anchorOf(d) };
-    const k = e.p + '\n' + e.a;
+    entries.push({ p, d, a: aRaw !== undefined && aRaw.trim() ? aRaw.trim() : anchorOf(d) });
+  }
+  for (const e of entries) {
+    const k = e.p + '\n' + e.a + '\n' + e.d;
     if (have.has(k)) { dup++; continue; }
     have.add(k); wsMine.push(e); added.push(e);
   }
@@ -476,10 +485,11 @@ $('wAddBtn').onclick = () => {
   const page = pageNorm($('pg').value);
   if (!page) { alert('Wikisource စာမျက်နှာအမည် ထည့်ပါ'); return; }
   const lines = $('words').value.split(/\r?\n/).filter(l => l.trim());
-  if (!lines.length) return;
+  const title = $('pgTitle').value;
+  if (!lines.length && !title.trim()) return;
   try { localStorage.setItem(WPAGE, page); } catch (e) {}
-  const { added, dup } = addEntries(page, lines);
-  $('words').value = '';
+  const { added, dup } = addEntries(page, lines, title);
+  $('words').value = ''; $('pgTitle').value = '';
   const out = $('wOut');
   out.value = added.map(linkOf).join('\n') + (dup ? `\n\n(ရှိပြီးသား ${dup} ခု ကျော်ခဲ့သည်)` : '');
   out.classList.remove('hidden'); $('wOutCopy').classList.remove('hidden');
@@ -491,16 +501,19 @@ $('wOutCopy').onclick = async () => {
   $('wOutCopy').textContent = '✓ ကူးပြီး';
   setTimeout(() => $('wOutCopy').textContent = 'ထွက်လာသော လင့်အားလုံး ကူးမည်', 1500);
 };
-// backup format: one "page<TAB>heading" per line - the same two things typed into the sheet (columns B and D)
-$('wExportBtn').onclick = () => download('wiki-linker-wikisource-mine.txt', 'text/plain', wsMine.map(e => e.p + '\t' + e.d).join('\n'));
+// backup format: one "page<TAB>heading" per line - the same two things typed into the sheet (columns B and D);
+// a third column is added only when the anchor is not the automatic one (empty = link to the page itself)
+$('wExportBtn').onclick = () => download('wiki-linker-wikisource-mine.txt', 'text/plain',
+  wsMine.map(e => e.p + '\t' + e.d + (e.a === anchorOf(e.d) ? '' : '\t' + e.a)).join('\n'));
 $('wImportBtn').onclick = () => $('wFile').click();
 $('wFile').onchange = async e => {
   const f = e.target.files[0]; e.target.value = '';
   if (!f) return;
   let n = 0;
   for (const ln of (await f.text()).split(/\r?\n/)) {
-    const [p, d] = ln.split('\t');
-    if (p && d) n += addEntries(p, [d]).added.length;
+    const [p, d, a] = ln.split('\t');
+    if (!p || !d) continue;
+    n += (a === '' ? addEntries(p, [], d) : addEntries(p, [a === undefined ? d : d + '|' + a])).added.length;
   }
   alert(`စကားလုံးအသစ် ${n} လုံး ထည့်ပြီးပါပြီ`);
   runSearch();
