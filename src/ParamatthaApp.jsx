@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import ParamatthaCore from './Paramattha1App.jsx';
 import VietnameseVersion from './Paramattha2App.jsx';
 import { startVithiEnglish, extendEnglish } from './vithiCittaEnglish.js';
+import { startFitCircles } from './fitCircles.js';
 import { PARAMATTHA_PHRASES, PARAMATTHA_WORDS } from './paramatthaEnglishExtra.js';
 
 // English: the component itself already shows Roman Pali for everything that was migrated; a small display layer
@@ -46,6 +47,7 @@ export default function ParamatthaApp() {
   // 3rd entry (e.g. 'en', once its translation coverage is ready) needs no
   // change here -- it just joins the cycle.
   const [langIdx, setLangIdx] = useState(0);
+  useEffect(() => startFitCircles(), []);
   const current = LANGUAGES[langIdx];
   const Active = current.Component;
   const cycleLang = () => setLangIdx(prev => (prev + 1) % LANGUAGES.length);
