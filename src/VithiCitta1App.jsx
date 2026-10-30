@@ -1984,7 +1984,7 @@ useEffect(() => {
   useEffect(() => {
     if (timelineRef.current && timelineRef.current.children) {
       const nodes = Array.from(timelineRef.current.querySelectorAll('.citta-node'));
-      if (nodes[currentIndex]) nodes[currentIndex].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      if (nodes[currentIndex]) nodes[currentIndex].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
     }
   }, [currentIndex]);
 useEffect(() => {
@@ -2270,14 +2270,7 @@ if (paticcaKhandha !== 1 && paticcaStep > 0) {
       
       return baseStyle + "bg-slate-100 text-slate-400 border-slate-200 opacity-40 grayscale";
   };
-const displayLifeOffset = (() => {
-    const dIdx = vithiData.findIndex(n => n.isLifeDividerBefore);
-    if (dIdx !== -1) {
-        if (activePhase === 'patisandhi' && currentIndex < dIdx) return currentLifeOffset - 1;
-        if (activePhase === 'cuti' && currentIndex >= dIdx) return currentLifeOffset + 1;
-    }
-    return currentLifeOffset;
-})();
+const displayLifeOffset = currentLifeOffset; // the header no longer follows the clicked node
   return (
     <div className="h-screen w-screen overflow-hidden bg-slate-100 p-2 md:p-4 flex justify-center items-center font-sans text-slate-800">
       <div className="max-w-6xl w-full h-full flex flex-col bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-200 relative">
@@ -2889,19 +2882,6 @@ if (nidanaHlType === 'effect') circleStyles += 'scale-[1.2] ring-[4px] ring-offs
                        setCurrentIndex(idx); 
                        setIsPlaying(false); 
 // Cross-life navigation: patisandhi မတိုင်ခင်/ပြီးနောက် node ကို နှိပ်ရင် ဘဝပြောင်းသည်
-const dividerIdx = vithiData.findIndex(n => n.isLifeDividerBefore);
-if (dividerIdx !== -1) {
-    if (activePhase === 'patisandhi' && idx < dividerIdx) {
-        setCurrentLifeOffset(p => p - 1);
-        setActivePhase('cuti');
-        return;
-    }
-    if (activePhase === 'cuti' && idx >= dividerIdx) {
-        setCurrentLifeOffset(p => p + 1);
-        setActivePhase('patisandhi');
-        return;
-    }
-}
 if (selectedNidana === 1 || (selectedNidana === 2 && (nidana2SubMode === 'kamma' || nidana2SubMode === 'sahajata'))) {
   const VIPAKA_TYPES = ['ပဋိသန္ဓေ','ဘဝင်','စုတိ','စက္ခုဝိညာဏ်','သောတဝိညာဏ်','ဃာနဝိညာဏ်','ဇိဝှါဝိညာဏ်','ကာယဝိညာဏ်','သမ္ပဋိစ္ဆိုင်း','သန္တီရဏ','တဒါရုံ'];
   const tIdx = VIPAKA_TYPES.findIndex(t => node.name === t || node.name.includes(t));
@@ -2939,7 +2919,7 @@ if (selectedNidana === 1 || (selectedNidana === 2 && (nidana2SubMode === 'kamma'
             const targetIdx = vithiData.findIndex(n => n.isAvijjaNode && n.nodeType === 'vajjana' && n.avijjaIdx === savedAvijjaIdx);
             if (targetIdx !== -1) {
     const nodes = Array.from(timelineRef.current.querySelectorAll('.citta-node'));
-    if (nodes[targetIdx]) nodes[targetIdx].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    if (nodes[targetIdx]) nodes[targetIdx].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
 }
         }, 50);
     }

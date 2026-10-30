@@ -1961,7 +1961,7 @@ const hasPreSamphassa = (isNamaKhandha || isViññana) && (
   useEffect(() => {
     if (timelineRef.current && timelineRef.current.children) {
       const nodes = Array.from(timelineRef.current.querySelectorAll('.citta-node'));
-      if (nodes[currentIndex]) nodes[currentIndex].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      if (nodes[currentIndex]) nodes[currentIndex].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
     }
   }, [currentIndex]);
 
@@ -2244,14 +2244,7 @@ const hasPreSamphassa = (isNamaKhandha || isViññana) && (
       return baseStyle + "bg-slate-100 text-slate-400 border-slate-200 opacity-40 grayscale";
   };
 
-  const displayLifeOffset = (() => {
-      const dIdx = vithiData.findIndex(n => n.isLifeDividerBefore);
-      if (dIdx !== -1) {
-          if (activePhase === 'patisandhi' && currentIndex < dIdx) return currentLifeOffset - 1;
-          if (activePhase === 'cuti' && currentIndex >= dIdx) return currentLifeOffset + 1;
-      }
-      return currentLifeOffset;
-  })();
+  const displayLifeOffset = currentLifeOffset; // the header no longer follows the clicked node
 
   const isPaticcaActiveInRender = paticcaStep > 0;
   const rupaNodeInRender = (isPaticcaActiveInRender && paticcaKhandha === 1 && paticcaLockedNodeData)
@@ -2852,19 +2845,6 @@ if (nidanaHlType === 'effect') circleStyles += 'scale-[1.2] ring-[4px] ring-offs
                        setCurrentIndex(idx); 
                        setIsPlaying(false); 
 // Cross-life navigation: patisandhi မတိုင်ခင်/ပြီးနောက် node ကို နှိပ်ရင် ဘဝပြောင်းသည်
-const dividerIdx = vithiData.findIndex(n => n.isLifeDividerBefore);
-if (dividerIdx !== -1) {
-    if (activePhase === 'patisandhi' && idx < dividerIdx) {
-        setCurrentLifeOffset(p => p - 1);
-        setActivePhase('cuti');
-        return;
-    }
-    if (activePhase === 'cuti' && idx >= dividerIdx) {
-        setCurrentLifeOffset(p => p + 1);
-        setActivePhase('patisandhi');
-        return;
-    }
-}
 if (selectedNidana === 1 || (selectedNidana === 2 && (nidana2SubMode === 'kamma' || nidana2SubMode === 'sahajata'))) {
   const VIPAKA_TYPES = ['Kiết sanh','Hữu phần','Tử tâm','Nhãn thức','Nhĩ thức','Tỷ thức','Thiệt thức','Thân thức','Tiếp thâu','Quan sát','Đồng sở duyên'];
   const tIdx = VIPAKA_TYPES.findIndex(t => node.name === t || node.name.includes(t));
@@ -2902,7 +2882,7 @@ if (selectedNidana === 1 || (selectedNidana === 2 && (nidana2SubMode === 'kamma'
             const targetIdx = vithiData.findIndex(n => n.isAvijjaNode && n.nodeType === 'vajjana' && n.avijjaIdx === savedAvijjaIdx);
             if (targetIdx !== -1) {
     const nodes = Array.from(timelineRef.current.querySelectorAll('.citta-node'));
-    if (nodes[targetIdx]) nodes[targetIdx].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    if (nodes[targetIdx]) nodes[targetIdx].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
 }
         }, 50);
     }
