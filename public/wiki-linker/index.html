@@ -20,7 +20,7 @@
   .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:20px; }
   .card + .card { margin-top:20px; }
   h2 { margin:0 0 12px; font-size:17px; }
-  textarea, input[type=text] { width:100%; border:1px solid var(--line); border-radius:10px; padding:10px 12px; font:inherit; background:var(--bg); }
+  textarea, input[type=text], input[type=password] { width:100%; border:1px solid var(--line); border-radius:10px; padding:10px 12px; font:inherit; background:var(--bg); }
   textarea { resize:vertical; }
   textarea:focus, input[type=text]:focus { outline:2px solid var(--accent); }
   button { font:inherit; cursor:pointer; border:0; border-radius:10px; padding:10px 14px; font-weight:700; }
@@ -150,6 +150,25 @@
           </div>
           <input type="file" id="wFile" accept=".txt" class="hidden">
           <div class="note" id="wMine"></div>
+          <label class="note" style="display:flex; gap:8px; align-items:center"><input type="checkbox" id="autoDl"> ထည့်တိုင်း Backup ဖိုင်ကို အလိုအလျောက် ဒေါင်းမည် (ကွန်ပျူတာ)</label>
+        </div>
+
+        <div class="card">
+          <h2>GitHub နဲ့ ချိတ်ရန် (စက်အားလုံး တူစေရန်)</h2>
+          <div class="note" id="ghStatus" style="margin:0 0 8px"></div>
+          <input type="password" id="ghToken" placeholder="GitHub token ကို ဒီမှာ paste လုပ်ပါ" autocomplete="off">
+          <div class="row" style="margin-top:8px">
+            <button class="primary small" id="ghSave">သိမ်းမည်</button>
+            <button class="plain small" id="ghSync">ယခု Sync လုပ်မည်</button>
+            <button class="plain small" id="ghOff">ဖြုတ်မည်</button>
+          </div>
+          <div class="note">
+            ၁။ <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com/settings/personal-access-tokens/new</a> ကို ဖွင့်ပါ။<br>
+            ၂။ Repository access → Only select repositories → <b>dhamma</b> ကို ရွေးပါ။<br>
+            ၃။ Permissions → Repository permissions → <b>Contents: Read and write</b> ပေးပါ။<br>
+            ၄။ Generate token နှိပ်ပြီး token ကို copy လုပ်၍ ဒီမှာ paste လုပ်ပါ။ ဖုန်းမှာလည်း တစ်ကြိမ် paste လုပ်ပါ။<br>
+            Token ကို ဒီစက်ရဲ့ browser ထဲမှာပဲ သိမ်းပါတယ် (တခြားနေရာ မပို့ပါ)။
+          </div>
         </div>
       </div>
     </div>
@@ -403,6 +422,7 @@ async function loadWs() {
     }));
     $('pgList').innerHTML = data.pages.map(pg => `<option value="${esc(pg.p)}">`).join('');
   } catch (e) { wsBase = []; }
+  await syncOnLoad();
   updateWsStatus();
   runSearch();
 }
@@ -446,6 +466,10 @@ $('results').addEventListener('click', async e => {
   if (b.dataset.rm !== undefined) {
     const h = box._shown[+b.dataset.rm];
     wsMine = wsMine.filter(x => x !== h.e); saveMine(); updateWsStatus(); runSearch();
+    if (getToken()) {
+      try { setGh('သိမ်းနေသည်...'); wsMine = await ghMutate(list => list.filter(x => entryKey(x) !== entryKey(h.e))); saveMine(); setGhDirty(false); setGh('✓ GitHub မှာ သိမ်းပြီး'); updateWsStatus(); runSearch(); }
+      catch (err) { setGhDirty(true); setGh(`GitHub မှ ဖျက်၍မရ (${err.message})`); }
+    }
     return;
   }
   const h = box._shown[+b.dataset.i];
@@ -472,7 +496,7 @@ function addEntries(page, words) {
   return { added, dup };
 }
 $('pg').value = (() => { try { return localStorage.getItem(WPAGE) || ''; } catch (e) { return ''; } })();
-$('wAddBtn').onclick = () => {
+$('wAddBtn').onclick = async () => {
   const page = pageNorm($('pg').value);
   if (!page) { alert('Wikisource စာမျက်နှာအမည် ထည့်ပါ'); return; }
   const lines = $('words').value.split(/\r?\n/).filter(l => l.trim());
@@ -485,6 +509,7 @@ $('wAddBtn').onclick = () => {
   out.classList.remove('hidden'); $('wOutCopy').classList.remove('hidden');
   out.dataset.links = added.map(linkOf).join('\n');
   runSearch();
+  await afterAdd(added);
 };
 $('wOutCopy').onclick = async () => {
   await copyText($('wOut').dataset.links || '');
@@ -497,14 +522,100 @@ $('wImportBtn').onclick = () => $('wFile').click();
 $('wFile').onchange = async e => {
   const f = e.target.files[0]; e.target.value = '';
   if (!f) return;
-  let n = 0;
+  const added = [];
   for (const ln of (await f.text()).split(/\r?\n/)) {
     const [p, d] = ln.split('\t');
-    if (p && d) n += addEntries(p, [d]).added.length;
+    if (p && d) added.push(...addEntries(p, [d]).added);
   }
-  alert(`စကားလုံးအသစ် ${n} လုံး ထည့်ပြီးပါပြီ`);
+  alert(`စကားလုံးအသစ် ${added.length} လုံး ထည့်ပြီးပါပြီ`);
   runSearch();
+  await afterAdd(added, true);
 };
+
+// ---- GitHub sync: the list of added words lives in public/wiki-linker/wikisource-mine.json of the repo ----
+// Every device with the token reads/writes that file through the GitHub API; devices without a token still
+// read the deployed copy. Each change = one small commit on main (the Pages deploy then publishes it).
+const GH_FILE = 'https://api.github.com/repos/sayadawtejinda/dhamma/contents/public/wiki-linker/wikisource-mine.json';
+const TKEY = 'wikiLinker.ghToken';
+const DKEY = 'wikiLinker.ghDirty';
+const AKEY = 'wikiLinker.autoDl';
+const getToken = () => { try { return localStorage.getItem(TKEY) || ''; } catch (e) { return ''; } };
+const setGhDirty = v => { try { localStorage.setItem(DKEY, v ? '1' : ''); } catch (e) {} };
+const isGhDirty = () => { try { return !!localStorage.getItem(DKEY); } catch (e) { return false; } };
+const setGh = msg => { $('ghStatus').textContent = msg; };
+const entryKey = e => e.p + '\n' + e.a;
+const toEntry = x => ({ p: x.p, d: x.d, a: anchorOf(x.d) });
+const toB64 = s => { let bin = ''; new TextEncoder().encode(s).forEach(c => bin += String.fromCharCode(c)); return btoa(bin); };
+const fromB64 = b => new TextDecoder().decode(Uint8Array.from(atob(b.replace(/\s/g, '')), c => c.charCodeAt(0)));
+const ghHeaders = () => ({ Authorization: 'Bearer ' + getToken(), Accept: 'application/vnd.github+json' });
+function unionEntries(a, b) {
+  const seen = new Set(), out = [];
+  for (const e of [...a, ...b]) { const k = entryKey(e); if (!seen.has(k)) { seen.add(k); out.push(e); } }
+  return out;
+}
+async function ghGet() {
+  const r = await fetch(GH_FILE + '?ref=main', { headers: ghHeaders(), cache: 'no-store' });
+  if (r.status === 404) return { list: [], sha: null };
+  if (!r.ok) throw new Error(r.status === 401 || r.status === 403 ? 'token မမှန်/ခွင့်မရှိ' : r.status);
+  const j = await r.json();
+  return { list: JSON.parse(fromB64(j.content)).map(toEntry), sha: j.sha };
+}
+// read the remote list, change it, write it back (re-read and retry if someone else committed in between)
+async function ghMutate(mutate) {
+  for (let i = 0; i < 3; i++) {
+    const { list, sha } = await ghGet();
+    const next = mutate(list);
+    const body = { message: 'Wiki Linker: update Wikisource words', branch: 'main',
+      content: toB64('[\n' + next.map(e => JSON.stringify({ p: e.p, d: e.d })).join(',\n') + '\n]\n') };
+    if (sha) body.sha = sha;
+    const r = await fetch(GH_FILE, { method: 'PUT', headers: ghHeaders(), body: JSON.stringify(body) });
+    if (r.ok) return next;
+    if (r.status !== 409 && r.status !== 422) throw new Error(r.status === 401 || r.status === 403 ? 'token မမှန်/ခွင့်မရှိ' : r.status);
+  }
+  throw new Error('conflict');
+}
+async function syncOnLoad() {
+  if (getToken()) {
+    try {
+      setGh('Sync လုပ်နေသည်...');
+      wsMine = isGhDirty() ? await ghMutate(list => unionEntries(list, wsMine)) : (await ghGet()).list;
+      saveMine(); setGhDirty(false); setGh('✓ GitHub နဲ့ ချိတ်ထားသည်');
+    } catch (e) { setGh(`GitHub နဲ့ ချိတ်မရ (${e.message}) — ဒီ browser ထဲက စာရင်းကိုပဲ သုံးနေသည်`); }
+  } else {
+    try {
+      const r = await fetch('wikisource-mine.json?t=' + Date.now());
+      if (r.ok) { wsMine = unionEntries(wsMine, (await r.json()).map(toEntry)); saveMine(); }
+    } catch (e) {}
+    setGh('Token မထည့်ရသေးပါ — စာရင်းကို ကြည့်လို့ရပါတယ်၊ ထည့်တာက ဒီ browser ထဲပဲ သိမ်းပါမယ်။');
+  }
+}
+async function afterAdd(added, wholeFile) {
+  if (getToken() && (added.length || isGhDirty())) {
+    try {
+      setGh('GitHub မှာ သိမ်းနေသည်...');
+      wsMine = await ghMutate(list => unionEntries(list, added.length ? added : wsMine));
+      saveMine(); setGhDirty(false); setGh('✓ GitHub မှာ သိမ်းပြီး');
+      updateWsStatus(); runSearch();
+    } catch (e) { setGhDirty(true); setGh(`GitHub မှာ သိမ်း၍မရ (${e.message}) — ဒီ browser ထဲမှာ သိမ်းထားသည်၊ နောက်မှ "ယခု Sync လုပ်မည်" နှိပ်ပါ`); }
+  }
+  if (added.length && $('autoDl').checked) $('wExportBtn').click();
+}
+$('ghSave').onclick = async () => {
+  const t = $('ghToken').value.trim();
+  if (!t) return;
+  try { localStorage.setItem(TKEY, t); } catch (e) { alert('Browser ထဲ သိမ်း၍မရပါ'); return; }
+  $('ghToken').value = '';
+  setGhDirty(true); // first sync pushes whatever is in this browser
+  await syncOnLoad(); updateWsStatus(); runSearch();
+};
+$('ghSync').onclick = async () => { if (getToken()) { setGhDirty(true); await syncOnLoad(); updateWsStatus(); runSearch(); } else alert('Token အရင်ထည့်ပါ'); };
+$('ghOff').onclick = () => { try { localStorage.removeItem(TKEY); } catch (e) {} setGh('Token ဖယ်ပြီးပါပြီ'); };
+// computers download a backup after every add by default; phones don't
+$('autoDl').checked = (() => {
+  try { const v = localStorage.getItem(AKEY); if (v !== null) return v === '1'; } catch (e) {}
+  return matchMedia('(pointer: fine)').matches && !/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
+})();
+$('autoDl').onchange = () => { try { localStorage.setItem(AKEY, $('autoDl').checked ? '1' : '0'); } catch (e) {} };
 
 load(); renderKeywords();
 loadMine(); updateWsStatus(); loadWs();
