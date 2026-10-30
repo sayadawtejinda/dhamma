@@ -2515,6 +2515,7 @@ if (selectedNidana === 10) {
   _nidHlRef.current = nidanaHlOf;
   // The header only follows the life of the shown node while a cause-effect view (paṭicca-samuppāda) is open: its causes
   // (avijjā, taṇhā, upādāna, saṅkhāra, kamma) belong to the life before the centre life, jāti/jarā-maraṇa to the one after it.
+  const _divIdx = vithiData.findIndex(n => n.isLifeDividerBefore);
   const displayLifeOffset = (() => {
     if (selectedNidana === null && !(paticcaStep > 0)) return currentLifeOffset;
     const dIdx = vithiData.findIndex(n => n.isLifeDividerBefore);
@@ -2547,7 +2548,7 @@ if (selectedNidana === 10) {
              const L = currentLifeOffset + d; // the centre life stays in the middle
              const isHl = d === displayLifeOffset - currentLifeOffset; // life the shown causes/effects belong to
              const isCurLife = d === 0;
-             const _ep = (activeNode.isAvijjaNode || activeNode.isSankharaNode) ? 'pavatti' : activeNode.name === PHASES[0].label || activeNode.name === 'ပဋိသန္ဓေ' ? 'patisandhi' : activePhase;
+             const _ep = (activeNode.isAvijjaNode || activeNode.isSankharaNode) ? 'pavatti' : (activeNode.name === PHASES[0].label || activeNode.name === 'ပဋိသန္ဓေ') && activePhase !== 'cuti' ? 'patisandhi' : activePhase;
              return (
                <React.Fragment key={d}>
                  {d !== -1 && <ChevronRight className="w-3 h-3 text-slate-600 shrink-0 self-center"/>}
@@ -2568,8 +2569,14 @@ if (selectedNidana === 10) {
                      {PHASES.map(ph => (
                        <button key={ph.id}
                          disabled={!(isCurLife || (d === -1 && ph.id === 'cuti') || (d === 1 && ph.id === 'patisandhi'))}
-                         onClick={() => { setActivePhase(d === -1 ? 'patisandhi' : d === 1 ? 'cuti' : ph.id); setCurrentIndex(0); setIsPlaying(false); setPaticcaStep(0); }}
-                         className={`flex-1 min-w-0 truncate text-[9px] md:text-[11px] font-bold rounded py-0.5 transition-colors disabled:opacity-40 disabled:cursor-default ${isHl && (d === 0 ? _ep === ph.id : d === -1 ? ph.id === 'pavatti' : ph.id === 'patisandhi') ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-300 enabled:hover:bg-slate-600'}`}>
+                         onClick={() => {
+                           setIsPlaying(false); setPaticcaStep(0);
+                           if (d === 0) { setActivePhase(ph.id); setCurrentIndex(0); return; }
+                           // next life's pat ball / previous life's cuti ball: show it and select it
+                           setActivePhase(d === -1 ? 'patisandhi' : 'cuti');
+                           setTimeout(() => { const k = _vdRef.current.findIndex(n => n.isLifeDividerBefore); if (k > 0) setCurrentIndex(d === 1 ? k : k - 1); }, 150);
+                         }}
+                         className={`flex-1 min-w-0 truncate text-[9px] md:text-[11px] font-bold rounded py-0.5 transition-colors disabled:opacity-40 disabled:cursor-default ${(isHl && (d === 0 ? _ep === ph.id : d === -1 ? ph.id === 'pavatti' : ph.id === 'patisandhi')) || (selectedNidana === null && ((d === 1 && ph.id === 'patisandhi' && activePhase === 'cuti' && currentIndex === _divIdx) || (d === -1 && ph.id === 'cuti' && activePhase === 'patisandhi' && currentIndex === _divIdx - 1))) ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-300 enabled:hover:bg-slate-600'}`}>
                          {ph.label}
                        </button>
                      ))}
@@ -7882,6 +7889,7 @@ if (selectedNidana === 10) {
   _nidHlRef.current = nidanaHlOf;
   // The header only follows the life of the shown node while a cause-effect view (paṭicca-samuppāda) is open: its causes
   // (avijjā, taṇhā, upādāna, saṅkhāra, kamma) belong to the life before the centre life, jāti/jarā-maraṇa to the one after it.
+  const _divIdx = vithiData.findIndex(n => n.isLifeDividerBefore);
   const displayLifeOffset = (() => {
     if (selectedNidana === null && !(paticcaStep > 0)) return currentLifeOffset;
     const dIdx = vithiData.findIndex(n => n.isLifeDividerBefore);
@@ -7920,7 +7928,7 @@ if (selectedNidana === 10) {
              const L = currentLifeOffset + d; // the centre life stays in the middle
              const isHl = d === displayLifeOffset - currentLifeOffset; // life the shown causes/effects belong to
              const isCurLife = d === 0;
-             const _ep = (activeNode.isAvijjaNode || activeNode.isSankharaNode) ? 'pavatti' : activeNode.name === PHASES[0].label || activeNode.name === 'ပဋိသန္ဓေ' ? 'patisandhi' : activePhase;
+             const _ep = (activeNode.isAvijjaNode || activeNode.isSankharaNode) ? 'pavatti' : (activeNode.name === PHASES[0].label || activeNode.name === 'ပဋိသန္ဓေ') && activePhase !== 'cuti' ? 'patisandhi' : activePhase;
              return (
                <React.Fragment key={d}>
                  {d !== -1 && <ChevronRight className="w-3 h-3 text-slate-600 shrink-0 self-center"/>}
@@ -7941,8 +7949,14 @@ if (selectedNidana === 10) {
                      {PHASES.map(ph => (
                        <button key={ph.id}
                          disabled={!(isCurLife || (d === -1 && ph.id === 'cuti') || (d === 1 && ph.id === 'patisandhi'))}
-                         onClick={() => { setActivePhase(d === -1 ? 'patisandhi' : d === 1 ? 'cuti' : ph.id); setCurrentIndex(0); setIsPlaying(false); setPaticcaStep(0); }}
-                         className={`flex-1 min-w-0 truncate text-[9px] md:text-[11px] font-bold rounded py-0.5 transition-colors disabled:opacity-40 disabled:cursor-default ${isHl && (d === 0 ? _ep === ph.id : d === -1 ? ph.id === 'pavatti' : ph.id === 'patisandhi') ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-300 enabled:hover:bg-slate-600'}`}>
+                         onClick={() => {
+                           setIsPlaying(false); setPaticcaStep(0);
+                           if (d === 0) { setActivePhase(ph.id); setCurrentIndex(0); return; }
+                           // next life's pat ball / previous life's cuti ball: show it and select it
+                           setActivePhase(d === -1 ? 'patisandhi' : 'cuti');
+                           setTimeout(() => { const k = _vdRef.current.findIndex(n => n.isLifeDividerBefore); if (k > 0) setCurrentIndex(d === 1 ? k : k - 1); }, 150);
+                         }}
+                         className={`flex-1 min-w-0 truncate text-[9px] md:text-[11px] font-bold rounded py-0.5 transition-colors disabled:opacity-40 disabled:cursor-default ${(isHl && (d === 0 ? _ep === ph.id : d === -1 ? ph.id === 'pavatti' : ph.id === 'patisandhi')) || (selectedNidana === null && ((d === 1 && ph.id === 'patisandhi' && activePhase === 'cuti' && currentIndex === _divIdx) || (d === -1 && ph.id === 'cuti' && activePhase === 'patisandhi' && currentIndex === _divIdx - 1))) ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-300 enabled:hover:bg-slate-600'}`}>
                          {ph.label}
                        </button>
                      ))}
