@@ -1984,12 +1984,24 @@ useEffect(() => {
   // Lives run in order (pat -> pavatti -> cuti, then the next life): slide the timeline in the direction of travel.
   const _seqPos = currentLifeOffset * 3 + ({ patisandhi: 0, pavatti: 1, cuti: 2 }[activePhase] ?? 0);
   const _prevSeq = useRef(_seqPos);
+  const _vdRef = useRef([]);
+  _vdRef.current = vithiData;
   useEffect(() => {
     const dir = Math.sign(_seqPos - _prevSeq.current);
     _prevSeq.current = _seqPos;
     const el = timelineRef.current;
-    if (!dir || !el || !el.animate) return;
-    el.animate([{ transform: `translateX(${dir * 35}%)`, opacity: 0.15 }, { transform: 'translateX(0)', opacity: 1 }], { duration: 500, easing: 'cubic-bezier(.2,.8,.2,1)' });
+    if (dir && el && el.animate) el.animate([{ transform: `translateX(${dir * 35}%)`, opacity: 0.15 }, { transform: 'translateX(0)', opacity: 1 }], { duration: 500, easing: 'cubic-bezier(.2,.8,.2,1)' });
+    // Pat view: the previous life's cuti ball sits at the left edge with the pat ball right after it;
+    // cuti view: the cuti ball and the next life's pat ball sit at the right edge.
+    const t = setTimeout(() => {
+      const box = timelineRef.current; if (!box) return;
+      const dIdx = _vdRef.current.findIndex(n => n.isLifeDividerBefore);
+      if (dIdx < 1) return;
+      const ns = box.querySelectorAll('.citta-node'); const c = box.getBoundingClientRect();
+      if (activePhase === 'patisandhi' && ns[dIdx - 1]) box.scrollLeft += ns[dIdx - 1].getBoundingClientRect().left - c.left - 8;
+      else if (activePhase === 'cuti' && ns[dIdx]) box.scrollLeft += ns[dIdx].getBoundingClientRect().right - c.right + 8;
+    }, 80);
+    return () => clearTimeout(t);
   }, [_seqPos]);
   useEffect(() => {
     if (timelineRef.current && timelineRef.current.children) {
