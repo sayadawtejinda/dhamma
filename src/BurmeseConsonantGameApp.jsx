@@ -96,7 +96,7 @@ const BCG_APP_BODY_HTML = `
                     <span id="image-display-fallback" class="hidden text-center font-bold text-gray-500 px-2"></span>
                 </div>
                 <div id="image-game-instruction" class="flex flex-col items-center gap-2">
-                    <div id="image-level-badge" class="bg-orange-500 text-white px-4 py-1 rounded-full text-lg font-bold shadow-md uppercase tracking-wide">Level 1</div>
+                    <div id="image-level-badge" title="Tap to play another level" style="cursor:pointer" class="bg-orange-500 text-white px-4 py-1 rounded-full text-lg font-bold shadow-md uppercase tracking-wide">Level 1</div>
                     <div id="image-instruction-text" class="text-xl font-bold text-orange-600">Find the FIRST letter</div>
                 </div>
                 <div id="image-options-grid"></div>
@@ -1028,6 +1028,22 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
                 rootEl.querySelector('#spider-progress-container').classList.remove('active');
             }
         }
+        // Picture Game levels the student can play: Level 1 always, Level 2 once
+        // Level 1 is won, Level 3 once Level 2 is won. Played-again levels still
+        // pay coins; the win is only recorded (for the trophy) the first time.
+        function maxUnlockedPictureLevel() {
+            return completedGameIds.has('picture-2') ? 3 : completedGameIds.has('picture-1') ? 2 : 1;
+        }
+        function cyclePictureLevel() {
+            if (currentGameMode !== 'image' || isVictorySequence) return;
+            const stages = ['first', 'last', 'middle'];
+            const cur = stages.indexOf(imageGameStage) + 1;
+            const next = cur >= maxUnlockedPictureLevel() ? 1 : cur + 1;
+            imageGameStage = stages[next - 1];
+            netScore = 0; updateSpiderProgress();
+            showGameStatus(`Level ${next} Started!`, 'info');
+            askImageQuestion();
+        }
         function triggerImageLevelUp() {
             isVictorySequence = true;
             recordGameCompleted('picture-' + ({ first: 1, last: 2, middle: 3 }[imageGameStage] || 1));
@@ -1216,19 +1232,21 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
         elements.groupSelectorBtn.addEventListener('click', () => {
             stopGame();
             if (allSoundGroupsForReading.length === 0) return;
-            const candidateIndex = (currentSelectedGroupIndex + 1) % allSoundGroupsForReading.length;
+            let candidateIndex = (currentSelectedGroupIndex + 1) % allSoundGroupsForReading.length;
             // Group N+1 stays locked until group N's Pick AND Click games are
-            // both won -- Group 1 (index 0) is always reachable, and wrapping
-            // back to it from the end is never blocked.
+            // both won. The button cycles through the groups the student can
+            // reach; when the next one is still locked it wraps back to
+            // Group 1, so finished groups can always be studied and played again.
+            let lockedNote = '';
             if (candidateIndex !== 0 && (candidateIndex + 1) > maxUnlockedGroupNumber()) {
-                showGameStatus(`Finish Group ${currentSelectedGroupIndex + 1}'s Pick and Click games first!`, 'incorrect');
-                return;
+                lockedNote = ` (Group ${candidateIndex + 1} opens after Group ${currentSelectedGroupIndex + 1}'s Pick and Click games are done.)`;
+                candidateIndex = 0;
             }
             currentSelectedGroupIndex = candidateIndex;
             const newIndex = currentSelectedGroupIndex;
             persistCurrentGroup(newIndex);
             updateGroupSelectorBadge();
-            showGameStatus(`Group ${newIndex + 1} Selected.`, 'info');
+            showGameStatus(`Group ${newIndex + 1} Selected.${lockedNote}`, 'info');
             let targetElement;
             if (newIndex === 0) { targetElement = rootEl.querySelector('#original-consonant-group-wrapper'); }
             else {
@@ -1240,6 +1258,7 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
                 setTimeout(() => { targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 100);
             }
         });
+        elements.imageLevelBadge.addEventListener('click', cyclePictureLevel);
         elements.chatInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleTypingInput(); });
         elements.chatInput.addEventListener('input', (e) => {
             const currentVal = e.target.value;
@@ -1523,15 +1542,15 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
             let correctCons = '';
             if (imageGameStage === 'first') {
                 correctCons = currentImageWordData.b[0];
-                elements.imageLevelBadge.innerText = "LEVEL 1";
+                elements.imageLevelBadge.innerText = "LEVEL 1" + (maxUnlockedPictureLevel() > 1 ? " ↻" : "");
                 elements.imageInstructionText.innerText = "Find the FIRST letter";
             } else if (imageGameStage === 'last') {
                 correctCons = currentImageWordData.b[currentImageWordData.b.length - 1];
-                elements.imageLevelBadge.innerText = "LEVEL 2";
+                elements.imageLevelBadge.innerText = "LEVEL 2" + (maxUnlockedPictureLevel() > 1 ? " ↻" : "");
                 elements.imageInstructionText.innerText = "Find the LAST letter";
             } else if (imageGameStage === 'middle') {
                 correctCons = currentImageWordData.b[1];
-                elements.imageLevelBadge.innerText = "LEVEL 3";
+                elements.imageLevelBadge.innerText = "LEVEL 3" + (maxUnlockedPictureLevel() > 1 ? " ↻" : "");
                 elements.imageInstructionText.innerText = "Find the MIDDLE letter";
             }
             if (!correctCons) { console.warn("Data issue with word:", word); askImageQuestion(); return; }
