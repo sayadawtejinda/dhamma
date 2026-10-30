@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import RupaOverlay from './RupaOverlay.jsx';
 
 // --- Data Definitions ---
 
@@ -3552,6 +3553,8 @@ const NibbanaDot = ({ item }) => (
   // Deeper language-neutral snapshot: the active filter (ids), context citta, selected kalapa/samutthana/bhumi chip/
   // paticca node, sabba item, vithi cycle indexes and floating-panel positions. Objects that hold translated text are
   // stored by id (or flat index) and looked up again in the new language's data; restored once on mount.
+  const [rupaOpen, setRupaOpen] = useState(() => initialPage?.ro ?? false);
+  const [rupaPage, setRupaPage] = useState(() => initialPage?.rp ?? null);
   const _restoring = initialPage?.f !== undefined;
   const [snapReady, setSnapReady] = useState(!_restoring);
   const _flatBhumi = () => BHUMI_31.flatMap(g => g.subgroups ? g.subgroups.flatMap(sg => sg.items) : (g.items || []));
@@ -3566,11 +3569,11 @@ const NibbanaDot = ({ item }) => (
       lke: lokuttaraExpanded, pho: photthabbaOn, kal: selectedKalapa?.id ?? null, sam: selectedSamutthana?.id ?? null,
       bhi: selectedBhumiItem ? _flatBhumi().findIndex(it => it.name === selectedBhumiItem.name) : -1,
       pat: selectedPaticcaId, pvi: pancaVariantIdx, pdi: pancaDoorIdx, mti: manoTypeIdx, mvi: manoVariantIdx, vai: vithiActiveIdx,
-      bp: bhumiPos, pp: paticcaPos, vp: vithiPos,
+      bp: bhumiPos, pp: paticcaPos, vp: vithiPos, ro: rupaOpen, rp: rupaPage,
     });
   }, [snapReady, filter, cittaContext, nanakadaciMode, detailPick, saccaVimuttaFocus, viratiCycleIndex, lokuttaraExpanded, photthabbaOn,
       selectedKalapa, selectedSamutthana, selectedBhumiItem, selectedPaticcaId, pancaVariantIdx, pancaDoorIdx, manoTypeIdx, manoVariantIdx, vithiActiveIdx,
-      bhumiPos, paticcaPos, vithiPos]);
+      bhumiPos, paticcaPos, vithiPos, rupaOpen, rupaPage]);
   useEffect(() => {
     const p = initialPage;
     if (!p || p.f === undefined) return;
@@ -4296,6 +4299,16 @@ const NibbanaDot = ({ item }) => (
         <span>Duyên Khởi</span>
         <span className="text-sm">{paticcaOpen ? '✕' : '▶'}</span>
       </button>
+
+      <button
+        onClick={() => setRupaOpen(v => !v)}
+        className="fixed bottom-4 right-64 z-40 bg-rose-700 hover:bg-rose-800 text-white rounded-full w-14 h-14 shadow-lg flex flex-col items-center justify-center text-[10px] font-bold leading-tight transition-colors"
+        title="Hiện/Ẩn trang Sắc pháp (Rūpa)"
+      >
+        <span>Sắc pháp</span>
+        <span className="text-sm">{rupaOpen ? '✕' : '▶'}</span>
+      </button>
+      {rupaOpen && <RupaOverlay lang={'vi'} onClose={() => setRupaOpen(false)} initialPage={rupaPage} onPageChange={setRupaPage} />}
 
       {bhumiOpen && (
         <div
