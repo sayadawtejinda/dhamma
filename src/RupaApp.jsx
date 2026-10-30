@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import RupaMyanmarCore from './Rupa1App.jsx';
 import RupaVietnameseVersion from './Rupa2App.jsx';
+import RupaEnglishVersion from './Rupa3App.jsx';
 
 // Both language versions are separate, fully independent components (unlike
 // Paramattha's Myanmar/English lang-dict migration) -- an edit to one will
@@ -8,12 +9,13 @@ import RupaVietnameseVersion from './Rupa2App.jsx';
 // precedent this mirrors.
 const LANGUAGES = [
   { key: 'my', label: 'မြန်မာ', Component: RupaMyanmarCore },
+  { key: 'en', label: 'English', Component: RupaEnglishVersion },
   { key: 'vi', label: 'Tiếng Việt', Component: RupaVietnameseVersion },
 ];
 
 export default function RupaApp() {
   // No separate "choose a language" page -- the 🌐 button below cycles
-  // straight through LANGUAGES in place (my -> vi -> my -> ...).
+  // straight through LANGUAGES in place (my -> en -> vi -> my -> ...).
   const [langIdx, setLangIdx] = useState(0);
   const current = LANGUAGES[langIdx];
   const Active = current.Component;

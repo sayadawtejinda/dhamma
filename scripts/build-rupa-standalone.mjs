@@ -1,12 +1,12 @@
 // Generates public/downloads/Rupa.html -- a single, self-contained HTML
 // file (React + Babel Standalone + Tailwind all from CDN, app source
 // embedded inline) that a viewer can download and just double-click to
-// open, no build step or dev server required. Bundles BOTH language
+// open, no build step or dev server required. Bundles all three language
 // versions behind the same language-picker/switch UI as the live rupa.html
-// page, so downloading once covers both languages.
+// page, so downloading once covers all languages.
 //
 // Re-run this (`node scripts/build-rupa-standalone.mjs`) any time
-// src/Rupa1App.jsx or src/Rupa2App.jsx changes, then commit the
+// src/Rupa1App.jsx, Rupa2App.jsx or Rupa3App.jsx changes, then commit the
 // regenerated public/downloads/Rupa.html.
 import { readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -22,13 +22,14 @@ const root = join(__dirname, '..');
 // from colliding with each other.
 function wrapAsIIFE(source) {
   const body = source
-    .replace(/^import[^\n]*\n/gm, '') // no ES module imports inside a plain <script>
+    .replace(/^import[\s\S]*?from\s+'[^']*';?\r?\n/gm, '') // no ES module imports inside a plain <script> (incl. the multi-line lucide import)
     .replace(/export default function App\s*\(/, 'function App(');
   return `(function () {\n${body}\nreturn App;\n})()`;
 }
 
 const myanmarSrc = wrapAsIIFE(readFileSync(join(root, 'src/Rupa1App.jsx'), 'utf8'));
 const vietnameseSrc = wrapAsIIFE(readFileSync(join(root, 'src/Rupa2App.jsx'), 'utf8'));
+const englishSrc = wrapAsIIFE(readFileSync(join(root, 'src/Rupa3App.jsx'), 'utf8'));
 
 const html = `<!doctype html>
 <html lang="my">
@@ -71,14 +72,17 @@ const html = `<!doctype html>
 
       const RupaMy = ${myanmarSrc};
       const RupaVi = ${vietnameseSrc};
+      const RupaEn = ${englishSrc};
 
       const LANGUAGES = [
         { key: 'my', label: 'မြန်မာ', Component: RupaMy },
+        { key: 'en', label: 'English', Component: RupaEn },
         { key: 'vi', label: 'Tiếng Việt', Component: RupaVi },
       ];
 
       function RupaApp() {
         const [langIdx, setLangIdx] = useState(0);
+        const [pageState, setPageState] = useState(null);
         const current = LANGUAGES[langIdx];
         const Active = current.Component;
         const cycleLang = () => setLangIdx(prev => (prev + 1) % LANGUAGES.length);
@@ -88,7 +92,7 @@ const html = `<!doctype html>
               className="fixed top-3 left-3 z-[10000] bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold px-3 py-2 rounded-full shadow-lg">
               🌐 {current.label}
             </button>
-            <Active />
+            <Active initialPage={pageState} onPageChange={(s) => setPageState(p => ({ ...p, ...s }))} />
           </div>
         );
       }

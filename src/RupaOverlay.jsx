@@ -1,13 +1,13 @@
 import React from 'react';
 import RupaMyanmarCore from './Rupa1App.jsx';
 import RupaVietnameseVersion from './Rupa2App.jsx';
+import RupaEnglishVersion from './Rupa3App.jsx';
 
 // Full-screen overlay opened by the "ရုပ်" floating button on the Paramattha page. It follows Paramattha's current
-// language (Rupa1App for Myanmar, Rupa2App for Vietnamese; English will join once its translation exists, until then
-// it shows the Myanmar one). The Rupa page state (tab/door/origin/kotthasa) is kept by the caller so a language
-// switch re-opens the same view.
+// language (Rupa1App Myanmar, Rupa3App English, Rupa2App Vietnamese). The Rupa page state (tab/door/origin/kotthasa)
+// is kept by the caller so a language switch re-opens the same view.
 export default function RupaOverlay({ lang, onClose, initialPage, onPageChange }) {
-  const Comp = lang === 'vi' ? RupaVietnameseVersion : RupaMyanmarCore;
+  const Comp = lang === 'vi' ? RupaVietnameseVersion : lang === 'en' ? RupaEnglishVersion : RupaMyanmarCore;
   return (
     <div className="fixed inset-0 z-[9000] bg-white overflow-auto">
       <button
