@@ -861,6 +861,8 @@ const [rupaRupaAyState, setRupaRupaAyState] = useState({ causeIdx: 0, effectIdx:
   const [cutiVariation, setCutiVariation] = useState(0); 
   const [nidana10BaseOffset, setNidana10BaseOffset] = useState(0);
   const [pastCutiVariation, setPastCutiVariation] = useState(0);
+  const [maranaDoor, setMaranaDoor] = useState({ past: 0, present: 0 }); // 0 = mano-dvāra, 1 = pañca-dvāra
+  const [maranaPancaIdx, setMaranaPancaIdx] = useState(0);
 
   const [aramQIndex, setAramQIndex] = useState(0);
   const [tadaCycleIndex, setTadaCycleIndex] = useState(0);
@@ -1425,24 +1427,38 @@ const maranaJavana = mSOpts[sankharaState.javanaIdx % mSOpts.length] || mSGroup.
         const isTadaAllowed = !activePuggalaId.includes('rupa') && !activePuggalaId.includes('arupa');
         const hasTada = (variation === 0 || variation === 2) && isTadaAllowed;
         const hasBhavanga = (variation === 2 || variation === 3);
+        const isPancaDoor = (lifePhase === 'past' ? maranaDoor.past : maranaDoor.present) === 1;
+        const vN = isPancaDoor ? "မရဏာသန္န ပဉ္စဒွါရဝီထိ" : "မရဏာသန္န မနောဒွါရဝီထိ";
+        const pDoorKey = ['cakkhu', 'sota', 'ghana', 'jivha', 'kaya'][maranaPancaIdx];
+        const pInfo = PANCADVARA_INFO[pDoorKey];
+
 
         seq.push({ vName: "ဝီထိမုတ်စိတ်", name: "ဘဝင်္ဂစလန", b: "ဟဒယဝတ္ထု-၆၃", c: activeBhavanga.cetasikas, a: oldAram, promptType: lifePhase === 'past' ? 'past_life' : 'present_life', isBhavangaNode: true, specificName: activeBhavanga.label });
         seq.push({ vName: "ဝီထိမုတ်စိတ်", name: "ဘဝင်္ဂုပစ္ဆေဒ", b: "ဟဒယဝတ္ထု-၆၃", c: activeBhavanga.cetasikas, a: oldAram, isBhavangaNode: true, specificName: activeBhavanga.label });
-        seq.push({ vName: "မရဏာသန္န မနောဒွါရဝီထိ", name: "မနောဒွါရာဝဇ္ဇန်း", b: "ဟဒယဝတ္ထု-၆၃", c: set12B, a: newAram, promptType: lifePhase === 'past' ? 'present_life' : 'future_life' });
+        if (isPancaDoor) {
+            const vedSet = pInfo.vedanā === "သုခ" ? set8_Sukha : set8_Upekkha;
+            seq.push({ vName: vN, name: "ပဉ္စဒွါရာဝဇ္ဇန်း", b: "ဟဒယဝတ္ထု-၆၃", c: set11, a: newAram, isMaranaAvajjana: true, promptType: lifePhase === 'past' ? 'present_life' : 'future_life' });
+            seq.push({ vName: vN, name: pInfo.viññāṇa, b: pInfo.base, c: vedSet, a: newAram, isMaranaVinnana: true, specificName: "အဟိတ်ကုသလဝိပါက် " + pInfo.viññāṇa });
+            seq.push({ vName: vN, name: "သမ္ပဋိစ္ဆိုင်း", b: "ဟဒယဝတ္ထု-၆၃", c: set11, a: newAram, specificName: "အဟိတ်ကုသလဝိပါက် " + "သမ္ပဋိစ္ဆိုင်း" });
+            seq.push({ vName: vN, name: "သန္တီရဏ", b: "ဟဒယဝတ္ထု-၆၃", c: set11, a: newAram, specificName: "အဟိတ်ကုသလဝိပါက် ဥပေက္ခာသန္တီရဏ" });
+            seq.push({ vName: vN, name: "ဝုဋ္ဌော", b: "ဟဒယဝတ္ထု-၆၃", c: set12B, a: newAram });
+        } else {
+            seq.push({ vName: vN, name: "မနောဒွါရာဝဇ္ဇန်း", b: "ဟဒယဝတ္ထု-၆၃", c: set12B, a: newAram, isMaranaAvajjana: true, promptType: lifePhase === 'past' ? 'present_life' : 'future_life' });
+        }
         
         for(let i=1; i<=5; i++) {
-            seq.push({ vName: "မရဏာသန္န မနောဒွါရဝီထိ", name: `${toMyanmarNum(i)} - ဇော`, b: "ဟဒယဝတ္ထု-၆၃", c: maranaJavana.cetasikas, a: newAram, isJavanaNode: true, specificName: maranaJavana.label });
+            seq.push({ vName: vN, name: `${toMyanmarNum(i)} - ဇော`, b: "ဟဒယဝတ္ထု-၆၃", c: maranaJavana.cetasikas, a: newAram, isJavanaNode: true, specificName: maranaJavana.label });
         }
         
         if (hasTada) {
             if (selectedTada) {
-                seq.push({ vName: "မရဏာသန္န မနောဒွါရဝီထိ", name: "၁ - တဒါရုံ", b: "ဟဒယဝတ္ထု-၆၃", c: selectedTada.cetasikas, a: newAram, isTadarammana: true, specificName: selectedTada.label });
-                seq.push({ vName: "မရဏာသန္န မနောဒွါရဝီထိ", name: "၂ - တဒါရုံ", b: "ဟဒယဝတ္ထု-၆၃", c: selectedTada.cetasikas, a: newAram, isTadarammana: true, specificName: selectedTada.label });
+                seq.push({ vName: vN, name: "၁ - တဒါရုံ", b: "ဟဒယဝတ္ထု-၆၃", c: selectedTada.cetasikas, a: newAram, isTadarammana: true, specificName: selectedTada.label });
+                seq.push({ vName: vN, name: "၂ - တဒါရုံ", b: "ဟဒယဝတ္ထု-၆၃", c: selectedTada.cetasikas, a: newAram, isTadarammana: true, specificName: selectedTada.label });
             } else if (jVedana === 'D' && bVedana === 'S') {
-                seq.push({ vName: "မရဏာသန္န မနောဒွါရဝီထိ", name: "အာဂန္တုကဘဝင်", b: "ဟဒယဝတ္ထု-၆၃", c: agantukaBhavanga.cetasikas, a: newAram, specificName: agantukaBhavanga.label });
+                seq.push({ vName: vN, name: "အာဂန္တုကဘဝင်", b: "ဟဒယဝတ္ထု-၆၃", c: agantukaBhavanga.cetasikas, a: newAram, specificName: agantukaBhavanga.label });
             }
         } else if (jVedana === 'D' && bVedana === 'S' && isTadaAllowed) {
-            seq.push({ vName: "မရဏာသန္န မနောဒွါရဝီထိ", name: "အာဂန္တုကဘဝင်", b: "ဟဒယဝတ္ထု-၆၃", c: agantukaBhavanga.cetasikas, a: newAram, specificName: agantukaBhavanga.label });
+            seq.push({ vName: vN, name: "အာဂန္တုကဘဝင်", b: "ဟဒယဝတ္ထု-၆၃", c: agantukaBhavanga.cetasikas, a: newAram, specificName: agantukaBhavanga.label });
         }
         
         if (hasBhavanga) {
@@ -1462,7 +1478,7 @@ const maranaJavana = mSOpts[sankharaState.javanaIdx % mSOpts.length] || mSGroup.
         finalSeq.push(...seq);
 
         finalSeq.forEach((node, idx) => {
-            pushNode(node.vName, node.name, node.b, node.c, node.a, { displayNum: toMyanmarNum(17 - idx), isCutiNode: node.isCutiNode, lifePhase: node.lPhase, promptType: node.promptType, isTadarammana: node.isTadarammana, specificName: node.specificName, isBhavangaNode: node.isBhavangaNode, isJavanaNode: node.isJavanaNode, isMaranaNode: true });
+            pushNode(node.vName, node.name, node.b, node.c, node.a, { displayNum: toMyanmarNum(17 - idx), isCutiNode: node.isCutiNode, lifePhase: node.lPhase, promptType: node.promptType, isTadarammana: node.isTadarammana, specificName: node.specificName, isBhavangaNode: node.isBhavangaNode, isJavanaNode: node.isJavanaNode, isMaranaNode: true, isMaranaAvajjana: node.isMaranaAvajjana, isMaranaVinnana: node.isMaranaVinnana });
         });
     };
 
@@ -1746,7 +1762,7 @@ const maranaJavana = mSOpts[sankharaState.javanaIdx % mSOpts.length] || mSGroup.
     }
 
     return result;
-  }, [activePhase, activeVithi, availableJavanaGroups, currentBhavangaGroup, javanaGroupId, javanaSubIndex, bhavangaGroupId, bhavangaSubIndex, selectedArammana, pancaDvaraVariation, manoKamaVariation, appanaVariation, kayaArammanaIndex, cutiVariation, pastCutiVariation, aramQIndex, tadaCycleIndex, customArammanas, lokuttaraJhanaIndex, rupaArammanaIndex, availableTadarammanas, activePuggalaId, avijjaStateByLife, sankharaStateByLife, currentLifeOffset, selectedNidana, nidanaCycleIndex]);
+  }, [activePhase, activeVithi, availableJavanaGroups, currentBhavangaGroup, javanaGroupId, javanaSubIndex, bhavangaGroupId, bhavangaSubIndex, selectedArammana, pancaDvaraVariation, manoKamaVariation, appanaVariation, kayaArammanaIndex, cutiVariation, pastCutiVariation, maranaDoor, maranaPancaIdx, aramQIndex, tadaCycleIndex, customArammanas, lokuttaraJhanaIndex, rupaArammanaIndex, availableTadarammanas, activePuggalaId, avijjaStateByLife, sankharaStateByLife, currentLifeOffset, selectedNidana, nidanaCycleIndex]);
 
   useEffect(() => {
     if (paticcaStep === 3 && paticcaSavedState && paticcaSavedState.phase === activePhase) {
@@ -2001,7 +2017,7 @@ useEffect(() => {
     const cet = selectedCetasika == null ? null : selectedCetasika === "အသိစိတ်" ? -1 : _cetKeys.indexOf(selectedCetasika);
     onPageChange?.({
       idx: currentIndex, jsub: javanaSubIndex, bsub: bhavangaSubIndex, pdv: pancaDvaraVariation, mkv: manoKamaVariation,
-      apv: appanaVariation, cuv: cutiVariation, pcv: pastCutiVariation, tcy: tadaCycleIndex, cet,
+      apv: appanaVariation, cuv: cutiVariation, pcv: pastCutiVariation, mdr: maranaDoor, mpi: maranaPancaIdx, tcy: tadaCycleIndex, cet,
       nid: selectedNidana, nvm: nidanaViewMode, nci: nidanaCycleIndex, n2: nidana2SubMode, n3: nidana3SubMode,
       n4: nidana4CycleIdx, n5: nidana5SubMode, n10e: nidana10EffectIdx, n10b: nidana10BaseOffset,
       snm: showNidanaMenu, sad: showAyatanaDetail, rra: rupaRupaAyState, dm: displayMode, kv: khandhaViewIndex,
@@ -2011,7 +2027,7 @@ useEffect(() => {
       pstep: paticcaStep, pkh: paticcaKhandha, psav: paticcaSavedState, psc: sankharaOnlyCetana,
       spm: showPuggalaMenu, sbm: showBhavangaMenu, epg: expandedPuggalaGroup, ebg: expandedBhavangaGroup,
     });
-  }, [snapReady, currentIndex, javanaSubIndex, bhavangaSubIndex, pancaDvaraVariation, manoKamaVariation, appanaVariation, cutiVariation, pastCutiVariation, tadaCycleIndex, selectedCetasika,
+  }, [snapReady, currentIndex, javanaSubIndex, bhavangaSubIndex, pancaDvaraVariation, manoKamaVariation, appanaVariation, cutiVariation, pastCutiVariation, maranaDoor, maranaPancaIdx, tadaCycleIndex, selectedCetasika,
       selectedNidana, nidanaViewMode, nidanaCycleIndex, nidana2SubMode, nidana3SubMode, nidana4CycleIdx, nidana5SubMode, nidana10EffectIdx, nidana10BaseOffset,
       showNidanaMenu, showAyatanaDetail, rupaRupaAyState, displayMode, khandhaViewIndex, lokuttaraJhanaIndex, rupaArammanaIndex, kayaArammanaIndex, aramQIndex,
       isBhavangaAuto, lifeLocks, avijjaStateByLife, sankharaStateByLife, selectedArammana, selectedBaseForModal,
@@ -2024,7 +2040,7 @@ useEffect(() => {
     const inPaticca = p.pstep > 0 && p.psav;
     setJavanaSubIndex(p.jsub ?? 0); setBhavangaSubIndex(p.bsub ?? 0);
     setPancaDvaraVariation(p.pdv ?? 0); setManoKamaVariation(p.mkv ?? 0); setAppanaVariation(p.apv ?? 0);
-    setCutiVariation(p.cuv ?? 0); setPastCutiVariation(p.pcv ?? 0); setTadaCycleIndex(p.tcy ?? 0);
+    setCutiVariation(p.cuv ?? 0); setPastCutiVariation(p.pcv ?? 0); setMaranaDoor(p.mdr ?? { past: 0, present: 0 }); setMaranaPancaIdx(p.mpi ?? 0); setTadaCycleIndex(p.tcy ?? 0);
     setNidanaViewMode(p.nvm ?? 'cause'); setNidanaCycleIndex(p.nci ?? 0); setNidana2SubMode(p.n2 ?? null); setNidana3SubMode(p.n3 ?? null);
     setNidana4CycleIdx(p.n4 ?? 0); setNidana5SubMode(p.n5 ?? 'cause'); setNidana10EffectIdx(p.n10e ?? 0); setNidana10BaseOffset(p.n10b ?? 0);
     setShowAyatanaDetail(!!p.sad); setRupaRupaAyState(p.rra ?? { causeIdx: 0, effectIdx: 0 });
@@ -2895,6 +2911,14 @@ if (selectedNidana === 1 || (selectedNidana === 2 && (nidana2SubMode === 'kamma'
     return;
   }
 }
+                       if (node.isMaranaAvajjana || node.isMaranaVinnana) {
+                           const mLocked = activePhase === 'cuti' ? lifeLocks[currentLifeOffset] : lifeLocks[currentLifeOffset - 1];
+                           if (mLocked) return;
+                           const mKey = activePhase === 'cuti' ? 'present' : 'past';
+                           if (node.isMaranaVinnana) setMaranaPancaIdx(p => (p + 1) % 5);
+                           else setMaranaDoor(p => ({ ...p, [mKey]: p[mKey] === 1 ? 0 : 1 }));
+                           return;
+                       }
                        if (node.promptType) return;
 
                        if (node.isAvijjaNode) {
