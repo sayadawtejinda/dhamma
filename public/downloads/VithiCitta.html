@@ -2541,8 +2541,9 @@ if (selectedNidana === 10) {
                    <div className="flex gap-0.5 mt-0.5">
                      {PHASES.map(ph => (
                        <button key={ph.id}
-                         onClick={() => { setCurrentLifeOffset(L); setActivePhase(ph.id); setCurrentIndex(0); setIsPlaying(false); setPaticcaStep(0); }}
-                         className={`flex-1 min-w-0 truncate text-[9px] md:text-[11px] font-bold rounded py-0.5 transition-colors ${isCurLife && _ep === ph.id ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>
+                         disabled={!(isCurLife || (d === -1 && ph.id === 'cuti') || (d === 1 && ph.id === 'patisandhi'))}
+                         onClick={() => { setActivePhase(d === -1 ? 'patisandhi' : d === 1 ? 'cuti' : ph.id); setCurrentIndex(0); setIsPlaying(false); setPaticcaStep(0); }}
+                         className={`flex-1 min-w-0 truncate text-[9px] md:text-[11px] font-bold rounded py-0.5 transition-colors disabled:opacity-40 disabled:cursor-default ${isCurLife && _ep === ph.id ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-300 enabled:hover:bg-slate-600'}`}>
                          {ph.label}
                        </button>
                      ))}
@@ -7887,8 +7888,9 @@ if (selectedNidana === 10) {
                    <div className="flex gap-0.5 mt-0.5">
                      {PHASES.map(ph => (
                        <button key={ph.id}
-                         onClick={() => { setCurrentLifeOffset(L); setActivePhase(ph.id); setCurrentIndex(0); setIsPlaying(false); setPaticcaStep(0); }}
-                         className={`flex-1 min-w-0 truncate text-[9px] md:text-[11px] font-bold rounded py-0.5 transition-colors ${isCurLife && _ep === ph.id ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>
+                         disabled={!(isCurLife || (d === -1 && ph.id === 'cuti') || (d === 1 && ph.id === 'patisandhi'))}
+                         onClick={() => { setActivePhase(d === -1 ? 'patisandhi' : d === 1 ? 'cuti' : ph.id); setCurrentIndex(0); setIsPlaying(false); setPaticcaStep(0); }}
+                         className={`flex-1 min-w-0 truncate text-[9px] md:text-[11px] font-bold rounded py-0.5 transition-colors disabled:opacity-40 disabled:cursor-default ${isCurLife && _ep === ph.id ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-300 enabled:hover:bg-slate-600'}`}>
                          {ph.label}
                        </button>
                      ))}
