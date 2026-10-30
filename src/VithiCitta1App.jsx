@@ -2973,6 +2973,9 @@ if (selectedNidana === 1 || (selectedNidana === 2 && (nidana2SubMode === 'kamma'
                            const mKey = activePhase === 'cuti' ? 'present' : 'past';
                            if (node.isMaranaVinnana) setMaranaPancaIdx(p => (p + 1) % 5);
                            else setMaranaDoor(p => ({ ...p, [mKey]: p[mKey] === 1 ? 0 : 1 }));
+                           // the vithi changes length, so the ball moves to another index: keep the same ball selected
+                           const _keep = node.isMaranaVinnana ? 'isMaranaVinnana' : 'isMaranaAvajjana';
+                           setTimeout(() => { const k = _vdRef.current.findIndex(n => n[_keep]); if (k >= 0) setCurrentIndex(k); }, 150);
                            return;
                        }
                        if (node.promptType) return;
