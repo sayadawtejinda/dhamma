@@ -2498,26 +2498,10 @@ if (selectedNidana === 10) {
            </button>
         </div>
 
-        {/* --- Phase Tabs --- */}
-        <div className="shrink-0 bg-slate-800 p-2 flex justify-center items-center border-t border-slate-700 z-50 relative">
-          <div className="flex bg-slate-700 rounded-xl p-1 gap-1 max-w-md w-full">
-            {PHASES.map((phase) => (
-              <button
-                key={phase.id}
-                onClick={() => { setActivePhase(phase.id); setIsPlaying(false); setPaticcaStep(0); }}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-1 px-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${
-                  ((() => { const ep = (activeNode.isAvijjaNode || activeNode.isSankharaNode) ? 'pavatti' : activeNode.name === 'Kiết sanh' ? 'patisandhi' : activePhase; return ep === phase.id; })())
-                    ? 'bg-emerald-500 text-white shadow-md'
-                    : 'text-slate-300 hover:text-white hover:bg-slate-600'
-                }`}
-              >
-                <Clock className="w-3 h-3" />
-                {phase.label}
-              </button>
-            ))}
-          </div>
-          
-          <div className="absolute right-3 md:right-6 top-1/2 -translate-y-1/2 flex items-center gap-2">
+        {/* --- Filters Area --- */}
+        <div className="shrink-0 bg-slate-100 p-3 md:p-4 border-b border-slate-200 flex flex-col items-center relative z-40">
+          {/* Duyên Khởi Phương Pháp 1 (Top Right) */}
+          <div className="absolute top-2 right-2 md:top-4 md:right-4 z-50 flex flex-col items-center">
             <div className="relative flex flex-col items-center">
               <button
                 onClick={() => {
@@ -2564,10 +2548,7 @@ if (selectedNidana === 10) {
               )}
             </div>
           </div>
-        </div>
 
-        {/* --- Filters Area --- */}
-        <div className="shrink-0 bg-slate-100 p-3 md:p-4 border-b border-slate-200 flex flex-col items-center relative z-40">
           <div className="absolute top-2 left-2 md:top-4 md:left-4 z-50 flex items-center">
              <div className="relative">
                  <div 
