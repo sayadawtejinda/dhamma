@@ -1958,6 +1958,16 @@ const hasPreSamphassa = (isNamaKhandha || isViññana) && (
       return () => clearInterval(interval);
   }, [isPlaying, vithiData.length]);
 
+  // Lives run in order (pat -> pavatti -> cuti, then the next life): slide the timeline in the direction of travel.
+  const _seqPos = currentLifeOffset * 3 + ({ patisandhi: 0, pavatti: 1, cuti: 2 }[activePhase] ?? 0);
+  const _prevSeq = useRef(_seqPos);
+  useEffect(() => {
+    const dir = Math.sign(_seqPos - _prevSeq.current);
+    _prevSeq.current = _seqPos;
+    const el = timelineRef.current;
+    if (!dir || !el || !el.animate) return;
+    el.animate([{ transform: `translateX(${dir * 35}%)`, opacity: 0.15 }, { transform: 'translateX(0)', opacity: 1 }], { duration: 500, easing: 'cubic-bezier(.2,.8,.2,1)' });
+  }, [_seqPos]);
   useEffect(() => {
     if (timelineRef.current && timelineRef.current.children) {
       const nodes = Array.from(timelineRef.current.querySelectorAll('.citta-node'));
@@ -2433,25 +2443,46 @@ if (selectedNidana === 10) {
             <div className="fixed inset-0 z-40" onClick={() => { setShowPuggalaMenu(false); setShowBhavangaMenu(false); }}></div>
         )}
 
-        {/* --- Life Timeline Header --- */}
-        <div className="shrink-0 bg-slate-900 px-4 py-2 flex justify-between items-center text-slate-300 z-30">
-           <button onClick={() => {setCurrentLifeOffset(p=>p-1); setCurrentIndex(0); setIsPlaying(false);}} className="hover:text-white flex gap-1 items-center px-2 py-1 bg-slate-800 rounded hover:bg-slate-700 transition">
-             <ChevronLeft className="w-4 h-4"/> <span className="text-xs">{getLifeName(displayLifeOffset - 1)}</span>
+        {/* --- Life Timeline Header: lives in order, each pat -> pavatti -> cuti --- */}
+        <div className="shrink-0 bg-slate-900 px-2 md:px-4 py-2 flex items-stretch gap-1 md:gap-2 text-slate-300 z-30">
+           <button onClick={() => {setCurrentLifeOffset(p=>p-1); setCurrentIndex(0); setIsPlaying(false);}} className="hover:text-white flex items-center px-1 bg-slate-800 rounded hover:bg-slate-700 transition shrink-0">
+             <ChevronLeft className="w-4 h-4"/>
            </button>
-           <div className="flex items-center gap-2 relative">
-               <div className="font-black text-emerald-400 text-base md:text-lg tracking-wide px-2 text-center">
-                   {getLifeName(displayLifeOffset)}
-               </div>
-               <button 
-                  onClick={() => toggleLifeLock(currentLifeOffset)} 
-                  className={`p-1.5 rounded-md transition-colors ${isLifeLocked ? 'text-rose-400 bg-rose-900/50 hover:bg-rose-900' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
-                  title={isLifeLocked ? "Khóa thay đổi hạng người cho kiếp này" : "Mở khóa thay đổi hạng người"}
-               >
-                  {isLifeLocked ? <Lock className="w-4 h-4"/> : <Unlock className="w-4 h-4"/>}
+           {[-1, 0, 1].map(d => {
+             const L = displayLifeOffset + d;
+             const isCurLife = d === 0;
+             const _ep = (activeNode.isAvijjaNode || activeNode.isSankharaNode) ? 'pavatti' : activeNode.name === PHASES[0].label || activeNode.name === 'ပဋိသန္ဓေ' ? 'patisandhi' : activePhase;
+             return (
+               <React.Fragment key={d}>
+                 {d !== -1 && <ChevronRight className="w-3 h-3 text-slate-600 shrink-0 self-center"/>}
+                 <div className={`flex-1 min-w-0 rounded-lg px-1.5 py-1 border transition-colors ${isCurLife ? 'border-emerald-500/60 bg-slate-800' : 'border-slate-700 bg-slate-900/60'}`}>
+                   <div className="flex items-center justify-center gap-1">
+                     <div className={`font-black text-[10px] md:text-sm tracking-wide text-center truncate ${isCurLife ? 'text-emerald-400' : 'text-slate-400'}`}>{getLifeName(L)}</div>
+                     {isCurLife && (
+                       <button 
+                  onClick={() => toggleLifeLock(currentLifeOffset)} 
+                  className={`p-0.5 rounded-md transition-colors ${isLifeLocked ? 'text-rose-400 bg-rose-900/50 hover:bg-rose-900' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
+                  title={isLifeLocked ? "Khóa thay đổi hạng người cho kiếp này" : "Mở khóa thay đổi hạng người"}
+               >
+                  {isLifeLocked ? <Lock className="w-4 h-4"/> : <Unlock className="w-4 h-4"/>}
                </button>
-           </div>
-           <button onClick={() => {setCurrentLifeOffset(p=>p+1); setCurrentIndex(0); setIsPlaying(false);}} className="hover:text-white flex gap-1 items-center px-2 py-1 bg-slate-800 rounded hover:bg-slate-700 transition">
-             <span className="text-xs">{getLifeName(displayLifeOffset + 1)}</span> <ChevronRight className="w-4 h-4"/>
+                     )}
+                   </div>
+                   <div className="flex gap-0.5 mt-0.5">
+                     {PHASES.map(ph => (
+                       <button key={ph.id}
+                         onClick={() => { setCurrentLifeOffset(L); setActivePhase(ph.id); setCurrentIndex(0); setIsPlaying(false); setPaticcaStep(0); }}
+                         className={`flex-1 min-w-0 truncate text-[9px] md:text-[11px] font-bold rounded py-0.5 transition-colors ${isCurLife && _ep === ph.id ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>
+                         {ph.label}
+                       </button>
+                     ))}
+                   </div>
+                 </div>
+               </React.Fragment>
+             );
+           })}
+           <button onClick={() => {setCurrentLifeOffset(p=>p+1); setCurrentIndex(0); setIsPlaying(false);}} className="hover:text-white flex items-center px-1 bg-slate-800 rounded hover:bg-slate-700 transition shrink-0">
+             <ChevronRight className="w-4 h-4"/>
            </button>
         </div>
 
