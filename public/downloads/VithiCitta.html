@@ -2024,6 +2024,9 @@ useEffect(() => {
   const _prevSeq = useRef(_seqPos);
   const _vdRef = useRef([]);
   _vdRef.current = vithiData;
+  const _nidHlRef = useRef(() => null);
+  const _curIdxRef = useRef(0);
+  _curIdxRef.current = currentIndex;
   useEffect(() => {
     const dir = Math.sign(_seqPos - _prevSeq.current);
     _prevSeq.current = _seqPos;
@@ -2041,6 +2044,27 @@ useEffect(() => {
     }, 80);
     return () => clearTimeout(t);
   }, [_seqPos]);
+  // Cause-effect views: show the whole highlighted vīthi in the timeline (centred if it fits, else from the left edge).
+  useEffect(() => {
+    if (selectedNidana === null && !(paticcaStep > 0)) return;
+    const t = setTimeout(() => {
+      const box = timelineRef.current; if (!box) return;
+      const vd = _vdRef.current;
+      let marked = [];
+      if (selectedNidana !== null) marked = vd.map((n, i) => (_nidHlRef.current(n, i) ? i : -1)).filter(i => i >= 0);
+      else if (paticcaStep === 1) marked = vd.map((n, i) => (n.isAvijjaNode ? i : -1)).filter(i => i >= 0);
+      else if (paticcaStep === 2) marked = vd.map((n, i) => (n.isSankharaNode ? i : -1)).filter(i => i >= 0);
+      else marked = [_curIdxRef.current];
+      const ns = box.querySelectorAll('.citta-node');
+      const first = ns[marked[0]], last = ns[marked[marked.length - 1]];
+      if (!first || !last) return;
+      const c = box.getBoundingClientRect();
+      const l = first.getBoundingClientRect().left - c.left, r = last.getBoundingClientRect().right - c.left;
+      const target = (r - l <= c.width - 24) ? box.scrollLeft + (l + r) / 2 - c.width / 2 : box.scrollLeft + l - 12;
+      box.scrollLeft = Math.max(0, target);
+    }, 180);
+    return () => clearTimeout(t);
+  }, [selectedNidana, nidanaViewMode, nidanaCycleIndex, nidana2SubMode, nidana3SubMode, nidana5SubMode, nidana4CycleIdx, nidana10EffectIdx, paticcaStep, activePhase, vithiData.length]);
   useEffect(() => {
     if (timelineRef.current && timelineRef.current.children) {
       const nodes = Array.from(timelineRef.current.querySelectorAll('.citta-node'));
@@ -2488,6 +2512,7 @@ if (selectedNidana === 10) {
   }
 }
   };
+  _nidHlRef.current = nidanaHlOf;
   // The header only follows the life of the shown node while a cause-effect view (paṭicca-samuppāda) is open: its causes
   // (avijjā, taṇhā, upādāna, saṅkhāra, kamma) belong to the life before the centre life, jāti/jarā-maraṇa to the one after it.
   const displayLifeOffset = (() => {
@@ -2530,12 +2555,12 @@ if (selectedNidana === 10) {
                    <div className="flex items-center justify-center gap-1">
                      <div className={`font-black text-[10px] md:text-sm tracking-wide text-center truncate ${isCurLife ? 'text-emerald-400' : isHl ? 'text-emerald-300' : 'text-slate-400'}`}>{getLifeName(L)}</div>
                      {isCurLife && (
-                       <button 
-                  onClick={() => toggleLifeLock(currentLifeOffset)} 
-                  className={`p-0.5 rounded-md transition-colors ${isLifeLocked ? 'text-rose-400 bg-rose-900/50 hover:bg-rose-900' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
-                  title={isLifeLocked ? "ဤဘဝအတွက် ပုဂ္ဂိုလ်ပြောင်းလဲခွင့် ပိတ်ထားသည်" : "ဤဘဝအတွက် ပုဂ္ဂိုလ်ပြောင်းလဲခွင့် ဖွင့်ထားသည်"}
-               >
-                  {isLifeLocked ? <Lock className="w-4 h-4"/> : <Unlock className="w-4 h-4"/>}
+                       <button 
+                  onClick={() => toggleLifeLock(currentLifeOffset)} 
+                  className={`p-0.5 rounded-md transition-colors ${isLifeLocked ? 'text-rose-400 bg-rose-900/50 hover:bg-rose-900' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
+                  title={isLifeLocked ? "ဤဘဝအတွက် ပုဂ္ဂိုလ်ပြောင်းလဲခွင့် ပိတ်ထားသည်" : "ဤဘဝအတွက် ပုဂ္ဂိုလ်ပြောင်းလဲခွင့် ဖွင့်ထားသည်"}
+               >
+                  {isLifeLocked ? <Lock className="w-4 h-4"/> : <Unlock className="w-4 h-4"/>}
                </button>
                      )}
                    </div>
@@ -7369,6 +7394,9 @@ const hasPreSamphassa = (isNamaKhandha || isViññana) && (
   const _prevSeq = useRef(_seqPos);
   const _vdRef = useRef([]);
   _vdRef.current = vithiData;
+  const _nidHlRef = useRef(() => null);
+  const _curIdxRef = useRef(0);
+  _curIdxRef.current = currentIndex;
   useEffect(() => {
     const dir = Math.sign(_seqPos - _prevSeq.current);
     _prevSeq.current = _seqPos;
@@ -7386,6 +7414,27 @@ const hasPreSamphassa = (isNamaKhandha || isViññana) && (
     }, 80);
     return () => clearTimeout(t);
   }, [_seqPos]);
+  // Cause-effect views: show the whole highlighted vīthi in the timeline (centred if it fits, else from the left edge).
+  useEffect(() => {
+    if (selectedNidana === null && !(paticcaStep > 0)) return;
+    const t = setTimeout(() => {
+      const box = timelineRef.current; if (!box) return;
+      const vd = _vdRef.current;
+      let marked = [];
+      if (selectedNidana !== null) marked = vd.map((n, i) => (_nidHlRef.current(n, i) ? i : -1)).filter(i => i >= 0);
+      else if (paticcaStep === 1) marked = vd.map((n, i) => (n.isAvijjaNode ? i : -1)).filter(i => i >= 0);
+      else if (paticcaStep === 2) marked = vd.map((n, i) => (n.isSankharaNode ? i : -1)).filter(i => i >= 0);
+      else marked = [_curIdxRef.current];
+      const ns = box.querySelectorAll('.citta-node');
+      const first = ns[marked[0]], last = ns[marked[marked.length - 1]];
+      if (!first || !last) return;
+      const c = box.getBoundingClientRect();
+      const l = first.getBoundingClientRect().left - c.left, r = last.getBoundingClientRect().right - c.left;
+      const target = (r - l <= c.width - 24) ? box.scrollLeft + (l + r) / 2 - c.width / 2 : box.scrollLeft + l - 12;
+      box.scrollLeft = Math.max(0, target);
+    }, 180);
+    return () => clearTimeout(t);
+  }, [selectedNidana, nidanaViewMode, nidanaCycleIndex, nidana2SubMode, nidana3SubMode, nidana5SubMode, nidana4CycleIdx, nidana10EffectIdx, paticcaStep, activePhase, vithiData.length]);
   useEffect(() => {
     if (timelineRef.current && timelineRef.current.children) {
       const nodes = Array.from(timelineRef.current.querySelectorAll('.citta-node'));
@@ -7830,6 +7879,7 @@ if (selectedNidana === 10) {
   }
 }
   };
+  _nidHlRef.current = nidanaHlOf;
   // The header only follows the life of the shown node while a cause-effect view (paṭicca-samuppāda) is open: its causes
   // (avijjā, taṇhā, upādāna, saṅkhāra, kamma) belong to the life before the centre life, jāti/jarā-maraṇa to the one after it.
   const displayLifeOffset = (() => {
@@ -7878,12 +7928,12 @@ if (selectedNidana === 10) {
                    <div className="flex items-center justify-center gap-1">
                      <div className={`font-black text-[10px] md:text-sm tracking-wide text-center truncate ${isCurLife ? 'text-emerald-400' : isHl ? 'text-emerald-300' : 'text-slate-400'}`}>{getLifeName(L)}</div>
                      {isCurLife && (
-                       <button 
-                  onClick={() => toggleLifeLock(currentLifeOffset)} 
-                  className={`p-0.5 rounded-md transition-colors ${isLifeLocked ? 'text-rose-400 bg-rose-900/50 hover:bg-rose-900' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
-                  title={isLifeLocked ? "Khóa thay đổi hạng người cho kiếp này" : "Mở khóa thay đổi hạng người"}
-               >
-                  {isLifeLocked ? <Lock className="w-4 h-4"/> : <Unlock className="w-4 h-4"/>}
+                       <button 
+                  onClick={() => toggleLifeLock(currentLifeOffset)} 
+                  className={`p-0.5 rounded-md transition-colors ${isLifeLocked ? 'text-rose-400 bg-rose-900/50 hover:bg-rose-900' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
+                  title={isLifeLocked ? "Khóa thay đổi hạng người cho kiếp này" : "Mở khóa thay đổi hạng người"}
+               >
+                  {isLifeLocked ? <Lock className="w-4 h-4"/> : <Unlock className="w-4 h-4"/>}
                </button>
                      )}
                    </div>
