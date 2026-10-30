@@ -2513,10 +2513,18 @@ if (selectedNidana === 10) {
                          disabled={!(isCurLife || (d === -1 && ph.id === 'cuti') || (d === 1 && ph.id === 'patisandhi'))}
                          onClick={() => {
                            setIsPlaying(false); setPaticcaStep(0);
-                           if (d === 0) { setActivePhase(ph.id); setCurrentIndex(0); return; }
-                           // next life's pat ball / previous life's cuti ball: show it and select it
-                           setActivePhase(d === -1 ? 'patisandhi' : 'cuti');
-                           setTimeout(() => { const k = _vdRef.current.findIndex(n => n.isLifeDividerBefore); if (k > 0) setCurrentIndex(d === 1 ? k : k - 1); }, 150);
+                           // pat -> select the pat ball, cuti -> the cuti ball (also next life's pat / previous life's cuti), pavatti -> first ball
+                           const toPhase = d === -1 ? 'patisandhi' : d === 1 ? 'cuti' : ph.id;
+                           setActivePhase(toPhase);
+                           setTimeout(() => {
+                             const k = _vdRef.current.findIndex(n => n.isLifeDividerBefore);
+                             if (toPhase === 'pavatti' || k < 1) { setCurrentIndex(0); return; }
+                             setCurrentIndex(d === 1 ? k : d === -1 ? k - 1 : toPhase === 'cuti' ? k - 1 : k);
+                             const box = timelineRef.current; if (!box) return;
+                             const ns = box.querySelectorAll('.citta-node'); const c = box.getBoundingClientRect();
+                             if (toPhase === 'patisandhi' && ns[k - 1]) box.scrollLeft += ns[k - 1].getBoundingClientRect().left - c.left - 8;
+                             else if (toPhase === 'cuti' && ns[k]) box.scrollLeft += ns[k].getBoundingClientRect().right - c.right + 8;
+                           }, 150);
                          }}
                          className={`flex-1 min-w-0 truncate text-[9px] md:text-[11px] font-bold rounded py-0.5 transition-colors disabled:opacity-40 disabled:cursor-default ${(isHl && (d === 0 ? _ep === ph.id : d === -1 ? ph.id === 'pavatti' : ph.id === 'patisandhi')) || (selectedNidana === null && ((d === 1 && ph.id === 'patisandhi' && activePhase === 'cuti' && currentIndex === _divIdx) || (d === -1 && ph.id === 'cuti' && activePhase === 'patisandhi' && currentIndex === _divIdx - 1))) ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-300 enabled:hover:bg-slate-600'}`}>
                          {ph.label}
