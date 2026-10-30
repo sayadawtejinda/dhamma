@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="my">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wiki Linker</title>
+<style>
+  :root { --bg:#f8fafc; --card:#fff; --text:#1e293b; --muted:#94a3b8; --line:#e2e8f0; --accent:#4f46e5; --accent2:#4338ca; --soft:#eef2ff; --ok:#16a34a; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family: system-ui, "Noto Sans Myanmar", "Myanmar Text", sans-serif; padding:16px; }
+  .wrap { max-width:1150px; margin:0 auto; }
+  header { text-align:center; margin-bottom:20px; }
+  h1 { margin:0 0 4px; font-size:28px; }
+  header p { margin:0; color:#64748b; }
+  .grid { display:grid; grid-template-columns: 1fr; gap:20px; }
+  @media (min-width: 900px) { .grid { grid-template-columns: 340px 1fr; } }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:20px; }
+  h2 { margin:0 0 12px; font-size:17px; }
+  textarea { width:100%; border:1px solid var(--line); border-radius:10px; padding:10px 12px; font:inherit; background:var(--bg); resize:vertical; }
+  textarea:focus { outline:2px solid var(--accent); }
+  button { font:inherit; cursor:pointer; border:0; border-radius:10px; padding:10px 14px; font-weight:700; }
+  .primary { background:var(--accent); color:#fff; } .primary:hover { background:var(--accent2); } .primary:disabled { background:#cbd5e1; cursor:default; }
+  .plain { background:#f1f5f9; color:#475569; border:1px solid var(--line); } .plain:hover { background:#e2e8f0; }
+  .row { display:flex; gap:10px; } .row > * { flex:1; }
+  .small { font-size:12px; padding:6px 10px; }
+  .label { font-size:12px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; }
+  #kwlist { max-height:400px; overflow-y:auto; margin-top:8px; }
+  .kw { display:flex; align-items:center; justify-content:space-between; padding:6px 8px; border-radius:8px; gap:6px; }
+  .kw:hover { background:var(--soft); }
+  .kw span { font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .kw .acts { display:none; gap:2px; } .kw:hover .acts { display:flex; }
+  .kw .acts button { background:none; padding:2px 6px; color:var(--muted); font-size:15px; } .kw .acts button:hover { color:var(--accent); }
+  .kw input { flex:1; font:inherit; padding:4px 6px; border:1px solid var(--line); border-radius:6px; }
+  .empty { text-align:center; color:var(--muted); font-style:italic; padding:24px 0; }
+  #input { width:100%; min-height:420px; font-size:18px; line-height:1.7; padding:16px; }
+  .tip { background:var(--soft); border:1px solid #c7d2fe; border-radius:12px; padding:12px 14px; font-size:12px; color:#312e81; margin:12px 0; }
+  .tip ul { margin:4px 0 0; padding-left:20px; }
+  #review { background:var(--bg); border:1px solid var(--line); border-radius:12px; padding:20px; max-height:500px; overflow-y:auto; font-size:18px; line-height:2; white-space:pre-wrap; margin-bottom:16px; }
+  .lk { cursor:pointer; padding:2px 6px; border-radius:6px; font-weight:700; user-select:none; }
+  .lk.on { background:var(--accent); color:#fff; } .lk.off { color:#cbd5e1; text-decoration:line-through; }
+  #final { height:450px; background:#0f172a; color:#e0e7ff; font:14px/1.6 ui-monospace, Consolas, monospace; resize:none; }
+  .big { width:100%; padding:14px; font-size:16px; }
+  .title-ok { color:var(--ok); }
+  .hidden { display:none; }
+  .top { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+  .x { background:none; color:var(--muted); font-size:20px; padding:0 6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Wiki Linker</h1>
+    <p>Auto-linking &amp; Citation Cleaner</p>
+  </header>
+
+  <div class="grid">
+    <div>
+      <div class="card">
+        <h2>Keywords စီမံရန်</h2>
+        <textarea id="newKw" rows="5" placeholder="စာလုံးများကို တစ်ကြောင်းချင်းစီ ရိုက်ထည့်ပါ...&#10;ဥပမာ- သာရိပုတ္တရာထေရ်|အရှင်သာရိပုတ္တရာ"></textarea>
+        <button class="primary big" id="addBtn" style="margin-top:8px">+ စာရင်းထဲသို့ ထည့်မည်</button>
+        <div class="row" style="margin-top:8px">
+          <button class="plain small" id="exportBtn">⬇ Backup သိမ်းမည်</button>
+          <button class="plain small" id="importBtn">⬆ Backup ပြန်ထည့်မည်</button>
+        </div>
+        <input type="file" id="file" accept=".txt,.json" class="hidden">
+        <div style="border-top:1px solid var(--line); margin-top:14px; padding-top:12px">
+          <div class="label" id="kwCount"></div>
+          <div id="kwlist"></div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="card" id="vInput">
+        <h2>ဆောင်းပါးစာသားထည့်ပါ</h2>
+        <textarea id="input" placeholder="ဒီမှာ စာသားများကို ရိုက်ထည့်ပါ..."></textarea>
+        <div class="tip"><b>လုပ်ဆောင်ချက်များ:</b>
+          <ul>
+            <li><code>[၁၈၁၊ ၁၈၂]</code> ကဲ့သို့သော ကိုးကားနံပါတ် အများအပြားပါသည်များကိုပါ ဖျက်ထုတ်ပေးပါမည်။</li>
+            <li><code>အမည်ရင်း|အမည်ကွဲ</code> ပုံစံဖြင့် Keywords ထည့်ပါက လင့်များကို နီးစပ်ရာစာသားဖြင့် ချိတ်ပေးပါမည်။</li>
+            <li>မူရင်းတွင် လင့်ချိတ်ပြီးသား စာလုံးများကို ကျော်သွားပါမည်။</li>
+          </ul>
+        </div>
+        <button class="primary big" id="goBtn" disabled>စတင်ပြင်ဆင်မည်</button>
+      </div>
+
+      <div class="card hidden" id="vReview">
+        <div class="top"><h2 style="margin:0">ရလဒ်ကို စစ်ဆေးပါ</h2><button class="x" data-back>✕</button></div>
+        <div id="review"></div>
+        <div class="row">
+          <button class="plain big" data-back>ပြန်ပြင်မည်</button>
+          <button class="primary big" id="okBtn">အတည်ပြုမည်</button>
+        </div>
+      </div>
+
+      <div class="card hidden" id="vFinal">
+        <div class="top"><h2 class="title-ok" style="margin:0">✓ အဆင်သင့်ဖြစ်ပါပြီ</h2><button class="x" data-back>✕</button></div>
+        <textarea id="final" readonly></textarea>
+        <div class="row" style="margin-top:12px">
+          <button class="primary big" id="copyBtn">Copy Result</button>
+          <button class="plain big" id="newBtn">အသစ်တစ်ခု ထပ်လုပ်မည်</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const KEY = 'wikiLinker.keywords.v1';
+let keywords = [];
+let editingId = null;
+let text = '';
+let links = [];
+
+const $ = id => document.getElementById(id);
+const uid = () => Math.random().toString(36).slice(2, 11);
+const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function load() {
+  try { keywords = JSON.parse(localStorage.getItem(KEY)) || []; } catch (e) { keywords = []; }
+}
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(keywords)); }
+  catch (e) { alert('Browser ထဲ သိမ်း၍မရပါ — Backup သိမ်းထားပါ'); }
+}
+
+function renderKeywords() {
+  $('kwCount').textContent = `သိမ်းဆည်းထားသော စာလုံးများ (${keywords.length})`;
+  const box = $('kwlist');
+  if (!keywords.length) { box.innerHTML = '<div class="empty">စာရင်းမရှိသေးပါ</div>'; }
+  else {
+    const sorted = [...keywords].sort((a, b) => b.createdAt - a.createdAt);
+    box.innerHTML = sorted.map(k => editingId === k.id
+      ? `<div class="kw"><input id="editBox" value="${esc(k.word)}"></div>`
+      : `<div class="kw"><span title="${esc(k.word)}">${esc(k.word)}</span><div class="acts"><button data-edit="${k.id}">✎</button><button data-del="${k.id}">🗑</button></div></div>`
+    ).join('');
+    const eb = $('editBox');
+    if (eb) {
+      eb.focus();
+      const id = editingId;
+      const commit = () => {
+        if (editingId !== id) return;
+        const v = eb.value.trim();
+        if (v) { const k = keywords.find(x => x.id === id); if (k) k.word = v; save(); }
+        editingId = null; renderKeywords();
+      };
+      eb.onblur = commit;
+      eb.onkeydown = e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { editingId = null; renderKeywords(); } };
+    }
+  }
+  updateGo();
+}
+function updateGo() { $('goBtn').disabled = !$('input').value || !keywords.length; }
+
+$('kwlist').addEventListener('click', e => {
+  const ed = e.target.closest('[data-edit]'), del = e.target.closest('[data-del]');
+  if (ed) { editingId = ed.dataset.edit; renderKeywords(); }
+  if (del) { keywords = keywords.filter(k => k.id !== del.dataset.del); save(); renderKeywords(); }
+});
+
+function addWords(lines) {
+  const have = new Set(keywords.map(k => k.word));
+  let n = 0;
+  const now = Date.now();
+  for (const raw of lines) {
+    const w = String(raw).trim();
+    if (!w || have.has(w)) continue;
+    have.add(w);
+    keywords.push({ id: uid(), word: w, createdAt: now + n });
+    n++;
+  }
+  save(); renderKeywords();
+  return n;
+}
+$('addBtn').onclick = () => { addWords($('newKw').value.split('\n')); $('newKw').value = ''; };
+
+$('exportBtn').onclick = () => {
+  const blob = new Blob([JSON.stringify(keywords, null, 1)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'wiki-linker-keywords.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+$('importBtn').onclick = () => $('file').click();
+$('file').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  const t = await f.text();
+  let lines;
+  try {
+    const j = JSON.parse(t);
+    lines = j.map(x => typeof x === 'string' ? x : x.word);
+  } catch (err) { lines = t.split(/\r?\n/); }
+  const n = addWords(lines);
+  alert(`စာလုံးအသစ် ${n} လုံး ထည့်ပြီးပါပြီ`);
+};
+
+$('input').addEventListener('input', updateGo);
+
+function show(v) {
+  $('vInput').classList.toggle('hidden', v !== 'input');
+  $('vReview').classList.toggle('hidden', v !== 'review');
+  $('vFinal').classList.toggle('hidden', v !== 'final');
+}
+document.querySelectorAll('[data-back]').forEach(b => b.onclick = () => { $('input').value = text; show('input'); updateGo(); });
+
+function processToLinks() {
+  let t = $('input').value;
+  t = t.replace(/\[[၀-၉\d\s၊,]+\]/g, '');
+  t = t.replace(/^==([^=]+)==\s*$/gm, '===$1===');
+  t = t.replace(/^###\s*(.+)$/gm, '===$1===');
+  t = t.replace(/\*\*([^*]+)\*\*/g, "'''$1'''");
+
+  const existing = /\[\[([^|\]]+)(?:\|([^\]]+))?\]\]/g;
+  const pre = new Set(), ranges = [];
+  let m;
+  while ((m = existing.exec(t)) !== null) {
+    pre.add(m[1].trim());
+    if (m[2]) pre.add(m[2].trim());
+    ranges.push({ start: m.index, end: m.index + m[0].length });
+  }
+
+  const kws = keywords.map(k => {
+    if (k.word.includes('|')) {
+      const p = k.word.split('|');
+      return { target: p[0].trim(), searchWord: p[1].trim() };
+    }
+    return { target: k.word, searchWord: k.word };
+  }).filter(k => k.searchWord).sort((a, b) => b.searchWord.length - a.searchWord.length);
+
+  const temp = [];
+  kws.forEach(k => {
+    if (pre.has(k.searchWord)) return;
+    const re = new RegExp(k.searchWord.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+    let w;
+    while ((w = re.exec(t)) !== null) {
+      const inside = ranges.some(r => w.index >= r.start && w.index < r.end);
+      if (!inside) {
+        temp.push({ target: k.target, display: k.searchWord, index: w.index, active: true, id: uid() });
+        break;
+      }
+    }
+  });
+
+  temp.sort((a, b) => a.index - b.index);
+  const final = [], occ = new Set(), done = new Set();
+  temp.forEach(l => {
+    let overlap = false;
+    for (let i = l.index; i < l.index + l.display.length; i++) if (occ.has(i)) { overlap = true; break; }
+    if (!overlap && !done.has(l.display)) {
+      final.push(l); done.add(l.display);
+      for (let i = l.index; i < l.index + l.display.length; i++) occ.add(i);
+    }
+  });
+
+  text = t; links = final;
+  renderReview();
+  show('review');
+}
+$('goBtn').onclick = processToLinks;
+
+const linkMarkup = l => l.target !== l.display ? `[[${l.target}|${l.display}]]` : `[[${l.display}]]`;
+
+function renderReview() {
+  const byIndex = new Map(links.map(l => [l.index, l]));
+  let html = '', i = 0;
+  while (i < text.length) {
+    const l = byIndex.get(i);
+    if (l) {
+      html += `<span class="lk ${l.active ? 'on' : 'off'}" data-id="${l.id}">${esc(l.active ? linkMarkup(l) : l.display)}</span>`;
+      i += l.display.length;
+    } else {
+      let j = i + 1;
+      while (j < text.length && !byIndex.has(j)) j++;
+      html += esc(text.slice(i, j));
+      i = j;
+    }
+  }
+  $('review').innerHTML = html;
+}
+$('review').addEventListener('click', e => {
+  const s = e.target.closest('.lk');
+  if (!s) return;
+  const l = links.find(x => x.id === s.dataset.id);
+  l.active = !l.active;
+  renderReview();
+});
+
+function finalText() {
+  let out = '', last = 0;
+  links.filter(l => l.active).sort((a, b) => a.index - b.index).forEach(l => {
+    out += text.substring(last, l.index) + linkMarkup(l);
+    last = l.index + l.display.length;
+  });
+  return out + text.substring(last);
+}
+$('okBtn').onclick = () => { $('final').value = finalText(); show('final'); };
+$('copyBtn').onclick = async () => {
+  const v = $('final').value;
+  try { await navigator.clipboard.writeText(v); }
+  catch (e) { $('final').select(); document.execCommand('copy'); }
+  $('copyBtn').textContent = 'Copied!';
+  setTimeout(() => $('copyBtn').textContent = 'Copy Result', 2000);
+};
+$('newBtn').onclick = () => { text = ''; $('input').value = ''; updateGo(); show('input'); };
+
+load(); renderKeywords();
+</script>
+</body>
+</html>
