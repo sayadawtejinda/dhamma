@@ -63,6 +63,10 @@
   .res .btns a.open { font-size:12px; font-weight:700; padding:6px 10px; border-radius:10px; background:#f1f5f9; color:#475569; border:1px solid var(--line); text-decoration:none; white-space:nowrap; display:inline-flex; align-items:center; }
   .res .btns a.open:hover { background:#e2e8f0; }
   .out { font:13px/1.6 ui-monospace, Consolas, monospace; background:#0f172a; color:#e0e7ff; min-height:90px; }
+  .hgrid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  @media (max-width: 600px) { .hgrid { grid-template-columns:1fr; } }
+  .hgrid label { font-size:12px; font-weight:700; color:#64748b; display:block; margin-bottom:3px; }
+  .hgrid .wide { grid-column: 1 / -1; }
   .chip { display:inline-flex; align-items:center; gap:6px; padding:5px 11px; margin:3px; border:1px solid var(--line); border-radius:999px; font-size:14px; cursor:pointer; background:#fff; }
   .chip.on { background:var(--soft); border-color:var(--accent); font-weight:700; }
   .chip.have { opacity:.55; cursor:default; }
@@ -150,6 +154,22 @@
       </div>
 
       <div class="hidden" id="vWs">
+        <div class="card" id="hdrCard">
+          <div class="top" style="margin:0"><h2 style="margin:0">Wikisource စာအုပ် Header ကုဒ်</h2>
+            <button class="primary small" id="hdrOpen">+ Header ကုဒ် ထုတ်မည်</button></div>
+          <div id="hdrBox" class="hidden" style="margin-top:14px">
+            <div class="hgrid" id="hdrForm"></div>
+            <textarea id="hdrOut" class="out" rows="14" readonly style="margin-top:12px"></textarea>
+            <div class="row" style="margin-top:8px">
+              <button class="primary" id="hdrCopy">ကုဒ်ကူးမည်</button>
+              <button class="plain" id="hdrNext">နောက်တစ်အုပ် →</button>
+              <button class="plain" id="hdrClose">ပိတ်မည်</button>
+            </div>
+            <div class="note" id="hdrHint"></div>
+            <div class="note">"နောက်တစ်အုပ်" နှိပ်ရင် စာရေးဆရာ၊ section၊ categories စတာတွေ ထားပြီး previous ကို ယခုစာအုပ်နဲ့ အစားထိုးပေးပါတယ် (ယခင် previous က previous2 ဖြစ်သွားမယ်)။ title၊ next၊ year စတာတွေ ရှင်းပေးပါတယ်။</div>
+          </div>
+        </div>
+
         <div class="card">
           <h2>စကားလုံး ရှာရန်</h2>
           <input type="text" id="q" placeholder="စကားလုံး ရိုက်ထည့်ပါ..." autocomplete="off">
@@ -729,6 +749,68 @@ function refreshFinal() {
   renderCats();
 }
 renderPicked();
+
+// ---- Wikisource {{header}} code for a book ----
+// Field names are exactly the ones of the user's template (including "contribuor").
+const HDR_FIELDS = ['title', 'author', 'override_author', 'editor', 'translator', 'contribuor', 'override_contributor', 'section',
+  'previous', 'previous2', 'next', 'next2', 'year', 'notes', 'edition', 'categories', 'shortcut', 'portal'];
+const HDR_LINKS = new Set(['previous', 'previous2', 'next', 'next2']);   // typed plainly, written as [[...]]
+const HDRKEY = 'wikiLinker.header.v1', HDRPREV = 'wikiLinker.headerPrev';
+let hdrPrevTitle = '';
+try { hdrPrevTitle = localStorage.getItem(HDRPREV) || ''; } catch (e) {}
+const hdrWrap = v => { v = v.trim(); return !v ? '' : /^\[\[.*\]\]$/.test(v) ? v : `[[${v}]]`; };
+function hdrGet() {
+  const s = {};
+  HDR_FIELDS.forEach(f => s[f] = $('hf_' + f).value);
+  return s;
+}
+function hdrSet(s) { HDR_FIELDS.forEach(f => $('hf_' + f).value = s[f] || ''); hdrRefresh(); }
+function hdrCode(s) {
+  const lines = ['{{header'];
+  HDR_FIELDS.forEach(f => {
+    let v = HDR_LINKS.has(f) ? hdrWrap(s[f] || '') : (s[f] || '').trim();
+    if (f === 'next' && !v) v = '[[]]';
+    lines.push(v ? `| ${f} = ${v}` : `| ${f} =`);
+  });
+  lines.push('}}');
+  return lines.join('\n');
+}
+function hdrRefresh() {
+  const s = hdrGet();
+  $('hdrOut').value = hdrCode(s);
+  try { localStorage.setItem(HDRKEY, JSON.stringify(s)); localStorage.setItem(HDRPREV, hdrPrevTitle); } catch (e) {}
+  $('hdrHint').textContent = hdrPrevTitle && s.title.trim()
+    ? `ယခင်စာအုပ် "${hdrPrevTitle}" ရဲ့ header မှာ  | next = ${hdrWrap(s.title)}  လို့ ပြင်ပါ။` : '';
+}
+$('hdrForm').innerHTML = HDR_FIELDS.map(f =>
+  `<div class="${f === 'title' || f === 'notes' ? 'wide' : ''}"><label for="hf_${f}">${f}${HDR_LINKS.has(f) ? ' (စာအုပ်အမည် ရိုက်ရုံ)' : ''}</label><input type="text" id="hf_${f}" autocomplete="off"></div>`).join('');
+$('hdrForm').addEventListener('input', hdrRefresh);
+$('hdrOpen').onclick = () => {
+  const open = $('hdrBox').classList.contains('hidden');
+  if (open) {
+    let s = {};
+    try { s = JSON.parse(localStorage.getItem(HDRKEY)) || {}; } catch (e) {}
+    if (!s.section) s.section = 'စာစစ်ရန်လိုအပ်သည်';
+    hdrSet(s);
+  }
+  $('hdrBox').classList.toggle('hidden', !open);
+  if (open) $('hf_title').focus();
+};
+$('hdrClose').onclick = () => $('hdrBox').classList.add('hidden');
+$('hdrCopy').onclick = async () => {
+  await copyText($('hdrOut').value, $('hdrOut'));
+  $('hdrCopy').textContent = '✓ ကူးပြီး';
+  setTimeout(() => $('hdrCopy').textContent = 'ကုဒ်ကူးမည်', 1500);
+};
+$('hdrNext').onclick = () => {
+  const s = hdrGet();
+  if (!s.title.trim()) { alert('ယခုစာအုပ်ရဲ့ title အရင်ထည့်ပါ'); return; }
+  hdrPrevTitle = s.title.trim();
+  const n = { ...s, previous2: s.previous, previous: hdrWrap(s.title) };   // the finished book becomes "previous"
+  ['title', 'next', 'next2', 'year', 'notes', 'edition', 'shortcut'].forEach(f => n[f] = '');
+  hdrSet(n);
+  $('hf_title').focus();
+};
 
 // ---- GitHub sync: the list of added words lives in public/wiki-linker/wikisource-mine.json of the repo ----
 // Every device with the token reads/writes that file through the GitHub API; devices without a token still
