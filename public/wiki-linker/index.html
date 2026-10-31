@@ -63,6 +63,12 @@
   .res .btns a.open { font-size:12px; font-weight:700; padding:6px 10px; border-radius:10px; background:#f1f5f9; color:#475569; border:1px solid var(--line); text-decoration:none; white-space:nowrap; display:inline-flex; align-items:center; }
   .res .btns a.open:hover { background:#e2e8f0; }
   .out { font:13px/1.6 ui-monospace, Consolas, monospace; background:#0f172a; color:#e0e7ff; min-height:90px; }
+  .chip { display:inline-flex; align-items:center; gap:6px; padding:5px 11px; margin:3px; border:1px solid var(--line); border-radius:999px; font-size:14px; cursor:pointer; background:#fff; }
+  .chip.on { background:var(--soft); border-color:var(--accent); font-weight:700; }
+  .chip.have { opacity:.55; cursor:default; }
+  .grp { margin-top:10px; }
+  details.cats { border:1px solid var(--line); border-radius:12px; padding:10px 14px; margin-bottom:12px; }
+  details.cats summary { cursor:pointer; font-weight:700; }
 </style>
 </head>
 <body>
@@ -120,6 +126,13 @@
 
       <div class="card hidden" id="vFinal">
         <div class="top"><h2 class="title-ok" style="margin:0">✓ အဆင်သင့်ဖြစ်ပါပြီ</h2><button class="x" data-back>✕</button></div>
+        <div class="note" id="extInfo" style="margin:0 0 10px"></div>
+        <details class="cats" id="catBox" open>
+          <summary>ကဏ္ဍများ ရွေးရန် <span id="catCount"></span></summary>
+          <input type="text" id="catQ" placeholder="ကဏ္ဍ ရှာရန်..." autocomplete="off" style="margin-top:10px">
+          <div id="catList"></div>
+          <div class="note">ရွေးလိုက်တာတွေကို ဆောင်းပါးအဆုံး ({{reflist}} နောက်) မှာ ထည့်ပေးပါမယ်။ ဆောင်းပါးထဲ ပါပြီးသားဆိုရင် "ပါပြီး" လို့ပြပြီး ထပ်မထည့်ပါဘူး။</div>
+        </details>
         <textarea id="final" readonly></textarea>
         <div class="row" style="margin-top:12px">
           <button class="primary big" id="copyBtn">Copy Result</button>
@@ -133,6 +146,16 @@
           <input type="text" id="q" placeholder="စကားလုံး ရိုက်ထည့်ပါ..." autocomplete="off">
           <div class="note" id="wsStatus">တင်နေသည်...</div>
           <div id="results"></div>
+        </div>
+
+        <div class="card">
+          <h2>ရွေးထားသော လင့်များ <span id="pickedN"></span></h2>
+          <div id="pickedList"></div>
+          <div class="row" style="margin-top:8px">
+            <button class="plain small" id="pickedCopy">အားလုံးကူးမည်</button>
+            <button class="plain small" id="pickedClear">ရှင်းမည်</button>
+          </div>
+          <div class="note">"Wikipedia လင့်ကူး" နှိပ်တဲ့ လင့်တွေ ဒီမှာ စုပါမယ်။ စာသား tab မှာ "အတည်ပြုမည်" လုပ်တဲ့အခါ ဒီလင့်တွေကို <b>===ပြင်ပလင့်များ===</b> ခေါင်းစဉ်အောက်မှာ အလိုအလျောက် ထည့်ပေးပါမယ်။</div>
         </div>
 
         <div class="card">
@@ -385,13 +408,16 @@ async function copyText(v, fallbackEl) {
     if (!fallbackEl) document.body.removeChild(ta);
   }
 }
-$('okBtn').onclick = () => { $('final').value = finalText(); show('final'); };
+$('okBtn').onclick = () => { refreshFinal(); show('final'); };
 $('copyBtn').onclick = async () => {
   await copyText($('final').value, $('final'));
   $('copyBtn').textContent = 'Copied!';
   setTimeout(() => $('copyBtn').textContent = 'Copy Result', 2000);
 };
-$('newBtn').onclick = () => { text = ''; $('input').value = ''; updateGo(); show('input'); };
+$('newBtn').onclick = () => {
+  text = ''; $('input').value = ''; updateGo(); show('input');
+  selCats.clear(); picked = []; savePicked(); renderPicked();   // a new article starts with no chosen links/categories
+};
 
 // ---- Wikisource links: the sheet's "လင့်များ" logic ----
 // Typed in the sheet:  page name (col B, filled down in col A)  +  heading words (col D)
@@ -475,7 +501,8 @@ $('results').addEventListener('click', async e => {
     return;
   }
   const h = box._shown[+b.dataset.i];
-  await copyText(b.dataset.copy === 'url' ? urlOf(h.e) : linkOf(h.e));
+  await copyText(linkOf(h.e));
+  addPicked(h.e);
   const old = b.textContent;
   b.textContent = '✓ ကူးပြီး'; b.classList.add('done');
   setTimeout(() => { b.textContent = old; b.classList.remove('done'); }, 1500);
@@ -533,6 +560,119 @@ $('wFile').onchange = async e => {
   runSearch();
   await afterAdd(added, true);
 };
+
+// ---- chosen Wikisource links + categories, added to the finished article ----
+const PKEY = 'wikiLinker.picked.v1';
+let picked = [];   // [{d, line}]  lines copied with "Wikipedia လင့်ကူး", in the order they were chosen
+try { picked = JSON.parse(localStorage.getItem(PKEY)) || []; } catch (e) {}
+const savePicked = () => { try { localStorage.setItem(PKEY, JSON.stringify(picked)); } catch (e) {} };
+function addPicked(e) {
+  const line = linkOf(e);
+  if (!picked.some(p => p.line === line)) { picked.push({ d: e.d, line }); savePicked(); renderPicked(); }
+}
+function renderPicked() {
+  $('pickedN').textContent = picked.length ? `(${picked.length})` : '';
+  $('pickedList').innerHTML = picked.length
+    ? picked.map((p, i) => `<div class="res"><div class="info"><div class="h">${esc(p.d)}</div></div><div class="btns"><button class="plain small" data-pk="${i}" title="ဖယ်မည်">✕</button></div></div>`).join('')
+    : '<div class="empty">မရွေးရသေးပါ</div>';
+}
+$('pickedList').addEventListener('click', e => {
+  const b = e.target.closest('[data-pk]');
+  if (!b) return;
+  picked.splice(+b.dataset.pk, 1); savePicked(); renderPicked();
+});
+$('pickedCopy').onclick = async () => {
+  await copyText(picked.map(p => p.line).join('\n'));
+  $('pickedCopy').textContent = '✓ ကူးပြီး';
+  setTimeout(() => $('pickedCopy').textContent = 'အားလုံးကူးမည်', 1500);
+};
+$('pickedClear').onclick = () => { picked = []; savePicked(); renderPicked(); };
+
+// categories, grouped so they are quick to pick (kept exactly as written: some use Category:, some ကဏ္ဍ:)
+const CAT_GROUPS = [
+  ['ဗုဒ္ဓဘာသာ ယေဘုယျ', [
+    '[[ကဏ္ဍ:ဗုဒ္ဓဘာသာ ဝေါဟာရများ]]', '[[ကဏ္ဍ:ပါဠိဝေါဟာရများ]]', '[[ကဏ္ဍ:သင်္သကရိုက်ဝေါဟာရများ]]',
+    '[[Category:ဗုဒ္ဓဘာသာ]]', '[[Category:ဝိပဿနာ]]', '[[Category:ကံကြီး ကံငယ်များ]]', '[[Category:ရဟန်းဝိနည်းများ]]']],
+  ['ပိဋကတ် / ကျမ်းများ', [
+    '[[Category:သုတ္တန်ပိဋကတ်]]', '[[Category:ပိဋကတ် သုံးပုံ]]', '[[Category:ခုဒ္ဒကနိကာယ်]]', '[[Category:သံယုတ္တနိကာယ်]]',
+    '[[Category:ဒီဃနိကာယ်]]', '[[Category:အင်္ဂုတ္တရနိကာယ်]]', '[[Category:မဇ္ဈိမနိကာယ်]]', '[[Category:ဇာတ်နိပါတ်တော်]]']],
+  ['ဗုဒ္ဓခေတ် / သမိုင်း / နေရာ', [
+    '[[Category:ဗုဒ္ဓဘာသာ ဘုရားဖူးခရီး]]', '[[Category:ဗုဒ္ဓဘာသာ သမိုင်း]]', '[[Category:ဗုဒ္ဓခေတ်]]', '[[Category:ဗုဒ္ဓဝင် ပုဂ္ဂိုလ်များ]]',
+    '[[Category:ဗုဒ္ဓဘာသာ အထွတ်အမြတ်နေရာများ]]', '[[Category:ကျောက်စာများ]]']],
+  ['ပုဂ္ဂိုလ်များ', [
+    '[[ကဏ္ဍ:ရဟန္တာများ]]', '[[Category:အနာဂါမ်များ]]', '[[Category:သောတာပန်များ]]', '[[ကဏ္ဍ:ထေရီမများ]]', '[[ကဏ္ဍ:မထေရ်များ]]',
+    '[[ကဏ္ဍ:ဗုဒ္ဓဘာသာရဟန်းများ]]', '[[ကဏ္ဍ:မြန်မာ အမျိုးသား စာရေးဆရာများ]]', '[[ကဏ္ဍ:မြန်မာ စာရေးဆရာများ]]',
+    '[[ကဏ္ဍ:ပြိတ္တာများ]]', '[[ကဏ္ဍ:နတ်များ]]']],
+  ['စာပေ / ယဉ်ကျေးမှု', [
+    '[[Category:မြန်မာစာပေ]]', '[[Category:မြန်မာ့ ဓလေ့ထုံးစံ]]', '[[Category:ယဉ်ကျေးမှု]]',
+    '[[Category:မြန်မာဘာသာစကား စာအုပ်များ]]', '[[Category:ဗုဒ္ဓဘာသာအကြောင်း စာအုပ်များ]]']],
+];
+const CATS = CAT_GROUPS.flatMap(g => g[1]);
+const selCats = new Set();
+// compare ignoring spaces and the asat / dot-below marks, so spelling-order variants still match
+const nz = s => s.replace(/[့်​\s']/g, '');
+const catName = c => c.replace(/^\[\[[^:]*:/, '').replace(/\]\]\s*$/, '').trim();
+function catsIn(t) {
+  const out = new Set();
+  for (const m of t.matchAll(/\[\[\s*([^:\]|\[]+?)\s*:\s*([^\]|]+)/g)) {
+    if (/^category$/i.test(m[1]) || nz(m[1]).startsWith('ကဏ')) out.add(nz(m[2]));
+  }
+  return out;
+}
+let finalBase = '', haveCats = new Set();
+function renderCats() {
+  const q = $('catQ').value.trim();
+  $('catList').innerHTML = CAT_GROUPS.map(([title, list]) => {
+    const chips = list.filter(c => !q || catName(c).includes(q)).map(c => {
+      const have = haveCats.has(nz(catName(c))), on = selCats.has(c);
+      return `<label class="chip ${on ? 'on' : ''} ${have ? 'have' : ''}" title="${esc(c)}"><input type="checkbox" data-cat="${CATS.indexOf(c)}" ${on || have ? 'checked' : ''} ${have ? 'disabled' : ''}> ${esc(catName(c))}${have ? ' · ပါပြီး' : ''}</label>`;
+    }).join('');
+    return chips ? `<div class="grp"><div class="label">${esc(title)}</div>${chips}</div>` : '';
+  }).join('');
+  $('catCount').textContent = selCats.size ? `(${selCats.size} ခု ရွေးထား)` : '';
+}
+$('catList').addEventListener('change', e => {
+  const cb = e.target.closest('[data-cat]');
+  if (!cb) return;
+  const c = CATS[+cb.dataset.cat];
+  if (cb.checked) selCats.add(c); else selCats.delete(c);
+  refreshFinal();
+});
+$('catQ').addEventListener('input', renderCats);
+
+// "===ပြင်ပလင့်များ===" may be spelled with or without the dot/asat order the keyboard produced
+const isHeading = (line, test) => { const m = line.match(/^\s*=+\s*(.*?)\s*=+\s*$/); return !!m && test(nz(m[1].replace(/'/g, ''))); };
+const isExtHeading = l => isHeading(l, s => s.startsWith('ပြင') && s.includes('လငများ'));
+const isRefHeading = l => isHeading(l, s => s === 'ကိုးကား');
+function composeFinal(base) {
+  let t = base;
+  const lines = picked.map(p => p.line).filter(l => !t.includes(l));
+  if (lines.length) {
+    const arr = t.split('\n');
+    const hi = arr.findIndex(isExtHeading);
+    if (hi >= 0) arr.splice(hi + 1, 0, ...lines);
+    else {
+      const block = ['===ပြင်ပလင့်များ===', ...lines, ''];
+      const ri = arr.findIndex(isRefHeading);
+      if (ri >= 0) arr.splice(ri, 0, ...block); else arr.push('', ...block);
+    }
+    t = arr.join('\n');
+  }
+  const have = catsIn(t);
+  const cats = [...selCats].filter(c => !have.has(nz(catName(c))));
+  if (cats.length) t = t.replace(/\s*$/, '') + '\n' + cats.join('\n') + '\n';
+  return t;
+}
+function refreshFinal() {
+  finalBase = finalText();
+  haveCats = catsIn(finalBase);
+  $('final').value = composeFinal(finalBase);
+  $('extInfo').textContent = picked.length
+    ? `ပြင်ပလင့် ${picked.length} ခုကို ပြင်ပလင့်များ ခေါင်းစဉ်အောက်မှာ ထည့်ထားပါတယ်`
+    : 'ပြင်ပလင့် မရွေးရသေးပါ (Wikisource လင့်များ tab မှာ "Wikipedia လင့်ကူး" နှိပ်ရင် စုပါမယ်)';
+  renderCats();
+}
+renderPicked();
 
 // ---- GitHub sync: the list of added words lives in public/wiki-linker/wikisource-mine.json of the repo ----
 // Every device with the token reads/writes that file through the GitHub API; devices without a token still
