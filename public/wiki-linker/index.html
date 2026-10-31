@@ -60,6 +60,8 @@
   .res .mine { font-size:11px; background:#dcfce7; color:#166534; border-radius:6px; padding:1px 6px; margin-left:6px; }
   .res .btns { display:flex; gap:6px; flex-shrink:0; }
   .res .btns button.done { background:var(--ok); color:#fff; border-color:var(--ok); }
+  .res .btns a.open { font-size:12px; font-weight:700; padding:6px 10px; border-radius:10px; background:#f1f5f9; color:#475569; border:1px solid var(--line); text-decoration:none; white-space:nowrap; display:inline-flex; align-items:center; }
+  .res .btns a.open:hover { background:#e2e8f0; }
   .out { font:13px/1.6 ui-monospace, Consolas, monospace; background:#0f172a; color:#e0e7ff; min-height:90px; }
 </style>
 </head>
@@ -452,7 +454,7 @@ function runSearch() {
   const shown = hits.slice(0, 60);
   box.innerHTML = (hits.length ? '' : '<div class="empty">မတွေ့ပါ</div>')
     + shown.map((h, i) => `<div class="res"><div class="info"><div class="h">${esc(h.e.d)}${h.mine ? '<span class="mine">ကိုယ်ပိုင်</span>' : ''}</div><div class="pg">${esc(h.e.p)}</div></div>`
-      + `<div class="btns"><button class="primary small" data-copy="link" data-i="${i}">လင့်ကူး</button><button class="plain small" data-copy="url" data-i="${i}">URL</button>`
+      + `<div class="btns"><a class="open" href="${esc(urlOf(h.e))}" target="_blank" rel="noopener">ဖွင့်ဖတ်မည်</a><button class="primary small" data-copy="link" data-i="${i}">Wikipedia လင့်ကူး</button>`
       + (h.mine ? `<button class="plain small" data-rm="${i}" title="ဖျက်မည်">🗑</button>` : '') + `</div></div>`).join('')
     + (hits.length > 60 ? `<div class="note">တွေ့သည် ${hits.length} ခု — ပထမ ၆၀ ခုကို ပြထားသည်။ ပိုတိတိကျကျ ရိုက်ပါ။</div>` : '');
   box._shown = shown;
