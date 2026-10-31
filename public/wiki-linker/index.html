@@ -174,6 +174,11 @@
           <h2>စကားလုံး ရှာရန်</h2>
           <input type="text" id="q" placeholder="စကားလုံး ရိုက်ထည့်ပါ..." autocomplete="off">
           <div class="note" id="wsStatus">တင်နေသည်...</div>
+          <div class="label" style="margin:12px 0 4px">"Wikipedia လင့်ကူး" တဲ့အခါ ပြမည့်စာ</div>
+          <div class="row" style="flex-wrap:wrap">
+            <label class="chip" style="flex:1"><input type="radio" name="lm" value="sub"> ခေါင်းစဉ်ငယ် (ဥပမာ- မနောမယိဒ္ဓိ)</label>
+            <label class="chip" style="flex:1"><input type="radio" name="lm" value="book"> စာအုပ်ခေါင်းစဉ် (ဥပမာ- ကမ္မဋ္ဌာန်း ဘာသာဋီကာ)</label>
+          </div>
           <div id="results"></div>
         </div>
 
@@ -181,10 +186,10 @@
           <h2>ရွေးထားသော လင့်များ <span id="pickedN"></span></h2>
           <div id="pickedList"></div>
           <div class="row" style="margin-top:8px">
-            <button class="plain small" id="pickedCopy">အားလုံးကူးမည်</button>
+            <button class="primary small" id="pickedInsert">ပြင်ပလင့်အနေနဲ့ ထည့်မည်</button>
             <button class="plain small" id="pickedClear">ရှင်းမည်</button>
           </div>
-          <div class="note">"Wikipedia လင့်ကူး" နှိပ်တဲ့ လင့်တွေ ဒီမှာ စုပါမယ်။ စာသား tab မှာ "အတည်ပြုမည်" လုပ်တဲ့အခါ ဒီလင့်တွေကို <b>===ပြင်ပလင့်များ===</b> ခေါင်းစဉ်အောက်မှာ အလိုအလျောက် ထည့်ပေးပါမယ်။</div>
+          <div class="note">"Wikipedia လင့်ကူး" နှိပ်တဲ့ လင့်တွေ ဒီမှာ စုပါမယ်။ စာသား tab မှာ "အတည်ပြုမည်" လုပ်တဲ့အခါ ဒီလင့်တွေကို <b>===ပြင်ပလင့်များ===</b> ခေါင်းစဉ်အောက်မှာ အလိုအလျောက် ထည့်ပေးပါမယ်။ "ပြင်ပလင့်အနေနဲ့ ထည့်မည်" ကို နှိပ်ရင် ဆောင်းပါးထဲ အခုတန်း ထည့်ပေးပါမယ်။ ⇄ နဲ့ လင့်တစ်ခုချင်းရဲ့ ပြမည့်စာ (ခေါင်းစဉ်ငယ်/စာအုပ်ခေါင်းစဉ်) ကို ပြောင်းလို့ရပါတယ်။</div>
         </div>
 
         <div class="card">
@@ -342,7 +347,22 @@ function processToLinks() {
   let t = $('input').value;
   t = t.replace(/\[[၀-၉\d\s၊,]+\]/g, '');
   t = t.replace(/^==([^=]+)==\s*$/gm, '===$1===');
-  t = t.replace(/^###\s*(.+)$/gm, '===$1===');
+  // "## ၁။ ခေါင်းစဉ်" -> "===ခေါင်းစဉ်===" (the number is dropped); "####" and deeper keep their depth.
+  // A "##" line right after a "#" list line is a nested wiki list item, not a heading, so it is left alone.
+  const stripNo = s => s.replace(/^\(?[0-9၀-၉]+[.)။၊]\s*/, '');
+  let prevList = false;
+  t = t.split('\n').map(l => {
+    const m = l.match(/^(#{2,6})[ \t]*(\S.*?)[ \t]*$/);
+    if (m && !prevList) {
+      const eq = '='.repeat(m[1].length <= 3 ? 3 : m[1].length);
+      prevList = false;
+      return eq + stripNo(m[2]) + eq;
+    }
+    prevList = /^#/.test(l);
+    return l;
+  }).join('\n');
+  // "1. text" / "၁. text" / "2) text" lines -> wiki numbered list "# text"
+  t = t.replace(/^[ \t]*[0-9၀-၉]+[.)][ \t]+(?=\S)/gm, '# ');
   t = t.replace(/\*\*([^*]+)\*\*/g, "'''$1'''");
 
   const existing = /\[\[([^|\]]+)(?:\|([^\]]+))?\]\]/g;
@@ -353,6 +373,10 @@ function processToLinks() {
     if (m[2]) pre.add(m[2].trim());
     ranges.push({ start: m.index, end: m.index + m[0].length });
   }
+
+  // external links "[https://... text]" are left untouched too (keywords must not be linked inside them)
+  const extLink = /\[https?:\/\/[^\]]*\]/g;
+  while ((m = extLink.exec(t)) !== null) ranges.push({ start: m.index, end: m.index + m[0].length });
 
   const kws = keywords.map(k => {
     if (k.word.includes('|')) {
@@ -530,8 +554,8 @@ $('results').addEventListener('click', async e => {
     return;
   }
   const h = box._shown[+b.dataset.i];
-  await copyText(linkOf(h.e));
-  addPicked(h.e);
+  await copyText(lineFor(h.e, linkMode));
+  addPicked(h.e, linkMode);
   const old = b.textContent;
   b.textContent = '✓ ကူးပြီး'; b.classList.add('done');
   setTimeout(() => { b.textContent = old; b.classList.remove('done'); }, 1500);
@@ -592,28 +616,61 @@ $('wFile').onchange = async e => {
 
 // ---- chosen Wikisource links + categories, added to the finished article ----
 const PKEY = 'wikiLinker.picked.v1';
-let picked = [];   // [{d, line}]  lines copied with "Wikipedia လင့်ကူး", in the order they were chosen
+let picked = [];   // [{p, a, d, mode}]  links copied with "Wikipedia လင့်ကူး", in the order they were chosen
 try { picked = JSON.parse(localStorage.getItem(PKEY)) || []; } catch (e) {}
 const savePicked = () => { try { localStorage.setItem(PKEY, JSON.stringify(picked)); } catch (e) {} };
-function addPicked(e) {
-  const line = linkOf(e);
-  if (!picked.some(p => p.line === line)) { picked.push({ d: e.d, line }); savePicked(); renderPicked(); }
+
+// What the Wikipedia link shows: the sub-heading ("sub") or the book title ("book"); the URL is the same.
+//   book: * [https://my.wikisource.org/wiki/ကမ္မဋ္ဌာန်း_ဘာသာဋီကာ#မနောမယိဒ္ဓိ ကမ္မဋ္ဌာန်း ဘာသာဋီကာ]
+//   sub : * [https://my.wikisource.org/wiki/ကမ္မဋ္ဌာန်း_ဘာသာဋီကာ#မနောမယိဒ္ဓိ မနောမယိဒ္ဓိ]
+const MKEY = 'wikiLinker.linkMode';
+let linkMode = 'sub';
+try { linkMode = localStorage.getItem(MKEY) === 'book' ? 'book' : 'sub'; } catch (e) {}
+const bookOf = p => p.split('/')[0].replace(/_/g, ' ');
+const labelFor = (e, mode) => mode === 'book' ? bookOf(e.p) : e.d;
+const lineFor = (e, mode) => `* [${urlOf(e)} ${labelFor(e, mode)}]`;
+const pickedLine = p => p.p ? lineFor(p, p.mode) : p.line;   // (older saved items only have the finished line)
+const pickedLabel = p => p.p ? labelFor(p, p.mode) : p.d;
+document.querySelectorAll('input[name=lm]').forEach(r => {
+  r.checked = r.value === linkMode;
+  r.onchange = () => { linkMode = r.value; try { localStorage.setItem(MKEY, linkMode); } catch (e) {} };
+});
+
+function addPicked(e, mode) {
+  const url = urlOf(e);
+  const old = picked.find(p => p.p && urlOf(p) === url);
+  if (old) old.mode = mode;
+  else picked.push({ p: e.p, a: e.a, d: e.d, mode });
+  savePicked(); renderPicked();
 }
 function renderPicked() {
   $('pickedN').textContent = picked.length ? `(${picked.length})` : '';
   $('pickedList').innerHTML = picked.length
-    ? picked.map((p, i) => `<div class="res"><div class="info"><div class="h">${esc(p.d)}</div></div><div class="btns"><button class="plain small" data-pk="${i}" title="ဖယ်မည်">✕</button></div></div>`).join('')
+    ? picked.map((p, i) => `<div class="res"><div class="info"><div class="h">${esc(pickedLabel(p))}</div><div class="pg">${p.p ? (p.mode === 'book' ? 'စာအုပ်ခေါင်းစဉ် ပြသည်' : 'ခေါင်းစဉ်ငယ် ပြသည်') : ''}</div></div>`
+      + `<div class="btns">${p.p ? `<button class="plain small" data-pm="${i}" title="ပြမည့်စာ ပြောင်းမည်">⇄</button>` : ''}<button class="plain small" data-pk="${i}" title="ဖယ်မည်">✕</button></div></div>`).join('')
     : '<div class="empty">မရွေးရသေးပါ</div>';
 }
 $('pickedList').addEventListener('click', e => {
+  const m = e.target.closest('[data-pm]');
+  if (m) { const p = picked[+m.dataset.pm]; p.mode = p.mode === 'book' ? 'sub' : 'book'; savePicked(); renderPicked(); return; }
   const b = e.target.closest('[data-pk]');
   if (!b) return;
   picked.splice(+b.dataset.pk, 1); savePicked(); renderPicked();
 });
-$('pickedCopy').onclick = async () => {
-  await copyText(picked.map(p => p.line).join('\n'));
-  $('pickedCopy').textContent = '✓ ကူးပြီး';
-  setTimeout(() => $('pickedCopy').textContent = 'အားလုံးကူးမည်', 1500);
+// put the chosen links straight into the article, under the external-links heading
+$('pickedInsert').onclick = () => {
+  if (!picked.length) return;
+  const before = $('input').value;
+  const lines = picked.map(pickedLine);
+  const after = insertExtLinks(before, lines);
+  $('input').value = after;
+  picked = []; savePicked(); renderPicked(); updateGo();
+  show('input');
+  const at = after.split('\n').findIndex(isExtHeading);   // jump the textarea to the heading
+  if (at >= 0) {
+    const pos = after.split('\n').slice(0, at).join('\n').length;
+    $('input').blur(); $('input').focus(); $('input').setSelectionRange(pos, pos);
+  }
 };
 $('pickedClear').onclick = () => { picked = []; savePicked(); renderPicked(); };
 
@@ -718,22 +775,24 @@ $('catQ').addEventListener('input', renderCats);
 
 // "===ပြင်ပလင့်များ===" may be spelled with or without the dot/asat order the keyboard produced
 const isHeading = (line, test) => { const m = line.match(/^\s*=+\s*(.*?)\s*=+\s*$/); return !!m && test(nz(m[1].replace(/'/g, ''))); };
-const isExtHeading = l => isHeading(l, s => s.startsWith('ပြင') && s.includes('လငများ'));
+const isExtHeading = l => isHeading(l, s => s.startsWith('ပြင') && s.includes('လင'));
 const isRefHeading = l => isHeading(l, s => s === 'ကိုးကား');
-function composeFinal(base) {
-  let t = base;
-  const lines = picked.map(p => p.line).filter(l => !t.includes(l));
-  if (lines.length) {
-    const arr = t.split('\n');
-    const hi = arr.findIndex(isExtHeading);
-    if (hi >= 0) arr.splice(hi + 1, 0, ...lines);
-    else {
-      const block = ['===ပြင်ပလင့်များ===', ...lines, ''];
-      const ri = arr.findIndex(isRefHeading);
-      if (ri >= 0) arr.splice(ri, 0, ...block); else arr.push('', ...block);
-    }
-    t = arr.join('\n');
+// lines go right under the external-links heading (made before "ကိုးကား" / at the end if it is missing); lines already there are skipped
+function insertExtLinks(t, lines) {
+  lines = lines.filter(l => !t.includes(l));
+  if (!lines.length) return t;
+  const arr = t.split('\n');
+  const hi = arr.findIndex(isExtHeading);
+  if (hi >= 0) arr.splice(hi + 1, 0, ...lines);
+  else {
+    const block = ['===ပြင်ပလင့်များ===', ...lines, ''];
+    const ri = arr.findIndex(isRefHeading);
+    if (ri >= 0) arr.splice(ri, 0, ...block); else arr.push('', ...block);
   }
+  return arr.join('\n');
+}
+function composeFinal(base) {
+  let t = insertExtLinks(base, picked.map(pickedLine));
   const have = catsIn(t);
   const cats = [...selCats].filter(c => !have.has(nz(catName(c))));
   if (cats.length) t = t.replace(/\s*$/, '') + '\n' + cats.join('\n') + '\n';
