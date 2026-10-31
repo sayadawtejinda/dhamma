@@ -386,18 +386,25 @@ function processToLinks() {
     return { target: k.word, searchWord: k.word };
   }).filter(k => k.searchWord).sort((a, b) => b.searchWord.length - a.searchWord.length);
 
+  // heading lines ("===...===") - a word is linked there only when it has no linkable place in the text below
+  const heads = [];
+  let off = 0;
+  for (const ln of t.split('\n')) {
+    if (/^[ \t]*={2,}.*={2,}[ \t]*$/.test(ln)) heads.push({ start: off, end: off + ln.length });
+    off += ln.length + 1;
+  }
   const temp = [];
   kws.forEach(k => {
     if (pre.has(k.searchWord)) return;
     const re = new RegExp(k.searchWord.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
-    let w;
+    let w, bodyAt = -1, headAt = -1;
     while ((w = re.exec(t)) !== null) {
-      const inside = ranges.some(r => w.index >= r.start && w.index < r.end);
-      if (!inside) {
-        temp.push({ target: k.target, display: k.searchWord, index: w.index, active: true, id: uid() });
-        break;
-      }
+      if (ranges.some(r => w.index >= r.start && w.index < r.end)) continue;
+      if (heads.some(r => w.index >= r.start && w.index < r.end)) { if (headAt < 0) headAt = w.index; }
+      else { bodyAt = w.index; break; }
     }
+    const at = bodyAt >= 0 ? bodyAt : headAt;
+    if (at >= 0) temp.push({ target: k.target, display: k.searchWord, index: at, active: true, id: uid() });
   });
 
   temp.sort((a, b) => a.index - b.index);
@@ -791,8 +798,21 @@ function insertExtLinks(t, lines) {
   }
   return arr.join('\n');
 }
+// make sure the article ends with "=== ကိုးကား ===" + {{reflist}} (before any category lines at the very end)
+function ensureRefs(t) {
+  const arr = t.split('\n');
+  const ri = arr.findIndex(isRefHeading);
+  const hasList = /\{\{\s*reflist/i.test(t);
+  if (hasList) return t;
+  if (ri >= 0) { arr.splice(ri + 1, 0, '{{reflist}}'); return arr.join('\n'); }
+  let end = arr.length;
+  while (end > 0 && (arr[end - 1].trim() === '' || (/^\s*\[\[/.test(arr[end - 1]) && catsIn(arr[end - 1]).size))) end--;
+  const tail = arr.splice(end).filter(l => l.trim() !== '');   // trailing category lines stay right after {{reflist}}
+  arr.push('', '=== ကိုးကား ===', '{{reflist}}', ...tail);
+  return arr.join('\n');
+}
 function composeFinal(base) {
-  let t = insertExtLinks(base, picked.map(pickedLine));
+  let t = insertExtLinks(ensureRefs(base), picked.map(pickedLine));
   const have = catsIn(t);
   const cats = [...selCats].filter(c => !have.has(nz(catName(c))));
   if (cats.length) t = t.replace(/\s*$/, '') + '\n' + cats.join('\n') + '\n';
