@@ -131,6 +131,15 @@
           <summary>ကဏ္ဍများ ရွေးရန် <span id="catCount"></span></summary>
           <input type="text" id="catQ" placeholder="ကဏ္ဍ ရှာရန်..." autocomplete="off" style="margin-top:10px">
           <div id="catList"></div>
+          <div class="label" style="margin:14px 0 4px">ကဏ္ဍအသစ် ထည့်ရန်</div>
+          <div class="row">
+            <select id="catPre" style="flex:0 0 110px; border:1px solid var(--line); border-radius:10px; padding:10px; font:inherit; background:var(--bg)">
+              <option value="ကဏ္ဍ:">ကဏ္ဍ:</option>
+              <option value="Category:">Category:</option>
+            </select>
+            <input type="text" id="catNew" placeholder="ကဏ္ဍအမည် (ဥပမာ- ပါရမီများ)" autocomplete="off">
+            <button class="primary small" id="catAdd" style="flex:0 0 auto">+ ထည့်မည်</button>
+          </div>
           <div class="note">ရွေးလိုက်တာတွေကို ဆောင်းပါးအဆုံး ({{reflist}} နောက်) မှာ ထည့်ပေးပါမယ်။ ဆောင်းပါးထဲ ပါပြီးသားဆိုရင် "ပါပြီး" လို့ပြပြီး ထပ်မထည့်ပါဘူး။</div>
         </details>
         <textarea id="final" readonly></textarea>
@@ -607,7 +616,20 @@ const CAT_GROUPS = [
     '[[Category:မြန်မာစာပေ]]', '[[Category:မြန်မာ့ ဓလေ့ထုံးစံ]]', '[[Category:ယဉ်ကျေးမှု]]',
     '[[Category:မြန်မာဘာသာစကား စာအုပ်များ]]', '[[Category:ဗုဒ္ဓဘာသာအကြောင်း စာအုပ်များ]]']],
 ];
-const CATS = CAT_GROUPS.flatMap(g => g[1]);
+const BASE_CATS = CAT_GROUPS.flatMap(g => g[1]);
+// categories the user adds here ("[[ကဏ္ဍ:အမည်]]" lines); synced to categories-mine.json like the words
+const CCKEY = 'wikiLinker.customCats.v1', CDKEY = 'wikiLinker.catDirty';
+let customCats = [];
+try { customCats = JSON.parse(localStorage.getItem(CCKEY)) || []; } catch (e) {}
+const saveCats = () => { try { localStorage.setItem(CCKEY, JSON.stringify(customCats)); } catch (e) {} };
+const setCatDirty = v => { try { localStorage.setItem(CDKEY, v ? '1' : ''); } catch (e) {} };
+const isCatDirty = () => { try { return !!localStorage.getItem(CDKEY); } catch (e) { return false; } };
+const allCats = () => [...BASE_CATS, ...customCats];
+function unionCats(a, b) {
+  const seen = new Set(), out = [];
+  for (const c of [...a, ...b]) { const k = nz(catName(c)); if (!seen.has(k)) { seen.add(k); out.push(c); } }
+  return out;
+}
 const selCats = new Set();
 // compare ignoring spaces and the asat / dot-below marks, so spelling-order variants still match
 const nz = s => s.replace(/[့်​\s']/g, '');
@@ -622,10 +644,13 @@ function catsIn(t) {
 let finalBase = '', haveCats = new Set();
 function renderCats() {
   const q = $('catQ').value.trim();
-  $('catList').innerHTML = CAT_GROUPS.map(([title, list]) => {
+  const all = allCats();
+  const groups = customCats.length ? [...CAT_GROUPS, ['ကိုယ်ပိုင်ကဏ္ဍများ', customCats]] : CAT_GROUPS;
+  $('catList').innerHTML = groups.map(([title, list]) => {
+    const mine = list === customCats;
     const chips = list.filter(c => !q || catName(c).includes(q)).map(c => {
       const have = haveCats.has(nz(catName(c))), on = selCats.has(c);
-      return `<label class="chip ${on ? 'on' : ''} ${have ? 'have' : ''}" title="${esc(c)}"><input type="checkbox" data-cat="${CATS.indexOf(c)}" ${on || have ? 'checked' : ''} ${have ? 'disabled' : ''}> ${esc(catName(c))}${have ? ' · ပါပြီး' : ''}</label>`;
+      return `<label class="chip ${on ? 'on' : ''} ${have ? 'have' : ''}" title="${esc(c)}"><input type="checkbox" data-cat="${all.indexOf(c)}" ${on || have ? 'checked' : ''} ${have ? 'disabled' : ''}> ${esc(catName(c))}${have ? ' · ပါပြီး' : ''}${mine ? `<span data-delcat="${all.indexOf(c)}" title="စာရင်းမှ ဖျက်မည်" style="color:#94a3b8">✕</span>` : ''}</label>`;
     }).join('');
     return chips ? `<div class="grp"><div class="label">${esc(title)}</div>${chips}</div>` : '';
   }).join('');
@@ -634,8 +659,39 @@ function renderCats() {
 $('catList').addEventListener('change', e => {
   const cb = e.target.closest('[data-cat]');
   if (!cb) return;
-  const c = CATS[+cb.dataset.cat];
+  const c = allCats()[+cb.dataset.cat];
   if (cb.checked) selCats.add(c); else selCats.delete(c);
+  refreshFinal();
+});
+async function pushCats(mutate) {
+  if (!getToken()) return;
+  try {
+    setGh('GitHub မှာ သိမ်းနေသည်...');
+    customCats = await ghMutate(mutate, CATS_FILE);
+    saveCats(); setCatDirty(false); setGh('✓ GitHub မှာ သိမ်းပြီး');
+  } catch (err) { setCatDirty(true); setGh(`GitHub မှာ သိမ်း၍မရ (${err.message}) — ဒီ browser ထဲမှာ သိမ်းထားသည်၊ နောက်မှ "ယခု Sync လုပ်မည်" နှိပ်ပါ`); }
+}
+$('catAdd').onclick = async () => {
+  const name = $('catNew').value.trim().replace(/\s+/g, ' ');
+  if (!name) return;
+  const line = `[[${$('catPre').value}${name}]]`;
+  const existing = allCats().find(c => nz(catName(c)) === nz(name));
+  $('catNew').value = '';
+  if (existing) { selCats.add(existing); refreshFinal(); return; }   // already in the list: just select it
+  customCats.push(line); saveCats(); selCats.add(line);
+  refreshFinal();
+  await pushCats(list => unionCats(list, [line]));
+  refreshFinal();
+};
+$('catNew').addEventListener('keydown', e => { if (e.key === 'Enter') $('catAdd').click(); });
+$('catList').addEventListener('click', async e => {
+  const del = e.target.closest('[data-delcat]');
+  if (!del) return;
+  e.preventDefault();
+  const c = allCats()[+del.dataset.delcat];
+  customCats = customCats.filter(x => x !== c); selCats.delete(c); saveCats();
+  refreshFinal();
+  await pushCats(list => list.filter(x => nz(catName(x)) !== nz(catName(c))));
   refreshFinal();
 });
 $('catQ').addEventListener('input', renderCats);
@@ -695,22 +751,27 @@ function unionEntries(a, b) {
   for (const e of [...a, ...b]) { const k = entryKey(e); if (!seen.has(k)) { seen.add(k); out.push(e); } }
   return out;
 }
-async function ghGet() {
-  const r = await fetch(GH_FILE + '?ref=main', { headers: ghHeaders(), cache: 'no-store' });
+// two lists live in the repo: the added Wikisource words and the added categories
+const WORDS_FILE = { url: GH_FILE, msg: 'Wiki Linker: update Wikisource words',
+  fromJson: arr => arr.map(toEntry), toJson: list => list.map(e => ({ p: e.p, d: e.d })) };
+const CATS_FILE = { url: GH_FILE.replace('wikisource-mine.json', 'categories-mine.json'), msg: 'Wiki Linker: update categories',
+  fromJson: arr => arr, toJson: list => list };
+async function ghGet(file = WORDS_FILE) {
+  const r = await fetch(file.url + '?ref=main', { headers: ghHeaders(), cache: 'no-store' });
   if (r.status === 404) return { list: [], sha: null };
   if (!r.ok) throw new Error(r.status === 401 || r.status === 403 ? 'token မမှန်/ခွင့်မရှိ' : r.status);
   const j = await r.json();
-  return { list: JSON.parse(fromB64(j.content)).map(toEntry), sha: j.sha };
+  return { list: file.fromJson(JSON.parse(fromB64(j.content))), sha: j.sha };
 }
 // read the remote list, change it, write it back (re-read and retry if someone else committed in between)
-async function ghMutate(mutate) {
+async function ghMutate(mutate, file = WORDS_FILE) {
   for (let i = 0; i < 3; i++) {
-    const { list, sha } = await ghGet();
+    const { list, sha } = await ghGet(file);
     const next = mutate(list);
-    const body = { message: 'Wiki Linker: update Wikisource words', branch: 'main',
-      content: toB64('[\n' + next.map(e => JSON.stringify({ p: e.p, d: e.d })).join(',\n') + '\n]\n') };
+    const body = { message: file.msg, branch: 'main',
+      content: toB64('[\n' + file.toJson(next).map(e => JSON.stringify(e)).join(',\n') + '\n]\n') };
     if (sha) body.sha = sha;
-    const r = await fetch(GH_FILE, { method: 'PUT', headers: ghHeaders(), body: JSON.stringify(body) });
+    const r = await fetch(file.url, { method: 'PUT', headers: ghHeaders(), body: JSON.stringify(body) });
     if (r.ok) return next;
     if (r.status !== 409 && r.status !== 422) throw new Error(r.status === 401 || r.status === 403 ? 'token မမှန်/ခွင့်မရှိ' : r.status);
   }
@@ -721,12 +782,17 @@ async function syncOnLoad() {
     try {
       setGh('Sync လုပ်နေသည်...');
       wsMine = isGhDirty() ? await ghMutate(list => unionEntries(list, wsMine)) : (await ghGet()).list;
-      saveMine(); setGhDirty(false); setGh('✓ GitHub နဲ့ ချိတ်ထားသည်');
+      saveMine(); setGhDirty(false);
+      customCats = isCatDirty() ? await ghMutate(list => unionCats(list, customCats), CATS_FILE) : (await ghGet(CATS_FILE)).list;
+      saveCats(); setCatDirty(false); renderCats();
+      setGh('✓ GitHub နဲ့ ချိတ်ထားသည်');
     } catch (e) { setGh(`GitHub နဲ့ ချိတ်မရ (${e.message}) — ဒီ browser ထဲက စာရင်းကိုပဲ သုံးနေသည်`); }
   } else {
     try {
       const r = await fetch('wikisource-mine.json?t=' + Date.now());
       if (r.ok) { wsMine = unionEntries(wsMine, (await r.json()).map(toEntry)); saveMine(); }
+      const c = await fetch('categories-mine.json?t=' + Date.now());
+      if (c.ok) { customCats = unionCats(customCats, await c.json()); saveCats(); renderCats(); }
     } catch (e) {}
     setGh('Token မထည့်ရသေးပါ — စာရင်းကို ကြည့်လို့ရပါတယ်၊ ထည့်တာက ဒီ browser ထဲပဲ သိမ်းပါမယ်။');
   }
@@ -747,10 +813,10 @@ $('ghSave').onclick = async () => {
   if (!t) return;
   try { localStorage.setItem(TKEY, t); } catch (e) { alert('Browser ထဲ သိမ်း၍မရပါ'); return; }
   $('ghToken').value = '';
-  setGhDirty(true); // first sync pushes whatever is in this browser
+  setGhDirty(true); setCatDirty(true); // first sync pushes whatever is in this browser
   await syncOnLoad(); updateWsStatus(); runSearch();
 };
-$('ghSync').onclick = async () => { if (getToken()) { setGhDirty(true); await syncOnLoad(); updateWsStatus(); runSearch(); } else alert('Token အရင်ထည့်ပါ'); };
+$('ghSync').onclick = async () => { if (getToken()) { setGhDirty(true); setCatDirty(true); await syncOnLoad(); updateWsStatus(); runSearch(); } else alert('Token အရင်ထည့်ပါ'); };
 $('ghOff').onclick = () => { try { localStorage.removeItem(TKEY); } catch (e) {} setGh('Token ဖယ်ပြီးပါပြီ'); };
 // computers download a backup after every add by default; phones don't
 $('autoDl').checked = (() => {
