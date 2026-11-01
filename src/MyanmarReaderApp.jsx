@@ -38,10 +38,10 @@ const sanitizeReaderKey = (key) => (key || 'unknown').replace(/[.$#/\[\]]/g, '_'
 // --- GOOGLE SHEET CONFIG ---
 const SHEET_CHAPTER_PREFIX = "Chapter"; 
 const TOTAL_CHAPTERS = 29;
-// Coins for finishing one full round of Practice Mode's consonant-syllable
-// drill (the "gift box" reward, once every syllable for the chosen
-// consonant has been matched) -- per the teacher's request.
-const PRACTICE_MODE_REWARD_COINS = 99;
+// Practice Mode's consonant-syllable drill pays a few coins for every correct
+// key tapped (instead of one big reward at the end), so students see coins
+// arriving as they go -- per the teacher's request.
+const PRACTICE_MODE_KEY_COINS = 2;
 // Re-reading a chapter whose trophy is already earned pays half the usual
 // coins, until that re-reading has earned REREAD_FULL_RATE_DAILY_COINS in one
 // day; past that, a quarter. Chapters without a trophy yet always pay in full,
@@ -871,10 +871,22 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
   // the actual story, which is exactly the false "completed Chapter X"
   // class of bug already fixed elsewhere for trophy-derived progress. Coins
   // only, no score.
+  // The balance on screen goes up at once; the write is batched (one write per
+  // short burst of taps) to keep Firestore writes low.
+  const practiceCoinsPendingRef = useRef(0);
+  const practiceCoinsTimerRef = useRef(null);
+  const flushPracticeModeCoins = () => {
+    practiceCoinsTimerRef.current = null;
+    const amount = practiceCoinsPendingRef.current;
+    practiceCoinsPendingRef.current = 0;
+    if (!amount || !studentName || !userId) return;
+    setDoc(readerRosterDocRef(studentName), { coinBalance: increment(amount) }, { merge: true }).catch(() => {});
+  };
   const awardPracticeModeCoins = (amount) => {
     if (!amount || !studentName || !userId) return;
     setCoinBalance(prev => prev + amount);
-    setDoc(readerRosterDocRef(studentName), { coinBalance: increment(amount) }, { merge: true }).catch(() => {});
+    practiceCoinsPendingRef.current += amount;
+    if (!practiceCoinsTimerRef.current) practiceCoinsTimerRef.current = setTimeout(flushPracticeModeCoins, 1500);
   };
 
   const SHRINE_ROSTER_PATH = 'artifacts/shrine-room-app/public/data/roster';
@@ -2611,6 +2623,9 @@ const closeQAPanel = () => {
 
         if (char !== nextExpectedKey) return; 
 
+        awardPracticeModeCoins(PRACTICE_MODE_KEY_COINS);
+        spawnFlyingCoins(window.innerWidth / 2, window.innerHeight * 0.65, PRACTICE_MODE_KEY_COINS);
+
         const newKeys = [...currentKeys, char];
         setCurrentKeys(newKeys);
 
@@ -2663,7 +2678,6 @@ const closeQAPanel = () => {
             if (nextStep === validSyllables.length) {
                 setGiftCount(prev => prev + 1);
                 setShowGiftPopup(true);
-                awardPracticeModeCoins(PRACTICE_MODE_REWARD_COINS);
                 setTimeout(() => {
                     setShowGiftPopup(false);
                     setIsPracticeMode(false);
