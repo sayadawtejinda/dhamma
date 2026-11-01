@@ -9128,6 +9128,43 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
   // asks the teacher for the trophies earned. If a trophy request is already waiting for the
   // teacher, nothing is added to it (it would be overwritten); the progress still counts, so
   // the next report asks for what is owed.
+  // Smart Study only: the trophies a student has earned are given at once, the same way the teacher's
+  // Approve would give them (trophy total, the lesson's own ledger, the lesson's awarded count, the
+  // announcement), so no request goes to the teacher. Everything is worked out inside ONE transaction
+  // from the student's record as it is right now: what the finished lessons deserve (same formula as
+  // the request) minus what the ledger says was already given, capped by the class's ceiling. Run twice
+  // (two tabs, the report and the catch-up), the second run finds nothing owed, so nothing is paid twice.
+  const grantSmartStudyTrophies = async (session, highestUnit) => {
+    const unitCount = session.lessonUnitCount || 0;
+    const ceiling = Math.min(session.lessonTrophyLimit || 0, computeClassTrophyMax(unitCount));
+    if (!studentUid || !(highestUnit > 0) || unitCount <= 0 || ceiling <= 0) return 0;
+    const lessonKey = computeLessonKey(session.lessonTitle, session.lessonLink);
+    const studentRef = doc(db, `${publicDataPath}/students`, studentUid);
+    let newTotal = 0;
+    const granted = await runTransaction(db, async (tx) => {
+      const snap = await tx.get(studentRef);
+      if (!snap.exists()) return 0;
+      const sd = snap.data();
+      const already = sd.earnedTrophies?.[lessonKey] || 0;
+      const deserved = Math.min(ceiling, Math.floor((highestUnit * ceiling) / unitCount));
+      const amount = Math.max(0, deserved - already);
+      if (amount <= 0) return 0;
+      tx.update(studentRef, { trophyCount: increment(amount), justEarnedTrophy: true, [`earnedTrophies.${lessonKey}`]: increment(amount) });
+      newTotal = (sd.trophyCount || 0) + amount;
+      return amount;
+    });
+    if (granted > 0) {
+      try { await updateDoc(doc(db, `${publicDataPath}/studySessions`, session.id), { awardedTrophies: increment(granted) }); }
+      catch (e) { console.error('Auto trophy: session count:', e); }
+      try {
+        const expires = new Date();
+        expires.setDate(expires.getDate() + 1);
+        await addDoc(announcementsCollection, { studentName: studentProfile.name, trophyCount: newTotal, createdAt: serverTimestamp(), expiresAt: Timestamp.fromDate(expires), id: getUUID() });
+      } catch (e) { console.error('Auto trophy: announcement:', e); }
+    }
+    return granted;
+  };
+
   const requestEarnedTrophiesForAutoReport = async (session) => {
     if (!studentUid || !studentProfile) return;
     const got = { score: '', completed: 0 };
@@ -9171,6 +9208,12 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       }
     }
     const requestWaiting = studentProfile.trophyRequested === true;
+    if (amount > 0 && session.lessonLink?.startsWith('smartstudy://')) {
+      // Smart Study: given at once, nothing to ask the teacher for (see grantSmartStudyTrophies)
+      try { await grantSmartStudyTrophies(session, newHighestUnit); }
+      catch (e) { console.error('Auto report: giving Smart Study trophies:', e); }
+      amount = 0;
+    }
     if (amount > 0 && !requestWaiting) {
       upd.trophyRequested = true;
       upd.requestedTrophyAmount = amount;
@@ -9404,7 +9447,11 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           // others still waiting come with the next report (they stay counted).
           // Animal Sound Quiz (Part 3): the same, one trophy at a time (5 in all).
           if (isMyanmarPoemsUrl(targetSession.lessonLink) || isAnimalSoundUrl(targetSession.lessonLink)) autoAmount = Math.min(1, autoAmount);
-          if (autoAmount > 0) {
+          if (autoAmount > 0 && targetSession.lessonLink?.startsWith('smartstudy://')) {
+            // Smart Study: given at once, nothing to ask the teacher for (see grantSmartStudyTrophies)
+            try { await grantSmartStudyTrophies(targetSession, newHighestUnit); }
+            catch (err) { console.error('Report: giving Smart Study trophies:', err); }
+          } else if (autoAmount > 0) {
             studentUpdateData.trophyRequested = true;
             studentUpdateData.requestedTrophyAmount = autoAmount;
             studentUpdateData.requestedTrophyLessonId = targetSession.lessonId;
