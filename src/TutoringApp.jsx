@@ -9166,6 +9166,34 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     return granted;
   };
 
+  // The moment a Smart Study lesson is finished (SmartStudy.jsx announces it once the result is saved), the
+  // trophies the finished lessons now deserve are given -- the same Approve-style credit as always, in one go,
+  // and the student is told right away inside Smart Study. The class's session (the one being worked on, else
+  // the latest) supplies the lesson count and trophy limit; the progress is worked out from Smart Study's own
+  // records exactly as the report does. Nothing happens for a class with no sent lesson.
+  const ssLessonDoneRef = useRef(null);
+  ssLessonDoneRef.current = async (e) => {
+    const classId = e.detail?.classId;
+    if (!classId || !studentUid || !studentProfile) return;
+    const forClass = (s) => s.lessonLink?.startsWith('smartstudy://') && extractSmartStudyClassId(s.lessonLink) === classId;
+    const startMs = (s) => s.startTime?.toDate?.()?.getTime?.() || 0;
+    const session = (activeSession && forClass(activeSession)) ? activeSession : (mySessions || []).filter(forClass).sort((a, b) => startMs(b) - startMs(a))[0];
+    if (!session || !(session.lessonUnitCount > 0)) return;
+    const got = { completed: 0 };
+    try { await autoFillReport(session, { setScore: () => {}, setCompleted: (v) => { got.completed = parseFloat(v) || 0; } }); }
+    catch (err) { console.error('Smart Study trophy: progress fetch:', err); return; }
+    const lessonKey = computeLessonKey(session.lessonTitle, session.lessonLink);
+    const highest = Math.max(getEffectivePreviousUnit(lessonKey, session), got.completed);
+    const granted = await grantSmartStudyTrophies(session, highest);
+    if (granted > 0) window.dispatchEvent(new CustomEvent('ss-trophy-granted', { detail: { amount: granted } }));
+  };
+  useEffect(() => {
+    if (!studentUid) return;
+    const onDone = (e) => { ssLessonDoneRef.current?.(e).catch(err => console.error('Smart Study trophy:', err)); };
+    window.addEventListener('ss-lesson-done', onDone);
+    return () => window.removeEventListener('ss-lesson-done', onDone);
+  }, [studentUid]);
+
   const requestEarnedTrophiesForAutoReport = async (session) => {
     if (!studentUid || !studentProfile) return;
     const got = { score: '', completed: 0 };
@@ -9209,12 +9237,9 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       }
     }
     const requestWaiting = studentProfile.trophyRequested === true;
-    if (amount > 0 && session.lessonLink?.startsWith('smartstudy://')) {
-      // Smart Study: given at once, nothing to ask the teacher for (see grantSmartStudyTrophies)
-      try { await grantSmartStudyTrophies(session, newHighestUnit); }
-      catch (e) { console.error('Auto report: giving Smart Study trophies:', e); }
-      amount = 0;
-    }
+    // Smart Study trophies are given the moment a lesson is finished (see the 'ss-lesson-done' listener above),
+    // never at report time: the report only records the progress, nothing is asked for here.
+    if (session.lessonLink?.startsWith('smartstudy://')) amount = 0;
     if (amount > 0 && !requestWaiting) {
       upd.trophyRequested = true;
       upd.requestedTrophyAmount = amount;
@@ -9448,11 +9473,9 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           // others still waiting come with the next report (they stay counted).
           // Animal Sound Quiz (Part 3): the same, one trophy at a time (5 in all).
           if (isMyanmarPoemsUrl(targetSession.lessonLink) || isAnimalSoundUrl(targetSession.lessonLink)) autoAmount = Math.min(1, autoAmount);
-          if (autoAmount > 0 && targetSession.lessonLink?.startsWith('smartstudy://')) {
-            // Smart Study: given at once, nothing to ask the teacher for (see grantSmartStudyTrophies)
-            try { await grantSmartStudyTrophies(targetSession, newHighestUnit); }
-            catch (err) { console.error('Report: giving Smart Study trophies:', err); }
-          } else if (autoAmount > 0) {
+          // Smart Study trophies are given the moment a lesson is finished (see the 'ss-lesson-done' listener),
+          // so the report asks for nothing here.
+          if (autoAmount > 0 && !targetSession.lessonLink?.startsWith('smartstudy://')) {
             studentUpdateData.trophyRequested = true;
             studentUpdateData.requestedTrophyAmount = autoAmount;
             studentUpdateData.requestedTrophyLessonId = targetSession.lessonId;

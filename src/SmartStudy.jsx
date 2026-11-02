@@ -2274,6 +2274,15 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [previousView, setPreviousView] = useState('home');
   const [modal, setModal] = useState({ message: '', type: '', visible: false });
+  // Tutoring gave the student a trophy for the lesson just finished: say so right here
+  useEffect(() => {
+    const onGranted = (e) => {
+      const n = e.detail?.amount || 1;
+      setModal(m => ({ message: `${m.visible && m.message ? m.message + '\n\n' : ''}🏆 You earned ${n > 1 ? n + ' trophies' : 'a trophy'}! Well done!`, type: 'success', visible: true }));
+    };
+    window.addEventListener('ss-trophy-granted', onGranted);
+    return () => window.removeEventListener('ss-trophy-granted', onGranted);
+  }, []);
   const [confirmationModal, setConfirmationModal] = useState({ message: '', onConfirm: null });
   const [quizConfirmation, setQuizConfirmation] = useState({ lesson: null });
   const [competitorSelection, setCompetitorSelection] = useState({ lesson: null });
@@ -3806,6 +3815,8 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
     const practiceLine = usedPractice ? `\n\nWell done for practising until you passed!` : '';
     try {
       await saveQuizResult(result);
+      // tell the Tutoring side the lesson is finished: it gives the trophy the finished lessons now deserve
+      window.dispatchEvent(new CustomEvent('ss-lesson-done', { detail: { classId, studentName: userName, lessonId: currentLesson.lessonId } }));
       if (bonus > 0) await awardQuizCoins('bonus', bonus);
       setModal({ message: `Quiz Finished! You passed. First-round correct: ${correctAnswerCount}/${totalQuestions}. Final score: ${currentQuizScore}${practiceLine}${bonusLine}`, type: 'success', visible: true });
     } catch (error) {
