@@ -3966,8 +3966,8 @@ useEffect(() => {
         {...nextHoldProps}
         disabled={isLocked || currentSheetIndex >= sheetData.length - 1}
         title="Next (hold to turn the red lock off / on)"
-        className="relative p-3 bg-teal-400 hover:bg-teal-500 text-white border-b-4 border-teal-600 rounded-r-xl disabled:opacity-40 transition-all active:scale-95 h-full"
-    ><ChevronRight size={20} />{autoReadMode && <Lock size={12} className="absolute top-0.5 right-0.5 text-red-600 drop-shadow" strokeWidth={3} />}</button>
+        className={`relative p-3 text-white border-b-4 rounded-r-xl disabled:opacity-40 transition-all active:scale-95 h-full ${autoReadMode ? 'bg-red-500 hover:bg-red-600 border-red-700' : 'bg-teal-400 hover:bg-teal-500 border-teal-600'}`}
+    ><ChevronRight size={20} />{autoReadMode && <Lock size={11} className="absolute top-0.5 right-0.5 text-white" strokeWidth={3} />}</button>
 </div>
             ) : sheetData.length > 0 && currentSheetIndex >= 0 ? (
                 <div className="flex items-center gap-1 h-[60px]">
@@ -4007,8 +4007,8 @@ useEffect(() => {
                         {...nextHoldProps}
                         disabled={isLocked || currentSheetIndex >= sheetData.length - 1}
                         title="Next (hold to turn the red lock off / on)"
-                        className="relative p-3 bg-teal-400 hover:bg-teal-500 text-white border-b-4 border-teal-600 rounded-r-xl disabled:opacity-40 transition-all active:scale-95 h-full"
-                    ><ChevronRight size={20} />{autoReadMode && <Lock size={12} className="absolute top-0.5 right-0.5 text-red-600 drop-shadow" strokeWidth={3} />}</button>
+                        className={`relative p-3 text-white border-b-4 rounded-r-xl disabled:opacity-40 transition-all active:scale-95 h-full ${autoReadMode ? 'bg-red-500 hover:bg-red-600 border-red-700' : 'bg-teal-400 hover:bg-teal-500 border-teal-600'}`}
+                    ><ChevronRight size={20} />{autoReadMode && <Lock size={11} className="absolute top-0.5 right-0.5 text-white" strokeWidth={3} />}</button>
                 </div>
             ) : (
                 <div className="relative inline-block h-[60px]" onClick={() => { if(onboardingStep === 'sheet_icon') setOnboardingStep('choose_chapter'); }}>
@@ -4076,18 +4076,14 @@ useEffect(() => {
               title={`Change Lesson (${LESSONS.length} lines)`}
               className="flex items-center justify-center gap-2 bg-indigo-500 hover:bg-indigo-600 disabled:bg-indigo-300 disabled:cursor-not-allowed text-white px-5 py-4 rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transition-all active:scale-95 border-b-4 border-indigo-700 h-[60px]"
             >
-              <span className="text-2xl font-black">{appMode === 'lesson' && currentLessonIndex >= 0 ? `(${currentLessonIndex + 1}/${LESSONS.length})` : LESSONS.length}</span>
+              <span className="text-sm font-black">{appMode === 'lesson' && currentLessonIndex >= 0 ? `(${currentLessonIndex + 1}/${LESSONS.length})` : LESSONS.length}</span>
             </button>
             
             <button
               onClick={() => setShowSpellModeConfirm(true)}
               disabled={isLocked || isPracticeMode} // keyboard practice always uses way 2
               title="Reading way: 1 = spell it out, 2 = read the whole word (tap to change)"
-              className={`flex items-center justify-center gap-2 px-6 rounded-xl font-bold text-lg transition-all duration-300 h-[60px] ${
-                isSpellMode
-                  ? 'bg-blue-600 text-white shadow-[0_0_20px_rgba(59,130,246,0.9)] ring-4 ring-blue-300 scale-105 border-transparent'
-                  : 'bg-blue-500 hover:bg-blue-600 text-white shadow-lg hover:shadow-xl active:scale-95 border-b-4 border-blue-700'
-              }`}
+              className="flex items-center justify-center gap-2 px-6 rounded-xl font-bold text-lg transition-all duration-300 h-[60px] bg-blue-500 hover:bg-blue-600 text-white shadow-lg hover:shadow-xl active:scale-95 border-b-4 border-blue-700"
             >
               <span className="text-3xl font-black w-8 text-center">{isSpellMode ? 1 : 2}</span>
             </button>
