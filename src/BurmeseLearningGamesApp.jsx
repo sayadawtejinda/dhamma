@@ -376,8 +376,9 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
             "တစ်": "Tit", "နှစ်": "Hnit", "သုံး": "Thone", "လေး": "Lay", "ငါး": "Ngar", "ခြောက်": "Chauk", "ခုနှစ်": "Khu Hnit", "ရှစ်": "Shit", "ကိုး": "Koe", "ဆယ်": "Seh",
             "ခု": "Khu", "ကောင်": "Kaung", "လုံး": "Lone", "ယောက်": "Yauk", "ပင်": "Pin", "ထည်": "Hteh", "ရွက်": "Ywet", "ဗူး": "Boo", "မျိုး": "Myoe", "နိုင်ငံ": "Nine Ngan", "ပါး": "Par", "ရွာ": "Ywar", "မြို့": "Myo", "ကိုင်း": "Kaing", "ချောင်း": "Chaung", "ခွက်": "Khwet", "လက်": "Let", "စုံ": "Sone", "ပွင့်": "Pwint", "ဥ": "U", "ညွှတ်": "Nyut", "ဖူး": "Phu", "ပုလင်း": "Pa Lin", "စိတ်": "Seik", "ခိုင်": "Khaing", "ဖီး": "Phee", "တောင့်": "Taung", "ခြမ်း": "Chan", "ထုပ်": "Htote", "ပွဲ": "Pwe", "စင်း": "Sin", "စီး": "See", "ချပ်": "Chat",
             // Preposition game
-            "ပုံး": "Pone", "ကုလားထိုင်": "Ka Lar Htine", "အပေါ်မှာ": "Ah Paw Hma", "အောက်မှာ": "Auk Hma", "ထဲမှာ": "Htay Hma", "ဘေးမှာ": "Bay Hma", "ရှေ့မှာ": "Shay Hma", "နောက်မှာ": "Nauk Hma", "ကြားမှာ": "Kyar Hma",
-            "ဘယ်မှာ ရှိသလဲ": "Beh Hma Shi Tha Leh", "ထဲမှာ ဘာရှိသလဲ": "Htay Hma Bar Shi Tha Leh"
+            "ပုံး": "Pone", "ကုလားထိုင်": "Ka Lar Htine", "ပေါ်မှာ": "Paw Hma", "အပေါ်မှာ": "Ah Paw Hma", "အောက်မှာ": "Auk Hma", "ထဲမှာ": "Htay Hma", "ဘေးမှာ": "Bay Hma", "ရှေ့မှာ": "Shay Hma", "နောက်မှာ": "Nauk Hma", "ကြားမှာ": "Kyar Hma",
+            "အနီးမှာ": "Ah Nee Hma", "ဝေးဝေးမှာ": "Way Way Hma", "မျက်နှာချင်းဆိုင်မှာ": "Myet Hna Chin Sine Hma", "အပေါ်ကို": "Ah Paw Ko", "အောက်ကို": "Auk Ko", "ပတ်ပြီး": "Pat Pyee", "ဖောက်ပြီး": "Phauk Pyee", "ဖြတ်ကူးပြီး": "Phyat Ku Pyee",
+            "ဘယ်မှာ ရှိသလဲ": "Beh Hma Shi Tha Leh", "ဘယ်လို သွားသလဲ": "Beh Lo Thwar Tha Leh", "ထဲမှာ ဘာရှိသလဲ": "Htay Hma Bar Shi Tha Leh", "ဘယ်ပုံလဲ": "Beh Pone Leh"
         };
 
         // Helper function for Romanization
@@ -1543,14 +1544,18 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
         // =================================================================
         // 7b. PREPOSITION GAME LOGIC
         // =================================================================
-        // Two kinds of question, both shown as an emoji scene:
-        //   A) "<object> ဘယ်မှာ ရှိသလဲ?" -- pick where it is (on / under / beside ...)
-        //   B) "ပုံးထဲမှာ ဘာရှိသလဲ?"     -- pick what is inside the box
-        // Object and place names that already sit in the main audio sprite are played from it;
-        // the new recordings (the place words, the two question endings, a few new object names)
-        // are single files in public/prepositionAudio/ (see the README.txt there). A recording that
-        // is not added yet simply stays silent -- the game still works, with the words on screen.
-        const PREP_CLIPS = ['on', 'under', 'inside', 'beside', 'front', 'behind', 'between', 'q_where', 'q_what_in', 'ref_box', 'ref_chair'];
+        // All 16 prepositions of the owl picture set, shown as emoji scenes. Four kinds of question:
+        //   A) "<object> ဘယ်မှာ ရှိသလဲ?"       -- where is it (on, over, under, in, beside, in front of,
+        //                                          behind, between, near, far, opposite)
+        //   M) "<object> ဘယ်လို သွားသလဲ?"      -- how does it move (up, down, around, through, across)
+        //   B) "ပုံးထဲမှာ ဘာရှိသလဲ?"            -- what is in the box
+        //   C) "<object> <place> ဘယ်ပုံလဲ?"     -- hear a place word, pick the matching picture of three
+        // Object and place names already in the main audio sprite are played from it; the new
+        // recordings (the place words, the question endings, two new nouns) are single files in
+        // public/prepositionAudio/ (see the README.txt there). A recording that is not added yet
+        // simply stays silent -- the game still works, with the words on screen.
+        const PREP_CLIPS = ['on', 'over', 'under', 'inside', 'beside', 'front', 'behind', 'between', 'near', 'far', 'opposite',
+            'up', 'down', 'around', 'through', 'across', 'q_where', 'q_how', 'q_what_in', 'q_which', 'ref_box', 'ref_chair'];
         const PREP_WORD_CLIP = { 'ပုံး': 'ref_box', 'ကုလားထိုင်': 'ref_chair' };
         const prepClipBuffers = new Map();
         let prepClipsLoading = null;
@@ -1590,15 +1595,30 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
             return PREP_WORD_CLIP[burmese] ? playPrepClip(PREP_WORD_CLIP[burmese]) : playAudio(burmese);
         }
 
+        // kind 'place' = where it is; 'move' = how it moves. refs = what it can be placed next to
+        // (none: the scene needs no second thing). The Burmese wording lives here only.
         const PREPS = {
-            on:      { clip: 'on',      bm: 'အပေါ်မှာ', en: 'On',          refs: ['box', 'chair', 'car'] },
-            under:   { clip: 'under',   bm: 'အောက်မှာ', en: 'Under',       refs: ['box', 'chair', 'tree'] },
-            inside:  { clip: 'inside',  bm: 'ထဲမှာ',    en: 'In',          refs: ['box'] },
-            beside:  { clip: 'beside',  bm: 'ဘေးမှာ',   en: 'Beside',      refs: ['box', 'chair', 'tree', 'house', 'car'] },
-            front:   { clip: 'front',   bm: 'ရှေ့မှာ',   en: 'In front of', refs: ['house', 'tree', 'car'] },
-            behind:  { clip: 'behind',  bm: 'နောက်မှာ',  en: 'Behind',      refs: ['house', 'car', 'box'] },
-            between: { clip: 'between', bm: 'ကြားမှာ',   en: 'Between',     refs: ['box', 'tree', 'house'] }
+            on:       { clip: 'on',       bm: 'ပေါ်မှာ',            en: 'On',          kind: 'place', refs: ['box', 'chair', 'car'] },
+            over:     { clip: 'over',     bm: 'အပေါ်မှာ',           en: 'Over',        kind: 'place', refs: ['box', 'chair', 'house', 'tree'] },
+            under:    { clip: 'under',    bm: 'အောက်မှာ',           en: 'Under',       kind: 'place', refs: ['box', 'chair', 'tree'] },
+            inside:   { clip: 'inside',   bm: 'ထဲမှာ',              en: 'In',          kind: 'place', refs: ['box'] },
+            beside:   { clip: 'beside',   bm: 'ဘေးမှာ',             en: 'Beside',      kind: 'place', refs: ['box', 'chair', 'tree', 'house', 'car'] },
+            front:    { clip: 'front',    bm: 'ရှေ့မှာ',             en: 'In front of', kind: 'place', refs: ['house', 'tree', 'car'] },
+            behind:   { clip: 'behind',   bm: 'နောက်မှာ',           en: 'Behind',      kind: 'place', refs: ['house', 'car', 'box'] },
+            between:  { clip: 'between',  bm: 'ကြားမှာ',            en: 'Between',     kind: 'place', refs: ['box', 'tree', 'house'] },
+            near:     { clip: 'near',     bm: 'အနီးမှာ',            en: 'Near',        kind: 'place', refs: ['house', 'tree', 'car', 'box', 'chair'] },
+            far:      { clip: 'far',      bm: 'ဝေးဝေးမှာ',           en: 'Far',         kind: 'place', refs: ['house', 'tree', 'car', 'box', 'chair'] },
+            opposite: { clip: 'opposite', bm: 'မျက်နှာချင်းဆိုင်မှာ', en: 'Opposite',    kind: 'place', refs: ['house', 'tree', 'car', 'box'] },
+            up:       { clip: 'up',       bm: 'အပေါ်ကို',           en: 'Up',          kind: 'move',  refs: [] },
+            down:     { clip: 'down',     bm: 'အောက်ကို',           en: 'Down',        kind: 'move',  refs: [] },
+            around:   { clip: 'around',   bm: 'ပတ်ပြီး',            en: 'Around',      kind: 'move',  refs: ['tree', 'house'] },
+            through:  { clip: 'through',  bm: 'ဖောက်ပြီး',          en: 'Through',     kind: 'move',  refs: [] },
+            across:   { clip: 'across',   bm: 'ဖြတ်ကူးပြီး',        en: 'Across',      kind: 'move',  refs: [] }
         };
+        // Pictures that could also be called by another word -- never offered together as right / wrong
+        const PREP_CONFLICTS = [['on', 'over'], ['on', 'up'], ['over', 'up'], ['under', 'down'], ['beside', 'near'], ['beside', 'opposite'],
+            ['beside', 'between'], ['near', 'front'], ['near', 'opposite'], ['near', 'between'], ['far', 'opposite'], ['through', 'across']];
+        const prepConflict = (a, b) => PREP_CONFLICTS.some(([x, y]) => (x === a && y === b) || (x === b && y === a));
         const PREP_REFS = {
             box:   { e: '📦', bm: 'ပုံး' },
             chair: { e: '🪑', bm: 'ကုလားထိုင်' },
@@ -1607,8 +1627,9 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
             car:   { e: '🚗', bm: 'ကား' }
         };
         const PREP_OBJECTS = [
-            { bm: 'ပန်းသီး', e: '🍎' }, { bm: 'လိမ္မော်သီး', e: '🍊' }, { bm: 'ဖရဲသီး', e: '🍉' }, { bm: 'ငှက်ပျောသီး', e: '🍌' }, { bm: 'စပျစ်သီး', e: '🍇' },
-            { bm: 'ဘောလုံး', e: '⚽' }, { bm: 'ကြောင်', e: '🐈' }, { bm: 'ခွေး', e: '🐕' }, { bm: 'ယုန်', e: '🐇' }, { bm: 'ငှက်', e: '🐦' }
+            { bm: 'ပန်းသီး', en: 'apple', e: '🍎' }, { bm: 'လိမ္မော်သီး', en: 'orange', e: '🍊' }, { bm: 'ဖရဲသီး', en: 'watermelon', e: '🍉' },
+            { bm: 'ငှက်ပျောသီး', en: 'banana', e: '🍌' }, { bm: 'စပျစ်သီး', en: 'grapes', e: '🍇' }, { bm: 'ဘောလုံး', en: 'ball', e: '⚽' },
+            { bm: 'ကြောင်', en: 'cat', e: '🐈' }, { bm: 'ခွေး', en: 'dog', e: '🐕' }, { bm: 'ယုန်', en: 'rabbit', e: '🐇' }, { bm: 'ငှက်', en: 'bird', e: '🐦' }
         ];
 
         const prepSceneEl = byId('prep-scene');
@@ -1619,53 +1640,109 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
         let prepState = null;
         let prepSeq = 0;
         let lastPrepKey = null;
+        const pickOne = (list) => list[Math.floor(Math.random() * list.length)];
 
-        // The picture. Everything is an emoji, placed with plain CSS: on / under stack the two,
-        // beside / between put them in a row, front / behind overlap them (the one drawn later covers
-        // the other), and "in" draws a box with the object sinking into it.
+        // The picture. Everything is an emoji (plus a little plain CSS for boxes, walls, roads and
+        // rivers), kept within about 250px so it also fits a phone. `ref` is null for the scenes that
+        // need no second thing (up, down, through, across).
         function prepSceneHtml(prepKey, ref, obj) {
-            const O = obj.e, R = ref.e;
+            const O = obj.e, R = ref ? ref.e : '';
             const sz = (rem) => `font-size:${rem}rem;line-height:1;`;
-            if (prepKey === 'on') {
-                return `<div class="flex flex-col items-center"><span style="${sz(4.5)}margin-bottom:-14px;position:relative;z-index:2">${O}</span><span style="${sz(8)}">${R}</span></div>`;
+            const abs = (x, y, rem, extra = '') => `position:absolute;left:${x};top:${y};${sz(rem)}transform:translate(-50%,-50%);${extra}`;
+            const arrowLine = (w) => `<span style="display:flex;align-items:center;align-self:center;color:#ef4444;font-weight:900;font-size:1.1rem"><span>◀</span><span style="display:block;width:${w}px;border-top:4px solid #ef4444"></span><span>▶</span></span>`;
+            switch (prepKey) {
+                case 'on':
+                    return `<div class="flex flex-col items-center"><span style="${sz(4.5)}margin-bottom:-14px;position:relative;z-index:2">${O}</span><span style="${sz(8)}">${R}</span></div>`;
+                case 'over':
+                    return `<div class="flex flex-col items-center"><span style="${sz(4.5)}margin-bottom:26px">${O}</span><span style="${sz(8)}">${R}</span></div>`;
+                case 'under':
+                    return `<div class="flex flex-col items-center"><span style="${sz(8)}">${R}</span><span style="${sz(4.5)}margin-top:-6px">${O}</span></div>`;
+                case 'beside': {
+                    const o = `<span style="${sz(4.5)}">${O}</span>`, r = `<span style="${sz(8)}">${R}</span>`;
+                    return `<div class="flex items-end gap-2">${Math.random() < 0.5 ? o + r : r + o}</div>`;
+                }
+                case 'between': {
+                    const r = `<span style="${sz(5)}">${R}</span>`;
+                    return `<div class="flex items-end gap-3">${r}<span style="${sz(4)}">${O}</span>${r}</div>`;
+                }
+                case 'near':
+                case 'far': {
+                    const o = `<span style="${sz(3.2)}">${O}</span>`, r = `<span style="${sz(5)}">${R}</span>`;
+                    const line = arrowLine(prepKey === 'near' ? 8 : 64);
+                    return `<div class="flex items-end gap-1">${Math.random() < 0.5 ? o + line + r : r + line + o}</div>`;
+                }
+                case 'opposite': {
+                    const road = `<div style="width:56px;height:140px;align-self:flex-end;background:repeating-linear-gradient(to bottom,#fde047 0 14px,transparent 14px 28px) center/4px 100% no-repeat,#6b7280;border-radius:4px"></div>`;
+                    return `<div class="flex items-end gap-2"><span style="${sz(4)}">${O}</span>${road}<span style="${sz(5)}">${R}</span></div>`;
+                }
+                case 'front':
+                    return `<div style="position:relative;width:260px;height:215px;">
+                        <span style="${sz(9)}position:absolute;left:50%;top:46px;transform:translateX(-50%);z-index:1">${R}</span>
+                        <span style="${sz(5.5)}position:absolute;left:50%;bottom:0;transform:translateX(-50%);z-index:2;filter:drop-shadow(0 4px 3px rgba(0,0,0,.35))">${O}</span>
+                    </div>`;
+                case 'behind':
+                    return `<div style="position:relative;width:260px;height:215px;">
+                        <span style="${sz(4)}position:absolute;left:64%;bottom:14px;transform:translateX(-50%);z-index:1">${O}</span>
+                        <span style="${sz(9)}position:absolute;left:38%;top:14px;transform:translateX(-50%);z-index:2">${R}</span>
+                    </div>`;
+                case 'up':
+                    return `<div class="flex flex-col items-center" style="gap:2px"><span style="${sz(3)}">☁️</span><span style="${sz(4.5)}">${O}</span><span style="${sz(3)}">⬆️</span></div>`;
+                case 'down':
+                    return `<div class="flex flex-col items-center" style="gap:2px"><span style="${sz(3)}">⬇️</span><span style="${sz(4.5)}">${O}</span></div>`;
+                case 'around':
+                    return `<div style="position:relative;width:210px;height:200px;">
+                        <div style="position:absolute;left:30px;top:20px;width:150px;height:150px;border:5px dashed #3b82f6;border-radius:50%"></div>
+                        <span style="${abs('50%', '48%', 5)}">${R}</span>
+                        <span style="${abs('80%', '28%', 3)}">${O}</span>
+                        <span style="${abs('18%', '82%', 2)}">🔄</span>
+                    </div>`;
+                case 'through':
+                    return `<div style="position:relative;width:250px;height:190px;">
+                        <div style="position:absolute;left:100px;top:0;width:56px;height:190px;background:#d9a066;border:4px solid #a06a35;border-radius:6px"></div>
+                        <div style="position:absolute;left:104px;top:72px;width:48px;height:48px;border-radius:50%;background:#1e293b"></div>
+                        <span style="${abs('18%', '50%', 3.2)}">➡️</span>
+                        <span style="${abs('82%', '50%', 4)}">${O}</span>
+                    </div>`;
+                case 'across':
+                    return `<div style="position:relative;width:240px;height:170px;">
+                        <div style="position:absolute;left:84px;top:36px;width:72px;height:134px;background:#60a5fa;border-radius:6px"></div>
+                        <div style="position:absolute;left:30px;top:92px;width:180px;height:14px;background:#a16207;border-radius:4px"></div>
+                        <span style="${abs('24%', '36%', 4)}">${O}</span>
+                        <span style="${abs('80%', '36%', 2.6)}">➡️</span>
+                    </div>`;
+                default: // inside: an open box, the object's lower half hidden behind the box front
+                    return `<div style="position:relative;width:200px;height:190px;">
+                        <span style="${sz(5)}position:absolute;left:50%;top:34px;transform:translateX(-50%);z-index:1">${O}</span>
+                        <div style="position:absolute;left:50%;bottom:0;transform:translateX(-50%);width:170px;height:105px;background:#d9a066;border:5px solid #a06a35;border-radius:6px 6px 14px 14px;z-index:2"></div>
+                        <div style="position:absolute;left:50%;bottom:92px;transform:translateX(-50%);width:186px;height:16px;background:#c4884a;border:4px solid #a06a35;border-radius:6px;z-index:3"></div>
+                    </div>`;
             }
-            if (prepKey === 'under') {
-                return `<div class="flex flex-col items-center"><span style="${sz(8)}">${R}</span><span style="${sz(4.5)}margin-top:-6px">${O}</span></div>`;
-            }
-            if (prepKey === 'beside') {
-                const objFirst = Math.random() < 0.5;
-                const o = `<span style="${sz(4.5)}">${O}</span>`, r = `<span style="${sz(8)}">${R}</span>`;
-                return `<div class="flex items-end gap-2">${objFirst ? o + r : r + o}</div>`;
-            }
-            if (prepKey === 'between') {
-                const r = `<span style="${sz(7)}">${R}</span>`;
-                return `<div class="flex items-end gap-3">${r}<span style="${sz(4.5)}">${O}</span>${r}</div>`;
-            }
-            if (prepKey === 'front') {
-                return `<div style="position:relative;width:260px;height:215px;">
-                    <span style="${sz(9)}position:absolute;left:50%;top:46px;transform:translateX(-50%);z-index:1">${R}</span>
-                    <span style="${sz(5.5)}position:absolute;left:50%;bottom:0;transform:translateX(-50%);z-index:2;filter:drop-shadow(0 4px 3px rgba(0,0,0,.35))">${O}</span>
-                </div>`;
-            }
-            if (prepKey === 'behind') {
-                return `<div style="position:relative;width:260px;height:215px;">
-                    <span style="${sz(4)}position:absolute;left:64%;bottom:14px;transform:translateX(-50%);z-index:1">${O}</span>
-                    <span style="${sz(9)}position:absolute;left:38%;top:14px;transform:translateX(-50%);z-index:2">${R}</span>
-                </div>`;
-            }
-            // inside: an open box, the object's lower half hidden behind the box front
-            return `<div style="position:relative;width:200px;height:190px;">
-                <span style="${sz(5)}position:absolute;left:50%;top:34px;transform:translateX(-50%);z-index:1">${O}</span>
-                <div style="position:absolute;left:50%;bottom:0;transform:translateX(-50%);width:170px;height:105px;background:#d9a066;border:5px solid #a06a35;border-radius:6px 6px 14px 14px;z-index:2"></div>
-                <div style="position:absolute;left:50%;bottom:92px;transform:translateX(-50%);width:186px;height:16px;background:#c4884a;border:4px solid #a06a35;border-radius:6px;z-index:3"></div>
+        }
+
+        // a small copy of a scene, for the "which picture" answers
+        function prepThumbHtml(prepKey, ref, obj) {
+            return `<div style="width:130px;height:108px;overflow:hidden;margin:0 auto;position:relative">
+                <div style="width:260px;height:215px;display:flex;align-items:flex-end;justify-content:center;transform:scale(.5);transform-origin:top left">${prepSceneHtml(prepKey, ref, obj)}</div>
             </div>`;
         }
 
         function refreshPrepTexts() {
             if (!prepState) return;
-            if (prepState.type === 'A') prepQuestionEl.textContent = `${t(prepState.obj.bm)} ${t('ဘယ်မှာ ရှိသလဲ')}?`;
-            else prepQuestionEl.textContent = `${t(prepState.ref.bm)}${t('ထဲမှာ ဘာရှိသလဲ')}?`;
+            const { type, prepKey, ref, obj } = prepState;
+            const info = PREPS[prepKey];
+            let bm, en;
+            if (type === 'A') { bm = `${t(obj.bm)} ${t('ဘယ်မှာ ရှိသလဲ')}?`; en = `Where is the ${obj.en}?`; }
+            else if (type === 'M') { bm = `${t(obj.bm)} ${t('ဘယ်လို သွားသလဲ')}?`; en = `How does the ${obj.en} move?`; }
+            else if (type === 'B') { bm = `${t(ref.bm)}${t('ထဲမှာ ဘာရှိသလဲ')}?`; en = 'What is in the box?'; }
+            else { bm = `${t(obj.bm)} ${t(info.bm)} ${t('ဘယ်ပုံလဲ')}?`; en = `Which picture shows the ${obj.en} "${info.en.toLowerCase()}"?`; }
+            prepQuestionEl.innerHTML = `<span>${bm}</span><span class="block text-sm font-normal text-gray-500">${en}</span>`;
             prepOptionsEl.querySelectorAll('.prep-bm').forEach(el => { el.textContent = t(el.dataset.bm); });
+        }
+
+        // up to n place words that cannot also be right for `correct`, optionally of one kind only
+        function prepDistractors(correct, n, kind) {
+            const pool = Object.keys(PREPS).filter(k => k !== correct && !prepConflict(k, correct) && (!kind || PREPS[k].kind === kind));
+            return shuffleArray(pool).slice(0, n);
         }
 
         function setupPrepGame() {
@@ -1679,33 +1756,46 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
 
             const objs = shuffleArray([...PREP_OBJECTS]);
             const obj = objs[0];
-            const type = Math.random() < 0.3 ? 'B' : 'A';
-            let prepKey, ref, options;
+            const roll = Math.random();
+            // 'place' words are asked "where", 'move' words "how it moves"; 1 in 3 is the picture match
+            let type = roll < 0.3 ? 'B' : roll < 0.65 ? 'A' : roll < 0.8 ? 'M' : 'C';
+            const keys = Object.keys(PREPS).filter(k => k !== lastPrepKey);
+            let prepKey, ref = null, options;
             if (type === 'B') {
                 prepKey = 'inside';
                 ref = PREP_REFS.box;
                 options = shuffleArray([{ item: obj, correct: true }, { item: objs[1], correct: false }, { item: objs[2], correct: false }]);
+            } else if (type === 'C') {
+                prepKey = pickOne(keys);
+                const keysFor = [prepKey, ...prepDistractors(prepKey, 2)];
+                options = shuffleArray(keysFor.map(k => {
+                    const refKeys = PREPS[k].refs;
+                    return { key: k, correct: k === prepKey, ref: refKeys.length ? PREP_REFS[pickOne(refKeys)] : null };
+                }));
+                ref = options.find(o => o.correct).ref;
             } else {
-                const keys = Object.keys(PREPS).filter(k => k !== lastPrepKey);
-                prepKey = keys[Math.floor(Math.random() * keys.length)];
+                const wanted = type === 'A' ? 'place' : 'move';
+                prepKey = pickOne(keys.filter(k => PREPS[k].kind === wanted && k !== 'inside'));
                 const refKeys = PREPS[prepKey].refs;
-                ref = PREP_REFS[refKeys[Math.floor(Math.random() * refKeys.length)]];
-                const others = shuffleArray(Object.keys(PREPS).filter(k => k !== prepKey)).slice(0, 2);
-                options = shuffleArray([prepKey, ...others].map(k => ({ key: k, correct: k === prepKey })));
+                ref = refKeys.length ? PREP_REFS[pickOne(refKeys)] : null;
+                options = shuffleArray([prepKey, ...prepDistractors(prepKey, 2, wanted)].map(k => ({ key: k, correct: k === prepKey })));
             }
             lastPrepKey = prepKey;
             prepState = { type, prepKey, ref, obj };
-            prepSceneEl.innerHTML = prepSceneHtml(prepKey, ref, obj);
-            prepOptionsEl.className = type === 'B' ? 'grid grid-cols-3 gap-4' : 'grid grid-cols-1 gap-4';
+            prepSceneEl.innerHTML = type === 'C' ? `<div style="font-size:6rem;line-height:1">${obj.e}</div>` : prepSceneHtml(prepKey, ref, obj);
+            prepOptionsEl.className = type === 'B' || type === 'C' ? 'grid grid-cols-3 gap-3' : 'grid grid-cols-1 gap-4';
 
             options.forEach((option, index) => {
                 const button = document.createElement('button');
                 button.id = `prep-option-${index}`;
-                button.classList.add('w-full', 'p-4', 'rounded-xl', 'font-bold', 'text-lg', 'shadow-md', 'transition', 'duration-200', 'default-answer', 'text-center', 'disabled:opacity-70');
+                button.classList.add('w-full', 'rounded-xl', 'font-bold', 'text-lg', 'shadow-md', 'transition', 'duration-200', 'default-answer', 'text-center', 'disabled:opacity-70');
+                button.classList.add(type === 'C' ? 'p-2' : 'p-4');
                 if (option.correct) button.classList.add('prep-correct-item');
                 button.disabled = true;
                 if (type === 'B') {
                     button.innerHTML = `<div class="text-6xl mb-1">${option.item.e}</div><div class="prep-bm text-base" data-bm="${option.item.bm}">${t(option.item.bm)}</div>`;
+                } else if (type === 'C') {
+                    button.innerHTML = prepThumbHtml(option.key, option.ref, obj);
                 } else {
                     const info = PREPS[option.key];
                     button.innerHTML = `<span class="prep-bm" data-bm="${info.bm}">${t(info.bm)}</span><span class="block text-sm font-normal text-gray-500">${info.en}</span>`;
@@ -1714,10 +1804,10 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
                 prepOptionsEl.appendChild(button);
             });
             refreshPrepTexts();
-            playPrepSequence(mySeq, type, ref, obj, options);
+            playPrepSequence(mySeq, type, prepKey, ref, obj, options);
         }
 
-        async function playPrepSequence(mySeq, type, ref, obj, options) {
+        async function playPrepSequence(mySeq, type, prepKey, ref, obj, options) {
             const alive = () => mySeq === prepSeq && quizState.isAnswering && currentActiveGame === 'prep';
             await sleep(500);
             if (!alive()) return;
@@ -1725,17 +1815,26 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
             if (loading) await loading;
             if (!alive()) return;
             if (type === 'A') { await playPrepWord(obj.bm); if (!alive()) return; await playPrepClip('q_where'); }
-            else { await playPrepWord(ref.bm); if (!alive()) return; await playPrepClip('q_what_in'); }
-            for (let i = 0; i < options.length; i++) {
-                if (!alive()) return;
-                const button = byId(`prep-option-${i}`);
-                if (!button) return;
-                button.classList.add('highlight-answer');
-                if (type === 'A') await playPrepClip(PREPS[options[i].key].clip);
-                else await playAudio(options[i].item.bm);
-                await sleep(200);
-                button.classList.remove('highlight-answer');
-                await sleep(200);
+            else if (type === 'M') { await playPrepWord(obj.bm); if (!alive()) return; await playPrepClip('q_how'); }
+            else if (type === 'B') { await playPrepWord(ref.bm); if (!alive()) return; await playPrepClip('q_what_in'); }
+            else {
+                await playPrepWord(obj.bm); if (!alive()) return;
+                await playPrepClip(PREPS[prepKey].clip); if (!alive()) return;
+                await playPrepClip('q_which');
+            }
+            // the three answers are read out one by one (pictures are looked at, not read)
+            if (type !== 'C') {
+                for (let i = 0; i < options.length; i++) {
+                    if (!alive()) return;
+                    const button = byId(`prep-option-${i}`);
+                    if (!button) return;
+                    button.classList.add('highlight-answer');
+                    if (type === 'B') await playAudio(options[i].item.bm);
+                    else await playPrepClip(PREPS[options[i].key].clip);
+                    await sleep(200);
+                    button.classList.remove('highlight-answer');
+                    await sleep(200);
+                }
             }
             if (!alive()) return;
             prepFeedbackEl.textContent = 'Choose the correct answer.';
@@ -1749,15 +1848,17 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
             stopHintTimer();
             const allButtons = prepOptionsEl.querySelectorAll('button');
             allButtons.forEach(btn => btn.disabled = true);
+            const info = PREPS[prepState.prepKey];
+            if (prepState.type === 'C') prepSceneEl.innerHTML = prepSceneHtml(prepState.prepKey, prepState.ref, prepState.obj);
             if (clickedOption.correct) {
                 awardCoins(20);
                 prepFeedbackEl.textContent = '✅ Correct!';
                 buttonEl.classList.replace('default-answer', 'correct-answer');
-                if (prepState.type === 'A') playPrepClip(PREPS[prepState.prepKey].clip); else playAudio(prepState.obj.bm);
+                if (prepState.type === 'B') playAudio(prepState.obj.bm); else playPrepClip(info.clip);
                 handleWin('prep', 'floating-trophy', setupPrepGame);
             } else {
                 awardCoins(-1);
-                const answerText = prepState.type === 'A' ? `${PREPS[prepState.prepKey].bm} (${PREPS[prepState.prepKey].en})` : prepState.obj.bm;
+                const answerText = prepState.type === 'B' ? prepState.obj.bm : prepState.type === 'C' ? `the picture "${info.en}"` : `${info.bm} (${info.en})`;
                 prepFeedbackEl.textContent = `❌ Wrong! The answer is '${answerText}'.`;
                 buttonEl.classList.replace('default-answer', 'incorrect-answer');
                 const correctBtn = prepOptionsEl.querySelector('.prep-correct-item');
