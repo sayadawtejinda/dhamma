@@ -1535,6 +1535,20 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
     } catch (e) { alert('Could not load that week: ' + (e.message || e)); }
     setLoadingReportWeek(false);
   };
+  // The dashboard's saved copy of the sessions is only read again on 🔄 (see TeacherRefreshButton), so a report a student
+  // submitted a minute ago would not show. Opening Feedback Reports therefore also reads just the sessions that ended in the
+  // last 2 days (a few dozen documents, at most once every 10 minutes) and merges them into the list.
+  const [freshEndedSessions, setFreshEndedSessions] = useState([]);
+  const freshReadAtRef = useRef(0);
+  useEffect(() => {
+    if (viewMode !== 'reports' || reportTab !== 'feedback') return;
+    if (Date.now() - freshReadAtRef.current < 10 * 60 * 1000) return;
+    freshReadAtRef.current = Date.now();
+    const since = Timestamp.fromDate(new Date(Date.now() - 2 * 24 * 60 * 60 * 1000));
+    getDocs(query(sessionsCollection, where('endTime', '>=', since)))
+      .then(snap => setFreshEndedSessions(snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(x => x.endTime && x.startTime)))
+      .catch(e => { freshReadAtRef.current = 0; console.error('Fresh reports:', e); });
+  }, [viewMode, reportTab]);
   const [teacherConfigData, setTeacherConfigData] = useState(null);
   const [recoveryPasscodeInput, setRecoveryPasscodeInput] = useState('');
   const [recoveryPasscodeSaving, setRecoveryPasscodeSaving] = useState(false);
@@ -6835,7 +6849,10 @@ ${toSend.map(l => '• ' + l.title).join(', ')}`
 
           {reportTab === 'feedback' && (() => {
             const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-            const recentSessions = completedSessions.filter(s => s.endTime.toDate() >= weekAgo);
+            const freshIds = new Set(freshEndedSessions.map(x => x.id));
+            const recentSessions = [...freshEndedSessions, ...completedSessions.filter(s => !freshIds.has(s.id))]
+              .filter(s => s.endTime.toDate() >= weekAgo)
+              .sort((a, b) => b.startTime.toDate() - a.startTime.toDate());
             const loadedIds = new Set(recentSessions.map(x => x.id));
             const reportGroups = [
               { label: 'Last 7 days', list: recentSessions },
