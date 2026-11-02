@@ -1265,8 +1265,8 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
   const [currentKeys, setCurrentKeys] = useState([]);
   const [isPlaying, setIsPlaying] = useState(false);
   // The red lock on the Next button = Next held down for good: the whole button is red, and a tap still goes to the next
-  // sentence, reading it aloud by itself first. Coins (speaker or Next) are paid only while the lock is on; with it off,
-  // both still work but pay nothing. Holding Next switches the lock off / on again.
+  // sentence, reading it aloud by itself first. The speaker does the same while the lock is on. Coins are paid only while the
+  // lock is on; with it off, the speaker just reads and Next just moves on. Holding Next switches the lock off / on again.
   // Independent of the reading way (1 or 2).
   const [autoReadMode, setAutoReadMode] = useState(true);
   const [showLessonPicker, setShowLessonPicker] = useState(false);
@@ -4049,9 +4049,16 @@ useEffect(() => {
             )}
 
             <button
-  onClick={() => { setOnboardingStep(null); playSequence(); if (autoReadMode) payCurrentSentenceNow(); }}
+  onClick={() => {
+      setOnboardingStep(null);
+      // red lock on: the speaker does exactly what Next does (reads the sentence aloud, pays the coins, goes on to the next one);
+      // on the last sentence there is no next, so it just reads and pays
+      if (autoReadMode && appMode === 'sheet' && currentSheetIndex > 0 && currentSheetIndex < sheetData.length - 1) { handleNextSheetRow(); return; }
+      playSequence();
+      if (autoReadMode) payCurrentSentenceNow();
+  }}
   disabled={isLocked || (!syllables.length && !currentKeys.length)}
-  title="Read aloud (earns the coins while the red lock is on)"
+  title="Read aloud (with the red lock on: also pays the coins and goes to the next sentence)"
   className="relative flex-shrink-0 flex items-center justify-center gap-2 text-white px-6 py-4 rounded-xl font-bold text-lg shadow-lg transition-all border-b-4 h-[60px] overflow-hidden bg-emerald-500 hover:bg-emerald-600 border-emerald-700 hover:shadow-xl active:scale-95 disabled:bg-emerald-300 disabled:cursor-not-allowed"
 >
   <Volume2 size={24} className="relative z-10" />
