@@ -5844,7 +5844,8 @@ ${toSend.map(l => '• ' + l.title).join(', ')}`
                               // two is higher instead of always trusting live.
                               ? Math.max(dhammaschoolStudentProgress?.completedCount || 0, completedUnit)
                               : ssClassForTrophy
-                                ? (ssStudentClassCount ?? completedUnit)
+                                // the weekly file can be up to a week old; the student's own record (updated by every report) is live -- show the higher
+                                ? Math.max(ssStudentClassCount ?? 0, completedUnit)
                                 : (ssStudentTotalCount ?? completedUnit);
                           const displayedTotal = isAbhiForTrophy
                             ? (abhiTotalCount ?? effectiveUnitCountForDisplay)
