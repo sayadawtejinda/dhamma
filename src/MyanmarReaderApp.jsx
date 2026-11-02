@@ -1264,14 +1264,16 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
   const [syllables, setSyllables] = useState([]);
   const [currentKeys, setCurrentKeys] = useState([]);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [autoReadMode, setAutoReadMode] = useState(false);
+  // The small red lock on the Next button: while it is on (the normal state), Next reads the sentence aloud by itself and
+  // pays the coins before moving on. Holding Next switches it off / on again. Independent of the reading way (1 or 2).
+  const [autoReadMode, setAutoReadMode] = useState(true);
   const [showLessonPicker, setShowLessonPicker] = useState(false);
   // Sheet B: some students don't need the word-by-word read-aloud in the
   // reading box; when off, only the paragraph line audio plays.
   const [readWordsAloud, setReadWordsAloud] = useState(() => { try { return localStorage.getItem('readerReadWordsAloud') !== '0'; } catch (e) { return true; } });
   const toggleReadWordsAloud = () => setReadWordsAloud(prev => { const n = !prev; try { localStorage.setItem('readerReadWordsAloud', n ? '1' : '0'); } catch (e) {} return n; });
-  const [isSpeakerHeld, setIsSpeakerHeld] = useState(false);
-const longPressTimerRef = useRef(null);
+  const nextHoldTimerRef = useRef(null);
+  const nextHeldRef = useRef(false);
   const [isFetchingSheet, setIsFetchingSheet] = useState(false);
   
   // Spell Mode Toggle
@@ -2220,6 +2222,30 @@ setTimeout(() => {
       fetchSheetData(nextSheet, selectedColumn);
   };
 
+  // The sentence's coins, paid the moment it is read aloud with the speaker. A sentence is only ever paid once
+  // (completedSentences), so Next afterwards adds nothing more for it.
+  const payCurrentSentenceNow = () => {
+      if (appMode !== 'sheet' || currentSheetIndex <= 0 || completedSentences.has(currentSheetIndex)) return;
+      if (currentSentenceScore > 0) {
+          spawnFlyingCoins(scorePos.x + 40, scorePos.y + 40, Math.min(14, Math.max(6, Math.round(currentSentenceScore / 12))));
+      }
+      awardScore(currentSentenceScore);
+      setCompletedSentences(prev => { const n = new Set(prev); n.add(currentSheetIndex); return n; });
+  };
+
+  // Next: a tap goes to the next sentence; holding it switches the red lock (auto-read) off and on.
+  const nextHoldProps = {
+      onPointerDown: () => {
+          nextHeldRef.current = false;
+          if (nextHoldTimerRef.current) clearTimeout(nextHoldTimerRef.current);
+          nextHoldTimerRef.current = setTimeout(() => { nextHeldRef.current = true; nextHoldTimerRef.current = null; setAutoReadMode(prev => !prev); }, 600);
+      },
+      onPointerUp: () => { if (nextHoldTimerRef.current) { clearTimeout(nextHoldTimerRef.current); nextHoldTimerRef.current = null; } },
+      onPointerLeave: () => { if (nextHoldTimerRef.current) { clearTimeout(nextHoldTimerRef.current); nextHoldTimerRef.current = null; } },
+      onContextMenu: (e) => e.preventDefault(),
+      onClick: () => { if (nextHeldRef.current) { nextHeldRef.current = false; return; } handleNextSheetRow(); },
+  };
+
   const handleNextSheetRow = async () => {
       if (isLocked) return;
       interruptPlayback();
@@ -2593,7 +2619,7 @@ const closeQAPanel = () => {
               return;
           }
           interruptPlayback();
-          setIsSpellMode(false); setAutoReadMode(true); // keyboard practice reads the whole word: way 2
+          setIsSpellMode(false); // keyboard practice reads the whole word: way 2
           setIsPracticeMode(true);
           setPracticeStep(0);
           setCurrentKeys([]);
@@ -3405,7 +3431,6 @@ useEffect(() => {
                      <button onClick={() => {
                          const newSpellMode = !isSpellMode;
                          setIsSpellMode(newSpellMode);
-                         setAutoReadMode(!newSpellMode);
                          setShowSpellModeConfirm(false);
                      }} className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold transition-colors shadow-md">Switch</button>
                  </div>
@@ -3928,20 +3953,21 @@ useEffect(() => {
         </div>
         <div className="w-[1px] h-[60%] bg-teal-700 opacity-50"></div>
         <button
-            onClick={handleNextSheetRow}
+            {...nextHoldProps}
             disabled={isLocked}
             className="flex items-center justify-center gap-2 px-4 text-white hover:bg-teal-600 active:bg-teal-700 h-full transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Next Sentence"
+            title="Next Sentence (hold to turn the red lock off / on)"
         >
 
             <span className="font-bold whitespace-nowrap text-sm sm:text-base"> {currentSheetIndex + 1}/{sheetData.length}</span>
         </button>
     </div>
     <button
-        onClick={handleNextSheetRow}
+        {...nextHoldProps}
         disabled={isLocked || currentSheetIndex >= sheetData.length - 1}
-        className="p-3 bg-teal-400 hover:bg-teal-500 text-white border-b-4 border-teal-600 rounded-r-xl disabled:opacity-40 transition-all active:scale-95 h-full"
-    ><ChevronRight size={20} /></button>
+        title="Next (hold to turn the red lock off / on)"
+        className="relative p-3 bg-teal-400 hover:bg-teal-500 text-white border-b-4 border-teal-600 rounded-r-xl disabled:opacity-40 transition-all active:scale-95 h-full"
+    ><ChevronRight size={20} />{autoReadMode && <Lock size={12} className="absolute top-0.5 right-0.5 text-red-600 drop-shadow" strokeWidth={3} />}</button>
 </div>
             ) : sheetData.length > 0 && currentSheetIndex >= 0 ? (
                 <div className="flex items-center gap-1 h-[60px]">
@@ -3978,10 +4004,11 @@ useEffect(() => {
                         </button>
                     </div>
                     <button
-                        onClick={handleNextSheetRow}
+                        {...nextHoldProps}
                         disabled={isLocked || currentSheetIndex >= sheetData.length - 1}
-                        className="p-3 bg-teal-400 hover:bg-teal-500 text-white border-b-4 border-teal-600 rounded-r-xl disabled:opacity-40 transition-all active:scale-95 h-full"
-                    ><ChevronRight size={20} /></button>
+                        title="Next (hold to turn the red lock off / on)"
+                        className="relative p-3 bg-teal-400 hover:bg-teal-500 text-white border-b-4 border-teal-600 rounded-r-xl disabled:opacity-40 transition-all active:scale-95 h-full"
+                    ><ChevronRight size={20} />{autoReadMode && <Lock size={12} className="absolute top-0.5 right-0.5 text-red-600 drop-shadow" strokeWidth={3} />}</button>
                 </div>
             ) : (
                 <div className="relative inline-block h-[60px]" onClick={() => { if(onboardingStep === 'sheet_icon') setOnboardingStep('choose_chapter'); }}>
@@ -4020,39 +4047,12 @@ useEffect(() => {
             )}
 
             <button
-  onClick={() => { 
-      if (!autoReadMode) { setOnboardingStep(null); playSequence(); }
-  }}
-  onPointerDown={(e) => {
-      setIsSpeakerHeld(true);
-      longPressTimerRef.current = setTimeout(() => {
-          setAutoReadMode(prev => !prev);
-          setIsSpeakerHeld(false);
-          longPressTimerRef.current = null;
-      }, 600);
-  }}
-  onPointerUp={() => { 
-      if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; }
-      setIsSpeakerHeld(false);
-  }}
-  onPointerLeave={() => { 
-      if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; }
-      setIsSpeakerHeld(false);
-  }}
+  onClick={() => { setOnboardingStep(null); playSequence(); payCurrentSentenceNow(); }}
   disabled={isLocked || (!syllables.length && !currentKeys.length)}
-  title={autoReadMode ? "🔒 Auto-Read Mode is ON — Hold to turn off" : "Tap: Read Aloud | Hold: Auto-Read Mode"}
-  className={`relative flex-shrink-0 flex items-center justify-center gap-2 text-white px-6 py-4 rounded-xl font-bold text-lg shadow-lg transition-all border-b-4 h-[60px] overflow-hidden
-    ${isSpeakerHeld
-        ? 'bg-red-500 border-emerald-700 ring-4 ring-emerald-300 scale-95 cursor-wait'
-        : autoReadMode 
-            ? 'bg-red-600 border-red-800 ring-4 ring-emerald-300 hover:shadow-xl active:scale-95' 
-            : 'bg-emerald-500 hover:bg-emerald-600 border-emerald-700 hover:shadow-xl active:scale-95'}
-    disabled:bg-emerald-300 disabled:cursor-not-allowed`}
+  title="Read aloud (and earn the coins for this sentence)"
+  className="relative flex-shrink-0 flex items-center justify-center gap-2 text-white px-6 py-4 rounded-xl font-bold text-lg shadow-lg transition-all border-b-4 h-[60px] overflow-hidden bg-emerald-500 hover:bg-emerald-600 border-emerald-700 hover:shadow-xl active:scale-95 disabled:bg-emerald-300 disabled:cursor-not-allowed"
 >
-  {autoReadMode && !isSpeakerHeld && <span className="absolute inset-0 bg-emerald-400 opacity-40 animate-ping rounded-xl"></span>}
-  {autoReadMode && !isSpeakerHeld
-    ? <Lock size={24} className="relative z-10" />
-    : <Volume2 size={24} className="relative z-10" />}
+  <Volume2 size={24} className="relative z-10" />
 </button>
 
             {appMode === 'sheet' && sheetData.length > 0 && currentSheetIndex > 0 && sheetData[currentSheetIndex]?.en && (
