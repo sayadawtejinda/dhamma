@@ -182,6 +182,9 @@ const BLG_APP_BODY_HTML = `
             <button id="tab-name" class="game-tab px-4 sm:px-6 py-3 rounded-t-lg font-bold text-base sm:text-lg text-gray-500 transition duration-200 border-b-4 border-transparent cursor-pointer" onclick="window.__blgApp.handleTabClick('name')">
                 🏷️ Name Game
             </button>
+            <button id="tab-prep" class="game-tab px-4 sm:px-6 py-3 rounded-t-lg font-bold text-base sm:text-lg text-gray-500 transition duration-200 border-b-4 border-transparent cursor-pointer" onclick="window.__blgApp.handleTabClick('prep')">
+                📍 Preposition
+            </button>
         </div>
 
         <!-- Game Container -->
@@ -242,6 +245,23 @@ const BLG_APP_BODY_HTML = `
                     <div class="lg:w-2/3 flex flex-col justify-center gap-4">
                         <div id="name-game-options" class="grid grid-cols-1 gap-4"></div>
                         <button id="next-name-game-btn" class="mt-4 px-6 py-3 bg-blue-600 text-white font-bold rounded-lg shadow-lg hover:bg-blue-700 transition duration-200 active:translate-y-1 hidden" onclick="window.__blgApp.setupNameGame()">
+                            Next Question <span class="ml-2">➡️</span>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Preposition Game Section -->
+            <section id="prep-game-section" class="mb-12 p-6 bg-white rounded-xl shadow-xl border border-primary-green/30 hidden relative">
+                <div class="flex flex-col lg:flex-row gap-6">
+                    <div class="lg:w-1/2 flex flex-col items-center justify-center bg-sky-50 p-4 rounded-lg border border-gray-200 min-h-64">
+                        <div id="prep-scene" class="flex items-end justify-center w-full" style="min-height:230px;border-bottom:6px solid #86efac;"></div>
+                        <p id="prep-game-feedback" class="text-lg font-semibold text-center min-h-8 text-gray-700 mt-3">Listen to the audio.</p>
+                    </div>
+                    <div class="lg:w-1/2 flex flex-col justify-center gap-4">
+                        <p id="prep-question-text" class="text-xl font-semibold text-gray-800 min-h-10"></p>
+                        <div id="prep-options" class="grid grid-cols-1 gap-4"></div>
+                        <button id="next-prep-btn" class="mt-4 px-6 py-3 bg-blue-600 text-white font-bold rounded-lg shadow-lg hover:bg-blue-700 transition duration-200 active:translate-y-1 hidden" onclick="window.__blgApp.setupPrepGame()">
                             Next Question <span class="ml-2">➡️</span>
                         </button>
                     </div>
@@ -354,7 +374,10 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
             "ဂူ,တော": "Gu, Taw", "ခြံ,ကျက်စားရာ": "Chan, Kyet Sar Yar", "မြက်ခင်း,တော": "Myet Khin, Taw", "အသိုက်,အိုင်": "Ah Thaik, Aing",
             // Numbers & Classifiers
             "တစ်": "Tit", "နှစ်": "Hnit", "သုံး": "Thone", "လေး": "Lay", "ငါး": "Ngar", "ခြောက်": "Chauk", "ခုနှစ်": "Khu Hnit", "ရှစ်": "Shit", "ကိုး": "Koe", "ဆယ်": "Seh",
-            "ခု": "Khu", "ကောင်": "Kaung", "လုံး": "Lone", "ယောက်": "Yauk", "ပင်": "Pin", "ထည်": "Hteh", "ရွက်": "Ywet", "ဗူး": "Boo", "မျိုး": "Myoe", "နိုင်ငံ": "Nine Ngan", "ပါး": "Par", "ရွာ": "Ywar", "မြို့": "Myo", "ကိုင်း": "Kaing", "ချောင်း": "Chaung", "ခွက်": "Khwet", "လက်": "Let", "စုံ": "Sone", "ပွင့်": "Pwint", "ဥ": "U", "ညွှတ်": "Nyut", "ဖူး": "Phu", "ပုလင်း": "Pa Lin", "စိတ်": "Seik", "ခိုင်": "Khaing", "ဖီး": "Phee", "တောင့်": "Taung", "ခြမ်း": "Chan", "ထုပ်": "Htote", "ပွဲ": "Pwe", "စင်း": "Sin", "စီး": "See", "ချပ်": "Chat"
+            "ခု": "Khu", "ကောင်": "Kaung", "လုံး": "Lone", "ယောက်": "Yauk", "ပင်": "Pin", "ထည်": "Hteh", "ရွက်": "Ywet", "ဗူး": "Boo", "မျိုး": "Myoe", "နိုင်ငံ": "Nine Ngan", "ပါး": "Par", "ရွာ": "Ywar", "မြို့": "Myo", "ကိုင်း": "Kaing", "ချောင်း": "Chaung", "ခွက်": "Khwet", "လက်": "Let", "စုံ": "Sone", "ပွင့်": "Pwint", "ဥ": "U", "ညွှတ်": "Nyut", "ဖူး": "Phu", "ပုလင်း": "Pa Lin", "စိတ်": "Seik", "ခိုင်": "Khaing", "ဖီး": "Phee", "တောင့်": "Taung", "ခြမ်း": "Chan", "ထုပ်": "Htote", "ပွဲ": "Pwe", "စင်း": "Sin", "စီး": "See", "ချပ်": "Chat",
+            // Preposition game
+            "ပုံး": "Pone", "ကုလားထိုင်": "Ka Lar Htine", "အပေါ်မှာ": "Ah Paw Hma", "အောက်မှာ": "Auk Hma", "ထဲမှာ": "Htay Hma", "ဘေးမှာ": "Bay Hma", "ရှေ့မှာ": "Shay Hma", "နောက်မှာ": "Nauk Hma", "ကြားမှာ": "Kyar Hma",
+            "ဘယ်မှာ ရှိသလဲ": "Beh Hma Shi Tha Leh", "ထဲမှာ ဘာရှိသလဲ": "Htay Hma Bar Shi Tha Leh"
         };
 
         // Helper function for Romanization
@@ -396,6 +419,8 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
                  buttons.forEach(btn => {
                      btn.textContent = t(btn.dataset.burmeseName);
                  });
+            } else if (currentActiveGame === 'prep') {
+                 refreshPrepTexts();
             }
         }
 
@@ -622,7 +647,7 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
         let currentActiveGame = 'habitat';
         let currentGameWins = 0;
         const WINS_NEEDED = 5;
-        const GAME_ORDER = ['habitat', 'memory', 'counting', 'name'];
+        const GAME_ORDER = ['habitat', 'memory', 'counting', 'name', 'prep'];
 
         function showTransitionMessage(callback) {
             const modal = byId('transition-modal');
@@ -735,6 +760,8 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
                 targetEl = rootEl.querySelector('.counting-correct-item');
             } else if (currentActiveGame === 'name') {
                 targetEl = rootEl.querySelector('.name-correct-item');
+            } else if (currentActiveGame === 'prep') {
+                targetEl = rootEl.querySelector('.prep-correct-item');
             }
 
             if (targetEl) {
@@ -1514,6 +1541,233 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
         }
 
         // =================================================================
+        // 7b. PREPOSITION GAME LOGIC
+        // =================================================================
+        // Two kinds of question, both shown as an emoji scene:
+        //   A) "<object> ဘယ်မှာ ရှိသလဲ?" -- pick where it is (on / under / beside ...)
+        //   B) "ပုံးထဲမှာ ဘာရှိသလဲ?"     -- pick what is inside the box
+        // Object and place names that already sit in the main audio sprite are played from it;
+        // the new recordings (the place words, the two question endings, a few new object names)
+        // are single files in public/prepositionAudio/ (see the README.txt there). A recording that
+        // is not added yet simply stays silent -- the game still works, with the words on screen.
+        const PREP_CLIPS = ['on', 'under', 'inside', 'beside', 'front', 'behind', 'between', 'q_where', 'q_what_in', 'ref_box', 'ref_chair'];
+        const PREP_WORD_CLIP = { 'ပုံး': 'ref_box', 'ကုလားထိုင်': 'ref_chair' };
+        const prepClipBuffers = new Map();
+        let prepClipsLoading = null;
+
+        function loadPrepClips() {
+            if (prepClipsLoading || !audioCtx) return prepClipsLoading;
+            const base = import.meta.env.BASE_URL + 'prepositionAudio/';
+            prepClipsLoading = Promise.all(PREP_CLIPS.map(async (key) => {
+                try {
+                    const r = await fetch(base + key + '.mp3');
+                    if (!r.ok) return;
+                    prepClipBuffers.set(key, await audioCtx.decodeAudioData(await r.arrayBuffer()));
+                } catch (e) { /* not added yet: stays silent */ }
+            }));
+            return prepClipsLoading;
+        }
+
+        function playPrepClip(key) {
+            return new Promise((resolve) => {
+                const buffer = prepClipBuffers.get(key);
+                if (!audioCtx || !buffer) return resolve();
+                const source = audioCtx.createBufferSource();
+                source.buffer = buffer;
+                source.connect(audioCtx.destination);
+                activeAudioSources.push(source);
+                source.onended = () => {
+                    activeAudioSources = activeAudioSources.filter(s => s !== source);
+                    if (activeAudioSources.length === 0) isAudioPlaying = false;
+                    resolve();
+                };
+                isAudioPlaying = true;
+                source.start(0);
+            });
+        }
+
+        function playPrepWord(burmese) {
+            return PREP_WORD_CLIP[burmese] ? playPrepClip(PREP_WORD_CLIP[burmese]) : playAudio(burmese);
+        }
+
+        const PREPS = {
+            on:      { clip: 'on',      bm: 'အပေါ်မှာ', en: 'On',          refs: ['box', 'chair', 'car'] },
+            under:   { clip: 'under',   bm: 'အောက်မှာ', en: 'Under',       refs: ['box', 'chair', 'tree'] },
+            inside:  { clip: 'inside',  bm: 'ထဲမှာ',    en: 'In',          refs: ['box'] },
+            beside:  { clip: 'beside',  bm: 'ဘေးမှာ',   en: 'Beside',      refs: ['box', 'chair', 'tree', 'house', 'car'] },
+            front:   { clip: 'front',   bm: 'ရှေ့မှာ',   en: 'In front of', refs: ['house', 'tree', 'car'] },
+            behind:  { clip: 'behind',  bm: 'နောက်မှာ',  en: 'Behind',      refs: ['house', 'car', 'box'] },
+            between: { clip: 'between', bm: 'ကြားမှာ',   en: 'Between',     refs: ['box', 'tree', 'house'] }
+        };
+        const PREP_REFS = {
+            box:   { e: '📦', bm: 'ပုံး' },
+            chair: { e: '🪑', bm: 'ကုလားထိုင်' },
+            tree:  { e: '🌳', bm: 'သစ်ပင်' },
+            house: { e: '🏠', bm: 'အိမ်' },
+            car:   { e: '🚗', bm: 'ကား' }
+        };
+        const PREP_OBJECTS = [
+            { bm: 'ပန်းသီး', e: '🍎' }, { bm: 'လိမ္မော်သီး', e: '🍊' }, { bm: 'ဖရဲသီး', e: '🍉' }, { bm: 'ငှက်ပျောသီး', e: '🍌' }, { bm: 'စပျစ်သီး', e: '🍇' },
+            { bm: 'ဘောလုံး', e: '⚽' }, { bm: 'ကြောင်', e: '🐈' }, { bm: 'ခွေး', e: '🐕' }, { bm: 'ယုန်', e: '🐇' }, { bm: 'ငှက်', e: '🐦' }
+        ];
+
+        const prepSceneEl = byId('prep-scene');
+        const prepFeedbackEl = byId('prep-game-feedback');
+        const prepQuestionEl = byId('prep-question-text');
+        const prepOptionsEl = byId('prep-options');
+        const nextPrepBtn = byId('next-prep-btn');
+        let prepState = null;
+        let prepSeq = 0;
+        let lastPrepKey = null;
+
+        // The picture. Everything is an emoji, placed with plain CSS: on / under stack the two,
+        // beside / between put them in a row, front / behind overlap them (the one drawn later covers
+        // the other), and "in" draws a box with the object sinking into it.
+        function prepSceneHtml(prepKey, ref, obj) {
+            const O = obj.e, R = ref.e;
+            const sz = (rem) => `font-size:${rem}rem;line-height:1;`;
+            if (prepKey === 'on') {
+                return `<div class="flex flex-col items-center"><span style="${sz(4.5)}margin-bottom:-14px;position:relative;z-index:2">${O}</span><span style="${sz(8)}">${R}</span></div>`;
+            }
+            if (prepKey === 'under') {
+                return `<div class="flex flex-col items-center"><span style="${sz(8)}">${R}</span><span style="${sz(4.5)}margin-top:-6px">${O}</span></div>`;
+            }
+            if (prepKey === 'beside') {
+                const objFirst = Math.random() < 0.5;
+                const o = `<span style="${sz(4.5)}">${O}</span>`, r = `<span style="${sz(8)}">${R}</span>`;
+                return `<div class="flex items-end gap-2">${objFirst ? o + r : r + o}</div>`;
+            }
+            if (prepKey === 'between') {
+                const r = `<span style="${sz(7)}">${R}</span>`;
+                return `<div class="flex items-end gap-3">${r}<span style="${sz(4.5)}">${O}</span>${r}</div>`;
+            }
+            if (prepKey === 'front') {
+                return `<div style="position:relative;width:260px;height:215px;">
+                    <span style="${sz(9)}position:absolute;left:50%;top:46px;transform:translateX(-50%);z-index:1">${R}</span>
+                    <span style="${sz(5.5)}position:absolute;left:50%;bottom:0;transform:translateX(-50%);z-index:2;filter:drop-shadow(0 4px 3px rgba(0,0,0,.35))">${O}</span>
+                </div>`;
+            }
+            if (prepKey === 'behind') {
+                return `<div style="position:relative;width:260px;height:215px;">
+                    <span style="${sz(4)}position:absolute;left:64%;bottom:14px;transform:translateX(-50%);z-index:1">${O}</span>
+                    <span style="${sz(9)}position:absolute;left:38%;top:14px;transform:translateX(-50%);z-index:2">${R}</span>
+                </div>`;
+            }
+            // inside: an open box, the object's lower half hidden behind the box front
+            return `<div style="position:relative;width:200px;height:190px;">
+                <span style="${sz(5)}position:absolute;left:50%;top:34px;transform:translateX(-50%);z-index:1">${O}</span>
+                <div style="position:absolute;left:50%;bottom:0;transform:translateX(-50%);width:170px;height:105px;background:#d9a066;border:5px solid #a06a35;border-radius:6px 6px 14px 14px;z-index:2"></div>
+                <div style="position:absolute;left:50%;bottom:92px;transform:translateX(-50%);width:186px;height:16px;background:#c4884a;border:4px solid #a06a35;border-radius:6px;z-index:3"></div>
+            </div>`;
+        }
+
+        function refreshPrepTexts() {
+            if (!prepState) return;
+            if (prepState.type === 'A') prepQuestionEl.textContent = `${t(prepState.obj.bm)} ${t('ဘယ်မှာ ရှိသလဲ')}?`;
+            else prepQuestionEl.textContent = `${t(prepState.ref.bm)}${t('ထဲမှာ ဘာရှိသလဲ')}?`;
+            prepOptionsEl.querySelectorAll('.prep-bm').forEach(el => { el.textContent = t(el.dataset.bm); });
+        }
+
+        function setupPrepGame() {
+            quizState.isAnswering = true;
+            stopHintTimer();
+            const mySeq = ++prepSeq;
+            prepOptionsEl.innerHTML = '';
+            nextPrepBtn.classList.add('hidden');
+            prepFeedbackEl.textContent = 'Listen to the audio.';
+            loadPrepClips();
+
+            const objs = shuffleArray([...PREP_OBJECTS]);
+            const obj = objs[0];
+            const type = Math.random() < 0.3 ? 'B' : 'A';
+            let prepKey, ref, options;
+            if (type === 'B') {
+                prepKey = 'inside';
+                ref = PREP_REFS.box;
+                options = shuffleArray([{ item: obj, correct: true }, { item: objs[1], correct: false }, { item: objs[2], correct: false }]);
+            } else {
+                const keys = Object.keys(PREPS).filter(k => k !== lastPrepKey);
+                prepKey = keys[Math.floor(Math.random() * keys.length)];
+                const refKeys = PREPS[prepKey].refs;
+                ref = PREP_REFS[refKeys[Math.floor(Math.random() * refKeys.length)]];
+                const others = shuffleArray(Object.keys(PREPS).filter(k => k !== prepKey)).slice(0, 2);
+                options = shuffleArray([prepKey, ...others].map(k => ({ key: k, correct: k === prepKey })));
+            }
+            lastPrepKey = prepKey;
+            prepState = { type, prepKey, ref, obj };
+            prepSceneEl.innerHTML = prepSceneHtml(prepKey, ref, obj);
+            prepOptionsEl.className = type === 'B' ? 'grid grid-cols-3 gap-4' : 'grid grid-cols-1 gap-4';
+
+            options.forEach((option, index) => {
+                const button = document.createElement('button');
+                button.id = `prep-option-${index}`;
+                button.classList.add('w-full', 'p-4', 'rounded-xl', 'font-bold', 'text-lg', 'shadow-md', 'transition', 'duration-200', 'default-answer', 'text-center', 'disabled:opacity-70');
+                if (option.correct) button.classList.add('prep-correct-item');
+                button.disabled = true;
+                if (type === 'B') {
+                    button.innerHTML = `<div class="text-6xl mb-1">${option.item.e}</div><div class="prep-bm text-base" data-bm="${option.item.bm}">${t(option.item.bm)}</div>`;
+                } else {
+                    const info = PREPS[option.key];
+                    button.innerHTML = `<span class="prep-bm" data-bm="${info.bm}">${t(info.bm)}</span><span class="block text-sm font-normal text-gray-500">${info.en}</span>`;
+                }
+                button.onclick = () => handlePrepAnswer(option, button);
+                prepOptionsEl.appendChild(button);
+            });
+            refreshPrepTexts();
+            playPrepSequence(mySeq, type, ref, obj, options);
+        }
+
+        async function playPrepSequence(mySeq, type, ref, obj, options) {
+            const alive = () => mySeq === prepSeq && quizState.isAnswering && currentActiveGame === 'prep';
+            await sleep(500);
+            if (!alive()) return;
+            const loading = loadPrepClips();
+            if (loading) await loading;
+            if (!alive()) return;
+            if (type === 'A') { await playPrepWord(obj.bm); if (!alive()) return; await playPrepClip('q_where'); }
+            else { await playPrepWord(ref.bm); if (!alive()) return; await playPrepClip('q_what_in'); }
+            for (let i = 0; i < options.length; i++) {
+                if (!alive()) return;
+                const button = byId(`prep-option-${i}`);
+                if (!button) return;
+                button.classList.add('highlight-answer');
+                if (type === 'A') await playPrepClip(PREPS[options[i].key].clip);
+                else await playAudio(options[i].item.bm);
+                await sleep(200);
+                button.classList.remove('highlight-answer');
+                await sleep(200);
+            }
+            if (!alive()) return;
+            prepFeedbackEl.textContent = 'Choose the correct answer.';
+            prepOptionsEl.querySelectorAll('button').forEach(b => { b.disabled = false; });
+            resetHintTimer();
+        }
+
+        function handlePrepAnswer(clickedOption, buttonEl) {
+            if (!quizState.isAnswering) return;
+            quizState.isAnswering = false;
+            stopHintTimer();
+            const allButtons = prepOptionsEl.querySelectorAll('button');
+            allButtons.forEach(btn => btn.disabled = true);
+            if (clickedOption.correct) {
+                awardCoins(20);
+                prepFeedbackEl.textContent = '✅ Correct!';
+                buttonEl.classList.replace('default-answer', 'correct-answer');
+                if (prepState.type === 'A') playPrepClip(PREPS[prepState.prepKey].clip); else playAudio(prepState.obj.bm);
+                handleWin('prep', 'floating-trophy', setupPrepGame);
+            } else {
+                awardCoins(-1);
+                const answerText = prepState.type === 'A' ? `${PREPS[prepState.prepKey].bm} (${PREPS[prepState.prepKey].en})` : prepState.obj.bm;
+                prepFeedbackEl.textContent = `❌ Wrong! The answer is '${answerText}'.`;
+                buttonEl.classList.replace('default-answer', 'incorrect-answer');
+                const correctBtn = prepOptionsEl.querySelector('.prep-correct-item');
+                if (correctBtn) correctBtn.classList.replace('default-answer', 'correct-answer');
+                updateScoreUI();
+                nextPrepBtn.classList.remove('hidden');
+            }
+        }
+
+        // =================================================================
         // 8. GAME SWITCHING LOGIC
         // =================================================================
         const habitatSection = byId('habitat-quiz-section');
@@ -1524,6 +1778,8 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
         const tabMemory = byId('tab-memory');
         const tabCounting = byId('tab-counting'); 
         const tabName = byId('tab-name');
+        const prepGameSection = byId('prep-game-section');
+        const tabPrep = byId('tab-prep');
 
         function handleTabClick(game) {
             if (!isAudioInitialized) {
@@ -1546,6 +1802,8 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
             countingGameSection.classList.add('hidden');
             nameGameSection.classList.add('hidden'); 
             
+            prepGameSection.classList.add('hidden');
+            tabPrep.classList.remove('active-tab');
             tabHabitat.classList.remove('active-tab');
             tabMemory.classList.remove('active-tab');
             tabCounting.classList.remove('active-tab');
@@ -1567,6 +1825,10 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
                 nameGameSection.classList.remove('hidden');
                 tabName.classList.add('active-tab');
                 setupNameGame();
+            } else if (game === 'prep') {
+                prepGameSection.classList.remove('hidden');
+                tabPrep.classList.add('active-tab');
+                setupPrepGame();
             }
             updateScoreUI(); 
         }
@@ -1581,7 +1843,7 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
             
             byId('restart-memory-btn').addEventListener('click', startMemoryGame);
             
-            const games = ['habitat', 'memory', 'counting', 'name'];
+            const games = ['habitat', 'memory', 'counting', 'name', 'prep'];
             const randomGame = games[Math.floor(Math.random() * games.length)];
             switchGame(randomGame);
         }
@@ -1649,7 +1911,7 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
         // function from a different hybrid-wrapped app mounted alongside
         // this one can't silently overwrite it.
         window.__blgApp = {
-          toggleRoman, handleTabClick, setupQuestion, setupNameGame, changePage,
+          toggleRoman, handleTabClick, setupQuestion, setupNameGame, setupPrepGame, changePage,
           depositCoinsToShrineRoom,
         };
 
