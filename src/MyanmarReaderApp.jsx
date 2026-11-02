@@ -1264,8 +1264,9 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
   const [syllables, setSyllables] = useState([]);
   const [currentKeys, setCurrentKeys] = useState([]);
   const [isPlaying, setIsPlaying] = useState(false);
-  // The red lock on the Next button: while it is on (the normal state) the whole button is red and cannot be tapped.
-  // Holding Next switches the lock off (the button works again) and on again. Independent of the reading way (1 or 2).
+  // The red lock on the Next button = Next held down for good: the whole button is red, and a tap still goes to the next
+  // sentence, reading it aloud by itself first (and paying the coins). Holding Next switches the lock off / on again.
+  // Independent of the reading way (1 or 2).
   const [autoReadMode, setAutoReadMode] = useState(true);
   const [showLessonPicker, setShowLessonPicker] = useState(false);
   // Sheet B: some students don't need the word-by-word read-aloud in the
@@ -2243,7 +2244,7 @@ setTimeout(() => {
       onPointerUp: () => { if (nextHoldTimerRef.current) { clearTimeout(nextHoldTimerRef.current); nextHoldTimerRef.current = null; } },
       onPointerLeave: () => { if (nextHoldTimerRef.current) { clearTimeout(nextHoldTimerRef.current); nextHoldTimerRef.current = null; } },
       onContextMenu: (e) => e.preventDefault(),
-      onClick: () => { if (nextHeldRef.current) { nextHeldRef.current = false; return; } if (autoReadMode) return; handleNextSheetRow(); }, // locked: a tap does nothing
+      onClick: () => { if (nextHeldRef.current) { nextHeldRef.current = false; return; } handleNextSheetRow(); },
   };
 
   const handleNextSheetRow = async () => {
@@ -3955,7 +3956,7 @@ useEffect(() => {
         <button
             {...nextHoldProps}
             disabled={isLocked}
-            className={`flex items-center justify-center gap-2 px-4 text-white h-full transition-all disabled:opacity-50 disabled:cursor-not-allowed ${autoReadMode ? 'bg-red-500 hover:bg-red-500' : 'hover:bg-teal-600 active:bg-teal-700'}`}
+            className={`flex items-center justify-center gap-2 px-4 text-white h-full transition-all disabled:opacity-50 disabled:cursor-not-allowed ${autoReadMode ? 'bg-red-500 hover:bg-red-600 active:bg-red-700' : 'hover:bg-teal-600 active:bg-teal-700'}`}
             title="Next Sentence (hold to turn the red lock off / on)"
         >
 
@@ -3966,7 +3967,7 @@ useEffect(() => {
         {...nextHoldProps}
         disabled={isLocked || currentSheetIndex >= sheetData.length - 1}
         title="Next (hold to turn the red lock off / on)"
-        className={`relative p-3 text-white border-b-4 rounded-r-xl disabled:opacity-40 transition-all h-full ${autoReadMode ? 'bg-red-500 border-red-700' : 'bg-teal-400 hover:bg-teal-500 border-teal-600 active:scale-95'}`}
+        className={`relative p-3 text-white border-b-4 rounded-r-xl disabled:opacity-40 transition-all active:scale-95 h-full ${autoReadMode ? 'bg-red-500 hover:bg-red-600 border-red-700' : 'bg-teal-400 hover:bg-teal-500 border-teal-600'}`}
     ><ChevronRight size={20} />{autoReadMode && <Lock size={13} className="absolute top-0.5 right-0.5 text-white" strokeWidth={3} />}</button>
 </div>
             ) : sheetData.length > 0 && currentSheetIndex >= 0 ? (
@@ -4007,7 +4008,7 @@ useEffect(() => {
                         {...nextHoldProps}
                         disabled={isLocked || currentSheetIndex >= sheetData.length - 1}
                         title="Next (hold to turn the red lock off / on)"
-                        className={`relative p-3 text-white border-b-4 rounded-r-xl disabled:opacity-40 transition-all h-full ${autoReadMode ? 'bg-red-500 border-red-700' : 'bg-teal-400 hover:bg-teal-500 border-teal-600 active:scale-95'}`}
+                        className={`relative p-3 text-white border-b-4 rounded-r-xl disabled:opacity-40 transition-all active:scale-95 h-full ${autoReadMode ? 'bg-red-500 hover:bg-red-600 border-red-700' : 'bg-teal-400 hover:bg-teal-500 border-teal-600'}`}
                     ><ChevronRight size={20} />{autoReadMode && <Lock size={13} className="absolute top-0.5 right-0.5 text-white" strokeWidth={3} />}</button>
                 </div>
             ) : (
