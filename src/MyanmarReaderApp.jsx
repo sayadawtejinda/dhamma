@@ -1265,7 +1265,8 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
   const [currentKeys, setCurrentKeys] = useState([]);
   const [isPlaying, setIsPlaying] = useState(false);
   // The red lock on the Next button = Next held down for good: the whole button is red, and a tap still goes to the next
-  // sentence, reading it aloud by itself first (and paying the coins). Holding Next switches the lock off / on again.
+  // sentence, reading it aloud by itself first. Coins (speaker or Next) are paid only while the lock is on; with it off,
+  // both still work but pay nothing. Holding Next switches the lock off / on again.
   // Independent of the reading way (1 or 2).
   const [autoReadMode, setAutoReadMode] = useState(true);
   const [showLessonPicker, setShowLessonPicker] = useState(false);
@@ -2272,7 +2273,7 @@ setTimeout(() => {
 
       // Submit Score for current
       if (appMode === 'sheet' && currentSheetIndex > 0) {
-          if ((hasReadAloudCurrent || justRead) && !completedSentences.has(currentSheetIndex)) {
+          if (autoReadMode && (hasReadAloudCurrent || justRead) && !completedSentences.has(currentSheetIndex)) {
               if (currentSentenceScore > 0) {
                   spawnFlyingCoins(scorePos.x + 40, scorePos.y + 40, Math.min(14, Math.max(6, Math.round(currentSentenceScore / 12))));
               }
@@ -2328,7 +2329,7 @@ setShowTranslation(true);
 
       // Submit Score if read
       if (appMode === 'sheet' && currentSheetIndex > 0) {
-          if (hasReadAloudCurrent && !completedSentences.has(currentSheetIndex)) {
+          if (autoReadMode && hasReadAloudCurrent && !completedSentences.has(currentSheetIndex)) {
               if (currentSentenceScore > 0) {
                   spawnFlyingCoins(scorePos.x + 40, scorePos.y + 40, Math.min(14, Math.max(6, Math.round(currentSentenceScore / 12))));
               }
@@ -4048,9 +4049,9 @@ useEffect(() => {
             )}
 
             <button
-  onClick={() => { setOnboardingStep(null); playSequence(); payCurrentSentenceNow(); }}
+  onClick={() => { setOnboardingStep(null); playSequence(); if (autoReadMode) payCurrentSentenceNow(); }}
   disabled={isLocked || (!syllables.length && !currentKeys.length)}
-  title="Read aloud (and earn the coins for this sentence)"
+  title="Read aloud (earns the coins while the red lock is on)"
   className="relative flex-shrink-0 flex items-center justify-center gap-2 text-white px-6 py-4 rounded-xl font-bold text-lg shadow-lg transition-all border-b-4 h-[60px] overflow-hidden bg-emerald-500 hover:bg-emerald-600 border-emerald-700 hover:shadow-xl active:scale-95 disabled:bg-emerald-300 disabled:cursor-not-allowed"
 >
   <Volume2 size={24} className="relative z-10" />
