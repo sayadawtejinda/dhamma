@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { petKindOf, petHunger } from './petCatalog';
+import { petKindOf, petHunger, HUNGRY_PHRASES, THANKS_PHRASES, LOVE_PHRASES } from './petCatalog';
 import { feedPet } from './petActions';
 import { playPetSound } from './petSounds';
 import PetSprite, { PET_SPRITE_CSS } from './PetSprite';
@@ -92,10 +92,10 @@ function RoamingPet({ pet, studentUid, layerRef, lane = 0, sizePx, bottomPx, hid
         const act = chooseAct(kind, hunger);
         if (MOVE_ACTS.includes(act)) {
           const mode = act;
-          let target = rand(4, 92);
+          let target = rand(12, 88);
           const from = xRef.current;
           if (Math.abs(target - from) < 14) target = from < 50 ? from + rand(16, 40) : from - rand(16, 40);
-          target = Math.max(4, Math.min(92, target));
+          target = Math.max(12, Math.min(88, target));
           const px = Math.abs(target - from) / 100 * (layerRef.current?.clientWidth || window.innerWidth);
           const speed = kind.speed * (hunger === 2 ? 0.7 : 1) * (mode === 'run' ? 1.5 : 1);
           const dur = Math.max(1, Math.min(14, px / speed));
@@ -110,12 +110,12 @@ function RoamingPet({ pet, studentUid, layerRef, lane = 0, sizePx, bottomPx, hid
           await wait((isNight() ? rand(14, 26) : rand(8, 15)) * 1000);
           idle();
         } else if (act === 'talk') {
-          setSay(pick(kind.says)); setAction('talk');
+          setSay(pick(kind.phrases || kind.says)); setAction('talk');
           await wait(3000);
           if (!busyRef.current) setSay(null);
           idle();
         } else if (act === 'beg') {
-          setSay('🍖 ?'); setAction('beg');
+          setSay(pick(HUNGRY_PHRASES)); setAction('beg');
           await wait(3500);
           if (!busyRef.current) setSay(null);
           idle();
@@ -151,10 +151,10 @@ function RoamingPet({ pet, studentUid, layerRef, lane = 0, sizePx, bottomPx, hid
         setShowFood(false);
         setAction('happy');
         playPetSound(p.kind);
-        if (ok) { setHearts(n => n + 1); setSay('Yummy! 😋'); }
+        if (ok) { setHearts(n => n + 1); setSay(pick(THANKS_PHRASES)); }
         await sleepFor(1800);
       } else {
-        setAction('happy'); setHearts(n => n + 1); setSay(pick(kind.says));
+        setAction('happy'); setHearts(n => n + 1); setSay(pick(LOVE_PHRASES));
         playPetSound(p.kind);
         await sleepFor(2200);
       }

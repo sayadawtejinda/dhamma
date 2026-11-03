@@ -94,6 +94,29 @@ export const PET_KINDS = {
   },
 };
 
+// What a pet says in its speech bubble: short, easy English (15 for every animal -- 9 that every pet says and 6 of its own),
+// plus what it says when hungry, when thanked with food and when cuddled. Nothing here is stored or read: the bubble just
+// picks one at random on the device.
+const CORE_PHRASES = ['Thank you!', "I'm hungry.", 'Love you! ❤️', 'Hello!', 'Good morning!', "Let's play!", "I'm happy! 😊", "I'm sleepy.", 'Good night!'];
+const OWN_PHRASES = {
+  dog: ['Woof! Woof!', 'Throw the ball!', 'Walk with me!', 'I want a bone.', 'Good boy!', 'You are my best friend.'],
+  cat: ['Meow~', 'Pet me, please.', 'I like fish.', 'Purr... purr...', 'I am a good cat.', 'Where is my yarn?'],
+  bird: ['Tweet tweet!', 'I can fly!', 'Look at me!', 'I like seeds.', 'La la la! 🎵', 'The sky is blue.'],
+  squirrel: ['Chit chit!', 'I found an acorn!', 'I like nuts.', 'Climb with me!', 'Look at my tail!', 'I am quick!'],
+  rabbit: ['Hop hop!', 'I like carrots.', 'I can jump high!', 'My ears are long.', 'Soft and fluffy!', 'Hide and seek?'],
+  hamster: ['Squeak squeak!', 'I like seeds.', 'I am so small.', 'My cheeks are full!', 'I can run fast!', 'Run, run, run!'],
+  turtle: ['Slow and steady.', 'No hurry.', 'I like lettuce.', 'My shell is my home.', 'One step at a time.', 'Let me rest.'],
+  fox: ['Yip yip!', 'I am clever.', 'Catch me if you can!', 'My tail is fluffy.', 'I like grapes.', "Let's explore!"],
+  parrot: ['Hello! Hello!', 'Pretty bird!', 'Say it with me!', 'I can talk!', 'I like apples.', 'Squawk!'],
+  penguin: ['Honk honk!', 'I love fish.', 'I like the snow.', 'Waddle waddle!', "Let's slide!", 'Brrr, it is cold.'],
+  panda: ['Munch munch.', 'I love bamboo.', 'I am a big baby.', 'Hug me!', 'Roly-poly!', 'Nom nom nom.'],
+  elephant: ['Toot toot!', 'I am big!', 'I never forget.', 'I like bananas.', 'Splash splash!', 'My ears are big.'],
+};
+Object.keys(PET_KINDS).forEach(k => { PET_KINDS[k].phrases = [...CORE_PHRASES, ...(OWN_PHRASES[k] || [])]; });
+export const HUNGRY_PHRASES = ["I'm hungry! 🍖", 'Food, please!', 'Feed me, please!', "I'm so hungry...", 'Can I have some food?'];
+export const THANKS_PHRASES = ['Thank you! 😋', 'Yummy! Thank you!', 'Thank you so much!', 'Delicious!', 'Thank you, friend!'];
+export const LOVE_PHRASES = ['Love you! ❤️', 'I like you!', 'You are my friend!', 'Hug!', 'You are kind.', 'I am happy! 😊'];
+
 export const petKindOf = (pet) => PET_KINDS[pet?.kind] || PET_KINDS.dog;
 
 // 0 = full, 1 = peckish, 2 = hungry
