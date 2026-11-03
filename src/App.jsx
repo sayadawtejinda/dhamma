@@ -106,6 +106,7 @@ const ShrineRoomApp = lazyLoad(() => import('./ShrineRoomApp'));
 // wallet (not a separate currency of its own). Same standalone-app pattern
 // as BodhiTreeApp.jsx/ShrineRoomApp.jsx.
 const AvatarApp = lazyLoad(() => import('./AvatarApp'));
+const PetApp = lazyLoad(() => import('./PetApp'));
 // Nature World -- a fourth piece of the gamified "Home" idea: a student's
 // own growing plot of land they unlock and plant trees on with coins, same
 // shared wallet as Avatar/Shrine Room. First pass (land + trees only,
@@ -362,6 +363,7 @@ export default function App() {
   const [bodhiTreeRequest, setBodhiTreeRequest] = useState(null);
   const [shrineRoomRequest, setShrineRoomRequest] = useState(null);
   const [avatarRequest, setAvatarRequest] = useState(null);
+  const [petRequest, setPetRequest] = useState(null);
   const [natureWorldRequest, setNatureWorldRequest] = useState(null);
   const [watchAndLearnRequest, setWatchAndLearnRequest] = useState(null);
   const [festivalRequest, setFestivalRequest] = useState(null);
@@ -423,6 +425,15 @@ export default function App() {
   const closeAvatar = () => {
     setActiveApp('tutoring');
     setAvatarRequest(null);
+  };
+
+  const openPets = (request) => {
+    setPetRequest(request || {});
+    setActiveApp('pets');
+  };
+  const closePets = () => {
+    setActiveApp('tutoring');
+    setPetRequest(null);
   };
 
   const openNatureWorld = (request) => {
@@ -659,6 +670,7 @@ export default function App() {
           onOpenShrineRoom={openShrineRoom}
           onOpenAvatar={openAvatar}
           onOpenNatureWorld={openNatureWorld}
+          onOpenPets={openPets}
           onOpenWatchAndLearn={openWatchAndLearn}
           onOpenFestival={openFestival}
           onTrophyEarned={(totalTrophies) => setTrophyCelebration({ totalTrophies })}
@@ -990,6 +1002,12 @@ export default function App() {
         {activeApp === 'avatar' && (
           <div>
             <AvatarApp entryRequest={avatarRequest} onExit={closeAvatar} />
+          </div>
+        )}
+
+        {activeApp === 'pets' && (
+          <div>
+            <PetApp entryRequest={petRequest} onExit={closePets} />
           </div>
         )}
 

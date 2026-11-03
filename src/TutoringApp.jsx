@@ -43,6 +43,7 @@ import {
 import { cachedListen, liveShared, refreshCachedListeners, cachedListenUpdatedAt } from './cachedListen';
 import { appId } from './firebaseConfig';
 import { getHomeBackground } from './homeBackgrounds';
+import HomePets from './PetHome';
 import { auth, db } from './firebase';
 
 // --- Firebase Configuration ---
@@ -7547,7 +7548,7 @@ function SmartStudyProgressBadge({ classId, studentName, smartStudyNames, compac
   return null;
 }
 
-function StudentDashboard({ user, studentProfile, studentUid, announcements, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenMyanmarSpeaking, onOpenConsonantPractice, onOpenBurmeseGame, onOpenNumberLearning, onOpenVowelsLearning, onOpenAnimalSound, onOpenBurmeseLearningGames, onOpenInteractiveQuiz, onOpenMyanmarPoems, onOpenConsonantEndings, onOpenTimeAndCalendar, onOpenMyanmarSpelling, onOpenMyanmarSoundPractice, onOpenReadingMyanmar, onOpenSpeakingMyanmar, onOpenMyanmarPart1And2, onOpenBodhiTree, onOpenShrineRoom, onOpenAvatar, onOpenNatureWorld, onOpenWatchAndLearn, onOpenFestival, onLogout, onNavigate, onTrophyEarned, onTeacherGift }) {
+function StudentDashboard({ user, studentProfile, studentUid, announcements, onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenMyanmarSpeaking, onOpenConsonantPractice, onOpenBurmeseGame, onOpenNumberLearning, onOpenVowelsLearning, onOpenAnimalSound, onOpenBurmeseLearningGames, onOpenInteractiveQuiz, onOpenMyanmarPoems, onOpenConsonantEndings, onOpenTimeAndCalendar, onOpenMyanmarSpelling, onOpenMyanmarSoundPractice, onOpenReadingMyanmar, onOpenSpeakingMyanmar, onOpenMyanmarPart1And2, onOpenBodhiTree, onOpenShrineRoom, onOpenAvatar, onOpenNatureWorld, onOpenPets, onOpenWatchAndLearn, onOpenFestival, onLogout, onNavigate, onTrophyEarned, onTeacherGift }) {
   // Who is looking, for visits to a classmate's home / Shrine Room / Nature World (see AvatarPeek.jsx).
   useEffect(() => {
     window.__dhammaCurrentStudent = studentProfile && !studentProfile.isVisitor && studentUid ? { uid: studentUid, name: studentProfile.name } : null;
@@ -9707,6 +9708,9 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       </div>
       )}
 
+      {/* the student's pets wandering across the bottom of the home page (see PetHome.jsx) */}
+      {!studentProfile?.isVisitor && <HomePets pets={studentProfile?.pets} studentUid={studentUid} />}
+
       {isLessonOverlayOpen && (
         <div className="fixed inset-0 z-[9999] bg-indigo-900/95 flex flex-col justify-center items-center p-6 text-center">
            <h2 className="text-white text-2xl md:text-4xl font-bold mb-8">Lesson opened in another tab.</h2>
@@ -10029,6 +10033,15 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
                       title="My Nature World"
                     >
                       🌿
+                    </button>
+                  )}
+                  {onOpenPets && !studentProfile?.isVisitor && (
+                    <button
+                      onClick={() => onOpenPets({ studentUid, studentName: studentProfile?.name || '' })}
+                      className="flex items-center justify-center text-2xl bg-orange-50 hover:bg-orange-100 w-11 h-11 rounded-lg transition-colors border border-orange-200 flex-shrink-0"
+                      title="My Pets"
+                    >
+                      🐾
                     </button>
                   )}
                   <button
@@ -12082,7 +12095,7 @@ function DeactivatedScreen() {
   );
 }
 
-export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenConsonantPractice, onOpenBurmeseGame, onOpenMyanmarSpeaking, onOpenNumberLearning, onOpenVowelsLearning, onOpenAnimalSound, onOpenBurmeseLearningGames, onOpenInteractiveQuiz, onOpenMyanmarPoems, onOpenConsonantEndings, onOpenTimeAndCalendar, onOpenMyanmarSpelling, onOpenMyanmarSoundPractice, onOpenReadingMyanmar, onOpenSpeakingMyanmar, onOpenMyanmarPart1And2, onOpenBodhiTree, onOpenShrineRoom, onOpenAvatar, onOpenNatureWorld, onOpenWatchAndLearn, onOpenFestival, onTrophyEarned, onTeacherGift }) {
+export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpenMyanmarReader, onOpenDhammaschool, onOpenConsonantPractice, onOpenBurmeseGame, onOpenMyanmarSpeaking, onOpenNumberLearning, onOpenVowelsLearning, onOpenAnimalSound, onOpenBurmeseLearningGames, onOpenInteractiveQuiz, onOpenMyanmarPoems, onOpenConsonantEndings, onOpenTimeAndCalendar, onOpenMyanmarSpelling, onOpenMyanmarSoundPractice, onOpenReadingMyanmar, onOpenSpeakingMyanmar, onOpenMyanmarPart1And2, onOpenBodhiTree, onOpenShrineRoom, onOpenAvatar, onOpenNatureWorld, onOpenPets, onOpenWatchAndLearn, onOpenFestival, onTrophyEarned, onTeacherGift }) {
   const [user, setUser] = useState(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [role, setRole] = useState(null); 
@@ -12514,7 +12527,7 @@ export default function TutoringApp({ onOpenSmartStudy, onOpenAbhidhamma, onOpen
             </div>
           );
         }
-        return <StudentDashboard user={user} studentProfile={studentProfile} studentUid={targetStudentUid} announcements={announcements} onOpenSmartStudy={onOpenSmartStudy} onOpenAbhidhamma={onOpenAbhidhamma} onOpenMyanmarReader={onOpenMyanmarReader} onOpenDhammaschool={onOpenDhammaschool} onOpenMyanmarSpeaking={onOpenMyanmarSpeaking} onOpenConsonantPractice={onOpenConsonantPractice} onOpenBurmeseGame={onOpenBurmeseGame} onOpenNumberLearning={onOpenNumberLearning} onOpenVowelsLearning={onOpenVowelsLearning} onOpenAnimalSound={onOpenAnimalSound} onOpenBurmeseLearningGames={onOpenBurmeseLearningGames} onOpenInteractiveQuiz={onOpenInteractiveQuiz} onOpenMyanmarPoems={onOpenMyanmarPoems} onOpenConsonantEndings={onOpenConsonantEndings} onOpenTimeAndCalendar={onOpenTimeAndCalendar} onOpenMyanmarSpelling={onOpenMyanmarSpelling} onOpenMyanmarSoundPractice={onOpenMyanmarSoundPractice} onOpenReadingMyanmar={onOpenReadingMyanmar} onOpenSpeakingMyanmar={onOpenSpeakingMyanmar} onOpenMyanmarPart1And2={onOpenMyanmarPart1And2} onOpenBodhiTree={onOpenBodhiTree} onOpenShrineRoom={onOpenShrineRoom} onOpenAvatar={onOpenAvatar} onOpenNatureWorld={onOpenNatureWorld} onOpenWatchAndLearn={onOpenWatchAndLearn} onOpenFestival={onOpenFestival} onLogout={handleStudentLogout} onNavigate={setView} onTrophyEarned={onTrophyEarned} onTeacherGift={onTeacherGift} />;
+        return <StudentDashboard user={user} studentProfile={studentProfile} studentUid={targetStudentUid} announcements={announcements} onOpenSmartStudy={onOpenSmartStudy} onOpenAbhidhamma={onOpenAbhidhamma} onOpenMyanmarReader={onOpenMyanmarReader} onOpenDhammaschool={onOpenDhammaschool} onOpenMyanmarSpeaking={onOpenMyanmarSpeaking} onOpenConsonantPractice={onOpenConsonantPractice} onOpenBurmeseGame={onOpenBurmeseGame} onOpenNumberLearning={onOpenNumberLearning} onOpenVowelsLearning={onOpenVowelsLearning} onOpenAnimalSound={onOpenAnimalSound} onOpenBurmeseLearningGames={onOpenBurmeseLearningGames} onOpenInteractiveQuiz={onOpenInteractiveQuiz} onOpenMyanmarPoems={onOpenMyanmarPoems} onOpenConsonantEndings={onOpenConsonantEndings} onOpenTimeAndCalendar={onOpenTimeAndCalendar} onOpenMyanmarSpelling={onOpenMyanmarSpelling} onOpenMyanmarSoundPractice={onOpenMyanmarSoundPractice} onOpenReadingMyanmar={onOpenReadingMyanmar} onOpenSpeakingMyanmar={onOpenSpeakingMyanmar} onOpenMyanmarPart1And2={onOpenMyanmarPart1And2} onOpenBodhiTree={onOpenBodhiTree} onOpenShrineRoom={onOpenShrineRoom} onOpenAvatar={onOpenAvatar} onOpenNatureWorld={onOpenNatureWorld} onOpenPets={onOpenPets} onOpenWatchAndLearn={onOpenWatchAndLearn} onOpenFestival={onOpenFestival} onLogout={handleStudentLogout} onNavigate={setView} onTrophyEarned={onTrophyEarned} onTeacherGift={onTeacherGift} />;
       case 'weekly': 
         return <WeeklySchedule role={role} targetStudentUid={targetStudentUid} />;
       case 'attendance':

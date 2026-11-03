@@ -1178,7 +1178,7 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
             let correctDisplay = quizState.currentQuizType === 'B' ? `${quizState.currentCorrectItem.emoji} ${t(quizState.currentCorrectItem.burmese)}` : `'${t(quizState.currentCorrectItem.habitatKey)}'`;
 
             if (isCorrect) {
-                awardCoins(20);
+                awardCoins(10);
                 gameFeedbackEl.textContent = `✅ Correct!`;
                 playAudio(quizState.currentQuizType === 'A' ? quizState.currentCorrectItem.habitatKey : quizState.currentCorrectItem.burmese);
                 if (correctButton) correctButton.classList.replace('default-answer', 'correct-answer');
@@ -1274,7 +1274,7 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
                 movesDisplay.textContent = `Moves: ${memMoves}`;
 
                 if (memFlippedCards[0].dataset.name === memFlippedCards[1].dataset.name) {
-                    awardCoins(20);
+                    awardCoins(10);
                     memFlippedCards.forEach(c => c.classList.add('matched'));
                     memMatchedPairs++;
                     memFlippedCards = [];
@@ -1404,7 +1404,7 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
                 return;
             }
 
-            awardCoins(20);
+            awardCoins(10);
             quizState.isAnswering = false;
             countingGameState.currentCount++;
             
@@ -1520,7 +1520,7 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
             const correctBurmeseName = nameGameState.correctItem.name.split(' (')[0];
 
             if (clickedOption.isCorrect) {
-                awardCoins(20);
+                awardCoins(10);
                 nameGameFeedbackEl.textContent = `✅ Correct!`;
                 playAudio(correctBurmeseName);
                 buttonEl.classList.replace('default-answer', 'correct-answer');
@@ -1851,7 +1851,7 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
             const info = PREPS[prepState.prepKey];
             if (prepState.type === 'C') prepSceneEl.innerHTML = prepSceneHtml(prepState.prepKey, prepState.ref, prepState.obj);
             if (clickedOption.correct) {
-                awardCoins(20);
+                awardCoins(10);
                 prepFeedbackEl.textContent = '✅ Correct!';
                 buttonEl.classList.replace('default-answer', 'correct-answer');
                 if (prepState.type === 'B') playAudio(prepState.obj.bm); else playPrepClip(info.clip);

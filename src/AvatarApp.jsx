@@ -323,6 +323,10 @@ export default function AvatarApp({ entryRequest, onExit }) {
       return;
     }
     if (coinBalance < option.cost) { showToast('Not enough coins.'); return; }
+    // never spend by accident: every paid item (a house wallpaper costs thousands) is confirmed first
+    if (option.cost > 0 && !window.confirm(`Buy "${option.name}" for ${option.cost.toLocaleString('en-US')} coins?
+
+You have ${coinBalance.toLocaleString('en-US')} coins now and will have ${(coinBalance - option.cost).toLocaleString('en-US')} left.`)) return;
     setCoinBalance(prev => prev - option.cost);
     setOwned(prev => ({ ...prev, [categoryKey]: [...prev[categoryKey], option.id] }));
     setConfig(prev => ({ ...prev, [categoryKey]: option.id }));
