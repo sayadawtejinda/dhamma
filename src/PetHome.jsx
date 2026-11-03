@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { petKindOf, petHunger } from './petCatalog';
 import { feedPet } from './petActions';
+import PetSprite, { PET_SPRITE_CSS } from './PetSprite';
 
 // The student's pets wandering across the bottom of their home page. Nothing here reads Firebase: the pets
 // come from the profile the home page already has, and what a pet is doing (walking, sleeping, begging for
@@ -156,7 +157,6 @@ function RoamingPet({ pet, studentUid, layerRef, lane }) {
   };
 
   const hungry = petHunger(pet) === 2;
-  const faceSign = dir === 1 ? (kind.faces === 'left' ? -1 : 1) : (kind.faces === 'left' ? 1 : -1);
   return (
     <div
       className="absolute"
@@ -172,8 +172,8 @@ function RoamingPet({ pet, studentUid, layerRef, lane }) {
       )}
       {action === 'sleep' && <div className="absolute text-base font-bold text-indigo-700" style={{ left: '70%', bottom: '90%', animation: 'petFloat 2.4s ease-out infinite', pointerEvents: 'none' }}>💤</div>}
       {hearts > 0 && <div key={hearts} className="absolute text-2xl" style={{ left: '50%', bottom: '80%', animation: 'petFloat 1.6s ease-out forwards', pointerEvents: 'none' }}>❤️</div>}
-      {action === 'play' && <span className="absolute text-2xl" style={{ left: faceSign === -1 ? '95%' : '-45%', bottom: 2, animation: 'petToy .7s ease-in-out infinite', pointerEvents: 'none' }}>{kind.toy}</span>}
-      {showFood && <span className="absolute text-2xl" style={{ left: faceSign === -1 ? '85%' : '-30%', bottom: 0, animation: 'petEat .35s ease-in-out infinite', pointerEvents: 'none' }}>{kind.food}</span>}
+      {action === 'play' && <span className="absolute text-2xl" style={{ left: dir === 1 ? '92%' : '-40%', bottom: 2, animation: 'petToy .7s ease-in-out infinite', pointerEvents: 'none' }}>{kind.toy}</span>}
+      {showFood && <span className="absolute text-2xl" style={{ left: dir === 1 ? '85%' : '-25%', bottom: 0, animation: 'petEat .35s ease-in-out infinite', pointerEvents: 'none' }}>{kind.food}</span>}
       <button
         type="button"
         onClick={onTap}
@@ -181,8 +181,8 @@ function RoamingPet({ pet, studentUid, layerRef, lane }) {
         style={{ background: 'none', border: 'none', padding: 0, lineHeight: 1, WebkitTapHighlightColor: 'transparent' }}
         title={`${pet.name} -- tap to ${hungry || petHunger(pet) > 0 ? 'feed' : 'cuddle'}`}
       >
-        <span style={{ display: 'block', transform: `scaleX(${faceSign})`, transition: 'transform .25s' }}>
-          <span className={`pet-a-${action} block`} style={{ fontSize: 'clamp(40px, 9vw, 64px)', lineHeight: 1, transformOrigin: '50% 90%', filter: 'drop-shadow(0 3px 2px rgba(0,0,0,.25))' }}>{kind.emoji}</span>
+        <span style={{ display: 'block', width: 'clamp(84px, 19vw, 140px)', transform: `scaleX(${dir})`, transition: 'transform .25s', filter: 'drop-shadow(0 2px 2px rgba(0,0,0,.18))' }}>
+          <PetSprite kind={pet.kind} state={action} />
         </span>
       </button>
       <div className="text-center text-[10px] sm:text-xs font-bold text-white bg-black/45 rounded-full px-2 mt-0.5 mx-auto w-max max-w-[110px] truncate pointer-events-none">{pet.name}</div>
@@ -196,7 +196,7 @@ export default function HomePets({ pets, studentUid }) {
   if (!studentUid || list.length === 0) return null;
   return (
     <>
-      <style>{PET_CSS}</style>
+      <style>{PET_CSS + PET_SPRITE_CSS}</style>
       <div ref={layerRef} className="fixed inset-x-0 bottom-0 pointer-events-none overflow-hidden" style={{ height: 230, zIndex: 25 }} aria-hidden={false}>
         {list.map((pet, i) => <RoamingPet key={pet.id} pet={pet} studentUid={studentUid} layerRef={layerRef} lane={i % 3} />)}
       </div>

@@ -4,6 +4,7 @@ import { db } from './firebase';
 import { appId } from './firebaseConfig';
 import { PET_KINDS, MAX_PETS, petKindOf, petHunger, formatCoins } from './petCatalog';
 import { buyPet, feedPet, renamePet } from './petActions';
+import PetSprite, { PET_SPRITE_CSS } from './PetSprite';
 
 // Pet Shop + My Pets. Coins come out of the Shrine Room wallet (the same coins every other app deposits into,
 // like the Avatar shop). The pets live on the student's profile doc, so the home page shows them with no extra
@@ -124,7 +125,7 @@ export default function PetApp({ entryRequest, onExit }) {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-sky-100 via-emerald-50 to-amber-50 pb-16">
-      <style>{APP_CSS}</style>
+      <style>{APP_CSS + PET_SPRITE_CSS}</style>
       <div className="sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-emerald-200 shadow-sm">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
           <button onClick={onExit} className="px-3 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 font-bold text-gray-700">← Back</button>
@@ -148,7 +149,7 @@ export default function PetApp({ entryRequest, onExit }) {
                 const affordable = coins >= info.price;
                 return (
                   <div key={id} className="bg-white rounded-2xl shadow-md border border-emerald-100 p-3 flex flex-col items-center text-center">
-                    <span className="pet-app-bounce text-6xl sm:text-7xl" style={{ animationDelay: `${(info.price % 7) * 0.12}s` }}>{info.emoji}</span>
+                    <div className="w-32 sm:w-36"><PetSprite kind={id} state="idle" /></div>
                     <p className="mt-1 font-extrabold text-gray-800">{info.name}</p>
                     <p className="text-xs text-gray-500 min-h-[48px] mt-1">{info.blurb}</p>
                     <div className="mt-2 px-3 py-1 rounded-full bg-amber-100 border border-amber-300 text-amber-800 font-extrabold text-sm">🪙 {formatCoins(info.price)}</div>
@@ -181,7 +182,7 @@ export default function PetApp({ entryRequest, onExit }) {
                 const days = Math.max(0, Math.floor((Date.now() - (pet.boughtAt || Date.now())) / 86400000));
                 return (
                   <div key={pet.id} className="bg-white rounded-2xl shadow-md border border-emerald-100 p-4 flex items-center gap-4">
-                    <span className="pet-app-bounce text-6xl">{info.emoji}</span>
+                    <div className="w-24 sm:w-28 flex-shrink-0"><PetSprite kind={pet.kind} state={level === 2 ? 'beg' : 'idle'} /></div>
                     <div className="flex-1 min-w-0">
                       {renaming?.id === pet.id ? (
                         <div className="flex gap-2">
@@ -222,7 +223,7 @@ export default function PetApp({ entryRequest, onExit }) {
       {adoptInfo && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
           <div className="bg-white rounded-3xl shadow-2xl p-6 w-full max-w-sm text-center">
-            <span className="pet-app-bounce text-7xl">{adoptInfo.emoji}</span>
+            <div className="w-40 mx-auto"><PetSprite kind={adopting} state="happy" /></div>
             <h2 className="mt-2 text-xl font-extrabold text-gray-800">Adopt this {adoptInfo.name.toLowerCase()}?</h2>
             <p className="text-sm text-gray-500 mt-1">Give your new pet a name:</p>
             <input
