@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import { petKindOf, petHunger, HUNGRY_PHRASES, THANKS_PHRASES, LOVE_PHRASES } from './petCatalog';
 import { feedPet } from './petActions';
 import { playPetSound } from './petSounds';
-import { speakPet, unlockPetVoice, petVoiceOn, setPetVoiceOn } from './petVoice';
 import PetSprite, { PET_SPRITE_CSS } from './PetSprite';
 
 // The student's pets wandering across the bottom of their home page. Nothing here reads Firebase: the pets
@@ -64,9 +63,17 @@ function chooseAct(kind, hunger) {
 
 const MOVE_ACTS = ['walk', 'run', 'hop', 'scamper', 'waddle', 'fly'];
 
-function RoamingPet({ pet, studentUid, layerRef, lane = 0, sizePx, bottomPx, hideName, onFed, foodRef }) {
+// where the child last put this pet down (kept on this device only)
+const readSpot = (pet) => { try { return JSON.parse(localStorage.getItem(`petSpot_${pet.id}`) || 'null'); } catch (e) { return null; } };
+
+function RoamingPet({ pet, studentUid, layerRef, lane = 0, sizePx, bottomPx, hideName, onFed, foodRef, persist = false }) {
   const kind = petKindOf(pet);
-  const [x, setX] = useState(() => 8 + Math.random() * 82);
+  const spot = persist ? readSpot(pet) : null;
+  const [x, setX] = useState(() => (spot && typeof spot.x === 'number' ? spot.x : 8 + Math.random() * 82));
+  const [bottom, setBottom] = useState(() => (spot && typeof spot.b === 'number' ? spot.b : (bottomPx != null ? bottomPx : 6 + lane * 38)));
+  const [dragging, setDragging] = useState(false);
+  const dragRef = useRef({ id: null, sx: 0, sy: 0, moved: false, lastX: 0, x: 0, b: 0 });
+  const justDraggedRef = useRef(false);
   const [dir, setDir] = useState(Math.random() < 0.5 ? 1 : -1);
   const [action, setAction] = useState('sit');   // the animation class
   const [moveDur, setMoveDur] = useState(0);
@@ -111,13 +118,13 @@ function RoamingPet({ pet, studentUid, layerRef, lane = 0, sizePx, bottomPx, hid
           await wait((isNight() ? rand(14, 26) : rand(8, 15)) * 1000);
           idle();
         } else if (act === 'talk') {
-          { const line = pick(kind.phrases || kind.says); setSay(line); speakPet(petRef.current.kind, line, { auto: true }); }
+          setSay(pick(kind.phrases || kind.says));
           setAction('talk');
           await wait(3000);
           if (!busyRef.current) setSay(null);
           idle();
         } else if (act === 'beg') {
-          { const line = pick(HUNGRY_PHRASES); setSay(line); speakPet(petRef.current.kind, line, { auto: true }); }
+          setSay(pick(HUNGRY_PHRASES));
           setAction('beg');
           await wait(3500);
           if (!busyRef.current) setSay(null);
@@ -140,7 +147,6 @@ function RoamingPet({ pet, studentUid, layerRef, lane = 0, sizePx, bottomPx, hid
   const onTap = async () => {
     if (busyRef.current) return;
     busyRef.current = true;
-    unlockPetVoice();
     const p = petRef.current;
     try {
       if (studentUid && petHunger(p) > 0) {
@@ -155,13 +161,11 @@ function RoamingPet({ pet, studentUid, layerRef, lane = 0, sizePx, bottomPx, hid
         setShowFood(false);
         setAction('happy');
         playPetSound(p.kind);
-        if (ok) { const line = pick(THANKS_PHRASES); setHearts(n => n + 1); setSay(line); speakPet(p.kind, line, { delayMs: 600 }); }
+        if (ok) { setHearts(n => n + 1); setSay(pick(THANKS_PHRASES)); }
         await sleepFor(1800);
       } else {
-        const line = pick(LOVE_PHRASES);
-        setAction('happy'); setHearts(n => n + 1); setSay(line);
+        setAction('happy'); setHearts(n => n + 1); setSay(pick(LOVE_PHRASES));
         playPetSound(p.kind);
-        speakPet(p.kind, line, { delayMs: 700 });
         await sleepFor(2200);
       }
     } finally {
@@ -169,11 +173,48 @@ function RoamingPet({ pet, studentUid, layerRef, lane = 0, sizePx, bottomPx, hid
     }
   };
 
+  // Carrying a pet: press and drag it anywhere on the screen, let go and it carries on from there. A short tap (no drag) is still a tap.
+  const onPointerDown = (e) => {
+    if (busyRef.current) return;
+    dragRef.current = { id: e.pointerId, sx: e.clientX, sy: e.clientY, moved: false, lastX: e.clientX, x: xRef.current, b: bottom };
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+  };
+  const onPointerMove = (e) => {
+    const d = dragRef.current;
+    if (d.id !== e.pointerId) return;
+    if (!d.moved) {
+      if (Math.hypot(e.clientX - d.sx, e.clientY - d.sy) < 8) return;
+      d.moved = true; busyRef.current = true; setDragging(true); setMoveDur(0); setSay(null); setAction('beg');
+    }
+    const rect = layerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const spriteH = e.currentTarget.offsetHeight || 80;
+    const nx = Math.max(6, Math.min(94, ((e.clientX - rect.left) / rect.width) * 100));
+    const nb = Math.max(0, Math.min(rect.height - spriteH, rect.bottom - e.clientY - spriteH * 0.5));
+    if (Math.abs(e.clientX - d.lastX) > 3) { setDir(e.clientX > d.lastX ? 1 : -1); d.lastX = e.clientX; }
+    d.x = nx; d.b = nb;
+    setX(nx); setBottom(nb);
+  };
+  const endDrag = async (e) => {
+    const d = dragRef.current;
+    if (d.id !== e.pointerId) return;
+    dragRef.current = { ...d, id: null };
+    if (!d.moved) return;
+    justDraggedRef.current = true;
+    setTimeout(() => { justDraggedRef.current = false; }, 80);
+    setDragging(false);
+    if (persist) { try { localStorage.setItem(`petSpot_${pet.id}`, JSON.stringify({ x: d.x, b: d.b })); } catch (err) { /* ignore */ } }
+    setAction('happy'); setHearts(n => n + 1);
+    await sleepFor(1100);
+    busyRef.current = false;
+    setAction('sit');
+  };
+
   const hungry = petHunger(pet) === 2;
   return (
     <div
       className="absolute"
-      style={{ left: `${x}%`, bottom: bottomPx != null ? bottomPx : 6 + lane * 38, transform: 'translateX(-50%)', transition: `left ${moveDur}s linear`, zIndex: 25 + lane }}
+      style={{ left: `${x}%`, bottom, transform: 'translateX(-50%)', transition: dragging ? 'none' : `left ${moveDur}s linear`, zIndex: dragging ? 80 : 25 + lane }}
     >
       {say && (
         <div className="absolute left-1/2 whitespace-nowrap text-xs sm:text-sm font-bold bg-white text-gray-800 border border-gray-300 rounded-2xl px-3 py-1 shadow-md" style={{ bottom: '100%', marginBottom: 4, animation: 'petBubble .25s ease-out both', pointerEvents: 'none' }}>
@@ -189,10 +230,14 @@ function RoamingPet({ pet, studentUid, layerRef, lane = 0, sizePx, bottomPx, hid
       {showFood && <span className="absolute text-2xl" style={{ left: dir === 1 ? '85%' : '-25%', bottom: 0, animation: 'petEat .35s ease-in-out infinite', pointerEvents: 'none' }}>{kind.food}</span>}
       <button
         type="button"
-        onClick={onTap}
-        className="block pointer-events-auto select-none cursor-pointer"
-        style={{ background: 'none', border: 'none', padding: 0, lineHeight: 1, WebkitTapHighlightColor: 'transparent' }}
-        title={`${pet.name} -- tap to ${hungry || petHunger(pet) > 0 ? 'feed' : 'cuddle'}`}
+        onClick={() => { if (justDraggedRef.current) return; onTap(); }}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        className="block pointer-events-auto select-none"
+        style={{ background: 'none', border: 'none', padding: 0, lineHeight: 1, WebkitTapHighlightColor: 'transparent', touchAction: 'none', cursor: dragging ? 'grabbing' : 'grab' }}
+        title={`${pet.name} -- tap to ${hungry || petHunger(pet) > 0 ? 'feed' : 'cuddle'}, or drag to carry it`}
       >
         <span style={{ display: 'block', width: sizePx ? `${sizePx}px` : 'clamp(84px, 19vw, 140px)', transform: `scaleX(${dir})`, transition: 'transform .25s', filter: 'drop-shadow(0 2px 2px rgba(0,0,0,.18))' }}>
           <PetSprite kind={pet.kind} state={action} />
@@ -205,7 +250,6 @@ function RoamingPet({ pet, studentUid, layerRef, lane = 0, sizePx, bottomPx, hid
 
 export default function HomePets({ pets, studentUid, foodStock = 0 }) {
   const layerRef = useRef(null);
-  const [voice, setVoice] = useState(petVoiceOn);
   const foodRef = useRef(foodStock);
   foodRef.current = foodStock;
   const list = Array.isArray(pets) ? pets.slice(0, 6) : [];
@@ -213,15 +257,8 @@ export default function HomePets({ pets, studentUid, foodStock = 0 }) {
   return (
     <>
       <style>{PET_CSS + PET_SPRITE_CSS}</style>
-      <div ref={layerRef} className="fixed inset-x-0 bottom-0 pointer-events-none overflow-hidden" style={{ height: 230, zIndex: 25 }} aria-hidden={false}>
-        {list.map((pet, i) => <RoamingPet key={pet.id} pet={pet} studentUid={studentUid} layerRef={layerRef} lane={i % 3} foodRef={foodRef} />)}
-        <button
-          type="button"
-          onClick={() => { const next = !voice; setPetVoiceOn(next); setVoice(next); }}
-          className="absolute pointer-events-auto rounded-full bg-white/85 hover:bg-white shadow border border-gray-300 text-lg"
-          style={{ right: 8, bottom: 8, width: 40, height: 40, zIndex: 60 }}
-          title={voice ? 'Pets can talk (tap to make them quiet)' : 'Pets are quiet (tap to let them talk)'}
-        >{voice ? '🔊' : '🔇'}</button>
+      <div ref={layerRef} className="fixed inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 25 }}>
+        {list.map((pet, i) => <RoamingPet key={pet.id} pet={pet} studentUid={studentUid} layerRef={layerRef} lane={i % 3} foodRef={foodRef} persist />)}
       </div>
     </>
   );
