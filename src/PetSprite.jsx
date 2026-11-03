@@ -34,8 +34,13 @@ export const PET_SPRITE_CSS = `
 @keyframes psBreath { 0%,100% { transform: translateY(16px) scale(1,.8); } 50% { transform: translateY(15px) scale(1.02,.84); } }
 @keyframes psZ { 0% { transform: translate(0,0) scale(.6); opacity: 0; } 30% { opacity: 1; } 100% { transform: translate(14px,-26px) scale(1.1); opacity: 0; } }
 @keyframes psHappy { 0%,100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-24px) scale(1.06); } }
+@keyframes psEar { 0%,88%,100% { transform: rotate(0deg); } 91% { transform: rotate(-9deg); } 95% { transform: rotate(5deg); } }
+@keyframes psIdle { 0%,100% { transform: scale(1,1); } 50% { transform: scale(1.012,1.022); } }
 @keyframes psFlipper { 0%,100% { transform: rotate(-24deg); } 50% { transform: rotate(14deg); } }
 
+.ps .earg { animation: psEar 6s ease-in-out infinite; }
+.ps-idle .pg { animation: psIdle 3.2s ease-in-out infinite; }
+.ps-sleep .earg, .ps-fly .earg { animation: none; }
 .ps-walk .pg { animation: psBob .5s ease-in-out infinite; }
 .ps-walk .lgA { animation: psLegA .5s ease-in-out infinite; } .ps-walk .lgB { animation: psLegB .5s ease-in-out infinite; }
 .ps-run .pg { animation: psRunBob .3s ease-in-out infinite; }
@@ -101,8 +106,8 @@ function Quad({ kind, uid }) {
   const cy = 130 - q.legH - by + 6;               // body centre height
   const cx = 94;
   const hipY = cy + by - 8;
-  const hx = cx + bx + 6, hy = cy - by * 0.55;     // head centre
-  const hr = kind === 'elephant' ? 24 : kind === 'hamster' ? 22 : 19;
+  const hr = { dog: 23, cat: 22, fox: 21, rabbit: 21, squirrel: 20, hamster: 23, panda: 24, elephant: 26 }[kind] || 21;
+  const hx = cx + bx + 3, hy = cy - by * 0.5;      // head centre
   const grad = `${uid}-b`;
   const legs = [
     { x: cx + bx * 0.55, cls: 'lgB', far: true }, { x: cx - bx * 0.55, cls: 'lgA', far: true },
@@ -161,27 +166,32 @@ function Quad({ kind, uid }) {
           <g key={`n${i}`} className={`lg ${l.cls}`} style={{ transformOrigin: `${l.x}px ${hipY}px` }}>
             <rect x={l.x - q.legW / 2} y={hipY} width={q.legW} height={130 - hipY} rx={q.legW / 2} fill={q.leg} />
             <ellipse cx={l.x + 1.5} cy="128.5" rx={q.legW * 0.62} ry="4.2" fill={q.paw} />
+            <path d={`M${l.x + 1} 126.5 v3.4 M${l.x + 5} 126.5 v3.4`} stroke="#000" strokeWidth=".9" opacity=".22" strokeLinecap="round" />
           </g>
         ))}
         {/* head */}
         <g className="hd">
           {q.ear === 'big' && <ellipse cx={hx - 10} cy={hy + 2} rx="22" ry="25" fill={q.earC} />}
           {q.ear === 'big' && <ellipse cx={hx - 10} cy={hy + 2} rx="14" ry="18" fill={q.inner} opacity=".7" />}
-          <Ear />
+          <g className="earg" style={{ transformOrigin: `${hx - hr * 0.4}px ${hy - hr * 0.5}px` }}><Ear /></g>
           <ellipse cx={hx - 10} cy={hy + 14} rx="18" ry="20" fill={q.body} />
           <circle cx={hx} cy={hy} r={hr} fill={q.body} />
           {q.puffy && <ellipse cx={hx + 2} cy={hy + 9} rx={hr * 0.9} ry={hr * 0.62} fill={q.belly} />}
           {q.cheekW && <ellipse cx={hx + 2} cy={hy + 11} rx={hr * 0.78} ry="9" fill={q.cheekW} />}
-          {q.eyePatch && <ellipse cx={hx + 6} cy={hy - 2} rx="7" ry="9" fill={q.eyePatch} transform={`rotate(-20 ${hx + 6} ${hy - 2})`} />}
-          {q.snout > 0 && <ellipse cx={hx + hr * 0.7} cy={hy + 7} rx={q.snout} ry={kind === 'fox' ? 7 : 9} fill={kind === 'dog' ? '#f6e3c2' : q.body} />}
-          {q.snout > 0 && <circle cx={hx + hr * 0.7 + q.snout - 3} cy={hy + 3.5} r="3.4" fill={q.nose} />}
+          {q.eyePatch && <ellipse cx={hx + hr * 0.34} cy={hy + hr * 0.02} rx="8" ry="10" fill={q.eyePatch} transform={`rotate(-20 ${hx + hr * 0.34} ${hy + hr * 0.02})`} />}
+          {q.snout > 0 && <ellipse cx={hx + hr * 0.7} cy={hy + hr * 0.38} rx={q.snout} ry={kind === 'fox' ? 7 : 9} fill={kind === 'dog' ? '#f6e3c2' : q.body} />}
+          {q.snout > 0 && <circle cx={hx + hr * 0.7 + q.snout - 3} cy={hy + hr * 0.2} r="3.6" fill={q.nose} />}
+          {q.snout > 0 && <circle cx={hx + hr * 0.7 + q.snout - 4.2} cy={hy + hr * 0.14} r="1.1" fill="#fff" opacity=".7" />}
           {q.snout > 0 && <>
-            <path className="mouth-shut" d={`M${hx + hr * 0.7 + q.snout - 8} ${hy + 10} q4 3 9 0`} stroke="#3b2a22" strokeWidth="1.6" fill="none" strokeLinecap="round" />
-            <g className="mouth-open"><ellipse cx={hx + hr * 0.7 + 2} cy={hy + 12} rx="6" ry="5" fill="#5a1f2a" />{q.tongue && <ellipse cx={hx + hr * 0.7 + 3} cy={hy + 14.5} rx="3.6" ry="3" fill="#f0788d" />}</g>
+            <path className="mouth-shut" d={kind === 'cat'
+              ? `M${hx + hr * 0.7 + q.snout - 9} ${hy + hr * 0.5} q2.5 4 5 0 q2.5 4 5 0`
+              : `M${hx + hr * 0.7 + q.snout - 8} ${hy + hr * 0.52} q4 3.4 9 0`} stroke="#3b2a22" strokeWidth="1.6" fill="none" strokeLinecap="round" />
+            <g className="mouth-open"><ellipse cx={hx + hr * 0.7 + 2} cy={hy + hr * 0.6} rx="6.5" ry="5.5" fill="#5a1f2a" />{q.tongue && <ellipse cx={hx + hr * 0.7 + 3} cy={hy + hr * 0.6 + 3} rx="3.8" ry="3.2" fill="#f0788d" />}</g>
           </>}
-          <Eye x={hx + 6} y={hy - 3} r={kind === 'hamster' ? 3.8 : 3.4} />
-          <ellipse className="blush" cx={hx + 1} cy={hy + 8} rx="4.5" ry="3" fill="#ff8aa1" />
-          {q.whisk && [-3, 3].map((d, i) => <path key={i} d={`M${hx + hr * 0.7 + 2} ${hy + 8} q16 ${d - 2} 26 ${d * 3}`} stroke="#555" strokeWidth="1" fill="none" opacity=".6" />)}
+          <Eye x={hx + hr * 0.34} y={hy + hr * 0.02} r={hr * 0.16} />
+          <ellipse className="blush" cx={hx + hr * 0.02} cy={hy + hr * 0.42} rx="5" ry="3.2" fill="#ff8aa1" />
+          {kind === 'dog' && <ellipse cx={hx + hr * 0.3} cy={hy - hr * 0.3} rx="2.6" ry="1.6" fill="#8d5a2b" opacity=".8" />}
+          {q.whisk && [-3, 3].map((d, i) => <path key={i} d={`M${hx + hr * 0.7 + 2} ${hy + hr * 0.4} q16 ${d - 2} 26 ${d * 3}`} stroke="#555" strokeWidth="1" fill="none" opacity=".6" />)}
           {q.tusk && <path d={`M${hx + 14} ${hy + 14} q10 6 8 16`} stroke="#fff7e6" strokeWidth="4" fill="none" strokeLinecap="round" />}
           {q.trunk && (
             <g className="trunk">
@@ -238,14 +248,14 @@ function Bird({ kind, uid }) {
         </g>
         {/* head */}
         <g className="hd" style={{ transformOrigin: '124px 74px' }}>
-          <circle cx="128" cy="62" r="19" fill={b.head} />
+          <circle cx="128" cy="62" r="22" fill={b.head} />
           {b.cap && <path d="M110 58 C112 40 134 38 144 52 C132 48 120 50 110 58 Z" fill={b.cap} />}
           {b.crest && <path d="M118 46 q4 -14 14 -12 q-6 4 -4 12 z" fill={b.wing} />}
           <ellipse cx="132" cy="68" rx="14" ry="9" fill={b.belly} opacity=".85" />
           {b.long
             ? (<><path className="mouth-shut" d="M144 56 C162 54 164 74 150 74 C150 68 148 62 144 62 Z" fill={b.beak} /><path className="mouth-open" d="M144 54 C164 50 168 62 152 66 L144 62 Z M146 66 C158 66 160 76 150 76 Z" fill={b.beak} /></>)
             : (<><path className="mouth-shut" d="M145 58 L162 63 L145 68 Z" fill={b.beak} /><g className="mouth-open"><path d="M145 56 L162 59 L146 63 Z" fill={b.beak} /><path d="M146 65 L160 69 L145 70 Z" fill="#e89a1a" /></g></>)}
-          <Eye x={134} y={58} r={3.6} />
+          <Eye x={135} y={59} r={3.9} />
           <ellipse className="blush" cx="128" cy="68" rx="4" ry="2.6" fill="#ff8aa1" />
           <Zzz x={118} y={36} />
         </g>
@@ -290,7 +300,7 @@ function Turtle({ uid }) {
       <defs><radialGradient id={grad} cx="40%" cy="20%" r="85%"><stop offset="0%" stopColor="#fff" stopOpacity=".4" /><stop offset="100%" stopColor="#000" stopOpacity=".2" /></radialGradient></defs>
       <ellipse cx="100" cy="131" rx="56" ry="5" fill="#000" opacity=".16" />
       <g className="pg" filter={`url(#${uid}o)`}>
-        <g className="tail"><path d="M52 112 L36 118 L52 120 Z" fill="#8fbf6a" style={{ transformOrigin: '52px 114px' }} /></g>
+        <g className="tail"><path d="M50 106 L33 111 L50 114 Z" fill="#8fbf6a" style={{ transformOrigin: '52px 114px' }} /></g>
         {[{ x: 120, c: 'lgA' }, { x: 74, c: 'lgB' }].map((l, i) => (
           <g key={i} className={`lg ${l.c}`} style={{ transformOrigin: `${l.x}px 112px` }}>
             <rect x={l.x - 8} y="108" width="16" height="22" rx="8" fill="#8fbf6a" />
