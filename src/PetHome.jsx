@@ -63,7 +63,7 @@ function chooseAct(kind, hunger) {
 
 const MOVE_ACTS = ['walk', 'run', 'hop', 'scamper', 'waddle', 'fly'];
 
-function RoamingPet({ pet, studentUid, layerRef, lane }) {
+function RoamingPet({ pet, studentUid, layerRef, lane = 0, sizePx, bottomPx, hideName, onFed }) {
   const kind = petKindOf(pet);
   const [x, setX] = useState(() => 8 + Math.random() * 82);
   const [dir, setDir] = useState(Math.random() < 0.5 ? 1 : -1);
@@ -96,7 +96,7 @@ function RoamingPet({ pet, studentUid, layerRef, lane }) {
           const from = xRef.current;
           if (Math.abs(target - from) < 14) target = from < 50 ? from + rand(16, 40) : from - rand(16, 40);
           target = Math.max(4, Math.min(92, target));
-          const px = Math.abs(target - from) / 100 * window.innerWidth;
+          const px = Math.abs(target - from) / 100 * (layerRef.current?.clientWidth || window.innerWidth);
           const speed = kind.speed * (hunger === 2 ? 0.7 : 1) * (mode === 'run' ? 1.5 : 1);
           const dur = Math.max(1, Math.min(14, px / speed));
           setDir(target > from ? 1 : -1);
@@ -139,10 +139,11 @@ function RoamingPet({ pet, studentUid, layerRef, lane }) {
     busyRef.current = true;
     const p = petRef.current;
     try {
-      if (petHunger(p) > 0) {
+      if (studentUid && petHunger(p) > 0) {
         setSay(null); setAction('eat'); setShowFood(true);
         let ok = false;
         try { ok = await feedPet({ studentUid, petId: p.id }); } catch (e) { console.error('Feeding failed:', e); }
+        if (ok && onFed) onFed(p.id);
         await sleepFor(2600);
         setShowFood(false);
         setAction('happy');
@@ -163,7 +164,7 @@ function RoamingPet({ pet, studentUid, layerRef, lane }) {
   return (
     <div
       className="absolute"
-      style={{ left: `${x}%`, bottom: 6 + lane * 38, transform: 'translateX(-50%)', transition: `left ${moveDur}s linear`, zIndex: 25 + lane }}
+      style={{ left: `${x}%`, bottom: bottomPx != null ? bottomPx : 6 + lane * 38, transform: 'translateX(-50%)', transition: `left ${moveDur}s linear`, zIndex: 25 + lane }}
     >
       {say && (
         <div className="absolute left-1/2 whitespace-nowrap text-xs sm:text-sm font-bold bg-white text-gray-800 border border-gray-300 rounded-2xl px-3 py-1 shadow-md" style={{ bottom: '100%', marginBottom: 4, animation: 'petBubble .25s ease-out both', pointerEvents: 'none' }}>
@@ -184,11 +185,11 @@ function RoamingPet({ pet, studentUid, layerRef, lane }) {
         style={{ background: 'none', border: 'none', padding: 0, lineHeight: 1, WebkitTapHighlightColor: 'transparent' }}
         title={`${pet.name} -- tap to ${hungry || petHunger(pet) > 0 ? 'feed' : 'cuddle'}`}
       >
-        <span style={{ display: 'block', width: 'clamp(84px, 19vw, 140px)', transform: `scaleX(${dir})`, transition: 'transform .25s', filter: 'drop-shadow(0 2px 2px rgba(0,0,0,.18))' }}>
+        <span style={{ display: 'block', width: sizePx ? `${sizePx}px` : 'clamp(84px, 19vw, 140px)', transform: `scaleX(${dir})`, transition: 'transform .25s', filter: 'drop-shadow(0 2px 2px rgba(0,0,0,.18))' }}>
           <PetSprite kind={pet.kind} state={action} />
         </span>
       </button>
-      <div className="text-center text-[10px] sm:text-xs font-bold text-white bg-black/45 rounded-full px-2 mt-0.5 mx-auto w-max max-w-[110px] truncate pointer-events-none">{pet.name}</div>
+      {!hideName && <div className="text-center text-[10px] sm:text-xs font-bold text-white bg-black/45 rounded-full px-2 mt-0.5 mx-auto w-max max-w-[110px] truncate pointer-events-none">{pet.name}</div>}
     </div>
   );
 }
@@ -202,6 +203,20 @@ export default function HomePets({ pets, studentUid }) {
       <style>{PET_CSS + PET_SPRITE_CSS}</style>
       <div ref={layerRef} className="fixed inset-x-0 bottom-0 pointer-events-none overflow-hidden" style={{ height: 230, zIndex: 25 }} aria-hidden={false}>
         {list.map((pet, i) => <RoamingPet key={pet.id} pet={pet} studentUid={studentUid} layerRef={layerRef} lane={i % 3} />)}
+      </div>
+    </>
+  );
+}
+
+// A small grassy yard with ONE pet wandering in it -- used by the Pet app (shop: a sample pet to watch and tap; My Pets: your own pet,
+// which can be fed here too). Same behaviour as on the home page.
+export function PetYard({ pet, studentUid, height = 130, sizePx = 92, onFed, hideName = false }) {
+  const layerRef = useRef(null);
+  return (
+    <>
+      <style>{PET_CSS + PET_SPRITE_CSS}</style>
+      <div ref={layerRef} className="relative w-full overflow-hidden rounded-xl" style={{ height, background: 'linear-gradient(#cfeaff 0%, #e6f6ff 58%, #b7e08c 58%, #9fd078 100%)' }}>
+        <RoamingPet pet={pet} studentUid={studentUid} layerRef={layerRef} sizePx={sizePx} bottomPx={hideName ? 8 : 16} hideName={hideName} onFed={onFed} />
       </div>
     </>
   );

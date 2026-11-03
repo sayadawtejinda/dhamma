@@ -90,9 +90,9 @@ const Zzz = ({ x, y }) => <text className="zzz" x={x} y={y} fontSize="18" fontWe
 // ---------------------------------------------------------------- four-legged animals
 // Each animal is a set of colours and shape choices on one common body plan.
 const QUADS = {
-  dog:      { body: '#dca25e', belly: '#f6e3c2', leg: '#dca25e', paw: '#c98b46', ear: 'floppy', earC: '#8d5a2b', tail: 'curl', tailC: '#dca25e', snout: 15, nose: '#2a1f1a', patch: '#8d5a2b', tongue: true, bx: 44, by: 24, legH: 30, legW: 10 },
-  cat:      { body: '#f0a04b', belly: '#fff1dc', leg: '#f0a04b', paw: '#fff1dc', ear: 'pointy', earC: '#f0a04b', inner: '#f8b6b6', tail: 'long', tailC: '#f0a04b', snout: 8, nose: '#e57b8b', stripes: '#c7691f', whisk: true, bx: 42, by: 22, legH: 30, legW: 9 },
-  fox:      { body: '#ee8a3a', belly: '#fff4e4', leg: '#4a3a33', paw: '#3b2d27', ear: 'pointy', earC: '#ee8a3a', inner: '#3b2d27', tail: 'bush', tailC: '#ee8a3a', tip: '#fff', snout: 17, nose: '#1f1a18', cheekW: '#fff4e4', bx: 44, by: 22, legH: 30, legW: 8 },
+  dog:      { body: '#dca25e', belly: '#f6e3c2', leg: '#dca25e', paw: '#fbeed6', ear: 'floppy', earC: '#8d5a2b', tail: 'curl', tailC: '#dca25e', snout: 15, nose: '#2a1f1a', patch: '#8d5a2b', tongue: true, bx: 39, by: 25, legH: 25, legW: 11 },
+  cat:      { body: '#f0a04b', belly: '#fff1dc', leg: '#f0a04b', paw: '#fff1dc', ear: 'pointy', earC: '#f0a04b', inner: '#f8b6b6', tail: 'long', tailC: '#f0a04b', snout: 8, nose: '#e57b8b', stripes: '#c7691f', whisk: true, bx: 37, by: 22, legH: 26, legW: 9 },
+  fox:      { body: '#ee8a3a', belly: '#fff4e4', leg: '#4a3a33', paw: '#3b2d27', ear: 'pointy', earC: '#ee8a3a', inner: '#3b2d27', tail: 'bush', tailC: '#ee8a3a', tip: '#fff', snout: 17, nose: '#1f1a18', cheekW: '#fff4e4', bx: 39, by: 22, legH: 27, legW: 8 },
   rabbit:   { body: '#f4efe8', belly: '#ffffff', leg: '#f4efe8', paw: '#e6ded3', ear: 'long', earC: '#f4efe8', inner: '#f7b7c2', tail: 'pom', tailC: '#ffffff', snout: 7, nose: '#f08aa0', haunch: true, bx: 38, by: 27, legH: 26, legW: 11, whisk: true },
   squirrel: { body: '#b87a45', belly: '#f2dcb8', leg: '#b87a45', paw: '#8a5a2c', ear: 'tuft', earC: '#b87a45', tail: 'squirrel', tailC: '#b87a45', tailIn: '#e2b681', snout: 8, nose: '#2a1f1a', acorn: true, bx: 36, by: 22, legH: 24, legW: 9 },
   hamster:  { body: '#f0c488', belly: '#fff6e8', leg: '#f0c488', paw: '#f8d9b0', ear: 'round', earC: '#f0c488', inner: '#f7b7c2', tail: 'stub', tailC: '#f0c488', snout: 5, nose: '#e57b8b', patch: '#d79e5e', puffy: true, bx: 40, by: 31, legH: 14, legW: 11, whisk: true },
@@ -113,6 +113,13 @@ function Quad({ kind, uid }) {
     { x: cx + bx * 0.55, cls: 'lgB', far: true }, { x: cx - bx * 0.55, cls: 'lgA', far: true },
     { x: cx + bx * 0.5, cls: 'lgA', far: false }, { x: cx - bx * 0.55, cls: 'lgB', far: false },
   ];
+  const bean = (fill) => (
+    <g fill={fill}>
+      <ellipse cx={cx - bx * 0.36} cy={cy + 3} rx={bx * 0.68} ry={by * 1.08} />
+      <ellipse cx={cx + bx * 0.4} cy={cy - 1} rx={bx * 0.6} ry={by * 1.02} />
+      <ellipse cx={cx} cy={cy - 2} rx={bx * 0.72} ry={by * 0.96} />
+    </g>
+  );
   const Ear = () => {
     const ex = hx - hr * 0.45, ey = hy - hr * 0.7;
     if (q.ear === 'floppy') return <ellipse cx={hx - 8} cy={hy - 4} rx="8" ry="15" fill={q.earC} transform={`rotate(24 ${hx - 8} ${hy - 4})`} />;
@@ -149,23 +156,23 @@ function Quad({ kind, uid }) {
         {legs.filter(l => l.far).map((l, i) => (
           <g key={`f${i}`} className={`lg ${l.cls}`} style={{ transformOrigin: `${l.x}px ${hipY}px` }} opacity=".78">
             <rect x={l.x - q.legW / 2} y={hipY} width={q.legW} height={130 - hipY} rx={q.legW / 2} fill={q.leg} />
-            <ellipse cx={l.x + 1.5} cy="128.5" rx={q.legW * 0.62} ry="4.2" fill={q.paw} />
+            <ellipse cx={l.x + 1.5} cy="128.2" rx={q.legW * 0.8} ry="4.8" fill={q.paw} />
           </g>
         ))}
         {/* body */}
-        <ellipse cx={cx} cy={cy} rx={bx} ry={by} fill={q.body} />
+        {bean(q.body)}
         {q.haunch && <ellipse cx={cx - bx * 0.45} cy={cy + 6} rx="22" ry="22" fill={q.body} />}
         {q.band && <ellipse cx={cx + bx * 0.45} cy={cy} rx="12" ry={by - 1} fill={q.band} />}
         {q.patch && <ellipse cx={cx - 6} cy={cy - by * 0.4} rx="20" ry="10" fill={q.patch} opacity=".85" />}
         {q.stripes && [-16, -2, 12].map((dx, i) => <path key={i} d={`M${cx + dx} ${cy - by + 2} q3 8 0 14`} stroke={q.stripes} strokeWidth="4" strokeLinecap="round" fill="none" />)}
         <ellipse cx={cx + 4} cy={cy + by * 0.52} rx={bx * 0.74} ry={by * 0.42} fill={q.belly} opacity=".9" />
-        <ellipse cx={cx} cy={cy} rx={bx} ry={by} fill={`url(#${grad})`} />
+        <ellipse cx={cx} cy={cy} rx={bx * 1.04} ry={by * 1.04} fill={`url(#${grad})`} />
         {q.acorn && <g className="acorn"><ellipse cx={hx + 6} cy={hy + 26} rx="6" ry="7.5" fill="#8a5a2c" /><path d={`M${hx - 1} ${hy + 22} q7 -8 14 0 z`} fill="#5b3a1d" /></g>}
         {/* near legs */}
         {legs.filter(l => !l.far).map((l, i) => (
           <g key={`n${i}`} className={`lg ${l.cls}`} style={{ transformOrigin: `${l.x}px ${hipY}px` }}>
             <rect x={l.x - q.legW / 2} y={hipY} width={q.legW} height={130 - hipY} rx={q.legW / 2} fill={q.leg} />
-            <ellipse cx={l.x + 1.5} cy="128.5" rx={q.legW * 0.62} ry="4.2" fill={q.paw} />
+            <ellipse cx={l.x + 1.5} cy="128.2" rx={q.legW * 0.8} ry="4.8" fill={q.paw} />
             <path d={`M${l.x + 1} 126.5 v3.4 M${l.x + 5} 126.5 v3.4`} stroke="#000" strokeWidth=".9" opacity=".22" strokeLinecap="round" />
           </g>
         ))}
