@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { petKindOf, petHunger, HUNGRY_PHRASES, THANKS_PHRASES, LOVE_PHRASES } from './petCatalog';
 import { feedPet } from './petActions';
 import { playPetSound } from './petSounds';
+import { speakPet, unlockPetVoice, petVoiceOn, setPetVoiceOn } from './petVoice';
 import PetSprite, { PET_SPRITE_CSS } from './PetSprite';
 
 // The student's pets wandering across the bottom of their home page. Nothing here reads Firebase: the pets
@@ -110,12 +111,14 @@ function RoamingPet({ pet, studentUid, layerRef, lane = 0, sizePx, bottomPx, hid
           await wait((isNight() ? rand(14, 26) : rand(8, 15)) * 1000);
           idle();
         } else if (act === 'talk') {
-          setSay(pick(kind.phrases || kind.says)); setAction('talk');
+          { const line = pick(kind.phrases || kind.says); setSay(line); speakPet(petRef.current.kind, line, { auto: true }); }
+          setAction('talk');
           await wait(3000);
           if (!busyRef.current) setSay(null);
           idle();
         } else if (act === 'beg') {
-          setSay(pick(HUNGRY_PHRASES)); setAction('beg');
+          { const line = pick(HUNGRY_PHRASES); setSay(line); speakPet(petRef.current.kind, line, { auto: true }); }
+          setAction('beg');
           await wait(3500);
           if (!busyRef.current) setSay(null);
           idle();
@@ -137,6 +140,7 @@ function RoamingPet({ pet, studentUid, layerRef, lane = 0, sizePx, bottomPx, hid
   const onTap = async () => {
     if (busyRef.current) return;
     busyRef.current = true;
+    unlockPetVoice();
     const p = petRef.current;
     try {
       if (studentUid && petHunger(p) > 0) {
@@ -151,11 +155,13 @@ function RoamingPet({ pet, studentUid, layerRef, lane = 0, sizePx, bottomPx, hid
         setShowFood(false);
         setAction('happy');
         playPetSound(p.kind);
-        if (ok) { setHearts(n => n + 1); setSay(pick(THANKS_PHRASES)); }
+        if (ok) { const line = pick(THANKS_PHRASES); setHearts(n => n + 1); setSay(line); speakPet(p.kind, line, { delayMs: 600 }); }
         await sleepFor(1800);
       } else {
-        setAction('happy'); setHearts(n => n + 1); setSay(pick(LOVE_PHRASES));
+        const line = pick(LOVE_PHRASES);
+        setAction('happy'); setHearts(n => n + 1); setSay(line);
         playPetSound(p.kind);
+        speakPet(p.kind, line, { delayMs: 700 });
         await sleepFor(2200);
       }
     } finally {
@@ -199,6 +205,7 @@ function RoamingPet({ pet, studentUid, layerRef, lane = 0, sizePx, bottomPx, hid
 
 export default function HomePets({ pets, studentUid, foodStock = 0 }) {
   const layerRef = useRef(null);
+  const [voice, setVoice] = useState(petVoiceOn);
   const foodRef = useRef(foodStock);
   foodRef.current = foodStock;
   const list = Array.isArray(pets) ? pets.slice(0, 6) : [];
@@ -208,6 +215,13 @@ export default function HomePets({ pets, studentUid, foodStock = 0 }) {
       <style>{PET_CSS + PET_SPRITE_CSS}</style>
       <div ref={layerRef} className="fixed inset-x-0 bottom-0 pointer-events-none overflow-hidden" style={{ height: 230, zIndex: 25 }} aria-hidden={false}>
         {list.map((pet, i) => <RoamingPet key={pet.id} pet={pet} studentUid={studentUid} layerRef={layerRef} lane={i % 3} foodRef={foodRef} />)}
+        <button
+          type="button"
+          onClick={() => { const next = !voice; setPetVoiceOn(next); setVoice(next); }}
+          className="absolute pointer-events-auto rounded-full bg-white/85 hover:bg-white shadow border border-gray-300 text-lg"
+          style={{ right: 8, bottom: 8, width: 40, height: 40, zIndex: 60 }}
+          title={voice ? 'Pets can talk (tap to make them quiet)' : 'Pets are quiet (tap to let them talk)'}
+        >{voice ? '🔊' : '🔇'}</button>
       </div>
     </>
   );
