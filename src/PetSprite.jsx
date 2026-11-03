@@ -94,7 +94,6 @@ const QUADS = {
   cat:      { body: '#f0a04b', belly: '#fff1dc', leg: '#f0a04b', paw: '#fff1dc', ear: 'pointy', earC: '#f0a04b', inner: '#f8b6b6', tail: 'long', tailC: '#f0a04b', snout: 8, nose: '#e57b8b', stripes: '#c7691f', whisk: true, bx: 37, by: 22, legH: 26, legW: 9 },
   fox:      { body: '#ee8a3a', belly: '#fff4e4', leg: '#4a3a33', paw: '#3b2d27', ear: 'pointy', earC: '#ee8a3a', inner: '#3b2d27', tail: 'bush', tailC: '#ee8a3a', tip: '#fff', snout: 17, nose: '#1f1a18', cheekW: '#fff4e4', bx: 39, by: 22, legH: 27, legW: 8 },
   rabbit:   { body: '#f4efe8', belly: '#ffffff', leg: '#f4efe8', paw: '#e6ded3', ear: 'long', earC: '#f4efe8', inner: '#f7b7c2', tail: 'pom', tailC: '#ffffff', snout: 7, nose: '#f08aa0', haunch: true, bx: 38, by: 27, legH: 26, legW: 11, whisk: true },
-  squirrel: { body: '#b87a45', belly: '#f2dcb8', leg: '#b87a45', paw: '#8a5a2c', ear: 'tuft', earC: '#b87a45', tail: 'squirrel', tailC: '#b87a45', tailIn: '#e2b681', snout: 8, nose: '#2a1f1a', acorn: true, bx: 36, by: 22, legH: 24, legW: 9 },
   hamster:  { body: '#f0c488', belly: '#fff6e8', leg: '#f0c488', paw: '#f8d9b0', ear: 'round', earC: '#f0c488', inner: '#f7b7c2', tail: 'stub', tailC: '#f0c488', snout: 5, nose: '#e57b8b', patch: '#d79e5e', puffy: true, bx: 40, by: 31, legH: 14, legW: 11, whisk: true },
   panda:    { body: '#ffffff', belly: '#eeeef1', leg: '#25252a', paw: '#25252a', ear: 'round', earC: '#25252a', tail: 'stub', tailC: '#ffffff', snout: 8, nose: '#25252a', eyePatch: '#25252a', band: '#25252a', bx: 42, by: 33, legH: 18, legW: 17 },
   elephant: { body: '#a8b5c6', belly: '#cbd5e1', leg: '#a8b5c6', paw: '#93a2b6', ear: 'big', earC: '#97a6ba', inner: '#e7b3bd', tail: 'thin', tailC: '#97a6ba', snout: 0, nose: '#6f7c8a', trunk: true, bx: 46, by: 34, legH: 20, legW: 19, nails: true, lash: true },
@@ -209,6 +208,60 @@ function Quad({ kind, uid }) {
             </g>
           )}
           <Zzz x={hx - 6} y={hy - hr - 4} />
+        </g>
+      </g>
+    </g>
+  );
+}
+
+// ---------------------------------------------------------------- squirrel (sits up on its hind legs, with a big bushy tail)
+function Squirrel({ uid }) {
+  const grad = `${uid}-sq`;
+  const body = '#c07a3f', inner = '#e8bd86', belly = '#f6e1bd', tuft = '#6b4a2c';
+  return (
+    <g>
+      <defs><radialGradient id={grad} cx="40%" cy="25%" r="85%"><stop offset="0%" stopColor="#fff" stopOpacity=".5" /><stop offset="100%" stopColor="#000" stopOpacity=".14" /></radialGradient></defs>
+      <ellipse cx="96" cy="131" rx="40" ry="5" fill="#000" opacity=".16" />
+      <g className="pg" filter={`url(#${uid}o)`}>
+        {/* the big bushy tail, curling up behind the back */}
+        <g className="tail" style={{ transformOrigin: '76px 118px' }}>
+          <path d="M80 122 C38 130 18 98 30 62 C36 42 54 26 68 36 C56 48 54 66 62 80 C68 92 82 100 90 108 Z" fill={body} />
+          <path d="M72 110 C46 110 34 84 42 62 C46 50 56 44 62 46 C52 62 52 80 64 92" stroke={inner} strokeWidth="7" fill="none" strokeLinecap="round" />
+        </g>
+        {/* hind leg and foot */}
+        <g className="lg lgB" style={{ transformOrigin: '92px 110px' }}>
+          <ellipse cx="92" cy="114" rx="19" ry="15" fill={body} />
+          <ellipse cx="104" cy="127" rx="15" ry="5.6" fill={inner} />
+        </g>
+        {/* body */}
+        <ellipse cx="104" cy="92" rx="25" ry="33" fill={body} />
+        <ellipse cx="111" cy="98" rx="15" ry="25" fill={belly} />
+        <ellipse cx="104" cy="92" rx="25" ry="33" fill={`url(#${grad})`} />
+        {/* head */}
+        <g className="hd" style={{ transformOrigin: '112px 72px' }}>
+          <g className="earg" style={{ transformOrigin: '110px 44px' }}>
+            <ellipse cx="106" cy="40" rx="7" ry="12" fill={body} transform="rotate(-8 106 40)" />
+            <path d="M104 29 L102 18 L110 28 Z" fill={tuft} />
+            <ellipse cx="128" cy="40" rx="6.5" ry="11" fill={body} transform="rotate(10 128 40)" />
+            <path d="M129 29 L132 19 L124 28 Z" fill={tuft} />
+          </g>
+          <circle cx="118" cy="58" r="22" fill={body} />
+          <ellipse cx="124" cy="68" rx="15" ry="11" fill={belly} />
+          <ellipse cx="136" cy="64" rx="9" ry="7" fill={belly} />
+          <circle cx="142" cy="61" r="3.4" fill="#2a1f1a" />
+          <circle cx="141" cy="60" r="1" fill="#fff" opacity=".75" />
+          <path className="mouth-shut" d="M133 71 q4 3.4 9 0" stroke="#3b2a22" strokeWidth="1.6" fill="none" strokeLinecap="round" />
+          <g className="mouth-open"><ellipse cx="136" cy="72" rx="6" ry="5" fill="#5a1f2a" /><rect x="133.5" y="68" width="5" height="5" rx="1.2" fill="#fff" /></g>
+          <Eye x={128} y={56} r={3.7} />
+          <ellipse className="blush" cx="118" cy="68" rx="5" ry="3.2" fill="#ff8aa1" />
+          {[-3, 3].map((d, i) => <path key={i} d={`M138 66 q14 ${d - 2} 22 ${d * 3}`} stroke="#555" strokeWidth="1" fill="none" opacity=".55" />)}
+          <Zzz x={106} y={30} />
+        </g>
+        {/* front paws holding an acorn under the chin */}
+        <g className="lg lgA" style={{ transformOrigin: '118px 88px' }}>
+          <ellipse cx="122" cy="88" rx="9" ry="7" fill={body} />
+          <g><ellipse cx="132" cy="90" rx="8" ry="10" fill="#8a5a2c" /><path d="M123 85 q9 -10 18 0 z" fill="#5b3a1d" /><path d="M132 78 v-4" stroke="#5b3a1d" strokeWidth="2" strokeLinecap="round" /></g>
+          <ellipse cx="127" cy="91" rx="6" ry="5.5" fill={body} />
         </g>
       </g>
     </g>
@@ -339,6 +392,7 @@ export default function PetSprite({ kind, state = 'idle', style }) {
   const uid = useId().replace(/[^a-zA-Z0-9]/g, '');
   let art;
   if (QUADS[kind]) art = <Quad kind={kind} uid={uid} />;
+  else if (kind === 'squirrel') art = <Squirrel uid={uid} />;
   else if (BIRDS[kind]) art = <Bird kind={kind} uid={uid} />;
   else if (kind === 'penguin') art = <Penguin uid={uid} />;
   else if (kind === 'turtle') art = <Turtle uid={uid} />;

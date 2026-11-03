@@ -93,7 +93,12 @@ for (const st of students) {
     const prevMax = avatarMax[st.id] || 0;
     avatarMax[st.id] = Math.max(prevMax, owned.size);
     at(avatarMax[st.id], [[2, 'avatar-2'], [5, 'avatar-5'], [10, 'avatar-10'], [20, 'avatar-25'], [30, 'avatar-30'], [50, 'avatar-50']]);
+    // houses bought in the Avatar shop (the free starting house does not count; houses cannot be sold)
+    const houses = new Set(((sh.avatarOwned || {}).homeBackground || []).filter(x => x && x !== 'default'));
+    at(houses.size, [[1, 'house-1'], [3, 'house-3'], [5, 'house-5']]);
   }
+  // pets adopted (the weekly snapshot lists the count; pets cannot be sold)
+  at(st.petCount || 0, [[1, 'pets-1'], [3, 'pets-3'], [6, 'pets-6']]);
   // Myanmar Poems: the app's record, or the trophies the teacher confirmed (students from before the records have only the trophies)
   const po = poems.get(n) || {};
   const poemCount = Math.max(new Set(po.completedPoemIds || []).size, Math.min(48, (st.partUnits || {}).po || 0));

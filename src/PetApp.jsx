@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { appId } from './firebaseConfig';
-import { PET_KINDS, MAX_PETS, petKindOf, petHunger, formatCoins } from './petCatalog';
-import { buyPet, feedPet, renamePet } from './petActions';
+import { PET_KINDS, MAX_PETS, FOOD_PACKS, STARTER_MEALS, petKindOf, petHunger, formatCoins } from './petCatalog';
+import { buyPet, buyFood, feedPet, renamePet } from './petActions';
 import PetSprite, { PET_SPRITE_CSS } from './PetSprite';
 import { PetYard } from './PetHome';
 
@@ -31,6 +31,8 @@ export default function PetApp({ entryRequest, onExit }) {
   const [loading, setLoading] = useState(true);
   const [coins, setCoins] = useState(isPreview ? 50000 : 0);
   const [pets, setPets] = useState([]);
+  const [food, setFood] = useState(0);              // meals in stock
+  const [buyingFood, setBuyingFood] = useState(null); // pack id being confirmed
   const [tab, setTab] = useState('shop');
   const [adopting, setAdopting] = useState(null);   // kind id being confirmed
   const [petName, setPetName] = useState('');
@@ -53,6 +55,7 @@ export default function PetApp({ entryRequest, onExit }) {
         if (!alive) return;
         setCoins(w.exists() ? (w.data().coinBalance ?? 0) : 0);
         setPets(Array.isArray(s.data()?.pets) ? s.data().pets : []);
+        setFood(s.data()?.petFood || 0);
       } catch (e) { console.error('Error loading pets:', e); }
       if (alive) setLoading(false);
     })();
@@ -83,9 +86,10 @@ export default function PetApp({ entryRequest, onExit }) {
       if (result.ok) {
         setCoins(result.balance);
         setPets(prev => [...prev, result.pet]);
+        setFood(result.food ?? food);
         setAdopting(null);
         setTab('mine');
-        showToast(`🎉 ${result.pet.name} is now at your home!`);
+        showToast(`🎉 ${result.pet.name} is now at your home! (+${STARTER_MEALS} free meals)`);
       } else if (result.reason === 'coins') {
         setCoins(result.balance ?? coins); setAdopting(null); showToast('Not enough coins.');
       } else if (result.reason === 'full') {
@@ -102,11 +106,30 @@ export default function PetApp({ entryRequest, onExit }) {
     if (isPreview || busy) return;
     setBusy(true);
     try {
-      const ok = await feedPet({ studentUid, petId: pet.id });
-      if (ok) { setPets(prev => prev.map(p => (p.id === pet.id ? { ...p, fedAt: Date.now() } : p))); showToast(`${pet.name} enjoyed the ${petKindOf(pet).food}! ❤️`); }
+      const result = await feedPet({ studentUid, petId: pet.id });
+      if (result === 'fed') { setPets(prev => prev.map(p => (p.id === pet.id ? { ...p, fedAt: Date.now() } : p))); setFood(f => Math.max(0, f - 1)); showToast(`${pet.name} enjoyed the ${petKindOf(pet).food}! ❤️`); }
+      else if (result === 'nofood') { setFood(0); showToast('No food left! Buy some in the Food tab.'); }
       else showToast(`${pet.name} is not hungry right now.`);
     } catch (e) { console.error('Feeding failed:', e); showToast('Something went wrong. Please try again.'); }
     setBusy(false);
+  };
+
+  const confirmBuyFood = async () => {
+    if (!buyingFood || busy) return;
+    setBusy(true);
+    try {
+      const result = await buyFood({ studentUid, studentName, packId: buyingFood });
+      if (result.ok) { setCoins(result.balance); setFood(result.food); setBuyingFood(null); showToast(`🍖 You now have ${result.food} meal${result.food === 1 ? '' : 's'}!`); }
+      else if (result.reason === 'coins') { setCoins(result.balance ?? coins); setBuyingFood(null); showToast('Not enough coins.'); }
+      else { setBuyingFood(null); showToast('Something went wrong. Please try again.'); }
+    } catch (e) { console.error('Error buying food:', e); showToast('Something went wrong. Please try again.'); }
+    setBusy(false);
+  };
+  const openBuyFood = (packId) => {
+    if (isPreview) { showToast('Preview mode -- nothing can be bought here.'); return; }
+    const pack = FOOD_PACKS.find(p => p.id === packId);
+    if (coins < pack.price) { showToast(`You need ${formatCoins(pack.price - coins)} more coins.`); return; }
+    setBuyingFood(packId);
   };
 
   const submitRename = async () => {
@@ -131,10 +154,12 @@ export default function PetApp({ entryRequest, onExit }) {
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
           <button onClick={onExit} className="px-3 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 font-bold text-gray-700">← Back</button>
           <h1 className="flex-1 text-xl sm:text-2xl font-extrabold text-emerald-700">🐾 Pets</h1>
+          <div className="px-3 py-2 rounded-full bg-orange-100 border border-orange-300 font-extrabold text-orange-700 shadow-sm" title="Pet food you have (meals)">🍖 {food}</div>
           <div className="px-4 py-2 rounded-full bg-amber-100 border border-amber-300 font-extrabold text-amber-700 shadow-sm" title="Your Shrine Room coins">🪙 {formatCoins(coins)}</div>
         </div>
         <div className="max-w-3xl mx-auto px-4 pb-2 flex gap-2">
-          <button onClick={() => setTab('shop')} className={`flex-1 py-2 rounded-xl font-bold ${tab === 'shop' ? 'bg-emerald-500 text-white shadow' : 'bg-white text-emerald-700 border border-emerald-200'}`}>🏪 Pet Shop</button>
+          <button onClick={() => setTab('shop')} className={`flex-1 py-2 rounded-xl font-bold ${tab === 'shop' ? 'bg-emerald-500 text-white shadow' : 'bg-white text-emerald-700 border border-emerald-200'}`}>🏪 Pets</button>
+          <button onClick={() => setTab('food')} className={`flex-1 py-2 rounded-xl font-bold ${tab === 'food' ? 'bg-orange-500 text-white shadow' : 'bg-white text-orange-700 border border-orange-200'}`}>🍖 Food</button>
           <button onClick={() => setTab('mine')} className={`flex-1 py-2 rounded-xl font-bold ${tab === 'mine' ? 'bg-emerald-500 text-white shadow' : 'bg-white text-emerald-700 border border-emerald-200'}`}>🏠 My Pets ({pets.length}/{MAX_PETS})</button>
         </div>
       </div>
@@ -144,7 +169,7 @@ export default function PetApp({ entryRequest, onExit }) {
 
         {tab === 'shop' && (
           <>
-            <p className="text-sm text-gray-600 mb-4 text-center">Adopt a pet with your coins. It will live on your home page, play, sleep and ask you for food. You can have up to {MAX_PETS}.</p>
+            <p className="text-sm text-gray-600 mb-4 text-center">Adopt a pet with your coins. It will live on your home page, play, sleep and ask you for food (food is sold in the Food tab). You can have up to {MAX_PETS}.</p>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
               {shopList.map(([id, info]) => {
                 const affordable = coins >= info.price;
@@ -159,6 +184,27 @@ export default function PetApp({ entryRequest, onExit }) {
                       className={`mt-2 w-full py-2 rounded-xl font-bold ${affordable ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow' : 'bg-gray-200 text-gray-500'}`}
                     >
                       {affordable ? 'Adopt' : `Need ${formatCoins(info.price - coins)} more`}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+
+        {tab === 'food' && (
+          <>
+            <p className="text-sm text-gray-600 mb-4 text-center">One meal feeds one pet once. Every new pet comes with {STARTER_MEALS} free meals. You have <b>{food}</b> meal{food === 1 ? '' : 's'} now.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+              {FOOD_PACKS.map(pack => {
+                const affordable = coins >= pack.price;
+                return (
+                  <div key={pack.id} className="bg-white rounded-2xl shadow-md border border-orange-100 p-4 flex flex-col items-center text-center">
+                    <span className="text-6xl">{pack.icon}</span>
+                    <p className="mt-1 font-extrabold text-gray-800">{pack.label}</p>
+                    <div className="mt-2 px-3 py-1 rounded-full bg-amber-100 border border-amber-300 text-amber-800 font-extrabold text-sm">🪙 {formatCoins(pack.price)}</div>
+                    <button onClick={() => openBuyFood(pack.id)} className={`mt-3 w-full py-2 rounded-xl font-bold ${affordable ? 'bg-orange-500 hover:bg-orange-600 text-white shadow' : 'bg-gray-200 text-gray-500'}`}>
+                      {affordable ? 'Buy' : `Need ${formatCoins(pack.price - coins)} more`}
                     </button>
                   </div>
                 );
@@ -183,7 +229,7 @@ export default function PetApp({ entryRequest, onExit }) {
                 const days = Math.max(0, Math.floor((Date.now() - (pet.boughtAt || Date.now())) / 86400000));
                 return (
                   <div key={pet.id} className="bg-white rounded-2xl shadow-md border border-emerald-100 p-4 flex items-center gap-4">
-                    <div className="w-36 sm:w-44 flex-shrink-0"><PetYard pet={pet} studentUid={isPreview ? null : studentUid} height={124} sizePx={96} hideName onFed={(petId) => setPets(prev => prev.map(p => (p.id === petId ? { ...p, fedAt: Date.now() } : p)))} /></div>
+                    <div className="w-36 sm:w-44 flex-shrink-0"><PetYard pet={pet} studentUid={isPreview ? null : studentUid} foodStock={food} height={124} sizePx={96} hideName onFed={(petId) => { setPets(prev => prev.map(p => (p.id === petId ? { ...p, fedAt: Date.now() } : p))); setFood(f => Math.max(0, f - 1)); }} /></div>
                     <div className="flex-1 min-w-0">
                       {renaming?.id === pet.id ? (
                         <div className="flex gap-2">
@@ -206,11 +252,11 @@ export default function PetApp({ entryRequest, onExit }) {
                     </div>
                     <button
                       onClick={() => handleFeed(pet)}
-                      disabled={level === 0 || busy}
-                      className={`px-4 py-3 rounded-xl font-bold shadow ${level === 0 ? 'bg-gray-200 text-gray-400' : 'bg-orange-400 hover:bg-orange-500 text-white'}`}
+                      disabled={level === 0 || busy || food < 1}
+                      className={`px-4 py-3 rounded-xl font-bold shadow ${level === 0 || food < 1 ? 'bg-gray-200 text-gray-400' : 'bg-orange-400 hover:bg-orange-500 text-white'}`}
                     >
                       <span className="text-2xl block leading-none">{info.food}</span>
-                      <span className="text-xs">{level === 0 ? 'Full' : 'Feed'}</span>
+                      <span className="text-xs">{level === 0 ? 'Full' : food < 1 ? 'No food' : 'Feed'}</span>
                     </button>
                   </div>
                 );
@@ -243,6 +289,27 @@ export default function PetApp({ entryRequest, onExit }) {
           </div>
         </div>
       )}
+
+      {buyingFood && (() => {
+        const pack = FOOD_PACKS.find(p => p.id === buyingFood);
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+            <div className="bg-white rounded-3xl shadow-2xl p-6 w-full max-w-sm text-center">
+              <span className="text-7xl">{pack.icon}</span>
+              <h2 className="mt-2 text-xl font-extrabold text-gray-800">Buy {pack.label} of pet food?</h2>
+              <div className="mt-4 bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm text-amber-900 space-y-1">
+                <p className="font-extrabold text-base">Price: 🪙 {formatCoins(pack.price)}</p>
+                <p>You have 🪙 {formatCoins(coins)} → after: 🪙 {formatCoins(coins - pack.price)}</p>
+              </div>
+              <p className="mt-3 text-xs text-red-600 font-semibold">These coins will be spent. Do you really want to buy it?</p>
+              <div className="mt-4 flex gap-3">
+                <button onClick={() => setBuyingFood(null)} disabled={busy} className="flex-1 py-3 rounded-xl bg-gray-100 hover:bg-gray-200 font-bold text-gray-700">No, cancel</button>
+                <button onClick={confirmBuyFood} disabled={busy} className="flex-1 py-3 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold shadow disabled:opacity-60">{busy ? 'Buying...' : 'Yes, buy!'}</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {toast && <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] bg-gray-900 text-white px-5 py-3 rounded-full shadow-xl text-sm font-bold max-w-[90vw] text-center">{toast}</div>}
     </div>

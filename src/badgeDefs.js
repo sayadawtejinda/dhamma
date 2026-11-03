@@ -12,6 +12,8 @@ export const BADGE_GROUPS = [
   { id: 'heart', title: 'Hearts' },
   { id: 'shrine', title: 'Shrine Room' },
   { id: 'nature', title: 'Nature World & Avatar' },
+  { id: 'pets', title: 'Pets & Kindness' },
+  { id: 'home', title: 'Homes & Business' },
   { id: 'poems', title: 'Myanmar Poems' },
   { id: 'reader', title: 'Myanmar Reader' },
   { id: 'letters', title: 'Consonants & Vowels' },
@@ -91,6 +93,14 @@ export const BADGE_DEFS = [
   { id: 'avatar-25', group: 'nature', shape: 'shirt', metal: 'gold', icon: '👠', name: 'Fashion Star', desc: 'Got 20 Avatar items', master: true },
   { id: 'avatar-30', group: 'nature', shape: 'shirt', metal: 'gold', icon: '✨', name: 'Trendsetter', desc: 'Got 30 Avatar items', master: true },
   { id: 'avatar-50', group: 'nature', shape: 'shirt', metal: 'gold', icon: '👑', name: 'Fashion Icon', desc: 'Got 50 Avatar items', master: true },
+  // pets: a kind heart for animals (1 pet, 3 pets, 6 pets)
+  { id: 'pets-1', group: 'pets', shape: 'paw', metal: 'bronze', icon: '🐾', name: 'Animal Friend', desc: 'Adopted a pet and promised to look after it' },
+  { id: 'pets-3', group: 'pets', shape: 'paw', metal: 'silver', icon: '🐕', name: 'Kind Caretaker', desc: 'Looking after 3 pets with a kind heart' },
+  { id: 'pets-6', group: 'pets', shape: 'rosette', metal: 'gold', icon: '🦮', name: 'Guardian of Animals', desc: 'Looking after 6 pets: a heart full of kindness for animals', master: true },
+  // homes: buying houses in the Avatar shop (1, 3 and all 5 of the houses sold now)
+  { id: 'house-1', group: 'home', shape: 'pennant', metal: 'bronze', icon: '🏠', name: 'Home Owner', desc: 'Bought a house' },
+  { id: 'house-3', group: 'home', shape: 'badge8', metal: 'silver', icon: '🏘️', name: 'Property Dealer', desc: 'Owns 3 houses' },
+  { id: 'house-5', group: 'home', shape: 'crest', metal: 'gold', icon: '🏙️', name: 'Real-Estate Tycoon', desc: 'Owns every house in the shop', master: true },
   // poems: singing
   { id: 'poems-5', group: 'poems', shape: 'music', metal: 'bronze', icon: '🎵', name: 'Poem Beginner', desc: 'Recited 5 poems' },
   { id: 'poems-10', group: 'poems', shape: 'music', metal: 'bronze', icon: '🎤', name: 'Little Singer', desc: 'Recited 10 poems' },

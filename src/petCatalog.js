@@ -10,6 +10,18 @@
 
 export const PET_MIN_PRICE = 12000;
 export const MAX_PETS = 6;
+// Pet food, sold in the Pet Shop for coins. One meal feeds one pet once (any pet eats any food; the picture of the
+// food just changes with the animal). Every pet comes with a few free meals. The stock is one number on the student's
+// profile (students/{uid}.petFood), so it costs no extra reads.
+export const STARTER_MEALS = 3;
+export const FOOD_PACKS = [
+  { id: 'meal1', meals: 1, price: 100, label: '1 meal', icon: '🍖' },
+  { id: 'meal7', meals: 7, price: 600, label: '7 meals', icon: '🍖🍖' },
+  { id: 'meal30', meals: 30, price: 2400, label: '30 meals', icon: '🥩' },
+];
+
+
+
 
 // How long after being fed a pet stays full, and when it starts to ask for food.
 export const PET_PECKISH_AFTER_H = 6;   // starts to ask now and then
@@ -23,12 +35,12 @@ export const PET_KINDS = {
   dog: {
     emoji: '🐕', name: 'Puppy', price: 12000, faces: 'left', food: '🦴', toy: '🎾', says: ['Woof! 🐾', 'Woof woof!'],
     blurb: 'Loves to run, fetch his ball and be fed a bone.', moves: ['walk', 'run'], speed: 90,
-    acts: { walk: 3, run: 2, play: 3, sit: 2, sleep: 1, talk: 1 },
+    acts: { walk: 3, run: 2, play: 5, sit: 2, sleep: 1, talk: 1 },
   },
   cat: {
     emoji: '🐈', name: 'Kitty', price: 12000, faces: 'left', food: '🐟', toy: '🧶', says: ['Meow~', 'Purrr... 💗'],
     blurb: 'Walks slowly, grooms herself and naps a lot.', moves: ['walk'], speed: 45,
-    acts: { walk: 2, sit: 3, groom: 3, play: 1, sleep: 4, talk: 1 },
+    acts: { walk: 2, sit: 3, groom: 3, play: 3, sleep: 4, talk: 1 },
   },
   bird: {
     emoji: '🐦', name: 'Birdie', price: 12000, faces: 'left', food: '🌾', toy: '🪶', says: ['Tweet tweet! 🎵', 'Chirp! 🎶'],

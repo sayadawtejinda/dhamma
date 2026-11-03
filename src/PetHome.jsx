@@ -24,7 +24,7 @@ const PET_CSS = `
 @keyframes petEat { 0%,100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(4px) rotate(9deg); } }
 @keyframes petHappy { 0%,100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-20px) scale(1.12); } }
 @keyframes petFloat { 0% { transform: translate(-50%,0) scale(.7); opacity: 0; } 20% { opacity: 1; } 100% { transform: translate(-50%,-56px) scale(1.15); opacity: 0; } }
-@keyframes petToy { 0%,100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-26px) rotate(180deg); } }
+@keyframes petToy { 0%,100% { transform: translate(0,0) rotate(0deg); } 25% { transform: translate(calc(var(--d) * 12px),-26px) rotate(120deg); } 50% { transform: translate(calc(var(--d) * 22px),0) rotate(240deg); } 75% { transform: translate(calc(var(--d) * 10px),-14px) rotate(330deg); } }
 @keyframes petBubble { 0% { transform: translate(-50%,6px) scale(.7); opacity: 0; } 100% { transform: translate(-50%,0) scale(1); opacity: 1; } }
 .pet-a-walk { animation: petBob .5s ease-in-out infinite; }
 .pet-a-run { animation: petRun .3s ease-in-out infinite; }
@@ -63,7 +63,7 @@ function chooseAct(kind, hunger) {
 
 const MOVE_ACTS = ['walk', 'run', 'hop', 'scamper', 'waddle', 'fly'];
 
-function RoamingPet({ pet, studentUid, layerRef, lane = 0, sizePx, bottomPx, hideName, onFed }) {
+function RoamingPet({ pet, studentUid, layerRef, lane = 0, sizePx, bottomPx, hideName, onFed, foodRef }) {
   const kind = petKindOf(pet);
   const [x, setX] = useState(() => 8 + Math.random() * 82);
   const [dir, setDir] = useState(Math.random() < 0.5 ? 1 : -1);
@@ -141,9 +141,12 @@ function RoamingPet({ pet, studentUid, layerRef, lane = 0, sizePx, bottomPx, hid
     try {
       if (studentUid && petHunger(p) > 0) {
         setSay(null); setAction('eat'); setShowFood(true);
-        let ok = false;
-        try { ok = await feedPet({ studentUid, petId: p.id }); } catch (e) { console.error('Feeding failed:', e); }
+        let result = 'error';
+        if (foodRef && foodRef.current < 1) result = 'nofood'; // no stock: do not even try
+        else { try { result = await feedPet({ studentUid, petId: p.id }); } catch (e) { console.error('Feeding failed:', e); } }
+        const ok = result === 'fed';
         if (ok && onFed) onFed(p.id);
+        if (result === 'nofood') { setShowFood(false); setAction('beg'); setSay('No food left 🥺 (Pet Shop)'); await sleepFor(2800); return; }
         await sleepFor(2600);
         setShowFood(false);
         setAction('happy');
@@ -176,7 +179,7 @@ function RoamingPet({ pet, studentUid, layerRef, lane = 0, sizePx, bottomPx, hid
       )}
       {action === 'sleep' && <div className="absolute text-base font-bold text-indigo-700" style={{ left: '70%', bottom: '90%', animation: 'petFloat 2.4s ease-out infinite', pointerEvents: 'none' }}>💤</div>}
       {hearts > 0 && <div key={hearts} className="absolute text-2xl" style={{ left: '50%', bottom: '80%', animation: 'petFloat 1.6s ease-out forwards', pointerEvents: 'none' }}>❤️</div>}
-      {action === 'play' && <span className="absolute text-2xl" style={{ left: dir === 1 ? '92%' : '-40%', bottom: 2, animation: 'petToy .7s ease-in-out infinite', pointerEvents: 'none' }}>{kind.toy}</span>}
+      {action === 'play' && <span className="absolute" style={{ '--d': dir, left: dir === 1 ? '96%' : '-30%', bottom: 4, fontSize: 'clamp(26px, 5.5vw, 40px)', lineHeight: 1, animation: 'petToy .8s ease-in-out infinite', pointerEvents: 'none', filter: 'drop-shadow(0 2px 2px rgba(0,0,0,.25))' }}>{kind.toy}</span>}
       {showFood && <span className="absolute text-2xl" style={{ left: dir === 1 ? '85%' : '-25%', bottom: 0, animation: 'petEat .35s ease-in-out infinite', pointerEvents: 'none' }}>{kind.food}</span>}
       <button
         type="button"
@@ -194,15 +197,17 @@ function RoamingPet({ pet, studentUid, layerRef, lane = 0, sizePx, bottomPx, hid
   );
 }
 
-export default function HomePets({ pets, studentUid }) {
+export default function HomePets({ pets, studentUid, foodStock = 0 }) {
   const layerRef = useRef(null);
+  const foodRef = useRef(foodStock);
+  foodRef.current = foodStock;
   const list = Array.isArray(pets) ? pets.slice(0, 6) : [];
   if (!studentUid || list.length === 0) return null;
   return (
     <>
       <style>{PET_CSS + PET_SPRITE_CSS}</style>
       <div ref={layerRef} className="fixed inset-x-0 bottom-0 pointer-events-none overflow-hidden" style={{ height: 230, zIndex: 25 }} aria-hidden={false}>
-        {list.map((pet, i) => <RoamingPet key={pet.id} pet={pet} studentUid={studentUid} layerRef={layerRef} lane={i % 3} />)}
+        {list.map((pet, i) => <RoamingPet key={pet.id} pet={pet} studentUid={studentUid} layerRef={layerRef} lane={i % 3} foodRef={foodRef} />)}
       </div>
     </>
   );
@@ -210,13 +215,15 @@ export default function HomePets({ pets, studentUid }) {
 
 // A small grassy yard with ONE pet wandering in it -- used by the Pet app (shop: a sample pet to watch and tap; My Pets: your own pet,
 // which can be fed here too). Same behaviour as on the home page.
-export function PetYard({ pet, studentUid, height = 130, sizePx = 92, onFed, hideName = false }) {
+export function PetYard({ pet, studentUid, height = 130, sizePx = 92, onFed, hideName = false, foodStock = 0 }) {
   const layerRef = useRef(null);
+  const foodRef = useRef(foodStock);
+  foodRef.current = foodStock;
   return (
     <>
       <style>{PET_CSS + PET_SPRITE_CSS}</style>
       <div ref={layerRef} className="relative w-full overflow-hidden rounded-xl" style={{ height, background: 'linear-gradient(#cfeaff 0%, #e6f6ff 58%, #b7e08c 58%, #9fd078 100%)' }}>
-        <RoamingPet pet={pet} studentUid={studentUid} layerRef={layerRef} sizePx={sizePx} bottomPx={hideName ? 8 : 16} hideName={hideName} onFed={onFed} />
+        <RoamingPet pet={pet} studentUid={studentUid} layerRef={layerRef} sizePx={sizePx} bottomPx={hideName ? 8 : 16} hideName={hideName} onFed={onFed} foodRef={foodRef} />
       </div>
     </>
   );

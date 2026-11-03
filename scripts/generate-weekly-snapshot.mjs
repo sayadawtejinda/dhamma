@@ -317,6 +317,7 @@ async function main() {
       name: s.name,
       trophyCount: s.trophyCount || 0,
       heartsReceived: s.heartsReceived || 0,
+      ...(Array.isArray(s.pets) && s.pets.length ? { petCount: s.pets.length } : {}), // pets adopted (for the Pets & Kindness badges)
       heartsFromCounts: s.heartsFromCounts || {},
       attendedThisYear: attendedById[s.id] || 0,
       attendedTotal: attendedAllYears[s.id] || 0,

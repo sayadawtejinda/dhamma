@@ -9709,7 +9709,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       )}
 
       {/* the student's pets wandering across the bottom of the home page (see PetHome.jsx) */}
-      {!studentProfile?.isVisitor && <HomePets pets={studentProfile?.pets} studentUid={studentUid} />}
+      {!studentProfile?.isVisitor && <HomePets pets={studentProfile?.pets} studentUid={studentUid} foodStock={studentProfile?.petFood || 0} />}
 
       {isLessonOverlayOpen && (
         <div className="fixed inset-0 z-[9999] bg-indigo-900/95 flex flex-col justify-center items-center p-6 text-center">
