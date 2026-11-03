@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { petKindOf, petHunger } from './petCatalog';
 import { feedPet } from './petActions';
+import { playPetSound } from './petSounds';
 import PetSprite, { PET_SPRITE_CSS } from './PetSprite';
 
 // The student's pets wandering across the bottom of their home page. Nothing here reads Firebase: the pets
@@ -145,10 +146,12 @@ function RoamingPet({ pet, studentUid, layerRef, lane }) {
         await sleepFor(2600);
         setShowFood(false);
         setAction('happy');
+        playPetSound(p.kind);
         if (ok) { setHearts(n => n + 1); setSay('Yummy! 😋'); }
         await sleepFor(1800);
       } else {
         setAction('happy'); setHearts(n => n + 1); setSay(pick(kind.says));
+        playPetSound(p.kind);
         await sleepFor(2200);
       }
     } finally {

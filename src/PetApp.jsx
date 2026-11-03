@@ -5,6 +5,7 @@ import { appId } from './firebaseConfig';
 import { PET_KINDS, MAX_PETS, petKindOf, petHunger, formatCoins } from './petCatalog';
 import { buyPet, feedPet, renamePet } from './petActions';
 import PetSprite, { PET_SPRITE_CSS } from './PetSprite';
+import { playPetSound } from './petSounds';
 
 // Pet Shop + My Pets. Coins come out of the Shrine Room wallet (the same coins every other app deposits into,
 // like the Avatar shop). The pets live on the student's profile doc, so the home page shows them with no extra
@@ -22,6 +23,23 @@ const APP_CSS = `
 const hungerLabel = (level) => (level === 0 ? { text: 'Full and happy', icon: '😋', cls: 'text-emerald-600' }
   : level === 1 ? { text: 'Getting peckish', icon: '🙂', cls: 'text-amber-600' }
   : { text: 'Very hungry!', icon: '😢', cls: 'text-red-600' });
+
+// a pet in the shop or in My Pets: tap it and it jumps for joy and says hello in its own voice
+function TapPet({ kind, idle = 'idle', className = '' }) {
+  const [state, setState] = useState(idle);
+  useEffect(() => { setState(idle); }, [idle]);
+  return (
+    <button
+      type="button"
+      className={`block ${className}`}
+      style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', WebkitTapHighlightColor: 'transparent' }}
+      onClick={() => { playPetSound(kind); setState('happy'); setTimeout(() => setState(idle), 1700); }}
+      title="Tap me!"
+    >
+      <PetSprite kind={kind} state={state} />
+    </button>
+  );
+}
 
 export default function PetApp({ entryRequest, onExit }) {
   const isPreview = !entryRequest?.studentUid;
@@ -149,7 +167,7 @@ export default function PetApp({ entryRequest, onExit }) {
                 const affordable = coins >= info.price;
                 return (
                   <div key={id} className="bg-white rounded-2xl shadow-md border border-emerald-100 p-3 flex flex-col items-center text-center">
-                    <div className="w-32 sm:w-36"><PetSprite kind={id} state="idle" /></div>
+                    <TapPet kind={id} className="w-32 sm:w-36" />
                     <p className="mt-1 font-extrabold text-gray-800">{info.name}</p>
                     <p className="text-xs text-gray-500 min-h-[48px] mt-1">{info.blurb}</p>
                     <div className="mt-2 px-3 py-1 rounded-full bg-amber-100 border border-amber-300 text-amber-800 font-extrabold text-sm">🪙 {formatCoins(info.price)}</div>
@@ -182,7 +200,7 @@ export default function PetApp({ entryRequest, onExit }) {
                 const days = Math.max(0, Math.floor((Date.now() - (pet.boughtAt || Date.now())) / 86400000));
                 return (
                   <div key={pet.id} className="bg-white rounded-2xl shadow-md border border-emerald-100 p-4 flex items-center gap-4">
-                    <div className="w-24 sm:w-28 flex-shrink-0"><PetSprite kind={pet.kind} state={level === 2 ? 'beg' : 'idle'} /></div>
+                    <TapPet kind={pet.kind} idle={level === 2 ? 'beg' : 'idle'} className="w-24 sm:w-28 flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                       {renaming?.id === pet.id ? (
                         <div className="flex gap-2">

@@ -73,8 +73,9 @@ export const PET_SPRITE_CSS = `
 const Eye = ({ x, y, r = 3.4 }) => (
   <>
     <g className="eyes-open">
-      <circle cx={x} cy={y} r={r} fill="#1d1d1f" />
-      <circle cx={x + r * 0.35} cy={y - r * 0.4} r={r * 0.38} fill="#fff" />
+      <circle cx={x} cy={y} r={r * 1.22} fill="#1d1d1f" />
+      <circle cx={x + r * 0.42} cy={y - r * 0.5} r={r * 0.5} fill="#fff" />
+      <circle cx={x - r * 0.45} cy={y + r * 0.5} r={r * 0.24} fill="#fff" opacity=".85" />
     </g>
     <path className="eyes-shut" d={`M${x - r} ${y} Q${x} ${y + r * 1.1} ${x + r} ${y}`} stroke="#1d1d1f" strokeWidth="1.8" fill="none" strokeLinecap="round" />
   </>
@@ -138,7 +139,7 @@ function Quad({ kind, uid }) {
         <radialGradient id={grad} cx="45%" cy="30%" r="80%"><stop offset="0%" stopColor="#ffffff" stopOpacity=".55" /><stop offset="100%" stopColor="#000" stopOpacity=".12" /></radialGradient>
       </defs>
       <ellipse cx="100" cy="131" rx={bx + 22} ry="5" fill="#000" opacity=".16" />
-      <g className="pg">
+      <g className="pg" filter={`url(#${uid}o)`}>
         <Tail />
         {legs.filter(l => l.far).map((l, i) => (
           <g key={`f${i}`} className={`lg ${l.cls}`} style={{ transformOrigin: `${l.x}px ${hipY}px` }} opacity=".78">
@@ -208,7 +209,7 @@ function Bird({ kind, uid }) {
     <g>
       <defs><radialGradient id={grad} cx="40%" cy="25%" r="80%"><stop offset="0%" stopColor="#fff" stopOpacity=".5" /><stop offset="100%" stopColor="#000" stopOpacity=".12" /></radialGradient></defs>
       <ellipse cx="100" cy="131" rx="38" ry="5" fill="#000" opacity=".16" />
-      <g className="pg">
+      <g className="pg" filter={`url(#${uid}o)`}>
         {/* tail feathers */}
         <g className="tail" style={{ transformOrigin: '70px 96px' }}>
           {b.long ? (<>
@@ -260,7 +261,7 @@ function Penguin({ uid }) {
     <g>
       <defs><radialGradient id={grad} cx="40%" cy="25%" r="80%"><stop offset="0%" stopColor="#fff" stopOpacity=".28" /><stop offset="100%" stopColor="#000" stopOpacity=".1" /></radialGradient></defs>
       <ellipse cx="100" cy="131" rx="34" ry="5" fill="#000" opacity=".16" />
-      <g className="pg">
+      <g className="pg" filter={`url(#${uid}o)`}>
         <g className="lg lgA" style={{ transformOrigin: '90px 118px' }}><ellipse cx="90" cy="127" rx="11" ry="4.6" fill="#f59e0b" /></g>
         <g className="lg lgB" style={{ transformOrigin: '112px 118px' }}><ellipse cx="114" cy="127" rx="11" ry="4.6" fill="#f59e0b" /></g>
         <ellipse cx="100" cy="82" rx="31" ry="46" fill="#2a3547" />
@@ -288,7 +289,7 @@ function Turtle({ uid }) {
     <g>
       <defs><radialGradient id={grad} cx="40%" cy="20%" r="85%"><stop offset="0%" stopColor="#fff" stopOpacity=".4" /><stop offset="100%" stopColor="#000" stopOpacity=".2" /></radialGradient></defs>
       <ellipse cx="100" cy="131" rx="56" ry="5" fill="#000" opacity=".16" />
-      <g className="pg">
+      <g className="pg" filter={`url(#${uid}o)`}>
         <g className="tail"><path d="M52 112 L36 118 L52 120 Z" fill="#8fbf6a" style={{ transformOrigin: '52px 114px' }} /></g>
         {[{ x: 120, c: 'lgA' }, { x: 74, c: 'lgB' }].map((l, i) => (
           <g key={i} className={`lg ${l.c}`} style={{ transformOrigin: `${l.x}px 112px` }}>
@@ -325,6 +326,15 @@ export default function PetSprite({ kind, state = 'idle', style }) {
   else art = <Quad kind="dog" uid={uid} />;
   return (
     <svg className={`ps ps-${state}`} viewBox="0 0 200 150" style={style} role="img" aria-label={kind}>
+      <defs>
+        {/* a soft dark outline round the whole animal: the "sticker" look that makes cartoon pets read as cute */}
+        <filter id={`${uid}o`} filterUnits="userSpaceOnUse" x="-60" y="-100" width="320" height="300">
+          <feMorphology in="SourceAlpha" operator="dilate" radius="1.7" result="d" />
+          <feFlood floodColor="#4a3222" floodOpacity=".7" />
+          <feComposite in2="d" operator="in" result="o" />
+          <feMerge><feMergeNode in="o" /><feMergeNode in="SourceGraphic" /></feMerge>
+        </filter>
+      </defs>
       {art}
     </svg>
   );
