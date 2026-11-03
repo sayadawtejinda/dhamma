@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { petKindOf, petHunger, HUNGRY_PHRASES, THANKS_PHRASES, LOVE_PHRASES } from './petCatalog';
+import { petKindOf, petHunger, mealsOf, HUNGRY_PHRASES, THANKS_PHRASES, LOVE_PHRASES } from './petCatalog';
 import { feedPet } from './petActions';
 import { playPetSound } from './petSounds';
 import PetSprite, { PET_SPRITE_CSS } from './PetSprite';
@@ -66,7 +66,7 @@ const MOVE_ACTS = ['walk', 'run', 'hop', 'scamper', 'waddle', 'fly'];
 // where the child last put this pet down (kept on this device only)
 const readSpot = (pet) => { try { return JSON.parse(localStorage.getItem(`petSpot_${pet.id}`) || 'null'); } catch (e) { return null; } };
 
-function RoamingPet({ pet, studentUid, layerRef, lane = 0, sizePx, bottomPx, hideName, onFed, foodRef, persist = false }) {
+function RoamingPet({ pet, studentUid, layerRef, lane = 0, sizePx, bottomPx, hideName, onFed, foodRef, persist = false, maxScale }) {
   const kind = petKindOf(pet);
   const spot = persist ? readSpot(pet) : null;
   const [x, setX] = useState(() => (spot && typeof spot.x === 'number' ? spot.x : 8 + Math.random() * 82));
@@ -152,11 +152,11 @@ function RoamingPet({ pet, studentUid, layerRef, lane = 0, sizePx, bottomPx, hid
       if (studentUid && petHunger(p) > 0) {
         setSay(null); setAction('eat'); setShowFood(true);
         let result = 'error';
-        if (foodRef && foodRef.current < 1) result = 'nofood'; // no stock: do not even try
+        if (foodRef && mealsOf(foodRef.current?.foods, foodRef.current?.any, p.kind) < 1) result = 'nofood'; // no stock: do not even try
         else { try { result = await feedPet({ studentUid, petId: p.id }); } catch (e) { console.error('Feeding failed:', e); } }
         const ok = result === 'fed';
         if (ok && onFed) onFed(p.id);
-        if (result === 'nofood') { setShowFood(false); setAction('beg'); setSay('No food left 🥺 (Pet Shop)'); await sleepFor(2800); return; }
+        if (result === 'nofood') { setShowFood(false); setAction('beg'); setSay(`No ${kind.foodName ? kind.foodName.toLowerCase() : 'food'} left 🥺`); await sleepFor(2800); return; }
         await sleepFor(2600);
         setShowFood(false);
         setAction('happy');
@@ -239,7 +239,7 @@ function RoamingPet({ pet, studentUid, layerRef, lane = 0, sizePx, bottomPx, hid
         style={{ background: 'none', border: 'none', padding: 0, lineHeight: 1, WebkitTapHighlightColor: 'transparent', touchAction: 'none', cursor: dragging ? 'grabbing' : 'grab' }}
         title={`${pet.name} -- tap to ${hungry || petHunger(pet) > 0 ? 'feed' : 'cuddle'}, or drag to carry it`}
       >
-        <span style={{ display: 'block', width: sizePx ? `${sizePx}px` : 'clamp(84px, 19vw, 140px)', transform: `scaleX(${dir})`, transition: 'transform .25s', filter: 'drop-shadow(0 2px 2px rgba(0,0,0,.18))' }}>
+        <span style={{ display: 'block', width: (() => { const sc = Math.min(kind.scale || 1, maxScale || 9); return sizePx ? `${Math.round(sizePx * sc)}px` : `calc(clamp(84px, 19vw, 140px) * ${sc})`; })(), transform: `scaleX(${dir})`, transition: 'transform .25s', filter: 'drop-shadow(0 2px 2px rgba(0,0,0,.18))' }}>
           <PetSprite kind={pet.kind} state={action} />
         </span>
       </button>
@@ -248,7 +248,7 @@ function RoamingPet({ pet, studentUid, layerRef, lane = 0, sizePx, bottomPx, hid
   );
 }
 
-export default function HomePets({ pets, studentUid, foodStock = 0 }) {
+export default function HomePets({ pets, studentUid, foodStock = { foods: {}, any: 0 } }) {
   const layerRef = useRef(null);
   const foodRef = useRef(foodStock);
   foodRef.current = foodStock;
@@ -266,7 +266,7 @@ export default function HomePets({ pets, studentUid, foodStock = 0 }) {
 
 // A small grassy yard with ONE pet wandering in it -- used by the Pet app (shop: a sample pet to watch and tap; My Pets: your own pet,
 // which can be fed here too). Same behaviour as on the home page.
-export function PetYard({ pet, studentUid, height = 130, sizePx = 92, onFed, hideName = false, foodStock = 0 }) {
+export function PetYard({ pet, studentUid, height = 130, sizePx = 92, onFed, hideName = false, foodStock = { foods: {}, any: 0 } }) {
   const layerRef = useRef(null);
   const foodRef = useRef(foodStock);
   foodRef.current = foodStock;
@@ -274,7 +274,7 @@ export function PetYard({ pet, studentUid, height = 130, sizePx = 92, onFed, hid
     <>
       <style>{PET_CSS + PET_SPRITE_CSS}</style>
       <div ref={layerRef} className="relative w-full overflow-hidden rounded-xl" style={{ height, background: 'linear-gradient(#cfeaff 0%, #e6f6ff 58%, #b7e08c 58%, #9fd078 100%)' }}>
-        <RoamingPet pet={pet} studentUid={studentUid} layerRef={layerRef} sizePx={sizePx} bottomPx={hideName ? 8 : 16} hideName={hideName} onFed={onFed} foodRef={foodRef} />
+        <RoamingPet pet={pet} studentUid={studentUid} layerRef={layerRef} sizePx={sizePx} bottomPx={hideName ? 8 : 16} hideName={hideName} onFed={onFed} foodRef={foodRef} maxScale={1.12} />
       </div>
     </>
   );

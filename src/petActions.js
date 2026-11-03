@@ -1,7 +1,7 @@
 import { doc, runTransaction } from 'firebase/firestore';
 import { db } from './firebase';
 import { appId } from './firebaseConfig';
-import { MAX_PETS, PET_KINDS, FOOD_PACKS, STARTER_MEALS, newPetId, petCanEat } from './petCatalog';
+import { MAX_PETS, PET_KINDS, STARTER_MEALS, foodPacksFor, newPetId, petCanEat } from './petCatalog';
 
 // The only three things that ever write pet data. Each is ONE transaction over the stored documents (never
 // this screen's copy), so a double tap or a second tab cannot spend twice, feed twice or lose a pet.
@@ -27,45 +27,55 @@ export async function buyPet({ studentUid, studentName, kind, petName }) {
     if (balance < info.price) return { ok: false, reason: 'coins', balance };
     const now = Date.now();
     const pet = { id: newPetId(kind), kind, name: (petName || info.name).trim().slice(0, 16) || info.name, boughtAt: now, fedAt: now };
-    const food = (sSnap.data()?.petFood || 0) + STARTER_MEALS;
+    const foods = { ...(sSnap.data()?.petFoods || {}) };
+    foods[kind] = (foods[kind] || 0) + STARTER_MEALS;
     tx.set(wRef, { studentName, coinBalance: balance - info.price }, { merge: true });
-    tx.set(sRef, { pets: [...pets, pet], petFood: food }, { merge: true });
-    return { ok: true, pet, balance: balance - info.price, food };
+    tx.set(sRef, { pets: [...pets, pet], petFoods: foods }, { merge: true });
+    return { ok: true, pet, balance: balance - info.price, foods };
   });
 }
 
-// Gives a pet one meal from the food stock -- only when it is not still full from the last one.
+// Gives a pet one meal of ITS OWN food (or, failing that, any old "any pet" food) -- only when it is not still full from the last one.
 // Resolves 'fed' | 'nofood' | 'full' | 'gone'.
 export async function feedPet({ studentUid, petId }) {
   const sRef = studentRef(studentUid);
   return runTransaction(db, async (tx) => {
     const snap = await tx.get(sRef);
-    const pets = Array.isArray(snap.data()?.pets) ? snap.data().pets : [];
+    const data = snap.data() || {};
+    const pets = Array.isArray(data.pets) ? data.pets : [];
     const i = pets.findIndex(p => p.id === petId);
     if (i < 0) return 'gone';
     if (!petCanEat(pets[i])) return 'full';
-    const food = snap.data()?.petFood || 0;
-    if (food < 1) return 'nofood';
-    const next = pets.map((p, j) => (j === i ? { ...p, fedAt: Date.now() } : p));
-    tx.set(sRef, { pets: next, petFood: food - 1 }, { merge: true });
+    const kind = pets[i].kind;
+    const foods = { ...(data.petFoods || {}) };
+    const patch = {};
+    if ((foods[kind] || 0) >= 1) { foods[kind] -= 1; patch.petFoods = foods; }
+    else if ((data.petFood || 0) >= 1) patch.petFood = data.petFood - 1;
+    else return 'nofood';
+    patch.pets = pets.map((p, j) => (j === i ? { ...p, fedAt: Date.now() } : p));
+    tx.set(sRef, patch, { merge: true });
     return 'fed';
   });
 }
 
-// Buys a pack of pet food out of the Shrine Room wallet. Resolves { ok, balance, food } or { ok: false, reason: 'coins' | 'pack' }.
-export async function buyFood({ studentUid, studentName, packId }) {
-  const pack = FOOD_PACKS.find(p => p.id === packId);
+// Buys a pack of one animal's food out of the Shrine Room wallet -- only for a kind of animal the student has adopted.
+// Resolves { ok, balance, foods } or { ok: false, reason: 'coins' | 'pack' | 'nopet' }.
+export async function buyFood({ studentUid, studentName, kind, packId }) {
+  const pack = foodPacksFor(kind).find(p => p.id === packId);
   if (!pack) return { ok: false, reason: 'pack' };
   const sRef = studentRef(studentUid);
   const wRef = walletRef(studentName);
   return runTransaction(db, async (tx) => {
     const [sSnap, wSnap] = await Promise.all([tx.get(sRef), tx.get(wRef)]);
+    const pets = Array.isArray(sSnap.data()?.pets) ? sSnap.data().pets : [];
+    if (!pets.some(p => p.kind === kind)) return { ok: false, reason: 'nopet' };
     const balance = wSnap.exists() ? (wSnap.data().coinBalance ?? 0) : 0;
     if (balance < pack.price) return { ok: false, reason: 'coins', balance };
-    const food = (sSnap.data()?.petFood || 0) + pack.meals;
+    const foods = { ...(sSnap.data()?.petFoods || {}) };
+    foods[kind] = (foods[kind] || 0) + pack.meals;
     tx.set(wRef, { studentName, coinBalance: balance - pack.price }, { merge: true });
-    tx.set(sRef, { petFood: food }, { merge: true });
-    return { ok: true, balance: balance - pack.price, food };
+    tx.set(sRef, { petFoods: foods }, { merge: true });
+    return { ok: true, balance: balance - pack.price, foods };
   });
 }
 

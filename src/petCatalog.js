@@ -10,14 +10,15 @@
 
 export const PET_MIN_PRICE = 12000;
 export const MAX_PETS = 6;
-// Pet food, sold in the Pet Shop for coins. One meal feeds one pet once (any pet eats any food; the picture of the
-// food just changes with the animal). Every pet comes with a few free meals. The stock is one number on the student's
-// profile (students/{uid}.petFood), so it costs no extra reads.
+// Pet food, sold in the Pet Shop for coins -- every animal has its OWN food (a dog eats bones, a cat fish, a bird seeds...) and
+// food is sold only for the kinds of animal the student has adopted. One meal feeds one pet once. Every new pet comes with a few
+// free meals of its own food. The stock is one small map on the student's profile (students/{uid}.petFoods = { dog: 3, cat: 1 }),
+// so it costs no extra reads. (An older number, students/{uid}.petFood, counts as food any pet can eat.)
 export const STARTER_MEALS = 3;
-export const FOOD_PACKS = [
-  { id: 'meal1', meals: 1, price: 100, label: '1 meal', icon: '🍖' },
-  { id: 'meal7', meals: 7, price: 600, label: '7 meals', icon: '🍖🍖' },
-  { id: 'meal30', meals: 30, price: 2400, label: '30 meals', icon: '🥩' },
+export const FOOD_PACK_SIZES = [
+  { id: 'p1', meals: 1, mult: 1 },
+  { id: 'p7', meals: 7, mult: 6 },     // a little cheaper than 7 single meals
+  { id: 'p30', meals: 30, mult: 24 },
 ];
 
 
@@ -93,6 +94,23 @@ export const PET_KINDS = {
     acts: { walk: 3, sit: 3, play: 3, sleep: 2, talk: 2 },
   },
 };
+
+// each animal's own food (name, picture, price of ONE meal -- bigger animals eat more) and how big it is drawn on the home page
+const FOOD_INFO = {
+  dog: { name: 'Bones', emoji: '🦴', price: 100 }, cat: { name: 'Fish', emoji: '🐟', price: 100 }, bird: { name: 'Seeds', emoji: '🌾', price: 80 },
+  squirrel: { name: 'Nuts', emoji: '🌰', price: 80 }, rabbit: { name: 'Carrots', emoji: '🥕', price: 80 }, hamster: { name: 'Sunflower seeds', emoji: '🌻', price: 80 },
+  turtle: { name: 'Lettuce', emoji: '🥬', price: 80 }, fox: { name: 'Berries', emoji: '🍇', price: 120 }, parrot: { name: 'Fruit', emoji: '🍎', price: 120 },
+  penguin: { name: 'Fish', emoji: '🐟', price: 120 }, panda: { name: 'Bamboo', emoji: '🎋', price: 150 }, elephant: { name: 'Bananas', emoji: '🍌', price: 250 },
+};
+const SCALES = { dog: 1.08, cat: 1, bird: 0.9, squirrel: 1, rabbit: 1, hamster: 0.88, turtle: 0.95, fox: 1.05, parrot: 0.95, penguin: 0.95, panda: 1.2, elephant: 1.5 };
+Object.keys(PET_KINDS).forEach(k => {
+  const f = FOOD_INFO[k];
+  if (f) { PET_KINDS[k].food = f.emoji; PET_KINDS[k].foodName = f.name; PET_KINDS[k].foodPrice = f.price; }
+  PET_KINDS[k].scale = SCALES[k] || 1;
+});
+export const foodPacksFor = (kind) => FOOD_PACK_SIZES.map(p => ({ id: p.id, meals: p.meals, price: (PET_KINDS[kind]?.foodPrice || 100) * p.mult, label: p.meals === 1 ? '1 meal' : `${p.meals} meals` }));
+// meals this kind of pet can eat now: its own food plus any old "any pet" stock
+export const mealsOf = (foods, any, kind) => ((foods && foods[kind]) || 0) + (any || 0);
 
 // What a pet says in its speech bubble: short, easy English (15 for every animal -- 9 that every pet says and 6 of its own),
 // plus what it says when hungry, when thanked with food and when cuddled. Nothing here is stored or read: the bubble just
