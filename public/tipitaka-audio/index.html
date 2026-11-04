@@ -38,7 +38,7 @@ dialog{border:1px solid var(--l);border-radius:14px;background:var(--card);color
 <div id="seedbox" style="display:none;margin:8px 0"><button class="bt pri" id="seedbtn">📥 အရင်က ကွန်ပျူတာမှာ မှတ်ထားတာတွေ ထည့်မည်</button> <span class="sub" id="seedn"></span></div>
 <div id="list"></div>
 </main>
-<div id="bar" style="display:none"><div id="grip"><span style="flex:1" title="အသံကို စာပိုဒ်ရဲ့ ခန့်မှန်းနေရာကနေ စက္ကန့်ဘယ်လောက် ရှေ့/နောက် ကနေ စဖွင့်မလဲ။ အနှုတ် (-) = ရှေ့ကို၊ အပေါင်း = နောက်ကို">⠿ ခန့်မှန်းထားတဲ့ပိုဒ် <input type="number" id="leadU"> မှတ်ပြီးပိုဒ် <input type="number" id="leadM"> စက္ကန့်</span><button type="button" id="barmin" title="ချုံ့ရန် / ချဲ့ရန်">▁ ချုံ့</button></div><div class="in body"><div id="now">— သုတ္တန်တစ်ခုကို ရွေးပါ —</div><audio id="au" controls preload="none"></audio>
+<div id="bar" style="display:none"><div id="grip"><span style="flex:1" title="အသံကို စာပိုဒ်ရဲ့ ခန့်မှန်းနေရာကနေ စက္ကန့်ဘယ်လောက် ရှေ့/နောက် ကနေ စဖွင့်မလဲ။ အနှုတ် (-) = ခန့်မှန်းထားတာထက် ရှေ့ကို၊ အပေါင်း = နောက်ကို">⠿ စဖွင့်မယ့်နေရာ <input type="number" id="leadU"> စက္ကန့်</span><button type="button" id="barmin" title="ချုံ့ရန် / ချဲ့ရန်">▁ ချုံ့</button></div><div class="in body"><div id="now">— သုတ္တန်တစ်ခုကို ရွေးပါ —</div><audio id="au" controls preload="none"></audio>
 <div id="acts"><button data-miss="1" title="ဒီပိုဒ် အသံမရှိ">🔇</button><button data-missr="1" title="ဒီပိုဒ်ကနေ ... အထိ အသံမရှိ">🔇…</button><button data-up="1" title="ဒီပိုဒ်အထိ အတည်ပြုပြီး">✅↑</button><button data-d="-2">−2</button><button data-d="-1">−1</button><button data-d="1">+1</button><button data-d="2">+2</button><button data-set="1" title="ဖွင့်နေတဲ့ နေရာကို ဒီပိုဒ်ရဲ့ အစအဖြစ် မှတ်ရန် (ထပ်နှိပ်ရင် ဖြုတ်မည်)">📍</button></div></div></div>
 <div id="toast"></div>
 <dialog id="dlg"><form method="dialog"><b>ဆရာ ဝင်ရန်</b><div class="sub">အီးမေးလ်လိပ်စာ ရိုက်ပါ — ဝင်ရန် လင့်ကို အီးမေးလ်ပို့ပေးမည်။ ဆရာ့အီးမေးလ်ပဲ တည်းဖြတ်ခွင့်ရှိသည်။</div><input type="email" id="em" placeholder="you@example.com"><button class="bt pri" id="send" value="x">လင့်ပို့မည်</button> <button class="bt" value="c">ပိတ်</button></form></dialog>
@@ -53,8 +53,8 @@ const MN='၀၁၂၃၄၅၆၇၈၉',mn=n=>String(n).replace(/\d/g,d=>MN[d]
 const SETS=[['digha','ဒီဃနိကာယ်'],['mn','မဇ္ဈိမနိကာယ်'],['sn','သံယုတ္တနိကာယ်'],['an','အင်္ဂုတ္တရနိကာယ်'],['kn','ခုဒ္ဒကနိကာယ်'],['ab1','ဓမ္မသင်္ဂဏီ'],['ab2','ဝိဘင်္ဂ'],['ab3','ဓာတုကထာ'],['ab4','ပုဂ္ဂလပညတ္တိ'],['ab5','ကထာဝတ္ထု'],['ab6','ယမက'],['pt','ပဋ္ဌာန်း']];
 const lab=p=>String(p).replace(/_\d+$/,'');let TXT={},FIRST={},unsub=null;
 let MISS=new Set(),UP={},IDX={},SEED={},ED=false,NK=null,VER=new Set(),SHOWV=false,REV=new Set(),VL=false,OV={},TM={},FB_=null,CURK=null,CURFILE=0;
-$('#leadU').value=-lsGet('tpkLeadU','12');$('#leadM').value=-lsGet('tpkLeadM','2');
-$('#leadU').onchange=()=>lsSet('tpkLeadU',-$('#leadU').value);$('#leadM').onchange=()=>lsSet('tpkLeadM',-$('#leadM').value);
+$('#leadU').value=-lsGet('tpkLeadU','12');
+$('#leadU').onchange=()=>lsSet('tpkLeadU',-$('#leadU').value);
 const au=$('#au');
 // ---- the estimate: the start and the end of a group of suttas are known (file borders); every marked paragraph is a fixed point; in between the time runs with the characters
 let ORD=[];function calc(){ORD=[];IDX={};FIRST={};const cn={};NK.groups.forEach(g=>g.paras.forEach(x=>{if(FIRST[x[0]]===undefined)FIRST[x[0]]=x[0]+'|'+x[1];ORD.push(x[0]+'|'+x[1]);IDX[x[0]+'|'+x[1]]=cn[x[0]]=(cn[x[0]]===undefined?0:cn[x[0]]+1)}));TM={};NK.groups.forEach(g=>{const t0=NK.starts[g.fa],t1=NK.starts[g.fb];let cum=0;const W=x=>MISS.has(x[0]+'|'+x[1])?0:x[2];const tot=g.paras.reduce((a,x)=>a+W(x),0)||1;
@@ -90,12 +90,12 @@ async function listClick(e){
  if(e.target.dataset.miss){if(!ED)return;MISS.has(k)?MISS.delete(k):MISS.add(k);au.pause();calc();paint();put({m:JSON.stringify([...MISS])});return}
  if(e.target.dataset.missr){if(!ED)return;const [sn,pn]=k.split('|');const to=(prompt('¶'+pn+' ကနေ ဘယ်ပိုဒ်နံပါတ်အထိ အသံမရှိလဲ? (ပိုဒ်နံပါတ် ရိုက်ပါ၊ မြန်မာဂဏန်း/အင်္ဂလိပ်ဂဏန်း)')||'').trim().replace(/[0-9]/g,d=>MN[d]);if(!to)return;const e2=sn+'|'+to;if(IDX[e2]===undefined||IDX[e2]<IDX[k])return toast('ပိုဒ်နံပါတ် မှားနေသည်');ORD.filter(q=>q.split('|')[0]===sn&&IDX[q]>=IDX[k]&&IDX[q]<=IDX[e2]).forEach(q=>MISS.add(q));au.pause();calc();paint();put({m:JSON.stringify([...MISS])});toast('အသံမရှိအဖြစ် မှတ်ပြီး ✓');return}
  if(e.target.dataset.up){if(!ED)return;const [sn,pn]=k.split('|');au.pause();const on=UP[sn]!==pn;if(on)UP[sn]=pn;else delete UP[sn];
-  if(on){let ni=ORD.indexOf(k)+1;while(ORD[ni]!==undefined&&MISS.has(ORD[ni]))ni++;const nx=ORD[ni];if(nx){const [ns,np]=nx.split('|');if(ns!==sn)OPEN.add(ns);if(OV[nx]===undefined){OV[nx]=Math.round(TM[nx]);calc();put({j:JSON.stringify(OV)})}CURK=nx;paint();playAt(TM[nx],OV[nx]!==undefined?-$('#leadM').value:-$('#leadU').value);$('#now').textContent='¶'+np+' · '+NK.suttas[ns]+' (နောက်တစ်ပိုဒ် စစ်ရန်)';setTimeout(()=>{const el=document.querySelector('.row.cur');if(el)el.scrollIntoView({block:'center',behavior:'smooth'})},50)}else paint()}else paint();
+  if(on){let ni=ORD.indexOf(k)+1;while(ORD[ni]!==undefined&&MISS.has(ORD[ni]))ni++;const nx=ORD[ni];if(nx){const [ns,np]=nx.split('|');if(ns!==sn)OPEN.add(ns);if(OV[nx]===undefined){OV[nx]=Math.round(TM[nx]);calc();put({j:JSON.stringify(OV)})}CURK=nx;paint();playAt(TM[nx],-$('#leadU').value);$('#now').textContent='¶'+np+' · '+NK.suttas[ns]+' (နောက်တစ်ပိုဒ် စစ်ရန်)';setTimeout(()=>{const el=document.querySelector('.row.cur');if(el)el.scrollIntoView({block:'center',behavior:'smooth'})},50)}else paint()}else paint();
   if(await put({u:JSON.stringify(UP)}))toast(on?'¶'+pn+' အထိ အတည်ပြုပြီး ✓ — နောက်ပိုဒ်ကို ဖွင့်ပေးထားသည်':'ပြန်ဖျက်ပြီး');return}
  if(e.target.dataset.set&&ED&&OV[k]!==undefined){delete OV[k];calc();paint();put({j:JSON.stringify(OV)});toast('📍 မှတ်ထားတာ ဖြုတ်ပြီး (ခန့်မှန်းချိန်ကို ပြန်သုံးမည်)',3200);return}
  if(e.target.dataset.d||e.target.dataset.set){if(!ED)return;const t=e.target.dataset.set?Math.round(NK.starts[CURFILE-1]+au.currentTime):Math.max(0,Math.round(TM[k]+ +e.target.dataset.d));const d0=+e.target.dataset.d||0;const g=CURFILE?NK.starts[CURFILE-1]+au.currentTime:-1e9;const near=CURFILE>0&&Math.abs(g-TM[k])<90;
-  await mark(k,t);if(!e.target.dataset.set){{CURK=k;playAt(t,-$('#leadM').value)}}return}
- CURK=k;playAt(TM[k],OV[k]!==undefined?-$('#leadM').value:-$('#leadU').value);$('#now').textContent='¶'+k.split('|')[1]+' · '+NK.suttas[k.split('|')[0]];paint()};
+  await mark(k,t);if(!e.target.dataset.set){{CURK=k;playAt(t,-$('#leadU').value)}}return}
+ CURK=k;playAt(TM[k],-$('#leadU').value);$('#now').textContent='¶'+k.split('|')[1]+' · '+NK.suttas[k.split('|')[0]];paint()};
 $('#list').addEventListener('click',listClick);$('#acts').addEventListener('click',listClick);
 au.addEventListener('ended',()=>{if(CURFILE&&CURFILE<NK.dur.length){playAt(NK.starts[CURFILE],0)}});
 // ---- marks (Firestore doc tpkaudio/<nikaya>); everybody reads, only the teacher writes
