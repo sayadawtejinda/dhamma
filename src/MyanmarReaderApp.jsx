@@ -1461,6 +1461,29 @@ const [sheetBAudio] = useState(new Audio());
       }
   }, []);
 
+  // 🔄 for children whose sound stops working (a stuck audio file, a phone that put the sound to sleep): first tap = start every
+  // sound again; a second tap within 10 seconds = reload the page (the app puts the student back on the same sentence, and
+  // the coins still waiting to be saved are saved first).
+  const lastSoundRefreshRef = useRef(0);
+  const [soundRefreshNote, setSoundRefreshNote] = useState(null);
+  const handleRefreshSound = () => {
+      const now = Date.now();
+      if (now - lastSoundRefreshRef.current < 10000) {
+          try { flushPracticeModeCoins(); } catch (e) { /* nothing waiting */ }
+          setSoundRefreshNote('Reloading...');
+          setTimeout(() => window.location.reload(), 400);
+          return;
+      }
+      lastSoundRefreshRef.current = now;
+      interruptPlayback();
+      [level1AudioRef, level2AudioRef, charsAudioRef, qaAudioRef].forEach(r => { try { if (r.current) { r.current.pause(); r.current.load(); } } catch (e) { /* ignore */ } });
+      try { sheetBAudio.pause(); sheetBAudio.load(); } catch (e) { /* ignore */ }
+      isWordAudioBusyRef.current = false;
+      setIsFetchingSheet(false);
+      setSoundRefreshNote('Sound refreshed. Still no sound? Tap 🔄 once more to reload the page.');
+      setTimeout(() => setSoundRefreshNote(null), 8000);
+  };
+
   const interruptPlayback = () => {
       playbackIdRef.current += 1;
       qaPlaybackTokenRef.current += 1;
@@ -4133,8 +4156,18 @@ useEffect(() => {
             >
               <RotateCcw size={24} />
             </button>
+            <button
+              onClick={handleRefreshSound}
+              className="flex items-center justify-center gap-2 bg-sky-500 hover:bg-sky-600 text-white px-5 py-4 rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transition-all active:scale-95 border-b-4 border-sky-700 h-[60px]"
+              title="Sound not working? Tap to refresh"
+            >
+              <span className="text-2xl">🔄</span>
+            </button>
           </div>
         </div>
+        {soundRefreshNote && (
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] bg-gray-900 text-white px-5 py-3 rounded-2xl shadow-xl text-sm font-bold max-w-[90vw] text-center">{soundRefreshNote}</div>
+        )}
 
         <div className="bg-white rounded-3xl shadow-lg p-6 border border-gray-100 space-y-6">
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300 relative">
