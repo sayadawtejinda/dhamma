@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="my"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ပိဋကတ်တော် အသံ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Myanmar:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#faf6ef;--card:#fff;--t:#2a2118;--m:#7a6a58;--a:#7b3fb8;--l:#e3d8c8;--ok:#2e9e5b;--warn:#ffe9b3;--warnt:#5a3d00}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#1b1713;--card:#26201a;--t:#f0e6d6;--m:#a89a86;--l:#3a3128;--warn:#4a3a10;--warnt:#ffe9b3}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--t);font:16px/1.7 "Noto Sans Myanmar","Pyidaungsu",system-ui,sans-serif;padding-bottom:150px}
+header{padding:14px 16px 6px;max-width:900px;margin:0 auto}h1{font-size:1.3rem;margin:0}.sub{color:var(--m);font-size:.88rem}
+main{max-width:900px;margin:0 auto;padding:0 16px}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}.tabs button,.bt{border:1px solid var(--a);background:none;color:var(--a);border-radius:999px;padding:5px 14px;font:inherit;cursor:pointer}.tabs button.on,.bt.pri{background:var(--a);color:#fff}
+.su{background:var(--card);border:1px solid var(--l);border-radius:12px;margin:8px 0;overflow:hidden}
+.su>.h{display:flex;gap:8px;align-items:center;padding:10px 12px;cursor:pointer}.su>.h b{flex:1}.su .meta{color:var(--m);font-size:.82rem}
+.row{display:flex;gap:8px;align-items:flex-start;padding:8px 12px;border-top:1px solid var(--l);cursor:pointer}.row:hover{background:#7b3fb810}
+.row.cur{background:#7b3fb822}.row .pn{flex:none;width:44px;color:var(--m);font-size:.85rem}.row .tm{flex:none;width:58px;font-variant-numeric:tabular-nums;color:var(--a);font-weight:600;font-size:.9rem}.row.set .tm{color:var(--ok)}
+.row .tx{flex:1;font-size:.9rem;color:var(--m)}.fine{display:none;gap:3px;flex:none}.ed .fine{display:flex}.fine button{border:1px solid var(--a);color:var(--a);background:none;border-radius:6px;padding:0 7px;cursor:pointer;font:inherit;font-size:.8rem}
+.warn{background:var(--warn);color:var(--warnt);padding:5px 10px;border-radius:8px;font-size:.85rem;margin:6px 12px}
+#bar{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--card);border-top:2px solid var(--a);padding:8px 12px calc(8px + env(safe-area-inset-bottom));box-shadow:0 -4px 18px rgba(0,0,0,.2)}
+#bar .in{max-width:900px;margin:0 auto}#now{font-size:.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}audio{width:100%;height:36px}
+#sk{display:flex;gap:6px;justify-content:center;align-items:center;margin-top:4px;flex-wrap:wrap}#sk button{border:1px solid var(--a);background:none;color:var(--a);border-radius:8px;padding:4px 10px;font:inherit;cursor:pointer}#ct{min-width:64px;text-align:center;font-variant-numeric:tabular-nums;color:var(--m)}
+details.set{margin:8px 0;color:var(--m);font-size:.88rem}details.set input{width:56px;font:inherit;padding:2px 4px}
+.ed-only{display:none}.ed .ed-only{display:inline-block}
+#toast{position:fixed;left:50%;bottom:170px;transform:translateX(-50%);background:#333;color:#fff;padding:8px 14px;border-radius:10px;opacity:0;pointer-events:none;transition:.3s;z-index:30;max-width:90vw}#toast.on{opacity:1}
+dialog{border:1px solid var(--l);border-radius:14px;background:var(--card);color:var(--t);max-width:420px;width:92vw}dialog input{width:100%;font:inherit;padding:8px;margin:8px 0}
+</style></head><body>
+<header><h1>🎧 ပိဋကတ်တော် အသံ <span class="sub" id="nk"></span></h1>
+<div class="sub">သုတ္တန်ကို ဖွင့်ပြီး ပိဋ်နံပါတ်ကို နှိပ်ရင် အဲဒီပိုဒ်ကနေ နားထောင်နိုင်သည်။ အစိမ်း <span style="color:var(--ok)">●</span> = ဆရာ့ကိုယ်တိုင် နားထောင်စစ်ပြီး၊ ဖြူ = ခန့်မှန်းထားသည် (အနည်းငယ် လွဲနိုင်)။</div>
+<div style="margin-top:6px"><button class="bt" id="login">🔑 ဆရာ ဝင်ရန် (တည်းဖြတ်ရန်)</button><span class="sub ed-only" id="who"></span></div>
+<details class="set"><summary>⚙ ပိုဒ်ကို နှိပ်တဲ့အခါ ဘယ်နှစ်စက္ကန့် ရှေ့ကနေ ဖွင့်မလဲ</summary>
+ ခန့်မှန်းထားတဲ့ ပိုဒ် <input type="number" id="leadU" min="0" max="120"> စက္ကန့် &nbsp; စစ်ပြီးသား ပိုဒ် <input type="number" id="leadM" min="0" max="120"> စက္ကန့်</details>
+</header>
+<main id="main" class="">
+<div id="list"></div>
+</main>
+<div id="bar"><div class="in"><div id="now">— သုတ္တန်တစ်ခုကို ရွေးပါ —</div><audio id="au" controls preload="none"></audio>
+<div id="sk"><button data-s="-30">⏪30</button><button data-s="-10">⏪10</button><button data-s="-5">⏪5</button><span id="ct">0:00</span><button data-s="5">5⏩</button><button data-s="10">10⏩</button><button data-s="30">30⏩</button></div></div></div>
+<div id="toast"></div>
+<dialog id="dlg"><form method="dialog"><b>ဆရာ ဝင်ရန်</b><div class="sub">အီးမေးလ်လိပ်စာ ရိုက်ပါ — ဝင်ရန် လင့်ကို အီးမေးလ်ပို့ပေးမည်။ ဆရာ့အီးမေးလ်ပဲ တည်းဖြတ်ခွင့်ရှိသည်။</div><input type="email" id="em" placeholder="you@example.com"><button class="bt pri" id="send" value="x">လင့်ပို့မည်</button> <button class="bt" value="c">ပိတ်</button></form></dialog>
+<script>
+const FB={apiKey:"AIzaSyAZkNjG9WnRVIn1np1uPFvLZtL_M_Q7Vl0",authDomain:"dhamma-songs.firebaseapp.com",projectId:"dhamma-songs",appId:"1:342644793786:web:e9f64de5f0672d46f4bd83"};
+const V='11.6.1',ADMIN='sayadawtejinda@gmail.com';
+const $=s=>document.querySelector(s);const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const lsGet=(k,d)=>{try{const v=localStorage.getItem(k);return v===null?d:v}catch(e){return d}},lsSet=(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}};
+const toast=(t,ms=2200)=>{const e=$('#toast');e.textContent=t;e.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove('on'),ms)};
+const mm=t=>{t=Math.round(t);const h=Math.floor(t/3600),m=Math.floor(t%3600/60),s=t%60;return (h?h+':'+String(m).padStart(2,'0'):m)+':'+String(s).padStart(2,'0')};
+const MN='၀၁၂၃၄၅၆၇၈၉',mn=n=>String(n).replace(/\d/g,d=>MN[d]);
+let ED=false,NK=null,OV={},TM={},FB_=null,CURK=null,CURFILE=0;
+$('#leadU').value=lsGet('tpkLeadU','12');$('#leadM').value=lsGet('tpkLeadM','2');
+$('#leadU').onchange=()=>lsSet('tpkLeadU',$('#leadU').value);$('#leadM').onchange=()=>lsSet('tpkLeadM',$('#leadM').value);
+const au=$('#au');
+// ---- the estimate: the start and the end of a group of suttas are known (file borders); every marked paragraph is a fixed point; in between the time runs with the characters
+function calc(){TM={};NK.groups.forEach(g=>{const t0=NK.starts[g.fa],t1=NK.starts[g.fb];let cum=0;const tot=g.paras.reduce((a,x)=>a+x[2],0)||1;
+ const pts=[{c:0,t:t0}];g.paras.forEach(x=>{const k=x[0]+'|'+x[1];if(OV[k]!==undefined&&cum>0&&OV[k]>=t0&&OV[k]<t1){const q=pts[pts.length-1];if(OV[k]>q.t&&cum>q.c)pts.push({c:cum,t:OV[k]})}cum+=x[2]});pts.push({c:tot,t:t1});
+ cum=0;let j=0;g.paras.forEach(x=>{const k=x[0]+'|'+x[1];if(OV[k]!==undefined&&cum===0)pts[0].t=OV[k]>=t0?OV[k]:t0;while(j<pts.length-2&&cum>=pts[j+1].c)j++;const a=pts[j],b=pts[j+1];TM[k]=b.c>a.c?a.t+(cum-a.c)/(b.c-a.c)*(b.t-a.t):a.t;if(OV[k]!==undefined)TM[k]=OV[k];cum+=x[2]})})}
+const fileOf=t=>{let f=0;while(f<NK.dur.length-1&&NK.starts[f+1]<=t)f++;return f};
+// ---- list
+const OPEN=new Set();
+function paint(){const by={};NK.groups.forEach(g=>g.paras.forEach(x=>(by[x[0]]=by[x[0]]||[]).push(x)));
+ $('#list').innerHTML=Object.keys(by).map(no=>{const ps=by[no],n=ps.filter(x=>OV[x[0]+'|'+x[1]]!==undefined).length,t0=TM[ps[0][0]+'|'+ps[0][1]],last=ps[ps.length-1],t1=NK.starts[NK.groups.find(g=>g.paras.includes(last)).fb];
+  const open=OPEN.has(no);
+  return `<div class="su" data-no="${no}"><div class="h" data-tog="${no}"><b>${esc(NK.sutNum[no])}။ ${esc(NK.suttas[no])}</b><span class="meta">${mm(t1-t0)} · ¶${mn(ps.length)}${n?` · <span style="color:var(--ok)">စစ်ပြီး ${mn(n)}</span>`:''}</span><span>${open?'▲':'▼'}</span></div>`+
+  (open?(NK.warn.includes(+no)?'<div class="warn">⚠ ဒီသုတ္တန်ကို ဖတ်သူက အတိုချုံး/ပိုဖတ်ထားတာမို့ ပိုဒ်ခန့်မှန်းချက် ပိုလွဲနိုင်သည်</div>':'')+ps.map(x=>rowHtml(x)).join(''):'')+'</div>'}).join('')}
+function rowHtml(x){const k=x[0]+'|'+x[1],set=OV[k]!==undefined;return `<div class="row ${set?'set':''} ${k===CURK?'cur':''}" data-k="${k}"><span class="pn">¶${x[1]}</span><span class="tm">${mm(TM[k])}</span><span class="tx">${esc(x[3])}</span><span class="fine"><button data-d="-2">−2</button><button data-d="-1">−1</button><button data-d="1">+1</button><button data-d="2">+2</button><button data-set="1">📍</button></span></div>`}
+function playAt(t,lead){const f=fileOf(t);const url=NK.base+NK.pre+'-'+String(f+1).padStart(3,'0')+'.mp3';
+ const off=Math.max(0,t-NK.starts[f]-lead);
+ if(CURFILE!==f+1||!au.src.endsWith(url.split('/').pop())){au.src=url;CURFILE=f+1;au.addEventListener('loadedmetadata',()=>{au.currentTime=off},{once:true});au.load()}else au.currentTime=off;au.play().catch(()=>toast('ဖွင့်မရပါ — အင်တာနက် စစ်ပါ'))}
+$('#list').onclick=async e=>{
+ const tg=e.target.closest('[data-tog]');if(tg){const no=tg.dataset.tog;OPEN.has(no)?OPEN.delete(no):OPEN.add(no);paint();return}
+ const r=e.target.closest('.row');if(!r)return;const k=r.dataset.k;
+ if(e.target.dataset.d||e.target.dataset.set){if(!ED)return;const t=e.target.dataset.set?Math.round(NK.starts[CURFILE-1]+au.currentTime):Math.max(0,Math.round(TM[k]+ +e.target.dataset.d));await mark(k,t);if(!e.target.dataset.set)playAt(t,2);return}
+ CURK=k;playAt(TM[k],OV[k]!==undefined?+$('#leadM').value:+$('#leadU').value);$('#now').textContent='¶'+k.split('|')[1]+' · '+NK.suttas[k.split('|')[0]];paint()};
+$('#sk').onclick=e=>{const s=e.target.dataset.s;if(s)au.currentTime=Math.max(0,Math.min(au.duration||1e9,au.currentTime+ +s))};
+au.addEventListener('timeupdate',()=>{$('#ct').textContent=mm(au.currentTime)});
+au.addEventListener('ended',()=>{if(CURFILE&&CURFILE<NK.dur.length){playAt(NK.starts[CURFILE],0)}});
+// ---- marks (Firestore doc tpkaudio/<nikaya>); everybody reads, only the teacher writes
+let fbp=null;function fb(){return fbp||(fbp=(async()=>{
+ const A=await import(`https://www.gstatic.com/firebasejs/${V}/firebase-app.js`),Au=await import(`https://www.gstatic.com/firebasejs/${V}/firebase-auth.js`),F=await import(`https://www.gstatic.com/firebasejs/${V}/firebase-firestore.js`);
+ const app=A.initializeApp(FB,'tpk'),auth=Au.getAuth(app),db=F.getFirestore(app);
+ if(Au.isSignInWithEmailLink(auth,location.href)){let em=lsGet('tpkEmail','');if(!em)em=(prompt('ဝင်ရန် အီးမေးလ်ကို ထပ်ရိုက်ပါ')||'').trim();
+  try{await Au.signInWithEmailLink(auth,em,location.href);lsSet('tpkEmail',em);toast('ဝင်ပြီးပါပြီ ✓')}catch(e){toast('ဝင်မရပါ — လင့်အသစ် ပြန်တောင်းပါ')}
+  history.replaceState(null,'',location.pathname+location.hash)}
+ await auth.authStateReady();return {Au,F,auth,db}})())}
+function setEd(u){ED=!!u&&(u.email||'').toLowerCase()===ADMIN;document.body.classList.toggle('ed',ED);$('#main').classList.toggle('ed',ED);$('#who').textContent=ED?' ✓ ဆရာ — တည်းဖြတ်နိုင်သည်':'';$('#login').style.display=ED?'none':'';}
+async function mark(k,t){OV[k]=t;calc();paint();try{const f=await fb();await f.F.setDoc(f.F.doc(f.db,'tpkaudio',NK.id),{j:JSON.stringify(OV),ts:Date.now()})}catch(e){toast('မသိမ်းနိုင်ပါ — ဝင်ထားသလား စစ်ပါ')}}
+$('#login').onclick=async()=>{const f=await fb();if(f.auth.currentUser){setEd(f.auth.currentUser);return}$('#em').value=lsGet('tpkEmail','');$('#dlg').showModal()};
+$('#send').onclick=async e=>{e.preventDefault();const em=$('#em').value.trim();if(!em)return;const f=await fb();
+ try{await f.Au.sendSignInLinkToEmail(f.auth,em,{url:location.origin+location.pathname,handleCodeInApp:true});lsSet('tpkEmail',em);$('#dlg').close();toast('✉ လင့်ပို့ပြီး — အီးမေးလ်ထဲက လင့်ကို နှိပ်ပါ',6000)}catch(err){toast('ပို့မရပါ: '+(err.code||err.message),5000)}};
+(async()=>{
+ NK=await (await fetch('data/digha.json?v=1')).json();$('#nk').textContent='· '+NK.name;calc();OPEN.add('1');paint();
+ try{const f=await fb();setEd(f.auth.currentUser);f.Au.onAuthStateChanged(f.auth,setEd);
+  f.F.onSnapshot(f.F.doc(f.db,'tpkaudio',NK.id),s=>{try{OV=s.exists()?JSON.parse(s.data().j||'{}'):{}}catch(e){OV={}}calc();paint()},()=>{})}catch(e){}
+})();
+</script></body></html>

@@ -44,5 +44,11 @@ service cloud.firestore {
     match /blocked/{email} {
       allow read, write: if isAdmin();
     }
+
+    // Tipitaka audio page (public/tipitaka-audio): where each paragraph starts in the recordings; everybody reads, only the teacher writes
+    match /tpkaudio/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
   }
 }
