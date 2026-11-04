@@ -1428,7 +1428,8 @@ const maranaJavana = mSOpts[sankharaState.javanaIdx % mSOpts.length] || mSGroup.
         const hasTada = (variation === 0 || variation === 2) && isTadaAllowed;
         const hasBhavanga = (variation === 2 || variation === 3);
         const isPancaDoor = (lifePhase === 'past' ? maranaDoor.past : maranaDoor.present) === 1;
-        const vN = isPancaDoor ? "မရဏာသန္န ပဉ္စဒွါရဝီထိ" : "မရဏာသန္န မနောဒွါရဝီထိ";
+        const isBig = (variation === 0 || variation === 2);      // the two vithis with tadarammana: atimahanta (5 doors) / ativibhuta (mind door); the other two: mahanta / vibhuta
+        const vN = isPancaDoor ? `မရဏာသန္န ပဉ္စဒွါရဝီထိ (${isBig ? "အတိမဟန္တာရုံ" : "မဟန္တာရုံ"})` : `မရဏာသန္န မနောဒွါရဝီထိ (${isBig ? "အတိဝိဘူတာရုံ" : "ဝိဘူတာရုံ"})`;
         const pDoorKey = ['cakkhu', 'sota', 'ghana', 'jivha', 'kaya'][maranaPancaIdx];
         const pInfo = PANCADVARA_INFO[pDoorKey];
 
@@ -1462,7 +1463,7 @@ const maranaJavana = mSOpts[sankharaState.javanaIdx % mSOpts.length] || mSGroup.
         }
         
         if (hasBhavanga) {
-            const bvCount = variation === 2 ? 2 : 1; 
+            const bvCount = 1; 
             for(let i=1; i<=bvCount; i++) {
                 seq.push({ vName: "ဝီထိမုတ်စိတ်", name: "ဘဝင်", b: "ဟဒယဝတ္ထု-၆၃", c: activeBhavanga.cetasikas, a: oldAram, isBhavangaNode: true, specificName: activeBhavanga.label });
             }

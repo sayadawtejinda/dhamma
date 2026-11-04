@@ -1407,7 +1407,8 @@ const hasPreSamphassa = (isNamaKhandha || isViññana) && (
         const hasTada = (variation === 0 || variation === 2) && isTadaAllowed;
         const hasBhavanga = (variation === 2 || variation === 3);
         const isPancaDoor = (lifePhase === 'past' ? maranaDoor.past : maranaDoor.present) === 1;
-        const vN = isPancaDoor ? "Ngũ môn lộ Cận tử" : "Ý môn lộ Cận tử";
+        const isBig = (variation === 0 || variation === 2);      // the two vithis with tadarammana: atimahanta (5 doors) / ativibhuta (mind door); the other two: mahanta / vibhuta
+        const vN = isPancaDoor ? `Ngũ môn lộ Cận tử (${isBig ? "Cảnh Rất Lớn" : "Cảnh Lớn"})` : `Ý môn lộ Cận tử (${isBig ? "Cảnh Rất Rõ" : "Cảnh Rõ"})`;
         const pDoorKey = ['cakkhu', 'sota', 'ghana', 'jivha', 'kaya'][maranaPancaIdx];
         const pInfo = PANCADVARA_INFO[pDoorKey];
 
@@ -1441,7 +1442,7 @@ const hasPreSamphassa = (isNamaKhandha || isViññana) && (
         }
         
         if (hasBhavanga) {
-            const bvCount = variation === 2 ? 2 : 1; 
+            const bvCount = 1; 
             for(let i=1; i<=bvCount; i++) {
                 seq.push({ vName: "Tâm ngoại lộ", name: "Hữu phần", b: "Ý căn-63", c: activeBhavanga.cetasikas, a: oldAram, isBhavangaNode: true, specificName: activeBhavanga.label });
             }
