@@ -32,6 +32,7 @@ dialog{border:1px solid var(--l);border-radius:14px;background:var(--card);color
 </header>
 <div id="lock" style="max-width:900px;margin:30px auto;padding:0 16px;color:var(--m)">🔒 ဒီစာမျက်နှာက ဆရာအတွက်သာ ဖြစ်ပါသည်။ စာဖတ်သူများက Tipitaka စာမျက်နှာထဲမှာ စာပိုဒ်နံပါတ်ဘေးက 🔊 ကို နှိပ်ပြီး နားထောင်နိုင်ပါသည်။ ဆရာဖြစ်ရင် အပေါ်က <b>🔑 ဆရာ ဝင်ရန်</b> ကို နှိပ်ပါ။</div>
 <main id="main" class="" style="display:none">
+<div id="seedbox" style="display:none;margin:8px 0"><button class="bt pri" id="seedbtn">📥 အရင်က ကွန်ပျူတာမှာ မှတ်ထားတာတွေ ထည့်မည်</button> <span class="sub" id="seedn"></span></div>
 <div id="list"></div>
 </main>
 <div id="bar" style="display:none"><div class="in"><div id="now">— သုတ္တန်တစ်ခုကို ရွေးပါ —</div><audio id="au" controls preload="none"></audio>
@@ -46,7 +47,7 @@ const lsGet=(k,d)=>{try{const v=localStorage.getItem(k);return v===null?d:v}catc
 const toast=(t,ms=2200)=>{const e=$('#toast');e.textContent=t;e.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove('on'),ms)};
 const mm=t=>{t=Math.round(t);const h=Math.floor(t/3600),m=Math.floor(t%3600/60),s=t%60;return (h?h+':'+String(m).padStart(2,'0'):m)+':'+String(s).padStart(2,'0')};
 const MN='၀၁၂၃၄၅၆၇၈၉',mn=n=>String(n).replace(/\d/g,d=>MN[d]);
-let ED=false,NK=null,VER=new Set(),SHOWV=false,OV={},TM={},FB_=null,CURK=null,CURFILE=0;
+let SEED={},ED=false,NK=null,VER=new Set(),SHOWV=false,OV={},TM={},FB_=null,CURK=null,CURFILE=0;
 $('#leadU').value=lsGet('tpkLeadU','12');$('#leadM').value=lsGet('tpkLeadM','2');
 $('#leadU').onchange=()=>lsSet('tpkLeadU',$('#leadU').value);$('#leadM').onchange=()=>lsSet('tpkLeadM',$('#leadM').value);
 const au=$('#au');
@@ -57,7 +58,8 @@ function calc(){TM={};NK.groups.forEach(g=>{const t0=NK.starts[g.fa],t1=NK.start
 const fileOf=t=>{let f=0;while(f<NK.dur.length-1&&NK.starts[f+1]<=t)f++;return f};
 // ---- list
 const OPEN=new Set();
-function paint(){const by={};NK.groups.forEach(g=>g.paras.forEach(x=>(by[x[0]]=by[x[0]]||[]).push(x)));
+function seedCheck(){const n=Object.keys(SEED).filter(k=>OV[k]===undefined).length;$('#seedbox').style.display=ED&&n?'':'none';$('#seedn').textContent=n?mn(n)+' ပိုဒ် (ဒီဃနိကာယ် ပထမသုတ္တန်)':''}
+function paint(){seedCheck();const by={};NK.groups.forEach(g=>g.paras.forEach(x=>(by[x[0]]=by[x[0]]||[]).push(x)));
  const nv=Object.keys(by).filter(no=>VER.has(+no)).length;
  $('#list').innerHTML=(nv?`<div style="margin:6px 0"><button class="bt" data-showv="1">${SHOWV?'🙈 အတည်ပြုပြီးသားများ ဝှက်မည်':'👁 အတည်ပြုပြီးသား '+mn(nv)+' ခု ပြရန်'}</button> <span class="sub">(အများပြည်သူကို ပြထားပြီးသား သုတ္တန်များ — ဝှက်ထားသည်)</span></div>`:'')+Object.keys(by).filter(no=>SHOWV||!VER.has(+no)).map(no=>{const ps=by[no],n=ps.filter(x=>OV[x[0]+'|'+x[1]]!==undefined).length,t0=TM[ps[0][0]+'|'+ps[0][1]],last=ps[ps.length-1],t1=NK.starts[NK.groups.find(g=>g.paras.includes(last)).fb];
   const open=OPEN.has(no);
@@ -92,7 +94,9 @@ async function saveVer(){if(await put({v:JSON.stringify([...VER])}))toast('သ�
 $('#login').onclick=async()=>{const f=await fb();if(f.auth.currentUser){setEd(f.auth.currentUser);return}$('#em').value=lsGet('tpkEmail','');$('#dlg').showModal()};
 $('#send').onclick=async e=>{e.preventDefault();const em=$('#em').value.trim();if(!em)return;const f=await fb();
  try{await f.Au.sendSignInLinkToEmail(f.auth,em,{url:location.origin+location.pathname,handleCodeInApp:true});lsSet('tpkEmail',em);$('#dlg').close();toast('✉ လင့်ပို့ပြီး — အီးမေးလ်ထဲက လင့်ကို နှိပ်ပါ',6000)}catch(err){toast('ပို့မရပါ: '+(err.code||err.message),5000)}};
+$('#seedbtn').onclick=async()=>{if(!ED)return;let n=0;Object.keys(SEED).forEach(k=>{if(OV[k]===undefined){OV[k]=SEED[k];n++}});calc();paint();if(await put({j:JSON.stringify(OV)}))toast('ထည့်ပြီး ✓ '+mn(n)+' ပိုဒ်')};
 (async()=>{
+ try{SEED=await (await fetch('data/seed_digha.json?v=1')).json()}catch(e){}
  NK=await (await fetch('data/digha.json?v=1')).json();$('#nk').textContent='· '+NK.name;calc();OPEN.add('1');paint();
  try{const f=await fb();setEd(f.auth.currentUser);f.Au.onAuthStateChanged(f.auth,setEd);
   f.F.onSnapshot(f.F.doc(f.db,'tpkaudio',NK.id),s=>{try{OV=s.exists()?JSON.parse(s.data().j||'{}'):{}}catch(e){OV={}}try{VER=new Set(s.exists()?JSON.parse(s.data().v||'[]'):[])}catch(e){VER=new Set()}calc();paint()},()=>{})}catch(e){}
