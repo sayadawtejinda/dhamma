@@ -1,7 +1,7 @@
 import { doc, runTransaction } from 'firebase/firestore';
 import { db } from './firebase';
 import { appId } from './firebaseConfig';
-import { MAX_PETS, PET_KINDS, STARTER_MEALS, foodPacksFor, newPetId, petCanEat } from './petCatalog';
+import { MAX_PETS, PET_KINDS, PET_SELL_PRICE, STARTER_MEALS, foodPacksFor, newPetId, petCanEat } from './petCatalog';
 
 // The only three things that ever write pet data. Each is ONE transaction over the stored documents (never
 // this screen's copy), so a double tap or a second tab cannot spend twice, feed twice or lose a pet.
@@ -30,7 +30,9 @@ export async function buyPet({ studentUid, studentName, kind, petName }) {
     const foods = { ...(sSnap.data()?.petFoods || {}) };
     foods[kind] = (foods[kind] || 0) + STARTER_MEALS;
     tx.set(wRef, { studentName, coinBalance: balance - info.price }, { merge: true });
-    tx.set(sRef, { pets: [...pets, pet], petFoods: foods }, { merge: true });
+    // petMax = the most pets this student has had at once: the Pets & Kindness badges are counted from it, so selling a pet never takes a badge away
+    const petMax = Math.max(sSnap.data()?.petMax || 0, pets.length + 1);
+    tx.set(sRef, { pets: [...pets, pet], petFoods: foods, petMax }, { merge: true });
     return { ok: true, pet, balance: balance - info.price, foods };
   });
 }
@@ -76,6 +78,43 @@ export async function buyFood({ studentUid, studentName, kind, packId }) {
     tx.set(wRef, { studentName, coinBalance: balance - pack.price }, { merge: true });
     tx.set(sRef, { petFoods: foods }, { merge: true });
     return { ok: true, balance: balance - pack.price, foods };
+  });
+}
+
+// Sells a pet back for PET_SELL_PRICE coins (into the Shrine Room wallet). Resolves { ok, balance, pets } or { ok: false, reason: 'gone' }.
+export async function sellPet({ studentUid, studentName, petId }) {
+  const sRef = studentRef(studentUid);
+  const wRef = walletRef(studentName);
+  return runTransaction(db, async (tx) => {
+    const [sSnap, wSnap] = await Promise.all([tx.get(sRef), tx.get(wRef)]);
+    const pets = Array.isArray(sSnap.data()?.pets) ? sSnap.data().pets : [];
+    if (!pets.some(p => p.id === petId)) return { ok: false, reason: 'gone' };
+    const balance = (wSnap.exists() ? (wSnap.data().coinBalance ?? 0) : 0) + PET_SELL_PRICE;
+    const rest = pets.filter(p => p.id !== petId);
+    tx.set(wRef, { studentName, coinBalance: balance }, { merge: true });
+    tx.set(sRef, { pets: rest }, { merge: true });
+    return { ok: true, balance, pets: rest };
+  });
+}
+
+// Sends a pet to rest in its little house (it leaves the home screen and does not get hungry meanwhile) or brings it out again.
+// Resolves the new list of pets, or null when the pet is gone.
+export async function setPetHome({ studentUid, petId, home }) {
+  const sRef = studentRef(studentUid);
+  return runTransaction(db, async (tx) => {
+    const snap = await tx.get(sRef);
+    const pets = Array.isArray(snap.data()?.pets) ? snap.data().pets : [];
+    if (!pets.some(p => p.id === petId)) return null;
+    const now = Date.now();
+    const next = pets.map(p => {
+      if (p.id !== petId) return p;
+      if (home) return { ...p, home: true, homeAt: now };
+      // coming out: the time spent resting does not count towards hunger
+      const { homeAt, home: _h, ...rest } = p;
+      return { ...rest, fedAt: (p.fedAt || p.boughtAt || now) + Math.max(0, now - (homeAt || now)) };
+    });
+    tx.set(sRef, { pets: next }, { merge: true });
+    return next;
   });
 }
 

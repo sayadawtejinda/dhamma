@@ -10,6 +10,8 @@
 
 export const PET_MIN_PRICE = 12000;
 export const MAX_PETS = 6;
+// A pet that is no longer wanted can be sold back for a flat price, whatever it cost.
+export const PET_SELL_PRICE = 5000;
 // Pet food, sold in the Pet Shop for coins -- every animal has its OWN food (a dog eats bones, a cat fish, a bird seeds...) and
 // food is sold only for the kinds of animal the student has adopted. One meal feeds one pet once. Every new pet comes with a few
 // free meals of its own food. The stock is one small map on the student's profile (students/{uid}.petFoods = { dog: 3, cat: 1 }),

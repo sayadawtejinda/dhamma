@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { appId } from './firebaseConfig';
-import { PET_KINDS, MAX_PETS, STARTER_MEALS, foodPacksFor, mealsOf, petKindOf, petHunger, formatCoins } from './petCatalog';
-import { buyPet, buyFood, feedPet, renamePet } from './petActions';
+import { PET_KINDS, MAX_PETS, PET_SELL_PRICE, STARTER_MEALS, foodPacksFor, mealsOf, petKindOf, petHunger, formatCoins } from './petCatalog';
+import { buyPet, buyFood, feedPet, renamePet, sellPet, setPetHome } from './petActions';
 import PetSprite, { PET_SPRITE_CSS } from './PetSprite';
 import { PetYard } from './PetHome';
 
@@ -33,6 +33,7 @@ export default function PetApp({ entryRequest, onExit }) {
   const [pets, setPets] = useState([]);
   const [foods, setFoods] = useState({});           // meals in stock, by kind of animal
   const [anyFood, setAnyFood] = useState(0);          // old "any pet" meals
+  const [sellingPet, setSellingPet] = useState(null);   // the pet being confirmed for sale
   const [buyingFood, setBuyingFood] = useState(null); // { kind, packId } being confirmed
   const [tab, setTab] = useState('shop');
   const [adopting, setAdopting] = useState(null);   // kind id being confirmed
@@ -139,6 +140,27 @@ export default function PetApp({ entryRequest, onExit }) {
     const pack = foodPacksFor(kind).find(p => p.id === packId);
     if (coins < pack.price) { showToast(`You need ${formatCoins(pack.price - coins)} more coins.`); return; }
     setBuyingFood({ kind, packId });
+  };
+
+  const confirmSell = async () => {
+    if (!sellingPet || busy) return;
+    setBusy(true);
+    try {
+      const result = await sellPet({ studentUid, studentName, petId: sellingPet.id });
+      if (result.ok) { setCoins(result.balance); setPets(result.pets); showToast(`${sellingPet.name} went to a new home. You got 🪙 ${formatCoins(PET_SELL_PRICE)}.`); }
+      else showToast('That pet is not here any more.');
+    } catch (e) { console.error('Error selling pet:', e); showToast('Something went wrong. Please try again.'); }
+    setSellingPet(null);
+    setBusy(false);
+  };
+  const toggleHome = async (pet) => {
+    if (isPreview || busy) return;
+    setBusy(true);
+    try {
+      const next = await setPetHome({ studentUid, petId: pet.id, home: !pet.home });
+      if (next) { setPets(next); showToast(pet.home ? `${pet.name} is out on your home page again!` : `${pet.name} is resting in its house. 🏠`); }
+    } catch (e) { console.error('Error moving pet:', e); showToast('Something went wrong. Please try again.'); }
+    setBusy(false);
   };
 
   const submitRename = async () => {
@@ -257,11 +279,16 @@ export default function PetApp({ entryRequest, onExit }) {
               {pets.map(pet => {
                 const info = petKindOf(pet);
                 const level = petHunger(pet);
-                const label = hungerLabel(level);
+                const label = pet.home ? { text: 'Resting in its house', icon: '😴', cls: 'text-indigo-600' } : hungerLabel(level);
                 const days = Math.max(0, Math.floor((Date.now() - (pet.boughtAt || Date.now())) / 86400000));
                 return (
-                  <div key={pet.id} className="bg-white rounded-2xl shadow-md border border-emerald-100 p-4 flex items-center gap-4">
-                    <div className="w-36 sm:w-44 flex-shrink-0"><PetYard pet={pet} studentUid={isPreview ? null : studentUid} foodStock={{ foods, any: anyFood }} height={124} sizePx={96} hideName onFed={(petId) => { setPets(prev => prev.map(p => (p.id === petId ? { ...p, fedAt: Date.now() } : p))); eatLocal(pet.kind); }} /></div>
+                  <div key={pet.id} className="bg-white rounded-2xl shadow-md border border-emerald-100 p-4 flex flex-wrap items-center gap-4">
+                    <div className="w-36 sm:w-44 flex-shrink-0">{pet.home ? (
+                      <div className="rounded-xl bg-gradient-to-b from-amber-100 to-orange-100 border border-orange-200 flex flex-col items-center justify-end overflow-hidden" style={{ height: 124 }}>
+                        <div className="text-4xl leading-none">🏠</div>
+                        <div className="w-20 -mt-1"><PetSprite kind={pet.kind} state="sleep" /></div>
+                      </div>
+                    ) : <PetYard pet={pet} studentUid={isPreview ? null : studentUid} foodStock={{ foods, any: anyFood }} height={124} sizePx={96} hideName onFed={(petId) => { setPets(prev => prev.map(p => (p.id === petId ? { ...p, fedAt: Date.now() } : p))); eatLocal(pet.kind); }} />}</div>
                     <div className="flex-1 min-w-0">
                       {renaming?.id === pet.id ? (
                         <div className="flex gap-2">
@@ -284,16 +311,24 @@ export default function PetApp({ entryRequest, onExit }) {
                     </div>
                     <button
                       onClick={() => handleFeed(pet)}
-                      disabled={level === 0 || busy || mealsOf(foods, anyFood, pet.kind) < 1}
-                      className={`px-4 py-3 rounded-xl font-bold shadow ${level === 0 || mealsOf(foods, anyFood, pet.kind) < 1 ? 'bg-gray-200 text-gray-400' : 'bg-orange-400 hover:bg-orange-500 text-white'}`}
+                      disabled={pet.home || level === 0 || busy || mealsOf(foods, anyFood, pet.kind) < 1}
+                      className={`px-4 py-3 rounded-xl font-bold shadow ${pet.home || level === 0 || mealsOf(foods, anyFood, pet.kind) < 1 ? 'bg-gray-200 text-gray-400' : 'bg-orange-400 hover:bg-orange-500 text-white'}`}
                     >
                       <span className="text-2xl block leading-none">{info.food}</span>
-                      <span className="text-xs">{level === 0 ? 'Full' : mealsOf(foods, anyFood, pet.kind) < 1 ? 'No food' : `Feed (${mealsOf(foods, anyFood, pet.kind)})`}</span>
+                      <span className="text-xs">{pet.home ? 'Resting' : level === 0 ? 'Full' : mealsOf(foods, anyFood, pet.kind) < 1 ? 'No food' : `Feed (${mealsOf(foods, anyFood, pet.kind)})`}</span>
                     </button>
+                    <div className="w-full flex gap-2">
+                      <button onClick={() => toggleHome(pet)} disabled={busy || isPreview} className="flex-1 py-2 rounded-xl font-bold text-sm bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 disabled:opacity-60">
+                        {pet.home ? '🌳 Bring out on my screen' : '🏠 Send to its house'}
+                      </button>
+                      <button onClick={() => { if (isPreview) { showToast('Preview mode -- nothing can be sold here.'); return; } setSellingPet(pet); }} disabled={busy} className="py-2 px-3 rounded-xl font-bold text-sm bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 disabled:opacity-60">
+                        Sell 🪙 {formatCoins(PET_SELL_PRICE)}
+                      </button>
+                    </div>
                   </div>
                 );
               })}
-              <p className="text-xs text-gray-500 text-center pt-2">Your pets wander around your home page. Tap a hungry pet there to feed it, or tap a happy one to cuddle it.</p>
+              <p className="text-xs text-gray-500 text-center pt-2">Your pets wander around your home page. Tap a hungry pet there to feed it, or tap a happy one to cuddle it. A pet you send to its house rests there and does not get hungry; bring it out whenever you like.</p>
             </div>
           )
         )}
@@ -317,6 +352,24 @@ export default function PetApp({ entryRequest, onExit }) {
             <div className="mt-4 flex gap-3">
               <button onClick={() => setAdopting(null)} disabled={busy} className="flex-1 py-3 rounded-xl bg-gray-100 hover:bg-gray-200 font-bold text-gray-700">No, cancel</button>
               <button onClick={confirmAdopt} disabled={busy} className="flex-1 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold shadow disabled:opacity-60">{busy ? 'Adopting...' : 'Yes, adopt!'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {sellingPet && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="bg-white rounded-3xl shadow-2xl p-6 w-full max-w-sm text-center">
+            <div className="w-36 mx-auto"><PetSprite kind={sellingPet.kind} state="beg" /></div>
+            <h2 className="mt-2 text-xl font-extrabold text-gray-800">Sell {sellingPet.name}?</h2>
+            <div className="mt-4 bg-rose-50 border border-rose-200 rounded-xl p-3 text-sm text-rose-900 space-y-1">
+              <p className="font-extrabold text-base">You get: 🪙 {formatCoins(PET_SELL_PRICE)}</p>
+              <p>You have 🪙 {formatCoins(coins)} → after: 🪙 {formatCoins(coins + PET_SELL_PRICE)}</p>
+            </div>
+            <p className="mt-3 text-xs text-red-600 font-semibold">{sellingPet.name} will go away for ever. Do you really want to sell?</p>
+            <div className="mt-4 flex gap-3">
+              <button onClick={() => setSellingPet(null)} disabled={busy} className="flex-1 py-3 rounded-xl bg-gray-100 hover:bg-gray-200 font-bold text-gray-700">No, keep it</button>
+              <button onClick={confirmSell} disabled={busy} className="flex-1 py-3 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-bold shadow disabled:opacity-60">{busy ? 'Selling...' : 'Yes, sell'}</button>
             </div>
           </div>
         </div>

@@ -322,7 +322,7 @@ export default function HomePets({ pets, studentUid, foodStock = { foods: {}, an
   const layerRef = useRef(null);
   const foodRef = useRef(foodStock);
   foodRef.current = foodStock;
-  const list = Array.isArray(pets) ? pets.slice(0, 6) : [];
+  const list = Array.isArray(pets) ? pets.filter(p => !p.home).slice(0, 6) : [];   // pets resting in their house are not on the screen
   const hasPets = !!studentUid && list.length > 0;
   // A touch anywhere on the home page calls the pets: they walk over to that spot (see RoamingPet's comeToRef).
   useEffect(() => {
