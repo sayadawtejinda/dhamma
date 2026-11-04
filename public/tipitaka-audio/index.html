@@ -9,7 +9,7 @@
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--t);font:16px/1.7 "Noto Sans Myanmar","Pyidaungsu",system-ui,sans-serif;padding-bottom:150px}
 header{padding:14px 16px 6px;max-width:900px;margin:0 auto}h1{font-size:1.3rem;margin:0}.sub{color:var(--m);font-size:.88rem}
 main{max-width:900px;margin:0 auto;padding:0 16px}
-.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}.tabs button,.bt{border:1px solid var(--a);background:none;color:var(--a);border-radius:999px;padding:5px 14px;font:inherit;cursor:pointer}.tabs button.on,.bt.pri{background:var(--a);color:#fff}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}.tabs button.on,.tabs button:hover{background:var(--a);color:#fff}.tabs button,.bt{border:1px solid var(--a);background:none;color:var(--a);border-radius:999px;padding:5px 14px;font:inherit;cursor:pointer}.tabs button.on,.bt.pri{background:var(--a);color:#fff}
 .su{background:var(--card);border:1px solid var(--l);border-radius:12px;margin:8px 0;overflow:hidden}
 .su>.h{display:flex;gap:8px;align-items:center;padding:10px 12px;cursor:pointer}.su>.h b{flex:1}.su .meta{color:var(--m);font-size:.82rem}
 .row{display:flex;gap:8px;align-items:flex-start;padding:8px 12px;border-top:1px solid var(--l);cursor:pointer}.row:hover{background:#7b3fb810}
@@ -26,6 +26,7 @@ dialog{border:1px solid var(--l);border-radius:14px;background:var(--card);color
 </style></head><body>
 <header><h1>🎧 ပိဋကတ်တော် အသံ <span class="sub" id="nk"></span></h1>
 <div class="sub">သုတ္တန်ကို ဖွင့်ပြီး ပိဋ်နံပါတ်ကို နှိပ်ရင် အဲဒီပိုဒ်ကနေ နားထောင်နိုင်သည်။ အစိမ်း <span style="color:var(--ok)">●</span> = ဆရာ့ကိုယ်တိုင် နားထောင်စစ်ပြီး၊ ဖြူ = ခန့်မှန်းထားသည် (အနည်းငယ် လွဲနိုင်)။</div>
+<div class="tabs" id="tabs" style="display:none"></div>
 <div style="margin-top:6px"><button class="bt" id="login">🔑 ဆရာ ဝင်ရန် (တည်းဖြတ်ရန်)</button><span class="sub ed-only" id="who"></span></div>
 <details class="set"><summary>⚙ ပိုဒ်ကို နှိပ်တဲ့အခါ ဘယ်နှစ်စက္ကန့် ရှေ့ကနေ ဖွင့်မလဲ</summary>
  ခန့်မှန်းထားတဲ့ ပိုဒ် <input type="number" id="leadU" min="0" max="120"> စက္ကန့် &nbsp; စစ်ပြီးသား ပိုဒ် <input type="number" id="leadM" min="0" max="120"> စက္ကန့်</details>
@@ -47,30 +48,35 @@ const lsGet=(k,d)=>{try{const v=localStorage.getItem(k);return v===null?d:v}catc
 const toast=(t,ms=2200)=>{const e=$('#toast');e.textContent=t;e.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove('on'),ms)};
 const mm=t=>{t=Math.round(t);const h=Math.floor(t/3600),m=Math.floor(t%3600/60),s=t%60;return (h?h+':'+String(m).padStart(2,'0'):m)+':'+String(s).padStart(2,'0')};
 const MN='၀၁၂၃၄၅၆၇၈၉',mn=n=>String(n).replace(/\d/g,d=>MN[d]);
+const SETS=[['digha','ဒီဃနိကာယ်'],['mn','မဇ္ဈိမနိကာယ်'],['sn','သံယုတ္တနိကာယ်'],['an','အင်္ဂုတ္တရနိကာယ်'],['kn','ခုဒ္ဒကနိကာယ်'],['ab1','ဓမ္မသင်္ဂဏီ'],['ab2','ဝိဘင်္ဂ'],['ab3','ဓာတုကထာ'],['ab4','ပုဂ္ဂလပညတ္တိ'],['ab5','ကထာဝတ္ထု'],['ab6','ယမက'],['pt','ပဋ္ဌာန်း']];
+const lab=p=>String(p).replace(/_\d+$/,'');let TXT={},FIRST={},unsub=null;
 let MISS=new Set(),UP={},IDX={},SEED={},ED=false,NK=null,VER=new Set(),SHOWV=false,OV={},TM={},FB_=null,CURK=null,CURFILE=0;
 $('#leadU').value=lsGet('tpkLeadU','12');$('#leadM').value=lsGet('tpkLeadM','2');
 $('#leadU').onchange=()=>lsSet('tpkLeadU',$('#leadU').value);$('#leadM').onchange=()=>lsSet('tpkLeadM',$('#leadM').value);
 const au=$('#au');
 // ---- the estimate: the start and the end of a group of suttas are known (file borders); every marked paragraph is a fixed point; in between the time runs with the characters
-let ORD=[];function calc(){ORD=[];IDX={};const cn={};NK.groups.forEach(g=>g.paras.forEach(x=>{ORD.push(x[0]+'|'+x[1]);IDX[x[0]+'|'+x[1]]=cn[x[0]]=(cn[x[0]]===undefined?0:cn[x[0]]+1)}));TM={};NK.groups.forEach(g=>{const t0=NK.starts[g.fa],t1=NK.starts[g.fb];let cum=0;const W=x=>MISS.has(x[0]+'|'+x[1])?0:x[2];const tot=g.paras.reduce((a,x)=>a+W(x),0)||1;
+let ORD=[];function calc(){ORD=[];IDX={};FIRST={};const cn={};NK.groups.forEach(g=>g.paras.forEach(x=>{if(FIRST[x[0]]===undefined)FIRST[x[0]]=x[0]+'|'+x[1];ORD.push(x[0]+'|'+x[1]);IDX[x[0]+'|'+x[1]]=cn[x[0]]=(cn[x[0]]===undefined?0:cn[x[0]]+1)}));TM={};NK.groups.forEach(g=>{const t0=NK.starts[g.fa],t1=NK.starts[g.fb];let cum=0;const W=x=>MISS.has(x[0]+'|'+x[1])?0:x[2];const tot=g.paras.reduce((a,x)=>a+W(x),0)||1;
  const pts=[{c:0,t:t0}];g.paras.forEach(x=>{const k=x[0]+'|'+x[1];if(!MISS.has(k)&&OV[k]!==undefined&&cum>0&&OV[k]>=t0&&OV[k]<t1){const q=pts[pts.length-1];if(OV[k]>q.t&&cum>q.c)pts.push({c:cum,t:OV[k]})}cum+=W(x)});pts.push({c:tot,t:t1});
  cum=0;let j=0;g.paras.forEach(x=>{const k=x[0]+'|'+x[1];if(!MISS.has(k)&&OV[k]!==undefined&&cum===0)pts[0].t=OV[k]>=t0?OV[k]:t0;while(j<pts.length-2&&cum>=pts[j+1].c)j++;const a=pts[j],b=pts[j+1];TM[k]=b.c>a.c?a.t+(cum-a.c)/(b.c-a.c)*(b.t-a.t):a.t;if(!MISS.has(k)&&OV[k]!==undefined)TM[k]=OV[k];cum+=W(x)})})}
 const fileOf=t=>{let f=0;while(f<NK.dur.length-1&&NK.starts[f+1]<=t)f++;return f};
 // ---- list
 const OPEN=new Set();
-function seedCheck(){const n=Object.keys(SEED).filter(k=>OV[k]===undefined).length;$('#seedbox').style.display=ED&&n?'':'none';$('#seedn').textContent=n?mn(n)+' ပိုဒ် (ဒီဃနိကာယ် ပထမသုတ္တန်)':''}
+function snip(x){if(typeof x[3]==='string')return x[3];const b=NK.book[x[0]];const T=TXT[b];return T?(T[x[0]+'|'+x[1]]||'').slice(0,150):''}
+function needText(no){const b=NK.book[no];if(!b||TXT[b]!==undefined||(NK.groups[0].paras[0]&&typeof NK.groups[0].paras[0][3]==='string'))return;TXT[b]=null;fetch('data/txt/'+b+'.json?v=1').then(r=>r.json()).then(j=>{TXT[b]=j;paint()}).catch(()=>{TXT[b]={}})}
+function seedCheck(){const n=NK.id==='digha'?Object.keys(SEED).filter(k=>OV[k]===undefined).length:0;$('#seedbox').style.display=ED&&n?'':'none';$('#seedn').textContent=n?mn(n)+' ပိုဒ် (ဒီဃနိကာယ် ပထမသုတ္တန်)':''}
 function paint(){seedCheck();const by={};NK.groups.forEach(g=>g.paras.forEach(x=>(by[x[0]]=by[x[0]]||[]).push(x)));
  const nv=Object.keys(by).filter(no=>VER.has(+no)||UP[no]!==undefined).length;
- $('#list').innerHTML=(nv?`<div style="margin:6px 0"><button class="bt" data-showv="1">${SHOWV?'🙈 အတည်ပြုပြီးသားများ ဝှက်မည်':'👁 အတည်ပြုပြီးသား '+mn(nv)+' သုတ္တန် ပြရန်'}</button> <span class="sub">(အများပြည်သူကို ပြထားပြီးသား သုတ္တန်များ — ဝှက်ထားသည်)</span></div>`:'')+Object.keys(by).filter(no=>SHOWV||!VER.has(+no)).map(no=>{const ps=by[no],n=ps.filter(x=>OV[x[0]+'|'+x[1]]!==undefined).length,t0=TM[ps[0][0]+'|'+ps[0][1]],last=ps[ps.length-1],t1=NK.starts[NK.groups.find(g=>g.paras.includes(last)).fb];
+ $('#list').innerHTML=(nv?`<div style="margin:6px 0"><button class="bt" data-showv="1">${SHOWV?'🙈 အတည်ပြုပြီးသားများ ဝှက်မည်':'👁 အတည်ပြုပြီးသား '+mn(nv)+' သုတ္တန် ပြရန်'}</button> <span class="sub">(အများပြည်သူကို ပြထားပြီးသား သုတ္တန်များ — ဝှက်ထားသည်)</span></div>`:'')+Object.keys(by).filter(no=>SHOWV||!VER.has(+no)).map(no=>{const ps=by[no],n=ps.filter(x=>OV[x[0]+'|'+x[1]]!==undefined).length,t0=TM[ps[0][0]+'|'+ps[0][1]],nxs=FIRST[+no+1],t1=nxs!==undefined?TM[nxs]:NK.starts[NK.starts.length-1];
   const open=OPEN.has(no);
-  return `<div class="su" data-no="${no}"><div class="h" data-tog="${no}"><b>${esc(NK.sutNum[no])}။ ${esc(NK.suttas[no])}</b><span class="meta">${mm(t1-t0)} · ¶${mn(ps.length)}${(()=>{const q=ps.filter(x=>MISS.has(x[0]+'|'+x[1])).length;return q?` · <span style="color:#b00">🔇 ${mn(q)}</span>`:''})()}${n?` · <span style="color:var(--ok)">စစ်ပြီး ${mn(n)}</span>`:''}${UP[no]!==undefined?` · <span style="color:var(--ok)">✅ ¶${UP[no]} အထိ</span>`:''}</span>${ED?`<button class="bt ${VER.has(+no)?'':'pri'}" data-ver="${no}" style="padding:2px 10px;font-size:.8rem">${VER.has(+no)?'↩ ပြန်ဖွင့်':'✅ အတည်ပြုပြီး'}</button>`:''}<span>${open?'▲':'▼'}</span></div>`+
-  (open?(NK.warn.includes(+no)?'<div class="warn">⚠ ဒီသုတ္တန်ကို ဖတ်သူက အတိုချုံး/ပိုဖတ်ထားတာမို့ ပိုဒ်ခန့်မှန်းချက် ပိုလွဲနိုင်သည်</div>':'')+(UP[no]!==undefined&&!SHOWV&&IDX[no+'|'+UP[no]]!==undefined?`<div class="sub" style="padding:6px 12px">✅ ¶${ps[0][1]} မှ ¶${UP[no]} အထိ အတည်ပြုပြီး — ဝှက်ထားသည် (အပေါ်က 👁 ကိုနှိပ်ရင် ပြန်ပြမည်)</div>`:'')+ps.filter(x=>SHOWV||UP[no]===undefined||IDX[x[0]+'|'+x[1]]>IDX[no+'|'+UP[no]]).map(x=>rowHtml(x)).join(''):'')+'</div>'}).join('')}
+  return `<div class="su" data-no="${no}"><div class="h" data-tog="${no}"><b>${esc(NK.sutNum[no])}။ ${esc(NK.suttas[no])}</b><span class="meta">${mm(t1-t0)} · ¶${mn(ps.length)}${(()=>{const q=ps.filter(x=>MISS.has(x[0]+'|'+x[1])).length;return q?` · <span style="color:#b00">🔇 ${mn(q)}</span>`:''})()}${n?` · <span style="color:var(--ok)">စစ်ပြီး ${mn(n)}</span>`:''}${UP[no]!==undefined?` · <span style="color:var(--ok)">✅ ¶${lab(UP[no])} အထိ</span>`:''}</span>${ED?`<button class="bt ${VER.has(+no)?'':'pri'}" data-ver="${no}" style="padding:2px 10px;font-size:.8rem">${VER.has(+no)?'↩ ပြန်ဖွင့်':'✅ အတည်ပြုပြီး'}</button>`:''}<span>${open?'▲':'▼'}</span></div>`+
+  (open?(needText(no),NK.warn.includes(+no)?'<div class="warn">⚠ ဒီသုတ္တန်ကို ဖတ်သူက အတိုချုံး/ပိုဖတ်ထားတာမို့ ပိုဒ်ခန့်မှန်းချက် ပိုလွဲနိုင်သည်</div>':'')+(UP[no]!==undefined&&!SHOWV&&IDX[no+'|'+UP[no]]!==undefined?`<div class="sub" style="padding:6px 12px">✅ ¶${lab(ps[0][1])} မှ ¶${lab(UP[no])} အထိ အတည်ပြုပြီး — ဝှက်ထားသည် (အပေါ်က 👁 ကိုနှိပ်ရင် ပြန်ပြမည်)</div>`:'')+ps.filter(x=>SHOWV||UP[no]===undefined||IDX[x[0]+'|'+x[1]]>IDX[no+'|'+UP[no]]).map(x=>rowHtml(x)).join(''):'')+'</div>'}).join('')}
 function isOk(k){const s=k.split('|')[0];return VER.has(+s)||(UP[s]!==undefined&&IDX[k]<=IDX[s+'|'+UP[s]])}
 function rowHtml(x){const k=x[0]+'|'+x[1],set=OV[k]!==undefined;
- if(MISS.has(k))return `<div class="row" data-k="${k}" style="opacity:.65"><span class="pn">¶${x[1]}</span><span class="tm">🔇</span><span class="tx">${isOk(k)?'<b style="color:var(--ok)">✅ </b>':''}<b>အသံမရှိ</b> — ${esc(x[3])}</span><span class="fine" style="display:${ED?'flex':'none'}"><button data-miss="1">🔊 ပြန်ထား</button></span></div>`;return `<div class="row ${set?'set':''} ${k===CURK?'cur':''}" data-k="${k}"><span class="pn">¶${x[1]}</span><span class="tm">${mm(TM[k])}</span><span class="tx">${isOk(k)?'<b style="color:var(--ok)">✅ </b>':''}${esc(x[3])}</span><span class="fine"><button data-miss="1" title="ဒီပိုဒ် အသံမရှိ">🔇</button><button data-missr="1" title="ဒီပိုဒ်ကနေ ... အထိ အသံမရှိ">🔇…</button><button data-up="1" title="ဒီပိုဒ်အထိ အတည်ပြုပြီး">✅↑</button><button data-d="-2">−2</button><button data-d="-1">−1</button><button data-d="1">+1</button><button data-d="2">+2</button><button data-set="1">📍</button></span></div>`}
-function playAt(t,lead){const f=fileOf(t);const url=NK.base+NK.pre+'-'+String(f+1).padStart(3,'0')+'.mp3';
+ if(MISS.has(k))return `<div class="row" data-k="${k}" style="opacity:.65"><span class="pn">¶${lab(x[1])}</span><span class="tm">🔇</span><span class="tx">${isOk(k)?'<b style="color:var(--ok)">✅ </b>':''}<b>အသံမရှိ</b> — ${esc(snip(x))}</span><span class="fine" style="display:${ED?'flex':'none'}"><button data-miss="1">🔊 ပြန်ထား</button></span></div>`;return `<div class="row ${set?'set':''} ${k===CURK?'cur':''}" data-k="${k}"><span class="pn">¶${lab(x[1])}</span><span class="tm">${mm(TM[k])}</span><span class="tx">${isOk(k)?'<b style="color:var(--ok)">✅ </b>':''}${esc(snip(x))}</span><span class="fine"><button data-miss="1" title="ဒီပိုဒ် အသံမရှိ">🔇</button><button data-missr="1" title="ဒီပိုဒ်ကနေ ... အထိ အသံမရှိ">🔇…</button><button data-up="1" title="ဒီပိုဒ်အထိ အတည်ပြုပြီး">✅↑</button><button data-d="-2">−2</button><button data-d="-1">−1</button><button data-d="1">+1</button><button data-d="2">+2</button><button data-set="1">📍</button></span></div>`}
+function fileUrl(f){return NK.base+(NK.files?NK.files[f]:NK.pre+'-'+String(f+1).padStart(3,'0')+'.mp3')}
+function playAt(t,lead){const f=fileOf(t);const url=fileUrl(f);
  const off=Math.max(0,t-NK.starts[f]-lead);
- if(CURFILE!==f+1||!au.src.endsWith(url.split('/').pop())){au.src=url;CURFILE=f+1;au.addEventListener('loadedmetadata',()=>{au.currentTime=off},{once:true});au.load()}else au.currentTime=off;au.play().catch(()=>toast('ဖွင့်မရပါ — အင်တာနက် စစ်ပါ'))}
+ if(CURFILE!==f+1||!au.src.endsWith(url.split('/').pop())){au.pause();au.src=url;CURFILE=f+1;au.addEventListener('loadedmetadata',()=>{au.currentTime=off},{once:true});au.load()}else au.currentTime=off;au.play().catch(()=>toast('ဖွင့်မရပါ — အင်တာနက် စစ်ပါ'))}
 $('#list').onclick=async e=>{
  if(e.target.dataset.showv){SHOWV=!SHOWV;paint();return}
  if(e.target.dataset.ver){if(!ED)return;const no=+e.target.dataset.ver;if(VER.has(no)){VER.delete(no)}else{if(!confirm('ဒီသုတ္တန်ကို အတည်ပြုပြီးလို့ သတ်မှတ်မလား? အများပြည်သူကို 🔊 ပြပြီး၊ သင့်စာရင်းထဲက ဝှက်မည်။'))return;VER.add(no)}paint();saveVer();return}
@@ -94,7 +100,7 @@ let fbp=null;function fb(){return fbp||(fbp=(async()=>{
   try{await Au.signInWithEmailLink(auth,em,location.href);lsSet('tpkEmail',em);toast('ဝင်ပြီးပါပြီ ✓')}catch(e){toast('ဝင်မရပါ — လင့်အသစ် ပြန်တောင်းပါ')}
   history.replaceState(null,'',location.pathname+location.hash)}
  await auth.authStateReady();return {Au,F,auth,db}})())}
-function setEd(u){ED=!!u&&(u.email||'').toLowerCase()===ADMIN;document.body.classList.toggle('ed',ED);$('#main').style.display=ED?'':'none';$('#bar').style.display=ED?'':'none';$('#lock').style.display=ED?'none':'';$('details.set').style.display=ED?'':'none';$('#main').classList.toggle('ed',ED);$('#who').textContent=ED?' ✓ ဆရာ — တည်းဖြတ်နိုင်သည်':'';$('#login').style.display=ED?'none':'';}
+function setEd(u){ED=!!u&&(u.email||'').toLowerCase()===ADMIN;document.body.classList.toggle('ed',ED);$('#main').style.display=ED?'':'none';$('#tabs').style.display=ED?'flex':'none';$('#bar').style.display=ED?'':'none';$('#lock').style.display=ED?'none':'';$('details.set').style.display=ED?'':'none';$('#main').classList.toggle('ed',ED);$('#who').textContent=ED?' ✓ ဆရာ — တည်းဖြတ်နိုင်သည်':'';$('#login').style.display=ED?'none':'';}
 async function put(o){try{const f=await fb();await f.F.setDoc(f.F.doc(f.db,'tpkaudio',NK.id),Object.assign(o,{ts:Date.now()}),{merge:true});return true}catch(e){toast('မသိမ်းနိုင်ပါ — ဝင်ထားသလား စစ်ပါ');return false}}
 async function mark(k,t){OV[k]=t;calc();paint();put({j:JSON.stringify(OV)})}
 async function saveVer(){if(await put({v:JSON.stringify([...VER])}))toast('သိမ်းပြီး ✓')}
@@ -102,10 +108,19 @@ $('#login').onclick=async()=>{const f=await fb();if(f.auth.currentUser){setEd(f.
 $('#send').onclick=async e=>{e.preventDefault();const em=$('#em').value.trim();if(!em)return;const f=await fb();
  try{await f.Au.sendSignInLinkToEmail(f.auth,em,{url:location.origin+location.pathname,handleCodeInApp:true});lsSet('tpkEmail',em);$('#dlg').close();toast('✉ လင့်ပို့ပြီး — အီးမေးလ်ထဲက လင့်ကို နှိပ်ပါ',6000)}catch(err){toast('ပို့မရပါ: '+(err.code||err.message),5000)}};
 $('#seedbtn').onclick=async()=>{if(!ED)return;let n=0;Object.keys(SEED).forEach(k=>{if(OV[k]===undefined){OV[k]=SEED[k];n++}});calc();paint();if(await put({j:JSON.stringify(OV)}))toast('ထည့်ပြီး ✓ '+mn(n)+' ပိုဒ်')};
+async function loadSet(id){
+ if(unsub){unsub();unsub=null}
+ au.pause();CURK=null;CURFILE=0;OPEN.clear();SHOWV=false;OV={};MISS=new Set();UP={};VER=new Set();TXT={};
+ document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.id===id));lsSet('tpkSet',id);
+ $('#list').innerHTML='<div class="sub" style="padding:14px">⏳ ဖတ်နေသည်…</div>';
+ NK=await (await fetch('data/'+id+'.json?v=1')).json();$('#nk').textContent='· '+NK.name;calc();const f0=Object.keys(NK.suttas)[0];OPEN.add(f0);paint();
+ try{const f=await fb();unsub=f.F.onSnapshot(f.F.doc(f.db,'tpkaudio',NK.id),s=>{if(NK.id!==id)return;try{OV=s.exists()?JSON.parse(s.data().j||'{}'):{}}catch(e){OV={}}try{MISS=new Set(s.exists()?JSON.parse(s.data().m||'[]'):[])}catch(e){MISS=new Set()}try{UP=s.exists()?JSON.parse(s.data().u||'{}'):{}}catch(e){UP={}}try{VER=new Set(s.exists()?JSON.parse(s.data().v||'[]'):[])}catch(e){VER=new Set()}calc();paint()},()=>{})}catch(e){}
+}
+$('#tabs').innerHTML=SETS.map(x=>`<button data-id="${x[0]}">${x[1]}</button>`).join('');
+$('#tabs').onclick=e=>{const b=e.target.closest('[data-id]');if(b&&(!NK||b.dataset.id!==NK.id))loadSet(b.dataset.id)};
 (async()=>{
  try{SEED=await (await fetch('data/seed_digha.json?v=1')).json()}catch(e){}
- NK=await (await fetch('data/digha.json?v=1')).json();$('#nk').textContent='· '+NK.name;calc();OPEN.add('1');paint();
- try{const f=await fb();setEd(f.auth.currentUser);f.Au.onAuthStateChanged(f.auth,setEd);
-  f.F.onSnapshot(f.F.doc(f.db,'tpkaudio',NK.id),s=>{try{OV=s.exists()?JSON.parse(s.data().j||'{}'):{}}catch(e){OV={}}try{MISS=new Set(s.exists()?JSON.parse(s.data().m||'[]'):[])}catch(e){MISS=new Set()}try{UP=s.exists()?JSON.parse(s.data().u||'{}'):{}}catch(e){UP={}}try{VER=new Set(s.exists()?JSON.parse(s.data().v||'[]'):[])}catch(e){VER=new Set()}calc();paint()},()=>{})}catch(e){}
+ await loadSet(lsGet('tpkSet','digha'));
+ try{const f=await fb();setEd(f.auth.currentUser);f.Au.onAuthStateChanged(f.auth,setEd)}catch(e){}
 })();
 </script></body></html>
