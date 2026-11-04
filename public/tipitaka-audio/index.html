@@ -52,7 +52,7 @@ $('#leadU').value=lsGet('tpkLeadU','12');$('#leadM').value=lsGet('tpkLeadM','2')
 $('#leadU').onchange=()=>lsSet('tpkLeadU',$('#leadU').value);$('#leadM').onchange=()=>lsSet('tpkLeadM',$('#leadM').value);
 const au=$('#au');
 // ---- the estimate: the start and the end of a group of suttas are known (file borders); every marked paragraph is a fixed point; in between the time runs with the characters
-function calc(){IDX={};const cn={};NK.groups.forEach(g=>g.paras.forEach(x=>{IDX[x[0]+'|'+x[1]]=cn[x[0]]=(cn[x[0]]===undefined?0:cn[x[0]]+1)}));TM={};NK.groups.forEach(g=>{const t0=NK.starts[g.fa],t1=NK.starts[g.fb];let cum=0;const tot=g.paras.reduce((a,x)=>a+x[2],0)||1;
+let ORD=[];function calc(){ORD=[];IDX={};const cn={};NK.groups.forEach(g=>g.paras.forEach(x=>{ORD.push(x[0]+'|'+x[1]);IDX[x[0]+'|'+x[1]]=cn[x[0]]=(cn[x[0]]===undefined?0:cn[x[0]]+1)}));TM={};NK.groups.forEach(g=>{const t0=NK.starts[g.fa],t1=NK.starts[g.fb];let cum=0;const tot=g.paras.reduce((a,x)=>a+x[2],0)||1;
  const pts=[{c:0,t:t0}];g.paras.forEach(x=>{const k=x[0]+'|'+x[1];if(OV[k]!==undefined&&cum>0&&OV[k]>=t0&&OV[k]<t1){const q=pts[pts.length-1];if(OV[k]>q.t&&cum>q.c)pts.push({c:cum,t:OV[k]})}cum+=x[2]});pts.push({c:tot,t:t1});
  cum=0;let j=0;g.paras.forEach(x=>{const k=x[0]+'|'+x[1];if(OV[k]!==undefined&&cum===0)pts[0].t=OV[k]>=t0?OV[k]:t0;while(j<pts.length-2&&cum>=pts[j+1].c)j++;const a=pts[j],b=pts[j+1];TM[k]=b.c>a.c?a.t+(cum-a.c)/(b.c-a.c)*(b.t-a.t):a.t;if(OV[k]!==undefined)TM[k]=OV[k];cum+=x[2]})})}
 const fileOf=t=>{let f=0;while(f<NK.dur.length-1&&NK.starts[f+1]<=t)f++;return f};
@@ -75,7 +75,9 @@ $('#list').onclick=async e=>{
  if(e.target.dataset.ver){if(!ED)return;const no=+e.target.dataset.ver;if(VER.has(no)){VER.delete(no)}else{if(!confirm('ဒီသုတ္တန်ကို အတည်ပြုပြီးလို့ သတ်မှတ်မလား? အများပြည်သူကို 🔊 ပြပြီး၊ သင့်စာရင်းထဲက ဝှက်မည်။'))return;VER.add(no)}paint();saveVer();return}
  const tg=e.target.closest('[data-tog]');if(tg){const no=tg.dataset.tog;OPEN.has(no)?OPEN.delete(no):OPEN.add(no);paint();return}
  const r=e.target.closest('.row');if(!r)return;const k=r.dataset.k;
- if(e.target.dataset.up){if(!ED)return;const [sn,pn]=k.split('|');if(UP[sn]===pn)delete UP[sn];else UP[sn]=pn;paint();if(await put({u:JSON.stringify(UP)}))toast(UP[sn]?'¶'+pn+' အထိ အတည်ပြုပြီး ✓ — ပရိသတ်က ကြားရမည်':'ပြန်ဖျက်ပြီး');return}
+ if(e.target.dataset.up){if(!ED)return;const [sn,pn]=k.split('|');au.pause();const on=UP[sn]!==pn;if(on)UP[sn]=pn;else delete UP[sn];
+  if(on){const nx=ORD[ORD.indexOf(k)+1];if(nx){const [ns,np]=nx.split('|');if(ns!==sn)OPEN.add(ns);CURK=nx;paint();playAt(TM[nx],OV[nx]!==undefined?+$('#leadM').value:+$('#leadU').value);$('#now').textContent='¶'+np+' · '+NK.suttas[ns]+' (နောက်တစ်ပိုဒ် စစ်ရန်)';setTimeout(()=>{const el=document.querySelector('.row.cur');if(el)el.scrollIntoView({block:'center',behavior:'smooth'})},50)}else paint()}else paint();
+  if(await put({u:JSON.stringify(UP)}))toast(on?'¶'+pn+' အထိ အတည်ပြုပြီး ✓ — နောက်ပိုဒ်ကို ဖွင့်ပေးထားသည်':'ပြန်ဖျက်ပြီး');return}
  if(e.target.dataset.d||e.target.dataset.set){if(!ED)return;const t=e.target.dataset.set?Math.round(NK.starts[CURFILE-1]+au.currentTime):Math.max(0,Math.round(TM[k]+ +e.target.dataset.d));await mark(k,t);if(!e.target.dataset.set)playAt(t,2);return}
  CURK=k;playAt(TM[k],OV[k]!==undefined?+$('#leadM').value:+$('#leadU').value);$('#now').textContent='¶'+k.split('|')[1]+' · '+NK.suttas[k.split('|')[0]];paint()};
 $('#sk').onclick=e=>{const s=e.target.dataset.s;if(s)au.currentTime=Math.max(0,Math.min(au.duration||1e9,au.currentTime+ +s))};
