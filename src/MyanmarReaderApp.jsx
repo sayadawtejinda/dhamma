@@ -76,7 +76,7 @@ async function playSheetBClip(audio, src, t, durationMs) {
   }
   if (audio._sbToken !== token) return;
   try { audio.currentTime = t; } catch (e) { /* retried below */ }
-  try { await audio.play(); } catch (e) { return; }
+  try { await audio.play(); } catch (e) { if (e && e.name !== 'AbortError') window.dispatchEvent(new CustomEvent('reader-sound-problem')); return; }
   if (audio._sbToken !== token) { audio.pause(); return; }
   await new Promise((res) => { audio._sbTimeout = setTimeout(() => { audio.pause(); res(); }, durationMs); });
 }
@@ -1466,6 +1466,35 @@ const [sheetBAudio] = useState(new Audio());
   // the coins still waiting to be saved are saved first).
   const lastSoundRefreshRef = useRef(0);
   const [soundRefreshNote, setSoundRefreshNote] = useState(null);
+  // Noticing that the sound has stopped working: a sound that was asked to play but is refused (the phone wants a tap first), a
+  // sound file that failed to load, or one that "plays" without moving. The first trouble reloads that file by itself; when it
+  // happens again the 🔄 button starts to pulse and a short hint tells the child to tap it. A sound that works clears it.
+  // (A sound that was stopped on purpose, or one that is simply still downloading on a slow connection, is NOT counted.)
+  const soundFailRef = useRef(0);
+  const [soundProblem, setSoundProblem] = useState(false);
+  const [soundHint, setSoundHint] = useState(false);
+  const raiseSoundProblem = () => {
+      setSoundProblem(true); setSoundHint(true);
+      setTimeout(() => setSoundHint(false), 10000);
+  };
+  const noteSoundFailure = (el, why) => {
+      soundFailRef.current += 1;
+      if (why === 'broken') { try { el.load(); } catch (e) { /* ignore */ } }
+      if (soundFailRef.current >= 2 || why === 'rejected') raiseSoundProblem();
+  };
+  const verifySoundStarted = (el, startTime) => {
+      setTimeout(() => {
+          if (el.error || el.networkState === 3) return noteSoundFailure(el, 'broken');
+          if (el.paused || el.readyState < 3) return; // stopped on purpose, or still loading
+          if (el.currentTime > startTime + 0.03) { soundFailRef.current = 0; setSoundProblem(false); setSoundHint(false); }
+          else noteSoundFailure(el, 'stuck');
+      }, 600);
+  };
+  useEffect(() => {
+      const bad = () => raiseSoundProblem();
+      window.addEventListener('reader-sound-problem', bad);
+      return () => window.removeEventListener('reader-sound-problem', bad);
+  }, []);
   const handleRefreshSound = () => {
       const now = Date.now();
       if (now - lastSoundRefreshRef.current < 10000) {
@@ -1475,6 +1504,7 @@ const [sheetBAudio] = useState(new Audio());
           return;
       }
       lastSoundRefreshRef.current = now;
+      soundFailRef.current = 0; setSoundProblem(false); setSoundHint(false);
       interruptPlayback();
       [level1AudioRef, level2AudioRef, charsAudioRef, qaAudioRef].forEach(r => { try { if (r.current) { r.current.pause(); r.current.load(); } } catch (e) { /* ignore */ } });
       try { sheetBAudio.pause(); sheetBAudio.load(); } catch (e) { /* ignore */ }
@@ -2616,7 +2646,8 @@ const closeQAPanel = () => {
               audioElement.pause();
               resolve(true);
             }, durationMs);
-          }).catch(e => resolve(false));
+            verifySoundStarted(audioElement, startTime);
+          }).catch(e => { if (e && e.name !== 'AbortError') noteSoundFailure(audioElement, 'rejected'); resolve(false); });
         } else {
           resolve(false);
         }
@@ -4158,13 +4189,16 @@ useEffect(() => {
             </button>
             <button
               onClick={handleRefreshSound}
-              className="flex items-center justify-center gap-2 bg-sky-500 hover:bg-sky-600 text-white px-5 py-4 rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transition-all active:scale-95 border-b-4 border-sky-700 h-[60px]"
+              className={`flex items-center justify-center gap-2 bg-sky-500 hover:bg-sky-600 text-white px-5 py-4 rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transition-all active:scale-95 border-b-4 border-sky-700 h-[60px] ${soundProblem ? 'animate-pulse ring-4 ring-yellow-300' : ''}`}
               title="Sound not working? Tap to refresh"
             >
               <span className="text-2xl">🔄</span>
             </button>
           </div>
         </div>
+        {soundHint && !soundRefreshNote && (
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] bg-amber-500 text-white px-5 py-3 rounded-2xl shadow-xl text-sm font-bold max-w-[90vw] text-center">🔊 Can't hear anything? Tap the blue 🔄 button.</div>
+        )}
         {soundRefreshNote && (
           <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] bg-gray-900 text-white px-5 py-3 rounded-2xl shadow-xl text-sm font-bold max-w-[90vw] text-center">{soundRefreshNote}</div>
         )}
