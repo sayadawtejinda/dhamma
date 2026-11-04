@@ -89,7 +89,8 @@ $('#list').onclick=async e=>{
  if(e.target.dataset.up){if(!ED)return;const [sn,pn]=k.split('|');au.pause();const on=UP[sn]!==pn;if(on)UP[sn]=pn;else delete UP[sn];
   if(on){let ni=ORD.indexOf(k)+1;while(ORD[ni]!==undefined&&MISS.has(ORD[ni]))ni++;const nx=ORD[ni];if(nx){const [ns,np]=nx.split('|');if(ns!==sn)OPEN.add(ns);CURK=nx;paint();playAt(TM[nx],OV[nx]!==undefined?+$('#leadM').value:+$('#leadU').value);$('#now').textContent='¶'+np+' · '+NK.suttas[ns]+' (နောက်တစ်ပိုဒ် စစ်ရန်)';setTimeout(()=>{const el=document.querySelector('.row.cur');if(el)el.scrollIntoView({block:'center',behavior:'smooth'})},50)}else paint()}else paint();
   if(await put({u:JSON.stringify(UP)}))toast(on?'¶'+pn+' အထိ အတည်ပြုပြီး ✓ — နောက်ပိုဒ်ကို ဖွင့်ပေးထားသည်':'ပြန်ဖျက်ပြီး');return}
- if(e.target.dataset.d||e.target.dataset.set){if(!ED)return;const t=e.target.dataset.set?Math.round(NK.starts[CURFILE-1]+au.currentTime):Math.max(0,Math.round(TM[k]+ +e.target.dataset.d));await mark(k,t);if(!e.target.dataset.set)playAt(t,2);return}
+ if(e.target.dataset.d||e.target.dataset.set){if(!ED)return;const t=e.target.dataset.set?Math.round(NK.starts[CURFILE-1]+au.currentTime):Math.max(0,Math.round(TM[k]+ +e.target.dataset.d));const d0=+e.target.dataset.d||0;const g=CURFILE?NK.starts[CURFILE-1]+au.currentTime:-1e9;const near=!au.paused&&Math.abs(g-TM[k])<90;
+  await mark(k,t);if(!e.target.dataset.set){if(near)playAt(Math.max(0,g+d0),0);else playAt(t,2)}return}
  CURK=k;playAt(TM[k],OV[k]!==undefined?+$('#leadM').value:+$('#leadU').value);$('#now').textContent='¶'+k.split('|')[1]+' · '+NK.suttas[k.split('|')[0]];paint()};
 $('#sk').onclick=e=>{const s=e.target.dataset.s;if(s)au.currentTime=Math.max(0,Math.min(au.duration||1e9,au.currentTime+ +s))};
 au.addEventListener('timeupdate',()=>{$('#ct').textContent=mm(au.currentTime)});
