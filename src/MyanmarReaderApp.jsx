@@ -4196,12 +4196,6 @@ useEffect(() => {
             </button>
           </div>
         </div>
-        {soundHint && !soundRefreshNote && (
-          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] bg-amber-500 text-white px-5 py-3 rounded-2xl shadow-xl text-sm font-bold max-w-[90vw] text-center">🔊 Can't hear anything? Tap the blue 🔄 button.</div>
-        )}
-        {soundRefreshNote && (
-          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] bg-gray-900 text-white px-5 py-3 rounded-2xl shadow-xl text-sm font-bold max-w-[90vw] text-center">{soundRefreshNote}</div>
-        )}
 
         <div className="bg-white rounded-3xl shadow-lg p-6 border border-gray-100 space-y-6">
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300 relative">

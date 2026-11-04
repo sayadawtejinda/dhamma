@@ -33,14 +33,6 @@ export default function SoundGuardButton({ activeApp }) {
 
   return (
     <>
-      {problem && !note && (
-        <div className="fixed z-[9991] bg-amber-500 text-white px-4 py-2 rounded-2xl shadow-xl text-sm font-bold max-w-[80vw]" style={{ left: 12, bottom: 64 }}>
-          🔊 Can't hear anything? Tap 🔄
-        </div>
-      )}
-      {note && (
-        <div className="fixed z-[9991] bg-gray-900 text-white px-4 py-2 rounded-2xl shadow-xl text-sm font-bold max-w-[80vw]" style={{ left: 12, bottom: 64 }}>{note}</div>
-      )}
       <button
         type="button"
         onClick={tap}
