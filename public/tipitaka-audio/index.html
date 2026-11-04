@@ -30,10 +30,11 @@ dialog{border:1px solid var(--l);border-radius:14px;background:var(--card);color
 <details class="set"><summary>⚙ ပိုဒ်ကို နှိပ်တဲ့အခါ ဘယ်နှစ်စက္ကန့် ရှေ့ကနေ ဖွင့်မလဲ</summary>
  ခန့်မှန်းထားတဲ့ ပိုဒ် <input type="number" id="leadU" min="0" max="120"> စက္ကန့် &nbsp; စစ်ပြီးသား ပိုဒ် <input type="number" id="leadM" min="0" max="120"> စက္ကန့်</details>
 </header>
-<main id="main" class="">
+<div id="lock" style="max-width:900px;margin:30px auto;padding:0 16px;color:var(--m)">🔒 ဒီစာမျက်နှာက ဆရာအတွက်သာ ဖြစ်ပါသည်။ စာဖတ်သူများက Tipitaka စာမျက်နှာထဲမှာ စာပိုဒ်နံပါတ်ဘေးက 🔊 ကို နှိပ်ပြီး နားထောင်နိုင်ပါသည်။ ဆရာဖြစ်ရင် အပေါ်က <b>🔑 ဆရာ ဝင်ရန်</b> ကို နှိပ်ပါ။</div>
+<main id="main" class="" style="display:none">
 <div id="list"></div>
 </main>
-<div id="bar"><div class="in"><div id="now">— သုတ္တန်တစ်ခုကို ရွေးပါ —</div><audio id="au" controls preload="none"></audio>
+<div id="bar" style="display:none"><div class="in"><div id="now">— သုတ္တန်တစ်ခုကို ရွေးပါ —</div><audio id="au" controls preload="none"></audio>
 <div id="sk"><button data-s="-30">⏪30</button><button data-s="-10">⏪10</button><button data-s="-5">⏪5</button><span id="ct">0:00</span><button data-s="5">5⏩</button><button data-s="10">10⏩</button><button data-s="30">30⏩</button></div></div></div>
 <div id="toast"></div>
 <dialog id="dlg"><form method="dialog"><b>ဆရာ ဝင်ရန်</b><div class="sub">အီးမေးလ်လိပ်စာ ရိုက်ပါ — ဝင်ရန် လင့်ကို အီးမေးလ်ပို့ပေးမည်။ ဆရာ့အီးမေးလ်ပဲ တည်းဖြတ်ခွင့်ရှိသည်။</div><input type="email" id="em" placeholder="you@example.com"><button class="bt pri" id="send" value="x">လင့်ပို့မည်</button> <button class="bt" value="c">ပိတ်</button></form></dialog>
@@ -81,7 +82,7 @@ let fbp=null;function fb(){return fbp||(fbp=(async()=>{
   try{await Au.signInWithEmailLink(auth,em,location.href);lsSet('tpkEmail',em);toast('ဝင်ပြီးပါပြီ ✓')}catch(e){toast('ဝင်မရပါ — လင့်အသစ် ပြန်တောင်းပါ')}
   history.replaceState(null,'',location.pathname+location.hash)}
  await auth.authStateReady();return {Au,F,auth,db}})())}
-function setEd(u){ED=!!u&&(u.email||'').toLowerCase()===ADMIN;document.body.classList.toggle('ed',ED);$('#main').classList.toggle('ed',ED);$('#who').textContent=ED?' ✓ ဆရာ — တည်းဖြတ်နိုင်သည်':'';$('#login').style.display=ED?'none':'';}
+function setEd(u){ED=!!u&&(u.email||'').toLowerCase()===ADMIN;document.body.classList.toggle('ed',ED);$('#main').style.display=ED?'':'none';$('#bar').style.display=ED?'':'none';$('#lock').style.display=ED?'none':'';$('details.set').style.display=ED?'':'none';$('#main').classList.toggle('ed',ED);$('#who').textContent=ED?' ✓ ဆရာ — တည်းဖြတ်နိုင်သည်':'';$('#login').style.display=ED?'none':'';}
 async function mark(k,t){OV[k]=t;calc();paint();try{const f=await fb();await f.F.setDoc(f.F.doc(f.db,'tpkaudio',NK.id),{j:JSON.stringify(OV),ts:Date.now()})}catch(e){toast('မသိမ်းနိုင်ပါ — ဝင်ထားသလား စစ်ပါ')}}
 $('#login').onclick=async()=>{const f=await fb();if(f.auth.currentUser){setEd(f.auth.currentUser);return}$('#em').value=lsGet('tpkEmail','');$('#dlg').showModal()};
 $('#send').onclick=async e=>{e.preventDefault();const em=$('#em').value.trim();if(!em)return;const f=await fb();
