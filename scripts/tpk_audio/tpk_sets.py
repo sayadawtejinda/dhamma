@@ -41,16 +41,22 @@ def strip(s):
 def parse_books(books):
     """-> paras [dict(u,label,n,page,book,text)], units [dict(name,start)]"""
     paras = []; units = []; cur = None; seen = {}
-    parent = ''
+    parent = ''; pend = []      # headings waiting for the next paragraph (pre); closing lines go to the previous paragraph (post)
+    END = re.compile('နိဋ္ဌိတ|ဘာဏဝါရော|သမတ္တ|ဥဒ္ဒါန')
     for b in books:
         for pg in json.load(open(TIPI + b + '.json', encoding='utf8')):
             for m in re.finditer(r'<p class="(\w+)">(.*?)</p>', pg['content'], re.S):
                 cls, body = m.group(1), m.group(2)
                 if cls in ('chapter', 'subhead'):
-                    name = re.sub(r'\s+', ' ', strip(body)).strip()
+                    name = re.sub(r'\s+', ' ', strip(body)).strip(); pend.append(name)
                     if cls == 'chapter': parent = name
                     units.append(dict(name=name if cls == 'chapter' or not parent else parent + ' › ' + name, start=len(paras), book=b)); cur = None; continue
-                if cls in ('nikaya', 'book', 'centered', 'title') : continue
+                if cls in ('nikaya', 'book', 'centered', 'title'):
+                    ht = re.sub(r'\s+', ' ', strip(body)).strip()
+                    if ht:
+                        if cls == 'centered' and END.search(ht) and paras: paras[-1].setdefault('post', []).append(ht)
+                        else: pend.append(ht)
+                    continue
                 n = re.search(r'<span class="paranum">([^<]+)</span>', body)
                 t = re.sub(r'[ \t]+', ' ', strip(re.sub(r'<span class="paranum">[^<]*</span>', '', body))).strip()
                 if not units: units.append(dict(name='', start=0, book=b))
@@ -58,16 +64,18 @@ def parse_books(books):
                 if n:
                     label = n.group(1).strip(); k = (u, label); seen[k] = seen.get(k, 0) + 1
                     if seen[k] > 1: label += '_%d' % seen[k]
-                    cur = dict(u=u, label=label, n=0, page=pg['page'], book=b, text=t.lstrip('။ ').strip())
+                    cur = dict(u=u, label=label, n=0, page=pg['page'], book=b, text=t.lstrip('။ ').strip(), pre=pend); pend = []
                     paras.append(cur)
                 elif t:
                     if cur is None or cur['u'] != u:
                         label = '~%d' % (len([1 for p in paras if p['u'] == u]) + 1)
-                        cur = dict(u=u, label=label, n=0, page=pg['page'], book=b, text=t); paras.append(cur)
+                        cur = dict(u=u, label=label, n=0, page=pg['page'], book=b, text=t, pre=pend); pend = []; paras.append(cur)
                     else: cur['text'] += '\n' + t
     for p in paras:
         p['text'] = re.sub(r'  +', ' ', re.sub(r'\s*\[[^\]]*\]', '', p['text'])).strip()
-        p['n'] = max(1, len(p['text']))
+        cl = lambda x: re.sub(r'  +', ' ', re.sub(r'\s*\[[^\]]*\]', '', x)).strip()
+        p['pre'] = [cl(x) for x in p.get('pre', []) if cl(x)]; p['post'] = [cl(x) for x in p.get('post', []) if cl(x)]
+        p['n'] = max(1, len(p['text']) + sum(len(x) for x in p['pre'] + p['post']))
     # units without paragraphs are dropped
     used = sorted({p['u'] for p in paras}); remap = {u: i for i, u in enumerate(used)}
     for p in paras: p['u'] = remap[p['u']]
@@ -91,7 +99,9 @@ def build(setid, write=True):
                 book={str(i + 1): u['book'] for i, u in enumerate(units)}, books=cfg['books'], warn=[], auto=auto,
                 groups=[dict(fa=0, fb=len(dur), paras=[[p['u'] + 1, p['label'], p['n'], p['page']] for p in paras])])
     texts = {}
-    for p in paras: texts.setdefault(p['book'], {})['%d|%s' % (p['u'] + 1, p['label'])] = p['text']
+    for p in paras:
+        texts.setdefault(p['book'], {})['%d|%s' % (p['u'] + 1, p['label'])] = p['text']
+        if p['pre'] or p['post']: texts[p['book']]['%d|%s^' % (p['u'] + 1, p['label'])] = [p['pre'], p['post']]
     if write:
         os.makedirs(OUT, exist_ok=True)
         json.dump(data, open(os.path.join(OUT, setid + '.json'), 'w', encoding='utf8'), ensure_ascii=False, separators=(',', ':'))
