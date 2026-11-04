@@ -36,11 +36,16 @@ export const PET_SPRITE_CSS = `
 @keyframes psHappy { 0%,100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-24px) scale(1.06); } }
 @keyframes psEar { 0%,88%,100% { transform: rotate(0deg); } 91% { transform: rotate(-9deg); } 95% { transform: rotate(5deg); } }
 @keyframes psIdle { 0%,100% { transform: scale(1,1); } 50% { transform: scale(1.012,1.022); } }
+@keyframes psNuzzle { 0%,100% { transform: translateX(0) rotate(0deg); } 25% { transform: translateX(7px) rotate(-5deg); } 75% { transform: translateX(-7px) rotate(5deg); } }
 @keyframes psFlipper { 0%,100% { transform: rotate(-24deg); } 50% { transform: rotate(14deg); } }
 
 .ps .earg { animation: psEar 6s ease-in-out infinite; }
 .ps-idle .pg { animation: psIdle 3.2s ease-in-out infinite; }
 .ps-sleep .earg, .ps-fly .earg { animation: none; }
+.ps-nuzzle .pg { animation: psNuzzle .9s ease-in-out infinite; }
+.ps-nuzzle .hd { animation: psHead .7s ease-in-out infinite; }
+.ps-nuzzle .tail { animation: psTailFast .35s ease-in-out infinite; }
+.ps-nuzzle .eyes-open { display: none; } .ps-nuzzle .eyes-shut { display: block; } .ps-nuzzle .blush { opacity: 1; }
 .ps-walk .pg { animation: psBob .5s ease-in-out infinite; }
 .ps-walk .lgA { animation: psLegA .5s ease-in-out infinite; } .ps-walk .lgB { animation: psLegB .5s ease-in-out infinite; }
 .ps-run .pg { animation: psRunBob .3s ease-in-out infinite; }

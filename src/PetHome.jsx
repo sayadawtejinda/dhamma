@@ -62,6 +62,8 @@ function chooseAct(kind, hunger) {
 }
 
 const MOVE_ACTS = ['walk', 'run', 'hop', 'scamper', 'waddle', 'fly'];
+// the last place the child touched the screen (the pets of the home page come to it, see HomePets)
+let lastTap = null;
 
 // where the child last put this pet down (kept on this device only)
 const readSpot = (pet) => { try { return JSON.parse(localStorage.getItem(`petSpot_${pet.id}`) || 'null'); } catch (e) { return null; } };
@@ -85,6 +87,11 @@ function RoamingPet({ pet, studentUid, layerRef, lane = 0, sizePx, bottomPx, hid
   petRef.current = pet;
   const xRef = useRef(x);
   xRef.current = x;
+  const bottomRef = useRef(bottom);
+  bottomRef.current = bottom;
+  const homeBottomRef = useRef(bottom);   // the height this pet lives at (where it was put, or its lane); it drifts back there after visiting a child
+  const lastComeRef = useRef(0);
+  const comeToRef = useRef(null);
 
   useEffect(() => {
     let alive = true;
@@ -97,6 +104,19 @@ function RoamingPet({ pet, studentUid, layerRef, lane = 0, sizePx, bottomPx, hid
         const layer = layerRef.current;
         if (!layer || layer.getClientRects().length === 0 || document.hidden || busyRef.current) { await wait(2500); continue; }
         const hunger = petHunger(petRef.current);
+        if (persist && lastTap && Date.now() - lastTap.t < 25000 && Date.now() - lastComeRef.current > 12000 && Math.random() < 0.3) {
+          await comeToRef.current?.(lastTap.x, lastTap.y, 0);   // the child is busy with something: go and keep them company
+          await wait(1000);
+          continue;
+        }
+        if (persist && bottomRef.current > homeBottomRef.current + 10 && Date.now() - lastComeRef.current > 8000) {
+          // back down to where this pet lives
+          const mode = kind.moves[0];
+          setMoveDur(1.6); setAction(mode); setBottom(homeBottomRef.current);
+          await wait(1800);
+          idle();
+          continue;
+        }
         const act = chooseAct(kind, hunger);
         if (MOVE_ACTS.includes(act)) {
           const mode = act;
@@ -173,6 +193,53 @@ function RoamingPet({ pet, studentUid, layerRef, lane = 0, sizePx, bottomPx, hid
     }
   };
 
+  // A touch on the screen: this pet comes over, rubs itself against the child's hand lovingly, and now and then asks for food.
+  comeToRef.current = async (cx, cy, delayMs = 0) => {
+    if (busyRef.current || dragRef.current.id !== null) return;
+    busyRef.current = true;
+    lastComeRef.current = Date.now();
+    try {
+      if (delayMs) await sleepFor(delayMs);
+      const rect = layerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const spriteH = 90;
+      const side = Math.random() < 0.5 ? -1 : 1;
+      const targetPx = Math.max(rect.left + 40, Math.min(rect.right - 40, cx + side * (46 + Math.random() * 40)));
+      const tx = ((targetPx - rect.left) / rect.width) * 100;
+      const tb = Math.max(0, Math.min(rect.height - spriteH, rect.bottom - cy - 8));
+      const fromPx = (xRef.current / 100) * rect.width;
+      const dist = Math.hypot(targetPx - fromPx, tb - bottomRef.current);
+      const mode = kind.moves.includes('run') ? 'run' : kind.moves[0];
+      const speed = kind.speed * (mode === 'run' ? 1.5 : 1.25);
+      const dur = Math.max(0.6, Math.min(6, dist / speed));
+      setSay(null); setShowFood(false);
+      setDir(targetPx > fromPx ? 1 : -1);
+      setMoveDur(dur); setAction(mode); setX(tx); setBottom(tb);
+      await sleepFor(dur * 1000 + 150);
+      setDir(cx > targetPx ? 1 : -1);      // look at the child's hand
+      setAction('nuzzle'); setHearts(n => n + 1);
+      await sleepFor(3000 + Math.random() * 2500);
+      if (petHunger(petRef.current) > 0 ? Math.random() < 0.7 : Math.random() < 0.15) {
+        setSay(pick(HUNGRY_PHRASES)); setAction('beg');
+        await sleepFor(3600);
+        setSay(null);
+      }
+    } finally {
+      lastComeRef.current = Date.now();
+      busyRef.current = false;
+      setAction('sit');
+    }
+  };
+  useEffect(() => {
+    if (!persist) return undefined;
+    const onCome = (e) => {
+      if (Math.random() > 0.8) return;   // not every pet every time
+      comeToRef.current?.(e.detail.x, e.detail.y, 150 + Math.random() * 900);
+    };
+    window.addEventListener('pet-come', onCome);
+    return () => window.removeEventListener('pet-come', onCome);
+  }, [persist]);
+
   // Carrying a pet: press and drag it anywhere on the screen, let go and it carries on from there. A short tap (no drag) is still a tap.
   const onPointerDown = (e) => {
     if (busyRef.current) return;
@@ -203,6 +270,8 @@ function RoamingPet({ pet, studentUid, layerRef, lane = 0, sizePx, bottomPx, hid
     justDraggedRef.current = true;
     setTimeout(() => { justDraggedRef.current = false; }, 80);
     setDragging(false);
+    homeBottomRef.current = d.b;
+    lastComeRef.current = Date.now();
     if (persist) { try { localStorage.setItem(`petSpot_${pet.id}`, JSON.stringify({ x: d.x, b: d.b })); } catch (err) { /* ignore */ } }
     setAction('happy'); setHearts(n => n + 1);
     await sleepFor(1100);
@@ -214,7 +283,7 @@ function RoamingPet({ pet, studentUid, layerRef, lane = 0, sizePx, bottomPx, hid
   return (
     <div
       className="absolute"
-      style={{ left: `${x}%`, bottom, transform: 'translateX(-50%)', transition: dragging ? 'none' : `left ${moveDur}s linear`, zIndex: dragging ? 80 : 25 + lane }}
+      style={{ left: `${x}%`, bottom, transform: 'translateX(-50%)', transition: dragging ? 'none' : `left ${moveDur}s linear, bottom ${moveDur}s linear`, zIndex: dragging ? 80 : 25 + lane }}
     >
       {say && (
         <div className="absolute left-1/2 whitespace-nowrap text-xs sm:text-sm font-bold bg-white text-gray-800 border border-gray-300 rounded-2xl px-3 py-1 shadow-md" style={{ bottom: '100%', marginBottom: 4, animation: 'petBubble .25s ease-out both', pointerEvents: 'none' }}>
@@ -235,6 +304,7 @@ function RoamingPet({ pet, studentUid, layerRef, lane = 0, sizePx, bottomPx, hid
         onPointerMove={onPointerMove}
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
+        data-pet="1"
         className="block pointer-events-auto select-none"
         style={{ background: 'none', border: 'none', padding: 0, lineHeight: 1, WebkitTapHighlightColor: 'transparent', touchAction: 'none', cursor: dragging ? 'grabbing' : 'grab' }}
         title={`${pet.name} -- tap to ${hungry || petHunger(pet) > 0 ? 'feed' : 'cuddle'}, or drag to carry it`}
@@ -253,7 +323,23 @@ export default function HomePets({ pets, studentUid, foodStock = { foods: {}, an
   const foodRef = useRef(foodStock);
   foodRef.current = foodStock;
   const list = Array.isArray(pets) ? pets.slice(0, 6) : [];
-  if (!studentUid || list.length === 0) return null;
+  const hasPets = !!studentUid && list.length > 0;
+  // A touch anywhere on the home page calls the pets: they walk over to that spot (see RoamingPet's comeToRef).
+  useEffect(() => {
+    if (!hasPets) return undefined;
+    let last = 0;
+    const onDown = (e) => {
+      if (e.target && e.target.closest && e.target.closest('[data-pet]')) return;   // touching a pet itself is its own thing
+      const now = Date.now();
+      if (now - last < 1500) return;
+      last = now;
+      lastTap = { x: e.clientX, y: e.clientY, t: now };
+      window.dispatchEvent(new CustomEvent('pet-come', { detail: { x: e.clientX, y: e.clientY } }));
+    };
+    document.addEventListener('pointerdown', onDown, { capture: true, passive: true });
+    return () => document.removeEventListener('pointerdown', onDown, { capture: true });
+  }, [hasPets]);
+  if (!hasPets) return null;
   return (
     <>
       <style>{PET_CSS + PET_SPRITE_CSS}</style>
