@@ -13,12 +13,13 @@ main{max-width:900px;margin:0 auto;padding:0 16px}
 .su{background:var(--card);border:1px solid var(--l);border-radius:12px;margin:8px 0;overflow:hidden}
 .su>.h{display:flex;gap:8px;align-items:center;padding:10px 12px;cursor:pointer}.su>.h b{flex:1}.su .meta{color:var(--m);font-size:.82rem}
 .row{display:flex;gap:8px;align-items:flex-start;padding:8px 12px;border-top:1px solid var(--l);cursor:pointer}.row:hover{background:#7b3fb810}
-.row.cur{background:#7b3fb822}.row .pn{flex:none;width:44px;color:var(--m);font-size:.85rem}.row .tm{flex:none;width:58px;font-variant-numeric:tabular-nums;color:var(--a);font-weight:600;font-size:.9rem}.row.set .tm{color:var(--ok)}
+.row.cur{background:#7b3fb822}.row .pt{flex:none;width:58px;display:flex;flex-direction:column;gap:2px}.row .pn{color:var(--m);font-size:.85rem}.row .tm{font-variant-numeric:tabular-nums;color:var(--a);font-weight:600;font-size:.9rem}.row.set .tm{color:var(--ok)}
 .row .tx{flex:1;font-size:.9rem;color:var(--m)}.fine{display:none;gap:3px;flex:none}.ed .fine{display:flex}.fine button{border:1px solid var(--a);color:var(--a);background:none;border-radius:6px;padding:0 7px;cursor:pointer;font:inherit;font-size:.8rem}
 .warn{background:var(--warn);color:var(--warnt);padding:5px 10px;border-radius:8px;font-size:.85rem;margin:6px 12px}
 #bar{position:fixed;right:12px;bottom:12px;z-index:20;width:min(94vw,440px);background:var(--card);border:2px solid var(--a);border-radius:14px;padding:0 10px 8px;box-shadow:0 8px 28px rgba(0,0,0,.35)}
 #grip{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 2px;cursor:grab;touch-action:none;user-select:none;color:var(--m);font-size:.8rem}#grip:active{cursor:grabbing}#grip button{border:1px solid var(--a);background:none;color:var(--a);border-radius:8px;padding:0 9px;cursor:pointer;font:inherit}
 #bar.min .body{display:none}
+#acts{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}#acts button{flex:1;min-width:38px;border:1px solid var(--a);color:var(--a);background:none;border-radius:8px;padding:4px 0;cursor:pointer;font:inherit;font-size:.85rem}
 #bar .in{max-width:900px;margin:0 auto}#now{font-size:.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}audio{width:100%;height:36px}
 #sk{display:flex;gap:6px;justify-content:center;align-items:center;margin-top:4px;flex-wrap:wrap}#sk button{border:1px solid var(--a);background:none;color:var(--a);border-radius:8px;padding:4px 10px;font:inherit;cursor:pointer}#ct{min-width:64px;text-align:center;font-variant-numeric:tabular-nums;color:var(--m)}
 details.set{margin:8px 0;color:var(--m);font-size:.88rem}details.set input{width:56px;font:inherit;padding:2px 4px}
@@ -39,7 +40,7 @@ dialog{border:1px solid var(--l);border-radius:14px;background:var(--card);color
 <div id="list"></div>
 </main>
 <div id="bar" style="display:none"><div id="grip"><span>⠿ ဆွဲပြီး နေရာရွှေ့ပါ</span><button type="button" id="barmin" title="ချုံ့ရန် / ချဲ့ရန်">▁ ချုံ့</button></div><div class="in body"><div id="now">— သုတ္တန်တစ်ခုကို ရွေးပါ —</div><audio id="au" controls preload="none"></audio>
-<div id="sk"><button data-s="-30">⏪30</button><button data-s="-10">⏪10</button><button data-s="-5">⏪5</button><span id="ct">0:00</span><button data-s="5">5⏩</button><button data-s="10">10⏩</button><button data-s="30">30⏩</button></div></div></div>
+<div id="sk"><button data-s="-30">⏪30</button><button data-s="-10">⏪10</button><button data-s="-5">⏪5</button><span id="ct">0:00</span><button data-s="5">5⏩</button><button data-s="10">10⏩</button><button data-s="30">30⏩</button></div><div id="acts"><button data-miss="1" title="ဒီပိုဒ် အသံမရှိ">🔇</button><button data-missr="1" title="ဒီပိုဒ်ကနေ ... အထိ အသံမရှိ">🔇…</button><button data-up="1" title="ဒီပိုဒ်အထိ အတည်ပြုပြီး">✅↑</button><button data-d="-2">−2</button><button data-d="-1">−1</button><button data-d="1">+1</button><button data-d="2">+2</button><button data-set="1" title="ဖွင့်နေတဲ့ နေရာကို ဒီပိုဒ်ရဲ့ အစအဖြစ် မှတ်ရန် (ထပ်နှိပ်ရင် ဖြုတ်မည်)">📍</button></div></div></div>
 <div id="toast"></div>
 <dialog id="dlg"><form method="dialog"><b>ဆရာ ဝင်ရန်</b><div class="sub">အီးမေးလ်လိပ်စာ ရိုက်ပါ — ဝင်ရန် လင့်ကို အီးမေးလ်ပို့ပေးမည်။ ဆရာ့အီးမေးလ်ပဲ တည်းဖြတ်ခွင့်ရှိသည်။</div><input type="email" id="em" placeholder="you@example.com"><button class="bt pri" id="send" value="x">လင့်ပို့မည်</button> <button class="bt" value="c">ပိတ်</button></form></dialog>
 <script>
@@ -74,18 +75,18 @@ function paint(){seedCheck();const by={};NK.groups.forEach(g=>g.paras.forEach(x=
   (open?(needText(no),NK.warn.includes(+no)?'<div class="warn">⚠ ဒီသုတ္တန်ကို ဖတ်သူက အတိုချုံး/ပိုဖတ်ထားတာမို့ ပိုဒ်ခန့်မှန်းချက် ပိုလွဲနိုင်သည်</div>':'')+(UP[no]!==undefined&&!SHOWV&&!REV.has(+no)&&IDX[no+'|'+UP[no]]!==undefined?`<div class="sub" style="padding:6px 12px">✅ ¶${lab(ps[0][1])} မှ ¶${lab(UP[no])} အထိ အတည်ပြုပြီး — ဝှက်ထားသည် <button class="bt" data-rev="${no}" style="font-size:.8rem;padding:1px 10px">👁 ဒီသုတ္တန်ရဲ့ ဝှက်ထားတာ ပြရန်</button></div>`:'')+ps.filter(x=>SHOWV||REV.has(+no)||UP[no]===undefined||IDX[x[0]+'|'+x[1]]>IDX[no+'|'+UP[no]]).map(x=>rowHtml(x)).join(''):'')+'</div>'}).join('')}
 function isOk(k){const s=k.split('|')[0];return VER.has(+s)||(UP[s]!==undefined&&IDX[k]<=IDX[s+'|'+UP[s]])}
 function rowHtml(x){const k=x[0]+'|'+x[1],set=OV[k]!==undefined;
- if(MISS.has(k))return `<div class="row" data-k="${k}" style="opacity:.65"><span class="pn">¶${lab(x[1])}</span><span class="tm">🔇</span><span class="tx">${isOk(k)?'<b style="color:var(--ok)">✅ </b>':''}<b>အသံမရှိ</b> — ${esc(snip(x))}</span><span class="fine" style="display:${ED?'flex':'none'}"><button data-miss="1">🔊 ပြန်ထား</button></span></div>`;return `<div class="row ${set?'set':''} ${k===CURK?'cur':''}" data-k="${k}"><span class="pn">¶${lab(x[1])}</span><span class="tm">${mm(TM[k])}</span><span class="tx">${isOk(k)?'<b style="color:var(--ok)">✅ </b>':''}${esc(snip(x))}</span><span class="fine"><button data-miss="1" title="ဒီပိုဒ် အသံမရှိ">🔇</button><button data-missr="1" title="ဒီပိုဒ်ကနေ ... အထိ အသံမရှိ">🔇…</button><button data-up="1" title="ဒီပိုဒ်အထိ အတည်ပြုပြီး">✅↑</button><button data-d="-2">−2</button><button data-d="-1">−1</button><button data-d="1">+1</button><button data-d="2">+2</button><button data-set="1" title="${set?'မှတ်ထားပြီး — ထပ်နှိပ်ရင် ဖြုတ်မည်':'ဖွင့်နေတဲ့ နေရာကို ဒီပိုဒ်ရဲ့ အစအဖြစ် မှတ်ရန်'}">${set?'📍✓':'📍'}</button></span></div>`}
+ if(MISS.has(k))return `<div class="row" data-k="${k}" style="opacity:.65"><span class="pt"><span class="pn">¶${lab(x[1])}</span><span class="tm">🔇</span></span><span class="tx">${isOk(k)?'<b style="color:var(--ok)">✅ </b>':''}<b>အသံမရှိ</b> — ${esc(snip(x))}</span></div>`;return `<div class="row ${set?'set':''} ${k===CURK?'cur':''}" data-k="${k}"><span class="pt"><span class="pn">¶${lab(x[1])}</span><span class="tm">${mm(TM[k])}${set?' 📍':''}</span></span><span class="tx">${isOk(k)?'<b style="color:var(--ok)">✅ </b>':''}${esc(snip(x))}</span></div>`}
 function fileUrl(f){return NK.base+(NK.files?NK.files[f]:NK.pre+'-'+String(f+1).padStart(3,'0')+'.mp3')}
 function playAt(t,lead){const f=fileOf(t);const url=fileUrl(f);
  const off=Math.max(0,t-NK.starts[f]-lead);
  if(CURFILE!==f+1||!au.src.endsWith(url.split('/').pop())){au.pause();au.src=url;CURFILE=f+1;au.addEventListener('loadedmetadata',()=>{au.currentTime=off},{once:true});au.load()}else au.currentTime=off;au.play().catch(()=>toast('ဖွင့်မရပါ — အင်တာနက် စစ်ပါ'))}
-$('#list').onclick=async e=>{
+async function listClick(e){
  if(e.target.dataset.showv){SHOWV=!SHOWV;paint();return}
  if(e.target.dataset.vlist){VL=!VL;paint();return}
  if(e.target.dataset.rev){const no=+e.target.dataset.rev;if(REV.has(no)&&!e.target.closest('.su')){REV.delete(no)}else{REV.add(no);OPEN.add(String(no))}paint();setTimeout(()=>{const el=document.querySelector('.su[data-no="'+no+'"]');if(el)el.scrollIntoView({block:'start',behavior:'smooth'})},50);return}
  if(e.target.dataset.ver){if(!ED)return;const no=+e.target.dataset.ver;if(VER.has(no)){VER.delete(no)}else{if(!confirm('ဒီသုတ္တန်ကို အတည်ပြုပြီးလို့ သတ်မှတ်မလား? အများပြည်သူကို 🔊 ပြပြီး၊ သင့်စာရင်းထဲက ဝှက်မည်။'))return;VER.add(no)}paint();saveVer();return}
  const tg=e.target.closest('[data-tog]');if(tg){const no=tg.dataset.tog;OPEN.has(no)?OPEN.delete(no):OPEN.add(no);paint();return}
- const r=e.target.closest('.row');if(!r)return;const k=r.dataset.k;if(MISS.has(k)&&!e.target.dataset.miss){toast('ဒီပိုဒ် အသံမရှိပါ');return}
+ const r=e.target.closest('.row');if(!r&&!(e.target.closest('#acts')&&CURK))return;const k=r?r.dataset.k:CURK;if(MISS.has(k)&&!e.target.dataset.miss){toast('ဒီပိုဒ် အသံမရှိပါ');return}
  if(e.target.dataset.miss){if(!ED)return;MISS.has(k)?MISS.delete(k):MISS.add(k);au.pause();calc();paint();put({m:JSON.stringify([...MISS])});return}
  if(e.target.dataset.missr){if(!ED)return;const [sn,pn]=k.split('|');const to=(prompt('¶'+pn+' ကနေ ဘယ်ပိုဒ်နံပါတ်အထိ အသံမရှိလဲ? (ပိုဒ်နံပါတ် ရိုက်ပါ၊ မြန်မာဂဏန်း/အင်္ဂလိပ်ဂဏန်း)')||'').trim().replace(/[0-9]/g,d=>MN[d]);if(!to)return;const e2=sn+'|'+to;if(IDX[e2]===undefined||IDX[e2]<IDX[k])return toast('ပိုဒ်နံပါတ် မှားနေသည်');ORD.filter(q=>q.split('|')[0]===sn&&IDX[q]>=IDX[k]&&IDX[q]<=IDX[e2]).forEach(q=>MISS.add(q));au.pause();calc();paint();put({m:JSON.stringify([...MISS])});toast('အသံမရှိအဖြစ် မှတ်ပြီး ✓');return}
  if(e.target.dataset.up){if(!ED)return;const [sn,pn]=k.split('|');au.pause();const on=UP[sn]!==pn;if(on)UP[sn]=pn;else delete UP[sn];
@@ -95,6 +96,7 @@ $('#list').onclick=async e=>{
  if(e.target.dataset.d||e.target.dataset.set){if(!ED)return;const t=e.target.dataset.set?Math.round(NK.starts[CURFILE-1]+au.currentTime):Math.max(0,Math.round(TM[k]+ +e.target.dataset.d));const d0=+e.target.dataset.d||0;const g=CURFILE?NK.starts[CURFILE-1]+au.currentTime:-1e9;const near=!au.paused&&Math.abs(g-TM[k])<90;
   await mark(k,t);if(!e.target.dataset.set){if(near)playAt(Math.max(0,g+d0),0);else playAt(t,2)}return}
  CURK=k;playAt(TM[k],OV[k]!==undefined?+$('#leadM').value:+$('#leadU').value);$('#now').textContent='¶'+k.split('|')[1]+' · '+NK.suttas[k.split('|')[0]];paint()};
+$('#list').addEventListener('click',listClick);$('#acts').addEventListener('click',listClick);
 $('#sk').onclick=e=>{const s=e.target.dataset.s;if(s)au.currentTime=Math.max(0,Math.min(au.duration||1e9,au.currentTime+ +s))};
 au.addEventListener('timeupdate',()=>{$('#ct').textContent=mm(au.currentTime)});
 au.addEventListener('ended',()=>{if(CURFILE&&CURFILE<NK.dur.length){playAt(NK.starts[CURFILE],0)}});
