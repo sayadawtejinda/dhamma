@@ -40,7 +40,7 @@ dialog{border:1px solid var(--l);border-radius:14px;background:var(--card);color
 <div id="list"></div>
 </main>
 <div id="bar" style="display:none"><div id="grip"><span>⠿ ဆွဲပြီး နေရာရွှေ့ပါ</span><button type="button" id="barmin" title="ချုံ့ရန် / ချဲ့ရန်">▁ ချုံ့</button></div><div class="in body"><div id="now">— သုတ္တန်တစ်ခုကို ရွေးပါ —</div><audio id="au" controls preload="none"></audio>
-<div id="sk"><button data-s="-10">⏪10</button><button data-s="-5">⏪5</button><span id="ct">0:00</span><button data-s="5">5⏩</button><button data-s="10">10⏩</button></div><div id="acts"><button data-miss="1" title="ဒီပိုဒ် အသံမရှိ">🔇</button><button data-missr="1" title="ဒီပိုဒ်ကနေ ... အထိ အသံမရှိ">🔇…</button><button data-up="1" title="ဒီပိုဒ်အထိ အတည်ပြုပြီး">✅↑</button><button data-d="-2">−2</button><button data-d="-1">−1</button><button data-d="1">+1</button><button data-d="2">+2</button><button data-set="1" title="ဖွင့်နေတဲ့ နေရာကို ဒီပိုဒ်ရဲ့ အစအဖြစ် မှတ်ရန် (ထပ်နှိပ်ရင် ဖြုတ်မည်)">📍</button></div></div></div>
+<div id="acts"><button data-miss="1" title="ဒီပိုဒ် အသံမရှိ">🔇</button><button data-missr="1" title="ဒီပိုဒ်ကနေ ... အထိ အသံမရှိ">🔇…</button><button data-up="1" title="ဒီပိုဒ်အထိ အတည်ပြုပြီး">✅↑</button><button data-d="-2">−2</button><button data-d="-1">−1</button><button data-d="1">+1</button><button data-d="2">+2</button><button data-set="1" title="ဖွင့်နေတဲ့ နေရာကို ဒီပိုဒ်ရဲ့ အစအဖြစ် မှတ်ရန် (ထပ်နှိပ်ရင် ဖြုတ်မည်)">📍</button></div></div></div>
 <div id="toast"></div>
 <dialog id="dlg"><form method="dialog"><b>ဆရာ ဝင်ရန်</b><div class="sub">အီးမေးလ်လိပ်စာ ရိုက်ပါ — ဝင်ရန် လင့်ကို အီးမေးလ်ပို့ပေးမည်။ ဆရာ့အီးမေးလ်ပဲ တည်းဖြတ်ခွင့်ရှိသည်။</div><input type="email" id="em" placeholder="you@example.com"><button class="bt pri" id="send" value="x">လင့်ပို့မည်</button> <button class="bt" value="c">ပိတ်</button></form></dialog>
 <script>
@@ -93,12 +93,10 @@ async function listClick(e){
   if(on){let ni=ORD.indexOf(k)+1;while(ORD[ni]!==undefined&&MISS.has(ORD[ni]))ni++;const nx=ORD[ni];if(nx){const [ns,np]=nx.split('|');if(ns!==sn)OPEN.add(ns);if(OV[nx]===undefined){OV[nx]=Math.round(TM[nx]);calc();put({j:JSON.stringify(OV)})}CURK=nx;paint();playAt(TM[nx],OV[nx]!==undefined?+$('#leadM').value:+$('#leadU').value);$('#now').textContent='¶'+np+' · '+NK.suttas[ns]+' (နောက်တစ်ပိုဒ် စစ်ရန်)';setTimeout(()=>{const el=document.querySelector('.row.cur');if(el)el.scrollIntoView({block:'center',behavior:'smooth'})},50)}else paint()}else paint();
   if(await put({u:JSON.stringify(UP)}))toast(on?'¶'+pn+' အထိ အတည်ပြုပြီး ✓ — နောက်ပိုဒ်ကို ဖွင့်ပေးထားသည်':'ပြန်ဖျက်ပြီး');return}
  if(e.target.dataset.set&&ED&&OV[k]!==undefined){delete OV[k];calc();paint();put({j:JSON.stringify(OV)});toast('📍 မှတ်ထားတာ ဖြုတ်ပြီး (ခန့်မှန်းချိန်ကို ပြန်သုံးမည်)',3200);return}
- if(e.target.dataset.d||e.target.dataset.set){if(!ED)return;const t=e.target.dataset.set?Math.round(NK.starts[CURFILE-1]+au.currentTime):Math.max(0,Math.round(TM[k]+ +e.target.dataset.d));const d0=+e.target.dataset.d||0;const g=CURFILE?NK.starts[CURFILE-1]+au.currentTime:-1e9;const near=!au.paused&&Math.abs(g-TM[k])<90;
+ if(e.target.dataset.d||e.target.dataset.set){if(!ED)return;const t=e.target.dataset.set?Math.round(NK.starts[CURFILE-1]+au.currentTime):Math.max(0,Math.round(TM[k]+ +e.target.dataset.d));const d0=+e.target.dataset.d||0;const g=CURFILE?NK.starts[CURFILE-1]+au.currentTime:-1e9;const near=CURFILE>0&&Math.abs(g-TM[k])<90;
   await mark(k,t);if(!e.target.dataset.set){if(near)playAt(Math.max(0,g+d0),0);else playAt(t,2)}return}
  CURK=k;playAt(TM[k],OV[k]!==undefined?+$('#leadM').value:+$('#leadU').value);$('#now').textContent='¶'+k.split('|')[1]+' · '+NK.suttas[k.split('|')[0]];paint()};
 $('#list').addEventListener('click',listClick);$('#acts').addEventListener('click',listClick);
-$('#sk').onclick=e=>{const s=e.target.dataset.s;if(s)au.currentTime=Math.max(0,Math.min(au.duration||1e9,au.currentTime+ +s))};
-au.addEventListener('timeupdate',()=>{$('#ct').textContent=mm(au.currentTime)});
 au.addEventListener('ended',()=>{if(CURFILE&&CURFILE<NK.dur.length){playAt(NK.starts[CURFILE],0)}});
 // ---- marks (Firestore doc tpkaudio/<nikaya>); everybody reads, only the teacher writes
 let fbp=null;function fb(){return fbp||(fbp=(async()=>{
