@@ -17,7 +17,7 @@ main{max-width:900px;margin:0 auto;padding:0 16px}
 .row .tx{flex:1;font-size:.9rem;color:var(--m)}.fine{display:none;gap:3px;flex:none}.ed .fine{display:flex}.fine button{border:1px solid var(--a);color:var(--a);background:none;border-radius:6px;padding:0 7px;cursor:pointer;font:inherit;font-size:.8rem}
 .warn{background:var(--warn);color:var(--warnt);padding:5px 10px;border-radius:8px;font-size:.85rem;margin:6px 12px}
 #bar{position:fixed;right:12px;bottom:12px;z-index:20;width:min(94vw,440px);background:var(--card);border:2px solid var(--a);border-radius:14px;padding:0 10px 8px;box-shadow:0 8px 28px rgba(0,0,0,.35)}
-#grip{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 2px;cursor:grab;touch-action:none;user-select:none;color:var(--m);font-size:.8rem}#grip:active{cursor:grabbing}#grip button{border:1px solid var(--a);background:none;color:var(--a);border-radius:8px;padding:0 9px;cursor:pointer;font:inherit}
+#grip{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 2px;cursor:grab;touch-action:none;user-select:none;color:var(--m);font-size:.8rem}#grip:active{cursor:grabbing}#grip input{width:44px;font:inherit;padding:1px 3px;border:1px solid var(--a);border-radius:6px;background:var(--card);color:var(--t)}#grip button{border:1px solid var(--a);background:none;color:var(--a);border-radius:8px;padding:0 9px;cursor:pointer;font:inherit}
 #bar.min .body{display:none}
 #acts{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}#acts button{flex:1;min-width:38px;border:1px solid var(--a);color:var(--a);background:none;border-radius:8px;padding:4px 0;cursor:pointer;font:inherit;font-size:.85rem}
 #bar .in{max-width:900px;margin:0 auto}#now{font-size:.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}audio{width:100%;height:36px}
@@ -31,15 +31,14 @@ dialog{border:1px solid var(--l);border-radius:14px;background:var(--card);color
 <div class="sub">သုတ္တန်ကို ဖွင့်ပြီး ပိဋ်နံပါတ်ကို နှိပ်ရင် အဲဒီပိုဒ်ကနေ နားထောင်နိုင်သည်။ အစိမ်း <span style="color:var(--ok)">●</span> = ဆရာ့ကိုယ်တိုင် နားထောင်စစ်ပြီး၊ ဖြူ = ခန့်မှန်းထားသည် (အနည်းငယ် လွဲနိုင်)။</div>
 <div class="tabs" id="tabs" style="display:none"></div>
 <div style="margin-top:6px"><button class="bt" id="login">🔑 ဆရာ ဝင်ရန် (တည်းဖြတ်ရန်)</button><span class="sub ed-only" id="who"></span></div>
-<details class="set"><summary>⚙ ပိုဒ်ကို နှိပ်တဲ့အခါ ဘယ်နှစ်စက္ကန့် ရှေ့ကနေ ဖွင့်မလဲ</summary>
- ခန့်မှန်းထားတဲ့ ပိုဒ် <input type="number" id="leadU" min="0" max="120"> စက္ကန့် &nbsp; စစ်ပြီးသား ပိုဒ် <input type="number" id="leadM" min="0" max="120"> စက္ကန့်</details>
+
 </header>
 <div id="lock" style="max-width:900px;margin:30px auto;padding:0 16px;color:var(--m)">🔒 ဒီစာမျက်နှာက ဆရာအတွက်သာ ဖြစ်ပါသည်။ စာဖတ်သူများက Tipitaka စာမျက်နှာထဲမှာ စာပိုဒ်နံပါတ်ဘေးက 🔊 ကို နှိပ်ပြီး နားထောင်နိုင်ပါသည်။ ဆရာဖြစ်ရင် အပေါ်က <b>🔑 ဆရာ ဝင်ရန်</b> ကို နှိပ်ပါ။</div>
 <main id="main" class="" style="display:none">
 <div id="seedbox" style="display:none;margin:8px 0"><button class="bt pri" id="seedbtn">📥 အရင်က ကွန်ပျူတာမှာ မှတ်ထားတာတွေ ထည့်မည်</button> <span class="sub" id="seedn"></span></div>
 <div id="list"></div>
 </main>
-<div id="bar" style="display:none"><div id="grip"><span>⠿ ဆွဲပြီး နေရာရွှေ့ပါ</span><button type="button" id="barmin" title="ချုံ့ရန် / ချဲ့ရန်">▁ ချုံ့</button></div><div class="in body"><div id="now">— သုတ္တန်တစ်ခုကို ရွေးပါ —</div><audio id="au" controls preload="none"></audio>
+<div id="bar" style="display:none"><div id="grip"><span title="ပိုဒ်ကို နှိပ်တဲ့အခါ ဘယ်နှစ်စက္ကန့် ရှေ့ကနေ ဖွင့်မလဲ">⠿ ခန့်မှန်း <input type="number" id="leadU" min="0" max="120"> စစ်ပြီး <input type="number" id="leadM" min="0" max="120"> စက္ကန့်</span><button type="button" id="barmin" title="ချုံ့ရန် / ချဲ့ရန်">▁ ချုံ့</button></div><div class="in body"><div id="now">— သုတ္တန်တစ်ခုကို ရွေးပါ —</div><audio id="au" controls preload="none"></audio>
 <div id="acts"><button data-miss="1" title="ဒီပိုဒ် အသံမရှိ">🔇</button><button data-missr="1" title="ဒီပိုဒ်ကနေ ... အထိ အသံမရှိ">🔇…</button><button data-up="1" title="ဒီပိုဒ်အထိ အတည်ပြုပြီး">✅↑</button><button data-d="-2">−2</button><button data-d="-1">−1</button><button data-d="1">+1</button><button data-d="2">+2</button><button data-set="1" title="ဖွင့်နေတဲ့ နေရာကို ဒီပိုဒ်ရဲ့ အစအဖြစ် မှတ်ရန် (ထပ်နှိပ်ရင် ဖြုတ်မည်)">📍</button></div></div></div>
 <div id="toast"></div>
 <dialog id="dlg"><form method="dialog"><b>ဆရာ ဝင်ရန်</b><div class="sub">အီးမေးလ်လိပ်စာ ရိုက်ပါ — ဝင်ရန် လင့်ကို အီးမေးလ်ပို့ပေးမည်။ ဆရာ့အီးမေးလ်ပဲ တည်းဖြတ်ခွင့်ရှိသည်။</div><input type="email" id="em" placeholder="you@example.com"><button class="bt pri" id="send" value="x">လင့်ပို့မည်</button> <button class="bt" value="c">ပိတ်</button></form></dialog>
@@ -106,7 +105,7 @@ let fbp=null;function fb(){return fbp||(fbp=(async()=>{
   try{await Au.signInWithEmailLink(auth,em,location.href);lsSet('tpkEmail',em);toast('ဝင်ပြီးပါပြီ ✓')}catch(e){toast('ဝင်မရပါ — လင့်အသစ် ပြန်တောင်းပါ')}
   history.replaceState(null,'',location.pathname+location.hash)}
  await auth.authStateReady();return {Au,F,auth,db}})())}
-function setEd(u){ED=!!u&&(u.email||'').toLowerCase()===ADMIN;document.body.classList.toggle('ed',ED);$('#main').style.display=ED?'':'none';$('#tabs').style.display=ED?'flex':'none';$('#bar').style.display=ED?'':'none';if(ED&&window.__barPlace)setTimeout(window.__barPlace,0);$('#lock').style.display=ED?'none':'';$('details.set').style.display=ED?'':'none';$('#main').classList.toggle('ed',ED);$('#who').textContent=ED?' ✓ ဆရာ — တည်းဖြတ်နိုင်သည်':'';$('#login').style.display=ED?'none':'';}
+function setEd(u){ED=!!u&&(u.email||'').toLowerCase()===ADMIN;document.body.classList.toggle('ed',ED);$('#main').style.display=ED?'':'none';$('#tabs').style.display=ED?'flex':'none';$('#bar').style.display=ED?'':'none';if(ED&&window.__barPlace)setTimeout(window.__barPlace,0);$('#lock').style.display=ED?'none':'';$('#main').classList.toggle('ed',ED);$('#login').style.display=ED?'none':'';}
 async function put(o){try{const f=await fb();await f.F.setDoc(f.F.doc(f.db,'tpkaudio',NK.id),Object.assign(o,{ts:Date.now()}),{merge:true});return true}catch(e){toast('မသိမ်းနိုင်ပါ — ဝင်ထားသလား စစ်ပါ');return false}}
 async function mark(k,t){OV[k]=t;calc();paint();put({j:JSON.stringify(OV)})}
 async function saveVer(){if(await put({v:JSON.stringify([...VER])}))toast('သိမ်းပြီး ✓')}
@@ -129,7 +128,7 @@ async function loadSet(id){
  const mini=lsGet('tpkBarMin','0')==='1';bar.classList.toggle('min',mini);$('#barmin').textContent=mini?'▣ ချဲ့':'▁ ချုံ့';
  $('#barmin').onclick=()=>{const m=!bar.classList.contains('min');bar.classList.toggle('min',m);$('#barmin').textContent=m?'▣ ချဲ့':'▁ ချုံ့';lsSet('tpkBarMin',m?'1':'0');if(bar.style.left)clamp()};
  let dx=0,dy=0,drag=false;
- grip.addEventListener('pointerdown',e=>{if(e.target.closest('button'))return;drag=true;const r=bar.getBoundingClientRect();dx=e.clientX-r.left;dy=e.clientY-r.top;grip.setPointerCapture(e.pointerId);e.preventDefault()});
+ grip.addEventListener('pointerdown',e=>{if(e.target.closest('button,input'))return;drag=true;const r=bar.getBoundingClientRect();dx=e.clientX-r.left;dy=e.clientY-r.top;grip.setPointerCapture(e.pointerId);e.preventDefault()});
  grip.addEventListener('pointermove',e=>{if(!drag)return;bar.style.left=(e.clientX-dx)+'px';bar.style.top=(e.clientY-dy)+'px';bar.style.right='auto';bar.style.bottom='auto';clamp()});
  const end=()=>{if(!drag)return;drag=false;lsSet('tpkBarPos',JSON.stringify({l:bar.offsetLeft,t:bar.offsetTop}))};grip.addEventListener('pointerup',end);grip.addEventListener('pointercancel',end);
  addEventListener('resize',()=>{if(bar.style.left)clamp()});place();window.__barPlace=place})();
