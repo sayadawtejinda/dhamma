@@ -107,6 +107,7 @@ const ShrineRoomApp = lazyLoad(() => import('./ShrineRoomApp'));
 // as BodhiTreeApp.jsx/ShrineRoomApp.jsx.
 const AvatarApp = lazyLoad(() => import('./AvatarApp'));
 const PetApp = lazyLoad(() => import('./PetApp'));
+import SoundGuardButton from './SoundGuardButton';
 // Nature World -- a fourth piece of the gamified "Home" idea: a student's
 // own growing plot of land they unlock and plant trees on with coins, same
 // shared wallet as Avatar/Shrine Room. First pass (land + trees only,
@@ -640,6 +641,7 @@ export default function App() {
           🔄 Just updated the app — tap your subject again
         </div>
       )}
+      <SoundGuardButton activeApp={activeApp} />
       {/* The Tutoring Dashboard is the home screen, so it's the only app
           that's always mounted/eagerly loaded. Every other app below is
           lazy-loaded and only mounted while it's the active app, and
