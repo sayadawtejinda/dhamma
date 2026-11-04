@@ -94,7 +94,7 @@ async function listClick(e){
   if(await put({u:JSON.stringify(UP)}))toast(on?'¶'+pn+' အထိ အတည်ပြုပြီး ✓ — နောက်ပိုဒ်ကို ဖွင့်ပေးထားသည်':'ပြန်ဖျက်ပြီး');return}
  if(e.target.dataset.set&&ED&&OV[k]!==undefined){delete OV[k];calc();paint();put({j:JSON.stringify(OV)});toast('📍 မှတ်ထားတာ ဖြုတ်ပြီး (ခန့်မှန်းချိန်ကို ပြန်သုံးမည်)',3200);return}
  if(e.target.dataset.d||e.target.dataset.set){if(!ED)return;const t=e.target.dataset.set?Math.round(NK.starts[CURFILE-1]+au.currentTime):Math.max(0,Math.round(TM[k]+ +e.target.dataset.d));const d0=+e.target.dataset.d||0;const g=CURFILE?NK.starts[CURFILE-1]+au.currentTime:-1e9;const near=CURFILE>0&&Math.abs(g-TM[k])<90;
-  await mark(k,t);if(!e.target.dataset.set){if(near)playAt(Math.max(0,g+d0),0);else playAt(t,2)}return}
+  await mark(k,t);if(!e.target.dataset.set){{CURK=k;playAt(t,+$('#leadM').value)}}return}
  CURK=k;playAt(TM[k],OV[k]!==undefined?+$('#leadM').value:+$('#leadU').value);$('#now').textContent='¶'+k.split('|')[1]+' · '+NK.suttas[k.split('|')[0]];paint()};
 $('#list').addEventListener('click',listClick);$('#acts').addEventListener('click',listClick);
 au.addEventListener('ended',()=>{if(CURFILE&&CURFILE<NK.dur.length){playAt(NK.starts[CURFILE],0)}});
