@@ -1404,10 +1404,10 @@ const hasPreSamphassa = (isNamaKhandha || isViññana) && (
         if (!mSOpts || mSOpts.length === 0) mSOpts = mSGroup.options;
         const maranaJavana = mSOpts[sankharaState.javanaIdx % mSOpts.length] || mSGroup.options[0];
         const isTadaAllowed = !activePuggalaId.includes('rupa') && !activePuggalaId.includes('arupa');
-        const hasTada = (variation === 0 || variation === 2) && isTadaAllowed;
-        const hasBhavanga = (variation === 2 || variation === 3);
+        const hasTada = (variation === 0 || variation === 1) && isTadaAllowed;      // order shown when the cuti ball is clicked: 0 = tadarammana + bhavanga, 1 = tadarammana only, 2 = bhavanga only, 3 = cuti straight after the javanas
+        const hasBhavanga = (variation === 0 || variation === 2);
         const isPancaDoor = (lifePhase === 'past' ? maranaDoor.past : maranaDoor.present) === 1;
-        const isBig = (variation === 0 || variation === 2);      // the two vithis with tadarammana: atimahanta (5 doors) / ativibhuta (mind door); the other two: mahanta / vibhuta
+        const isBig = (variation === 0 || variation === 1);      // the two vithis with tadarammana: atimahanta (5 doors) / ativibhuta (mind door); the other two: mahanta / vibhuta
         const vN = isPancaDoor ? `Ngũ môn lộ Cận tử (${isBig ? "Cảnh Rất Lớn" : "Cảnh Lớn"})` : `Ý môn lộ Cận tử (${isBig ? "Cảnh Rất Rõ" : "Cảnh Rõ"})`;
         const pDoorKey = ['cakkhu', 'sota', 'ghana', 'jivha', 'kaya'][maranaPancaIdx];
         const pInfo = PANCADVARA_INFO[pDoorKey];
