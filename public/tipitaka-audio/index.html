@@ -47,12 +47,12 @@ const lsGet=(k,d)=>{try{const v=localStorage.getItem(k);return v===null?d:v}catc
 const toast=(t,ms=2200)=>{const e=$('#toast');e.textContent=t;e.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove('on'),ms)};
 const mm=t=>{t=Math.round(t);const h=Math.floor(t/3600),m=Math.floor(t%3600/60),s=t%60;return (h?h+':'+String(m).padStart(2,'0'):m)+':'+String(s).padStart(2,'0')};
 const MN='၀၁၂၃၄၅၆၇၈၉',mn=n=>String(n).replace(/\d/g,d=>MN[d]);
-let SEED={},ED=false,NK=null,VER=new Set(),SHOWV=false,OV={},TM={},FB_=null,CURK=null,CURFILE=0;
+let UP={},IDX={},SEED={},ED=false,NK=null,VER=new Set(),SHOWV=false,OV={},TM={},FB_=null,CURK=null,CURFILE=0;
 $('#leadU').value=lsGet('tpkLeadU','12');$('#leadM').value=lsGet('tpkLeadM','2');
 $('#leadU').onchange=()=>lsSet('tpkLeadU',$('#leadU').value);$('#leadM').onchange=()=>lsSet('tpkLeadM',$('#leadM').value);
 const au=$('#au');
 // ---- the estimate: the start and the end of a group of suttas are known (file borders); every marked paragraph is a fixed point; in between the time runs with the characters
-function calc(){TM={};NK.groups.forEach(g=>{const t0=NK.starts[g.fa],t1=NK.starts[g.fb];let cum=0;const tot=g.paras.reduce((a,x)=>a+x[2],0)||1;
+function calc(){IDX={};const cn={};NK.groups.forEach(g=>g.paras.forEach(x=>{IDX[x[0]+'|'+x[1]]=cn[x[0]]=(cn[x[0]]===undefined?0:cn[x[0]]+1)}));TM={};NK.groups.forEach(g=>{const t0=NK.starts[g.fa],t1=NK.starts[g.fb];let cum=0;const tot=g.paras.reduce((a,x)=>a+x[2],0)||1;
  const pts=[{c:0,t:t0}];g.paras.forEach(x=>{const k=x[0]+'|'+x[1];if(OV[k]!==undefined&&cum>0&&OV[k]>=t0&&OV[k]<t1){const q=pts[pts.length-1];if(OV[k]>q.t&&cum>q.c)pts.push({c:cum,t:OV[k]})}cum+=x[2]});pts.push({c:tot,t:t1});
  cum=0;let j=0;g.paras.forEach(x=>{const k=x[0]+'|'+x[1];if(OV[k]!==undefined&&cum===0)pts[0].t=OV[k]>=t0?OV[k]:t0;while(j<pts.length-2&&cum>=pts[j+1].c)j++;const a=pts[j],b=pts[j+1];TM[k]=b.c>a.c?a.t+(cum-a.c)/(b.c-a.c)*(b.t-a.t):a.t;if(OV[k]!==undefined)TM[k]=OV[k];cum+=x[2]})})}
 const fileOf=t=>{let f=0;while(f<NK.dur.length-1&&NK.starts[f+1]<=t)f++;return f};
@@ -63,9 +63,10 @@ function paint(){seedCheck();const by={};NK.groups.forEach(g=>g.paras.forEach(x=
  const nv=Object.keys(by).filter(no=>VER.has(+no)).length;
  $('#list').innerHTML=(nv?`<div style="margin:6px 0"><button class="bt" data-showv="1">${SHOWV?'🙈 အတည်ပြုပြီးသားများ ဝှက်မည်':'👁 အတည်ပြုပြီးသား '+mn(nv)+' ခု ပြရန်'}</button> <span class="sub">(အများပြည်သူကို ပြထားပြီးသား သုတ္တန်များ — ဝှက်ထားသည်)</span></div>`:'')+Object.keys(by).filter(no=>SHOWV||!VER.has(+no)).map(no=>{const ps=by[no],n=ps.filter(x=>OV[x[0]+'|'+x[1]]!==undefined).length,t0=TM[ps[0][0]+'|'+ps[0][1]],last=ps[ps.length-1],t1=NK.starts[NK.groups.find(g=>g.paras.includes(last)).fb];
   const open=OPEN.has(no);
-  return `<div class="su" data-no="${no}"><div class="h" data-tog="${no}"><b>${esc(NK.sutNum[no])}။ ${esc(NK.suttas[no])}</b><span class="meta">${mm(t1-t0)} · ¶${mn(ps.length)}${n?` · <span style="color:var(--ok)">စစ်ပြီး ${mn(n)}</span>`:''}</span>${ED?`<button class="bt ${VER.has(+no)?'':'pri'}" data-ver="${no}" style="padding:2px 10px;font-size:.8rem">${VER.has(+no)?'↩ ပြန်ဖွင့်':'✅ အတည်ပြုပြီး'}</button>`:''}<span>${open?'▲':'▼'}</span></div>`+
+  return `<div class="su" data-no="${no}"><div class="h" data-tog="${no}"><b>${esc(NK.sutNum[no])}။ ${esc(NK.suttas[no])}</b><span class="meta">${mm(t1-t0)} · ¶${mn(ps.length)}${n?` · <span style="color:var(--ok)">စစ်ပြီး ${mn(n)}</span>`:''}${UP[no]!==undefined?` · <span style="color:var(--ok)">✅ ¶${UP[no]} အထိ</span>`:''}</span>${ED?`<button class="bt ${VER.has(+no)?'':'pri'}" data-ver="${no}" style="padding:2px 10px;font-size:.8rem">${VER.has(+no)?'↩ ပြန်ဖွင့်':'✅ အတည်ပြုပြီး'}</button>`:''}<span>${open?'▲':'▼'}</span></div>`+
   (open?(NK.warn.includes(+no)?'<div class="warn">⚠ ဒီသုတ္တန်ကို ဖတ်သူက အတိုချုံး/ပိုဖတ်ထားတာမို့ ပိုဒ်ခန့်မှန်းချက် ပိုလွဲနိုင်သည်</div>':'')+ps.map(x=>rowHtml(x)).join(''):'')+'</div>'}).join('')}
-function rowHtml(x){const k=x[0]+'|'+x[1],set=OV[k]!==undefined;return `<div class="row ${set?'set':''} ${k===CURK?'cur':''}" data-k="${k}"><span class="pn">¶${x[1]}</span><span class="tm">${mm(TM[k])}</span><span class="tx">${esc(x[3])}</span><span class="fine"><button data-d="-2">−2</button><button data-d="-1">−1</button><button data-d="1">+1</button><button data-d="2">+2</button><button data-set="1">📍</button></span></div>`}
+function isOk(k){const s=k.split('|')[0];return VER.has(+s)||(UP[s]!==undefined&&IDX[k]<=IDX[s+'|'+UP[s]])}
+function rowHtml(x){const k=x[0]+'|'+x[1],set=OV[k]!==undefined;return `<div class="row ${set?'set':''} ${k===CURK?'cur':''}" data-k="${k}"><span class="pn">¶${x[1]}</span><span class="tm">${mm(TM[k])}</span><span class="tx">${isOk(k)?'<b style="color:var(--ok)">✅ </b>':''}${esc(x[3])}</span><span class="fine"><button data-up="1" title="ဒီပိုဒ်အထိ အတည်ပြုပြီး">✅↑</button><button data-d="-2">−2</button><button data-d="-1">−1</button><button data-d="1">+1</button><button data-d="2">+2</button><button data-set="1">📍</button></span></div>`}
 function playAt(t,lead){const f=fileOf(t);const url=NK.base+NK.pre+'-'+String(f+1).padStart(3,'0')+'.mp3';
  const off=Math.max(0,t-NK.starts[f]-lead);
  if(CURFILE!==f+1||!au.src.endsWith(url.split('/').pop())){au.src=url;CURFILE=f+1;au.addEventListener('loadedmetadata',()=>{au.currentTime=off},{once:true});au.load()}else au.currentTime=off;au.play().catch(()=>toast('ဖွင့်မရပါ — အင်တာနက် စစ်ပါ'))}
@@ -74,6 +75,7 @@ $('#list').onclick=async e=>{
  if(e.target.dataset.ver){if(!ED)return;const no=+e.target.dataset.ver;if(VER.has(no)){VER.delete(no)}else{if(!confirm('ဒီသုတ္တန်ကို အတည်ပြုပြီးလို့ သတ်မှတ်မလား? အများပြည်သူကို 🔊 ပြပြီး၊ သင့်စာရင်းထဲက ဝှက်မည်။'))return;VER.add(no)}paint();saveVer();return}
  const tg=e.target.closest('[data-tog]');if(tg){const no=tg.dataset.tog;OPEN.has(no)?OPEN.delete(no):OPEN.add(no);paint();return}
  const r=e.target.closest('.row');if(!r)return;const k=r.dataset.k;
+ if(e.target.dataset.up){if(!ED)return;const [sn,pn]=k.split('|');if(UP[sn]===pn)delete UP[sn];else UP[sn]=pn;paint();if(await put({u:JSON.stringify(UP)}))toast(UP[sn]?'¶'+pn+' အထိ အတည်ပြုပြီး ✓ — ပရိသတ်က ကြားရမည်':'ပြန်ဖျက်ပြီး');return}
  if(e.target.dataset.d||e.target.dataset.set){if(!ED)return;const t=e.target.dataset.set?Math.round(NK.starts[CURFILE-1]+au.currentTime):Math.max(0,Math.round(TM[k]+ +e.target.dataset.d));await mark(k,t);if(!e.target.dataset.set)playAt(t,2);return}
  CURK=k;playAt(TM[k],OV[k]!==undefined?+$('#leadM').value:+$('#leadU').value);$('#now').textContent='¶'+k.split('|')[1]+' · '+NK.suttas[k.split('|')[0]];paint()};
 $('#sk').onclick=e=>{const s=e.target.dataset.s;if(s)au.currentTime=Math.max(0,Math.min(au.duration||1e9,au.currentTime+ +s))};
@@ -99,6 +101,6 @@ $('#seedbtn').onclick=async()=>{if(!ED)return;let n=0;Object.keys(SEED).forEach(
  try{SEED=await (await fetch('data/seed_digha.json?v=1')).json()}catch(e){}
  NK=await (await fetch('data/digha.json?v=1')).json();$('#nk').textContent='· '+NK.name;calc();OPEN.add('1');paint();
  try{const f=await fb();setEd(f.auth.currentUser);f.Au.onAuthStateChanged(f.auth,setEd);
-  f.F.onSnapshot(f.F.doc(f.db,'tpkaudio',NK.id),s=>{try{OV=s.exists()?JSON.parse(s.data().j||'{}'):{}}catch(e){OV={}}try{VER=new Set(s.exists()?JSON.parse(s.data().v||'[]'):[])}catch(e){VER=new Set()}calc();paint()},()=>{})}catch(e){}
+  f.F.onSnapshot(f.F.doc(f.db,'tpkaudio',NK.id),s=>{try{OV=s.exists()?JSON.parse(s.data().j||'{}'):{}}catch(e){OV={}}try{UP=s.exists()?JSON.parse(s.data().u||'{}'):{}}catch(e){UP={}}try{VER=new Set(s.exists()?JSON.parse(s.data().v||'[]'):[])}catch(e){VER=new Set()}calc();paint()},()=>{})}catch(e){}
 })();
 </script></body></html>
