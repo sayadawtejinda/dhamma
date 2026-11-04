@@ -6,7 +6,7 @@
 <style>
 :root{--bg:#faf6ef;--card:#fff;--t:#2a2118;--m:#7a6a58;--a:#7b3fb8;--l:#e3d8c8;--ok:#2e9e5b;--warn:#ffe9b3;--warnt:#5a3d00}
 @media(prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#1b1713;--card:#26201a;--t:#f0e6d6;--m:#a89a86;--l:#3a3128;--warn:#4a3a10;--warnt:#ffe9b3}}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--t);font:16px/1.7 "Noto Sans Myanmar","Pyidaungsu",system-ui,sans-serif;padding-bottom:150px}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--t);font:16px/1.7 "Noto Sans Myanmar","Pyidaungsu",system-ui,sans-serif;padding-bottom:60px}
 header{padding:14px 16px 6px;max-width:900px;margin:0 auto}h1{font-size:1.3rem;margin:0}.sub{color:var(--m);font-size:.88rem}
 main{max-width:900px;margin:0 auto;padding:0 16px}
 .tabs{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}.tabs button.on,.tabs button:hover{background:var(--a);color:#fff}.tabs button,.bt{border:1px solid var(--a);background:none;color:var(--a);border-radius:999px;padding:5px 14px;font:inherit;cursor:pointer}.tabs button.on,.bt.pri{background:var(--a);color:#fff}
@@ -16,7 +16,9 @@ main{max-width:900px;margin:0 auto;padding:0 16px}
 .row.cur{background:#7b3fb822}.row .pn{flex:none;width:44px;color:var(--m);font-size:.85rem}.row .tm{flex:none;width:58px;font-variant-numeric:tabular-nums;color:var(--a);font-weight:600;font-size:.9rem}.row.set .tm{color:var(--ok)}
 .row .tx{flex:1;font-size:.9rem;color:var(--m)}.fine{display:none;gap:3px;flex:none}.ed .fine{display:flex}.fine button{border:1px solid var(--a);color:var(--a);background:none;border-radius:6px;padding:0 7px;cursor:pointer;font:inherit;font-size:.8rem}
 .warn{background:var(--warn);color:var(--warnt);padding:5px 10px;border-radius:8px;font-size:.85rem;margin:6px 12px}
-#bar{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--card);border-top:2px solid var(--a);padding:8px 12px calc(8px + env(safe-area-inset-bottom));box-shadow:0 -4px 18px rgba(0,0,0,.2)}
+#bar{position:fixed;right:12px;bottom:12px;z-index:20;width:min(94vw,440px);background:var(--card);border:2px solid var(--a);border-radius:14px;padding:0 10px 8px;box-shadow:0 8px 28px rgba(0,0,0,.35)}
+#grip{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 2px;cursor:grab;touch-action:none;user-select:none;color:var(--m);font-size:.8rem}#grip:active{cursor:grabbing}#grip button{border:1px solid var(--a);background:none;color:var(--a);border-radius:8px;padding:0 9px;cursor:pointer;font:inherit}
+#bar.min .body{display:none}
 #bar .in{max-width:900px;margin:0 auto}#now{font-size:.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}audio{width:100%;height:36px}
 #sk{display:flex;gap:6px;justify-content:center;align-items:center;margin-top:4px;flex-wrap:wrap}#sk button{border:1px solid var(--a);background:none;color:var(--a);border-radius:8px;padding:4px 10px;font:inherit;cursor:pointer}#ct{min-width:64px;text-align:center;font-variant-numeric:tabular-nums;color:var(--m)}
 details.set{margin:8px 0;color:var(--m);font-size:.88rem}details.set input{width:56px;font:inherit;padding:2px 4px}
@@ -36,7 +38,7 @@ dialog{border:1px solid var(--l);border-radius:14px;background:var(--card);color
 <div id="seedbox" style="display:none;margin:8px 0"><button class="bt pri" id="seedbtn">📥 အရင်က ကွန်ပျူတာမှာ မှတ်ထားတာတွေ ထည့်မည်</button> <span class="sub" id="seedn"></span></div>
 <div id="list"></div>
 </main>
-<div id="bar" style="display:none"><div class="in"><div id="now">— သုတ္တန်တစ်ခုကို ရွေးပါ —</div><audio id="au" controls preload="none"></audio>
+<div id="bar" style="display:none"><div id="grip"><span>⠿ ဆွဲပြီး နေရာရွှေ့ပါ</span><button type="button" id="barmin" title="ချုံ့ရန် / ချဲ့ရန်">▁ ချုံ့</button></div><div class="in body"><div id="now">— သုတ္တန်တစ်ခုကို ရွေးပါ —</div><audio id="au" controls preload="none"></audio>
 <div id="sk"><button data-s="-30">⏪30</button><button data-s="-10">⏪10</button><button data-s="-5">⏪5</button><span id="ct">0:00</span><button data-s="5">5⏩</button><button data-s="10">10⏩</button><button data-s="30">30⏩</button></div></div></div>
 <div id="toast"></div>
 <dialog id="dlg"><form method="dialog"><b>ဆရာ ဝင်ရန်</b><div class="sub">အီးမေးလ်လိပ်စာ ရိုက်ပါ — ဝင်ရန် လင့်ကို အီးမေးလ်ပို့ပေးမည်။ ဆရာ့အီးမေးလ်ပဲ တည်းဖြတ်ခွင့်ရှိသည်။</div><input type="email" id="em" placeholder="you@example.com"><button class="bt pri" id="send" value="x">လင့်ပို့မည်</button> <button class="bt" value="c">ပိတ်</button></form></dialog>
@@ -100,7 +102,7 @@ let fbp=null;function fb(){return fbp||(fbp=(async()=>{
   try{await Au.signInWithEmailLink(auth,em,location.href);lsSet('tpkEmail',em);toast('ဝင်ပြီးပါပြီ ✓')}catch(e){toast('ဝင်မရပါ — လင့်အသစ် ပြန်တောင်းပါ')}
   history.replaceState(null,'',location.pathname+location.hash)}
  await auth.authStateReady();return {Au,F,auth,db}})())}
-function setEd(u){ED=!!u&&(u.email||'').toLowerCase()===ADMIN;document.body.classList.toggle('ed',ED);$('#main').style.display=ED?'':'none';$('#tabs').style.display=ED?'flex':'none';$('#bar').style.display=ED?'':'none';$('#lock').style.display=ED?'none':'';$('details.set').style.display=ED?'':'none';$('#main').classList.toggle('ed',ED);$('#who').textContent=ED?' ✓ ဆရာ — တည်းဖြတ်နိုင်သည်':'';$('#login').style.display=ED?'none':'';}
+function setEd(u){ED=!!u&&(u.email||'').toLowerCase()===ADMIN;document.body.classList.toggle('ed',ED);$('#main').style.display=ED?'':'none';$('#tabs').style.display=ED?'flex':'none';$('#bar').style.display=ED?'':'none';if(ED&&window.__barPlace)setTimeout(window.__barPlace,0);$('#lock').style.display=ED?'none':'';$('details.set').style.display=ED?'':'none';$('#main').classList.toggle('ed',ED);$('#who').textContent=ED?' ✓ ဆရာ — တည်းဖြတ်နိုင်သည်':'';$('#login').style.display=ED?'none':'';}
 async function put(o){try{const f=await fb();await f.F.setDoc(f.F.doc(f.db,'tpkaudio',NK.id),Object.assign(o,{ts:Date.now()}),{merge:true});return true}catch(e){toast('မသိမ်းနိုင်ပါ — ဝင်ထားသလား စစ်ပါ');return false}}
 async function mark(k,t){OV[k]=t;calc();paint();put({j:JSON.stringify(OV)})}
 async function saveVer(){if(await put({v:JSON.stringify([...VER])}))toast('သိမ်းပြီး ✓')}
@@ -116,6 +118,17 @@ async function loadSet(id){
  NK=await (await fetch('data/'+id+'.json?v=1')).json();$('#nk').textContent='· '+NK.name;calc();const f0=Object.keys(NK.suttas)[0];OPEN.add(f0);paint();
  try{const f=await fb();unsub=f.F.onSnapshot(f.F.doc(f.db,'tpkaudio',NK.id),s=>{if(NK.id!==id)return;try{OV=s.exists()?JSON.parse(s.data().j||'{}'):{}}catch(e){OV={}}try{MISS=new Set(s.exists()?JSON.parse(s.data().m||'[]'):[])}catch(e){MISS=new Set()}try{UP=s.exists()?JSON.parse(s.data().u||'{}'):{}}catch(e){UP={}}try{VER=new Set(s.exists()?JSON.parse(s.data().v||'[]'):[])}catch(e){VER=new Set()}calc();paint()},()=>{})}catch(e){}
 }
+// ---- the player floats: drag it by its top strip, shrink it with the button; place and size are remembered
+(function(){const bar=$('#bar'),grip=$('#grip');let pos=null;try{pos=JSON.parse(lsGet('tpkBarPos','null'))}catch(e){}
+ const clamp=()=>{const w=bar.offsetWidth,h=bar.offsetHeight;let l=bar.offsetLeft,t=bar.offsetTop;l=Math.max(4,Math.min(innerWidth-w-4,l));t=Math.max(4,Math.min(innerHeight-h-4,t));bar.style.left=l+'px';bar.style.top=t+'px';bar.style.right='auto';bar.style.bottom='auto'};
+ const place=()=>{if(pos&&pos.l!==undefined){bar.style.left=pos.l+'px';bar.style.top=pos.t+'px';bar.style.right='auto';bar.style.bottom='auto';clamp()}};
+ const mini=lsGet('tpkBarMin','0')==='1';bar.classList.toggle('min',mini);$('#barmin').textContent=mini?'▣ ချဲ့':'▁ ချုံ့';
+ $('#barmin').onclick=()=>{const m=!bar.classList.contains('min');bar.classList.toggle('min',m);$('#barmin').textContent=m?'▣ ချဲ့':'▁ ချုံ့';lsSet('tpkBarMin',m?'1':'0');if(bar.style.left)clamp()};
+ let dx=0,dy=0,drag=false;
+ grip.addEventListener('pointerdown',e=>{if(e.target.closest('button'))return;drag=true;const r=bar.getBoundingClientRect();dx=e.clientX-r.left;dy=e.clientY-r.top;grip.setPointerCapture(e.pointerId);e.preventDefault()});
+ grip.addEventListener('pointermove',e=>{if(!drag)return;bar.style.left=(e.clientX-dx)+'px';bar.style.top=(e.clientY-dy)+'px';bar.style.right='auto';bar.style.bottom='auto';clamp()});
+ const end=()=>{if(!drag)return;drag=false;lsSet('tpkBarPos',JSON.stringify({l:bar.offsetLeft,t:bar.offsetTop}))};grip.addEventListener('pointerup',end);grip.addEventListener('pointercancel',end);
+ addEventListener('resize',()=>{if(bar.style.left)clamp()});place();window.__barPlace=place})();
 $('#tabs').innerHTML=SETS.map(x=>`<button data-id="${x[0]}">${x[1]}</button>`).join('');
 $('#tabs').onclick=e=>{const b=e.target.closest('[data-id]');if(b&&(!NK||b.dataset.id!==NK.id))loadSet(b.dataset.id)};
 (async()=>{
