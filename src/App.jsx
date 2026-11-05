@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import TutoringApp from './TutoringApp';
 import InstallAppBanner from './InstallAppBanner';
 import StarTicker from './StarTicker';
@@ -108,7 +108,6 @@ const ShrineRoomApp = lazyLoad(() => import('./ShrineRoomApp'));
 const AvatarApp = lazyLoad(() => import('./AvatarApp'));
 const PetApp = lazyLoad(() => import('./PetApp'));
 import SoundGuardButton from './SoundGuardButton';
-import TrophyToast from './TrophyToast';
 // Nature World -- a fourth piece of the gamified "Home" idea: a student's
 // own growing plot of land they unlock and plant trees on with coins, same
 // shared wallet as Avatar/Shrine Room. First pass (land + trees only,
@@ -243,6 +242,9 @@ function TrophyCelebration({ totalTrophies, onClose }) {
     const timer = setTimeout(onClose, 6000);
     return () => clearTimeout(timer);
   }, [onClose]);
+  // a tap in the first 5 seconds does not close it, so the child always sees it
+  const shownAtRef = useRef(Date.now());
+  const tryClose = () => { if (Date.now() - shownAtRef.current >= 5000) onClose(); };
 
   // Fixed, randomized-once (not re-rolled every render) burst origins/colors/
   // delays so the fireworks feel scattered across the screen instead of all
@@ -261,7 +263,7 @@ function TrophyCelebration({ totalTrophies, onClose }) {
   return (
     <div
       className="fixed inset-0 z-[99999] bg-black/75 flex flex-col items-center justify-center overflow-hidden cursor-pointer"
-      onClick={onClose}
+      onClick={tryClose}
     >
       <style>{`
         @keyframes trophyFireworkFly {
@@ -317,6 +319,12 @@ export default function App() {
   // auto-close itself before the student ever saw it, if the teacher
   // awarded it while they were off in, say, Myanmar Reader.
   const [trophyCelebration, setTrophyCelebration] = useState(null);
+  // a trophy given automatically when a lesson is finished: the same fireworks as a trophy from the teacher
+  useEffect(() => {
+    const onGranted = (e) => { if (e.detail?.total > 0) setTrophyCelebration({ totalTrophies: e.detail.total }); };
+    window.addEventListener('ss-trophy-granted', onGranted);
+    return () => window.removeEventListener('ss-trophy-granted', onGranted);
+  }, []);
   // A present from the teacher, shown over whichever app is open (see
   // TeacherGiftPopup) -- { studentUid, studentName } while one is up.
   const [teacherGiftPopup, setTeacherGiftPopup] = useState(null);
@@ -643,7 +651,6 @@ export default function App() {
         </div>
       )}
       <SoundGuardButton activeApp={activeApp} />
-      <TrophyToast />
       {/* The Tutoring Dashboard is the home screen, so it's the only app
           that's always mounted/eagerly loaded. Every other app below is
           lazy-loaded and only mounted while it's the active app, and

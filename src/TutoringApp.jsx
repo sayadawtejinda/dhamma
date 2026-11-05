@@ -9156,7 +9156,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
   const grantSmartStudyTrophies = async (session, highestUnit) => {
     const unitCount = session.lessonUnitCount || 0;
     const ceiling = Math.min(session.lessonTrophyLimit || 0, computeClassTrophyMax(unitCount));
-    if (!studentUid || !(highestUnit > 0) || unitCount <= 0 || ceiling <= 0) return 0;
+    if (!studentUid || !(highestUnit > 0) || unitCount <= 0 || ceiling <= 0) return { amount: 0, total: 0 };
     const lessonKey = computeLessonKey(session.lessonTitle, session.lessonLink);
     const studentRef = doc(db, `${publicDataPath}/students`, studentUid);
     let newTotal = 0;
@@ -9168,7 +9168,8 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       const deserved = Math.min(ceiling, Math.floor((highestUnit * ceiling) / unitCount));
       const amount = Math.max(0, deserved - already);
       if (amount <= 0) return 0;
-      tx.update(studentRef, { trophyCount: increment(amount), justEarnedTrophy: true, [`earnedTrophies.${lessonKey}`]: increment(amount) });
+      // no justEarnedTrophy flag here: the celebration is started straight away by the 'ss-trophy-granted' event below
+      tx.update(studentRef, { trophyCount: increment(amount), [`earnedTrophies.${lessonKey}`]: increment(amount) });
       newTotal = (sd.trophyCount || 0) + amount;
       return amount;
     });
@@ -9181,7 +9182,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
         await addDoc(announcementsCollection, { studentName: studentProfile.name, trophyCount: newTotal, createdAt: serverTimestamp(), expiresAt: Timestamp.fromDate(expires), id: getUUID() });
       } catch (e) { console.error('Auto trophy: announcement:', e); }
     }
-    return granted;
+    return { amount: granted, total: newTotal };
   };
 
   // The moment a Smart Study lesson is finished (SmartStudy.jsx announces it once the result is saved), the
@@ -9209,8 +9210,8 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     catch (err) { console.error('Smart Study trophy: progress fetch:', err); return; }
     const lessonKey = computeLessonKey(session.lessonTitle, session.lessonLink);
     const highest = Math.max(getEffectivePreviousUnit(lessonKey, session), got.completed);
-    const granted = await grantSmartStudyTrophies(session, highest);
-    if (granted > 0) window.dispatchEvent(new CustomEvent('ss-trophy-granted', { detail: { amount: granted } }));
+    const { amount: granted, total } = await grantSmartStudyTrophies(session, highest);
+    if (granted > 0) { playSound(0); window.dispatchEvent(new CustomEvent('ss-trophy-granted', { detail: { amount: granted, total } })); }
   };
   useEffect(() => {
     if (!studentUid) return;
