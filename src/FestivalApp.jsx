@@ -117,6 +117,10 @@ async function openPasukulaPacket({ festival, studentUid, studentName, slotIdx }
   });
 }
 
+// A student may throw between PASUKULA_MIN and PASUKULA_MAX coins at a time (so a mistyped, huge number cannot empty the wallet).
+const PASUKULA_MIN = 50;
+const PASUKULA_MAX = 1000;
+
 // Throws some of the student's own coins for another student to find (once a day).
 async function throwPasukula({ festival, studentUid, studentName, amount }) {
   const cfg = festival.pasukula;
@@ -133,7 +137,7 @@ async function throwPasukula({ festival, studentUid, studentName, amount }) {
     const r = rSnap.exists() ? rSnap.data() : {};
     const hadBalance = r.coinBalance != null;
     const balance = hadBalance ? r.coinBalance : SHRINE_STARTER_COINS;
-    if (!Number.isInteger(amount) || amount < 1) return { invalid: true };
+    if (!Number.isInteger(amount) || amount < PASUKULA_MIN || amount > PASUKULA_MAX) return { invalid: true };
     if (amount > balance) return { notEnough: true, balance };
     const gifts = poolSnap.exists() ? (poolSnap.data().gifts || []) : [];
     if (gifts.length >= cfg.maxWaiting) return { full: true };
@@ -328,6 +332,7 @@ function PasukulaPanel({ festival, studentUid, studentName, isTeacherPreview, fo
   const doThrow = async () => {
     const n = parseInt(amount, 10);
     if (!Number.isInteger(n) || n < 1) { setNote('Type how many coins you want to throw.'); return; }
+    if (n < PASUKULA_MIN || n > PASUKULA_MAX) { setNote(`You can throw from ${PASUKULA_MIN} to ${PASUKULA_MAX} coins.`); return; }
     if (isTeacherPreview) { setNote('Teacher preview: nothing is thrown.'); return; }
     if (n > balance) { setNote(`You only have ${balance} coins.`); return; }
     setBusy(true); setNote('');
@@ -337,7 +342,7 @@ function PasukulaPanel({ festival, studentUid, studentName, isTeacherPreview, fo
       else if (res.already) { onThrown(0); setThrowing(false); setNote('You already threw pasukula today. Come back tomorrow. 🌸'); }
       else if (res.full) { setNote('So many gifts are waiting already! Try again tomorrow. 🌸'); }
       else if (res.notEnough) { setNote(`You only have ${res.balance} coins.`); }
-      else { setNote('Type a number of coins.'); }
+      else { setNote(`You can throw from ${PASUKULA_MIN} to ${PASUKULA_MAX} coins.`); }
     } catch (err) { console.error(err); setNote('Could not throw it. Check your internet connection and try again.'); }
     setBusy(false);
   };
@@ -387,14 +392,15 @@ function PasukulaPanel({ festival, studentUid, studentName, isTeacherPreview, fo
         {!thrownToday && !throwing && (
           <div className="mt-4 rounded-2xl border border-amber-300/50 bg-white/5 p-3 text-center">
             <p className="text-sm font-bold">Would you like to throw pasukula too?</p>
-            <p className="text-xs text-indigo-200 mt-1">Throw as many of your coins as you like. Another student may find them in a packet.</p>
+            <p className="text-xs text-indigo-200 mt-1">Throw from {PASUKULA_MIN} to {PASUKULA_MAX} coins. Another student may find them in a packet.</p>
             <button onClick={() => setThrowing(true)} className="mt-2 w-full py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-indigo-950 font-black">🧧 Yes, I will throw</button>
           </div>
         )}
         {!thrownToday && throwing && (
           <div className="mt-4 rounded-2xl border border-amber-300/50 bg-white/5 p-3 text-center">
             <p className="text-sm font-bold">How many coins? <span className="text-amber-300">(You have 🪙 {balance})</span></p>
-            <input type="number" min="1" max={balance} inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} className="mt-2 w-full text-center text-xl font-black text-indigo-950 rounded-xl px-3 py-2" placeholder="0" />
+            <p className="text-xs text-indigo-200">From {PASUKULA_MIN} to {PASUKULA_MAX} coins.</p>
+            <input type="number" min={PASUKULA_MIN} max={Math.min(balance, PASUKULA_MAX)} inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} className="mt-2 w-full text-center text-xl font-black text-indigo-950 rounded-xl px-3 py-2" placeholder="0" />
             <div className="mt-2 flex gap-2">
               <button disabled={busy} onClick={doThrow} className="flex-1 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-indigo-950 font-black disabled:opacity-50">🧧 Throw it</button>
               <button onClick={() => setThrowing(false)} className="flex-1 py-2 rounded-xl bg-white/10 hover:bg-white/20 font-bold">Back</button>
