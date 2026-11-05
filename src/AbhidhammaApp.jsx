@@ -150,8 +150,6 @@ const QuizModule = ({ classId,lessonId,lessonTitle,userId,userName,ageGroup,quiz
   useEffect(()=>{if(state!=='playing'||show)return;const t=setTimeout(()=>setShow(true),5000);return()=>clearTimeout(t);},[state,show,qi]);
   useEffect(()=>{if(state!=='playing'||!show||proc)return;const t=setInterval(()=>setTl(p=>p-1),1000);return()=>clearInterval(t);},[state,show,proc,qi]);
   useEffect(()=>{if(tl<=0&&show&&!proc&&state==='playing')handleAnswer(-1,true);},[tl,show,proc,state]);
-  const [trophyMsg,setTrophyMsg]=useState('');
-  useEffect(()=>{const f=(e)=>{const n=e.detail?.amount||1;setTrophyMsg(`🏆 You earned ${n>1?n+' trophies':'a trophy'}! Well done!`);};window.addEventListener('ss-trophy-granted',f);return()=>window.removeEventListener('ss-trophy-granted',f);},[]);
   const handleAnswer=async(idx,timeout=false)=>{
     if(proc)return;setProc(true);setSel(idx);
     const q=quizData.questions[qi];const ok=!timeout&&q.correctAnswerIndex!==undefined&&idx===q.correctAnswerIndex;setFb(ok?'correct':'incorrect');
@@ -177,7 +175,7 @@ const QuizModule = ({ classId,lessonId,lessonTitle,userId,userName,ageGroup,quiz
     },1500);
   };
   if(state==='failed')return<div className="fixed inset-0 bg-gray-900 z-50 flex items-center justify-center p-4"><div className="bg-gray-800 p-8 rounded-2xl text-center border border-red-500"><div className="text-6xl mb-4">😔</div><h2 className="text-3xl font-bold text-red-400 mb-2">Not Enough Correct!</h2><p className="text-gray-300 mb-6">Need <span className="text-yellow-400 font-black">8+ correct</span> to pass.</p><button onClick={onClose} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-full">Go Back & Review</button></div></div>;
-  if(state==='finished')return<div className="fixed inset-0 bg-gray-900 z-50 flex items-center justify-center p-4"><div className="bg-gray-800 p-8 rounded-2xl text-center"><Trophy className="w-20 h-20 text-yellow-400 mx-auto mb-4"/><h2 className="text-3xl font-bold text-white mb-2">Quiz Completed!</h2>{trophyMsg&&<p className="text-yellow-300 font-bold mb-3">{trophyMsg}</p>}<p className="text-gray-400 text-lg mb-6">Score: <span className="text-indigo-400 font-bold">{score}</span></p><button onClick={onClose} className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-full">Finish</button></div></div>;
+  if(state==='finished')return<div className="fixed inset-0 bg-gray-900 z-50 flex items-center justify-center p-4"><div className="bg-gray-800 p-8 rounded-2xl text-center"><Trophy className="w-20 h-20 text-yellow-400 mx-auto mb-4"/><h2 className="text-3xl font-bold text-white mb-2">Quiz Completed!</h2><p className="text-gray-400 text-lg mb-6">Score: <span className="text-indigo-400 font-bold">{score}</span></p><button onClick={onClose} className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-full">Finish</button></div></div>;
   return(
     <div className="fixed inset-0 bg-gray-900 z-50 flex flex-col items-center justify-center p-4 overflow-y-auto">
       <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-white"><X className="w-8 h-8"/></button>

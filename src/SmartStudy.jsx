@@ -2274,15 +2274,7 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [previousView, setPreviousView] = useState('home');
   const [modal, setModal] = useState({ message: '', type: '', visible: false });
-  // Tutoring gave the student a trophy for the lesson just finished: say so right here
-  useEffect(() => {
-    const onGranted = (e) => {
-      const n = e.detail?.amount || 1;
-      setModal(m => ({ message: `${m.visible && m.message ? m.message + '\n\n' : ''}🏆 You earned ${n > 1 ? n + ' trophies' : 'a trophy'}! Well done!`, type: 'success', visible: true }));
-    };
-    window.addEventListener('ss-trophy-granted', onGranted);
-    return () => window.removeEventListener('ss-trophy-granted', onGranted);
-  }, []);
+  // (the trophy notice is TrophyToast, shown by App.jsx for 5 seconds on any screen)
   const [confirmationModal, setConfirmationModal] = useState({ message: '', onConfirm: null });
   const [quizConfirmation, setQuizConfirmation] = useState({ lesson: null });
   const [competitorSelection, setCompetitorSelection] = useState({ lesson: null });

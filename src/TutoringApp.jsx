@@ -5094,7 +5094,7 @@ ${toSend.map(l => '• ' + l.title).join(', ')}`
     <div className="p-6">
       <div className="fixed top-4 right-4 z-[9500]">
         <button
-          onClick={() => setShowNotifDropdown(v => !v)}
+          onClick={() => { if (!showNotifDropdown) refreshCachedListeners(['announcements5'], 5 * 60 * 1000); setShowNotifDropdown(v => !v); }}
           className="relative bg-white hover:bg-gray-50 border border-gray-200 rounded-full w-11 h-11 flex items-center justify-center shadow-lg text-xl"
           title="Notifications"
         >

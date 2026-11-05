@@ -4596,11 +4596,6 @@ function renderClickableWords(text) {
             }
         };
         
-        window.addEventListener('ss-trophy-granted', (e) => {
-            const n = (e.detail && e.detail.amount) || 1;
-            alertMessage(`🏆 You earned ${n > 1 ? n + ' trophies' : 'a trophy'}! Well done!`, 'success');
-        });
-
         function alertMessage(msg, type) {
             const div = document.createElement('div');
             div.className = `fixed top-6 right-6 px-6 py-4 rounded-2xl shadow-2xl text-white font-bold transform transition-all duration-500 translate-y-[-100%] z-[70] ${type === 'success' ? 'bg-green-500' : 'bg-red-500'}`;
