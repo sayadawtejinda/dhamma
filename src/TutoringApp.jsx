@@ -9193,7 +9193,14 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
   ssLessonDoneRef.current = async (e) => {
     const classId = e.detail?.classId;
     if (!classId || !studentUid || !studentProfile) return;
-    const forClass = (s) => s.lessonLink?.startsWith('smartstudy://') && extractSmartStudyClassId(s.lessonLink) === classId;
+    // which app finished the lesson: Smart Study (default), Dhammaschool or Abhidhamma -- all give their trophies the same way
+    const appName = e.detail?.app || 'smartstudy';
+    const prefix = `${appName}://`;
+    const forClass = (s) => {
+      if (!s.lessonLink?.startsWith(prefix)) return false;
+      const c = s.lessonLink.slice(prefix.length);
+      return c === classId || (appName === 'abhidhamma' && !c);   // a bare abhidhamma:// lesson covers every class
+    };
     const startMs = (s) => s.startTime?.toDate?.()?.getTime?.() || 0;
     const session = (activeSession && forClass(activeSession)) ? activeSession : (mySessions || []).filter(forClass).sort((a, b) => startMs(b) - startMs(a))[0];
     if (!session || !(session.lessonUnitCount > 0)) return;

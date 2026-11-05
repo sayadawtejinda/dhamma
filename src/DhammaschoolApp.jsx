@@ -1729,6 +1729,10 @@ let bilingualMode = false;
                     studentName,
                     completedAt: new Date().toISOString()
                 });
+                // tell the Tutoring side the lesson is finished: it gives the trophy the finished lessons now deserve
+                const l = allLessons[studentCurrentLessonId];
+                const cId = (l && l.classId && l.classId.trim()) ? l.classId.trim() : 'GENERAL';
+                window.dispatchEvent(new CustomEvent('ss-lesson-done', { detail: { app: 'dhammaschool', classId: cId, studentName, lessonId: studentCurrentLessonId } }));
             } catch(e) {
                 console.error("Error recording completion:", e);
             }
@@ -4592,6 +4596,11 @@ function renderClickableWords(text) {
             }
         };
         
+        window.addEventListener('ss-trophy-granted', (e) => {
+            const n = (e.detail && e.detail.amount) || 1;
+            alertMessage(`🏆 You earned ${n > 1 ? n + ' trophies' : 'a trophy'}! Well done!`, 'success');
+        });
+
         function alertMessage(msg, type) {
             const div = document.createElement('div');
             div.className = `fixed top-6 right-6 px-6 py-4 rounded-2xl shadow-2xl text-white font-bold transform transition-all duration-500 translate-y-[-100%] z-[70] ${type === 'success' ? 'bg-green-500' : 'bg-red-500'}`;
