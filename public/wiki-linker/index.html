@@ -887,6 +887,9 @@ $('hdrNext').onclick = () => {
   hdrPrevTitle = s.title.trim();
   const n = { ...s, previous2: s.previous, previous: hdrWrap(s.title) };   // the finished book becomes "previous"
   ['title', 'next', 'next2', 'year', 'notes', 'edition', 'shortcut'].forEach(f => n[f] = '');
+  // a book name already typed in "next" becomes the new title (only "next" is used up; the old book's header already points to it)
+  const nextName = s.next.trim().replace(/^\[\[|\]\]$/g, '').trim();
+  if (nextName) { n.title = nextName; hdrPrevTitle = ''; }
   hdrSet(n);
   $('hf_title').focus();
 };
