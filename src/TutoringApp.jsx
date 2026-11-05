@@ -9203,7 +9203,15 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       return c === classId || (appName === 'abhidhamma' && !c);   // a bare abhidhamma:// lesson covers every class
     };
     const startMs = (s) => s.startTime?.toDate?.()?.getTime?.() || 0;
-    const session = (activeSession && forClass(activeSession)) ? activeSession : (mySessions || []).filter(forClass).sort((a, b) => startMs(b) - startMs(a))[0];
+    let session = (activeSession && forClass(activeSession)) ? activeSession : (mySessions || []).filter(forClass).sort((a, b) => startMs(b) - startMs(a))[0];
+    if (!session) {
+      // The class's session is not in the lists this screen holds (e.g. it closed -- 45-minute limit -- while the child kept studying,
+      // and the saved list is not up to date yet): read this child's sessions for the class once, straight from Firebase.
+      try {
+        const snap = await getDocs(query(sessionsCollection, where('studentUid', '==', studentUid), where('lessonLink', '==', `${prefix}${classId}`)));
+        session = snap.docs.map(d => withCurrentSessionCounts({ id: d.id, ...d.data() })).sort((a, b) => startMs(b) - startMs(a))[0];
+      } catch (err) { console.error('Auto trophy: session lookup:', err); }
+    }
     if (!session || !(session.lessonUnitCount > 0)) return;
     const got = { completed: 0 };
     try { await autoFillReport(session, { setScore: () => {}, setCompleted: (v) => { got.completed = parseFloat(v) || 0; } }); }
