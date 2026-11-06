@@ -1,4 +1,5 @@
 import { listenWithHistory, listenLessonsWithHistory, loadStudentHistory } from './studentHistory';
+import { POEM_TITLES } from './poemTitles';
 import { isOnlineStatusDay, isParamiClassTime } from './presenceDay';
 import { PeekName, AvatarThumb } from './AvatarPeek';
 import { useAwards, AwardEmblem, HallOfExcellence, saveGivenCopy } from './Awards';
@@ -441,6 +442,23 @@ const isMyanmarPoemsUrl = (link) =>
 const poemUnitsForReport = (ids, poemTrophies) => {
   const floor = Math.max(0, Math.floor(poemTrophies || 0)) * 2;
   return floor + (ids || []).filter(i => Number.isInteger(i) && i >= floor).length;
+};
+// The poem the student recited most recently, as "Poem 12 - title": the latest day in recitedDates, and on that day
+// the highest poem number (they go through the poems in order). Falls back to the highest completed poem.
+const lastPoemLabel = (rosterData) => {
+  const dates = rosterData?.recitedDates && typeof rosterData.recitedDates === 'object' ? rosterData.recitedDates : {};
+  let bestDate = '', best = -1;
+  Object.entries(dates).forEach(([k, d]) => {
+    const i = Number(k);
+    if (!Number.isInteger(i) || typeof d !== 'string') return;
+    if (d > bestDate || (d === bestDate && i > best)) { bestDate = d; best = i; }
+  });
+  if (best < 0) {
+    const ids = Array.isArray(rosterData?.completedPoemIds) ? rosterData.completedPoemIds.filter(Number.isInteger) : [];
+    if (ids.length) best = Math.max(...ids);
+  }
+  if (best < 0) return '';
+  return POEM_TITLES[best] ? `Poem ${best + 1} - ${POEM_TITLES[best]}` : `Poem ${best + 1}`;
 };
 // Same idea for Myanmar Number Learning -- standalone (numberlearning://) or
 // as Speaking Myanmar's Part 2. Its own roster doc's completedLevels is what
@@ -8930,6 +8948,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           const poemUnits = await fetchPoemUnits(session);
           poemUnitsRef.current = poemUnits;
           if (poemUnits > 0) sink.setCompleted(String(poemUnits));
+          if (poemLastRef.current && sink.setNotes) sink.setNotes(poemLastRef.current);
         } catch (e) { console.error('Myanmar Poems progress fetch:', e); }
       }
     }
@@ -8996,7 +9015,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     setTodayCompletedInput('');
     setTrophyTapCount(0);
     setShowFeedbackModal(true);
-    await autoFillReport(activeSession, { setScore, setCompleted: handleCompletedUnitChange });
+    await autoFillReport(activeSession, { setScore, setCompleted: handleCompletedUnitChange, setNotes: (t) => setFeedbackNotes(prev => (prev && prev.trim() ? prev : t)) });
   };
 
   const handleOpenRedoReport = async (session) => {
@@ -9093,6 +9112,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           const poemUnits = await fetchPoemUnits(session);
           poemUnitsRef.current = poemUnits;
           if (poemUnits > 0) handleCompletedUnitChange(String(poemUnits));
+          if (poemLastRef.current) setFeedbackNotes(prev => (prev && prev.trim() ? prev : poemLastRef.current));
         } catch (e) { console.error('Myanmar Poems redo fetch:', e); }
       }
     }
@@ -9360,11 +9380,13 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
   
   // Poems: the number the Report should show as "completed" (see poemUnitsForReport).
   const poemUnitsRef = useRef(null); // null until the Report form has worked it out
+  const poemLastRef = useRef(''); // "Poem N - title" of the poem the student recited last (for "What did you study?")
   const fetchPoemUnits = async (session) => {
     const stuName = studentProfile?.name;
     if (!stuName) return 0;
     const rosterSnap = await readAppRoster(MYANMAR_POEMS_APP_ID, studentUid, sanitizePoemsKey, stuName);
     const ids = rosterSnap.exists() && Array.isArray(rosterSnap.data().completedPoemIds) ? rosterSnap.data().completedPoemIds : [];
+    poemLastRef.current = lastPoemLabel(rosterSnap.exists() ? rosterSnap.data() : {});
     const et = studentProfile?.earnedTrophies || {};
     const lk = computeLessonKey(session.lessonTitle, session.lessonLink);
     return poemUnitsForReport(ids, Math.max(et['Poem'] || 0, et[lk] || 0));
