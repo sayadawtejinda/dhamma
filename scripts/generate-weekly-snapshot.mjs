@@ -310,8 +310,10 @@ async function main() {
     Object.keys(u).forEach(k => { if (!u[k]) delete u[k]; });
     return u;
   };
+  // students the teacher asked to keep off the Trophies Awarded list (still active, e.g. attended once and left)
+  const HIDDEN_FROM_TROPHY_LIST = new Set(['02284119635381758800']); // Ashin Kovida
   const trophyList = students
-    .filter(s => s.isActive === true)
+    .filter(s => s.isActive === true && !HIDDEN_FROM_TROPHY_LIST.has(s.id))
     .map(s => ({
       id: s.id,
       name: s.name,
