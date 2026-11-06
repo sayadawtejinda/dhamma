@@ -54,7 +54,7 @@ export const loadRosterSnapshot = (rosterPath) => {
   return rosterSnapshotCache.get(rosterPath);
 };
 
-export function useOnlineRoster(rosterPath, filterDocs, lastSeenField = 'lastSeen', isTeacherMode = false, rankField = null) {
+export function useOnlineRoster(rosterPath, filterDocs, lastSeenField = 'lastSeen', isTeacherMode = false, rankField = null, sortField = null) {
   const liveWatchOn = useLiveWatch();
   const [rosterDocs, setRosterDocs] = useState([]);
   const [nowTick, setNowTick] = useState(Date.now());
@@ -99,6 +99,8 @@ export function useOnlineRoster(rosterPath, filterDocs, lastSeenField = 'lastSee
   const weeklyRosterList = roster
     .filter(s => s._isActiveThisWeek)
     .sort((a, b) => {
+      // sortField (e.g. 'lessonsDone'): the most first, whenever the rows carry it (the weekly file does)
+      if (sortField && (a[sortField] || 0) !== (b[sortField] || 0)) return (b[sortField] || 0) - (a[sortField] || 0);
       if (a._isWarning !== b._isWarning) return a._isWarning ? -1 : 1;
       if (a._isOnlineNow !== b._isOnlineNow) return a._isOnlineNow ? -1 : 1;
       return toMillis(b[lastSeenField]) - toMillis(a[lastSeenField]);
@@ -157,11 +159,13 @@ export default function OnlineStatusWidget({
   guideKey = null,
   // Name of a roster number (e.g. 'lotusCount'): the list then shows every student ranked by it (top three wear a Dhamma wheel).
   rankField = null,
+  // Name of a roster number (e.g. 'lessonsDone') the weekly list is sorted by, the most first.
+  sortField = null,
   // A room can decide what a tap on a NAME does (e.g. open that friend's room with their Avatar); return false to fall back to the Avatar window.
   onNameTap = null,
 }) {
   const liveWatchOn = useLiveWatch();
-  const { weeklyRosterList, onlineCount, warningCount: rawWarningCount, rankedAll } = useOnlineRoster(rosterPath, filterDocs, lastSeenField, isTeacherMode, rankField);
+  const { weeklyRosterList, onlineCount, warningCount: rawWarningCount, rankedAll } = useOnlineRoster(rosterPath, filterDocs, lastSeenField, isTeacherMode, rankField, sortField);
   const shownList = rankedAll || weeklyRosterList;
   const warningCount = showInactiveWarning ? rawWarningCount : 0;
   const [showPanel, setShowPanel] = useState(false);

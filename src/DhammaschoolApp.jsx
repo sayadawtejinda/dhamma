@@ -4934,8 +4934,12 @@ function renderClickableWords(text) {
         lastSeenField="lastActive"
         panelTitle="📖 Students"
         teacherLabel="👩‍🏫 Teacher"
+        sortField="lessonsDone"
+        panelNote="Lessons finished, the most first (updated weekly)."
         renderActivity={s => (
-          <span className="text-gray-600">{s.classId || 'GENERAL'}{s.lessonName ? ` · ${s.lessonName}` : ''}</span>
+          s.lessonsDone != null
+            ? <span className="text-gray-600 font-semibold">{s.lessonsDone} lessons done</span>
+            : <span className="text-gray-600">{s.classId || 'GENERAL'}{s.lessonName ? ` · ${s.lessonName}` : ''}</span>
         )}
       />
     </>

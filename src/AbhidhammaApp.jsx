@@ -1612,8 +1612,12 @@ export default function AbhidhammaApp({ entryRequest, onExit, isActive }) {
           filterDocs={d=>d.status==='approved'&&(!classId||d.classId===classId)}
           panelTitle="📚 Students"
           teacherLabel="👩‍🏫 Teacher"
+          sortField="lessonsDone"
+          panelNote="Lessons finished, the most first (updated weekly)."
           renderActivity={s=>(
-            <span className="text-gray-600">{s.classId}{s.group?` · ${AGE_GROUPS[s.group]?.label?.split(' ')[0]||s.group}`:''}</span>
+            s.lessonsDone!=null
+              ? <span className="text-gray-600 font-semibold">{s.lessonsDone} lessons done</span>
+              : <span className="text-gray-600">{s.classId}{s.group?` · ${AGE_GROUPS[s.group]?.label?.split(' ')[0]||s.group}`:''}</span>
           )}
         />
 

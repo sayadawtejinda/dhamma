@@ -25,6 +25,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { firebaseConfig, appId } from '../src/firebaseConfig.js';
 import { refreshClassSnapshots, refreshClassDocSnapshots, refreshAbhidhammaClassFiles, refreshDhammaschoolProgress, refreshFestivalDeeds, CLASS_DIR } from './class-snapshots.mjs';
+import { loadLessonContext, rankRoster } from './roster-lessons.mjs';
 import { refreshContentSnapshots, refreshAnnouncementsSnapshot, refreshAvatarSnapshot, refreshScheduleSnapshot } from './content-snapshots.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -503,9 +504,10 @@ async function main() {
       'myanmar-part1b-app', 'myanmar-part2a-app', 'myanmar-part2b-app', 'myanmar-poems-app', 'myanmar-reader-app', 'myanmar-sound-practice-app',
       'myanmar-spelling-app', 'myanmar-vowels-learning-app', 'reading-myanmar-app', 'speaking-myanmar-app', 'time-and-calendar-app',
       'watch-and-learn-app', 'myanmar-speaking-app'].map(a => ({ path: `artifacts/${a}/public/data/roster`, field: 'lastSeen' })),
-    { path: `artifacts/${appId}/public/data/classRoster`, field: 'lastSeen' },
-    { path: 'artifacts/lesson-translator-app-v6/public/data/classRoster', field: 'lastSeen' },
-    { path: 'artifacts/dhammaschool-app/public/data/presence', field: 'lastActive' },
+    // lessons: these three lists also show how many lessons each student has finished (see roster-lessons.mjs)
+    { path: `artifacts/${appId}/public/data/classRoster`, field: 'lastSeen', lessons: 'smartstudy', nameOf: d => d.studentName || d.name, keep: d => d.status === 'approved' },
+    { path: 'artifacts/lesson-translator-app-v6/public/data/classRoster', field: 'lastSeen', lessons: 'abhidhamma', nameOf: d => d.studentName || d.name, keep: d => d.status === 'approved' },
+    { path: 'artifacts/dhammaschool-app/public/data/presence', field: 'lastActive', lessons: 'dhammaschool', nameOf: d => d.name, keep: d => d.role === 'student' },
   ];
   const plain = (v) => {
     if (v && typeof v.toMillis === 'function') return v.toMillis();
@@ -517,10 +519,17 @@ async function main() {
   const ROSTER_DIR = join(__dirname, '..', 'public', 'rosterSnapshots');
   mkdirSync(ROSTER_DIR, { recursive: true });
   const rosterCutoff = Date.now() - 14 * 24 * 60 * 60 * 1000;
+  // the Tutoring student records: who is still active, and the lessons each has finished (one read of about 100 docs)
+  const lessonCtx = loadLessonContext((await getDocs(collection(db, `${publicDataPath}/students`))).docs.map(d => ({ id: d.id, ...d.data() })));
   for (const target of rosterTargets) {
     try {
       const snap = await getDocs(collection(db, target.path));
-      const docs = snap.docs.filter(d => msOf(d.data()[target.field]) > rosterCutoff).map(d => ({ id: d.id, ...plain(d.data()) }));
+      let docs = snap.docs.filter(d => msOf(d.data()[target.field]) > rosterCutoff).map(d => ({ id: d.id, ...plain(d.data()) }));
+      if (target.lessons) {
+        const ranked = rankRoster(target.lessons, docs.filter(target.keep), lessonCtx, target.nameOf, d => msOf(d[target.field]));
+        docs = ranked.list;
+        if (ranked.unmatched.length) console.log(`${target.lessons}: not found among the Tutoring students (left out): ${[...new Set(ranked.unmatched)].join(', ')}`);
+      }
       writeFileSync(join(ROSTER_DIR, `${target.path.replace(/\//g, '__')}.json`), JSON.stringify({ generatedAt, docs }));
     } catch (e) { console.error('Roster snapshot failed for', target.path, e.message); }
   }

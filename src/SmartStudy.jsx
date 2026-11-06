@@ -4018,7 +4018,9 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
             rosterPath={getRosterCollectionRef().path}
             isTeacherMode={true}
             filterDocs={(d) => d.status === 'approved'}
-            renderActivity={(s) => <span className="text-gray-600">{s.classId}{s.currentLessonId ? ` · ${s.currentLessonId}` : ''}</span>}
+            renderActivity={(s) => s.lessonsDone != null ? <span className="text-gray-600 font-semibold">{s.lessonsDone} lessons done</span> : <span className="text-gray-600">{s.classId}{s.currentLessonId ? ` · ${s.currentLessonId}` : ''}</span>}
+            sortField="lessonsDone"
+            panelNote="Lessons finished, the most first (updated weekly)."
           />
         ) : userName ? (
           <OnlineStatusWidget
@@ -4028,7 +4030,9 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
             coinBalance={depositLedgerLoaded ? Math.max(0, goldCoinsForScore(computeStudentTotalScore(allMyScoresGlobal, userName)) - smartStudyCoinsTransferredOut) : 0}
             onCoinClick={handleDepositCoinsToShrineRoom}
             filterDocs={(d) => d.status === 'approved'}
-            renderActivity={(s) => <span className="text-gray-600">{s.classId}{s.currentLessonId ? ` · ${s.currentLessonId}` : ''}</span>}
+            renderActivity={(s) => s.lessonsDone != null ? <span className="text-gray-600 font-semibold">{s.lessonsDone} lessons done</span> : <span className="text-gray-600">{s.classId}{s.currentLessonId ? ` · ${s.currentLessonId}` : ''}</span>}
+            sortField="lessonsDone"
+            panelNote="Lessons finished, the most first (updated weekly)."
           />
         ) : null
       )}
