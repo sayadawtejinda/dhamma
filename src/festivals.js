@@ -151,6 +151,84 @@ export const FESTIVALS = [
     },
   },
   {
+    id: 'nadaw-2026',
+    enabled: true,
+    scene: 'poets-moon',
+    icon: '📜',
+    title: 'Nadaw Festival of Poets',
+    tagline: 'Open the thazin flowers, honour the great poets of Myanmar, and win festival gifts!',
+    // Default dates -- the teacher sets the real ones on the "Festival apps" screen. Poets' Day (Sazodaw Nay) is the first
+    // day of the waxing moon of Nadaw, the day after the full moon of Tazaungmon, taken as 25 Nov 2026.
+    start: '2026-11-25',
+    end: '2026-11-29',
+    // Ten thazin buds in the garden -- tap a bud and it opens into a flower (thazin is the flower of Nadaw).
+    lamps: {
+      perDay: 10, coins: 5, allLitBonus: 20, style: 'tap', icon: '🌼', noun: 'thazin flower',
+      emoji: '🌿', doneEmoji: '🌼',
+      rewardText: 'Open {n} thazin flowers',
+    },
+    // Six ways to honour the world of words, one a day each.
+    kadaw: {
+      coins: 20,
+      lotus: 1,
+      title: 'Honour the Poets',
+      button: '📜 Honour the Poets',
+      actionLabel: '🙏 I Honour With Respect',
+      doneWord: 'Honours',
+      recipients: [
+        {
+          id: 'poets-day', emoji: '📜', name: "Poets' Day (Sazodaw Nay)",
+          prayer: "Long ago, kings honoured the wise poets and writers of the kingdom in the month of Nadaw. In 1944 the Myanmar Writers' Association chose the first day of the waxing moon of Nadaw as Poets' Day, and it is still celebrated every year. Poems are like the flowers and fruit of a language. I thank everyone who has used beautiful words to teach, to comfort and to make us think.",
+          blessing: 'May your words always be kind, true and beautiful. Sadhu! Sadhu! Sadhu!',
+        },
+        {
+          id: 'thazin', emoji: '🌼', name: 'Thazin, the Flower of Nadaw',
+          prayer: 'Thazin is the flower of Nadaw. It blooms in the cool season. In the time of the Myanmar kings it was first offered to the king, and only after that did everyone else pick and wear it. Many poets wrote about its sweet smell. I breathe in slowly and imagine the smell of thazin, and my mind feels calm and gentle.',
+          blessing: 'May your heart be as fresh and sweet as a thazin flower. Sadhu! Sadhu! Sadhu!',
+        },
+        {
+          id: 'uttamagyaw', emoji: '📖', name: 'Shin Uttamagyaw (ရှင်ဥတ္တမကျော်)',
+          prayer: 'Shin Uttamagyaw was a monk and one of the great poets of the Inwa (Ava) period. He wrote beautiful poems, and one of them tells of the thazin flower that blooms in Nadaw. I bow to him and to all the monks who kept learning and wrote down wise words for us.',
+          blessing: 'May your wisdom grow like a patient reader. Sadhu! Sadhu! Sadhu!',
+        },
+        {
+          id: 'nat-shin-naung', emoji: '👑', name: 'Nat Shin Naung (နတ်ရှင်နောင်)',
+          prayer: "Nat Shin Naung was a royal prince and a poet whose songs and poems are still loved in Myanmar. Even a prince spent his time writing poems, because beautiful words stay in people's hearts for hundreds of years. I bow to him and to all the poets of the royal courts.",
+          blessing: "May your words stay in people's hearts for a long, long time. Sadhu! Sadhu! Sadhu!",
+        },
+        {
+          id: 'u-ponnya', emoji: '🎭', name: 'U Ponnya (ဦးပုည)',
+          prayer: 'U Ponnya was a famous poet and playwright of the Konbaung period. He wrote the play Wethandaya, the story of Prince Wethandaya (Vessantara), the Bodhisatta who gave away everything with a generous heart. I bow to him and to all the writers who tell good stories.',
+          blessing: 'May you grow up to be generous and to tell good stories. Sadhu! Sadhu! Sadhu!',
+        },
+        {
+          id: 'books', emoji: '📚', name: 'Good Books and Good Teachers',
+          prayer: 'Good books are like jewels. They are a spring of knowledge, and the things we read give us strength for life. Reading without a book is like walking in the dark without a light. I thank my teachers, my family and all the writers who gave me books to read, and I promise to read a good book.',
+          blessing: 'May good books and good teachers always find you. Sadhu! Sadhu! Sadhu!',
+        },
+      ],
+    },
+    rewards: [
+      {
+        id: 'nadaw-2026-robe',
+        category: 'outfit',
+        requires: { type: 'lamps', count: 30 },
+        item: { id: 'festival-nadaw-2026-robe', name: "📜 Poet's Moon Robe", color: '#3949AB', swatch: 'linear-gradient(135deg,#9FA8DA,#3949AB 55%,#FFE082)', pattern: 'night', cost: 0, festival: true },
+      },
+    ],
+    dailyGift: {
+      bonusCoins: 50,
+      pool: [
+        { category: 'accessory', item: { id: 'festival-nadaw-2026-thazin', name: '🌼 Thazin Crown', kind: 'flowercrown', color: '#FFF59D', cost: 0, festival: true } },
+        { category: 'outfit', item: { id: 'festival-nadaw-2026-thazinrobe', name: '🌼 Thazin Blossom Robe', color: '#FBC02D', swatch: 'linear-gradient(135deg,#FFF9C4,#FBC02D 60%,#7CB342)', pattern: 'blossoms', cost: 0, festival: true } },
+        { category: 'accessory', item: { id: 'festival-nadaw-2026-moon', name: '🌕 Nadaw Moon', kind: 'moonstar', color: '#FFF176', cost: 0, festival: true } },
+        { category: 'outfit', item: { id: 'festival-nadaw-2026-scholar', name: "📖 Poet's Scroll Robe", color: '#6D4C41', swatch: 'linear-gradient(135deg,#D7CCC8,#8D6E63 55%,#4E342E)', pattern: 'checks', cost: 0, festival: true } },
+        { category: 'accessory', item: { id: 'festival-nadaw-2026-idea', name: "💡 Poet's Idea", kind: 'bulb', color: '#FFEE58', cost: 0, festival: true } },
+        { category: 'outfit', item: { id: 'festival-nadaw-2026-sky', name: '🌌 Cool Season Sky Robe', color: '#00838F', swatch: 'linear-gradient(135deg,#80DEEA,#00838F 60%,#1A237E)', pattern: 'clouds', cost: 0, festival: true } },
+      ],
+    },
+  },
+  {
     id: 'nyaungyay-2027',
     enabled: true,
     scene: 'bodhi-water',

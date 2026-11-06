@@ -780,6 +780,7 @@ const NEW_SCENE_BG = {
   'newyear-fireworks': 'linear-gradient(180deg,#02030f 0%,#0b1040 50%,#2a1a5a 82%,#3b1f55 100%)',
   'cny-lanterns': 'linear-gradient(180deg,#2b0505 0%,#6b0f0f 45%,#b71c1c 80%,#7f1010 100%)',
   'freedom-sky': 'linear-gradient(180deg,#1a237e 0%,#3f51b5 35%,#ff8a65 70%,#ffe0b2 100%)',
+  'poets-moon': 'linear-gradient(180deg,#0b1038 0%,#1d2a6b 42%,#3b4a9a 74%,#233a5e 100%)',
   'sand-stupa': 'linear-gradient(180deg,#3b2a6b 0%,#c0577a 38%,#ffa45c 68%,#f6d99a 100%)',
   'forest-monks': 'linear-gradient(180deg,#04120d 0%,#0a2c20 40%,#14492f 75%,#1d5a38 100%)',
   'rohini-river': 'linear-gradient(180deg,#6fc0f2 0%,#b9e3ff 36%,#fbe9b7 64%,#86b872 100%)',
@@ -997,6 +998,39 @@ function FreedomScene({ glow }) {
         <ellipse cx="62" cy="6" rx="13" ry="7" transform="rotate(-10 62 6)" strokeDasharray="22 12" /><ellipse cx="86" cy="12" rx="13" ry="7" transform="rotate(20 86 12)" />
       </g>
       <text x="200" y="258" textAnchor="middle" fontSize="15" fontWeight="900" fill="#fff8e1" style={{ letterSpacing: 3 }}>FREE AS A DOVE</text>
+    </svg>
+  );
+}
+
+// Nadaw (Poets' Day): a calm cool-season night -- a lit book on a stand and thazin flowers (the page already draws the moon).
+// The book glows brighter as more of today's thazin flowers are opened.
+function PoetsMoonScene({ glow }) {
+  const stars = [[40, 30], [90, 60], [150, 24], [260, 40], [330, 26], [370, 70], [60, 100], [350, 110]];
+  const lines = [0, 1, 2, 3, 4];
+  return (
+    <svg viewBox="0 0 400 270" preserveAspectRatio="xMidYMax meet" className="absolute inset-0 w-full h-full" aria-hidden="true">
+      {stars.map(([x, y], i) => <circle key={i} cx={x} cy={y} r="1.6" fill="#fff8e1" opacity={0.5 + (i % 3) * 0.15} style={{ animation: `fsBob ${2 + (i % 4) * 0.5}s ease-in-out infinite` }} />)}
+      {/* hills */}
+      <path d="M0 200 Q80 172 170 196 T400 190 L400 270 L0 270 Z" fill="#1a2f55" />
+      <path d="M0 232 Q110 212 210 230 T400 226 L400 270 L0 270 Z" fill="#244070" />
+      {/* the open book on a stand */}
+      <g transform="translate(200 168)">
+        <path d="M-6 40 L6 40 L10 78 L-10 78 Z" fill="#5d4037" />
+        <path d="M-52 30 Q-26 22 0 34 Q26 22 52 30 L52 4 Q26 -4 0 8 Q-26 -4 -52 4 Z" fill="#fff8e1" opacity={0.7 + glow * 0.3} stroke="#d7b98a" strokeWidth="1.6" strokeLinejoin="round" />
+        <path d="M0 8 L0 34" stroke="#d7b98a" strokeWidth="1.6" />
+        {lines.map(i => <g key={i}><line x1="-44" y1={8 + i * 4.6} x2="-8" y2={11 + i * 4.6} stroke="#a1887f" strokeWidth="1.2" strokeLinecap="round" /><line x1="8" y1={11 + i * 4.6} x2="44" y2={8 + i * 4.6} stroke="#a1887f" strokeWidth="1.2" strokeLinecap="round" /></g>)}
+        <circle cx="0" cy="-10" r="26" fill="#ffe082" opacity={0.15 + glow * 0.35} />
+      </g>
+      {/* thazin sprigs on both sides */}
+      {[[56, 214, 1], [88, 226, 0.8], [344, 214, 1], [312, 226, 0.8]].map(([x, y, sc], i) => (
+        <g key={i} transform={`translate(${x} ${y}) scale(${sc})`}>
+          <path d="M0 0 Q-6 -22 2 -42" fill="none" stroke="#7cb342" strokeWidth="2.4" strokeLinecap="round" />
+          {[[-6, -16], [4, -26], [-4, -36], [6, -42]].map(([fx, fy], k) => <g key={k} transform={`translate(${fx} ${fy})`}>
+            {[0, 72, 144, 216, 288].map(a => <ellipse key={a} cx="0" cy="-4" rx="2.6" ry="4.4" fill="#fff59d" transform={`rotate(${a})`} />)}<circle r="2" fill="#ffb300" />
+          </g>)}
+        </g>
+      ))}
+      <text x="200" y="258" textAnchor="middle" fontSize="15" fontWeight="900" fill="#fff8e1" style={{ letterSpacing: 3 }}>POETS' DAY</text>
     </svg>
   );
 }
@@ -1754,6 +1788,8 @@ export default function FestivalApp({ entryRequest, onExit }) {
           <ChineseNewYearScene glow={glow} />
         ) : festival.scene === 'freedom-sky' ? (
           <FreedomScene glow={glow} />
+        ) : festival.scene === 'poets-moon' ? (
+          <PoetsMoonScene glow={glow} />
         ) : festival.scene === 'sand-stupa' ? (
           <SandStupaScene glow={glow} />
         ) : festival.scene === 'htamane-fire' ? (
