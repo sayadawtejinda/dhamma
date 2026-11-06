@@ -8746,7 +8746,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
   // Works out, from each app's own records, the score and the "completed up to" number a
   // report should carry. `sink` receives them: the Report form fills its fields with them,
   // and the automatic report (see handleAutoSubmitSession) uses them to request trophies.
-  const autoFillReport = async (session, sink) => {
+  const autoFillReport = async (session, sink, opts = {}) => {
 
     // Auto-fetch SmartStudy Score and Lesson completed so the feedback modal
     // is pre-filled. Works both when the session link has a classId
@@ -8847,7 +8847,8 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
             const dhammaschoolLessonKey = computeLessonKey(session.lessonTitle, session.lessonLink);
             const dhammaschoolPreviousUnit = getEffectivePreviousUnit(dhammaschoolLessonKey, session);
             const priorSubmittedEndTimes = (mySessions || [])
-              .filter(s => s.id !== session.id && s.lessonLink === session.lessonLink && s.endTime?.toDate)
+              // opts.afterSession: the session is an ended one and the lesson was finished after it closed, so its end counts too
+              .filter(s => (opts.afterSession || s.id !== session.id) && s.lessonLink === session.lessonLink && s.endTime?.toDate)
               .map(s => s.endTime.toDate().getTime());
             const cutoffMs = priorSubmittedEndTimes.length > 0
               ? Math.max(...priorSubmittedEndTimes)
@@ -9155,7 +9156,11 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
   // (two tabs, the report and the catch-up), the second run finds nothing owed, so nothing is paid twice.
   const grantSmartStudyTrophies = async (session, highestUnit) => {
     const unitCount = session.lessonUnitCount || 0;
-    const ceiling = Math.min(session.lessonTrophyLimit || 0, computeClassTrophyMax(unitCount));
+    // Smart Study: also capped by the class's own ceiling. Dhammaschool / Abhidhamma: the lesson's trophy limit (2 per lesson)
+    // is the ceiling -- the class formula would wrongly cap a 40-lesson grade at 8 trophies.
+    const ceiling = session.lessonLink?.startsWith('smartstudy://')
+      ? Math.min(session.lessonTrophyLimit || 0, computeClassTrophyMax(unitCount))
+      : (session.lessonTrophyLimit || 0);
     if (!studentUid || !(highestUnit > 0) || unitCount <= 0 || ceiling <= 0) return { amount: 0, total: 0 };
     const lessonKey = computeLessonKey(session.lessonTitle, session.lessonLink);
     const studentRef = doc(db, `${publicDataPath}/students`, studentUid);
@@ -9214,7 +9219,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     }
     if (!session || !(session.lessonUnitCount > 0)) return;
     const got = { completed: 0 };
-    try { await autoFillReport(session, { setScore: () => {}, setCompleted: (v) => { got.completed = parseFloat(v) || 0; } }); }
+    try { await autoFillReport(session, { setScore: () => {}, setCompleted: (v) => { got.completed = parseFloat(v) || 0; } }, { afterSession: !!session.endTime }); }
     catch (err) { console.error('Smart Study trophy: progress fetch:', err); return; }
     const lessonKey = computeLessonKey(session.lessonTitle, session.lessonLink);
     const highest = Math.max(getEffectivePreviousUnit(lessonKey, session), got.completed);
