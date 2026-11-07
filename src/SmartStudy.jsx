@@ -3927,6 +3927,7 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
             renderActivity={(s) => s.lessonsDone != null ? <span className="text-gray-600 font-semibold">{s.lessonsDone} lessons done</span> : <span className="text-gray-600">{s.classId}{s.currentLessonId ? ` · ${s.currentLessonId}` : ''}</span>}
             sortField="lessonsDone"
             panelNote="Lessons finished, the most first (updated weekly)."
+            weeklyLabel={(n) => <>👥 {n} active students</>}
           />
         ) : userName ? (
           <OnlineStatusWidget
@@ -3939,6 +3940,8 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
             renderActivity={(s) => s.lessonsDone != null ? <span className="text-gray-600 font-semibold">{s.lessonsDone} lessons done</span> : <span className="text-gray-600">{s.classId}{s.currentLessonId ? ` · ${s.currentLessonId}` : ''}</span>}
             sortField="lessonsDone"
             panelNote="Lessons finished, the most first (updated weekly)."
+            weeklyLabel={(n) => <>👥 {n} active students</>}
+            highlightSelf
           />
         ) : null
       )}

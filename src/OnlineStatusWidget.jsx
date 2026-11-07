@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { collection } from 'firebase/firestore';
 import { listenLiveOrOnce, isOnlineStatusDay } from './presenceDay';
 import { useLiveWatch } from './liveWatch';
@@ -163,6 +163,8 @@ export default function OnlineStatusWidget({
   sortField = null,
   // A room can decide what a tap on a NAME does (e.g. open that friend's room with their Avatar); return false to fall back to the Avatar window.
   onNameTap = null,
+  // true: when a student opens the list it scrolls to their own name and marks it (a yellow row with a "You" tag)
+  highlightSelf = false,
 }) {
   const liveWatchOn = useLiveWatch();
   const { weeklyRosterList, onlineCount, warningCount: rawWarningCount, rankedAll } = useOnlineRoster(rosterPath, filterDocs, lastSeenField, isTeacherMode, rankField, sortField);
@@ -170,6 +172,14 @@ export default function OnlineStatusWidget({
   const warningCount = showInactiveWarning ? rawWarningCount : 0;
   const [showPanel, setShowPanel] = useState(false);
   const [peekName, setPeekName] = useState(null);
+  const selfRowRef = useRef(null);
+  const sameName = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+  const isSelfRow = (s) => highlightSelf && !isTeacherMode && !!studentName && sameName(s.studentName || s.name, studentName);
+  useEffect(() => {
+    if (!showPanel || !highlightSelf) return undefined;
+    const t = setTimeout(() => { try { selfRowRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) { /* the list still opens */ } }, 120);
+    return () => clearTimeout(t);
+  }, [showPanel, highlightSelf]);
   const [guideOn] = useState(() => {
     if (!guideKey || isTeacherMode || !studentName) return false;
     try {
@@ -237,14 +247,16 @@ export default function OnlineStatusWidget({
             <div className="space-y-2">
               {shownList.map((s, idx) => {
                 const isWarning = showInactiveWarning && s._isWarning;
+                const isSelf = isSelfRow(s);
                 return (
-                <div key={s.id} className={`flex items-center justify-between p-3 rounded-xl border ${isWarning ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-100'}`}>
+                <div key={s.id} ref={isSelf ? selfRowRef : undefined} className={`flex items-center justify-between p-3 rounded-xl border ${isSelf ? 'bg-yellow-100 border-yellow-400 ring-2 ring-yellow-400' : isWarning ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-100'}`}>
                   <div className="flex items-center gap-2">
                     {rankedAll && <HolyRankBadge rank={idx + 1} />}
                     <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${s._isOnlineNow ? 'bg-emerald-500' : isWarning ? 'bg-red-500' : 'bg-gray-300'}`}></span>
                     <button type="button" className="font-bold text-gray-800 hover:underline text-left" title="See their Avatar" onClick={(e) => { e.stopPropagation(); const handled = onNameTap ? onNameTap(s) : false; if (handled === false || !onNameTap) setPeekName(s.studentName || s.name); }}>{s.studentName || s.name}</button>
                   </div>
                   <div className="text-right text-sm flex items-center justify-end gap-1">
+                    {isSelf && <span className="text-xs font-black text-yellow-800 bg-yellow-300 px-2 py-0.5 rounded-full">⭐ You</span>}
                     {s.id === firstFriendId && <span aria-hidden="true" className="text-3xl leading-none animate-bounce">👉</span>}
                     {isWarning ? (
                       <span className="text-red-600 font-bold text-xs">Inactive (please warn student)</span>
