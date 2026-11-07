@@ -14,6 +14,7 @@ import bigBellSound from '../audio/big-bellburmese.mp3';
 import windChimesSound from '../audio/wind-chimes.mp3';
 import meditationBowlsSound from '../audio/meditation-bowls.mp3';
 import meditationGuide1Audio from '../audio/Ryan meditation 1.m4a';
+import meditationGuide2Audio from '../audio/Ryan meditation 2.m4a';
 
 // A student's personal shrine room -- decorate an altar with offerings
 // bought using coins, earned mainly by lighting the lamp once a day.
@@ -1014,14 +1015,18 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     }, 9000);
     return () => clearInterval(interval);
   }, [meditatingMinutes, meditationVersion]);
-  // Guided meditation "1": Ryan's recording is played once from the moment the sit starts (the sit is started by a tap, so the
-  // browser lets it play). It stops with the sit -- finished, or left early. Reading "2" has no recording yet.
+  // Guided meditation recordings (Ryan's voice), played once from the moment the sit starts (the sit is started by a tap, so
+  // the browser lets it play). Each reading has one recording per language; only English exists so far -- when a Myanmar one
+  // is recorded, add it here as `my:` and it plays whenever the student has the Myanmar lines switched on. The recording stops
+  // with the sit, finished or left early.
+  const MEDITATION_AUDIO = { 1: { en: meditationGuide1Audio }, 2: { en: meditationGuide2Audio } };
+  const meditationAudioSrc = MEDITATION_AUDIO[meditationVersion]?.[meditationLanguage] || null;
   useEffect(() => {
-    if (meditatingMinutes == null || meditationVersion !== 1) return undefined;
+    if (meditatingMinutes == null || !meditationAudioSrc) return undefined;
     let audio = null;
-    try { audio = new Audio(meditationGuide1Audio); audio.play().catch(() => {}); } catch (e) { /* the sit works without the voice */ }
+    try { audio = new Audio(meditationAudioSrc); audio.play().catch(() => {}); } catch (e) { /* the sit works without the voice */ }
     return () => { try { if (audio) { audio.pause(); audio.src = ''; } } catch (e) { /* ignore */ } };
-  }, [meditatingMinutes != null, meditationVersion]);
+  }, [meditatingMinutes != null, meditationAudioSrc]);
   // Keeps the screen from auto-locking while a meditation countdown is
   // running, so the student doesn't lose their place mid-sit -- degrades
   // silently on browsers without the Wake Lock API (e.g. older Safari)
