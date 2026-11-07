@@ -11,9 +11,18 @@
 // until the sit ends. With no recording for the chosen language, a new line appears every 9 seconds.
 // The first entry is the one shown first; the others are chosen from the drop-down.
 
-// Every sound file in the audio folder, found by its file name (no need to import each one by hand).
-const AUDIO_FILES = import.meta.glob('../audio/*.{m4a,mp3,ogg,wav,aac}', { eager: true, query: '?url', import: 'default' });
-export const audioUrlByName = (name) => (name ? AUDIO_FILES[`../audio/${name}`] || null : null);
+// Every sound file in the audio folder, found by its file name (no need to import each one by hand). Any common sound format
+// works (m4a, mp3, ogg, wav, aac, flac, opus, webm, mp4). The name may be written without its ending (.m4a), and capital letters do
+// not matter, so 'Ryan meditation 3' finds 'Ryan meditation 3.mp3'.
+const AUDIO_FILES = import.meta.glob('../audio/*.{m4a,mp3,ogg,wav,aac,flac,opus,webm,weba,mp4,M4A,MP3,OGG,WAV}', { eager: true, query: '?url', import: 'default' });
+const AUDIO_BY_NAME = Object.entries(AUDIO_FILES).map(([path, url]) => { const file = path.split('/').pop(); return { file: file.toLowerCase(), bare: file.replace(/\.[^.]+$/, '').toLowerCase(), url }; });
+export const audioUrlByName = (name) => {
+  const n = String(name || '').trim().toLowerCase();
+  if (!n) return null;
+  const hit = AUDIO_BY_NAME.find(f => f.file === n) || AUDIO_BY_NAME.find(f => f.bare === n);
+  if (!hit) console.warn(`Meditation audio "${name}" is not in the audio folder`);
+  return hit ? hit.url : null;
+};
 
 const isMyanmar = (line) => /[\u1000-\u109F]/.test(line);
 // "Myanmar line / English line" pairs -> [{ my, en }]
