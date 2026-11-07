@@ -261,10 +261,147 @@ export const FlowerOfferingGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
 };
 
 // ---------------------------------------------------------------------------------------------------------------
+// Game 3: keep the world clean. Bottles, cans and other litter fall through the park. Tap one to pick it up -- it jumps into the
+// recycling bin and the student gets 2 or 3 coins. Seven pieces in all, same timing and coins as the birds; litter that is
+// not picked up before it lands just rolls away (no coins).
+const LITTER = 7;
+const LITTER_FIRST_MS = 800;
+const LITTER_EVERY_MS = 1500;
+const LITTER_FALL_MS = 3200;
+const LITTER_SIZE = 'clamp(48px, 10vmin, 84px)';
+const LITTER_THANKS = ['Thank you!', 'So clean!', 'Great job!', 'The Earth says thanks!'];
+const LITTER_ICONS = ['🍾', '🥫', '🥤', '🧃', '🛍️', '🍼', '🧴'];
+const BIN = { x: 50, y: 84 }; // where picked litter goes (% of the screen)
+const litterColumns = () => {
+  const xs = [];
+  while (xs.length < LITTER) {
+    let x = 8 + Math.random() * 78;
+    for (let tries = 0; tries < 20 && xs.length && Math.abs(x - xs[xs.length - 1]) < 24; tries++) x = 8 + Math.random() * 78;
+    xs.push(x);
+  }
+  return xs;
+};
+// A piece that was just picked up: it starts where the student tapped it and jumps into the bin.
+const PickedLitter = ({ it, from, won, stageRef }) => {
+  const [go, setGo] = useState(false);
+  useEffect(() => { const r = requestAnimationFrame(() => requestAnimationFrame(() => setGo(true))); return () => cancelAnimationFrame(r); }, []);
+  const st = stageRef.current;
+  const w = st ? st.clientWidth : 0, h = st ? st.clientHeight : 0;
+  const start = from || { x: w * it.x / 100, y: h * 0.2 };
+  return (
+    <div className="absolute pointer-events-none" style={{ zIndex: 6, left: go ? w * BIN.x / 100 : start.x, top: go ? h * BIN.y / 100 : start.y, opacity: go ? 0 : 1, transform: go ? 'scale(.4)' : 'scale(1)', transition: 'left .8s ease-in-out, top .8s ease-in, opacity .4s .5s, transform .8s' }}>
+      <span className="block select-none" style={{ fontSize: LITTER_SIZE, lineHeight: 1, transform: 'translate(-50%,-50%)' }}>{it.icon}</span>
+      <div className="absolute left-1/2 -translate-x-1/2 text-center whitespace-nowrap" style={{ top: `calc(${LITTER_SIZE} / -2 - 3.2rem)`, animation: 'litterThanks 1.8s ease-out forwards' }}>
+        <div className="bg-white text-emerald-900 font-bold text-sm rounded-full px-3 py-1 shadow">{it.thanks}</div>
+        {won > 0 && <div className="font-black text-yellow-600 drop-shadow">+{won} 🪙</div>}
+      </div>
+    </div>
+  );
+};
+export const LitterPickingGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
+  const [items] = useState(() => {
+    const icons = [...LITTER_ICONS].sort(() => Math.random() - 0.5);
+    return litterColumns().map((x, i) => ({ id: i, x, icon: icons[i % icons.length], spin: (i % 2 ? 1 : -1) * (160 + Math.random() * 200), thanks: LITTER_THANKS[i % LITTER_THANKS.length] }));
+  });
+  const [state, setState] = useState(() => Array(LITTER).fill('waiting')); // waiting | falling | picked | missed
+  const [won, setWon] = useState(() => Array(LITTER).fill(0));
+  const [from, setFrom] = useState(() => Array(LITTER).fill(null));        // px position where a piece was picked up
+  const [finished, setFinished] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const total = won.reduce((a, b) => a + b, 0);
+  const cleaned = state.filter(v => v === 'picked').length;
+  const soundRef = useRef(null);
+  const stageRef = useRef(null);
+  const itemRefs = useRef([]);
+
+  useEffect(() => {
+    const timers = [];
+    items.forEach((it) => {
+      const start = LITTER_FIRST_MS + it.id * LITTER_EVERY_MS;
+      timers.push(setTimeout(() => setState(st => st.map((v, i) => (i === it.id && v === 'waiting' ? 'falling' : v))), start));
+      timers.push(setTimeout(() => setState(st => st.map((v, i) => (i === it.id && v === 'falling' ? 'missed' : v))), start + LITTER_FALL_MS));
+    });
+    return () => timers.forEach(clearTimeout);
+  }, [items]);
+  useEffect(() => {
+    if (finished || !state.every(v => v === 'picked' || v === 'missed')) return undefined;
+    const t = setTimeout(() => setFinished(true), 1000); // let the last piece reach the bin first
+    return () => clearTimeout(t);
+  }, [state, finished]);
+
+  const pickUp = (id) => {
+    if (state[id] !== 'falling') return;
+    // remember where the piece is right now so it can jump from there into the bin
+    try {
+      const a = itemRefs.current[id].getBoundingClientRect(), s = stageRef.current.getBoundingClientRect();
+      setFrom(f => f.map((v, i) => (i === id ? { x: a.left - s.left + a.width / 2, y: a.top - s.top + a.height / 2 } : v)));
+    } catch (e) { /* the piece then simply starts from the top */ }
+    const coins = Math.max(0, Math.min(2 + Math.floor(Math.random() * 2), coinsLeft - total)); // 2 or 3, never past the lesson's limit
+    setState(st => st.map((v, i) => (i === id ? 'picked' : v)));
+    setWon(w => w.map((v, i) => (i === id ? coins : v)));
+    playCoinSound(soundRef);
+  };
+
+  return (
+    <div ref={stageRef} className="relative overflow-hidden text-white h-screen" style={{ height: '100dvh', minHeight: 420, background: 'linear-gradient(180deg,#7dd3fc 0%,#e0f2fe 52%,#86efac 52%,#4ade80 100%)' }}>
+      <style>{`
+        @keyframes litterFall { 0% { top: -14%; } 100% { top: 80%; } }
+        @keyframes litterTumble { 0% { transform: rotate(0) } 100% { transform: rotate(var(--spin)) } }
+        @keyframes litterThanks { 0% { transform: translateY(0); opacity: 0 } 15% { opacity: 1 } 100% { transform: translateY(-46px); opacity: 0 } }
+        @keyframes binBounce { 0%,100% { transform: scale(1) } 40% { transform: scale(1.12) } }
+      `}</style>
+      <div className="absolute top-0 inset-x-0 flex items-center justify-between gap-2 px-3 py-3 z-10">
+        <div className="bg-white/80 text-emerald-900 font-bold text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 ml-12 sm:ml-16 min-w-0 truncate">♻️ Keep the world clean! Pick up the litter</div>
+        <div className="bg-yellow-300 text-yellow-900 font-black text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 shadow whitespace-nowrap flex-shrink-0">🪙 {total}{coinsLeft <= 0 ? ' (limit reached)' : ''}</div>
+      </div>
+      {/* the park: sun, hills and a few trees */}
+      <svg viewBox="0 0 100 60" preserveAspectRatio="none" className="absolute inset-x-0 pointer-events-none" style={{ top: '30%', height: '24%', width: '100%' }} aria-hidden="true">
+        <path d="M0 60 L0 34 Q18 8 36 30 Q56 2 76 28 Q90 14 100 26 L100 60 Z" fill="#22c55e" opacity=".55" />
+      </svg>
+      <div className="absolute pointer-events-none" style={{ right: '8%', top: '12%', fontSize: 'clamp(40px, 9vmin, 80px)' }}>☀️</div>
+      <div className="absolute pointer-events-none" style={{ left: '6%', top: '40%', fontSize: 'clamp(36px, 8vmin, 70px)' }}>🌳</div>
+      <div className="absolute pointer-events-none" style={{ right: '5%', top: '42%', fontSize: 'clamp(32px, 7vmin, 62px)' }}>🌳</div>
+      {/* the recycling bin */}
+      <div className="absolute pointer-events-none" style={{ left: `${BIN.x}%`, bottom: '2%', width: 'clamp(70px, 16vmin, 130px)', transform: 'translateX(-50%)' }}>
+        <svg viewBox="0 0 60 70" className="w-full block" aria-hidden="true" key={cleaned} style={{ animation: cleaned > 0 ? 'binBounce .4s ease-out' : 'none' }}>
+          <rect x="6" y="14" width="48" height="8" rx="3" fill="#15803d" />
+          <rect x="24" y="9" width="12" height="6" rx="2" fill="#166534" />
+          <path d="M10 22 L14 66 Q14 68 17 68 L43 68 Q46 68 46 66 L50 22 Z" fill="#22c55e" stroke="#15803d" strokeWidth="2" />
+          <text x="30" y="52" textAnchor="middle" fontSize="22" fill="#f0fdf4">♻</text>
+        </svg>
+        {cleaned > 0 && <div className="absolute -top-2 -right-2 bg-white text-emerald-700 font-black text-sm rounded-full w-7 h-7 flex items-center justify-center shadow">{cleaned}</div>}
+      </div>
+      {items.map((it, i) => {
+        const st = state[i];
+        if (st === 'waiting' || st === 'missed') return null;
+        if (st === 'picked') return <PickedLitter key={it.id} it={it} from={from[i]} won={won[i]} stageRef={stageRef} />;
+        return (
+          <div key={it.id} ref={el => { itemRefs.current[it.id] = el; }} className="absolute" style={{ left: `${it.x}%`, top: '-14%', animation: `litterFall ${LITTER_FALL_MS}ms linear forwards`, zIndex: 5 }}>
+            <button onClick={() => pickUp(it.id)} aria-label="Pick up the litter" className="block" style={{ width: LITTER_SIZE, height: LITTER_SIZE, marginLeft: `calc(${LITTER_SIZE} / -2)`, marginTop: `calc(${LITTER_SIZE} / -2)` }}>
+              <span className="block select-none text-center" style={{ fontSize: LITTER_SIZE, lineHeight: 1, '--spin': `${it.spin}deg`, animation: `litterTumble ${LITTER_FALL_MS}ms linear forwards` }}>{it.icon}</span>
+            </button>
+          </div>
+        );
+      })}
+      {finished && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20 px-4">
+          <div className="bg-white text-gray-900 rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
+            <div className="text-5xl mb-2">{cleaned > 0 ? '🌍' : '🌤️'}</div>
+            <h2 className="text-2xl font-extrabold mb-1">{cleaned > 0 ? `You picked up ${cleaned} piece${cleaned === 1 ? '' : 's'} of litter!` : 'Nice try!'}</h2>
+            <p className="text-lg font-bold text-yellow-600 mb-4">{total > 0 ? `🪙 +${total} coins for your Shrine Room wallet` : (coinsLeft <= 0 ? 'You have already earned all the clean-up coins for this lesson. Great job!' : 'No coins this time.')}</p>
+            <GameButton disabled={leaving} onClick={() => { setLeaving(true); onDone(total); }} className="bg-emerald-500 hover:bg-emerald-600 text-white w-full text-xl">Continue →</GameButton>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------------------------------------------
 // The games, in the order they are handed out. A lesson always gets the same game (so a retake feels familiar and the
 // coin cap stays one per lesson), but neighbouring lessons get different ones, so the break does not become boring.
 // To add a game: write it above with the same two props and put it in this list.
-export const QUIZ_BREAK_GAMES = [BirdRescueGame, FlowerOfferingGame];
+export const QUIZ_BREAK_GAMES = [BirdRescueGame, FlowerOfferingGame, LitterPickingGame];
 const hashOf = (s) => { let h = 0; String(s ?? '').split('').forEach(ch => { h = (h * 31 + ch.charCodeAt(0)) >>> 0; }); return h; };
 export const quizBreakGameFor = (lessonId) => QUIZ_BREAK_GAMES[hashOf(lessonId) % QUIZ_BREAK_GAMES.length];
 export const QuizBreakGame = ({ lessonId, ...rest }) => {
