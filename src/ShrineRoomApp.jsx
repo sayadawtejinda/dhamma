@@ -1015,7 +1015,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     }, 9000);
     return () => clearInterval(interval);
   }, [meditatingMinutes, meditationVersion]);
-  // Guided meditation recordings (Ryan's voice), played once from the moment the sit starts (the sit is started by a tap, so
+  // Guided meditation recordings (Ryan's voice), played again and again (looped) from the moment the sit starts (the sit is started by a tap, so
   // the browser lets it play). Each reading has one recording per language; only English exists so far -- when a Myanmar one
   // is recorded, add it here as `my:` and it plays whenever the student has the Myanmar lines switched on. The recording stops
   // with the sit, finished or left early.
@@ -1024,7 +1024,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   useEffect(() => {
     if (meditatingMinutes == null || !meditationAudioSrc) return undefined;
     let audio = null;
-    try { audio = new Audio(meditationAudioSrc); audio.play().catch(() => {}); } catch (e) { /* the sit works without the voice */ }
+    try { audio = new Audio(meditationAudioSrc); audio.loop = true; audio.play().catch(() => {}); } catch (e) { /* the sit works without the voice */ }
     return () => { try { if (audio) { audio.pause(); audio.src = ''; } } catch (e) { /* ignore */ } };
   }, [meditatingMinutes != null, meditationAudioSrc]);
   // Keeps the screen from auto-locking while a meditation countdown is
