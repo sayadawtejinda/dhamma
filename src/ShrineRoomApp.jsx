@@ -13,8 +13,7 @@ import { useAwards, AwardPlaque } from './Awards';
 import bigBellSound from '../audio/big-bellburmese.mp3';
 import windChimesSound from '../audio/wind-chimes.mp3';
 import meditationBowlsSound from '../audio/meditation-bowls.mp3';
-import meditationGuide1Audio from '../audio/Ryan meditation 1.m4a';
-import meditationGuide2Audio from '../audio/Ryan meditation 2.m4a';
+import { MEDITATION_GUIDES } from './meditationGuides';
 
 // A student's personal shrine room -- decorate an altar with offerings
 // bought using coins, earned mainly by lighting the lamp once a day.
@@ -71,77 +70,8 @@ const todayKey = () => new Date().toISOString().slice(0, 10);
 // rest are assumed to follow the same naming pattern in that repo.
 const chantAudioUrl = (filename) => `https://raw.githubusercontent.com/nathantun93/bell/main/${encodeURIComponent(filename)}.mp3`;
 
-// Guided-meditation script, shown one line at a time in the empty space
-// above the Bodhi tree while a student meditates. English by default; the
-// "Myanmar" toggle in the duration picker switches the language for that
-// session (see meditationLanguage below).
-const MEDITATION_GUIDE = [
-  { en: 'Sit down comfortably with your legs crossed.', my: 'တင်ပလ္လင်ခွေထိုင်ပါ။' },
-  { en: 'Keep your back straight and relaxed.', my: 'သက်တောင့် သက်သာ ခါးကို ဖြောင့်ထားပါ။' },
-  { en: 'Gently close your eyes.', my: 'မျက်စိမှိတ်ထားပါ။' },
-  { en: "Don't look at anything around you.", my: 'ဘာမှ မကြည့်ရ။' },
-  { en: "Don't listen to any sounds.", my: 'ဘာမှ နားမထောင်ရ။' },
-  { en: "Don't focus on any smells.", my: 'ဘာမှ မနမ်းရှူရ။' },
-  { en: "Don't taste anything.", my: 'ဘာမှ အရသာခံ မစားရ။' },
-  { en: 'Feel only the floor beneath you and nothing else.', my: 'ကြမ်းပြင်ကလွဲ၍ ဘာနဲ့မှ မထိရ။' },
-  { en: 'Take slow, gentle breaths.', my: 'အေးအေးဆေးဆေး အသက်ရှု။' },
-  { en: 'Relax your whole body from head to toe.', my: 'ခန္ဓာကိုယ်နေရာအနှံ့ကို ဖြေလျော့ပေးပါ။' },
-  { en: 'Softly relax your face.', my: 'မျက်နှာကို ဖြေလျော့ပါ။' },
-  { en: 'Smooth out your forehead and relax.', my: 'နဖူးကို ဖြေလျော့ပါ။' },
-  { en: 'Let your shoulders drop and loosen up.', my: 'ပခုံးကို ဖြေလျော့ပါ။' },
-  { en: 'Relax your chest.', my: 'ရင်ဘတ်ကို ဖြေလျော့ပါ။' },
-  { en: "Don't hold any tightness or tension.", my: 'တောင့်တောင့်တင်းတင်း မဖြစ်စေပါနဲ့။' },
-  { en: 'Give both your body and mind a peaceful rest.', my: 'လူရော စိတ်ရော အနားပေးပါ။' },
-  { en: 'Wait patiently until everything feels quiet inside.', my: 'တဖြည်းဖြည်း ငြိမ်လာတဲ့ထိ စောင့်ပေးပါ။' },
-  { en: 'Focus on your breathing in and out, and gently notice each breath.', my: 'ဝင်လေ ထွက်လေကို အာရုံစူးစိုက်ပြီ စိတ်နဲ့ သိပေးနေပါ။' },
-  { en: 'Keep your eyes softly closed without opening them.', my: 'မျက်စိ မဖွင့်မိစေနဲ့။' },
-  { en: 'Let your eyes rest completely still behind your eyelids.', my: 'မျက်လုံးကိုပါ ငြိမ်အောင်လုပ်ပါ။' },
-  { en: 'Practice sitting as peaceful and still as a Buddha statue.', my: 'ဗုဒ္ဓရုပ်ပွားတော်လို ငြိမ်အောင် လေ့ကျင့်ပါ။' },
-  { en: "Don't let your mind jump around like a playful little monkey.", my: 'မျောက်တစ်ကောင်လို စိတ်ကို မပြေးစေနဲ့။' },
-  { en: 'Practice until your mind feels quiet, cool, and calm.', my: 'စိတ်ငြိမ်ပြီ အေးသွားတဲ့ထိ လေ့ကျင့်ပါ။' },
-  { en: 'Gently tell your mind to stay right here.', my: 'သင့်စိတ်ကို ဘယ်မှ မသွားရဘူးလို့ ပြောပါ။' },
-  { en: 'Be the gentle master of your own thoughts.', my: 'သင့်စိတ်ရဲ့ အရှင်သခင်ဖြစ်အောင် လုပ်ပါ။' },
-  { en: 'The world needs many peaceful hearts.', my: 'လောကကြီးမှာ အေးချမ်းသူတွေ အများကြီးလိုတယ်။' },
-  { en: 'I will do my best to bring peace to my own heart.', my: 'ငါ့စိတ်အေးချမ်းအောင် ငါကြိုးစားမယ်။' },
-  { en: 'When your meditation time is finished, stand up very slowly.', my: 'တရားထိုင်ဖို့ အချိန်ပြည့်သွားရင်လည်း ဖြည်းဖြည်းထပါ။' },
-  { en: 'Keep that cool, gentle quietness inside your heart all day long.', my: 'ရင်ထဲက အေးနေတာကို မပျောက်စေနဲ့။' },
-];
-
-// A second reading for the same sit (the "2" button in the duration picker). The first one above is always
-// the one shown unless the student taps 2. An audio version of these lines is planned.
-const MEDITATION_GUIDE_2 = [
-  { en: 'I want to be a peaceful person.', my: 'ငါ အေးချမ်းတဲ့သူတစ်ယောက် ဖြစ်ချင်တယ်။' },
-  { en: 'Only a calm mind brings peace.', my: 'စိတ်လေး ငြိမ်မှပဲ အေးချမ်းမှာပါ။' },
-  { en: 'To be calm, we need to relax our mind.', my: 'စိတ်ငြိမ်ဖို့အတွက် စိတ်ကို အနားပေး ဖြေလျော့ဖို့ လိုတယ်။' },
-  { en: 'We should relax our body, too.', my: 'ခန္ဓာကိုယ်နဲ့ ကြွက်သားတွေကိုလည်း လျော့ပေးရမယ်။' },
-  { en: 'No one else can make my mind calm.', my: 'ငါ့စိတ်ငြိမ်အောင် တခြားသူက လုပ်ပေးလို့ မရဘူး။' },
-  { en: 'I am responsible for my own peace.', my: 'ငါ အေးချမ်းဖို့အတွက် ငါ့မှာပဲ တာဝန်ရှိတယ်။' },
-  { en: 'I follow the Buddha because I want to be peaceful like Him.', my: 'ဘုရားရှင်လို အေးချမ်းချင်လို့ ဘုရားကို ကိုးကွယ်တာပါ။' },
-  { en: 'The Buddha’s mind is calm and peaceful.', my: 'ဘုရားရှင်ရဲ့ စိတ်တော်က တည်ငြိမ်ပြီး အေးချမ်းတယ်။' },
-  { en: 'Watching our breath can help us stay calm.', my: 'ဝင်လေထွက်လေကို သတိထားကြည့်ရင် စိတ်တည်ငြိမ်လာမယ်။' },
-  { en: 'We need to watch our breath for a longer time.', my: 'ဝင်လေထွက်လေကို ကြာကြာလေး စိုက်ကြည့်ပေးဖို့ လိုတယ်။' },
-  { en: 'We should avoid getting distracted by other thoughts.', my: 'တခြားအတွေးတွေ ရောမလာအောင် ဂရုစိုက်ရမယ်။' },
-  { en: 'A calm mind is gentle.', my: 'တည်ငြိမ်နေတဲ့ စိတ်လေးက နူးညံ့တယ်။' },
-  { en: 'A calm mind is peaceful.', my: 'တည်ငြိမ်နေတဲ့ စိတ်လေးက အေးချမ်းတယ်။' },
-  { en: 'Wise people say we must train our own mind.', my: 'ပညာရှိတွေက ကိုယ့်စိတ်ကို ကိုယ်တိုင် ဆုံးမရမယ်လို့ ပြောကြတယ်။' },
-  { en: 'Making our mind calm is training our mind.', my: 'စိတ်ငြိမ်အောင် ကျင့်ယူနေတာဟာ စိတ်ကို ဆုံးမနေတာပါပဲ။' },
-  { en: 'We learn not just to earn money.', my: 'ပညာသင်တာ ပိုက်ဆံရှာဖို့ တစ်ခုတည်းအတွက် မဟုတ်ပါဘူး။' },
-  { en: 'It is also to find inner happiness.', my: 'စိတ်ချမ်းသာမှု ရဖို့လည်း ပါတာပေါ့။' },
-  { en: 'Even when we grow up, we must care for our happiness.', my: 'လူကြီးဖြစ်လာရင်လည်း စိတ်ချမ်းသာအောင် ဆက်ကျင့်ရဦးမှာပဲ။' },
-  { en: 'Happiness is a lifelong process.', my: 'စိတ်ချမ်းသာမှုဆိုတာ အမြဲမပြတ် ကြိုးစားရမယ့် အလုပ်ပါ။' },
-  { en: 'A calm person is a brave person.', my: 'စိတ်ငြိမ်တဲ့သူဆိုတာ သတ္တိရှိတဲ့သူပါပဲ။' },
-  { en: 'A calm person is a respectful person.', my: 'စိတ်ငြိမ်တဲ့သူဆိုတာ ဂုဏ်သိက္ခာရှိတဲ့သူပါပဲ။' },
-  { en: 'Trying to keep the mind calm feels rewarding.', my: 'စိတ်ငြိမ်အောင် ကြိုးစားရတာ တကယ်ပဲ ကျေနပ်ဖို့ကောင်းပါတယ်။' },
-  { en: 'When our mind is calm, we can sit for a longer time.', my: 'စိတ်ငြိမ်နေရင် အကြာကြီး ထိုင်နိုင်လာလိမ့်မယ်။' },
-  { en: 'Being still is a form of rest.', my: 'ငြိမ်ငြိမ်လေး နေတတ်တာဟာ အနားယူနေတာပါပဲ။' },
-  { en: 'Resting recharges our energy.', my: 'အနားယူမှ ခွန်အားတွေ ပြန်ပြည့်လာတာပါ။' },
-  { en: 'Sleeping is also called resting.', my: 'အိပ်စက်နေတဲ့အချိန်ကိုလည်း အနားယူတယ်လို့ ခေါ်တာပါပဲ။' },
-  { en: 'But we are not aware while sleeping.', my: 'ဒါပေမဲ့ အိပ်နေတဲ့အချိန်မှာ သတိမရှိလှဘူး။' },
-  { en: 'Meditating is resting with full awareness.', my: 'အခုလို တရားထိုင်မှ သတိရှိရှိနဲ့ အနားယူတာလို့ ခေါ်ပါတယ်။' },
-  { en: 'Knowing our breath is being mindful.', my: 'ဝင်လေထွက်လေကို သိနေတာကို သတိရှိတယ်လို့ ခေါ်တာပါ။' },
-  { en: 'A mindful person deserves respect.', my: 'သတိရှိနေတဲ့သူဟာ လေးစားထိုက်သူပါပဲ။' },
-];
-
+// Guided meditations (the lines, the recordings and how to add more) are in meditationGuides.js; a sit shows one line at a time in the
+// empty space above the Bodhi tree. English by default; the "Myanmar" toggle in the duration picker switches the language.
 // --- Chanting text, from the teacher's Chanting.md, in the 3 formats it
 // was supplied in (Myanmar words spelled with English letters, Myanmar
 // script, and an English meaning-translation). Order follows the
@@ -1004,28 +934,34 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   const [meditationLanguage, setMeditationLanguage] = useState('en');
   const [meditationLineIndex, setMeditationLineIndex] = useState(0);
   // 1 = the usual guide (always the default); 2 = the second reading, only if the student taps 2.
-  const [meditationVersion, setMeditationVersion] = useState(1);
-  const activeGuide = meditationVersion === 2 ? MEDITATION_GUIDE_2 : MEDITATION_GUIDE;
-  useEffect(() => { if (meditatingMinutes == null && !meditationPickerOpen) setMeditationVersion(1); }, [meditatingMinutes, meditationPickerOpen]);
+  const [meditationVersion, setMeditationVersion] = useState(MEDITATION_GUIDES[0].id);   // the guide chosen in the duration picker
+  const activeGuideEntry = MEDITATION_GUIDES.find(g => g.id === meditationVersion) || MEDITATION_GUIDES[0];
+  const activeGuide = activeGuideEntry.lines;
+  useEffect(() => { if (meditatingMinutes == null && !meditationPickerOpen) setMeditationVersion(MEDITATION_GUIDES[0].id); }, [meditatingMinutes, meditationPickerOpen]);
+  // The recording (Ryan's voice) for the chosen guide and language, if there is one: it plays from the moment the sit starts (the
+  // sit is started by a tap, so the browser lets it play), repeating until the sit ends -- finished or left early. The line on
+  // screen follows the recording. With no recording, a new line appears every 9 seconds.
+  const meditationAudioSrc = activeGuideEntry.audioUrl?.[meditationLanguage] || null;
+  const lastAudioTickRef = useRef(0);
   useEffect(() => {
-    if (meditatingMinutes == null) return;
+    if (meditatingMinutes == null) return undefined;
     setMeditationLineIndex(0);
     const interval = setInterval(() => {
-      setMeditationLineIndex(i => (i + 1) % activeGuide.length);
+      if (Date.now() - lastAudioTickRef.current < 2500) return;   // the recording is moving the lines
+      setMeditationLineIndex(i => (i + 1) % Math.max(1, activeGuide.length));
     }, 9000);
     return () => clearInterval(interval);
-  }, [meditatingMinutes, meditationVersion]);
-  // Guided meditation recordings (Ryan's voice), played again and again (looped) from the moment the sit starts (the sit is started by a tap, so
-  // the browser lets it play). Each reading has one recording per language; only English exists so far -- when a Myanmar one
-  // is recorded, add it here as `my:` and it plays whenever the student has the Myanmar lines switched on. The recording stops
-  // with the sit, finished or left early.
-  const MEDITATION_AUDIO = { 1: { en: meditationGuide1Audio }, 2: { en: meditationGuide2Audio } };
-  const meditationAudioSrc = MEDITATION_AUDIO[meditationVersion]?.[meditationLanguage] || null;
+  }, [meditatingMinutes, meditationVersion, meditationLanguage]);
   useEffect(() => {
     if (meditatingMinutes == null || !meditationAudioSrc) return undefined;
     let audio = null;
-    try { audio = new Audio(meditationAudioSrc); audio.loop = true; audio.play().catch(() => {}); } catch (e) { /* the sit works without the voice */ }
-    return () => { try { if (audio) { audio.pause(); audio.src = ''; } } catch (e) { /* ignore */ } };
+    const onTime = () => {
+      if (!(audio.duration > 0) || !activeGuide.length) return;
+      lastAudioTickRef.current = Date.now();
+      setMeditationLineIndex(Math.min(activeGuide.length - 1, Math.floor((audio.currentTime / audio.duration) * activeGuide.length)));
+    };
+    try { audio = new Audio(meditationAudioSrc); audio.loop = true; audio.addEventListener('timeupdate', onTime); audio.play().catch(() => {}); } catch (e) { /* the sit works without the voice */ }
+    return () => { try { if (audio) { audio.removeEventListener('timeupdate', onTime); audio.pause(); audio.src = ''; } } catch (e) { /* ignore */ } lastAudioTickRef.current = 0; };
   }, [meditatingMinutes != null, meditationAudioSrc]);
   // Keeps the screen from auto-locking while a meditation countdown is
   // running, so the student doesn't lose their place mid-sit -- degrades
@@ -1965,16 +1901,16 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
               >
                 မြန်မာ
               </button>
-              {[1, 2].map(v => (
-                <button
-                  key={v}
-                  onClick={() => setMeditationVersion(v)}
-                  title={v === 1 ? 'Guided lines (usual)' : 'Second reading'}
-                  className={`text-xs font-bold w-6 h-6 rounded-full border ${meditationVersion === v ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white text-emerald-600 border-emerald-300'}`}
+              {MEDITATION_GUIDES.length > 1 && (
+                <select
+                  value={activeGuideEntry.id}
+                  onChange={(e) => { const g = MEDITATION_GUIDES.find(x => String(x.id) === e.target.value); if (g) setMeditationVersion(g.id); }}
+                  title="Choose the guided meditation"
+                  className="text-xs font-bold px-2 py-1 rounded-full border bg-white text-emerald-700 border-emerald-300 focus:outline-none"
                 >
-                  {v}
-                </button>
-              ))}
+                  {MEDITATION_GUIDES.map(g => <option key={g.id} value={g.id}>{g.title}</option>)}
+                </select>
+              )}
             </div>
             <p className="text-sm text-gray-500 mb-4">How many minutes will you meditate?</p>
             <input
