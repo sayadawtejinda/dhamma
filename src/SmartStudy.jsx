@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import coinDropSound from '../audio/coin-drop.mp3';
+import { QuizBreakGame, BIRD_COIN_CAP } from './quizBreakGames';
 import { loadClassMeta, setClassMeta, bumpLessonVersion } from './classMeta';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { 
@@ -180,7 +180,7 @@ const quizBonusCoins = (correct, total) => (correct === total ? 100 : (correct =
 // Quiz coins go straight into the student's Shrine Room wallet. Each reward has a
 // fixed id (class + student + lesson + kind), so it can only ever be paid once,
 // however many times the lesson is taken, from however many devices.
-const BIRD_COIN_CAP = 30; // most bird-game coins one student can ever earn from one lesson
+// (BIRD_COIN_CAP -- the most game coins one student can earn from one lesson -- lives in quizBreakGames.jsx with the games)
 const payQuizCoins = async ({ rewardId, amount, shrineName, studentName, cap }) => {
   if (!amount || amount <= 0) return 0;
   const rewardRef = doc(db, 'artifacts', appId, 'public', 'data', 'smartStudyQuizCoins', rewardId);
@@ -2010,100 +2010,6 @@ const LoadingView = React.memo(() => (
   </div>
 ));
 
-
-// Between the two halves of a quiz: cages with little birds pop up here and there.
-// Tap one to open it -- the bird says thank you and drops 2 or 3 coins.
-const BIRD_CAGES = 7;
-const BIRD_FIRST_MS = 800;
-const BIRD_EVERY_MS = 1500;
-const BIRD_VISIBLE_MS = 3200;
-const BIRD_THANKS = ['Thank you!', 'Thanks!', 'Thank you, friend!', 'You are kind!'];
-const BirdRescueGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
-  const [cages] = useState(() => Array.from({ length: BIRD_CAGES }, (_, i) => ({
-    id: i, x: 4 + Math.random() * 62, y: 18 + Math.random() * 54,
-    bird: ['🐦', '🐤', '🦜', '🕊️', '🐥'][i % 5], thanks: BIRD_THANKS[i % BIRD_THANKS.length],
-  })));
-  const [state, setState] = useState(() => Array(BIRD_CAGES).fill('waiting')); // waiting | visible | opened | missed
-  const [won, setWon] = useState(() => Array(BIRD_CAGES).fill(0));
-  const [finished, setFinished] = useState(false);
-  const [leaving, setLeaving] = useState(false);
-  const total = won.reduce((a, b) => a + b, 0);
-  const soundRef = useRef(null);
-
-  useEffect(() => {
-    const timers = [];
-    cages.forEach((c) => {
-      const start = BIRD_FIRST_MS + c.id * BIRD_EVERY_MS;
-      timers.push(setTimeout(() => setState(st => st.map((v, i) => (i === c.id && v === 'waiting' ? 'visible' : v))), start));
-      timers.push(setTimeout(() => setState(st => st.map((v, i) => (i === c.id && v === 'visible' ? 'missed' : v))), start + BIRD_VISIBLE_MS));
-    });
-    return () => timers.forEach(clearTimeout);
-  }, [cages]);
-  useEffect(() => { if (!finished && state.every(v => v === 'opened' || v === 'missed')) setFinished(true); }, [state, finished]);
-
-  const openCage = (id) => {
-    if (state[id] !== 'visible') return;
-    const coins = Math.max(0, Math.min(2 + Math.floor(Math.random() * 2), coinsLeft - total)); // 2 or 3, never past the lesson's limit
-    setState(st => st.map((v, i) => (i === id ? 'opened' : v)));
-    setWon(w => w.map((v, i) => (i === id ? coins : v)));
-    try { if (!soundRef.current) soundRef.current = new Audio(coinDropSound); soundRef.current.currentTime = 0; soundRef.current.play().catch(() => {}); } catch (e) { /* sound is optional */ }
-  };
-
-  return (
-    <div className="relative overflow-hidden text-white h-screen" style={{ height: '100dvh', minHeight: 420, background: 'linear-gradient(180deg,#7dd3fc 0%,#bae6fd 55%,#86efac 100%)' }}>
-      <style>{`
-        @keyframes cagePop { 0% { transform: scale(0) } 70% { transform: scale(1.15) } 100% { transform: scale(1) } }
-        @keyframes birdHop { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-6px) } }
-        @keyframes birdFly { 0% { transform: translate(0,0) scale(1); opacity: 1 } 100% { transform: translate(110px,-190px) scale(1.5) rotate(18deg); opacity: 0 } }
-        @keyframes thankRise { 0% { transform: translateY(0); opacity: 0 } 15% { opacity: 1 } 100% { transform: translateY(-46px); opacity: 0 } }
-      `}</style>
-      <div className="absolute top-0 inset-x-0 flex items-center justify-between gap-2 px-3 py-3 z-10">
-        <div className="bg-white/80 text-sky-900 font-bold text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 ml-12 sm:ml-16 min-w-0 truncate">🐦 Free the birds! Tap the cages</div>
-        <div className="bg-yellow-300 text-yellow-900 font-black text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 shadow whitespace-nowrap flex-shrink-0">🪙 {total}{coinsLeft <= 0 ? ' (limit reached)' : ''}</div>
-      </div>
-      {cages.map((c, i) => {
-        const st = state[i];
-        if (st === 'waiting' || st === 'missed') return null;
-        const opened = st === 'opened';
-        return (
-          <div key={c.id} className="absolute" style={{ left: `${c.x}%`, top: `${c.y}%` }}>
-            <button
-              onClick={() => openCage(c.id)}
-              disabled={opened}
-              aria-label="Open the cage"
-              className="relative block"
-              style={{ width: 76, height: 92, animation: opened ? 'none' : 'cagePop .35s ease-out', transform: opened ? 'rotate(-16deg) translateY(-8px)' : 'none', opacity: opened ? 0.35 : 1, transition: 'transform .4s, opacity .6s' }}
-            >
-              <span className="absolute left-1/2 text-3xl select-none" style={{ top: '30%', marginLeft: -16, animation: opened ? 'birdFly 1.3s ease-in forwards' : 'birdHop .7s ease-in-out infinite' }}>{c.bird}</span>
-              <svg viewBox="0 0 80 96" width="76" height="92" className="relative">
-                <path d="M12 58 Q12 14 40 14 Q68 14 68 58 Z" fill="rgba(255,255,255,0.18)" stroke="#8d6e63" strokeWidth="3" />
-                <g stroke="#8d6e63" strokeWidth="2.5"><line x1="26" y1="17" x2="26" y2="58" /><line x1="40" y1="14" x2="40" y2="58" /><line x1="54" y1="17" x2="54" y2="58" /></g>
-                <rect x="8" y="58" width="64" height="12" rx="5" fill="#a1887f" stroke="#6d4c41" strokeWidth="2" />
-                <circle cx="40" cy="8" r="5" fill="none" stroke="#8d6e63" strokeWidth="3" />
-              </svg>
-            </button>
-            {opened && (
-              <div className="absolute left-1/2 -translate-x-1/2 pointer-events-none text-center whitespace-nowrap" style={{ top: -28, animation: 'thankRise 1.8s ease-out forwards' }}>
-                <div className="bg-white text-sky-900 font-bold text-sm rounded-full px-3 py-1 shadow">{c.thanks}</div>
-                {won[i] > 0 && <div className="font-black text-yellow-600 drop-shadow">+{won[i]} 🪙</div>}
-              </div>
-            )}
-          </div>
-        );
-      })}
-      {finished && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20 px-4">
-          <div className="bg-white text-gray-900 rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
-            <div className="text-5xl mb-2">{total > 0 ? '🎉' : '🌤️'}</div>
-            <h2 className="text-2xl font-extrabold mb-1">{total > 0 ? `You freed ${won.filter(w => w > 0).length} birds!` : 'Nice try!'}</h2>
-            <p className="text-lg font-bold text-yellow-600 mb-4">{total > 0 ? `🪙 +${total} coins for your Shrine Room wallet` : (coinsLeft <= 0 ? 'You have already earned all the bird coins for this lesson. Great job!' : 'No coins this time.')}</p>
-            <Button disabled={leaving} onClick={() => { setLeaving(true); onDone(total); }} className="bg-emerald-500 hover:bg-emerald-600 text-white w-full text-xl">Continue →</Button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
 
 const QuizView = React.memo(({ quiz, questionNumber, totalQuestions, timerValue, feedback, onAnswerSelect, onNext, userName, activeLesson, showPreview, totalScore, isLastQuestion, isSavingScore, competitors = [], roundNumber = 1, roundQuestionNumber = 1, roundTotal = 5, isPractice = false, nextLabel = 'Next' }) => {
   const answerStyles = [
@@ -3980,7 +3886,7 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
         const roundLast = currentQuestionIndex === quizRoundEnd;
         return <QuizView quiz={quizQuestions[currentQuestionIndex]} questionNumber={currentQuestionIndex + 1} totalQuestions={quizOrigLen} timerValue={timerValue} feedback={showFeedback} onAnswerSelect={handleAnswerSubmit} onNext={handleNextQuestion} isLastQuestion={roundLast && currentQuestionIndex >= quizOrigLen - 1} totalScore={currentQuizScore} userName={userName} activeLesson={currentLesson} showPreview={showPreview} isSavingScore={isSavingScore} competitors={inPractice ? [] : quizCompetitors} roundNumber={quizRound} roundQuestionNumber={currentQuestionIndex - quizRoundStart + 1} roundTotal={quizRoundEnd - quizRoundStart + 1} isPractice={inPractice} nextLabel={roundLast ? ((quizCoinsEligibleRef.current && !(currentQuestionIndex >= quizOrigLen - 1 && Object.values(quizMasteryRef.current).filter(Boolean).length >= Math.floor(quizOrigLen * 0.8))) ? 'Bird game 🐦' : (currentQuestionIndex >= quizOrigLen - 1 ? 'Finish' : 'Continue')) : 'Next'} />;
       case 'quizBreak':
-        return <BirdRescueGame key={quizRound} coinsLeft={birdCoinsLeft} onDone={handleBirdGameDone} />;
+        return <QuizBreakGame key={quizRound} lessonId={currentLesson?.lessonId} coinsLeft={birdCoinsLeft} onDone={handleBirdGameDone} />;
       case 'studentProfile': return <StudentProfileView allScores={allScores} selectedName={selectedName} handleSetView={handleSetView} setSelectedLessonId={setSelectedLessonId} playClickSound={playClickSound} setSelectedAgeLevel={setSelectedAgeLevel} previousView={previousView} userName={userName} globalLeaderboardScores={globalLeaderboardScores} heartCounts={heartCounts} myTotalLessonsCompletedAllClasses={myTotalLessonsCompletedAllClasses}/>;
       case 'lessonLeaderboard': return <LessonLeaderboardView allScores={allScores} selectedLessonId={selectedLessonId} handleSetView={handleSetView} setSelectedName={setSelectedName} playClickSound={playClickSound} heartCounts={heartCounts} handleHeartClick={handleHeartClick} setSelectedAgeLevel={setSelectedAgeLevel} userName={userName} previousView={previousView} />;
       case 'globalLeaderboard': return <GlobalLeaderboardView globalLeaderboardScores={globalLeaderboardScores} handleSetView={handleSetView} previousView={previousView} setSelectedName={setSelectedName} playClickSound={playClickSound} heartCounts={heartCounts} handleHeartClick={handleHeartClick} setSelectedAgeLevel={setSelectedAgeLevel} userName={userName} />;
