@@ -14,6 +14,7 @@ import bigBellSound from '../audio/big-bellburmese.mp3';
 import windChimesSound from '../audio/wind-chimes.mp3';
 import meditationBowlsSound from '../audio/meditation-bowls.mp3';
 import { MEDITATION_GUIDES } from './meditationGuides';
+const MEDITATION_AUDIO_MIN_MINUTES = 10;   // the recordings are played for sits of this many minutes or more
 
 // A student's personal shrine room -- decorate an altar with offerings
 // bought using coins, earned mainly by lighting the lamp once a day.
@@ -941,7 +942,8 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   // The recording (Ryan's voice) for the chosen guide and language, if there is one: it plays from the moment the sit starts (the
   // sit is started by a tap, so the browser lets it play), repeating until the sit ends -- finished or left early. The line on
   // screen follows the recording. With no recording, a new line appears every 9 seconds.
-  const meditationAudioSrc = activeGuideEntry.audioUrl?.[meditationLanguage] || null;
+  // Only a sit of MEDITATION_AUDIO_MIN_MINUTES or more gets the recording; a shorter sit (5 minutes) shows the lines alone, a new one every 9 seconds.
+  const meditationAudioSrc = (meditatingMinutes != null && meditatingMinutes >= MEDITATION_AUDIO_MIN_MINUTES) ? (activeGuideEntry.audioUrl?.[meditationLanguage] || null) : null;
   const lastAudioTickRef = useRef(0);
   useEffect(() => {
     if (meditatingMinutes == null) return undefined;
