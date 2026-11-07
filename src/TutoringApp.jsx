@@ -9298,7 +9298,8 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     const requestWaiting = studentProfile.trophyRequested === true;
     // Smart Study trophies are given the moment a lesson is finished (see the 'ss-lesson-done' listener above),
     // never at report time: the report only records the progress, nothing is asked for here.
-    if (session.lessonLink?.startsWith('smartstudy://')) amount = 0;
+    // (Dhammaschool and Abhidhamma work the same way now: asking the teacher as well paid the same trophies twice.)
+    if (/^(smartstudy|dhammaschool|abhidhamma):\/\//.test(session.lessonLink || '')) amount = 0;
     if (amount > 0 && !requestWaiting) {
       upd.trophyRequested = true;
       upd.requestedTrophyAmount = amount;
@@ -9536,7 +9537,8 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           if (isMyanmarPoemsUrl(targetSession.lessonLink) || isAnimalSoundUrl(targetSession.lessonLink)) autoAmount = Math.min(1, autoAmount);
           // Smart Study trophies are given the moment a lesson is finished (see the 'ss-lesson-done' listener),
           // so the report asks for nothing here.
-          if (autoAmount > 0 && !targetSession.lessonLink?.startsWith('smartstudy://')) {
+          // (Dhammaschool and Abhidhamma work the same way now: asking the teacher as well paid the same trophies twice.)
+          if (autoAmount > 0 && !/^(smartstudy|dhammaschool|abhidhamma):\/\//.test(targetSession.lessonLink || '')) {
             studentUpdateData.trophyRequested = true;
             studentUpdateData.requestedTrophyAmount = autoAmount;
             studentUpdateData.requestedTrophyLessonId = targetSession.lessonId;
