@@ -1365,10 +1365,135 @@ export const TenGiftsGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
 };
 
 // ---------------------------------------------------------------------------------------------------------------
+// Game 11: return what was left behind (honesty and care for others). Someone walks away and forgets their belongings on the
+// ground. Tap the item: you run after them, they turn around and are glad to get it back -- 2 or 3 coins. An item not returned in
+// time is left behind (no coins). Seven items per game, same timing and coins as the birds.
+const LOST_COUNT = 7;
+const LOST_FIRST_MS = 800;
+const LOST_EVERY_MS = 1500;
+const LOST_VISIBLE_MS = 3400;
+const LOST_SIZE = 'clamp(46px, 9.5vmin, 80px)';
+const LOST_THANKS = ['Thank you for returning it!', 'You are so honest!', 'I forgot it, thank you!', 'What a kind child!'];
+const LOST_KINDS = [
+  { item: '👜', name: 'Bag' }, { item: '🎒', name: 'Backpack' }, { item: '🧢', name: 'Cap' }, { item: '☂️', name: 'Umbrella' },
+  { item: '👓', name: 'Glasses' }, { item: '🧸', name: 'Toy' }, { item: '📚', name: 'Books' }, { item: '🧣', name: 'Scarf' },
+  { item: '🔑', name: 'Keys' }, { item: '🍱', name: 'Lunch box' },
+];
+const LOST_OWNERS = ['🚶', '🚶‍♀️', '👴', '👵', '🧑', '👩'];
+const lostSpots = () => {
+  const out = [];
+  for (let i = 0; i < LOST_COUNT; i++) {
+    let p = null;
+    for (let tries = 0; tries < 30; tries++) {
+      const c = { x: 12 + Math.random() * 56, y: 44 + Math.random() * 36 };
+      if (out.every(o => Math.hypot(o.x - c.x, (o.y - c.y) * 1.4) > 22)) { p = c; break; }
+    }
+    out.push(p || { x: 12 + Math.random() * 56, y: 44 + Math.random() * 36 });
+  }
+  return out;
+};
+// An item that was just returned: the owner comes back to take it and says thanks.
+const ReturnedItem = ({ it, won }) => (
+  <div className="absolute pointer-events-none" style={{ zIndex: 6, left: `${it.x}%`, top: `${it.y}%`, transform: 'translate(-50%,-50%)' }}>
+    <span className="block select-none" style={{ fontSize: LOST_SIZE, lineHeight: 1, animation: 'lostHappy .6s ease-in-out .6s 3' }}>{it.owner}</span>
+    <span className="absolute select-none" style={{ right: '-40%', bottom: 0, fontSize: 'clamp(26px, 5vmin, 44px)', animation: 'lostGive 1s ease-out forwards' }}>{it.kind.item}</span>
+    <div className="absolute left-1/2 -translate-x-1/2 text-center whitespace-nowrap" style={{ top: `calc(${LOST_SIZE} / -2 - 3.4rem)`, animation: 'lostThanks 2.2s ease-out forwards' }}>
+      <div className="bg-white text-emerald-900 font-bold text-sm rounded-full px-3 py-1 shadow">{it.thanks}</div>
+      {won > 0 && <div className="font-black text-yellow-600 drop-shadow">+{won} 🪙</div>}
+    </div>
+  </div>
+);
+export const ReturnLostItemsGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
+  const [items] = useState(() => {
+    const kinds = [...LOST_KINDS].sort(() => Math.random() - 0.5);
+    const owners = [...LOST_OWNERS].sort(() => Math.random() - 0.5);
+    return lostSpots().map((p, i) => ({ id: i, x: p.x, y: p.y, kind: kinds[i % kinds.length], owner: owners[i % owners.length], thanks: LOST_THANKS[i % LOST_THANKS.length] }));
+  });
+  const [state, setState] = useState(() => Array(LOST_COUNT).fill('waiting')); // waiting | lost | returned | gone
+  const [won, setWon] = useState(() => Array(LOST_COUNT).fill(0));
+  const [finished, setFinished] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const total = won.reduce((a, b) => a + b, 0);
+  const returned = state.filter(v => v === 'returned').length;
+  const soundRef = useRef(null);
+
+  useEffect(() => {
+    const timers = [];
+    items.forEach((it) => {
+      const start = LOST_FIRST_MS + it.id * LOST_EVERY_MS;
+      timers.push(setTimeout(() => setState(st => st.map((v, i) => (i === it.id && v === 'waiting' ? 'lost' : v))), start));
+      timers.push(setTimeout(() => setState(st => st.map((v, i) => (i === it.id && v === 'lost' ? 'gone' : v))), start + LOST_VISIBLE_MS));
+    });
+    return () => timers.forEach(clearTimeout);
+  }, [items]);
+  useEffect(() => {
+    if (finished || !state.every(v => v === 'returned' || v === 'gone')) return undefined;
+    const t = setTimeout(() => setFinished(true), 1800); // let the last owner say thanks
+    return () => clearTimeout(t);
+  }, [state, finished]);
+
+  const giveBack = (id) => {
+    if (state[id] !== 'lost') return;
+    const coins = Math.max(0, Math.min(2 + Math.floor(Math.random() * 2), coinsLeft - total)); // 2 or 3, never past the lesson's limit
+    setState(st => st.map((v, i) => (i === id ? 'returned' : v)));
+    setWon(w => w.map((v, i) => (i === id ? coins : v)));
+    playCoinSound(soundRef);
+  };
+
+  return (
+    <div className="relative overflow-hidden text-white h-screen" style={{ height: '100dvh', minHeight: 420, background: 'linear-gradient(180deg,#bae6fd 0%,#e0f2fe 38%,#d6d3d1 38%,#a8a29e 100%)' }}>
+      <style>{`
+        @keyframes lostPop { 0% { transform: translate(-50%,-50%) scale(.3); opacity: 0 } 100% { transform: translate(-50%,-50%) scale(1); opacity: 1 } }
+        @keyframes lostBlink { 0%,100% { transform: translate(-50%,0) } 50% { transform: translate(-50%,-6px) } }
+        @keyframes lostWalk { 0% { transform: translateX(0) } 100% { transform: translateX(150px) } }
+        @keyframes lostHappy { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-14px) } }
+        @keyframes lostGive { 0% { transform: translateX(40px) scale(.8); opacity: 0 } 40% { opacity: 1 } 100% { transform: translateX(0) scale(1); opacity: 1 } }
+        @keyframes lostThanks { 0% { transform: translateY(0); opacity: 0 } 15% { opacity: 1 } 100% { transform: translateY(-46px); opacity: 0 } }
+      `}</style>
+      <div className="absolute top-0 inset-x-0 flex items-center justify-between gap-2 px-3 py-3 z-10">
+        <div className="bg-white/80 text-emerald-900 font-bold text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 ml-12 sm:ml-16 min-w-0 truncate">🎒 Return what they forgot</div>
+        <div className="bg-yellow-300 text-yellow-900 font-black text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 shadow whitespace-nowrap flex-shrink-0">🪙 {total}{coinsLeft <= 0 ? ' (limit reached)' : ''}</div>
+      </div>
+      <div className="absolute pointer-events-none" style={{ right: '8%', top: '10%', fontSize: 'clamp(40px, 9vmin, 80px)' }}>☀️</div>
+      <div className="absolute pointer-events-none" style={{ left: '5%', top: '22%', fontSize: 'clamp(34px, 8vmin, 66px)' }}>🌳</div>
+      {returned > 0 && <div className="absolute pointer-events-none bg-white text-emerald-700 font-black text-sm rounded-full px-3 py-1 shadow" style={{ left: '4%', bottom: '3%' }}>🎒 {returned}</div>}
+      {items.map((it, i) => {
+        const st = state[i];
+        if (st === 'waiting' || st === 'gone') return null;
+        if (st === 'returned') return <ReturnedItem key={it.id} it={it} won={won[i]} />;
+        return (
+          <React.Fragment key={it.id}>
+            {/* the owner, walking away without noticing */}
+            <div className="absolute pointer-events-none select-none" style={{ left: `${it.x + 12}%`, top: `${it.y}%`, transform: 'translate(-50%,-50%)', zIndex: 4 }}>
+              <span className="block" style={{ fontSize: LOST_SIZE, lineHeight: 1, animation: `lostWalk ${LOST_VISIBLE_MS}ms linear forwards` }}>{it.owner}</span>
+            </div>
+            <button onClick={() => giveBack(it.id)} aria-label={`Return the ${it.kind.name}`} className="absolute" style={{ left: `${it.x}%`, top: `${it.y}%`, width: LOST_SIZE, height: LOST_SIZE, transform: 'translate(-50%,-50%)', animation: 'lostPop .35s ease-out', zIndex: 5 }}>
+              <span className="block select-none" style={{ fontSize: LOST_SIZE, lineHeight: 1 }}>{it.kind.item}</span>
+              <span className="absolute left-1/2 select-none" style={{ top: '-30%', fontSize: 'clamp(20px, 4vmin, 34px)', animation: 'lostBlink 1s ease-in-out infinite' }}>❗</span>
+            </button>
+          </React.Fragment>
+        );
+      })}
+      {finished && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20 px-4">
+          <div className="bg-white text-gray-900 rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
+            <div className="text-5xl mb-2">{returned > 0 ? '🎒' : '🌤️'}</div>
+            <h2 className="text-2xl font-extrabold mb-1">{returned > 0 ? `You returned ${returned} thing${returned === 1 ? '' : 's'}!` : 'Nice try!'}</h2>
+            <p className="text-sm text-gray-600 mb-2">{returned > 0 ? 'Honesty and kindness make everyone trust you.' : 'Be quick, they are walking away.'}</p>
+            <p className="text-lg font-bold text-yellow-600 mb-4">{total > 0 ? `🪙 +${total} coins for your Shrine Room wallet` : (coinsLeft <= 0 ? 'You have already earned all the coins for this lesson. Great job!' : 'No coins this time.')}</p>
+            <GameButton disabled={leaving} onClick={() => { setLeaving(true); onDone(total); }} className="bg-emerald-500 hover:bg-emerald-600 text-white w-full text-xl">Continue →</GameButton>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------------------------------------------
 // The games, in the order they are handed out. A lesson always gets the same game (so a retake feels familiar and the
 // coin cap stays one per lesson), but neighbouring lessons get different ones, so the break does not become boring.
 // To add a game: write it above with the same two props and put it in this list.
-export const QUIZ_BREAK_GAMES = [BirdRescueGame, FlowerOfferingGame, LitterPickingGame, AnimalRescueGame, WoodcutterAxeGame, AntGatheringGame, WaterAnimalsGame, HelpFriendsGame, PayRespectGame, TenGiftsGame];
+export const QUIZ_BREAK_GAMES = [BirdRescueGame, FlowerOfferingGame, LitterPickingGame, AnimalRescueGame, WoodcutterAxeGame, AntGatheringGame, WaterAnimalsGame, HelpFriendsGame, PayRespectGame, TenGiftsGame, ReturnLostItemsGame];
 const hashOf = (s) => { let h = 0; String(s ?? '').split('').forEach(ch => { h = (h * 31 + ch.charCodeAt(0)) >>> 0; }); return h; };
 export const quizBreakGameFor = (lessonId) => QUIZ_BREAK_GAMES[hashOf(lessonId) % QUIZ_BREAK_GAMES.length];
 export const QuizBreakGame = ({ lessonId, ...rest }) => {
