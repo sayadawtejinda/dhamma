@@ -1169,7 +1169,9 @@ export default function ConsonantPracticeApp({ entryRequest, onExit, hideOwnOnli
             const size = consonantCountOptions[currentConsonantCountIndex];
             if (completedGroupSizes.includes(size)) return;
             completedGroupSizes.push(size);
-            setDoc(consonantRosterRef, { completedGroups: arrayUnion(size) }, { merge: true }).catch(() => {});
+            setDoc(consonantRosterRef, { completedGroups: arrayUnion(size) }, { merge: true })
+                .then(() => window.dispatchEvent(new CustomEvent('ss-lesson-done', { detail: { app: 'consonantpractice', studentName } })))   // Tutoring gives the trophy at once
+                .catch(() => {});
             updateGroupIconBadge();
         }
 

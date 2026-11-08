@@ -425,6 +425,21 @@ const sanitizeVowelsKey = (key) => (key || 'unknown').replace(/[.$#/\[\]]/g, '_'
 const isVowelsLearningUrl = (link) =>
   link === 'vowelslearning://' ||
   (groupSchemeOfLink(link) === 'readingmyanmar://' && extractGroupPartKey(link) === 'vowelslearning');
+// Consonant Practice -- standalone (consonantpractice://) or as Reading Myanmar's Part 1. Its roster doc's completedGroups
+// (the group sizes the student has finished) is the progress.
+const CONSONANT_PRACTICE_APP_ID = 'consonant-practice-app'; // Firestore appId used inside ConsonantPracticeApp.jsx
+const sanitizeConsonantKey = (key) => (key || 'unknown').replace(/[.$#/\[\]]/g, '_');
+const isConsonantPracticeUrl = (link) =>
+  link === 'consonantpractice://' ||
+  (groupSchemeOfLink(link) === 'readingmyanmar://' && extractGroupPartKey(link) === 'consonantpractice');
+// The three small Reading Myanmar games whose trophies are given the moment a unit is finished (like Smart Study):
+// the app announces it ('ss-lesson-done' with its name), and Tutoring gives what the finished units deserve.
+const AUTO_TROPHY_SMALL_APPS = { consonantpractice: isConsonantPracticeUrl, burmesegame: isBurmeseGameUrl, vowelslearning: isVowelsLearningUrl };
+// true for every lesson whose trophies are given automatically, so a report never asks the teacher for them as well
+const hasAutoTrophies = (link) => /^(smartstudy|dhammaschool|abhidhamma):\/\//.test(link || '') || Object.values(AUTO_TROPHY_SMALL_APPS).some(f => f(link));
+// ...but a small game lesson sent without its unit count / trophy limit cannot be paid automatically, so its report still asks the teacher
+const reportAsksNoTrophies = (session) => hasAutoTrophies(session?.lessonLink)
+  && (!Object.values(AUTO_TROPHY_SMALL_APPS).some(f => f(session?.lessonLink)) || ((session?.lessonUnitCount || 0) > 0 && (session?.lessonTrophyLimit || 0) > 0));
 // Same idea for Myanmar Poems -- standalone (myanmarpoems://) or as Speaking
 // Myanmar's Part 1. Its own roster doc's completedPoemIds is what the
 // Report auto-fill reads.
@@ -8912,6 +8927,18 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       }
     }
 
+    // Consonant Practice: the number of consonant groups the student has finished goes into "completed".
+    if (isConsonantPracticeUrl(session.lessonLink)) {
+      const stuName = studentProfile?.name;
+      if (stuName) {
+        try {
+          const rosterSnap = await readAppRoster(CONSONANT_PRACTICE_APP_ID, studentUid, sanitizeConsonantKey, stuName);
+          const completedGroups = rosterSnap.exists() && Array.isArray(rosterSnap.data().completedGroups) ? rosterSnap.data().completedGroups : [];
+          if (completedGroups.length > 0) sink.setCompleted(String(completedGroups.length));
+        } catch (e) { console.error('Consonant Practice progress fetch:', e); }
+      }
+    }
+
     // Burmese Consonant Game: fetch total completed games (Picture Game
     // levels + per-group Pick/Click games) and drop the count into "completed".
     if (isBurmeseGameUrl(session.lessonLink)) {
@@ -9217,12 +9244,15 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
   // records exactly as the report does. Nothing happens for a class with no sent lesson.
   const ssLessonDoneRef = useRef(null);
   ssLessonDoneRef.current = async (e) => {
-    const classId = e.detail?.classId;
-    if (!classId || !studentUid || !studentProfile) return;
-    // which app finished the lesson: Smart Study (default), Dhammaschool or Abhidhamma -- all give their trophies the same way
+    // which app finished the lesson: Smart Study (default), Dhammaschool, Abhidhamma -- or one of the three small Reading Myanmar
+    // games (Consonant Practice, Burmese Consonant Game, Vowels), which have no class -- all give their trophies the same way
     const appName = e.detail?.app || 'smartstudy';
+    const smallAppIs = AUTO_TROPHY_SMALL_APPS[appName] || null;
+    const classId = e.detail?.classId;
+    if ((!classId && !smallAppIs) || !studentUid || !studentProfile) return;
     const prefix = `${appName}://`;
     const forClass = (s) => {
+      if (smallAppIs) return smallAppIs(s.lessonLink);   // standalone (burmesegame://) or as a part (readingmyanmar://burmesegame)
       if (!s.lessonLink?.startsWith(prefix)) return false;
       const c = s.lessonLink.slice(prefix.length);
       return c === classId || (appName === 'abhidhamma' && !c);   // a bare abhidhamma:// lesson covers every class
@@ -9233,7 +9263,8 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       // The class's session is not in the lists this screen holds (e.g. it closed -- 45-minute limit -- while the child kept studying,
       // and the saved list is not up to date yet): read this child's sessions for the class once, straight from Firebase.
       try {
-        const snap = await getDocs(query(sessionsCollection, where('studentUid', '==', studentUid), where('lessonLink', '==', `${prefix}${classId}`)));
+        const links = smallAppIs ? [prefix, `readingmyanmar://${appName}`] : [`${prefix}${classId}`];
+        const snap = await getDocs(query(sessionsCollection, where('studentUid', '==', studentUid), where('lessonLink', 'in', links)));
         session = snap.docs.map(d => withCurrentSessionCounts({ id: d.id, ...d.data() })).sort((a, b) => startMs(b) - startMs(a))[0];
       } catch (err) { console.error('Auto trophy: session lookup:', err); }
     }
@@ -9299,7 +9330,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     // Smart Study trophies are given the moment a lesson is finished (see the 'ss-lesson-done' listener above),
     // never at report time: the report only records the progress, nothing is asked for here.
     // (Dhammaschool and Abhidhamma work the same way now: asking the teacher as well paid the same trophies twice.)
-    if (/^(smartstudy|dhammaschool|abhidhamma):\/\//.test(session.lessonLink || '')) amount = 0;
+    if (reportAsksNoTrophies(session)) amount = 0;
     if (amount > 0 && !requestWaiting) {
       upd.trophyRequested = true;
       upd.requestedTrophyAmount = amount;
@@ -9538,7 +9569,7 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
           // Smart Study trophies are given the moment a lesson is finished (see the 'ss-lesson-done' listener),
           // so the report asks for nothing here.
           // (Dhammaschool and Abhidhamma work the same way now: asking the teacher as well paid the same trophies twice.)
-          if (autoAmount > 0 && !/^(smartstudy|dhammaschool|abhidhamma):\/\//.test(targetSession.lessonLink || '')) {
+          if (autoAmount > 0 && !reportAsksNoTrophies(targetSession)) {
             studentUpdateData.trophyRequested = true;
             studentUpdateData.requestedTrophyAmount = autoAmount;
             studentUpdateData.requestedTrophyLessonId = targetSession.lessonId;

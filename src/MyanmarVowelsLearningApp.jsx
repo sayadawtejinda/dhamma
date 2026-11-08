@@ -757,7 +757,9 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
             if (completedGameIds.has(gameId)) return;
             completedGameIds.add(gameId);
             updateModeButtonLockUI();
-            if (progressRosterRef) setDoc(progressRosterRef, { completedGames: arrayUnion(gameId) }, { merge: true }).catch(() => {});
+            if (progressRosterRef) setDoc(progressRosterRef, { completedGames: arrayUnion(gameId) }, { merge: true })
+                .then(() => window.dispatchEvent(new CustomEvent('ss-lesson-done', { detail: { app: 'vowelslearning', studentName } })))   // Tutoring gives the trophy at once
+                .catch(() => {});
         }
 
         // Games must be played in order (teacher's explicit requirement):

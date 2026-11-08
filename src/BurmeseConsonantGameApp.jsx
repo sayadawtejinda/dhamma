@@ -796,6 +796,7 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
             updateGroupSelectorBadge();
             if (progressRosterRef) {
                 setDoc(progressRosterRef, { completedGames: arrayUnion(gameId) }, { merge: true })
+                    .then(() => window.dispatchEvent(new CustomEvent('ss-lesson-done', { detail: { app: 'burmesegame', studentName } })))   // Tutoring gives the trophy at once
                     .catch(e => console.error('Error saving game completion:', gameId, e));
             }
         }
