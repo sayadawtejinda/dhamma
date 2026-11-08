@@ -1722,17 +1722,20 @@ let bilingualMode = false;
         async function recordLessonCompletion() {
             if (isPreviewMode) return;
             if (!studentCurrentLessonId || !userId) return;
+            // Remember the lesson NOW: the "Finish" button goes back to the library without waiting for this save, which clears
+            // studentCurrentLessonId -- read after the save, the class came out as GENERAL and the trophy was never given.
+            const doneLessonId = studentCurrentLessonId;
+            const doneLesson = allLessons[doneLessonId];
+            const doneClassId = (doneLesson && doneLesson.classId && doneLesson.classId.trim()) ? doneLesson.classId.trim() : 'GENERAL';
             try {
-                await setDoc(doc(db, PATHS.completions, `${studentCurrentLessonId}_${userId}`), {
-                    lessonId: studentCurrentLessonId,
+                await setDoc(doc(db, PATHS.completions, `${doneLessonId}_${userId}`), {
+                    lessonId: doneLessonId,
                     userId,
                     studentName,
                     completedAt: new Date().toISOString()
                 });
                 // tell the Tutoring side the lesson is finished: it gives the trophy the finished lessons now deserve
-                const l = allLessons[studentCurrentLessonId];
-                const cId = (l && l.classId && l.classId.trim()) ? l.classId.trim() : 'GENERAL';
-                window.dispatchEvent(new CustomEvent('ss-lesson-done', { detail: { app: 'dhammaschool', classId: cId, studentName, lessonId: studentCurrentLessonId } }));
+                window.dispatchEvent(new CustomEvent('ss-lesson-done', { detail: { app: 'dhammaschool', classId: doneClassId, studentName, lessonId: doneLessonId } }));
             } catch(e) {
                 console.error("Error recording completion:", e);
             }
