@@ -398,10 +398,169 @@ export const LitterPickingGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
 };
 
 // ---------------------------------------------------------------------------------------------------------------
+// Game 4: protect the animals (compassion). Arrows, spears and knives drift slowly towards a little group of animals. Tap one to
+// break it before it arrives -- the student gets 2 or 3 coins. One that is not stopped only frightens the animals ("Ouch!"):
+// nothing is shown that is cruel, and there are no coins for it. Seven in all, same timing and coins as the birds.
+const THREATS = 7;
+const THREAT_FIRST_MS = 800;
+const THREAT_EVERY_MS = 1500;
+const THREAT_TRAVEL_MS = 3600;                 // how long one takes to arrive: slow enough to catch
+const THREAT_SIZE = 'clamp(54px, 11vmin, 92px)';
+const ANIMAL_SIZE = 'clamp(46px, 10vmin, 84px)';
+const ANIMALS = [{ e: '🐰', x: 36, y: 74 }, { e: '🦌', x: 50, y: 70 }, { e: '🐑', x: 64, y: 74 }, { e: '🐥', x: 43, y: 84 }, { e: '🐿️', x: 57, y: 84 }];
+const THREAT_KINDS = ['arrow', 'spear', 'knife'];
+const THREAT_THANKS = ['Saved them!', 'Well done!', 'So kind!', 'The animals are safe!'];
+
+// the three drawn pointing to the right; the game turns them to face the animals
+const ThreatPicture = ({ kind }) => (
+  <svg viewBox="0 0 100 40" width="100%" height="100%" aria-hidden="true">
+    {kind === 'arrow' && (<g>
+      <line x1="8" y1="20" x2="82" y2="20" stroke="#8d6e63" strokeWidth="5" strokeLinecap="round" />
+      <path d="M96 20 L78 9 L78 31 Z" fill="#78909c" stroke="#455a64" strokeWidth="2" strokeLinejoin="round" />
+      <path d="M6 20 L20 8 L26 8 L18 20 L26 32 L20 32 Z" fill="#ef5350" stroke="#b71c1c" strokeWidth="1.5" strokeLinejoin="round" />
+    </g>)}
+    {kind === 'spear' && (<g>
+      <line x1="4" y1="20" x2="78" y2="20" stroke="#6d4c41" strokeWidth="6" strokeLinecap="round" />
+      <path d="M98 20 L70 8 Q74 20 70 32 Z" fill="#b0bec5" stroke="#455a64" strokeWidth="2" strokeLinejoin="round" />
+      <rect x="60" y="15" width="8" height="10" rx="2" fill="#fbc02d" stroke="#f57f17" strokeWidth="1.5" />
+    </g>)}
+    {kind === 'knife' && (<g>
+      <rect x="4" y="14" width="30" height="12" rx="5" fill="#6d4c41" stroke="#3e2723" strokeWidth="2" />
+      <rect x="32" y="9" width="6" height="22" rx="2" fill="#fbc02d" stroke="#f57f17" strokeWidth="1.5" />
+      <path d="M38 12 L90 20 L38 28 Z" fill="#cfd8dc" stroke="#546e7a" strokeWidth="2" strokeLinejoin="round" />
+    </g>)}
+  </svg>
+);
+
+// where each threat starts: a random place on the left, right or top edge, aiming at the group of animals
+const threatRoutes = () => {
+  const kinds = Array.from({ length: THREATS }, (_, i) => THREAT_KINDS[i % THREAT_KINDS.length]).sort(() => Math.random() - 0.5);
+  let lastSide = '';
+  return kinds.map((kind, id) => {
+    let side = ['left', 'right', 'top'][Math.floor(Math.random() * 3)];
+    if (side === lastSide) side = ['left', 'right', 'top'].find(s => s !== side && Math.random() < 0.6) || 'top';
+    lastSide = side;
+    const from = side === 'left' ? { x: -10, y: 12 + Math.random() * 40 } : side === 'right' ? { x: 110, y: 12 + Math.random() * 40 } : { x: 14 + Math.random() * 72, y: -12 };
+    const to = { x: 42 + Math.random() * 16, y: 68 + Math.random() * 8 };
+    const angle = Math.atan2(to.y - from.y, to.x - from.x) * 180 / Math.PI;   // (screen proportions are close enough for the picture)
+    return { id, kind, from, to, angle, thanks: THREAT_THANKS[id % THREAT_THANKS.length] };
+  });
+};
+
+// one threat on its way: it starts at its edge and, one frame later, is set moving to the animals
+const FlyingThreat = ({ t, onTap, btnRef }) => {
+  const [go, setGo] = useState(false);
+  useEffect(() => { const r = requestAnimationFrame(() => requestAnimationFrame(() => setGo(true))); return () => cancelAnimationFrame(r); }, []);
+  return (
+    <div className="absolute" style={{ zIndex: 5, left: `${go ? t.to.x : t.from.x}%`, top: `${go ? t.to.y : t.from.y}%`, transition: go ? `left ${THREAT_TRAVEL_MS}ms linear, top ${THREAT_TRAVEL_MS}ms linear` : 'none' }}>
+      <button ref={btnRef} onClick={onTap} aria-label="Break it to protect the animals" className="block" style={{ width: THREAT_SIZE, height: THREAT_SIZE, marginLeft: `calc(${THREAT_SIZE} / -2)`, marginTop: `calc(${THREAT_SIZE} / -2)`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <span className="block" style={{ width: '100%', height: '60%', transform: `rotate(${t.angle}deg)` }}><ThreatPicture kind={t.kind} /></span>
+      </button>
+    </div>
+  );
+};
+
+export const AnimalRescueGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
+  const [threats] = useState(threatRoutes);
+  const [state, setState] = useState(() => Array(THREATS).fill('waiting')); // waiting | coming | saved | hit
+  const [won, setWon] = useState(() => Array(THREATS).fill(0));
+  const [bursts, setBursts] = useState([]);                                  // where a threat was broken: { id, x, y, text, coins }
+  const [scare, setScare] = useState(0);                                     // counts up each time the animals are frightened
+  const [finished, setFinished] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const total = won.reduce((a, b) => a + b, 0);
+  const saved = state.filter(v => v === 'saved').length;
+  const hits = state.filter(v => v === 'hit').length;
+  const soundRef = useRef(null);
+  const stageRef = useRef(null);
+  const itemRefs = useRef([]);
+
+  useEffect(() => {
+    const timers = [];
+    threats.forEach((t) => {
+      const start = THREAT_FIRST_MS + t.id * THREAT_EVERY_MS;
+      timers.push(setTimeout(() => setState(st => st.map((v, i) => (i === t.id && v === 'waiting' ? 'coming' : v))), start));
+      timers.push(setTimeout(() => {
+        setState(st => { if (st[t.id] !== 'coming') return st; setScare(n => n + 1); return st.map((v, i) => (i === t.id ? 'hit' : v)); });
+      }, start + THREAT_TRAVEL_MS));
+    });
+    return () => timers.forEach(clearTimeout);
+  }, [threats]);
+  useEffect(() => {
+    if (finished || !state.every(v => v === 'saved' || v === 'hit')) return undefined;
+    const t = setTimeout(() => setFinished(true), 900);
+    return () => clearTimeout(t);
+  }, [state, finished]);
+
+  const breakIt = (id) => {
+    if (state[id] !== 'coming') return;
+    let at = null;
+    try {
+      const a = itemRefs.current[id].getBoundingClientRect(), s = stageRef.current.getBoundingClientRect();
+      at = { x: a.left - s.left + a.width / 2, y: a.top - s.top + a.height / 2 };
+    } catch (e) { /* the burst then appears near the animals */ }
+    const coins = Math.max(0, Math.min(2 + Math.floor(Math.random() * 2), coinsLeft - total)); // 2 or 3, never past the lesson's limit
+    setState(st => st.map((v, i) => (i === id ? 'saved' : v)));
+    setWon(w => w.map((v, i) => (i === id ? coins : v)));
+    setBursts(b => [...b, { id, x: at ? at.x : 0, y: at ? at.y : 0, pct: !at, thanks: threats[id].thanks, coins }]);
+    playCoinSound(soundRef);
+  };
+
+  return (
+    <div ref={stageRef} className="relative overflow-hidden text-white h-screen" style={{ height: '100dvh', minHeight: 420, background: 'linear-gradient(180deg,#bae6fd 0%,#e0f2fe 45%,#bbf7d0 45%,#4ade80 100%)' }}>
+      <style>{`
+        @keyframes animalShake { 0%,100% { transform: translateX(0) } 20% { transform: translateX(-7px) } 40% { transform: translateX(7px) } 60% { transform: translateX(-5px) } 80% { transform: translateX(5px) } }
+        @keyframes animalHappy { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-6px) } }
+        @keyframes burstRise { 0% { transform: translateY(0) scale(.6); opacity: 0 } 15% { opacity: 1; transform: translateY(-6px) scale(1.1) } 100% { transform: translateY(-50px) scale(1); opacity: 0 } }
+        @keyframes sparkle { 0% { transform: scale(.3) rotate(0); opacity: 1 } 100% { transform: scale(1.8) rotate(90deg); opacity: 0 } }
+      `}</style>
+      <div className="absolute top-0 inset-x-0 flex items-center justify-between gap-2 px-3 py-3 z-10">
+        <div className="bg-white/80 text-emerald-900 font-bold text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 ml-12 sm:ml-16 min-w-0 truncate">🐰 Protect the animals! Tap what comes</div>
+        <div className="bg-yellow-300 text-yellow-900 font-black text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 shadow whitespace-nowrap flex-shrink-0">🪙 {total}{coinsLeft <= 0 ? ' (limit reached)' : ''}</div>
+      </div>
+      {/* the meadow */}
+      <div className="absolute pointer-events-none" style={{ left: '4%', top: '34%', fontSize: 'clamp(40px, 9vmin, 76px)' }}>🌳</div>
+      <div className="absolute pointer-events-none" style={{ right: '4%', top: '36%', fontSize: 'clamp(36px, 8vmin, 68px)' }}>🌳</div>
+      <div className="absolute pointer-events-none" style={{ right: '10%', top: '12%', fontSize: 'clamp(36px, 8vmin, 70px)' }}>☀️</div>
+      {/* the animals */}
+      {ANIMALS.map((a, i) => (
+        <div key={i} className="absolute pointer-events-none" style={{ left: `${a.x}%`, top: `${a.y}%`, transform: 'translate(-50%,-50%)', fontSize: ANIMAL_SIZE, lineHeight: 1, zIndex: 3 }}>
+          <span key={scare} className="block" style={{ animation: scare > 0 ? 'animalShake .6s ease-in-out' : `animalHappy ${1.6 + i * 0.2}s ease-in-out infinite` }}>{a.e}</span>
+        </div>
+      ))}
+      {scare > 0 && <div key={'o' + scare} className="absolute pointer-events-none text-center" style={{ left: '50%', top: '57%', transform: 'translateX(-50%)', zIndex: 4, animation: 'burstRise 1.4s ease-out forwards' }}><div className="bg-white text-rose-700 font-bold text-sm rounded-full px-3 py-1 shadow">😢 Ouch! Be careful!</div></div>}
+      {threats.map((t, i) => state[i] === 'coming' ? (
+        <FlyingThreat key={t.id} t={t} onTap={() => breakIt(t.id)} btnRef={el => { itemRefs.current[t.id] = el; }} />
+      ) : null)}
+      {bursts.map(b => (
+        <div key={b.id} className="absolute pointer-events-none text-center" style={{ zIndex: 6, left: b.pct ? '50%' : b.x, top: b.pct ? '60%' : b.y }}>
+          <span className="block" style={{ fontSize: 'clamp(40px, 9vmin, 72px)', lineHeight: 1, transform: 'translate(-50%,-50%)', animation: 'sparkle .8s ease-out forwards' }}>✨</span>
+          <div className="absolute left-0 whitespace-nowrap" style={{ top: '-3.6rem', transform: 'translateX(-50%)', animation: 'burstRise 1.8s ease-out forwards' }}>
+            <div className="bg-white text-emerald-900 font-bold text-sm rounded-full px-3 py-1 shadow">{b.thanks}</div>
+            {b.coins > 0 && <div className="font-black text-yellow-600 drop-shadow">+{b.coins} 🪙</div>}
+          </div>
+        </div>
+      ))}
+      {finished && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20 px-4">
+          <div className="bg-white text-gray-900 rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
+            <div className="text-5xl mb-2">{saved > 0 ? '🐰💚' : '🌤️'}</div>
+            <h2 className="text-2xl font-extrabold mb-1">{saved > 0 ? `You protected the animals ${saved} time${saved === 1 ? '' : 's'}!` : 'Nice try!'}</h2>
+            <p className="text-sm text-gray-500 mb-2">{hits > 0 ? 'Some of them got a fright. Next time, be quick!' : 'Not one of them got frightened. Wonderful!'}</p>
+            <p className="text-lg font-bold text-yellow-600 mb-4">{total > 0 ? `🪙 +${total} coins for your Shrine Room wallet` : (coinsLeft <= 0 ? 'You have already earned all the coins for this lesson. Great job!' : 'No coins this time.')}</p>
+            <GameButton disabled={leaving} onClick={() => { setLeaving(true); onDone(total); }} className="bg-emerald-500 hover:bg-emerald-600 text-white w-full text-xl">Continue →</GameButton>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------------------------------------------
 // The games, in the order they are handed out. A lesson always gets the same game (so a retake feels familiar and the
 // coin cap stays one per lesson), but neighbouring lessons get different ones, so the break does not become boring.
 // To add a game: write it above with the same two props and put it in this list.
-export const QUIZ_BREAK_GAMES = [BirdRescueGame, FlowerOfferingGame, LitterPickingGame];
+export const QUIZ_BREAK_GAMES = [BirdRescueGame, FlowerOfferingGame, LitterPickingGame, AnimalRescueGame];
 const hashOf = (s) => { let h = 0; String(s ?? '').split('').forEach(ch => { h = (h * 31 + ch.charCodeAt(0)) >>> 0; }); return h; };
 export const quizBreakGameFor = (lessonId) => QUIZ_BREAK_GAMES[hashOf(lessonId) % QUIZ_BREAK_GAMES.length];
 export const QuizBreakGame = ({ lessonId, ...rest }) => {
