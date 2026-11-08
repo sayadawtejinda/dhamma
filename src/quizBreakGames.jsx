@@ -1251,7 +1251,7 @@ const DANA_KINDS = [
   { person: '🚶', gift: '🥤', name: 'Drink', pali: 'Panadana' },
   { person: '👨‍👩‍👧', gift: '🏠', name: 'Shelter', pali: 'Gharadana' },
   { person: '🥶', gift: '👘', name: 'Clothing', pali: 'Vatthadana' },
-  { person: '🧑‍🦽', gift: '🛶', name: 'Transport', pali: 'Yanadana' },
+  { person: '🚶‍♀️', gift: '👟', name: 'Shoes', pali: 'Yanadana' },
   { person: '🧘', gift: '💐', name: 'Flowers', pali: 'Maladana' },
   { person: '🧓', gift: '🧴', name: 'Ointment', pali: 'Vilepanadana' },
   { person: '😴', gift: '🛏️', name: 'A bed', pali: 'Seyyadana' },
