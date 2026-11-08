@@ -34,13 +34,14 @@ export const linesFromText = (text) => {
   return out;
 };
 
-// The top of a file may hold "title:", "audio-en:" and "audio-my:" lines (all optional); everything after them is the text.
+// A line starting with # is a note and is ignored. The top of a file may hold "title:", "audio-en:" and "audio-my:" lines (all optional); everything after them is the text.
 const parseFile = (path, raw) => {
   const base = path.split('/').pop().replace(/\.txt$/i, '');
   const head = {};
   const body = [];
   let inHead = true;
   String(raw || '').replace(/^﻿/, '').split(/\r?\n/).forEach(line => {
+    if (line.trim().startsWith('#')) return;   // a note to yourself, not read
     const m = inHead && line.match(/^\s*(title|audio-en|audio-my|audio)\s*:\s*(.*)$/i);
     if (m) { head[m[1].toLowerCase()] = m[2].trim(); return; }
     if (inHead && line.trim() === '' && Object.keys(head).length === 0) return;
