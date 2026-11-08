@@ -1104,10 +1104,146 @@ export const HelpFriendsGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
 };
 
 // ---------------------------------------------------------------------------------------------------------------
+// Game 9: paying respect (gratitude and reverence). Those we respect appear one by one -- grandparents, parents, teachers, the
+// Buddha, the Dhamma, the Sangha and the Ten Great Disciples. Tap one to bow to them with joined hands: they bless you back --
+// 2 or 3 coins. Someone not honoured in time just waits for another day (no coins). Seven of them per game, picked at random,
+// same timing and coins as the birds.
+const RESPECT_COUNT = 7;
+const RESPECT_FIRST_MS = 800;
+const RESPECT_EVERY_MS = 1500;
+const RESPECT_VISIBLE_MS = 3400;
+const RESPECT_SIZE = 'clamp(54px, 11vmin, 92px)';
+const DISCIPLE_BLESS = 'May you grow in wisdom and goodness!';
+const RESPECT_WHO = [
+  { icon: '👴', name: 'Grandfather', bless: 'May you be happy and well!' },
+  { icon: '👵', name: 'Grandmother', bless: 'May you be happy and well!' },
+  { icon: '👨', name: 'Father', bless: 'May you always be safe!' },
+  { icon: '👩', name: 'Mother', bless: 'May you always be safe!' },
+  { icon: '👨‍🏫', name: 'Teacher', bless: 'May you learn and grow!' },
+  { icon: '👩‍🏫', name: 'Teacher', bless: 'May you learn and grow!' },
+  { icon: '🧘', name: 'Buddha', bless: 'May you be free from suffering!', holy: true },
+  { icon: '☸️', name: 'Dhamma', bless: 'May you walk the path of peace!', holy: true },
+  { icon: '🪷', name: 'Sangha', bless: 'May you be peaceful and happy!', holy: true },
+  { icon: '🧘', name: 'Sariputta', bless: DISCIPLE_BLESS, monk: true },
+  { icon: '🧘', name: 'Moggallana', bless: DISCIPLE_BLESS, monk: true },
+  { icon: '🧘', name: 'Mahakassapa', bless: DISCIPLE_BLESS, monk: true },
+  { icon: '🧘', name: 'Ananda', bless: DISCIPLE_BLESS, monk: true },
+  { icon: '🧘', name: 'Anuruddha', bless: DISCIPLE_BLESS, monk: true },
+  { icon: '🧘', name: 'Upali', bless: DISCIPLE_BLESS, monk: true },
+  { icon: '🧘', name: 'Rahula', bless: DISCIPLE_BLESS, monk: true },
+  { icon: '🧘', name: 'Subhuti', bless: DISCIPLE_BLESS, monk: true },
+  { icon: '🧘', name: 'Punna', bless: DISCIPLE_BLESS, monk: true },
+  { icon: '🧘', name: 'Kaccayana', bless: DISCIPLE_BLESS, monk: true },
+];
+const respectSpots = () => {
+  const out = [];
+  for (let i = 0; i < RESPECT_COUNT; i++) {
+    let p = null;
+    for (let tries = 0; tries < 30; tries++) {
+      const c = { x: 14 + Math.random() * 72, y: 36 + Math.random() * 40 };
+      if (out.every(o => Math.hypot(o.x - c.x, (o.y - c.y) * 1.4) > 22)) { p = c; break; }
+    }
+    out.push(p || { x: 14 + Math.random() * 72, y: 36 + Math.random() * 40 });
+  }
+  return out;
+};
+const RespectLabel = ({ it }) => (
+  <span className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap font-bold text-xs rounded-full px-2 py-0.5 shadow" style={{ top: '100%', background: it.who.holy ? '#fef3c7' : it.who.monk ? '#fed7aa' : '#ffffff', color: '#78350f' }}>{it.who.name}</span>
+);
+// Someone who was just honoured: they bow back with joined hands and bless the child.
+const HonouredPerson = ({ it, won }) => (
+  <div className="absolute pointer-events-none" style={{ zIndex: 6, left: `${it.x}%`, top: `${it.y}%`, transform: 'translate(-50%,-50%)' }}>
+    <span className="block select-none" style={{ fontSize: RESPECT_SIZE, lineHeight: 1, animation: 'respectBow 1.4s ease-in-out both' }}>{it.who.icon}</span>
+    <RespectLabel it={it} />
+    <div className="absolute left-1/2 -translate-x-1/2 select-none" style={{ top: `calc(${RESPECT_SIZE} * -0.6)`, fontSize: 'clamp(28px, 5.5vmin, 48px)', animation: 'respectHands 1.2s ease-out forwards' }}>🙏</div>
+    <div className="absolute left-1/2 -translate-x-1/2 text-center whitespace-nowrap" style={{ top: `calc(${RESPECT_SIZE} / -2 - 3.4rem)`, animation: 'respectBless 2.2s ease-out forwards' }}>
+      <div className="bg-white text-amber-900 font-bold text-sm rounded-full px-3 py-1 shadow">{it.who.bless}</div>
+      {won > 0 && <div className="font-black text-yellow-600 drop-shadow">+{won} 🪙</div>}
+    </div>
+  </div>
+);
+export const PayRespectGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
+  const [items] = useState(() => {
+    const who = [...RESPECT_WHO].sort(() => Math.random() - 0.5).slice(0, RESPECT_COUNT);
+    return respectSpots().map((p, i) => ({ id: i, x: p.x, y: p.y, who: who[i] }));
+  });
+  const [state, setState] = useState(() => Array(RESPECT_COUNT).fill('waiting')); // waiting | shown | honoured | gone
+  const [won, setWon] = useState(() => Array(RESPECT_COUNT).fill(0));
+  const [finished, setFinished] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const total = won.reduce((a, b) => a + b, 0);
+  const honoured = state.filter(v => v === 'honoured').length;
+  const soundRef = useRef(null);
+
+  useEffect(() => {
+    const timers = [];
+    items.forEach((it) => {
+      const start = RESPECT_FIRST_MS + it.id * RESPECT_EVERY_MS;
+      timers.push(setTimeout(() => setState(st => st.map((v, i) => (i === it.id && v === 'waiting' ? 'shown' : v))), start));
+      timers.push(setTimeout(() => setState(st => st.map((v, i) => (i === it.id && v === 'shown' ? 'gone' : v))), start + RESPECT_VISIBLE_MS));
+    });
+    return () => timers.forEach(clearTimeout);
+  }, [items]);
+  useEffect(() => {
+    if (finished || !state.every(v => v === 'honoured' || v === 'gone')) return undefined;
+    const t = setTimeout(() => setFinished(true), 1800); // let the last blessing finish
+    return () => clearTimeout(t);
+  }, [state, finished]);
+
+  const payRespect = (id) => {
+    if (state[id] !== 'shown') return;
+    const coins = Math.max(0, Math.min(2 + Math.floor(Math.random() * 2), coinsLeft - total)); // 2 or 3, never past the lesson's limit
+    setState(st => st.map((v, i) => (i === id ? 'honoured' : v)));
+    setWon(w => w.map((v, i) => (i === id ? coins : v)));
+    playCoinSound(soundRef);
+  };
+
+  return (
+    <div className="relative overflow-hidden text-white h-screen" style={{ height: '100dvh', minHeight: 420, background: 'linear-gradient(180deg,#fde68a 0%,#fff7ed 40%,#fed7aa 40%,#fdba74 100%)' }}>
+      <style>{`
+        @keyframes respectPop { 0% { transform: translate(-50%,-50%) scale(.3); opacity: 0 } 100% { transform: translate(-50%,-50%) scale(1); opacity: 1 } }
+        @keyframes respectBow { 0%,100% { transform: rotate(0deg) } 30%,60% { transform: rotate(14deg) translateY(4px) } }
+        @keyframes respectHands { 0% { transform: translate(-50%,10px) scale(.6); opacity: 0 } 30% { opacity: 1 } 100% { transform: translate(-50%,-16px) scale(1.2); opacity: 0 } }
+        @keyframes respectBless { 0% { transform: translateY(0); opacity: 0 } 15% { opacity: 1 } 100% { transform: translateY(-46px); opacity: 0 } }
+      `}</style>
+      <div className="absolute top-0 inset-x-0 flex items-center justify-between gap-2 px-3 py-3 z-10">
+        <div className="bg-white/80 text-amber-900 font-bold text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 ml-12 sm:ml-16 min-w-0 truncate">🙏 Pay respect</div>
+        <div className="bg-yellow-300 text-yellow-900 font-black text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 shadow whitespace-nowrap flex-shrink-0">🪙 {total}{coinsLeft <= 0 ? ' (limit reached)' : ''}</div>
+      </div>
+      <div className="absolute pointer-events-none" style={{ right: '8%', top: '10%', fontSize: 'clamp(40px, 9vmin, 80px)' }}>☀️</div>
+      <div className="absolute pointer-events-none" style={{ left: '6%', top: '14%', fontSize: 'clamp(30px, 7vmin, 56px)' }}>🪷</div>
+      {honoured > 0 && <div className="absolute pointer-events-none bg-white text-amber-700 font-black text-sm rounded-full px-3 py-1 shadow" style={{ left: '4%', bottom: '3%' }}>🙏 {honoured}</div>}
+      {items.map((it, i) => {
+        const st = state[i];
+        if (st === 'waiting' || st === 'gone') return null;
+        if (st === 'honoured') return <HonouredPerson key={it.id} it={it} won={won[i]} />;
+        return (
+          <button key={it.id} onClick={() => payRespect(it.id)} aria-label={`Pay respect to ${it.who.name}`} className="absolute" style={{ left: `${it.x}%`, top: `${it.y}%`, width: RESPECT_SIZE, height: RESPECT_SIZE, transform: 'translate(-50%,-50%)', animation: 'respectPop .35s ease-out', zIndex: 5 }}>
+            <span className="block select-none" style={{ fontSize: RESPECT_SIZE, lineHeight: 1 }}>{it.who.icon}</span>
+            <RespectLabel it={it} />
+          </button>
+        );
+      })}
+      {finished && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20 px-4">
+          <div className="bg-white text-gray-900 rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
+            <div className="text-5xl mb-2">{honoured > 0 ? '🙏' : '🌤️'}</div>
+            <h2 className="text-2xl font-extrabold mb-1">{honoured > 0 ? `You paid respect ${honoured} time${honoured === 1 ? '' : 's'}!` : 'Nice try!'}</h2>
+            <p className="text-sm text-gray-600 mb-2">{honoured > 0 ? 'Respect and gratitude bring happiness.' : 'Be quick, they are waiting.'}</p>
+            <p className="text-lg font-bold text-yellow-600 mb-4">{total > 0 ? `🪙 +${total} coins for your Shrine Room wallet` : (coinsLeft <= 0 ? 'You have already earned all the coins for this lesson. Great job!' : 'No coins this time.')}</p>
+            <GameButton disabled={leaving} onClick={() => { setLeaving(true); onDone(total); }} className="bg-amber-500 hover:bg-amber-600 text-white w-full text-xl">Continue →</GameButton>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------------------------------------------
 // The games, in the order they are handed out. A lesson always gets the same game (so a retake feels familiar and the
 // coin cap stays one per lesson), but neighbouring lessons get different ones, so the break does not become boring.
 // To add a game: write it above with the same two props and put it in this list.
-export const QUIZ_BREAK_GAMES = [BirdRescueGame, FlowerOfferingGame, LitterPickingGame, AnimalRescueGame, WoodcutterAxeGame, AntGatheringGame, WaterAnimalsGame, HelpFriendsGame];
+export const QUIZ_BREAK_GAMES = [BirdRescueGame, FlowerOfferingGame, LitterPickingGame, AnimalRescueGame, WoodcutterAxeGame, AntGatheringGame, WaterAnimalsGame, HelpFriendsGame, PayRespectGame];
 const hashOf = (s) => { let h = 0; String(s ?? '').split('').forEach(ch => { h = (h * 31 + ch.charCodeAt(0)) >>> 0; }); return h; };
 export const quizBreakGameFor = (lessonId) => QUIZ_BREAK_GAMES[hashOf(lessonId) % QUIZ_BREAK_GAMES.length];
 export const QuizBreakGame = ({ lessonId, ...rest }) => {
