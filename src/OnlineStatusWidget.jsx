@@ -54,9 +54,10 @@ export const loadRosterSnapshot = (rosterPath) => {
   return rosterSnapshotCache.get(rosterPath);
 };
 
-export function useOnlineRoster(rosterPath, filterDocs, lastSeenField = 'lastSeen', isTeacherMode = false, rankField = null, sortField = null) {
+export function useOnlineRoster(rosterPath, filterDocs, lastSeenField = 'lastSeen', isTeacherMode = false, rankField = null, sortField = null, listAllActive = false) {
   const liveWatchOn = useLiveWatch();
   const [rosterDocs, setRosterDocs] = useState([]);
+  const [fromFile, setFromFile] = useState(false);   // the list came from the weekly file (not from the live roster)
   const [nowTick, setNowTick] = useState(Date.now());
 
   useEffect(() => {
@@ -74,7 +75,7 @@ export function useOnlineRoster(rosterPath, filterDocs, lastSeenField = 'lastSee
     else {
       loadRosterSnapshot(rosterPath).then(docs => {
         if (cancelled) return;
-        if (docs) setRosterDocs(docs); else readLive();
+        if (docs) { setRosterDocs(docs); setFromFile(true); } else readLive();
       });
     }
     return () => { cancelled = true; unsub(); };
@@ -96,8 +97,10 @@ export function useOnlineRoster(rosterPath, filterDocs, lastSeenField = 'lastSee
     };
   });
 
+  // listAllActive: the weekly file already holds exactly the students who are still active (enrolled) in Tutoring, so every row of
+  // it is listed, whether or not they opened the app this week; only a student made inactive drops out (at the next weekly refresh).
   const weeklyRosterList = roster
-    .filter(s => s._isActiveThisWeek)
+    .filter(s => (listAllActive && fromFile) || s._isActiveThisWeek)
     .sort((a, b) => {
       // sortField (e.g. 'lessonsDone'): the most first, whenever the rows carry it (the weekly file does)
       if (sortField && (a[sortField] || 0) !== (b[sortField] || 0)) return (b[sortField] || 0) - (a[sortField] || 0);
@@ -165,9 +168,11 @@ export default function OnlineStatusWidget({
   onNameTap = null,
   // true: when a student opens the list it scrolls to their own name and marks it (a yellow row with a "You" tag)
   highlightSelf = false,
+  // true: list every student the weekly file holds (the still-active students of this app), not only those seen in the last 7 days
+  listAllActive = false,
 }) {
   const liveWatchOn = useLiveWatch();
-  const { weeklyRosterList, onlineCount, warningCount: rawWarningCount, rankedAll } = useOnlineRoster(rosterPath, filterDocs, lastSeenField, isTeacherMode, rankField, sortField);
+  const { weeklyRosterList, onlineCount, warningCount: rawWarningCount, rankedAll } = useOnlineRoster(rosterPath, filterDocs, lastSeenField, isTeacherMode, rankField, sortField, listAllActive);
   const shownList = rankedAll || weeklyRosterList;
   const warningCount = showInactiveWarning ? rawWarningCount : 0;
   const [showPanel, setShowPanel] = useState(false);
@@ -242,7 +247,7 @@ export default function OnlineStatusWidget({
               <h2 className="text-xl font-bold text-gray-800">{panelTitle} {onlineCount > 0 && <span className="text-emerald-600">({onlineCount} online)</span>}</h2>
               <button onClick={() => setShowPanel(false)} className="w-9 h-9 flex-shrink-0 flex items-center justify-center rounded-full bg-red-600 hover:bg-red-700 text-white" aria-label="Close"><X size={20} /></button>
             </div>
-            <p className="text-xs text-gray-400 mb-3">{rankedAll ? 'Everyone, the most first (updated weekly).' : 'Showing everyone active in the last 7 days.'}</p>
+            <p className="text-xs text-gray-400 mb-3">{rankedAll ? 'Everyone, the most first (updated weekly).' : (listAllActive && weeklyRosterList.length ? 'Showing every active student.' : 'Showing everyone active in the last 7 days.')}</p>
             {panelNote && <p className="text-sm font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg p-2 mb-3">{panelNote}</p>}
             <div className="space-y-2">
               {shownList.map((s, idx) => {

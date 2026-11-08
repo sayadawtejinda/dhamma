@@ -3928,6 +3928,7 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
             sortField="lessonsDone"
             panelNote="Lessons finished, the most first (updated weekly)."
             weeklyLabel={(n) => <>👥 {n} active students</>}
+            listAllActive
           />
         ) : userName ? (
           <OnlineStatusWidget
@@ -3942,6 +3943,7 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
             panelNote="Lessons finished, the most first (updated weekly)."
             weeklyLabel={(n) => <>👥 {n} active students</>}
             highlightSelf
+            listAllActive
           />
         ) : null
       )}

@@ -1616,6 +1616,7 @@ export default function AbhidhammaApp({ entryRequest, onExit, isActive }) {
           panelNote="Lessons finished, the most first (updated weekly)."
           weeklyLabel={(n) => <>👥 {n} active students</>}
           highlightSelf
+          listAllActive
           renderActivity={s=>(
             s.lessonsDone!=null
               ? <span className="text-gray-600 font-semibold">{s.lessonsDone} lessons done</span>

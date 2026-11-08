@@ -524,7 +524,9 @@ async function main() {
   for (const target of rosterTargets) {
     try {
       const snap = await getDocs(collection(db, target.path));
-      let docs = snap.docs.filter(d => msOf(d.data()[target.field]) > rosterCutoff).map(d => ({ id: d.id, ...plain(d.data()) }));
+      // the three lessons lists keep every student who is still active in Tutoring (however long ago they last opened the app);
+      // the other apps' pills only need the last 14 days
+      let docs = snap.docs.filter(d => target.lessons || msOf(d.data()[target.field]) > rosterCutoff).map(d => ({ id: d.id, ...plain(d.data()) }));
       if (target.lessons) {
         const ranked = rankRoster(target.lessons, docs.filter(target.keep), lessonCtx, target.nameOf, d => msOf(d[target.field]));
         docs = ranked.list;
