@@ -182,8 +182,7 @@ export default function PetApp({ entryRequest, onExit }) {
     <div className="min-h-screen bg-gradient-to-b from-sky-100 via-emerald-50 to-amber-50 pb-16">
       <style>{APP_CSS + PET_SPRITE_CSS}</style>
       <div className="sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-emerald-200 shadow-sm">
-        <div className="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
-          <button onClick={onExit} className="px-3 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 font-bold text-gray-700">← Back</button>
+        <div className="max-w-3xl mx-auto pl-16 pr-4 py-3 flex items-center gap-3">
           <h1 className="flex-1 text-xl sm:text-2xl font-extrabold text-emerald-700">🐾 Pets</h1>
           <div className="px-3 py-2 rounded-full bg-orange-100 border border-orange-300 font-extrabold text-orange-700 shadow-sm" title="All the pet food you have (meals)">🍖 {totalMeals}</div>
           <div className="px-4 py-2 rounded-full bg-amber-100 border border-amber-300 font-extrabold text-amber-700 shadow-sm" title="Your Shrine Room coins">🪙 {formatCoins(coins)}</div>

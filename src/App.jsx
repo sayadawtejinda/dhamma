@@ -1018,6 +1018,15 @@ export default function App() {
 
         {activeApp === 'pets' && (
           <div>
+            <div className="fixed top-3 left-3 z-[9999]">
+              <button
+                onClick={closePets}
+                className="w-12 h-12 flex items-center justify-center bg-gray-800 text-white rounded-full shadow-lg text-2xl hover:bg-gray-900"
+                aria-label="Back to Tutoring Dashboard"
+              >
+                🏡
+              </button>
+            </div>
             <PetApp entryRequest={petRequest} onExit={closePets} />
           </div>
         )}
