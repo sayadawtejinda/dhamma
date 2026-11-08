@@ -557,10 +557,184 @@ export const AnimalRescueGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
 };
 
 // ---------------------------------------------------------------------------------------------------------------
+// Game 5: the honest woodcutter (contentment). Each round an iron, a gold and a silver axe fall from the sky. Only the plain iron
+// axe is the right one: tap it for 2 or 3 coins and the next round comes. Tap the gold or silver one (greed) and every axe
+// vanishes -- the game ends with the coins won so far. Seven rounds; pick the iron axe all seven times and the river spirit
+// gives all three axes (the story's ending) plus a bonus of 5 coins. Coins never go past the lesson's limit.
+const AXE_ROUNDS = 7;
+const AXE_FIRST_MS = 800;
+const AXE_FALL_MS = 3800;
+const AXE_NEXT_MS = 900;
+const AXE_BONUS = 5;
+const AXE_SIZE = 'clamp(60px, 13vmin, 104px)';
+const AXE_COLORS = { iron: ['#6b7280', '#374151'], gold: ['#facc15', '#a16207'], silver: ['#f1f5f9', '#64748b'] };
+const AXE_THANKS = ['Content with iron!', 'Honest and happy!', 'Well chosen!', 'Simple is enough!'];
+const AxeIcon = ({ kind, size = AXE_SIZE }) => {
+  const [fill, edge] = AXE_COLORS[kind];
+  return (
+    <svg viewBox="0 0 48 48" aria-hidden="true" style={{ width: size, height: size, display: 'block', filter: kind === 'iron' ? 'none' : 'drop-shadow(0 0 5px rgba(255,255,255,.9))' }}>
+      <rect x="22" y="8" width="5" height="36" rx="2" fill="#92400e" stroke="#78350f" strokeWidth="1.2" transform="rotate(-28 24 26)" />
+      <path d="M8 8 Q20 3 30 12 L33 21 Q22 24 12 20 Z" fill={fill} stroke={edge} strokeWidth="1.6" strokeLinejoin="round" transform="translate(-1 -1)" />
+      {kind !== 'iron' && <path d="M13 11 Q19 8 25 12" stroke="#fff" strokeWidth="1.6" fill="none" strokeLinecap="round" opacity=".9" />}
+    </svg>
+  );
+};
+const AXE_KINDS = ['iron', 'gold', 'silver'];
+const axeRound = () => {
+  const kinds = [...AXE_KINDS].sort(() => Math.random() - 0.5);
+  const xs = [20, 50, 80].map(x => x + (Math.random() - 0.5) * 8);
+  return kinds.map((kind, i) => ({ kind, x: xs[i] }));
+};
+// The iron axe that was just chosen: it starts where it was tapped and flies up to the row of axes already collected.
+const ChosenAxe = ({ from, thanks, won, target, stageRef }) => {
+  const [go, setGo] = useState(false);
+  useEffect(() => { const r = requestAnimationFrame(() => requestAnimationFrame(() => setGo(true))); return () => cancelAnimationFrame(r); }, []);
+  const st = stageRef.current;
+  const w = st ? st.clientWidth : 0, h = st ? st.clientHeight : 0;
+  return (
+    <div className="absolute pointer-events-none" style={{ zIndex: 6, left: go ? w * target.x / 100 : from.x, top: go ? h * target.y / 100 : from.y, opacity: go ? 0 : 1, transform: `translate(-50%,-50%) scale(${go ? 0.4 : 1})`, transition: 'left .9s ease-in-out, top .9s ease-in-out, opacity .4s .6s, transform .9s' }}>
+      <AxeIcon kind="iron" />
+      <div className="absolute left-1/2 -translate-x-1/2 text-center whitespace-nowrap" style={{ top: `calc(${AXE_SIZE} * -0.5 - 3rem)`, animation: 'axeThanks 1.8s ease-out forwards' }}>
+        <div className="bg-white text-emerald-900 font-bold text-sm rounded-full px-3 py-1 shadow">{thanks}</div>
+        {won > 0 && <div className="font-black text-yellow-600 drop-shadow">+{won} 🪙</div>}
+      </div>
+    </div>
+  );
+};
+export const WoodcutterAxeGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
+  const [rounds] = useState(() => Array.from({ length: AXE_ROUNDS }, axeRound));
+  const [round, setRound] = useState(0);
+  const [phase, setPhase] = useState('waiting');   // waiting | falling | picked | missed | greed
+  const [picks, setPicks] = useState(0);
+  const [won, setWon] = useState(0);
+  const [from, setFrom] = useState(null);          // px position where the iron axe was tapped
+  const [thanks, setThanks] = useState('');
+  const [lastWon, setLastWon] = useState(0);
+  const [finished, setFinished] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const soundRef = useRef(null);
+  const stageRef = useRef(null);
+  const axeRefs = useRef([]);
+
+  // each round: a short pause, then the three axes fall; if none is taken they land in the river and the next round follows
+  useEffect(() => {
+    setPhase('waiting');
+    const t = setTimeout(() => setPhase('falling'), round === 0 ? AXE_FIRST_MS : 300);
+    return () => clearTimeout(t);
+  }, [round]);
+  useEffect(() => {
+    if (phase !== 'falling') return undefined;
+    const t = setTimeout(() => setPhase(p => (p === 'falling' ? 'missed' : p)), AXE_FALL_MS + 100);
+    return () => clearTimeout(t);
+  }, [phase, round]);
+  useEffect(() => {
+    if (phase === 'picked' || phase === 'missed') {
+      const t = setTimeout(() => { if (round + 1 < AXE_ROUNDS) setRound(r => r + 1); else setFinished(true); }, phase === 'picked' ? AXE_NEXT_MS + 400 : AXE_NEXT_MS);
+      return () => clearTimeout(t);
+    }
+    if (phase === 'greed') {
+      const t = setTimeout(() => setFinished(true), 2200);
+      return () => clearTimeout(t);
+    }
+    return undefined;
+  }, [phase, round]);
+
+  const allSeven = picks === AXE_ROUNDS;
+  const bonus = allSeven ? Math.max(0, Math.min(AXE_BONUS, coinsLeft - won)) : 0;
+  const total = won + bonus;
+
+  const take = (i) => {
+    if (phase !== 'falling') return;
+    const kind = rounds[round][i].kind;
+    if (kind !== 'iron') { setPhase('greed'); return; }
+    try {
+      const a = axeRefs.current[i].getBoundingClientRect(), s = stageRef.current.getBoundingClientRect();
+      setFrom({ x: a.left - s.left + a.width / 2, y: a.top - s.top + a.height / 2 });
+    } catch (e) { setFrom({ x: 100, y: 100 }); }
+    const coins = Math.max(0, Math.min(2 + Math.floor(Math.random() * 2), coinsLeft - won)); // 2 or 3, never past the lesson's limit
+    setWon(w => w + coins);
+    setLastWon(coins);
+    setPicks(p => p + 1);
+    setThanks(AXE_THANKS[round % AXE_THANKS.length]);
+    setPhase('picked');
+    playCoinSound(soundRef);
+  };
+
+  const TARGET = { x: 50, y: 15 };
+  return (
+    <div ref={stageRef} className="relative overflow-hidden text-white h-screen" style={{ height: '100dvh', minHeight: 420, background: 'linear-gradient(180deg,#bae6fd 0%,#e0f2fe 55%,#86efac 55%,#4ade80 80%)' }}>
+      <style>{`
+        @keyframes axeFall { 0% { top: -16%; } 100% { top: 76%; } }
+        @keyframes axeSpin { 0% { transform: rotate(-12deg) } 50% { transform: rotate(12deg) } 100% { transform: rotate(-12deg) } }
+        @keyframes axeThanks { 0% { transform: translateY(0); opacity: 0 } 15% { opacity: 1 } 100% { transform: translateY(-46px); opacity: 0 } }
+        @keyframes axePoof { 0% { transform: scale(.6); opacity: 0 } 30% { opacity: 1 } 100% { transform: scale(1.6); opacity: 0 } }
+        @keyframes riverWave { 0%,100% { transform: translateX(0) } 50% { transform: translateX(-3%) } }
+      `}</style>
+      <div className="absolute top-0 inset-x-0 flex items-center justify-between gap-2 px-3 py-3 z-10">
+        <div className="bg-white/80 text-emerald-900 font-bold text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 ml-12 sm:ml-16 min-w-0 truncate">🪓 Take only the plain iron axe</div>
+        <div className="bg-yellow-300 text-yellow-900 font-black text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 shadow whitespace-nowrap flex-shrink-0">🪙 {total}{coinsLeft <= 0 ? ' (limit reached)' : ''}</div>
+      </div>
+      {/* the axes taken so far */}
+      <div className="absolute inset-x-0 flex justify-center gap-1 pointer-events-none" style={{ top: '9%', zIndex: 4 }} aria-label={`${picks} of ${AXE_ROUNDS} iron axes`}>
+        {Array.from({ length: AXE_ROUNDS }, (_, i) => (
+          <div key={i} className="rounded-full bg-white/60 flex items-center justify-center" style={{ width: 'clamp(28px, 6vmin, 44px)', height: 'clamp(28px, 6vmin, 44px)', opacity: i < picks ? 1 : 0.4 }}>
+            <AxeIcon kind="iron" size="80%" />
+          </div>
+        ))}
+      </div>
+      {/* the woodland and the river */}
+      <div className="absolute pointer-events-none" style={{ right: '7%', top: '8%', fontSize: 'clamp(36px, 8vmin, 70px)' }}>☀️</div>
+      <div className="absolute pointer-events-none" style={{ left: '4%', top: '38%', fontSize: 'clamp(40px, 9vmin, 76px)' }}>🌲</div>
+      <div className="absolute pointer-events-none" style={{ right: '4%', top: '40%', fontSize: 'clamp(36px, 8vmin, 70px)' }}>🌲</div>
+      <div className="absolute inset-x-0 bottom-0 pointer-events-none" style={{ height: '20%', background: 'linear-gradient(180deg,#38bdf8,#0284c7)', zIndex: 1 }}>
+        <div style={{ height: 10, margin: '6px -3% 0', background: 'repeating-linear-gradient(90deg,rgba(255,255,255,.55) 0 24px,transparent 24px 48px)', borderRadius: 6, animation: 'riverWave 4s ease-in-out infinite' }} />
+      </div>
+      {phase === 'falling' && rounds[round].map((ax, i) => (
+        <div key={`${round}-${i}`} ref={el => { axeRefs.current[i] = el; }} className="absolute" style={{ left: `${ax.x}%`, top: '-16%', animation: `axeFall ${AXE_FALL_MS}ms linear forwards`, zIndex: 5 }}>
+          <button onClick={() => take(i)} aria-label={`${ax.kind} axe`} className="block" style={{ width: AXE_SIZE, height: AXE_SIZE, marginLeft: `calc(${AXE_SIZE} / -2)`, marginTop: `calc(${AXE_SIZE} / -2)` }}>
+            <div style={{ animation: 'axeSpin 1.2s ease-in-out infinite' }}><AxeIcon kind={ax.kind} /></div>
+          </button>
+        </div>
+      ))}
+      {phase === 'picked' && from && <ChosenAxe key={round} from={from} thanks={thanks} won={lastWon} target={TARGET} stageRef={stageRef} />}
+      {phase === 'greed' && (
+        <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none px-4">
+          <div className="text-center" style={{ animation: 'axeThanks 2.2s ease-out forwards' }}>
+            <div style={{ fontSize: 'clamp(50px, 14vmin, 110px)', animation: 'axePoof 1.4s ease-out forwards' }}>💨</div>
+            <div className="bg-white text-red-700 font-extrabold rounded-2xl px-4 py-2 shadow-lg">Oh no! Wanting more made every axe vanish!</div>
+          </div>
+        </div>
+      )}
+      {finished && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20 px-4">
+          <div className="bg-white text-gray-900 rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
+            {allSeven ? (
+              <>
+                <div className="flex justify-center gap-1 mb-2">{AXE_KINDS.map(k => <AxeIcon key={k} kind={k} size="clamp(48px, 12vmin, 72px)" />)}</div>
+                <h2 className="text-2xl font-extrabold mb-1">The river spirit gives you all three axes!</h2>
+                <p className="text-sm text-gray-600 mb-2">You were content with the iron axe seven times.</p>
+              </>
+            ) : (
+              <>
+                <div className="text-5xl mb-2">{phase === 'greed' ? '💨' : '🪓'}</div>
+                <h2 className="text-2xl font-extrabold mb-1">{picks > 0 ? `You took ${picks} iron axe${picks === 1 ? '' : 's'}!` : 'Nice try!'}</h2>
+                <p className="text-sm text-gray-600 mb-2">{phase === 'greed' ? 'Wanting the gold and silver made the axes vanish.' : 'Be happy with what you need.'}</p>
+              </>
+            )}
+            <p className="text-lg font-bold text-yellow-600 mb-4">{total > 0 ? `🪙 +${total} coins for your Shrine Room wallet` : (coinsLeft <= 0 ? 'You have already earned all the coins for this lesson. Great job!' : 'No coins this time.')}</p>
+            <GameButton disabled={leaving} onClick={() => { setLeaving(true); onDone(total); }} className="bg-emerald-500 hover:bg-emerald-600 text-white w-full text-xl">Continue →</GameButton>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------------------------------------------
 // The games, in the order they are handed out. A lesson always gets the same game (so a retake feels familiar and the
 // coin cap stays one per lesson), but neighbouring lessons get different ones, so the break does not become boring.
 // To add a game: write it above with the same two props and put it in this list.
-export const QUIZ_BREAK_GAMES = [BirdRescueGame, FlowerOfferingGame, LitterPickingGame, AnimalRescueGame];
+export const QUIZ_BREAK_GAMES = [BirdRescueGame, FlowerOfferingGame, LitterPickingGame, AnimalRescueGame, WoodcutterAxeGame];
 const hashOf = (s) => { let h = 0; String(s ?? '').split('').forEach(ch => { h = (h * 31 + ch.charCodeAt(0)) >>> 0; }); return h; };
 export const quizBreakGameFor = (lessonId) => QUIZ_BREAK_GAMES[hashOf(lessonId) % QUIZ_BREAK_GAMES.length];
 export const QuizBreakGame = ({ lessonId, ...rest }) => {
