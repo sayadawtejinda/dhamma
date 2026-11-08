@@ -1105,7 +1105,7 @@ export const HelpFriendsGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
 
 // ---------------------------------------------------------------------------------------------------------------
 // Game 9: paying respect (gratitude and reverence). Those we respect appear one by one -- grandparents, parents, teachers, the
-// Buddha, the Dhamma, the Sangha and the Ten Great Disciples. Tap one to bow to them with joined hands: they bless you back --
+// Buddha, the Dhamma, the Sangha and the rest of the ten most respected (Paccekabuddha, Great Disciples, Arahants, Elders, Dhamma teachers, Benefactors). Tap one to bow to them with joined hands: they bless you back --
 // 2 or 3 coins. Someone not honoured in time just waits for another day (no coins). Seven of them per game, picked at random,
 // same timing and coins as the birds.
 const RESPECT_COUNT = 7;
@@ -1124,16 +1124,12 @@ const RESPECT_WHO = [
   { icon: '🧘', name: 'Buddha', bless: 'May you be free from suffering!', holy: true },
   { icon: '☸️', name: 'Dhamma', bless: 'May you walk the path of peace!', holy: true },
   { icon: '🪷', name: 'Sangha', bless: 'May you be peaceful and happy!', holy: true },
-  { icon: '🧘', name: 'Sariputta', bless: DISCIPLE_BLESS, monk: true },
-  { icon: '🧘', name: 'Moggallana', bless: DISCIPLE_BLESS, monk: true },
-  { icon: '🧘', name: 'Mahakassapa', bless: DISCIPLE_BLESS, monk: true },
-  { icon: '🧘', name: 'Ananda', bless: DISCIPLE_BLESS, monk: true },
-  { icon: '🧘', name: 'Anuruddha', bless: DISCIPLE_BLESS, monk: true },
-  { icon: '🧘', name: 'Upali', bless: DISCIPLE_BLESS, monk: true },
-  { icon: '🧘', name: 'Rahula', bless: DISCIPLE_BLESS, monk: true },
-  { icon: '🧘', name: 'Subhuti', bless: DISCIPLE_BLESS, monk: true },
-  { icon: '🧘', name: 'Punna', bless: DISCIPLE_BLESS, monk: true },
-  { icon: '🧘', name: 'Kaccayana', bless: DISCIPLE_BLESS, monk: true },
+  { icon: '🧘', name: 'Paccekabuddha', bless: 'May you be free from suffering!', holy: true },
+  { icon: '🧘', name: 'Great Disciples', bless: DISCIPLE_BLESS, monk: true },
+  { icon: '🧘', name: 'Arahants', bless: DISCIPLE_BLESS, monk: true },
+  { icon: '🧓', name: 'Elder', bless: 'May you be healthy and happy!' },
+  { icon: '📖', name: 'Dhamma Teacher', bless: 'May you walk the path of peace!' },
+  { icon: '🎁', name: 'Benefactor', bless: 'May goodness come back to you!' },
 ];
 const respectSpots = () => {
   const out = [];
