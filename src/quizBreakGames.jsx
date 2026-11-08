@@ -731,10 +731,151 @@ export const WoodcutterAxeGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
 };
 
 // ---------------------------------------------------------------------------------------------------------------
+// Game 6: the diligent ant (effort). While the other little creatures play, the ant gathers food. Food appears on the ground; tap
+// it and the ant runs to it and carries it home to the nest -- 2 or 3 coins. Food not gathered in time is simply left (no coins).
+// Seven pieces in all, same timing and coins as the birds.
+const ANT_FOODS = 7;
+const ANT_FIRST_MS = 800;
+const ANT_EVERY_MS = 1500;
+const ANT_VISIBLE_MS = 3400;
+const ANT_FOOD_SIZE = 'clamp(44px, 9vmin, 76px)';
+const ANT_ICONS = ['🍞', '🍎', '🍇', '🌽', '🍯', '🍉', '🥕'];
+const ANT_THANKS = ['Hard worker!', 'Busy ant!', 'Food for everyone!', 'Well done, little ant!'];
+const NEST = { x: 10, y: 78 };
+const antSpots = () => {
+  const out = [];
+  for (let i = 0; i < ANT_FOODS; i++) {
+    let p = null;
+    for (let tries = 0; tries < 30; tries++) {
+      const c = { x: 24 + Math.random() * 64, y: 58 + Math.random() * 26 };
+      if (out.every(o => Math.hypot(o.x - c.x, (o.y - c.y) * 1.4) > 18)) { p = c; break; }
+    }
+    out.push(p || { x: 24 + Math.random() * 64, y: 58 + Math.random() * 26 });
+  }
+  return out;
+};
+const PLAYMATES = [
+  { e: '🦗', x: 30, y: 36, anim: 'antHop 1.1s ease-in-out infinite' },
+  { e: '🦋', x: 62, y: 24, anim: 'antFlutter 3.2s ease-in-out infinite' },
+  { e: '🐞', x: 80, y: 42, anim: 'antHop 1.6s ease-in-out .3s infinite' },
+  { e: '🐛', x: 46, y: 46, anim: 'antWiggle 1.4s ease-in-out infinite' },
+];
+// A piece of food that was just gathered: it rides to the nest and fades.
+const CarriedFood = ({ it, won }) => {
+  const [go, setGo] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setGo(true), 750); return () => clearTimeout(t); }, []);
+  return (
+    <div className="absolute pointer-events-none" style={{ zIndex: 6, left: `${go ? NEST.x : it.x}%`, top: `${go ? NEST.y : it.y}%`, opacity: go ? 0 : 1, transform: `translate(-50%,-50%) scale(${go ? 0.5 : 1})`, transition: 'left .8s ease-in-out, top .8s ease-in-out, opacity .4s .5s, transform .8s' }}>
+      <span className="block select-none" style={{ fontSize: ANT_FOOD_SIZE, lineHeight: 1 }}>{it.icon}</span>
+      <div className="absolute left-1/2 -translate-x-1/2 text-center whitespace-nowrap" style={{ top: `calc(${ANT_FOOD_SIZE} / -2 - 3.2rem)`, animation: 'antThanks 1.8s ease-out forwards' }}>
+        <div className="bg-white text-emerald-900 font-bold text-sm rounded-full px-3 py-1 shadow">{it.thanks}</div>
+        {won > 0 && <div className="font-black text-yellow-600 drop-shadow">+{won} 🪙</div>}
+      </div>
+    </div>
+  );
+};
+export const AntGatheringGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
+  const [items] = useState(() => {
+    const icons = [...ANT_ICONS].sort(() => Math.random() - 0.5);
+    return antSpots().map((p, i) => ({ id: i, x: p.x, y: p.y, icon: icons[i % icons.length], thanks: ANT_THANKS[i % ANT_THANKS.length] }));
+  });
+  const [state, setState] = useState(() => Array(ANT_FOODS).fill('waiting')); // waiting | shown | gathered | missed
+  const [won, setWon] = useState(() => Array(ANT_FOODS).fill(0));
+  const [ant, setAnt] = useState({ ...NEST, flip: false });
+  const [finished, setFinished] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const total = won.reduce((a, b) => a + b, 0);
+  const gathered = state.filter(v => v === 'gathered').length;
+  const soundRef = useRef(null);
+  const timersRef = useRef([]);
+
+  useEffect(() => {
+    const timers = [];
+    items.forEach((it) => {
+      const start = ANT_FIRST_MS + it.id * ANT_EVERY_MS;
+      timers.push(setTimeout(() => setState(st => st.map((v, i) => (i === it.id && v === 'waiting' ? 'shown' : v))), start));
+      timers.push(setTimeout(() => setState(st => st.map((v, i) => (i === it.id && v === 'shown' ? 'missed' : v))), start + ANT_VISIBLE_MS));
+    });
+    timersRef.current = timers;
+    return () => { timers.forEach(clearTimeout); timersRef.current.forEach(clearTimeout); };
+  }, [items]);
+  useEffect(() => {
+    if (finished || !state.every(v => v === 'gathered' || v === 'missed')) return undefined;
+    const t = setTimeout(() => setFinished(true), 1500); // let the ant bring the last piece home
+    return () => clearTimeout(t);
+  }, [state, finished]);
+
+  const gather = (id) => {
+    if (state[id] !== 'shown') return;
+    const it = items[id];
+    const coins = Math.max(0, Math.min(2 + Math.floor(Math.random() * 2), coinsLeft - total)); // 2 or 3, never past the lesson's limit
+    setState(st => st.map((v, i) => (i === id ? 'gathered' : v)));
+    setWon(w => w.map((v, i) => (i === id ? coins : v)));
+    playCoinSound(soundRef);
+    setAnt(a => ({ x: it.x, y: it.y, flip: it.x < a.x }));              // run to the food ...
+    timersRef.current.push(setTimeout(() => setAnt({ ...NEST, flip: true }), 750)); // ... and carry it home
+    timersRef.current.push(setTimeout(() => setAnt(a => ({ ...a, flip: false })), 1600));
+  };
+
+  return (
+    <div className="relative overflow-hidden text-white h-screen" style={{ height: '100dvh', minHeight: 420, background: 'linear-gradient(180deg,#bae6fd 0%,#e0f2fe 40%,#bbf7d0 40%,#86efac 70%,#a16207 100%)' }}>
+      <style>{`
+        @keyframes antHop { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-18px) } }
+        @keyframes antFlutter { 0%,100% { transform: translate(0,0) } 33% { transform: translate(24px,-12px) } 66% { transform: translate(-18px,10px) } }
+        @keyframes antWiggle { 0%,100% { transform: rotate(-8deg) } 50% { transform: rotate(8deg) } }
+        @keyframes antPop { 0% { transform: translate(-50%,-50%) scale(.3); opacity: 0 } 100% { transform: translate(-50%,-50%) scale(1); opacity: 1 } }
+        @keyframes antThanks { 0% { transform: translateY(0); opacity: 0 } 15% { opacity: 1 } 100% { transform: translateY(-46px); opacity: 0 } }
+        @keyframes antLegs { 0%,100% { transform: rotate(-6deg) } 50% { transform: rotate(6deg) } }
+      `}</style>
+      <div className="absolute top-0 inset-x-0 flex items-center justify-between gap-2 px-3 py-3 z-10">
+        <div className="bg-white/80 text-emerald-900 font-bold text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 ml-12 sm:ml-16 min-w-0 truncate">🐜 Help the ant gather food</div>
+        <div className="bg-yellow-300 text-yellow-900 font-black text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 shadow whitespace-nowrap flex-shrink-0">🪙 {total}{coinsLeft <= 0 ? ' (limit reached)' : ''}</div>
+      </div>
+      <div className="absolute pointer-events-none" style={{ right: '8%', top: '10%', fontSize: 'clamp(40px, 9vmin, 80px)' }}>☀️</div>
+      <div className="absolute pointer-events-none" style={{ left: '6%', top: '22%', fontSize: 'clamp(36px, 8vmin, 70px)' }}>🌳</div>
+      {/* the others are playing */}
+      {PLAYMATES.map((p, i) => (
+        <div key={i} className="absolute pointer-events-none select-none" style={{ left: `${p.x}%`, top: `${p.y}%`, fontSize: 'clamp(28px, 6vmin, 52px)', lineHeight: 1, animation: p.anim, zIndex: 2 }}>{p.e}</div>
+      ))}
+      {/* the nest: a little mound, with a counter */}
+      <div className="absolute pointer-events-none" style={{ left: `${NEST.x}%`, top: `${NEST.y + 4}%`, transform: 'translate(-50%,-50%)', zIndex: 3 }}>
+        <div style={{ width: 'clamp(70px, 16vmin, 130px)', height: 'clamp(38px, 8vmin, 66px)', borderRadius: '50% 50% 8% 8%', background: 'radial-gradient(circle at 50% 70%,#451a03 0 16%,#a16207 17%)' }} />
+        {gathered > 0 && <div className="absolute -top-3 -right-2 bg-white text-emerald-700 font-black text-sm rounded-full w-7 h-7 flex items-center justify-center shadow">{gathered}</div>}
+      </div>
+      {items.map((it, i) => {
+        const st = state[i];
+        if (st === 'waiting' || st === 'missed') return null;
+        if (st === 'gathered') return <CarriedFood key={it.id} it={it} won={won[i]} />;
+        return (
+          <button key={it.id} onClick={() => gather(it.id)} aria-label="Gather the food" className="absolute" style={{ left: `${it.x}%`, top: `${it.y}%`, width: ANT_FOOD_SIZE, height: ANT_FOOD_SIZE, transform: 'translate(-50%,-50%)', animation: 'antPop .35s ease-out', zIndex: 5 }}>
+            <span className="block select-none" style={{ fontSize: ANT_FOOD_SIZE, lineHeight: 1 }}>{it.icon}</span>
+          </button>
+        );
+      })}
+      {/* the ant */}
+      <div className="absolute pointer-events-none" style={{ left: `${ant.x}%`, top: `${ant.y}%`, zIndex: 7, transition: 'left .7s ease-in-out, top .7s ease-in-out', transform: 'translate(-50%,-50%)' }}>
+        <span className="block select-none" style={{ fontSize: 'clamp(34px, 7vmin, 60px)', lineHeight: 1, transform: ant.flip ? 'scaleX(-1)' : 'none', animation: 'antLegs .3s linear infinite' }}>🐜</span>
+      </div>
+      {finished && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20 px-4">
+          <div className="bg-white text-gray-900 rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
+            <div className="text-5xl mb-2">{gathered > 0 ? '🐜' : '🌤️'}</div>
+            <h2 className="text-2xl font-extrabold mb-1">{gathered > 0 ? `The ant gathered ${gathered} piece${gathered === 1 ? '' : 's'} of food!` : 'Nice try!'}</h2>
+            <p className="text-sm text-gray-600 mb-2">{gathered > 0 ? 'A little effort every day fills the nest.' : 'Be quick, the ant is waiting.'}</p>
+            <p className="text-lg font-bold text-yellow-600 mb-4">{total > 0 ? `🪙 +${total} coins for your Shrine Room wallet` : (coinsLeft <= 0 ? 'You have already earned all the coins for this lesson. Great job!' : 'No coins this time.')}</p>
+            <GameButton disabled={leaving} onClick={() => { setLeaving(true); onDone(total); }} className="bg-emerald-500 hover:bg-emerald-600 text-white w-full text-xl">Continue →</GameButton>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------------------------------------------
 // The games, in the order they are handed out. A lesson always gets the same game (so a retake feels familiar and the
 // coin cap stays one per lesson), but neighbouring lessons get different ones, so the break does not become boring.
 // To add a game: write it above with the same two props and put it in this list.
-export const QUIZ_BREAK_GAMES = [BirdRescueGame, FlowerOfferingGame, LitterPickingGame, AnimalRescueGame, WoodcutterAxeGame];
+export const QUIZ_BREAK_GAMES = [BirdRescueGame, FlowerOfferingGame, LitterPickingGame, AnimalRescueGame, WoodcutterAxeGame, AntGatheringGame];
 const hashOf = (s) => { let h = 0; String(s ?? '').split('').forEach(ch => { h = (h * 31 + ch.charCodeAt(0)) >>> 0; }); return h; };
 export const quizBreakGameFor = (lessonId) => QUIZ_BREAK_GAMES[hashOf(lessonId) % QUIZ_BREAK_GAMES.length];
 export const QuizBreakGame = ({ lessonId, ...rest }) => {
