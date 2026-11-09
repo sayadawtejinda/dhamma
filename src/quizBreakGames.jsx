@@ -1490,10 +1490,140 @@ export const ReturnLostItemsGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
 };
 
 // ---------------------------------------------------------------------------------------------------------------
+// Game 12: help mum and dad (gratitude and helping at home). Mum and dad are busy with housework, one after another. Tap them to
+// run over and lend a hand: the job gets done and they smile and thank you -- 2 or 3 coins. A parent not helped in time just carries
+// on alone (no coins). Seven jobs per game, same timing and coins as the birds.
+const HOME_COUNT = 7;
+const HOME_FIRST_MS = 800;
+const HOME_EVERY_MS = 1500;
+const HOME_VISIBLE_MS = 3400;
+const HOME_SIZE = 'clamp(54px, 11vmin, 92px)';
+const HOME_THANKS = ['Thank you, dear!', 'What a helpful child!', 'You make me so happy!', 'Now it is easy!'];
+const HOME_JOBS = [
+  { who: '👩‍🍳', tool: '🍲', name: 'Mum is cooking' },
+  { who: '👨', tool: '🧹', name: 'Dad is sweeping' },
+  { who: '👩', tool: '🧺', name: 'Mum is doing laundry' },
+  { who: '👨‍🌾', tool: '🪵', name: 'Dad is carrying wood' },
+  { who: '👩‍🌾', tool: '🪴', name: 'Mum is watering plants' },
+  { who: '👨‍🔧', tool: '🔧', name: 'Dad is fixing things' },
+  { who: '👩', tool: '🛒', name: 'Mum is carrying shopping' },
+  { who: '👨', tool: '🍽️', name: 'Dad is washing dishes' },
+  { who: '👩', tool: '🧽', name: 'Mum is cleaning' },
+  { who: '👨', tool: '🧳', name: 'Dad is carrying bags' },
+];
+const homeSpots = () => {
+  const out = [];
+  for (let i = 0; i < HOME_COUNT; i++) {
+    let p = null;
+    for (let tries = 0; tries < 30; tries++) {
+      const c = { x: 14 + Math.random() * 72, y: 40 + Math.random() * 38 };
+      if (out.every(o => Math.hypot(o.x - c.x, (o.y - c.y) * 1.4) > 22)) { p = c; break; }
+    }
+    out.push(p || { x: 14 + Math.random() * 72, y: 40 + Math.random() * 38 });
+  }
+  return out;
+};
+const HomeLabel = ({ it }) => (
+  <span className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap font-bold text-xs rounded-full px-2 py-0.5 shadow bg-white" style={{ top: '100%', color: '#78350f' }}>{it.job.name}</span>
+);
+// A parent who was just helped: the job is done, they smile and say thanks.
+const HelpedParent = ({ it, won }) => (
+  <div className="absolute pointer-events-none" style={{ zIndex: 6, left: `${it.x}%`, top: `${it.y}%`, transform: 'translate(-50%,-50%)' }}>
+    <span className="block select-none" style={{ fontSize: HOME_SIZE, lineHeight: 1, animation: 'homeHappy .6s ease-in-out .4s 3' }}>{it.job.who}</span>
+    <HomeLabel it={it} />
+    <div className="absolute left-1/2 -translate-x-1/2 select-none" style={{ top: `calc(${HOME_SIZE} * -0.6)`, fontSize: 'clamp(28px, 5.5vmin, 48px)', animation: 'homeHands 1.2s ease-out forwards' }}>🤝</div>
+    <div className="absolute left-1/2 -translate-x-1/2 text-center whitespace-nowrap" style={{ top: `calc(${HOME_SIZE} / -2 - 3.4rem)`, animation: 'homeThanks 2.2s ease-out forwards' }}>
+      <div className="bg-white text-amber-900 font-bold text-sm rounded-full px-3 py-1 shadow">✅ {it.thanks}</div>
+      {won > 0 && <div className="font-black text-yellow-600 drop-shadow">+{won} 🪙</div>}
+    </div>
+  </div>
+);
+export const HelpParentsGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
+  const [items] = useState(() => {
+    const jobs = [...HOME_JOBS].sort(() => Math.random() - 0.5).slice(0, HOME_COUNT);
+    return homeSpots().map((p, i) => ({ id: i, x: p.x, y: p.y, job: jobs[i], thanks: HOME_THANKS[i % HOME_THANKS.length] }));
+  });
+  const [state, setState] = useState(() => Array(HOME_COUNT).fill('waiting')); // waiting | busy | helped | gone
+  const [won, setWon] = useState(() => Array(HOME_COUNT).fill(0));
+  const [finished, setFinished] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const total = won.reduce((a, b) => a + b, 0);
+  const helped = state.filter(v => v === 'helped').length;
+  const soundRef = useRef(null);
+
+  useEffect(() => {
+    const timers = [];
+    items.forEach((it) => {
+      const start = HOME_FIRST_MS + it.id * HOME_EVERY_MS;
+      timers.push(setTimeout(() => setState(st => st.map((v, i) => (i === it.id && v === 'waiting' ? 'busy' : v))), start));
+      timers.push(setTimeout(() => setState(st => st.map((v, i) => (i === it.id && v === 'busy' ? 'gone' : v))), start + HOME_VISIBLE_MS));
+    });
+    return () => timers.forEach(clearTimeout);
+  }, [items]);
+  useEffect(() => {
+    if (finished || !state.every(v => v === 'helped' || v === 'gone')) return undefined;
+    const t = setTimeout(() => setFinished(true), 1800); // let the last parent finish saying thanks
+    return () => clearTimeout(t);
+  }, [state, finished]);
+
+  const help = (id) => {
+    if (state[id] !== 'busy') return;
+    const coins = Math.max(0, Math.min(2 + Math.floor(Math.random() * 2), coinsLeft - total)); // 2 or 3, never past the lesson's limit
+    setState(st => st.map((v, i) => (i === id ? 'helped' : v)));
+    setWon(w => w.map((v, i) => (i === id ? coins : v)));
+    playCoinSound(soundRef);
+  };
+
+  return (
+    <div className="relative overflow-hidden text-white h-screen" style={{ height: '100dvh', minHeight: 420, background: 'linear-gradient(180deg,#fef3c7 0%,#fffbeb 34%,#fcd9a8 34%,#e8b878 100%)' }}>
+      <style>{`
+        @keyframes homePop { 0% { transform: translate(-50%,-50%) scale(.3); opacity: 0 } 100% { transform: translate(-50%,-50%) scale(1); opacity: 1 } }
+        @keyframes homeWork { 0%,100% { transform: rotate(-10deg) } 50% { transform: rotate(10deg) } }
+        @keyframes homeBusy { 0%,100% { transform: translate(-50%,0) } 50% { transform: translate(-50%,-6px) } }
+        @keyframes homeHappy { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-14px) } }
+        @keyframes homeHands { 0% { transform: translate(-50%,10px) scale(.6); opacity: 0 } 30% { opacity: 1 } 100% { transform: translate(-50%,-16px) scale(1.2); opacity: 0 } }
+        @keyframes homeThanks { 0% { transform: translateY(0); opacity: 0 } 15% { opacity: 1 } 100% { transform: translateY(-46px); opacity: 0 } }
+      `}</style>
+      <div className="absolute top-0 inset-x-0 flex items-center justify-between gap-2 px-3 py-3 z-10">
+        <div className="bg-white/80 text-amber-900 font-bold text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 ml-12 sm:ml-16 min-w-0 truncate">🏠 Help mum and dad</div>
+        <div className="bg-yellow-300 text-yellow-900 font-black text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 shadow whitespace-nowrap flex-shrink-0">🪙 {total}{coinsLeft <= 0 ? ' (limit reached)' : ''}</div>
+      </div>
+      <div className="absolute pointer-events-none" style={{ right: '8%', top: '10%', fontSize: 'clamp(40px, 9vmin, 80px)' }}>🪟</div>
+      <div className="absolute pointer-events-none" style={{ left: '6%', top: '14%', fontSize: 'clamp(34px, 8vmin, 66px)' }}>🏠</div>
+      {helped > 0 && <div className="absolute pointer-events-none bg-white text-amber-700 font-black text-sm rounded-full px-3 py-1 shadow" style={{ left: '4%', bottom: '3%' }}>🤝 {helped}</div>}
+      {items.map((it, i) => {
+        const st = state[i];
+        if (st === 'waiting' || st === 'gone') return null;
+        if (st === 'helped') return <HelpedParent key={it.id} it={it} won={won[i]} />;
+        return (
+          <button key={it.id} onClick={() => help(it.id)} aria-label={`Help: ${it.job.name}`} className="absolute" style={{ left: `${it.x}%`, top: `${it.y}%`, width: HOME_SIZE, height: HOME_SIZE, transform: 'translate(-50%,-50%)', animation: 'homePop .35s ease-out', zIndex: 5 }}>
+            <span className="block select-none" style={{ fontSize: HOME_SIZE, lineHeight: 1 }}>{it.job.who}</span>
+            <span className="absolute select-none" style={{ right: '-28%', bottom: '4%', fontSize: 'clamp(28px, 5.5vmin, 48px)', animation: 'homeWork .8s ease-in-out infinite' }}>{it.job.tool}</span>
+            <span className="absolute left-1/2 select-none" style={{ top: '-30%', fontSize: 'clamp(20px, 4vmin, 34px)', animation: 'homeBusy 1s ease-in-out infinite' }}>💦</span>
+            <HomeLabel it={it} />
+          </button>
+        );
+      })}
+      {finished && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20 px-4">
+          <div className="bg-white text-gray-900 rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
+            <div className="text-5xl mb-2">{helped > 0 ? '🏠' : '🌤️'}</div>
+            <h2 className="text-2xl font-extrabold mb-1">{helped > 0 ? `You helped ${helped} time${helped === 1 ? '' : 's'}!` : 'Nice try!'}</h2>
+            <p className="text-sm text-gray-600 mb-2">{helped > 0 ? 'Helping our parents is a way of thanking them.' : 'Be quick, mum and dad are busy.'}</p>
+            <p className="text-lg font-bold text-yellow-600 mb-4">{total > 0 ? `🪙 +${total} coins for your Shrine Room wallet` : (coinsLeft <= 0 ? 'You have already earned all the coins for this lesson. Great job!' : 'No coins this time.')}</p>
+            <GameButton disabled={leaving} onClick={() => { setLeaving(true); onDone(total); }} className="bg-amber-500 hover:bg-amber-600 text-white w-full text-xl">Continue →</GameButton>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------------------------------------------
 // The games, in the order they are handed out. A lesson always gets the same game (so a retake feels familiar and the
 // coin cap stays one per lesson), but neighbouring lessons get different ones, so the break does not become boring.
 // To add a game: write it above with the same two props and put it in this list.
-export const QUIZ_BREAK_GAMES = [BirdRescueGame, FlowerOfferingGame, LitterPickingGame, AnimalRescueGame, WoodcutterAxeGame, AntGatheringGame, WaterAnimalsGame, HelpFriendsGame, PayRespectGame, TenGiftsGame, ReturnLostItemsGame];
+export const QUIZ_BREAK_GAMES = [BirdRescueGame, FlowerOfferingGame, LitterPickingGame, AnimalRescueGame, WoodcutterAxeGame, AntGatheringGame, WaterAnimalsGame, HelpFriendsGame, PayRespectGame, TenGiftsGame, ReturnLostItemsGame, HelpParentsGame];
 const hashOf = (s) => { let h = 0; String(s ?? '').split('').forEach(ch => { h = (h * 31 + ch.charCodeAt(0)) >>> 0; }); return h; };
 export const quizBreakGameFor = (lessonId) => QUIZ_BREAK_GAMES[hashOf(lessonId) % QUIZ_BREAK_GAMES.length];
 export const QuizBreakGame = ({ lessonId, ...rest }) => {
