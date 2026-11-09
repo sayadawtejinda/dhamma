@@ -1565,7 +1565,7 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
             const base = import.meta.env.BASE_URL + 'prepositionAudio/';
             prepClipsLoading = Promise.all(PREP_CLIPS.map(async (key) => {
                 try {
-                    const r = await fetch(base + key + '.mp3');
+                    const r = await fetch(base + key + '.wav');
                     if (!r.ok) return;
                     prepClipBuffers.set(key, await audioCtx.decodeAudioData(await r.arrayBuffer()));
                 } catch (e) { /* not added yet: stays silent */ }

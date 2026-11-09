@@ -1,7 +1,7 @@
 Preposition game (Burmese Learning Games, Part 4) -- recordings still needed
 ==========================================================================
 
-Put each recording here as an .mp3 with EXACTLY this file name (a short clip, one phrase,
+Put each recording here as a .wav (or change the loader) with EXACTLY this file name (a short clip, one phrase,
 about 1-2 seconds, no long silence at the start or end). A clip that is missing is simply
 skipped: the game still works, it just stays silent for that phrase.
 
