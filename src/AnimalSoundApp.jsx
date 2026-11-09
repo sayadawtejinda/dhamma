@@ -812,11 +812,7 @@ export default function AnimalSoundApp({ entryRequest, onExit, hideOwnOnlineBadg
             // Respect language mode for question text
             questionTextElement.textContent = displayLang === 'my' ? currentQuestion.text : currentQuestion.romanText;
             
-            if (isTranslationVisible) {
-                englishTranslationElement.textContent = currentQuestion.englishText;
-            } else {
-                englishTranslationElement.textContent = '';
-            }
+            hideTranslation(); // a new question always starts with the English hidden
 
             totalQuestionsAsked++;
             updateScoreDisplay(); // Includes race car logic
@@ -911,17 +907,27 @@ export default function AnimalSoundApp({ entryRequest, onExit, hideOwnOnlineBadg
             }
         }
         
+        // The English help is shown for only 3 seconds, then hides itself again,
+        // so students keep listening to the Burmese.
+        let translationTimer = null;
+        function hideTranslation() {
+            clearTimeout(translationTimer);
+            isTranslationVisible = false;
+            englishTranslationElement.textContent = '';
+            toggleEnglishBtn.classList.remove('bg-emerald-500', 'text-white');
+            toggleEnglishBtn.classList.add('bg-emerald-100', 'text-emerald-600');
+        }
         function toggleTranslation() {
-            isTranslationVisible = !isTranslationVisible;
-            if (isTranslationVisible && currentQuestion) {
-                englishTranslationElement.textContent = currentQuestion.englishText;
-                toggleEnglishBtn.classList.remove('bg-emerald-100', 'text-emerald-600');
-                toggleEnglishBtn.classList.add('bg-emerald-500', 'text-white');
-            } else {
-                englishTranslationElement.textContent = '';
-                toggleEnglishBtn.classList.remove('bg-emerald-500', 'text-white');
-                toggleEnglishBtn.classList.add('bg-emerald-100', 'text-emerald-600');
+            if (isTranslationVisible || !currentQuestion) {
+                hideTranslation();
+                return;
             }
+            isTranslationVisible = true;
+            englishTranslationElement.textContent = currentQuestion.englishText;
+            toggleEnglishBtn.classList.remove('bg-emerald-100', 'text-emerald-600');
+            toggleEnglishBtn.classList.add('bg-emerald-500', 'text-white');
+            clearTimeout(translationTimer);
+            translationTimer = setTimeout(hideTranslation, 3000);
         }
 
 
