@@ -11855,10 +11855,10 @@ function BadgeApprovals({ students, sessions }) {
                   <optgroup label="Dhamma Year medal from 2026 on (the Bodhi Tree's last level, with the year; the weekly job works these out at the end of each year)">
                     {STAGE_NAMES.map((n, i) => <option key={`bodhiy${i}`} value={`b:bodhi-year:${new Date().getFullYear()}:${i}`}>{new Date().getFullYear()} · {n}</option>)}
                   </optgroup>
-                  <optgroup label="Dhamma Year 2020 to 2025 (given by hand to students studying since then)">
-                    {Array.from({ length: 6 }, (_, i) => 2020 + i).flatMap(y => [
-                      <option key={`yr${y}`} value={`b:year-${y}`}>Dhamma Year {y}</option>,
-                      ...(y > 2020 ? [<option key={`yrs${y}`} value={`years:${y}`}>All years 2020 to {y}</option>] : []),
+                  <optgroup label="Dhamma Year 2005 to 2025 (given by hand; choose the first year the student studied and every later year to 2025 is given too)">
+                    {Array.from({ length: 21 }, (_, i) => 2005 + i).flatMap(y => [
+                      <option key={`yrs${y}`} value={`years:${y}`}>Dhamma Year {y} and every year after, to 2025</option>,
+                      <option key={`yr${y}`} value={`b:year-${y}`}>Dhamma Year {y} only</option>,
                     ])}
                   </optgroup>
                   <optgroup label="Top-three honours (the ceremony; the honour itself shows only while the student really holds that place)">
@@ -11873,8 +11873,8 @@ function BadgeApprovals({ students, sessions }) {
                     const [type, a, b] = manualBadge.split(':');
                     const given = st.badgesGiven || {};
                     if (type === 'years') {
-                      // every year from 2020 up to the chosen one, lowest first, the ones not given yet
-                      const ids = Array.from({ length: Number(a) - 2019 }, (_, i) => `year-${2020 + i}`).filter(id => !given[id]);
+                      // the chosen (earliest) year and every year after it up to 2025, lowest first, the ones not given yet
+                      const ids = Array.from({ length: 2025 - Number(a) + 1 }, (_, i) => `year-${Number(a) + i}`).filter(id => !given[id]);
                       if (ids.length === 0) { alert('All these years were already given to this student.'); return; }
                       await give(st, ids.map(id => ({ award: false, id })));
                       setManualBadge('');

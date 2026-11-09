@@ -191,11 +191,11 @@ export const dynamicBadge = (id) => {
   }
   // Dhammaschool: five steps in every grade (8, 16, 24, 32, 40 of its 40 chapters). 'ds-grade:GRADE-3:2' = step 2 of Grade 3;
   // the old 'ds-grade:GRADE-3' (no step) is the last step. Every grade has its own number mark and its own look for the last step.
-  // A year of studying with the teacher (from 2020): 'year-2020'. Given by the teacher by hand, one for every year; shown with the Bodhi
+  // A year of studying with the teacher (from 2005): 'year-2020'. Given by the teacher by hand, one for every year; shown with the Bodhi
   // gold yearly badges.
   if (/^year-\d{4}$/.test(id)) {
     const y = Number(id.slice(5));
-    if (y < 2019 || y > 2100) return null;
+    if (y < 2005 || y > 2100) return null;
     return { id, group: 'attend', shape: 'yearmedal', year: y, metal: 'gold', icon: '', name: `Dhamma Year ${y}`, desc: `Studying with the teacher in ${y}`, master: true };
   }
   if (id.startsWith('ds-grade:')) {
@@ -222,7 +222,7 @@ export const badgeMeta = (id) => BY_ID.get(id) || dynamicBadge(id);
 // student has (a tap opens the whole ladder), and the teacher gives a whole ladder at once, lowest first.
 export const ladderOf = (id) => {
   if (id.startsWith('bodhi-level:')) { const p = id.split(':'); return `bodhi-level:${p.length >= 3 ? p[1] : 2026}`; }
-  if (id.startsWith('bodhi-year:') || id.startsWith('year-')) return 'years'; // all the Dhamma Year medals (2020 on) are one set
+  if (id.startsWith('bodhi-year:') || id.startsWith('year-')) return 'years'; // all the Dhamma Year medals (2005 on) are one set
   if (id.startsWith('ds-grade:')) return `ds-grade:${id.split(':')[1]}`;
   if (id.startsWith('shrine-visits')) return 'shrine-visits';
   if (/^nature-\d+$/.test(id)) return 'trees';
