@@ -1660,35 +1660,33 @@ const almsSpots = () => {
   }
   return out;
 };
-// A monk drawn in SVG: shaved head, saffron robe wrapped over the left shoulder (right shoulder bare), black alms bowl held in front.
+// A monk drawn in SVG for the alms round: shaved head, saffron robe covering both shoulders, a round black alms bowl held in front.
 const MonkSvg = ({ size, mouth = false }) => (
   <svg viewBox="0 0 100 140" width={size} height={`calc(${size} * 1.4)`} style={{ display: 'block' }} aria-hidden="true">
     {/* feet */}
     <ellipse cx="40" cy="134" rx="9" ry="4" fill="#d9a77a" />
     <ellipse cx="60" cy="134" rx="9" ry="4" fill="#d9a77a" />
-    {/* the robe: lower wrap and body */}
-    <path d="M22 132 L26 60 Q50 48 74 60 L78 132 Q50 138 22 132 Z" fill="#d9731a" />
-    <path d="M30 128 Q50 134 70 128 M31 112 Q50 118 69 112 M32 96 Q50 102 68 96" stroke="#b35a10" strokeWidth="2" fill="none" />
-    {/* bare right shoulder and arm (viewer's left) */}
-    <path d="M26 60 Q34 52 44 56 L42 74 Q34 76 28 72 Z" fill="#e0ac7c" />
-    {/* robe over the left shoulder */}
-    <path d="M44 56 Q62 52 76 60 L78 84 Q60 76 44 70 Z" fill="#c2410c" />
-    <path d="M48 62 Q62 62 72 68 M48 70 Q62 70 74 77" stroke="#9a3412" strokeWidth="1.6" fill="none" />
+    {/* the robe covers both shoulders, down to the ankles */}
+    <path d="M20 132 L22 64 Q26 52 42 50 L58 50 Q74 52 78 64 L80 132 Q50 138 20 132 Z" fill="#d9731a" />
+    {/* the folded cloth across the chest */}
+    <path d="M42 50 L58 50 Q74 52 78 64 L78 84 Q58 74 36 68 Q30 58 42 50 Z" fill="#c2410c" />
+    <path d="M40 58 Q58 60 74 70 M38 66 Q58 68 76 79" stroke="#9a3412" strokeWidth="1.6" fill="none" />
+    <path d="M30 128 Q50 134 70 128 M31 114 Q50 120 69 114 M32 100 Q50 104 68 100" stroke="#b35a10" strokeWidth="2" fill="none" />
     {/* neck and head */}
-    <rect x="44" y="40" width="12" height="14" rx="4" fill="#e0ac7c" />
+    <rect x="44" y="40" width="12" height="12" rx="4" fill="#e0ac7c" />
     <circle cx="50" cy="26" r="16" fill="#e8b887" />
     <ellipse cx="34.5" cy="28" rx="3" ry="5" fill="#e0ac7c" />
     <ellipse cx="65.5" cy="28" rx="3" ry="5" fill="#e0ac7c" />
     {/* calm face, eyes down */}
     <path d="M42 26 Q45 28 48 26 M52 26 Q55 28 58 26" stroke="#5b3a1e" strokeWidth="1.6" fill="none" strokeLinecap="round" />
     <path d={mouth ? 'M44 34 Q50 40 56 34' : 'M45 35 Q50 38 55 35'} stroke="#8a4b2a" strokeWidth="1.6" fill="none" strokeLinecap="round" />
-    {/* the black alms bowl held in both hands */}
-    <ellipse cx="50" cy="90" rx="22" ry="6" fill="#1f1f1f" />
-    <path d="M28 90 Q30 114 50 116 Q70 114 72 90 Z" fill="#111111" />
-    <ellipse cx="50" cy="90" rx="22" ry="6" fill="#2b2b2b" stroke="#444" strokeWidth="1" />
-    <path d="M34 98 Q36 108 44 111" stroke="#555" strokeWidth="2" fill="none" strokeLinecap="round" />
-    <ellipse cx="29" cy="94" rx="6" ry="5" fill="#e0ac7c" />
-    <ellipse cx="71" cy="94" rx="6" ry="5" fill="#e0ac7c" />
+    {/* the round black alms bowl: rounded bottom, narrower mouth */}
+    <path d="M33 88 C24 96 27 118 50 118 C73 118 76 96 67 88 Z" fill="#111111" />
+    <ellipse cx="50" cy="88" rx="17" ry="4.5" fill="#262626" stroke="#555" strokeWidth="1" />
+    <path d="M33 100 Q34 110 42 114" stroke="#666" strokeWidth="2" fill="none" strokeLinecap="round" />
+    {/* hands holding the bowl at its sides */}
+    <ellipse cx="29" cy="100" rx="5" ry="6" fill="#e0ac7c" />
+    <ellipse cx="71" cy="100" rx="5" ry="6" fill="#e0ac7c" />
   </svg>
 );
 const AlmsLabel = ({ it }) => (
