@@ -1236,125 +1236,142 @@ export const PayRespectGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
 };
 
 // ---------------------------------------------------------------------------------------------------------------
-// Game 10: the ten kinds of giving (dana). People in need appear one by one, each with a little bubble showing what would help
-// them: food, a drink, a home, clothing, transport, flowers, ointment, a bed, fragrance, a lamp. Tap the person to give it: the gift
-// goes to them and they are glad -- 2 or 3 coins. Someone not helped in time walks on (no coins). Seven of the ten kinds per game,
-// picked at random, same timing and coins as the birds.
+// Game 10: the ten kinds of giving (dana). One person in need appears at a time -- a child, a poor person, a monk and so on --
+// saying what they would like. Three gifts wait on the tray; tap the one they like, quickly, before the time bar runs out: they
+// are glad and you get 2 or 3 coins. A wrong gift is politely refused (try another while there is time); no gift in time means no
+// coins. Seven people per game, picked at random, never past the lesson's coin limit.
 const DANA_COUNT = 7;
-const DANA_FIRST_MS = 800;
-const DANA_EVERY_MS = 1500;
-const DANA_VISIBLE_MS = 3400;
-const DANA_SIZE = 'clamp(54px, 11vmin, 92px)';
+const DANA_ROUND_MS = 5500;
+const DANA_BETWEEN_MS = 1500;
+const DANA_SIZE = 'clamp(80px, 18vmin, 140px)';
 const DANA_THANKS = ['Sadhu! Thank you!', 'So kind of you!', 'This is just what I needed!', 'May you be happy!'];
-const DANA_KINDS = [
-  { person: '🧒', gift: '🍚', name: 'Food', pali: 'Annadana' },
-  { person: '🚶', gift: '🥤', name: 'Drink', pali: 'Panadana' },
-  { person: '👨‍👩‍👧', gift: '🏠', name: 'Shelter', pali: 'Gharadana' },
-  { person: '🥶', gift: '👘', name: 'Clothing', pali: 'Vatthadana' },
-  { person: '🚶‍♀️', gift: '👟', name: 'Shoes', pali: 'Yanadana' },
-  { person: '🧘', gift: '💐', name: 'Flowers', pali: 'Maladana' },
-  { person: '🧓', gift: '🧴', name: 'Ointment', pali: 'Vilepanadana' },
-  { person: '😴', gift: '🛏️', name: 'A bed', pali: 'Seyyadana' },
-  { person: '👵', gift: '🌿', name: 'Fragrance', pali: 'Gandhadana' },
-  { person: '🧑‍🦯', gift: '🪔', name: 'A lamp', pali: 'Padipadana' },
-];
-const danaSpots = () => {
-  const out = [];
-  for (let i = 0; i < DANA_COUNT; i++) {
-    let p = null;
-    for (let tries = 0; tries < 30; tries++) {
-      const c = { x: 14 + Math.random() * 72, y: 40 + Math.random() * 38 };
-      if (out.every(o => Math.hypot(o.x - c.x, (o.y - c.y) * 1.4) > 22)) { p = c; break; }
-    }
-    out.push(p || { x: 14 + Math.random() * 72, y: 40 + Math.random() * 38 });
-  }
-  return out;
+const DANA_GIFTS = {
+  food: { icon: '🍚', name: 'Food', pali: 'Annadana' },
+  drink: { icon: '🥤', name: 'Drink', pali: 'Panadana' },
+  home: { icon: '🏠', name: 'Shelter', pali: 'Gharadana' },
+  cloth: { icon: '👘', name: 'Clothing', pali: 'Vatthadana' },
+  shoes: { icon: '👟', name: 'Shoes', pali: 'Yanadana' },
+  flowers: { icon: '💐', name: 'Flowers', pali: 'Maladana' },
+  ointment: { icon: '🧴', name: 'Ointment', pali: 'Vilepanadana' },
+  bed: { icon: '🛏️', name: 'A bed', pali: 'Seyyadana' },
+  scent: { icon: '🌿', name: 'Fragrance', pali: 'Gandhadana' },
+  lamp: { icon: '🪔', name: 'A lamp', pali: 'Padipadana' },
 };
-const DanaLabel = ({ it }) => (
-  <span className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap font-bold text-xs rounded-full px-2 py-0.5 shadow bg-white" style={{ top: '100%', color: '#78350f' }}>{it.kind.name} · {it.kind.pali}</span>
-);
-// Someone who was just given their gift: the gift floats to them, they hop happily and say thanks.
-const GladPerson = ({ it, won }) => (
-  <div className="absolute pointer-events-none" style={{ zIndex: 6, left: `${it.x}%`, top: `${it.y}%`, transform: 'translate(-50%,-50%)' }}>
-    <span className="block select-none" style={{ fontSize: DANA_SIZE, lineHeight: 1, animation: 'danaHappy .6s ease-in-out .5s 3' }}>{it.kind.person}</span>
-    <DanaLabel it={it} />
-    <div className="absolute left-1/2 -translate-x-1/2 select-none" style={{ top: `calc(${DANA_SIZE} * -0.7)`, fontSize: 'clamp(28px, 5.5vmin, 48px)', animation: 'danaGive 1s ease-in forwards' }}>{it.kind.gift}</div>
-    <div className="absolute left-1/2 -translate-x-1/2 text-center whitespace-nowrap" style={{ top: `calc(${DANA_SIZE} / -2 - 3.4rem)`, animation: 'danaThanks 2.2s ease-out forwards' }}>
-      <div className="bg-white text-amber-900 font-bold text-sm rounded-full px-3 py-1 shadow">{it.thanks}</div>
-      {won > 0 && <div className="font-black text-yellow-600 drop-shadow">+{won} 🪙</div>}
-    </div>
-  </div>
-);
+const DANA_PEOPLE = [
+  { icon: '🧒', who: 'A hungry child', says: 'I am so hungry!', wants: 'food' },
+  { icon: '🚶', who: 'A thirsty traveller', says: 'I am so thirsty!', wants: 'drink' },
+  { icon: '👨‍👩‍👧', who: 'A family with no home', says: 'We have nowhere to stay.', wants: 'home' },
+  { icon: '🥶', who: 'A poor person', says: 'I am so cold!', wants: 'cloth' },
+  { icon: '🚶‍♀️', who: 'A woman with bare feet', says: 'The road hurts my feet.', wants: 'shoes' },
+  { icon: '🧘', who: 'A monk', says: 'Flowers for the Buddha shrine, please.', wants: 'flowers' },
+  { icon: '🧓', who: 'A sick old man', says: 'My skin is sore.', wants: 'ointment' },
+  { icon: '😴', who: 'A tired traveller', says: 'I have nowhere to sleep.', wants: 'bed' },
+  { icon: '👵', who: 'A grandmother', says: 'I would love something fragrant.', wants: 'scent' },
+  { icon: '🧑‍🦯', who: 'A person in the dark', says: 'I cannot see in the dark.', wants: 'lamp' },
+];
+const shuffleDana = (a) => [...a].sort(() => Math.random() - 0.5);
+// The seven people of one game, each with the three gifts on the tray (the wanted one and two others, shuffled).
+const makeDanaRounds = () => shuffleDana(DANA_PEOPLE).slice(0, DANA_COUNT).map((p, i) => {
+  const others = shuffleDana(Object.keys(DANA_GIFTS).filter(k => k !== p.wants)).slice(0, 2);
+  return { ...p, id: i, options: shuffleDana([p.wants, ...others]), thanks: DANA_THANKS[i % DANA_THANKS.length] };
+});
 export const TenGiftsGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
-  const [items] = useState(() => {
-    const kinds = [...DANA_KINDS].sort(() => Math.random() - 0.5).slice(0, DANA_COUNT);
-    return danaSpots().map((p, i) => ({ id: i, x: p.x, y: p.y, kind: kinds[i], thanks: DANA_THANKS[i % DANA_THANKS.length] }));
-  });
-  const [state, setState] = useState(() => Array(DANA_COUNT).fill('waiting')); // waiting | shown | helped | gone
+  const [rounds] = useState(makeDanaRounds);
+  const [round, setRound] = useState(0);
+  const [phase, setPhase] = useState('play'); // play | glad | late
+  const [refused, setRefused] = useState([]); // gifts already refused in this round
+  const [shake, setShake] = useState(0);
   const [won, setWon] = useState(() => Array(DANA_COUNT).fill(0));
   const [finished, setFinished] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const total = won.reduce((a, b) => a + b, 0);
-  const helped = state.filter(v => v === 'helped').length;
+  const gaveCount = useRef(0);
   const soundRef = useRef(null);
+  const cur = rounds[round];
 
+  // the time bar: a person not helped in time leaves
   useEffect(() => {
-    const timers = [];
-    items.forEach((it) => {
-      const start = DANA_FIRST_MS + it.id * DANA_EVERY_MS;
-      timers.push(setTimeout(() => setState(st => st.map((v, i) => (i === it.id && v === 'waiting' ? 'shown' : v))), start));
-      timers.push(setTimeout(() => setState(st => st.map((v, i) => (i === it.id && v === 'shown' ? 'gone' : v))), start + DANA_VISIBLE_MS));
-    });
-    return () => timers.forEach(clearTimeout);
-  }, [items]);
-  useEffect(() => {
-    if (finished || !state.every(v => v === 'helped' || v === 'gone')) return undefined;
-    const t = setTimeout(() => setFinished(true), 1800); // let the last person finish saying thanks
+    if (finished || phase !== 'play') return undefined;
+    const t = setTimeout(() => setPhase('late'), DANA_ROUND_MS);
     return () => clearTimeout(t);
-  }, [state, finished]);
+  }, [round, phase, finished]);
+  // after the person has been helped (or has left), the next one comes
+  useEffect(() => {
+    if (finished || phase === 'play') return undefined;
+    const t = setTimeout(() => {
+      if (round + 1 >= DANA_COUNT) { setFinished(true); return; }
+      setRound(r => r + 1); setPhase('play'); setRefused([]);
+    }, DANA_BETWEEN_MS);
+    return () => clearTimeout(t);
+  }, [phase, round, finished]);
 
-  const give = (id) => {
-    if (state[id] !== 'shown') return;
+  const choose = (key) => {
+    if (phase !== 'play' || refused.includes(key)) return;
+    if (key !== cur.wants) { setRefused(r => [...r, key]); setShake(s => s + 1); return; }
     const coins = Math.max(0, Math.min(2 + Math.floor(Math.random() * 2), coinsLeft - total)); // 2 or 3, never past the lesson's limit
-    setState(st => st.map((v, i) => (i === id ? 'helped' : v)));
-    setWon(w => w.map((v, i) => (i === id ? coins : v)));
+    gaveCount.current += 1;
+    setPhase('glad');
+    setWon(w => w.map((v, i) => (i === round ? coins : v)));
     playCoinSound(soundRef);
   };
 
+  const gave = gaveCount.current;
   return (
-    <div className="relative overflow-hidden text-white h-screen" style={{ height: '100dvh', minHeight: 420, background: 'linear-gradient(180deg,#bae6fd 0%,#e0f2fe 38%,#fde68a 38%,#fbbf24 100%)' }}>
+    <div className="relative overflow-hidden text-white h-screen" style={{ height: '100dvh', minHeight: 460, background: 'linear-gradient(180deg,#bae6fd 0%,#e0f2fe 38%,#fde68a 38%,#fbbf24 100%)' }}>
       <style>{`
-        @keyframes danaPop { 0% { transform: translate(-50%,-50%) scale(.3); opacity: 0 } 100% { transform: translate(-50%,-50%) scale(1); opacity: 1 } }
-        @keyframes danaNeed { 0%,100% { transform: translate(-50%,0) } 50% { transform: translate(-50%,-6px) } }
+        @keyframes danaPop { 0% { transform: scale(.3); opacity: 0 } 100% { transform: scale(1); opacity: 1 } }
         @keyframes danaHappy { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-16px) } }
-        @keyframes danaGive { 0% { transform: translate(-50%,-40px) scale(.7); opacity: 0 } 30% { opacity: 1 } 100% { transform: translate(-50%,24px) scale(1.2); opacity: 0 } }
-        @keyframes danaThanks { 0% { transform: translateY(0); opacity: 0 } 15% { opacity: 1 } 100% { transform: translateY(-46px); opacity: 0 } }
+        @keyframes danaNo { 0%,100% { transform: translateX(0) } 25% { transform: translateX(-10px) } 75% { transform: translateX(10px) } }
+        @keyframes danaLeave { 0% { transform: translateX(0); opacity: 1 } 100% { transform: translateX(80px); opacity: 0 } }
+        @keyframes danaBar { 0% { width: 100% } 100% { width: 0% } }
+        @keyframes danaGift { 0% { transform: translateY(40px) scale(.7); opacity: 0 } 100% { transform: translateY(0) scale(1); opacity: 1 } }
       `}</style>
       <div className="absolute top-0 inset-x-0 flex items-center justify-between gap-2 px-3 py-3 z-10">
-        <div className="bg-white/80 text-amber-900 font-bold text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 ml-12 sm:ml-16 min-w-0 truncate">🎁 Give to those in need</div>
+        <div className="bg-white/80 text-amber-900 font-bold text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 ml-12 sm:ml-16 min-w-0 truncate">🎁 Give quickly! {round + 1}/{DANA_COUNT}</div>
         <div className="bg-yellow-300 text-yellow-900 font-black text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 shadow whitespace-nowrap flex-shrink-0">🪙 {total}{coinsLeft <= 0 ? ' (limit reached)' : ''}</div>
       </div>
       <div className="absolute pointer-events-none" style={{ right: '8%', top: '10%', fontSize: 'clamp(40px, 9vmin, 80px)' }}>☀️</div>
-      <div className="absolute pointer-events-none" style={{ left: '5%', top: '22%', fontSize: 'clamp(34px, 8vmin, 66px)' }}>🌳</div>
-      {helped > 0 && <div className="absolute pointer-events-none bg-white text-amber-700 font-black text-sm rounded-full px-3 py-1 shadow" style={{ left: '4%', bottom: '3%' }}>🎁 {helped}</div>}
-      {items.map((it, i) => {
-        const st = state[i];
-        if (st === 'waiting' || st === 'gone') return null;
-        if (st === 'helped') return <GladPerson key={it.id} it={it} won={won[i]} />;
-        return (
-          <button key={it.id} onClick={() => give(it.id)} aria-label={`Give ${it.kind.name}`} className="absolute" style={{ left: `${it.x}%`, top: `${it.y}%`, width: DANA_SIZE, height: DANA_SIZE, transform: 'translate(-50%,-50%)', animation: 'danaPop .35s ease-out', zIndex: 5 }}>
-            <span className="block select-none" style={{ fontSize: DANA_SIZE, lineHeight: 1 }}>{it.kind.person}</span>
-            <span className="absolute left-1/2 select-none bg-white/90 rounded-full px-1" style={{ top: '-34%', fontSize: 'clamp(22px, 4.5vmin, 38px)', animation: 'danaNeed 1s ease-in-out infinite' }}>{it.kind.gift}</span>
-            <DanaLabel it={it} />
-          </button>
-        );
-      })}
+      {!finished && (
+        <div key={round} className="absolute inset-x-0 flex flex-col items-center px-4" style={{ top: '14%' }}>
+          {/* the time bar */}
+          <div className="w-full max-w-sm h-3 bg-white/60 rounded-full overflow-hidden mb-3">
+            <div className="h-full bg-red-500 rounded-full" style={{ width: '100%', animation: phase === 'play' ? `danaBar ${DANA_ROUND_MS}ms linear forwards` : 'none', ...(phase !== 'play' ? { width: 0 } : {}) }} />
+          </div>
+          <div className="bg-white text-amber-900 font-bold text-sm sm:text-base rounded-2xl px-4 py-2 shadow text-center max-w-sm mb-2">
+            {phase === 'glad' ? `✅ ${cur.thanks}` : phase === 'late' ? 'Too late... they had to go.' : `"${cur.says}"`}
+            {phase === 'glad' && won[round] > 0 && <div className="font-black text-yellow-600">+{won[round]} 🪙</div>}
+          </div>
+          <div key={shake} className="select-none" style={{ fontSize: DANA_SIZE, lineHeight: 1, animation: phase === 'glad' ? 'danaHappy .6s ease-in-out 3' : phase === 'late' ? 'danaLeave .8s ease-in forwards' : (shake ? 'danaNo .4s' : 'danaPop .35s ease-out') }}>{cur.icon}</div>
+          <div className="bg-white/90 text-amber-900 font-bold text-xs rounded-full px-3 py-1 shadow mt-1">{cur.who}</div>
+        </div>
+      )}
+      {/* the tray of three gifts */}
+      {!finished && (
+        <div className="absolute inset-x-0 bottom-0 pb-5 px-3 z-10">
+          <div className="text-center font-bold text-amber-900 text-sm mb-2">Which gift do they like?</div>
+          <div className="flex items-stretch justify-center gap-2 sm:gap-4">
+            {cur.options.map((k) => {
+              const g = DANA_GIFTS[k];
+              const refusedNow = refused.includes(k);
+              const isRight = phase !== 'play' && k === cur.wants;
+              return (
+                <button key={k} onClick={() => choose(k)} disabled={phase !== 'play' || refusedNow} aria-label={`Give ${g.name}`}
+                  className={`flex flex-col items-center rounded-2xl px-3 py-2 shadow-lg border-4 w-28 sm:w-36 ${isRight ? 'bg-green-100 border-green-500' : refusedNow ? 'bg-gray-200 border-gray-300 opacity-40' : 'bg-white border-amber-300 active:scale-95'}`}>
+                  <span className="select-none" style={{ fontSize: 'clamp(40px, 10vmin, 64px)', lineHeight: 1, animation: 'danaGift .4s ease-out' }}>{g.icon}</span>
+                  <span className="text-amber-900 font-extrabold text-sm leading-tight">{g.name}</span>
+                  <span className="text-amber-700 text-[11px] leading-tight">{g.pali}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
       {finished && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20 px-4">
           <div className="bg-white text-gray-900 rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
-            <div className="text-5xl mb-2">{helped > 0 ? '🎁' : '🌤️'}</div>
-            <h2 className="text-2xl font-extrabold mb-1">{helped > 0 ? `You gave ${helped} gift${helped === 1 ? '' : 's'}!` : 'Nice try!'}</h2>
-            <p className="text-sm text-gray-600 mb-2">{helped > 0 ? 'Giving with a kind heart brings happiness to everyone.' : 'Be quick, they need your help.'}</p>
+            <div className="text-5xl mb-2">{gave > 0 ? '🎁' : '🌤️'}</div>
+            <h2 className="text-2xl font-extrabold mb-1">{gave > 0 ? `You gave ${gave} gift${gave === 1 ? '' : 's'}!` : 'Nice try!'}</h2>
+            <p className="text-sm text-gray-600 mb-2">{gave > 0 ? 'Giving what people truly need brings happiness to everyone.' : 'Be quick, they need your help.'}</p>
             <p className="text-lg font-bold text-yellow-600 mb-4">{total > 0 ? `🪙 +${total} coins for your Shrine Room wallet` : (coinsLeft <= 0 ? 'You have already earned all the coins for this lesson. Great job!' : 'No coins this time.')}</p>
             <GameButton disabled={leaving} onClick={() => { setLeaving(true); onDone(total); }} className="bg-amber-500 hover:bg-amber-600 text-white w-full text-xl">Continue →</GameButton>
           </div>
