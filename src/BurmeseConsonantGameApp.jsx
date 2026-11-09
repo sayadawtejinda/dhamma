@@ -1325,7 +1325,7 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
             elements.chatInput.placeholder = message;
             elements.chatInput.value = '';
             playAudio(questionConsonants[0]);
-            audioTimer = setInterval(() => playAudio(questionConsonants[0]), 5000);
+            audioTimer = setInterval(() => playAudio(questionConsonants[0]), 8000);
         }
         function checkTypingAnswer() {
             const userInput = elements.chatInput.value;
@@ -1364,7 +1364,7 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
             correctAnswer = activeGroup[Math.floor(Math.random() * activeGroup.length)];
             showGameStatus("Click the letter you hear.", 'info');
             playAudio(correctAnswer);
-            audioTimer = setInterval(() => playAudio(correctAnswer), 5000);
+            audioTimer = setInterval(() => playAudio(correctAnswer), 8000);
         }
         function showGameStatus(message, type) {
             elements.gameStatus.textContent = message;
@@ -1439,7 +1439,7 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
             });
             showGameStatus("Pick the letter you hear.", 'info');
             playAudio(correctAnswer);
-            audioTimer = setInterval(() => playAudio(correctAnswer), 5000);
+            audioTimer = setInterval(() => playAudio(correctAnswer), 8000);
         }
         function togglePickGame() { if (currentGameMode === 'pick') stopGame(); else startPickGame(); }
         function startPickGame() {
@@ -1573,7 +1573,7 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
                 elements.imageOptionsGrid.appendChild(div);
             });
             playAudio(word);
-            audioTimer = setInterval(() => playAudio(word), 4000);
+            audioTimer = setInterval(() => playAudio(word), 8000);
         }
         function checkImageAnswer(clicked, element) {
             if (isVictorySequence) return;
