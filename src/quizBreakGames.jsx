@@ -1660,13 +1660,44 @@ const almsSpots = () => {
   }
   return out;
 };
+// A monk drawn in SVG: shaved head, saffron robe wrapped over the left shoulder (right shoulder bare), black alms bowl held in front.
+const MonkSvg = ({ size, mouth = false }) => (
+  <svg viewBox="0 0 100 140" width={size} height={`calc(${size} * 1.4)`} style={{ display: 'block' }} aria-hidden="true">
+    {/* feet */}
+    <ellipse cx="40" cy="134" rx="9" ry="4" fill="#d9a77a" />
+    <ellipse cx="60" cy="134" rx="9" ry="4" fill="#d9a77a" />
+    {/* the robe: lower wrap and body */}
+    <path d="M22 132 L26 60 Q50 48 74 60 L78 132 Q50 138 22 132 Z" fill="#d9731a" />
+    <path d="M30 128 Q50 134 70 128 M31 112 Q50 118 69 112 M32 96 Q50 102 68 96" stroke="#b35a10" strokeWidth="2" fill="none" />
+    {/* bare right shoulder and arm (viewer's left) */}
+    <path d="M26 60 Q34 52 44 56 L42 74 Q34 76 28 72 Z" fill="#e0ac7c" />
+    {/* robe over the left shoulder */}
+    <path d="M44 56 Q62 52 76 60 L78 84 Q60 76 44 70 Z" fill="#c2410c" />
+    <path d="M48 62 Q62 62 72 68 M48 70 Q62 70 74 77" stroke="#9a3412" strokeWidth="1.6" fill="none" />
+    {/* neck and head */}
+    <rect x="44" y="40" width="12" height="14" rx="4" fill="#e0ac7c" />
+    <circle cx="50" cy="26" r="16" fill="#e8b887" />
+    <ellipse cx="34.5" cy="28" rx="3" ry="5" fill="#e0ac7c" />
+    <ellipse cx="65.5" cy="28" rx="3" ry="5" fill="#e0ac7c" />
+    {/* calm face, eyes down */}
+    <path d="M42 26 Q45 28 48 26 M52 26 Q55 28 58 26" stroke="#5b3a1e" strokeWidth="1.6" fill="none" strokeLinecap="round" />
+    <path d={mouth ? 'M44 34 Q50 40 56 34' : 'M45 35 Q50 38 55 35'} stroke="#8a4b2a" strokeWidth="1.6" fill="none" strokeLinecap="round" />
+    {/* the black alms bowl held in both hands */}
+    <ellipse cx="50" cy="90" rx="22" ry="6" fill="#1f1f1f" />
+    <path d="M28 90 Q30 114 50 116 Q70 114 72 90 Z" fill="#111111" />
+    <ellipse cx="50" cy="90" rx="22" ry="6" fill="#2b2b2b" stroke="#444" strokeWidth="1" />
+    <path d="M34 98 Q36 108 44 111" stroke="#555" strokeWidth="2" fill="none" strokeLinecap="round" />
+    <ellipse cx="29" cy="94" rx="6" ry="5" fill="#e0ac7c" />
+    <ellipse cx="71" cy="94" rx="6" ry="5" fill="#e0ac7c" />
+  </svg>
+);
 const AlmsLabel = ({ it }) => (
   <span className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap font-bold text-xs rounded-full px-2 py-0.5 shadow bg-orange-100" style={{ top: '100%', color: '#7c2d12' }}>{it.who}</span>
 );
 // A monk who was just offered food: it drops into the bowl and he blesses the giver.
 const BlessingMonk = ({ it, won }) => (
   <div className="absolute pointer-events-none" style={{ zIndex: 6, left: `${it.x}%`, top: `${it.y}%`, transform: 'translate(-50%,-50%)' }}>
-    <span className="block select-none" style={{ fontSize: it.who === 'Novice' ? `calc(${ALMS_SIZE} * 0.85)` : ALMS_SIZE, lineHeight: 1 }}>🧘</span>
+    <MonkSvg size={it.who === 'Novice' ? `calc(${ALMS_SIZE} * 0.8)` : ALMS_SIZE} mouth />
     <AlmsLabel it={it} />
     <div className="absolute left-1/2 -translate-x-1/2 select-none" style={{ top: `calc(${ALMS_SIZE} * -0.9)`, fontSize: 'clamp(28px, 5.5vmin, 48px)', animation: 'almsDrop 1s ease-in forwards' }}>{it.food}</div>
     <div className="absolute left-1/2 -translate-x-1/2 text-center whitespace-nowrap" style={{ top: `calc(${ALMS_SIZE} / -2 - 3.4rem)`, animation: 'almsBless 2.2s ease-out forwards' }}>
@@ -1738,9 +1769,8 @@ export const AlmsRoundGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
         return (
           <div key={it.id} className="absolute" style={{ left: `${it.x}%`, top: `${it.y}%`, zIndex: 5, transform: 'translate(-50%,-50%)' }}>
             <div style={{ animation: `almsPop .35s ease-out, almsWalk ${ALMS_VISIBLE_MS}ms linear forwards` }}>
-              <button onClick={() => offer(it.id)} aria-label={`Offer food to the ${it.who}`} className="relative block" style={{ width: ALMS_SIZE, height: ALMS_SIZE }}>
-                <span className="block select-none" style={{ fontSize: it.who === 'Novice' ? `calc(${ALMS_SIZE} * 0.85)` : ALMS_SIZE, lineHeight: 1, animation: 'almsStep .6s ease-in-out infinite' }}>🧘</span>
-                <span className="absolute select-none" style={{ right: '-22%', bottom: '8%', fontSize: 'clamp(24px, 5vmin, 40px)' }}>🥣</span>
+              <button onClick={() => offer(it.id)} aria-label={`Offer food to the ${it.who}`} className="relative block">
+                <div style={{ animation: 'almsStep .6s ease-in-out infinite' }}><MonkSvg size={it.who === 'Novice' ? `calc(${ALMS_SIZE} * 0.8)` : ALMS_SIZE} /></div>
                 <AlmsLabel it={it} />
               </button>
             </div>
