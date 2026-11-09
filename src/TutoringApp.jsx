@@ -11855,8 +11855,8 @@ function BadgeApprovals({ students, sessions }) {
                   <optgroup label="Dhamma Year medal from 2026 on (the Bodhi Tree's last level, with the year; the weekly job works these out at the end of each year)">
                     {STAGE_NAMES.map((n, i) => <option key={`bodhiy${i}`} value={`b:bodhi-year:${new Date().getFullYear()}:${i}`}>{new Date().getFullYear()} · {n}</option>)}
                   </optgroup>
-                  <optgroup label="Dhamma Year 2005 to 2025 (given by hand; choose the first year the student studied and every later year to 2025 is given too)">
-                    {Array.from({ length: 21 }, (_, i) => 2005 + i).flatMap(y => [
+                  <optgroup label="Dhamma Year 2020 to 2025 (given by hand; choose the first year the student studied and every later year to 2025 is given too)">
+                    {Array.from({ length: 6 }, (_, i) => 2020 + i).flatMap(y => [
                       <option key={`yrs${y}`} value={`years:${y}`}>Dhamma Year {y} and every year after, to 2025</option>,
                       <option key={`yr${y}`} value={`b:year-${y}`}>Dhamma Year {y} only</option>,
                     ])}
