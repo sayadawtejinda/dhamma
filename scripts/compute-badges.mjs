@@ -167,8 +167,12 @@ for (const st of students) {
   if (valid.length) out[n] = valid;
 }
 // the three places of the three honours (trophies, lotus flowers in the Shrine Room, classes attended)
-const top3 = (list, key, nameOf, idOf) => list.filter(x => (x[key] || 0) > 0).sort((a, b) => (b[key] || 0) - (a[key] || 0)).slice(0, 3)
-  .map((x, i) => ({ id: idOf ? idOf(x) : undefined, name: nameOf(x), count: x[key] || 0, tier: i + 1 }));
+// With ties: everyone with the same count shares the place (two tied for 3rd both get 3rd).
+const top3 = (list, key, nameOf, idOf) => {
+  const rows = list.filter(x => (x[key] || 0) > 0).sort((a, b) => (b[key] || 0) - (a[key] || 0));
+  return rows.map(x => ({ x, tier: 1 + rows.filter(o => (o[key] || 0) > (x[key] || 0)).length })).filter(r => r.tier <= 3)
+    .map(({ x, tier }) => ({ id: idOf ? idOf(x) : undefined, name: nameOf(x), count: x[key] || 0, tier }));
+};
 const awards = {
   trophy: top3(students, 'trophyCount', x => x.name, x => x.id),
   holy: top3([...shrine.values()].filter(d => (d.studentName || d.id)), 'lotusCount', x => x.studentName || x.id),

@@ -32,6 +32,10 @@ const METALS = {
 };
 
 // ---- who the winners are (one fetch each, kept for the whole visit) ----
+// Places 1-3, with ties: everyone with the same count shares the place (two tied for 3rd both get 3rd; two tied for 1st both get 1st,
+// and the next one is then 3rd). `rows` must already be sorted from highest to lowest.
+const withPlaces = (rows, countOf, make) => rows.map(r => ({ r, tier: 1 + rows.filter(o => countOf(o) > countOf(r)).length }))
+  .filter(x => x.tier <= 3).map(x => make(x.r, x.tier));
 let topPromise = null;
 const loadTop = () => {
   if (!topPromise) {
@@ -40,15 +44,15 @@ const loadTop = () => {
       fetch(`${base}weeklySnapshot.json`).then(r => (r.ok ? r.json() : null)).catch(() => null),
       fetch(`${base}rosterSnapshots/artifacts__shrine-room-app__public__data__roster.json`).then(r => (r.ok ? r.json() : null)).catch(() => null),
     ]).then(([snap, shrine]) => {
-      const trophy = ((snap && snap.trophyList) || []).filter(s => (s.trophyCount || 0) > 0)
-        .sort((a, b) => (b.trophyCount || 0) - (a.trophyCount || 0)).slice(0, 3)
-        .map((s, i) => ({ id: s.id, name: s.name, count: s.trophyCount || 0, tier: i + 1 }));
-      const holy = ((shrine && shrine.docs) || []).filter(d => (d.studentName || d.id) && (d.lotusCount || 0) > 0)
-        .sort((a, b) => (b.lotusCount || 0) - (a.lotusCount || 0)).slice(0, 3)
-        .map((d, i) => ({ name: d.studentName || d.id, count: d.lotusCount || 0, tier: i + 1 }));
-      const joy = ((snap && snap.attendanceRankedList) || []).filter(s => !s.isOffline && (s.attended || 0) > 0)
-        .sort((a, b) => (b.attended || 0) - (a.attended || 0)).slice(0, 3)
-        .map((s, i) => ({ id: s.id, name: s.name, count: s.attended || 0, tier: i + 1 }));
+      const trophy = withPlaces(((snap && snap.trophyList) || []).filter(s => (s.trophyCount || 0) > 0)
+        .sort((a, b) => (b.trophyCount || 0) - (a.trophyCount || 0)), s => s.trophyCount || 0,
+        (s, tier) => ({ id: s.id, name: s.name, count: s.trophyCount || 0, tier }));
+      const holy = withPlaces(((shrine && shrine.docs) || []).filter(d => (d.studentName || d.id) && (d.lotusCount || 0) > 0)
+        .sort((a, b) => (b.lotusCount || 0) - (a.lotusCount || 0)), d => d.lotusCount || 0,
+        (d, tier) => ({ name: d.studentName || d.id, count: d.lotusCount || 0, tier }));
+      const joy = withPlaces(((snap && snap.attendanceRankedList) || []).filter(s => !s.isOffline && (s.attended || 0) > 0)
+        .sort((a, b) => (b.attended || 0) - (a.attended || 0)), s => s.attended || 0,
+        (s, tier) => ({ id: s.id, name: s.name, count: s.attended || 0, tier }));
       return { trophy, holy, joy, generatedAt: (snap && snap.generatedAt) || (shrine && shrine.generatedAt) || null };
     }).catch(() => { topPromise = null; return { trophy: [], holy: [], joy: [], generatedAt: null }; });
   }
