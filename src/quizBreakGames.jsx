@@ -1791,10 +1791,137 @@ export const AlmsRoundGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
 };
 
 // ---------------------------------------------------------------------------------------------------------------
+// Game 14: the duck that lays a golden egg every day (greed). One day = about 2.6 seconds: the duck lays one golden egg, tap it to
+// pick it up (2 or 3 coins). From the second day a tempting button offers ALL the gold at once -- but taking it ends the game:
+// the duck is gone, nothing inside, and no more eggs or coins. Seven days in all; the end screen shows how many eggs were missed
+// by being greedy ("he who wants too much gets too little").
+const DUCK_DAYS = 7;
+const DUCK_FIRST_MS = 500;
+const DUCK_DAY_MS = 2600;
+const DUCK_LAY_MS = 450;     // the egg appears this long after the day starts
+const DUCK_EGG_MS = 2000;    // and stays this long
+const DUCK_SIZE = 'clamp(70px, 16vmin, 130px)';
+const DUCK_EGG_SIZE = 'clamp(34px, 8vmin, 58px)';
+const duckEggSpot = () => ({ x: (Math.random() < 0.5 ? 18 : 60) + Math.random() * 22, y: 66 + Math.random() * 14 });
+const GoldenEgg = ({ size }) => (
+  <span className="block relative" style={{ width: size, height: `calc(${size} * 1.25)`, borderRadius: '50% 50% 50% 50% / 62% 62% 38% 38%', background: 'radial-gradient(circle at 35% 30%, #fff7b0 0%, #fde047 35%, #f59e0b 100%)', border: '2px solid #b45309', boxShadow: '0 0 14px 4px rgba(253,224,71,.8)' }}>
+    <span className="absolute select-none" style={{ top: '-30%', right: '-35%', fontSize: `calc(${size} * 0.5)`, animation: 'duckTwinkle .9s ease-in-out infinite' }}>✨</span>
+  </span>
+);
+export const GoldenEggDuckGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
+  const [spots] = useState(() => Array.from({ length: DUCK_DAYS }, duckEggSpot));
+  const [state, setState] = useState(() => Array(DUCK_DAYS).fill('waiting')); // waiting | egg | got | missed
+  const [won, setWon] = useState(() => Array(DUCK_DAYS).fill(0));
+  const [day, setDay] = useState(0);          // 0 until the first day starts, then 1..7
+  const [killed, setKilled] = useState(false);
+  const [finished, setFinished] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const total = won.reduce((a, b) => a + b, 0);
+  const eggs = state.filter(v => v === 'got').length;
+  const soundRef = useRef(null);
+
+  useEffect(() => {
+    if (killed) return undefined;
+    const timers = [];
+    for (let d = 0; d < DUCK_DAYS; d++) {
+      const start = DUCK_FIRST_MS + d * DUCK_DAY_MS;
+      timers.push(setTimeout(() => setDay(d + 1), start));
+      timers.push(setTimeout(() => setState(st => st.map((v, i) => (i === d && v === 'waiting' ? 'egg' : v))), start + DUCK_LAY_MS));
+      timers.push(setTimeout(() => setState(st => st.map((v, i) => (i === d && v === 'egg' ? 'missed' : v))), start + DUCK_LAY_MS + DUCK_EGG_MS));
+    }
+    return () => timers.forEach(clearTimeout);
+  }, [killed]);
+  useEffect(() => {
+    if (finished || killed || !state.every(v => v === 'got' || v === 'missed')) return undefined;
+    const t = setTimeout(() => setFinished(true), 1200);
+    return () => clearTimeout(t);
+  }, [state, finished, killed]);
+  useEffect(() => {
+    if (!killed) return undefined;
+    const t = setTimeout(() => setFinished(true), 3000); // let the child see what happened
+    return () => clearTimeout(t);
+  }, [killed]);
+
+  const pick = (id) => {
+    if (state[id] !== 'egg') return;
+    const coins = Math.max(0, Math.min(2 + Math.floor(Math.random() * 2), coinsLeft - total)); // 2 or 3, never past the lesson's limit
+    setState(st => st.map((v, i) => (i === id ? 'got' : v)));
+    setWon(w => w.map((v, i) => (i === id ? coins : v)));
+    playCoinSound(soundRef);
+  };
+  const missedByGreed = killed ? DUCK_DAYS - eggs - state.filter(v => v === 'missed').length : 0;
+
+  return (
+    <div className="relative overflow-hidden text-white h-screen" style={{ height: '100dvh', minHeight: 420, background: killed ? 'linear-gradient(180deg,#9ca3af 0%,#d1d5db 38%,#a8a29e 38%,#78716c 100%)' : 'linear-gradient(180deg,#bae6fd 0%,#e0f2fe 38%,#bbf7d0 38%,#86efac 100%)', transition: 'background .8s' }}>
+      <style>{`
+        @keyframes duckBob { 0%,100% { transform: translate(-50%,0) } 50% { transform: translate(-50%,-6px) } }
+        @keyframes duckPop { 0% { transform: translateY(-40px) scale(.3); opacity: 0 } 60% { transform: translateY(6px) scale(1.1); opacity: 1 } 100% { transform: translateY(0) scale(1); opacity: 1 } }
+        @keyframes duckTwinkle { 0%,100% { transform: scale(.7); opacity: .6 } 50% { transform: scale(1.2); opacity: 1 } }
+        @keyframes duckWin { 0% { transform: translateY(0); opacity: 0 } 15% { opacity: 1 } 100% { transform: translateY(-46px); opacity: 0 } }
+        @keyframes duckShake { 0%,100% { transform: translate(-50%,0) rotate(0) } 25% { transform: translate(-50%,0) rotate(-12deg) } 75% { transform: translate(-50%,0) rotate(12deg) } }
+        @keyframes duckBeg { 0%,100% { transform: scale(1) } 50% { transform: scale(1.07) } }
+      `}</style>
+      <div className="absolute top-0 inset-x-0 flex items-center justify-between gap-2 px-3 py-3 z-10">
+        <div className="bg-white/80 text-sky-900 font-bold text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 ml-12 sm:ml-16 min-w-0 truncate">🦆 {killed ? 'The duck is gone' : (day > 0 ? `Day ${day} of ${DUCK_DAYS}` : 'The golden egg duck')}</div>
+        <div className="bg-yellow-300 text-yellow-900 font-black text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 shadow whitespace-nowrap flex-shrink-0">🪙 {total}{coinsLeft <= 0 ? ' (limit reached)' : ''}</div>
+      </div>
+      <div className="absolute pointer-events-none" style={{ left: '6%', top: '14%', fontSize: 'clamp(34px, 8vmin, 66px)' }}>{killed ? '☁️' : '🌳'}</div>
+      <div className="absolute pointer-events-none" style={{ right: '8%', top: '10%', fontSize: 'clamp(40px, 9vmin, 80px)' }}>{killed ? '🌙' : '☀️'}</div>
+      {/* the duck, always in the middle of the field */}
+      <div className="absolute select-none" style={{ left: '50%', top: '44%', fontSize: DUCK_SIZE, lineHeight: 1, zIndex: 3, animation: killed ? 'duckShake .5s ease-in-out 3' : 'duckBob 1.4s ease-in-out infinite' }}>{killed ? '👻' : '🦆'}</div>
+      {killed && (
+        <div className="absolute text-center" style={{ left: '50%', top: '30%', transform: 'translateX(-50%)', zIndex: 8 }}>
+          <div className="bg-white text-gray-800 font-bold text-sm sm:text-base rounded-2xl px-4 py-2 shadow-lg whitespace-nowrap">😢 Nothing inside! No more golden eggs.</div>
+        </div>
+      )}
+      {!killed && day > 0 && !finished && <div className="absolute pointer-events-none bg-white text-yellow-700 font-black text-sm rounded-full px-3 py-1 shadow" style={{ left: '4%', bottom: '3%' }}>🥚 {eggs}</div>}
+      {state.map((st, i) => {
+        if (killed || st === 'waiting' || st === 'missed') return null;
+        const sp = spots[i];
+        if (st === 'got') {
+          return (
+            <div key={i} className="absolute pointer-events-none text-center whitespace-nowrap" style={{ left: `${sp.x}%`, top: `${sp.y}%`, transform: 'translate(-50%,-50%)', zIndex: 6, animation: 'duckWin 1.6s ease-out forwards' }}>
+              <div className="font-black text-yellow-600 drop-shadow">+{won[i]} 🪙</div>
+            </div>
+          );
+        }
+        return (
+          <button key={i} onClick={() => pick(i)} aria-label="Pick up the golden egg" className="absolute" style={{ left: `${sp.x}%`, top: `${sp.y}%`, transform: 'translate(-50%,-50%)', zIndex: 5, padding: 14, animation: 'duckPop .5s ease-out' }}>
+            <GoldenEgg size={DUCK_EGG_SIZE} />
+          </button>
+        );
+      })}
+      {/* the temptation: ALL the gold now -- from day 2 on */}
+      {!killed && !finished && day >= 2 && (
+        <button
+          onClick={() => setKilled(true)}
+          aria-label="Take all the gold now"
+          className="absolute left-1/2 -translate-x-1/2 bg-red-600 hover:bg-red-700 text-white font-extrabold rounded-full shadow-xl px-4 py-2 text-sm sm:text-base"
+          style={{ bottom: '3%', zIndex: 7, animation: 'duckBeg 1s ease-in-out infinite', maxWidth: '78%' }}
+        >😈 Take ALL the gold now!</button>
+      )}
+      {finished && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20 px-4">
+          <div className="bg-white text-gray-900 rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
+            <div className="text-5xl mb-2">{killed ? '😢' : '🥚'}</div>
+            <h2 className="text-2xl font-extrabold mb-1">{killed ? 'Too greedy!' : (eggs > 0 ? `You collected ${eggs} golden egg${eggs === 1 ? '' : 's'}!` : 'Nice try!')}</h2>
+            <p className="text-sm text-gray-600 mb-2">{killed
+              ? `You wanted everything at once, so the duck was lost and ${missedByGreed} more golden egg${missedByGreed === 1 ? '' : 's'} never came. If we want too much, we get less.`
+              : (eggs > 0 ? 'You were patient and content with one egg a day. Being content brings the most.' : 'Be quick, the golden egg only stays a little while.')}</p>
+            <p className="text-lg font-bold text-yellow-600 mb-4">{total > 0 ? `🪙 +${total} coins for your Shrine Room wallet` : (coinsLeft <= 0 ? 'You have already earned all the coins for this lesson. Great job!' : 'No coins this time.')}</p>
+            <GameButton disabled={leaving} onClick={() => { setLeaving(true); onDone(total); }} className="bg-sky-500 hover:bg-sky-600 text-white w-full text-xl">Continue →</GameButton>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------------------------------------------
 // The games, in the order they are handed out. A lesson always gets the same game (so a retake feels familiar and the
 // coin cap stays one per lesson), but neighbouring lessons get different ones, so the break does not become boring.
 // To add a game: write it above with the same two props and put it in this list.
-export const QUIZ_BREAK_GAMES = [BirdRescueGame, FlowerOfferingGame, LitterPickingGame, AnimalRescueGame, WoodcutterAxeGame, AntGatheringGame, WaterAnimalsGame, HelpFriendsGame, PayRespectGame, TenGiftsGame, ReturnLostItemsGame, HelpParentsGame, AlmsRoundGame];
+export const QUIZ_BREAK_GAMES = [BirdRescueGame, FlowerOfferingGame, LitterPickingGame, AnimalRescueGame, WoodcutterAxeGame, AntGatheringGame, WaterAnimalsGame, HelpFriendsGame, PayRespectGame, TenGiftsGame, ReturnLostItemsGame, HelpParentsGame, AlmsRoundGame, GoldenEggDuckGame];
 const hashOf = (s) => { let h = 0; String(s ?? '').split('').forEach(ch => { h = (h * 31 + ch.charCodeAt(0)) >>> 0; }); return h; };
 export const quizBreakGameFor = (lessonId) => QUIZ_BREAK_GAMES[hashOf(lessonId) % QUIZ_BREAK_GAMES.length];
 export const QuizBreakGame = ({ lessonId, ...rest }) => {
