@@ -1918,11 +1918,10 @@ export const GoldenEggDuckGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
 };
 
 // ---------------------------------------------------------------------------------------------------------------
-// Game 15: the cunning heron (nothing is free). The pond is drying up; seven fish. One visitor comes at a time with an offer and the
-// child chooses "Go with them" or "No thanks" before the time bar runs out. Five visitors are herons offering a free ride to a big lake
-// (it is a trick: a fish who goes is eaten); two are honest neighbours offering a fair deal -- share the work, share the water
-// (going with them is right). Refusing a heron, or joining an honest neighbour, gives 2 or 3 coins. Going with a heron costs a fish and
-// gives no coins. The end screen says: a free offer from a stranger has a hidden price.
+// Game 15: the cunning heron (nothing is free; do not believe a stranger's kind words). The pond is drying up; seven fish. Seven times
+// the heron comes with a free offer (a free ride to a big lake) -- it is a trick to eat them. The two answers are thrown up in arcs
+// from each side; "No thanks!" gives 2 or 3 coins, "Go with them" gives nothing and a fish is eaten (the number of fish lost is
+// shown all the time and on the end screen). No answer in time: nothing happens, no coins.
 const HERON_ROUNDS = 7;
 const HERON_ASK_MS = 5500;
 const HERON_RESULT_MS = 1900;
@@ -1932,16 +1931,11 @@ const HERON_TRICKS = [
   'Free water and free food at my lake, no cost at all!',
   'Trust me, I only want to help you, for nothing in return!',
   'A free ride to a pond full of rain. No charge, little fish!',
-];
-const HERON_FAIR = [
-  { who: '🐢', name: 'Turtle', says: 'Let us dig a channel to the river together. Then we all share the water.' },
-  { who: '🐟', name: 'Old fish', says: 'Let us share our deep water. I will share my hiding place too.' },
+  'Believe me, little fish: the big lake is full of food, and I carry you for free!',
+  'Your pond is dying. I will take you somewhere safe, free, one at a time!',
 ];
 const makeHeronRounds = () => {
-  const items = [
-    ...[...HERON_TRICKS].map(says => ({ trick: true, who: '🦩', name: 'Heron', says })),
-    ...HERON_FAIR.map(f => ({ trick: false, ...f })),
-  ];
+  const items = HERON_TRICKS.map(says => ({ trick: true, who: '🦩', name: 'Heron', says }));
   for (let i = items.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [items[i], items[j]] = [items[j], items[i]]; }
   return items.map(x => ({ ...x, flip: Math.random() < 0.5 })); // which answer comes up on the left
 };
@@ -1957,13 +1951,12 @@ export const CunningHeronGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
   const soundRef = useRef(null);
   const total = won.reduce((a, b) => a + b, 0);
   const eaten = outcomes.filter(o => o === 'eaten').length;
-  const wise = outcomes.filter(o => o === 'wise' || o === 'joined').length;
-  const it = rounds[r];
+    const it = rounds[r];
 
   // the time to choose runs out: nothing is decided, no coins
   useEffect(() => {
     if (finished || phase !== 'ask') return undefined;
-    const t = setTimeout(() => settle(it.trick ? 'late' : 'missedFair', 0), HERON_ASK_MS);
+    const t = setTimeout(() => settle('late', 0), HERON_ASK_MS);
     return () => clearTimeout(t);
   }, [r, phase, finished]); // eslint-disable-line react-hooks/exhaustive-deps
   // after the result is shown: next visitor, or the end
@@ -1984,18 +1977,13 @@ export const CunningHeronGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
   }
   const choose = (goWith) => {
     if (phase !== 'ask') return;
-    if (it.trick) {
-      if (goWith) settle('eaten', 0);
-      else { settle('wise', Math.max(0, Math.min(2 + Math.floor(Math.random() * 2), coinsLeft - total))); playCoinSound(soundRef); }
-    } else if (goWith) { settle('joined', Math.max(0, Math.min(2 + Math.floor(Math.random() * 2), coinsLeft - total))); playCoinSound(soundRef); }
-    else settle('missedFair', 0);
+    if (goWith) settle('eaten', 0);
+    else { settle('wise', Math.max(0, Math.min(2 + Math.floor(Math.random() * 2), coinsLeft - total))); playCoinSound(soundRef); }
   };
   const lastCoins = won[won.length - 1] || 0;
   const message = {
-    wise: 'No thanks! You were wise. Nothing is free.',
-    eaten: 'Oh no! The heron ate the fish. Nothing is free!',
-    joined: 'Good! A fair deal: we share the work and the water.',
-    missedFair: 'The honest neighbour swam away. A fair deal was missed.',
+    wise: 'No thanks! You did not believe the lie. Nothing is free.',
+    eaten: `Oh no! The heron lied and ate the fish. ${eaten} fish lost. Do not believe a stranger's free offer!`,
     late: 'Too slow to decide. The heron flew off, for now.',
   }[outcome] || '';
 
@@ -2013,6 +2001,7 @@ export const CunningHeronGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
         <div className="bg-white/80 text-sky-900 font-bold text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 ml-12 sm:ml-16 min-w-0 truncate">🦩 The cunning heron</div>
         <div className="bg-yellow-300 text-yellow-900 font-black text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 shadow whitespace-nowrap flex-shrink-0">🪙 {total}{coinsLeft <= 0 ? ' (limit reached)' : ''}</div>
       </div>
+      <div className="absolute pointer-events-none bg-white font-black text-sm rounded-full px-3 py-1 shadow" style={{ left: '4%', bottom: '3%', color: eaten > 0 ? '#b91c1c' : '#047857', zIndex: 6 }}>{eaten > 0 ? `💀 ${eaten} fish lost` : '🐟 No fish lost'}</div>
       {/* the small drying pond with the fish left in it */}
       <div className="absolute left-1/2 -translate-x-1/2 rounded-[50%] flex items-center justify-center flex-wrap gap-1 px-4" style={{ bottom: '24%', width: 'min(86%, 420px)', height: 'clamp(70px, 16vh, 120px)', background: 'radial-gradient(circle at 50% 40%, #7dd3fc, #0284c7)', border: '5px solid #a8845a', boxShadow: 'inset 0 4px 10px rgba(0,0,0,.25)' }}>
         {Array.from({ length: HERON_ROUNDS - eaten }, (_, i) => <span key={i} className="select-none" style={{ fontSize: 'clamp(18px, 4vmin, 30px)', animation: `heronSwim ${1.4 + (i % 3) * 0.4}s ease-in-out infinite` }}>🐟</span>)}
@@ -2051,7 +2040,7 @@ export const CunningHeronGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
           <div className="bg-white text-gray-900 rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
             <div className="text-5xl mb-2">{eaten === 0 ? '🐟' : '🦩'}</div>
             <h2 className="text-2xl font-extrabold mb-1">{eaten === 0 ? 'Every fish is safe!' : `${HERON_ROUNDS - eaten} fish stayed safe`}</h2>
-            <p className="text-sm text-gray-600 mb-2">{eaten === 0 ? 'You were not fooled. A free offer from a stranger has a hidden price.' : `${eaten} fish went with the heron and ${eaten === 1 ? 'was' : 'were'} eaten. Nothing is free: a free offer from a stranger has a hidden price. Do not follow a stranger who is too kind.`}</p>
+            <p className="text-sm text-gray-600 mb-2">{eaten === 0 ? 'You did not believe the heron. A free ride was only a trick to eat you. Nothing is free.' : `💀 ${eaten} fish went with the heron and ${eaten === 1 ? 'was' : 'were'} eaten. The heron lied: a free ride was only a trick to eat them. Do not believe a stranger's kind words. Nothing is free.`}</p>
             <p className="text-lg font-bold text-yellow-600 mb-4">{total > 0 ? `🪙 +${total} coins for your Shrine Room wallet` : (coinsLeft <= 0 ? 'You have already earned all the coins for this lesson. Great job!' : 'No coins this time.')}</p>
             <GameButton disabled={leaving} onClick={() => { setLeaving(true); onDone(total); }} className="bg-sky-500 hover:bg-sky-600 text-white w-full text-xl">Continue →</GameButton>
           </div>
