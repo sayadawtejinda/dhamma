@@ -1943,7 +1943,7 @@ const makeHeronRounds = () => {
     ...HERON_FAIR.map(f => ({ trick: false, ...f })),
   ];
   for (let i = items.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [items[i], items[j]] = [items[j], items[i]]; }
-  return items;
+  return items.map(x => ({ ...x, flip: Math.random() < 0.5 })); // which answer comes up on the left
 };
 export const CunningHeronGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
   const [rounds] = useState(makeHeronRounds);
@@ -2005,6 +2005,8 @@ export const CunningHeronGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
         @keyframes heronBar { 0% { width: 100% } 100% { width: 0% } }
         @keyframes heronIn { 0% { transform: translateY(-30px) scale(.6); opacity: 0 } 100% { transform: translateY(0) scale(1); opacity: 1 } }
         @keyframes heronSwim { 0%,100% { transform: translateX(-8px) } 50% { transform: translateX(8px) } }
+        @keyframes heronArcA { 0% { left: 10%; top: 94%; animation-timing-function: cubic-bezier(.2,.7,.4,1) } 45% { left: 24%; top: var(--peak); animation-timing-function: cubic-bezier(.6,0,.8,.3) } 100% { left: 38%; top: 94% } }
+        @keyframes heronArcB { 0% { left: 90%; top: 94%; animation-timing-function: cubic-bezier(.2,.7,.4,1) } 45% { left: 76%; top: var(--peak); animation-timing-function: cubic-bezier(.6,0,.8,.3) } 100% { left: 62%; top: 94% } }
         @keyframes heronUp { 0% { transform: translateY(0); opacity: 0 } 15% { opacity: 1 } 100% { transform: translateY(-40px); opacity: 0 } }
       `}</style>
       <div className="absolute top-0 inset-x-0 flex items-center justify-between gap-2 px-3 py-3 z-10">
@@ -2030,10 +2032,16 @@ export const CunningHeronGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
               <div className="absolute left-1/2 -translate-x-1/2 rounded-full overflow-hidden bg-white/60" style={{ top: '62%', width: 'min(80%, 360px)', height: 10, zIndex: 5 }}>
                 <div key={r} className="h-full bg-red-500" style={{ animation: `heronBar ${HERON_ASK_MS}ms linear forwards` }} />
               </div>
-              <div className="absolute left-1/2 -translate-x-1/2 flex gap-3 w-full justify-center px-4" style={{ bottom: '4%', zIndex: 6 }}>
-                <GameButton onClick={() => choose(true)} className="bg-emerald-500 hover:bg-emerald-600 text-white flex-1 max-w-[190px]">✅ Go with them</GameButton>
-                <GameButton onClick={() => choose(false)} className="bg-rose-500 hover:bg-rose-600 text-white flex-1 max-w-[190px]">🙅 No thanks!</GameButton>
-              </div>
+              {/* the two answers are thrown up from the bottom in arcs, one from each side, and fall back down on the same side:
+                  the child taps one while it flies (a wrong tap is allowed -- it counts) */}
+              {[{ go: true, label: '✅ Go with them', cls: 'bg-emerald-500', peak: '50%' }, { go: false, label: '🙅 No thanks!', cls: 'bg-rose-500', peak: '58%' }].map((a, k) => (
+                <button
+                  key={`${r}-${a.go}`}
+                  onClick={() => choose(a.go)}
+                  className={`absolute font-extrabold text-white rounded-full shadow-xl px-4 py-3 whitespace-nowrap ${a.cls}`}
+                  style={{ zIndex: 6, transform: 'translate(-50%,-50%)', '--peak': a.peak, animation: `${(k === 0) !== it.flip ? 'heronArcA' : 'heronArcB'} ${HERON_ASK_MS}ms linear forwards` }}
+                >{a.label}</button>
+              ))}
             </>
           )}
         </>
