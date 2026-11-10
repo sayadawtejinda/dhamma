@@ -3205,6 +3205,13 @@ ${toSend.map(l => '• ' + l.title).join(', ')}`
             if (maxAvailable > 0) {
               const alreadyEarned = sd.earnedTrophies?.[lessonKey] || 0;
               capped = Math.max(0, Math.min(amount, maxAvailable - alreadyEarned));
+              // Lessons whose trophies are also given automatically (Smart Study, Dhammaschool, Abhidhamma, the small games): never
+              // approve more than the finished units deserve minus what is already given, so an old request cannot pay twice.
+              if (hasAutoTrophies(sessionData.lessonLink) && sessionData.lessonUnitCount > 0) {
+                const done = Math.max(sd.completedUnits?.[lessonKey] || 0, sessionData.completedUnit || 0);
+                const deserved = Math.min(maxAvailable, Math.floor((done * maxAvailable) / sessionData.lessonUnitCount));
+                capped = Math.max(0, Math.min(capped, deserved - alreadyEarned));
+              }
             }
           }
         }
@@ -9219,9 +9226,17 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       const already = sd.earnedTrophies?.[lessonKey] || 0;
       const deserved = Math.min(ceiling, Math.floor((highestUnit * ceiling) / unitCount));
       const amount = Math.max(0, deserved - already);
-      if (amount <= 0) return 0;
+      // A trophy request for this same lesson that is still waiting for the teacher (made by an older version of the app, or by a
+      // report) is now covered by this automatic award -- drop it, so approving it later cannot pay the same trophies a second time.
+      const requestCovered = sd.trophyRequested === true && !sd.requestedTrophyBreakdown && sd.requestedTrophyLessonTitle
+        && computeLessonKey(sd.requestedTrophyLessonTitle, sd.requestedTrophyLessonLink) === lessonKey;
+      const clearRequest = requestCovered ? {
+        trophyRequested: false, requestedTrophyAmount: 0, requestedTrophyLessonId: null, requestedTrophyLessonTitle: null,
+        requestedTrophyLessonLink: null, requestedTrophySessionId: null,
+      } : {};
+      if (amount <= 0) { if (requestCovered) tx.update(studentRef, clearRequest); return 0; }
       // no justEarnedTrophy flag here: the celebration is started straight away by the 'ss-trophy-granted' event below
-      tx.update(studentRef, { trophyCount: increment(amount), [`earnedTrophies.${lessonKey}`]: increment(amount) });
+      tx.update(studentRef, { trophyCount: increment(amount), [`earnedTrophies.${lessonKey}`]: increment(amount), ...clearRequest });
       newTotal = (sd.trophyCount || 0) + amount;
       return amount;
     });
