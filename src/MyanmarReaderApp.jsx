@@ -749,7 +749,8 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
   const [resumePosition, setResumePosition] = useState(null); // {chapterNum, sheetName} — furthest point reached
   const [lastActivePosition, setLastActivePosition] = useState(null); // {chapterNum, sheetName, index} — exact spot last reading, for auto-resume on reopen
   const [hasAutoResumedOnce, setHasAutoResumedOnce] = useState(false);
-  const [showGoToSheetBPrompt, setShowGoToSheetBPrompt] = useState(null); // chapterNum, or null
+  const [showGoToSheetBPrompt, setShowGoToSheetBPrompt] = useState(null); // { chapterNum, sheetName } of the sheet just finished (A -> asks for B, B -> asks for the next chapter's A), or null
+  const askedNextRef = useRef(new Set());  // the sheets already asked about in this visit, so the question comes once per sheet
   const [onlineStudents, setOnlineStudents] = useState([]); // full roster docs, for the shared panel below
   const [showOnlinePanel, setShowOnlinePanel] = useState(false);
   const [alreadyCompletedInfo, setAlreadyCompletedInfo] = useState(null); // {chapterNum, sheetName} | null
@@ -1244,10 +1245,14 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
       timestamp: serverTimestamp()
     }, { merge: true }).catch(e => console.error('Persist chapter score error:', e));
 
-    // Sequential guidance: nudge toward Sheet B right after Sheet A finishes.
-    // (This no longer moves the saved "resume here" point: reading ahead must
-    // not jump a student forward -- that follows the teacher's trophies.)
-    if (isComplete && sheetName === 'A') setShowGoToSheetBPrompt(chapterNum);
+    // Sequential guidance: the moment a sheet is finished (700+), ask whether to go on -- Sheet A -> Sheet B of the same chapter,
+    // Sheet B -> Sheet A of the next chapter -- so a student can read one after another. Asked once per sheet per visit.
+    // (This does not move the saved "resume here" point: reading ahead must not jump a student forward -- that follows the
+    // teacher's trophies.)
+    if (isComplete && currentScore >= 700 && !askedNextRef.current.has(`${chapterNum}_${sheetName}`)) {
+      askedNextRef.current.add(`${chapterNum}_${sheetName}`);
+      setShowGoToSheetBPrompt({ chapterNum, sheetName });
+    }
 
     // Mirror the same "what are they doing right now" info onto the roster
     // doc, since that's what the online panel actually reads from. setDoc
@@ -3394,19 +3399,35 @@ useEffect(() => {
         </div>
       )}
 
-      {/* Sequential nudge — right after Sheet A finishes, point at Sheet B for
-          the same chapter (the two sheets are a matched pair; the chapter
-          isn't "done" — and isn't worth any trophy — until both are). */}
-      {showGoToSheetBPrompt != null && (
-        <div className="fixed top-2 left-1/2 -translate-x-1/2 z-[9850] bg-indigo-50 border-2 border-indigo-300 text-indigo-800 px-5 py-2.5 rounded-2xl shadow-lg flex items-center gap-3 text-sm font-bold max-w-[90vw]">
-          <span>🎉 {SHEET_CHAPTER_PREFIX} {showGoToSheetBPrompt} Sheet A done! Now try Sheet B.</span>
-          <button
-            onClick={() => { fetchSheetData('B', getColumnName(showGoToSheetBPrompt - 1)); setShowGoToSheetBPrompt(null); }}
-            className="bg-indigo-500 hover:bg-indigo-600 text-white px-3 py-1 rounded-lg flex-shrink-0"
-          >Go to Sheet B</button>
-          <button onClick={() => setShowGoToSheetBPrompt(null)} className="text-indigo-500 hover:text-indigo-800 flex-shrink-0"><X size={18}/></button>
-        </div>
-      )}
+      {/* Sequential question -- right after a sheet is finished: Sheet A asks about Sheet B of the same chapter, Sheet B asks about
+          Sheet A of the next chapter (the last chapter has none). */}
+      {showGoToSheetBPrompt != null && (() => {
+        const { chapterNum: pc, sheetName: ps } = showGoToSheetBPrompt;
+        const next = ps === 'A' ? { ch: pc, sheet: 'B' } : (pc < TOTAL_CHAPTERS ? { ch: pc + 1, sheet: 'A' } : null);
+        const close = () => setShowGoToSheetBPrompt(null);
+        return (
+          <div className="fixed inset-0 z-[9860] flex items-center justify-center bg-black/40 px-4" onClick={close}>
+            <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full text-center border-4 border-indigo-300" onClick={e => e.stopPropagation()}>
+              <div className="text-5xl mb-2">🎉</div>
+              <h2 className="text-xl font-extrabold text-indigo-800 mb-1">{SHEET_CHAPTER_PREFIX} {pc} Sheet {ps} done!</h2>
+              {next ? (
+                <>
+                  <p className="text-gray-700 mb-4">{ps === 'A' ? `Do you want to go on to Sheet B of ${SHEET_CHAPTER_PREFIX} ${pc}?` : `${SHEET_CHAPTER_PREFIX} ${pc} is finished! Do you want to go on to ${SHEET_CHAPTER_PREFIX} ${next.ch}, Sheet A?`}</p>
+                  <div className="flex gap-3 justify-center">
+                    <button onClick={() => { fetchSheetData(next.sheet, getColumnName(next.ch - 1)); close(); }} className="bg-indigo-500 hover:bg-indigo-600 text-white font-bold px-5 py-2 rounded-xl">{next.sheet === 'B' ? '✅ Yes, Sheet B' : `✅ Yes, ${SHEET_CHAPTER_PREFIX} ${next.ch}`}</button>
+                    <button onClick={close} className="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold px-5 py-2 rounded-xl">Not now</button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="text-gray-700 mb-4">You have finished the last chapter. Well done!</p>
+                  <button onClick={close} className="bg-indigo-500 hover:bg-indigo-600 text-white font-bold px-5 py-2 rounded-xl">OK</button>
+                </>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Resume prompt — shown once after the name is known and before any
           chapter has been opened this session, pointing back to the furthest
