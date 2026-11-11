@@ -1318,6 +1318,8 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
                 groupsToUse.forEach(group => {
                     group.forEach(item => {
                         const burmeseName = item.name.split(' (')[0];
+                        // colours (Red, Blue...) are not counted, and the kitchen/food/animal groups hold some of them by position
+                        if (gameGroups.colors.items.some(c => c.name.split(' (')[0] === burmeseName)) return;
                         if (audioSpriteMap.has(burmeseName)) countableItems.push(item);
                     });
                 });
@@ -1346,7 +1348,18 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
             let classifier; 
             const burmeseName = countingGameState.correctItem.name.split(' (')[0];
             
-            if (["ကော်ဖီ", "လက်ဖက်ရည်", "ဖန်ခွက်", "နို့", "အချိုရည်"].includes(burmeseName)) classifier = "ခွက်";
+            if (["ကော်ဖီ", "လက်ဖက်ရည်", "နို့", "အချိုရည်", "ဒိန်ချဉ်", "နို့မစ်ရှိတ်"].includes(burmeseName)) classifier = "ခွက်";   // things we drink or eat from a cup
+            else if (["ဖန်ခွက်", "ပုလင်း", "ပန်းကန်လုံး", "ဒယ်အိုး", "ကြက်ဥကြော်"].includes(burmeseName)) classifier = "လုံး";   // the object itself, not what is in it
+            else if (["စပျစ်သီး"].includes(burmeseName)) classifier = "ခိုင်";    // a bunch
+            else if (["ပဲသီး"].includes(burmeseName)) classifier = "တောင့်";     // a pod
+            else if (["ခေါက်ဆွဲ"].includes(burmeseName)) classifier = "ပွဲ";      // a serving
+            else if (["ပြောင်းဖူးပေါက်"].includes(burmeseName)) classifier = "ထုပ်";   // a bag
+            else if (["မီးဖိုလက်အိတ်"].includes(burmeseName)) classifier = "စုံ";      // a pair
+            else if (["ပန်းကန်ပြား"].includes(burmeseName)) classifier = "ချပ်";     // a flat plate
+            else if (["ဇွန်း"].includes(burmeseName)) classifier = "ချောင်း";
+            else if (["ဒုံးပျံ"].includes(burmeseName)) classifier = "လုံး";
+            else if (["လေယာဉ်ပျံ", "ဟယ်လီကော်ပတာ", "ရထား", "မြေအောက်ရထား", "သင်္ဘော", "ကူးတို့သင်္ဘော"].includes(burmeseName)) classifier = "စင်း";   // aircraft, trains and ships
+            else if (["ထောပတ်", "လေထီး", "စွတ်ဖား"].includes(burmeseName)) classifier = "ခု";
             else if (["ဆိုဒါ", "ဆိုဒါဗူး", "ကိုကာကိုလာ"].includes(burmeseName)) classifier = "ဗူး";
             else if (["ကွတ်ကီး", "Sandwich"].includes(burmeseName)) classifier = "ခု";
             else if (["ဟင်းနုနွယ်", "ကညွှတ်"].includes(burmeseName)) classifier = "ပင်";
