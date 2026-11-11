@@ -297,7 +297,7 @@ const GROUP_APP_PART_MAX = {
     myanmarpoems: 24, // 2 self-recited poems = 1 trophy (48 poems / 2), confirmed by the teacher
     numberlearning: 16,
     animalsound: 5,
-    burmeselearninggames: 20,
+    burmeselearninggames: 10,
     interactivequiz: 5,
     timeandcalendar: 3,
   },
@@ -337,9 +337,9 @@ const GROUP_APP_PART_UNIT_COUNT = {
     // matches GROUP_APP_PART_MAX (1:1).
     animalsound: 5,
     // 1 trophy per 30 in-game round-wins (already the app's own trophyUnits
-    // math), capped at 20, confirmed by the teacher -- matches
+    // math), at most one a day and capped at 10 (it was 20), confirmed by the teacher -- matches
     // GROUP_APP_PART_MAX (1:1).
-    burmeselearninggames: 20,
+    burmeselearninggames: 10,
   },
 };
 // What to call one "unit" for each part above, for the Available Lessons

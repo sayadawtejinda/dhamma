@@ -906,12 +906,12 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
 
         // --- Progress persistence (roster doc, keyed by studentName) ---
         // Every handleWin() below (across all 4 mini-games) is a "round
-        // win" -- 30 of those = 1 real Tutoring trophy, capped at 20 total
-        // (so 600 wins is the max this ever credits); coins are separate
+        // win" -- 30 of those = 1 real Tutoring trophy, capped at 10 total
+        // (so 300 wins is the max this ever credits); coins are separate
         // and keep coming after the cap. Both persist across visits.
         const progressRosterRef = studentUid ? rosterDocRefByUid(db, BLG_ROSTER_PATH, studentUid) : null;
         const WINS_PER_TROPHY = 30;
-        const MAX_TROPHIES = 20;
+        const MAX_TROPHIES = 10;   // at most 10 trophies in all, and only one a day (see below)
         let totalWins = 0;
         // At most ONE trophy a day: the wins keep adding up, but a new trophy is released only once a day (the student's own day).
         let trophyUnitsGiven = 0;
@@ -2070,7 +2070,7 @@ export default function BurmeseLearningGamesApp({ entryRequest, onExit, hideOwnO
           panelTitle="🎮 Students"
           renderActivity={s => (
             <span className="text-gray-600">
-              {s.trophyUnits != null ? `${s.trophyUnits}/20 trophies` : 'Not practicing'}
+              {s.trophyUnits != null ? `${s.trophyUnits}/10 trophies` : 'Not practicing'}
               {s.coinBalance != null && <> · <span className="font-bold text-amber-600">🪙{s.coinBalance}</span></>}
             </span>
           )}
