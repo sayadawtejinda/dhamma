@@ -114,6 +114,33 @@ const treeGrowthScale = (plantedAt) => {
   return 0.55 + (weeks / TREE_MAX_GROWTH_WEEKS) * 0.95;
 };
 
+// Which way does this phone's 🐇 picture look? It differs between Android, Apple and Windows. Found by drawing it once and seeing on which side
+// the ears (the top of the picture) lean: that is the side of the head. Left when it cannot be told.
+let bunnyLooksLeftCache = null;
+const bunnyLooksLeft = () => {
+  if (bunnyLooksLeftCache !== null) return bunnyLooksLeftCache;
+  bunnyLooksLeftCache = true;
+  try {
+    const S = 96;
+    const c = document.createElement('canvas'); c.width = c.height = S;
+    const g = c.getContext('2d', { willReadFrequently: true });
+    g.font = '72px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif';
+    g.textBaseline = 'middle'; g.textAlign = 'center'; g.fillText('🐇', S / 2, S / 2 + 4);
+    const d = g.getImageData(0, 0, S, S).data;
+    let minX = S, maxX = 0, minY = S, maxY = 0;
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) if (d[(y * S + x) * 4 + 3] > 40) { if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; }
+    if (maxX <= minX || maxY <= minY) return bunnyLooksLeftCache;
+    const topY = minY + (maxY - minY) * 0.3;
+    let sum = 0, n = 0;
+    for (let y = minY; y <= topY; y++) for (let x = 0; x < S; x++) if (d[(y * S + x) * 4 + 3] > 40) { sum += x; n++; }
+    if (n > 0) {
+      const bias = sum / n - (minX + maxX) / 2;
+      if (Math.abs(bias) > 1.5) bunnyLooksLeftCache = bias < 0;
+    }
+  } catch (e) { /* keep the default */ }
+  return bunnyLooksLeftCache;
+};
+
 // A little rabbit that hops from plot to plot across the land the student
 // owns -- purely decorative, no coins. Picks a random unlocked plot every few
 // seconds and glides there, facing the way it's heading.
@@ -124,7 +151,7 @@ function Bunny({ unlockedCount, startDelayMs = 0 }) {
   });
   const randomCell = () => Math.floor(Math.random() * Math.max(1, unlockedCount));
   const [pos, setPos] = useState(() => cellOf(randomCell()));
-  // 🐇 (side view) faces left by default, so it's mirrored when heading right.
+  // 🐇 (side view) faces left on some phones and right on others (see bunnyLooksLeft), so it is mirrored to match where it heads.
   const [facingRight, setFacingRight] = useState(false);
   // Touching it shows the front-facing 🐰 for a moment.
   const [surprised, setSurprised] = useState(false);
@@ -161,7 +188,7 @@ function Bunny({ unlockedCount, startDelayMs = 0 }) {
       }}
     >
       <span className="inline-block text-2xl sm:text-3xl drop-shadow" style={{ animation: 'natureBunnyHop 0.45s ease-in-out infinite' }}>
-        <span className="inline-block" style={{ transform: surprised || !facingRight ? 'none' : 'scaleX(-1)' }}>{surprised ? '🐰' : '🐇'}</span>
+        <span className="inline-block" style={{ transform: surprised || facingRight !== bunnyLooksLeft() ? 'none' : 'scaleX(-1)' }}>{surprised ? '🐰' : '🐇'}</span>
       </span>
     </div>
   );
