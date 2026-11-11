@@ -1,8 +1,8 @@
 // The guided meditations of the Shrine Room. Each one is a plain text file in the folder src/meditations (see README.md there);
 // this file only reads them -- nothing here needs editing to add a meditation.
 //
-// While a recording plays, the line shown follows the recording (the lines are spread evenly over its length) and both repeat
-// until the sit ends. With no recording for the chosen language, a new line appears every 9 seconds.
+// A new line appears every 9 seconds; while a recording plays the line follows the recording's own clock at that same pace (record it
+// while watching the lines change every 9 seconds). Both repeat until the sit ends.
 // The meditations are listed in the order of their file names (Meditation 2 before Meditation 10); the first is the one shown
 // first, the others are chosen from the drop-down list.
 
