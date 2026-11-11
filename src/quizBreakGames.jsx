@@ -2051,10 +2051,163 @@ export const CunningHeronGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
 };
 
 // ---------------------------------------------------------------------------------------------------------------
+// Game 16: sharing the water. A big, kind elephant lives by a pond. Small animals come to drink one after another, but they are afraid
+// of the big elephant. The child taps each little animal to invite it kindly ("Come and drink!"): the elephant welcomes it, it drinks and
+// says thank you -- 2 or 3 coins. An animal that is not invited in time is frightened and runs away (no coins). Seven animals per game,
+// same timing and coins as the birds.
+const SHARE_COUNT = 7;
+const SHARE_FIRST_MS = 800;
+const SHARE_EVERY_MS = 1500;
+const SHARE_VISIBLE_MS = 3400;
+const SHARE_SCARED_MS = 1100;
+const SHARE_SIZE = 'clamp(44px, 9.5vmin, 76px)';
+const SHARE_ANIMALS = [
+  { e: '🐇', name: 'Rabbit' }, { e: '🐿️', name: 'Squirrel' }, { e: '🐥', name: 'Chick' }, { e: '🐸', name: 'Frog' },
+  { e: '🐢', name: 'Turtle' }, { e: '🐭', name: 'Mouse' }, { e: '🦔', name: 'Hedgehog' }, { e: '🐒', name: 'Monkey' },
+  { e: '🦌', name: 'Fawn' }, { e: '🐑', name: 'Lamb' },
+];
+const SHARE_THANKS = ['Thank you, Elephant!', 'The water is so good!', 'You are kind!', 'Thank you for sharing!'];
+const shareSpots = () => {
+  const out = [];
+  for (let i = 0; i < SHARE_COUNT; i++) {
+    let p = null;
+    for (let tries = 0; tries < 40; tries++) {
+      const left = Math.random() < 0.5;
+      const c = { x: left ? 8 + Math.random() * 20 : 72 + Math.random() * 20, y: 46 + Math.random() * 38 };
+      if (out.every(o => Math.hypot(o.x - c.x, (o.y - c.y) * 1.4) > 18)) { p = c; break; }
+    }
+    out.push(p || { x: Math.random() < 0.5 ? 14 : 84, y: 46 + Math.random() * 38 });
+  }
+  return out;
+};
+const ShareLabel = ({ it }) => (
+  <span className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap font-bold text-xs rounded-full px-2 py-0.5 shadow bg-white" style={{ top: '100%', color: '#075985' }}>{it.animal.name}</span>
+);
+export const ShareWaterGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
+  const [items] = useState(() => {
+    const animals = [...SHARE_ANIMALS].sort(() => Math.random() - 0.5).slice(0, SHARE_COUNT);
+    return shareSpots().map((p, i) => ({ id: i, x: p.x, y: p.y, animal: animals[i], thanks: SHARE_THANKS[i % SHARE_THANKS.length], toRight: p.x < 50 ? -1 : 1 }));
+  });
+  const [state, setState] = useState(() => Array(SHARE_COUNT).fill('waiting')); // waiting | here | drinking | scared | gone
+  const [won, setWon] = useState(() => Array(SHARE_COUNT).fill(0));
+  const [invite, setInvite] = useState(null);      // the animal the elephant is welcoming right now
+  const [finished, setFinished] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const total = won.reduce((a, b) => a + b, 0);
+  const shared = state.filter(v => v === 'drinking').length;
+  const scaredCount = state.filter(v => v === 'scared' || v === 'gone').length;   // 'gone' only follows 'scared'
+  const soundRef = useRef(null);
+
+  useEffect(() => {
+    const timers = [];
+    items.forEach((it) => {
+      const start = SHARE_FIRST_MS + it.id * SHARE_EVERY_MS;
+      timers.push(setTimeout(() => setState(st => st.map((v, i) => (i === it.id && v === 'waiting' ? 'here' : v))), start));
+      timers.push(setTimeout(() => setState(st => st.map((v, i) => (i === it.id && v === 'here' ? 'scared' : v))), start + SHARE_VISIBLE_MS));
+      timers.push(setTimeout(() => setState(st => st.map((v, i) => (i === it.id && v === 'scared' ? 'gone' : v))), start + SHARE_VISIBLE_MS + SHARE_SCARED_MS));
+    });
+    return () => timers.forEach(clearTimeout);
+  }, [items]);
+  useEffect(() => {
+    if (finished || !state.every(v => v === 'drinking' || v === 'gone')) return undefined;
+    const t = setTimeout(() => setFinished(true), 1800); // let the last animal finish drinking
+    return () => clearTimeout(t);
+  }, [state, finished]);
+
+  const call = (id) => {
+    if (state[id] !== 'here') return;
+    const coins = Math.max(0, Math.min(2 + Math.floor(Math.random() * 2), coinsLeft - total)); // 2 or 3, never past the lesson's limit
+    setState(st => st.map((v, i) => (i === id ? 'drinking' : v)));
+    setWon(w => w.map((v, i) => (i === id ? coins : v)));
+    setInvite(id);
+    setTimeout(() => setInvite(cur => (cur === id ? null : cur)), 1600);
+    playCoinSound(soundRef);
+  };
+
+  return (
+    <div className="relative overflow-hidden text-white h-screen" style={{ height: '100dvh', minHeight: 420, background: 'linear-gradient(180deg,#bae6fd 0%,#e0f2fe 30%,#d9f99d 30%,#a3d977 100%)' }}>
+      <style>{`
+        @keyframes shwPop { 0% { opacity: 0; transform: scale(.4) } 100% { opacity: 1; transform: scale(1) } }
+        @keyframes shwShy { 0%,100% { transform: translateX(-3px) } 50% { transform: translateX(3px) } }
+        @keyframes shwRun { 0% { transform: translateX(0) rotate(0); opacity: 1 } 100% { transform: translateX(calc(var(--run) * 120px)) rotate(calc(var(--run) * 14deg)); opacity: 0 } }
+        @keyframes shwDrink { 0%,100% { transform: translateY(0) } 50% { transform: translateY(5px) } }
+        @keyframes shwUp { 0% { transform: translateY(0); opacity: 0 } 15% { opacity: 1 } 100% { transform: translateY(-46px); opacity: 0 } }
+        @keyframes shwSway { 0%,100% { transform: translateX(-50%) rotate(-3deg) } 50% { transform: translateX(-50%) rotate(3deg) } }
+      `}</style>
+      <div className="absolute top-0 inset-x-0 flex items-center justify-between gap-2 px-3 py-3 z-10">
+        <div className="bg-white/80 text-sky-900 font-bold text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 ml-12 sm:ml-16 min-w-0 truncate">🐘 Invite the little ones to drink</div>
+        <div className="bg-yellow-300 text-yellow-900 font-black text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 shadow whitespace-nowrap flex-shrink-0">🪙 {total}{coinsLeft <= 0 ? ' (limit reached)' : ''}</div>
+      </div>
+      <div className="absolute pointer-events-none" style={{ right: '7%', top: '9%', fontSize: 'clamp(40px, 9vmin, 80px)' }}>☀️</div>
+      <div className="absolute pointer-events-none" style={{ left: '5%', top: '14%', fontSize: 'clamp(34px, 8vmin, 66px)' }}>🌳</div>
+      {/* the pond, with the elephant standing at its edge */}
+      <div className="absolute rounded-[50%]" style={{ left: '50%', top: '58%', transform: 'translateX(-50%)', width: 'min(44%, 280px)', height: 'clamp(70px, 18vh, 130px)', background: 'radial-gradient(circle at 50% 40%, #7dd3fc, #0369a1)', border: '5px solid #a8845a', boxShadow: 'inset 0 4px 10px rgba(0,0,0,.25)' }} />
+      <div className="absolute select-none" style={{ left: '50%', top: '30%', fontSize: 'clamp(70px, 17vmin, 130px)', lineHeight: 1, transform: 'translateX(-50%)', animation: 'shwSway 2.4s ease-in-out infinite', zIndex: 3 }}>🐘</div>
+      {invite != null && (
+        <div className="absolute text-center whitespace-nowrap" style={{ left: '50%', top: '19%', transform: 'translateX(-50%)', zIndex: 8, animation: 'shwPop .3s ease-out' }}>
+          <div className="bg-white text-sky-900 font-bold text-sm rounded-full px-3 py-1 shadow-lg">🐘 Come, little {items[invite].animal.name.toLowerCase()}, drink with me!</div>
+        </div>
+      )}
+      {shared > 0 && <div className="absolute pointer-events-none bg-white text-sky-700 font-black text-sm rounded-full px-3 py-1 shadow" style={{ left: '4%', bottom: '3%' }}>💧 {shared}</div>}
+      {items.map((it, i) => {
+        const st = state[i];
+        if (st === 'waiting' || st === 'gone') return null;
+        const pos = { left: `${it.x}%`, top: `${it.y}%`, transform: 'translate(-50%,-50%)' };
+        if (st === 'drinking') {
+          return (
+            <div key={it.id} className="absolute pointer-events-none" style={{ ...pos, zIndex: 6 }}>
+              <span className="block select-none" style={{ fontSize: SHARE_SIZE, lineHeight: 1, animation: 'shwDrink .5s ease-in-out infinite' }}>{it.animal.e}</span>
+              <span className="absolute select-none" style={{ left: it.toRight === -1 ? '90%' : '-40%', bottom: '-6%', fontSize: 'clamp(18px, 4vmin, 30px)' }}>💧</span>
+              <ShareLabel it={it} />
+              <div className="absolute left-1/2 -translate-x-1/2 text-center whitespace-nowrap" style={{ top: `calc(${SHARE_SIZE} * -0.9)`, animation: 'shwUp 2.2s ease-out forwards' }}>
+                <div className="bg-white text-sky-900 font-bold text-sm rounded-full px-3 py-1 shadow">🙏 {it.thanks}</div>
+                {won[i] > 0 && <div className="font-black text-yellow-600 drop-shadow">+{won[i]} 🪙</div>}
+              </div>
+            </div>
+          );
+        }
+        if (st === 'scared') {
+          return (
+            <div key={it.id} className="absolute pointer-events-none" style={{ ...pos, zIndex: 5 }}>
+              <div style={{ '--run': it.x < 50 ? -1 : 1, animation: `shwRun ${SHARE_SCARED_MS}ms ease-in forwards` }}>
+                <span className="block select-none" style={{ fontSize: SHARE_SIZE, lineHeight: 1 }}>{it.animal.e}</span>
+                <span className="absolute select-none" style={{ right: '-20%', top: '-24%', fontSize: 'clamp(18px, 4vmin, 30px)' }}>😱</span>
+              </div>
+            </div>
+          );
+        }
+        return (
+          <button key={it.id} onClick={() => call(it.id)} aria-label={`Invite the ${it.animal.name} to drink`} className="absolute" style={{ ...pos, zIndex: 5, animation: 'shwPop .35s ease-out' }}>
+            <div style={{ animation: 'shwShy .5s ease-in-out infinite' }}>
+              <span className="block select-none" style={{ fontSize: SHARE_SIZE, lineHeight: 1 }}>{it.animal.e}</span>
+              <span className="absolute select-none" style={{ right: '-26%', top: '-22%', fontSize: 'clamp(16px, 3.6vmin, 26px)' }}>💧❓</span>
+            </div>
+            <ShareLabel it={it} />
+          </button>
+        );
+      })}
+      {finished && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20 px-4">
+          <div className="bg-white text-gray-900 rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
+            <div className="text-5xl mb-2">{shared > 0 ? '🐘' : '🌤️'}</div>
+            <h2 className="text-2xl font-extrabold mb-1">{shared > 0 ? `You shared the water with ${shared} animal${shared === 1 ? '' : 's'}!` : 'Nice try!'}</h2>
+            <p className="text-sm text-gray-600 mb-2">{shared > 0
+              ? `A kind invitation makes the little ones brave. Sharing makes everyone happy.${scaredCount > 0 ? ` ${scaredCount} ran away frightened because nobody invited them.` : ''}`
+              : 'The little animals were afraid of the big elephant. Invite them quickly and kindly.'}</p>
+            <p className="text-lg font-bold text-yellow-600 mb-4">{total > 0 ? `🪙 +${total} coins for your Shrine Room wallet` : (coinsLeft <= 0 ? 'You have already earned all the coins for this lesson. Great job!' : 'No coins this time.')}</p>
+            <GameButton disabled={leaving} onClick={() => { setLeaving(true); onDone(total); }} className="bg-sky-500 hover:bg-sky-600 text-white w-full text-xl">Continue →</GameButton>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------------------------------------------
 // The games, in the order they are handed out. A lesson always gets the same game (so a retake feels familiar and the
 // coin cap stays one per lesson), but neighbouring lessons get different ones, so the break does not become boring.
 // To add a game: write it above with the same two props and put it in this list.
-export const QUIZ_BREAK_GAMES = [BirdRescueGame, FlowerOfferingGame, LitterPickingGame, AnimalRescueGame, WoodcutterAxeGame, AntGatheringGame, WaterAnimalsGame, HelpFriendsGame, PayRespectGame, TenGiftsGame, ReturnLostItemsGame, HelpParentsGame, AlmsRoundGame, GoldenEggDuckGame, CunningHeronGame];
+export const QUIZ_BREAK_GAMES = [BirdRescueGame, FlowerOfferingGame, LitterPickingGame, AnimalRescueGame, WoodcutterAxeGame, AntGatheringGame, WaterAnimalsGame, HelpFriendsGame, PayRespectGame, TenGiftsGame, ReturnLostItemsGame, HelpParentsGame, AlmsRoundGame, GoldenEggDuckGame, CunningHeronGame, ShareWaterGame];
 const hashOf = (s) => { let h = 0; String(s ?? '').split('').forEach(ch => { h = (h * 31 + ch.charCodeAt(0)) >>> 0; }); return h; };
 export const quizBreakGameFor = (lessonId) => QUIZ_BREAK_GAMES[hashOf(lessonId) % QUIZ_BREAK_GAMES.length];
 export const QuizBreakGame = ({ lessonId, ...rest }) => {
