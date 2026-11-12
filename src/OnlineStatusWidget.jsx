@@ -49,7 +49,7 @@ const rosterSnapshotCache = new Map();
 export const loadRosterSnapshot = (rosterPath) => {
   if (!rosterSnapshotCache.has(rosterPath)) {
     rosterSnapshotCache.set(rosterPath, fetch(`${import.meta.env.BASE_URL}rosterSnapshots/${rosterPath.replace(/\//g, '__')}.json`)
-      .then(r => (r.ok ? r.json() : null)).then(j => (j && j.docs) || null).catch(() => null));
+      .then(r => (r.ok ? r.json() : null)).then(j => { if (!(j && j.docs)) return null; j.docs.generatedAt = j.generatedAt || null; return j.docs; }).catch(() => null));
   }
   return rosterSnapshotCache.get(rosterPath);
 };
@@ -88,7 +88,10 @@ export function useOnlineRoster(rosterPath, filterDocs, lastSeenField = 'lastSee
 
   const roster = (filterDocs ? rosterDocs.filter(filterDocs) : rosterDocs).map(s => {
     const lastSeenMs = toMillis(s[lastSeenField]);
-    const since = lastSeenMs > 0 ? nowTick - lastSeenMs : Infinity;
+    // A list from the weekly file is a snapshot: "this week" is the 7 days before the file was made, not before today, so every
+    // student sees the same list all week long (it used to shrink day by day until the next weekly refresh).
+    const fileAt = fromFile && rosterDocs.generatedAt ? Date.parse(rosterDocs.generatedAt) : 0;
+    const since = lastSeenMs > 0 ? (fileAt > 0 ? Math.max(0, fileAt - lastSeenMs) + WARNING_MS + 1 : nowTick - lastSeenMs) : Infinity;
     return {
       ...s,
       _isOnlineNow: since < ONLINE_MS,
