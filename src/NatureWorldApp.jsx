@@ -383,6 +383,21 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
     });
     return () => { off = true; };
   }, [studentUid, studentName]);
+  // Thank-you notes: a friend I sent a gift to opened it. They saved that only in THEIR OWN doc (giftsOpened has my
+  // name), so it comes from the same weekly file -- nothing is written into anyone else's doc. Up to a week late.
+  const [thanks, setThanks] = useState([]);
+  useEffect(() => {
+    if (!studentUid || !studentName) return;
+    let off = false;
+    loadRosterSnapshot(SHRINE_ROSTER_PATH).then(docs => {
+      if (off || !docs) return;
+      setThanks(docs
+        .filter(d => d.studentName && d.studentName !== studentName && (d.natureWorld?.giftsOpened || []).some(k => k === `gift:${studentName}` || String(k).startsWith(`${studentName}-`)))
+        .map(d => ({ name: d.studentName, gift: giftForVisit(`gift:${studentName}`) })));
+    });
+    return () => { off = true; };
+  }, [studentUid, studentName]);
+  const [sendPop, setSendPop] = useState(false); // the little gift that flies away for 2 seconds when I send one
   const [showVisitorsPanel, setShowVisitorsPanel] = useState(false);
   const [heartRainId, setHeartRainId] = useState(null);
   // Opening a visitor's gift shakes out hearts, and the plant inside goes into
@@ -537,6 +552,7 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
     setVisitingStudentName(targetName);
     setVisitingWorld(null);
     setVisitGiftNote(null);
+    setSendPop(false);
     setVisitLoading(true);
     try {
       const docs = await loadRosterSnapshot(SHRINE_ROSTER_PATH);
@@ -557,6 +573,8 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
             setWorld(prev => ({ ...prev, giftWeekKey: weekKey, giftWeekGiven: nextGiven, giftedFriends: nextGifted }));
             persist({ natureWorld: { giftWeekKey: weekKey, giftWeekGiven: nextGiven, giftedFriends: nextGifted } });
             setVisitGiftNote(`📦 ➜ ${targetName} 🎁 (${nextGiven.length}/${GIFTS_SENT_PER_WEEK})`);
+            setSendPop(true);
+            setTimeout(() => setSendPop(false), 2000);
           } else {
             setVisitGiftNote(`🎁 ${GIFTS_SENT_PER_WEEK}/${GIFTS_SENT_PER_WEEK} ✅ 🌸`);
           }
@@ -576,7 +594,7 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
     visitStartedRef.current = true;
     handleVisitStudent(entryRequest.visit);
   }, [loading]);
-  const closeVisit = () => { setVisitingStudentName(null); setVisitingWorld(null); setVisitGiftNote(null); if (entryRequest?.visit && onExit) onExit(); };
+  const closeVisit = () => { setVisitingStudentName(null); setVisitingWorld(null); setVisitGiftNote(null); setSendPop(false); if (entryRequest?.visit && onExit) onExit(); };
 
   const renderGrid = (w, { interactive }) => (
     <div className="relative w-full">
@@ -717,12 +735,12 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
         )}
       />
 
-      {!isTeacherPreview && recentVisitors.length > 0 && (
+      {!isTeacherPreview && (recentVisitors.length > 0 || thanks.length > 0) && (
         <button
           onClick={() => { setFrozenOpened(world.giftsOpened || []); setShowVisitorsPanel(true); }}
           className="fixed top-16 right-3 z-50 flex items-center gap-1 bg-white hover:bg-emerald-50 text-emerald-700 text-sm font-semibold px-3 py-2 rounded-full shadow-lg border-2 border-emerald-300"
         >
-          🎁 Gifts ({recentVisitors.length})
+          {recentVisitors.length > 0 ? `🎁 Gifts (${recentVisitors.length})` : `💌 Thank-yous (${thanks.length})`}
         </button>
       )}
 
@@ -846,7 +864,7 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
             <h2 className="text-lg font-bold text-emerald-800 mb-1">🎁 Your gifts</h2>
             <p className="text-xs text-gray-400 mb-4">🎁</p>
             {recentVisitors.length === 0 ? (
-              <p className="text-3xl mb-4">🎁 ❌</p>
+              <p className="text-3xl mb-4">{thanks.length > 0 ? '💌' : '🎁 ❌'}</p>
             ) : (
               <div className="space-y-2 mb-4 max-h-64 overflow-y-auto text-left">
                 {recentVisitors.map((v, i) => {
@@ -867,6 +885,19 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
                 })}
               </div>
             )}
+            {thanks.length > 0 && (
+              <div className="mb-4 text-left">
+                <h3 className="text-sm font-bold text-emerald-800 mb-2 text-center">💌 Thank-you notes</h3>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {thanks.map(t => (
+                    <div key={t.name} className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                      <span className="text-2xl flex-shrink-0">{t.gift.emoji}</span>
+                      <span className="text-sm text-gray-800"><b>{t.name}</b> opened your gift: “Thank you for the {t.gift.name}! 🙏”</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <button onClick={() => { setShowVisitorsPanel(false); setFrozenOpened(null); }} className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2.5 rounded-xl">
               Close
             </button>
@@ -877,6 +908,12 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
       {/* Visit -- a read-only peek at another student's world. */}
       {visitingStudentName && (
         <div className="fixed inset-0 z-[10001] bg-black/60 flex items-center justify-center p-4" onClick={closeVisit}>
+          {sendPop && (
+            <div className="pointer-events-none fixed z-[10003] text-5xl" style={{ left: '30%', top: '45%', animation: 'giftFly 2s ease-in forwards' }}>
+              <style>{`@keyframes giftFly { 0% { transform: translate(0,0) scale(.4) rotate(0); opacity: 0 } 15% { transform: translate(10px,-20px) scale(1.2) rotate(-8deg); opacity: 1 } 100% { transform: translate(60vw,-60vh) scale(.5) rotate(25deg); opacity: 0 } }`}</style>
+              📦🎁
+            </div>
+          )}
           <div className="relative bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 text-center max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <button onClick={closeVisit} className="absolute top-2 right-2 z-[10002] w-11 h-11 rounded-full bg-red-600 hover:bg-red-700 text-white text-2xl font-bold shadow-lg flex items-center justify-center" aria-label="Close">×</button>
             <h2 className="text-lg font-bold text-emerald-800 mb-2">🌿 {visitingStudentName}'s Nature World</h2>

@@ -1134,6 +1134,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   const [creditFriends, setCreditFriends] = useState(null); // null = the old record (every visited friend counts)
   const [creditWeek, setCreditWeek] = useState({ week: null, n: 0 });
   const [visitGiftNote, setVisitGiftNote] = useState(null);
+  const [giftPop, setGiftPop] = useState(null); // the gift emojis that pop up for 2 seconds when a visit gives a gift
 
   const rosterRef = studentUid ? doc(db, SHRINE_ROSTER_PATH, sanitizeShrineKey(studentName)) : null;
 
@@ -1152,6 +1153,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     setVisitingStudentName(targetName);
     setVisitingData(null);
     setVisitGiftNote(null);
+    setGiftPop(null);
     setVisitLoading(true);
     try {
       // Their altar is last week's picture from the weekly static roster file (no Firestore read); only if that
@@ -1202,7 +1204,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     visitStartedRef.current = true;
     handleVisitStudent(entryRequest.visit);
   }, [loading]);
-  const closeVisit = () => { setVisitingStudentName(null); setVisitingData(null); setVisitGiftNote(null); if (entryRequest?.visit && onExit) onExit(); };
+  const closeVisit = () => { setVisitingStudentName(null); setVisitingData(null); setVisitGiftNote(null); setGiftPop(null); if (entryRequest?.visit && onExit) onExit(); };
 
   // Picks up to SHRINE_GIFTS_PER_VISIT different offerings from the altar
   // being visited as gifts (a friend only ever gives once; the Golden
@@ -1237,6 +1239,8 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     setGiftDay({ date: today, count: gotToday + picks.length });
     persist({ shrineGifts: nextGifts, shrineGiftFriends: nextFriends, shrineGiftDay: today, shrineGiftDayCount: gotToday + picks.length });
     setVisitGiftNote(`🎁 ${picks.map(id => `${findOffering(id).emoji || ''} ${findOffering(id).name}`).join(' + ')} → 🛍️ FREE!`);
+    setGiftPop(picks.map(id => findOffering(id).emoji || '🎁'));
+    setTimeout(() => setGiftPop(null), 2000);
   }
   // A gift is used up the moment the free purchase is made.
   const takeGift = (offeringId) => {
@@ -1964,6 +1968,12 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
           state. */}
       {visitingStudentName && (
         <div className="fixed inset-0 z-[10001] bg-black/60 flex items-center justify-center p-4" onClick={closeVisit}>
+          {giftPop && (
+            <div className="pointer-events-none fixed left-1/2 z-[10003] flex gap-2 text-5xl" style={{ top: '40%', animation: 'giftPopUp 2s ease-out forwards' }}>
+              <style>{`@keyframes giftPopUp { 0% { transform: translate(-50%,0) scale(.3); opacity: 0 } 20% { transform: translate(-50%,-20px) scale(1.25); opacity: 1 } 70% { transform: translate(-50%,-50px) scale(1); opacity: 1 } 100% { transform: translate(-50%,-90px) scale(.9); opacity: 0 } }`}</style>
+              {giftPop.map((e, i) => <span key={i}>{e}</span>)}<span>🎁</span>
+            </div>
+          )}
           <div className="relative bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <button onClick={closeVisit} className="absolute top-2 right-2 z-[10002] w-11 h-11 rounded-full bg-red-600 hover:bg-red-700 text-white text-2xl font-bold shadow-lg flex items-center justify-center" aria-label="Close">×</button>
             <h2 className="text-lg font-bold text-emerald-800 mb-2">🛕 {visitingStudentName}'s Shrine Room</h2>
