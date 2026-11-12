@@ -2204,10 +2204,145 @@ export const ShareWaterGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
 };
 
 // ---------------------------------------------------------------------------------------------------------------
+// Game 17: the school of many skills (learn something useful). Eight lessons, half about making an honest living (farming,
+// carpentry, sewing, pottery, cooking, healing, teaching, Right Livelihood), half about the Dhamma (Four Noble Truths, Eightfold
+// Path, Five Precepts, loving-kindness, breathing meditation, giving/morality/mind training, Three Jewels, kamma). Each lesson first
+// shows a short teaching card (no timer, read at your own pace), then asks one question with two answers. A right answer gives 2 or 3
+// coins; a wrong one shows the right answer and gives none. The student learns first, so the coins are earned by learning.
+const SCHOOL_ROUNDS = 8;
+const SCHOOL_RESULT_MS = 2300;
+const SCHOOL_LESSONS = [
+  { kind: 'Livelihood', emoji: '🌾', title: 'Farming', teach: 'A farmer ploughs the field, sows the seed and waters the plants. After the rains the rice is harvested and shared with everyone.', q: 'What does a farmer grow in the field?', right: 'Rice and vegetables', wrong: 'Bricks and roofs' },
+  { kind: 'Livelihood', emoji: '🪚', title: 'Carpentry', teach: 'A carpenter measures, saws and joins wood to make doors, chairs and houses. A good carpenter measures twice and cuts once.', q: 'What does a carpenter work with?', right: 'Wood', wrong: 'Cloth' },
+  { kind: 'Livelihood', emoji: '🧵', title: 'Sewing', teach: 'A tailor measures the body, cuts the cloth and sews it with a needle and thread to make clothes. Robes for monks are sewn this way too.', q: 'Who makes clothes from cloth?', right: 'A tailor', wrong: 'A potter' },
+  { kind: 'Livelihood', emoji: '🏺', title: 'Pottery', teach: 'A potter shapes wet clay with the hands, lets it dry, then bakes it in a hot kiln. Pots, cups and water jars are made like this.', q: 'What is a clay pot made from?', right: 'Clay from the earth', wrong: 'Paper' },
+  { kind: 'Livelihood', emoji: '🍲', title: 'Cooking', teach: 'A cook washes the food, cooks it well and keeps the kitchen clean, so that people who eat it stay healthy and strong.', q: 'Why must a cook keep the kitchen clean?', right: 'So the food is safe to eat', wrong: 'So the food lasts for years' },
+  { kind: 'Livelihood', emoji: '🩺', title: 'Healing', teach: 'A doctor or nurse studies medicine to look after sick people. The Buddha praised caring for the sick as a very good deed.', q: 'Who does a doctor look after?', right: 'Sick people', wrong: 'Only rich people' },
+  { kind: 'Livelihood', emoji: '📚', title: 'Teaching', teach: 'A teacher shares what they know, so that students learn to read, write, count and think wisely. Teaching is a gift that never runs out.', q: 'What does a teacher share?', right: 'Knowledge', wrong: 'Only toys' },
+  { kind: 'Livelihood', emoji: '⚖️', title: 'Right Livelihood', teach: 'The Buddha taught Right Livelihood: earn your living honestly, without harming others. Selling weapons, living beings, meat, alcohol or poison is wrong livelihood.', q: 'Which job is Right Livelihood?', right: 'Growing vegetables', wrong: 'Selling weapons' },
+  { kind: 'Dhamma', emoji: '☸️', title: 'Four Noble Truths', teach: 'The Buddha taught four truths: there is suffering, suffering has a cause, suffering can end, and there is a path that leads to its end.', q: 'How many Noble Truths did the Buddha teach?', right: 'Four', wrong: 'Nine' },
+  { kind: 'Dhamma', emoji: '🛤️', title: 'Noble Eightfold Path', teach: 'The path to the end of suffering has eight parts: right view, intention, speech, action, livelihood, effort, mindfulness and concentration.', q: 'How many parts does the Noble Eightfold Path have?', right: 'Eight', wrong: 'Three' },
+  { kind: 'Dhamma', emoji: '🙏', title: 'Five Precepts', teach: 'Lay Buddhists keep five precepts: not to kill, not to steal, not to lie, not to misuse sensual pleasures, and not to take alcohol or drugs.', q: 'Which one is a precept?', right: 'Do not steal', wrong: 'Do not sleep' },
+  { kind: 'Dhamma', emoji: '💗', title: 'Loving-kindness (Metta)', teach: 'Metta is loving-kindness. We sit quietly and wish, "May all beings be happy and free from suffering", for ourselves, our family and everyone.', q: 'What do we wish for others in Metta?', right: 'Happiness', wrong: 'Trouble' },
+  { kind: 'Dhamma', emoji: '🌬️', title: 'Breathing meditation', teach: 'Sit calmly with a straight back and know each in-breath and each out-breath. When the mind wanders, gently bring it back to the breath.', q: 'In breathing meditation, what do we watch?', right: 'The breath', wrong: 'A video' },
+  { kind: 'Dhamma', emoji: '🎁', title: 'Dana, Sila, Bhavana', teach: 'There are three ways to make merit: Dana is giving, Sila is keeping the precepts, and Bhavana is training the mind by meditation.', q: 'What is Dana?', right: 'Giving', wrong: 'Sleeping' },
+  { kind: 'Dhamma', emoji: '💎', title: 'The Three Jewels', teach: 'The Three Jewels are the Buddha, the Dhamma (his teaching) and the Sangha (the noble community). We take refuge in them.', q: 'The Three Jewels are the Buddha, the Dhamma and the...', right: 'Sangha', wrong: 'Nibbana' },
+  { kind: 'Dhamma', emoji: '🌱', title: 'Kamma', teach: 'Kamma means action done on purpose. Good actions of body, speech and mind bring happy results later; bad actions bring unhappy results.', q: 'What do good actions bring?', right: 'Happy results', wrong: 'Unhappy results' },
+];
+const shuffled = (a) => { const b = [...a]; for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } return b; };
+const makeSchoolRounds = () => {
+  const half = SCHOOL_ROUNDS / 2;
+  const pick = (kind) => shuffled(SCHOOL_LESSONS.filter(l => l.kind === kind)).slice(0, half);
+  return shuffled([...pick('Livelihood'), ...pick('Dhamma')]).map(l => ({ ...l, flip: Math.random() < 0.5 }));
+};
+export const SchoolOfSkillsGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
+  const [rounds] = useState(makeSchoolRounds);
+  const [r, setR] = useState(0);
+  const [phase, setPhase] = useState('learn');   // learn | quiz | result
+  const [picked, setPicked] = useState(null);    // 'right' | 'wrong'
+  const [results, setResults] = useState([]);    // true / false for each lesson
+  const [won, setWon] = useState([]);
+  const [finished, setFinished] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const soundRef = useRef(null);
+  const total = won.reduce((a, b) => a + b, 0);
+  const learned = results.filter(Boolean).length;
+  const it = rounds[r];
+
+  // after the answer is shown: next lesson, or the end
+  useEffect(() => {
+    if (finished || phase !== 'result') return undefined;
+    const t = setTimeout(() => {
+      if (r + 1 >= SCHOOL_ROUNDS) setFinished(true);
+      else { setR(r + 1); setPhase('learn'); setPicked(null); }
+    }, SCHOOL_RESULT_MS);
+    return () => clearTimeout(t);
+  }, [r, phase, finished]);
+
+  const answer = (isRight) => {
+    if (phase !== 'quiz') return;
+    const coins = isRight ? Math.max(0, Math.min(2 + Math.floor(Math.random() * 2), coinsLeft - total)) : 0;
+    if (coins > 0) playCoinSound(soundRef);
+    setPicked(isRight ? 'right' : 'wrong');
+    setResults(x => [...x, isRight]);
+    setWon(w => [...w, coins]);
+    setPhase('result');
+  };
+  const lastCoins = won[won.length - 1] || 0;
+  const options = it ? (it.flip ? [['wrong', it.wrong], ['right', it.right]] : [['right', it.right], ['wrong', it.wrong]]) : [];
+  const isLivelihood = it && it.kind === 'Livelihood';
+
+  return (
+    <div className="relative overflow-hidden text-white h-screen" style={{ height: '100dvh', minHeight: 420, background: 'linear-gradient(180deg,#e0f2fe 0%,#fef9c3 100%)' }}>
+      <style>{`
+        @keyframes schoolIn { 0% { transform: translateY(-24px) scale(.7); opacity: 0 } 100% { transform: translateY(0) scale(1); opacity: 1 } }
+        @keyframes schoolUp { 0% { transform: translateY(0); opacity: 0 } 15% { opacity: 1 } 100% { transform: translateY(-40px); opacity: 0 } }
+      `}</style>
+      <div className="absolute top-0 inset-x-0 flex items-center justify-between gap-2 px-3 py-3 z-10">
+        <div className="bg-white/80 text-sky-900 font-bold text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 ml-12 sm:ml-16 min-w-0 truncate">🎓 School of many skills</div>
+        <div className="bg-yellow-300 text-yellow-900 font-black text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 shadow whitespace-nowrap flex-shrink-0">🪙 {total}{coinsLeft <= 0 ? ' (limit reached)' : ''}</div>
+      </div>
+      {/* the skills learned so far, on a shelf */}
+      <div className="absolute inset-x-0 flex items-center justify-center gap-1 flex-wrap px-4" style={{ top: 62, zIndex: 4 }}>
+        {Array.from({ length: SCHOOL_ROUNDS }, (_, i) => (
+          <span key={i} className="select-none rounded-full flex items-center justify-center" style={{ width: 'clamp(26px, 6vmin, 36px)', height: 'clamp(26px, 6vmin, 36px)', background: i < results.length ? (results[i] ? '#86efac' : '#fecaca') : (i === r ? '#fde047' : 'rgba(255,255,255,.7)'), fontSize: 'clamp(14px, 3.4vmin, 20px)' }}>{i < results.length ? rounds[i].emoji : ''}</span>
+        ))}
+      </div>
+      {!finished && it && (
+        <div key={r} className="absolute left-1/2 text-center" style={{ top: 112, transform: 'translateX(-50%)', width: 'min(92%, 440px)', zIndex: 5, animation: 'schoolIn .4s ease-out' }}>
+          <div className="select-none" style={{ fontSize: 'clamp(54px, 12vmin, 90px)', lineHeight: 1 }}>{it.emoji}</div>
+          <div className="mt-1 flex items-center justify-center gap-2">
+            <span className="font-extrabold text-sm rounded-full px-3 py-0.5 shadow bg-white" style={{ color: '#78350f' }}>{it.title}</span>
+            <span className="font-bold text-xs rounded-full px-2 py-0.5 shadow text-white" style={{ background: isLivelihood ? '#d97706' : '#7c3aed' }}>{isLivelihood ? '🛠️ Livelihood' : '☸️ Dhamma'}</span>
+          </div>
+          {phase === 'learn' && (
+            <>
+              <div className="mt-3 bg-white text-gray-800 font-semibold text-sm sm:text-base rounded-2xl px-4 py-3 shadow-lg text-left">{it.teach}</div>
+              <div className="mt-4 flex justify-center">
+                <GameButton onClick={() => setPhase('quiz')} className="bg-emerald-500 hover:bg-emerald-600 text-white w-full max-w-[260px] text-lg">I learned it! →</GameButton>
+              </div>
+            </>
+          )}
+          {phase === 'quiz' && (
+            <>
+              <div className="mt-3 bg-white text-gray-800 font-bold text-sm sm:text-base rounded-2xl px-4 py-3 shadow-lg">{it.q}</div>
+              <div className="mt-3 flex flex-col gap-3 items-center">
+                {options.map(([k, label]) => (
+                  <GameButton key={k} onClick={() => answer(k === 'right')} className="bg-sky-500 hover:bg-sky-600 text-white w-full max-w-[320px]">{label}</GameButton>
+                ))}
+              </div>
+            </>
+          )}
+          {phase === 'result' && (
+            <>
+              <div className="mt-3 bg-white text-gray-800 font-bold text-sm sm:text-base rounded-2xl px-4 py-3 shadow-lg">
+                {picked === 'right' ? `Well done! ${it.right}.` : `Not quite. The answer is: ${it.right}.`}
+              </div>
+              {lastCoins > 0 && <div className="font-black text-yellow-600 drop-shadow mt-2" style={{ animation: 'schoolUp 2s ease-out forwards' }}>+{lastCoins} 🪙</div>}
+            </>
+          )}
+        </div>
+      )}
+      {finished && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20 px-4">
+          <div className="bg-white text-gray-900 rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
+            <div className="text-5xl mb-2">{learned >= SCHOOL_ROUNDS ? '🎓' : '📖'}</div>
+            <h2 className="text-2xl font-extrabold mb-1">{learned >= SCHOOL_ROUNDS ? 'You learned every skill!' : `You learned ${learned} of ${SCHOOL_ROUNDS} skills`}</h2>
+            <p className="text-sm text-gray-600 mb-2">A good living and a good heart go together. Skills help us look after our family, and the Dhamma helps us look after our mind.</p>
+            <p className="text-lg font-bold text-yellow-600 mb-4">{total > 0 ? `🪙 +${total} coins for your Shrine Room wallet` : (coinsLeft <= 0 ? 'You have already earned all the coins for this lesson. Great job!' : 'No coins this time.')}</p>
+            <GameButton disabled={leaving} onClick={() => { setLeaving(true); onDone(total); }} className="bg-sky-500 hover:bg-sky-600 text-white w-full text-xl">Continue →</GameButton>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------------------------------------------
 // The games, in the order they are handed out. A lesson always gets the same game (so a retake feels familiar and the
 // coin cap stays one per lesson), but neighbouring lessons get different ones, so the break does not become boring.
 // To add a game: write it above with the same two props and put it in this list.
-export const QUIZ_BREAK_GAMES = [BirdRescueGame, FlowerOfferingGame, LitterPickingGame, AnimalRescueGame, WoodcutterAxeGame, AntGatheringGame, WaterAnimalsGame, HelpFriendsGame, PayRespectGame, TenGiftsGame, ReturnLostItemsGame, HelpParentsGame, AlmsRoundGame, GoldenEggDuckGame, CunningHeronGame, ShareWaterGame];
+export const QUIZ_BREAK_GAMES = [BirdRescueGame, FlowerOfferingGame, LitterPickingGame, AnimalRescueGame, WoodcutterAxeGame, AntGatheringGame, WaterAnimalsGame, HelpFriendsGame, PayRespectGame, TenGiftsGame, ReturnLostItemsGame, HelpParentsGame, AlmsRoundGame, GoldenEggDuckGame, CunningHeronGame, ShareWaterGame, SchoolOfSkillsGame];
 const hashOf = (s) => { let h = 0; String(s ?? '').split('').forEach(ch => { h = (h * 31 + ch.charCodeAt(0)) >>> 0; }); return h; };
 export const quizBreakGameFor = (lessonId) => QUIZ_BREAK_GAMES[hashOf(lessonId) % QUIZ_BREAK_GAMES.length];
 export const QuizBreakGame = ({ lessonId, ...rest }) => {
