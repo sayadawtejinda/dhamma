@@ -4,7 +4,7 @@ import { listenLiveOrOnce, isOnlineStatusDay } from './presenceDay';
 import { useLiveWatch } from './liveWatch';
 import { AvatarPeekModal } from './AvatarPeek';
 import { X } from 'lucide-react';
-import { HolyRankBadge } from './Awards';
+import { HolyRankBadge, StudyBook } from './Awards';
 import { db } from './firebase';
 
 // One shared "who's online" pill + panel, used the same way in every app in
@@ -164,6 +164,8 @@ export default function OnlineStatusWidget({
   rankField = null,
   // Name of a roster number (e.g. 'lessonsDone') the weekly list is sorted by, the most first.
   sortField = null,
+  // 'ss' | 'abhi' | 'ds': with sortField, each row shows its place; places 1-3 wear the open-book medal (ties share a place)
+  rankKind = null,
   // A room can decide what a tap on a NAME does (e.g. open that friend's room with their Avatar); return false to fall back to the Avatar window.
   onNameTap = null,
   // true: when a student opens the list it scrolls to their own name and marks it (a yellow row with a "You" tag)
@@ -257,6 +259,12 @@ export default function OnlineStatusWidget({
                 <div key={s.id} ref={isSelf ? selfRowRef : undefined} className={`flex items-center justify-between p-3 rounded-xl border ${isSelf ? 'bg-yellow-100 border-yellow-400 ring-2 ring-yellow-400' : isWarning ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-100'}`}>
                   <div className="flex items-center gap-2">
                     {rankedAll && <HolyRankBadge rank={idx + 1} />}
+                    {!rankedAll && rankKind && sortField && (() => {
+                      const place = 1 + shownList.filter(o => (o[sortField] || 0) > (s[sortField] || 0)).length;
+                      return place <= 3 && (s[sortField] || 0) > 0
+                        ? <span className="w-8 flex justify-center"><StudyBook kind={rankKind} tier={place} size={26} /></span>
+                        : <span className="w-8 text-center text-sm font-bold text-gray-400">{place}</span>;
+                    })()}
                     <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${s._isOnlineNow ? 'bg-emerald-500' : isWarning ? 'bg-red-500' : 'bg-gray-300'}`}></span>
                     <button type="button" className="font-bold text-gray-800 hover:underline text-left" title="See their Avatar" onClick={(e) => { e.stopPropagation(); const handled = onNameTap ? onNameTap(s) : false; if (handled === false || !onNameTap) setPeekName(s.studentName || s.name); }}>{s.studentName || s.name}</button>
                   </div>

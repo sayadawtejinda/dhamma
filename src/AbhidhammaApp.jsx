@@ -1613,6 +1613,7 @@ export default function AbhidhammaApp({ entryRequest, onExit, isActive }) {
           panelTitle="📚 Students"
           teacherLabel="👩‍🏫 Teacher"
           sortField="lessonsDone"
+ rankKind="abhi"
           panelNote="Lessons finished, the most first (updated weekly)."
           weeklyLabel={(n) => <>👥 {n} active students</>}
           highlightSelf

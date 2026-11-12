@@ -3926,6 +3926,7 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
             filterDocs={(d) => d.status === 'approved'}
             renderActivity={(s) => s.lessonsDone != null ? <span className="text-gray-600 font-semibold">{s.lessonsDone} lessons done</span> : <span className="text-gray-600">{s.classId}{s.currentLessonId ? ` · ${s.currentLessonId}` : ''}</span>}
             sortField="lessonsDone"
+ rankKind="ss"
             panelNote="Lessons finished, the most first (updated weekly)."
             weeklyLabel={(n) => <>👥 {n} active students</>}
             listAllActive
@@ -3940,6 +3941,7 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
             filterDocs={(d) => d.status === 'approved'}
             renderActivity={(s) => s.lessonsDone != null ? <span className="text-gray-600 font-semibold">{s.lessonsDone} lessons done</span> : <span className="text-gray-600">{s.classId}{s.currentLessonId ? ` · ${s.currentLessonId}` : ''}</span>}
             sortField="lessonsDone"
+ rankKind="ss"
             panelNote="Lessons finished, the most first (updated weekly)."
             weeklyLabel={(n) => <>👥 {n} active students</>}
             highlightSelf

@@ -4938,6 +4938,7 @@ function renderClickableWords(text) {
         panelTitle="📖 Students"
         teacherLabel="👩‍🏫 Teacher"
         sortField="lessonsDone"
+ rankKind="ds"
         panelNote="Lessons finished, the most first (updated weekly)."
         weeklyLabel={(n) => <>👥 {n} active students</>}
         highlightSelf
