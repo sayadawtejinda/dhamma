@@ -2359,13 +2359,14 @@ const TEN_PAIRS = [
   { part: 'Mind', badName: 'Wrong view (micchādiṭṭhi)', goodName: 'Right view: kamma is real (the opposite of wrong view)', bad: ['🌫️', 'Wrong view'], good: ['☸️', 'Right view: kamma is real'] },
 ];
 const PART_EMOJI = { Body: '🧍', Speech: '🗣️', Mind: '🧠' };
-const makeTenRounds = () => {
-  const items = [...TEN_PAIRS];
+const makeTenRounds = (pairs) => () => {
+  const items = [...pairs];
   for (let i = items.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [items[i], items[j]] = [items[j], items[i]]; }
   return items.map(x => ({ ...x, flip: Math.random() < 0.5 })); // which one is thrown up from the left
 };
-export const TenDeedsGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
-  const [rounds] = useState(makeTenRounds);
+// the same game for any list of ten good/bad pairs; cfg = { pairs, title, partText(pair), prompt, doneAll, doneSome(n), doneText }
+const ArcDeedsGame = ({ cfg, onDone, coinsLeft = BIRD_COIN_CAP }) => {
+  const [rounds] = useState(makeTenRounds(cfg.pairs));
   const [r, setR] = useState(0);
   const [phase, setPhase] = useState('ask');      // ask | result
   const [outcome, setOutcome] = useState(null);   // good | bad | late
@@ -2422,7 +2423,7 @@ export const TenDeedsGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
         @keyframes tenUp { 0% { transform: translateY(0); opacity: 0 } 15% { opacity: 1 } 100% { transform: translateY(-40px); opacity: 0 } }
       `}</style>
       <div className="absolute top-0 inset-x-0 flex items-center justify-between gap-2 px-3 py-3 z-10">
-        <div className="bg-white/85 text-violet-900 font-bold text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 ml-12 sm:ml-16 min-w-0 truncate">☸️ Ten wrong, ten right deeds</div>
+        <div className="bg-white/85 text-violet-900 font-bold text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 ml-12 sm:ml-16 min-w-0 truncate">{cfg.title}</div>
         <div className="bg-yellow-300 text-yellow-900 font-black text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 shadow whitespace-nowrap flex-shrink-0">🪙 {total}{coinsLeft <= 0 ? ' (limit reached)' : ''}</div>
       </div>
       {/* the ten pairs: green = the good deed was chosen, red = missed */}
@@ -2434,9 +2435,9 @@ export const TenDeedsGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
       {!finished && it && (
         <>
           <div key={r} className="absolute left-1/2 text-center" style={{ top: '14%', transform: 'translateX(-50%)', width: 'min(92%, 420px)', zIndex: 5, animation: 'tenIn .4s ease-out' }}>
-            <div className="select-none" style={{ fontSize: 'clamp(44px, 11vmin, 80px)', lineHeight: 1 }}>{PART_EMOJI[it.part]}</div>
-            <div className="mt-1 font-bold text-xs rounded-full px-3 py-0.5 inline-block shadow bg-white" style={{ color: '#5b21b6' }}>Deeds of the {it.part.toLowerCase()}</div>
-            <div className="mt-2 bg-white text-gray-800 font-bold text-sm sm:text-base rounded-2xl px-4 py-3 shadow-lg">{phase === 'ask' ? 'Tap the GOOD deed before it falls!' : message}</div>
+            <div className="select-none" style={{ fontSize: 'clamp(44px, 11vmin, 80px)', lineHeight: 1 }}>{it.icon || PART_EMOJI[it.part]}</div>
+            <div className="mt-1 font-bold text-xs rounded-full px-3 py-0.5 inline-block shadow bg-white" style={{ color: '#5b21b6' }}>{cfg.partText(it)}</div>
+            <div className="mt-2 bg-white text-gray-800 font-bold text-sm sm:text-base rounded-2xl px-4 py-3 shadow-lg">{phase === 'ask' ? cfg.prompt : message}</div>
             {phase === 'result' && lastCoins > 0 && <div className="font-black text-yellow-300 drop-shadow mt-1" style={{ animation: 'tenUp 2s ease-out forwards' }}>+{lastCoins} 🪙</div>}
           </div>
           {phase === 'ask' && (
@@ -2461,8 +2462,8 @@ export const TenDeedsGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
         <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20 px-4">
           <div className="bg-white text-gray-900 rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
             <div className="text-5xl mb-2">{goodCount >= TEN_ROUNDS ? '🌟' : '☸️'}</div>
-            <h2 className="text-2xl font-extrabold mb-1">{goodCount >= TEN_ROUNDS ? 'All ten good deeds!' : `${goodCount} of ${TEN_ROUNDS} good deeds chosen`}</h2>
-            <p className="text-sm text-gray-600 mb-2">Three deeds of the body, four of the speech and three of the mind. Leave the wrong deeds, do the right deeds, and your life becomes happy.</p>
+            <h2 className="text-2xl font-extrabold mb-1">{goodCount >= TEN_ROUNDS ? cfg.doneAll : cfg.doneSome(goodCount)}</h2>
+            <p className="text-sm text-gray-600 mb-2">{cfg.doneText}</p>
             <p className="text-lg font-bold text-yellow-600 mb-4">{total > 0 ? `🪙 +${total} coins for your Shrine Room wallet` : (coinsLeft <= 0 ? 'You have already earned all the coins for this lesson. Great job!' : 'No coins this time.')}</p>
             <GameButton disabled={leaving} onClick={() => { setLeaving(true); onDone(total); }} className="bg-sky-500 hover:bg-sky-600 text-white w-full text-xl">Continue →</GameButton>
           </div>
@@ -2472,11 +2473,40 @@ export const TenDeedsGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
   );
 };
 
+export const TenDeedsGame = (props) => <ArcDeedsGame cfg={{
+  pairs: TEN_PAIRS, title: '☸️ Ten wrong, ten right deeds', partText: (it) => `Deeds of the ${it.part.toLowerCase()}`, prompt: 'Tap the GOOD deed before it falls!',
+  doneAll: 'All ten good deeds!', doneSome: (n) => `${n} of ${TEN_ROUNDS} good deeds chosen`,
+  doneText: 'Three deeds of the body, four of the speech and three of the mind. Leave the wrong deeds, do the right deeds, and your life becomes happy.',
+}} {...props} />;
+
+// ---------------------------------------------------------------------------------------------------------------
+// Game 19: the ten ways of making merit (puñña-kiriya-vatthu), played like game 18. Each way is thrown up beside its opposite
+// (giving / greed, morality / misconduct, calming the mind / laziness, respect / rudeness, helping at home / only playing, sharing
+// merit / keeping it all, rejoicing / jealousy, listening to the Dhamma / not listening, teaching the Dhamma / keeping it to oneself,
+// right view / wrong view). Tap the way of making merit for 2 or 3 coins.
+const MERIT_PAIRS = [
+  { icon: '🎁', part: 'Dana', badName: 'Greed and stinginess', goodName: 'Giving (dāna)', bad: ['🤑', 'Wanting everything for myself'], good: ['🎁', 'Giving to others (dāna)'] },
+  { icon: '🙏', part: 'Sila', badName: 'Breaking the precepts, doing wrong deeds', goodName: 'Good conduct (sīla)', bad: ['⚠️', 'Doing wrong deeds'], good: ['🙏', 'Keeping good conduct (sīla)'] },
+  { icon: '🧘', part: 'Bhavana', badName: 'Laziness', goodName: 'Calming the mind by meditation (bhāvanā)', bad: ['😴', 'Being lazy'], good: ['🧘', 'Calming the mind (bhāvanā)'] },
+  { icon: '🧎', part: 'Apacayana', badName: 'Rudeness', goodName: 'Respecting parents and elders (apacāyana)', bad: ['😤', 'Being rude to elders'], good: ['🧎', 'Respecting parents and elders'] },
+  { icon: '🧹', part: 'Veyyavacca', badName: 'Only wanting to play', goodName: 'Helping with the housework (veyyāvacca)', bad: ['🎮', 'Only wanting to play'], good: ['🧹', 'Helping with the housework'] },
+  { icon: '🤲', part: 'Pattidana', badName: 'Keeping all the merit for oneself', goodName: 'Sharing merit with others (pattidāna)', bad: ['🔒', 'Keeping all the merit for myself'], good: ['🤲', 'Sharing merit with everyone'] },
+  { icon: '😊', part: 'Pattanumodana', badName: 'Jealousy', goodName: 'Rejoicing in the good deeds of others (pattānumodanā)', bad: ['😒', 'Being jealous of others'], good: ['😊', 'Rejoicing in others' good deeds'] },
+  { icon: '👂', part: 'Dhammassavana', badName: 'Not listening', goodName: 'Listening to the Dhamma (dhammassavana)', bad: ['🙉', 'Not listening, only chatting'], good: ['👂', 'Listening to the Dhamma'] },
+  { icon: '📢', part: 'Dhammadesana', badName: 'Keeping good knowledge to oneself', goodName: 'Teaching the Dhamma to others (dhammadesanā)', bad: ['🤐', 'Hiding the Dhamma from others'], good: ['📢', 'Teaching the Dhamma to others'] },
+  { icon: '☸️', part: 'Ditthujukamma', badName: 'Wrong view', goodName: 'Straightening the view: knowing that kamma is real (diṭṭhujukamma)', bad: ['🌫️', 'Believing kamma is nothing'], good: ['☸️', 'Right view: kamma is real'] },
+];
+export const TenMeritGame = (props) => <ArcDeedsGame cfg={{
+  pairs: MERIT_PAIRS, title: '🪷 Ten ways to make merit', partText: (it) => `Making merit: ${it.part}`, prompt: 'Tap the way to make MERIT before it falls!',
+  doneAll: 'All ten ways of merit!', doneSome: (n) => `${n} of ${TEN_ROUNDS} ways of merit chosen`,
+  doneText: 'Giving, good conduct, meditation, respect, service, sharing merit, rejoicing, listening, teaching and straight view: ten ways to make merit and a happy life.',
+}} {...props} />;
+
 // ---------------------------------------------------------------------------------------------------------------
 // The games, in the order they are handed out. A lesson always gets the same game (so a retake feels familiar and the
 // coin cap stays one per lesson), but neighbouring lessons get different ones, so the break does not become boring.
 // To add a game: write it above with the same two props and put it in this list.
-export const QUIZ_BREAK_GAMES = [BirdRescueGame, FlowerOfferingGame, LitterPickingGame, AnimalRescueGame, WoodcutterAxeGame, AntGatheringGame, WaterAnimalsGame, HelpFriendsGame, PayRespectGame, TenGiftsGame, ReturnLostItemsGame, HelpParentsGame, AlmsRoundGame, GoldenEggDuckGame, CunningHeronGame, ShareWaterGame, SchoolOfSkillsGame, TenDeedsGame];
+export const QUIZ_BREAK_GAMES = [BirdRescueGame, FlowerOfferingGame, LitterPickingGame, AnimalRescueGame, WoodcutterAxeGame, AntGatheringGame, WaterAnimalsGame, HelpFriendsGame, PayRespectGame, TenGiftsGame, ReturnLostItemsGame, HelpParentsGame, AlmsRoundGame, GoldenEggDuckGame, CunningHeronGame, ShareWaterGame, SchoolOfSkillsGame, TenDeedsGame, TenMeritGame];
 const hashOf = (s) => { let h = 0; String(s ?? '').split('').forEach(ch => { h = (h * 31 + ch.charCodeAt(0)) >>> 0; }); return h; };
 export const quizBreakGameFor = (lessonId) => QUIZ_BREAK_GAMES[hashOf(lessonId) % QUIZ_BREAK_GAMES.length];
 export const QuizBreakGame = ({ lessonId, ...rest }) => {
