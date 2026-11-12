@@ -1237,7 +1237,7 @@ export const PayRespectGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
 
 // ---------------------------------------------------------------------------------------------------------------
 // Game 10: the ten kinds of giving (dana). One person in need appears at a time -- a child, a poor person, a monk and so on --
-// saying what they would like. Three gifts wait on the tray; tap the one they like, quickly, before the time bar runs out: they
+// saying what they would like. Two gifts wait on the tray; tap the one they like, quickly, before the time bar runs out: they
 // are glad and you get 2 or 3 coins. A wrong gift is politely refused (try another while there is time); no gift in time means no
 // coins. Seven people per game, picked at random, never past the lesson's coin limit.
 const DANA_COUNT = 7;
@@ -1270,9 +1270,9 @@ const DANA_PEOPLE = [
   { icon: '🧑‍🦯', who: 'A person in the dark', says: 'I cannot see in the dark.', wants: 'lamp' },
 ];
 const shuffleDana = (a) => [...a].sort(() => Math.random() - 0.5);
-// The seven people of one game, each with the three gifts on the tray (the wanted one and two others, shuffled).
+// The seven people of one game, each with two gifts on the tray (the wanted one and one other, shuffled).
 const makeDanaRounds = () => shuffleDana(DANA_PEOPLE).slice(0, DANA_COUNT).map((p, i) => {
-  const others = shuffleDana(Object.keys(DANA_GIFTS).filter(k => k !== p.wants)).slice(0, 2);
+  const others = shuffleDana(Object.keys(DANA_GIFTS).filter(k => k !== p.wants)).slice(0, 1);
   return { ...p, id: i, options: shuffleDana([p.wants, ...others]), thanks: DANA_THANKS[i % DANA_THANKS.length] };
 });
 export const TenGiftsGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
@@ -1345,7 +1345,7 @@ export const TenGiftsGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
           <div className="bg-white/90 text-amber-900 font-bold text-xs rounded-full px-3 py-1 shadow mt-1">{cur.who}</div>
         </div>
       )}
-      {/* the tray of three gifts */}
+      {/* the tray of two gifts */}
       {!finished && (
         <div className="absolute inset-x-0 bottom-0 pb-5 px-3 z-10">
           <div className="text-center font-bold text-amber-900 text-sm mb-2">Which gift do they like?</div>
