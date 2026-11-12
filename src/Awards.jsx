@@ -104,7 +104,7 @@ export function awardsFor(top, { name, id } = {}) {
   return list;
 }
 
-// The awards a student HAS (the teacher gave them, and they still hold that place): `profile` = their own live record when known.
+// The awards a student HAS (the teacher gave them, and they still hold that place; the three lessons honours need no giving: whoever holds the place wears it): `profile` = their own live record when known.
 // The student's own Home page keeps a copy of what was given to them on THIS device (a live record it already has: no read), so the
 // Avatar, Shrine Room and Bodhi Tree -- which only have the weekly file -- show an award the day it is given, not a week later.
 const GIVEN_CACHE = 'badgesGivenCopy:';
@@ -116,7 +116,7 @@ export function useAwards({ name, id, profile } = {}) {
   const data = useBadgeData();
   const copy = !profile ? readGivenCopy(name) : null;
   const given = copy ? { ...givenOf(data, name, profile), ...copy } : givenOf(data, name, profile);
-  return awardsFor(top, { name, id }).filter(a => given[`award-${a.kind}`] === a.tier).map(a => ({ ...a, generatedAt: top.generatedAt }));
+  return awardsFor(top, { name, id }).filter(a => STUDY_KINDS.includes(a.kind) || given[`award-${a.kind}`] === a.tier).map(a => ({ ...a, generatedAt: top.generatedAt }));
 }
 
 // ---- the drawings ----
