@@ -2491,7 +2491,7 @@ const MERIT_PAIRS = [
   { icon: '🧎', part: 'Apacayana', badName: 'Rudeness', goodName: 'Respecting parents and elders (apacāyana)', bad: ['😤', 'Being rude to elders'], good: ['🧎', 'Respecting parents and elders'] },
   { icon: '🧹', part: 'Veyyavacca', badName: 'Only wanting to play', goodName: 'Helping with the housework (veyyāvacca)', bad: ['🎮', 'Only wanting to play'], good: ['🧹', 'Helping with the housework'] },
   { icon: '🤲', part: 'Pattidana', badName: 'Keeping all the merit for oneself', goodName: 'Sharing merit with others (pattidāna)', bad: ['🔒', 'Keeping all the merit for myself'], good: ['🤲', 'Sharing merit with everyone'] },
-  { icon: '😊', part: 'Pattanumodana', badName: 'Jealousy', goodName: 'Rejoicing in the good deeds of others (pattānumodanā)', bad: ['😒', 'Being jealous of others'], good: ['😊', 'Rejoicing in others' good deeds'] },
+  { icon: '😊', part: 'Pattanumodana', badName: 'Jealousy', goodName: 'Rejoicing in the good deeds of others (pattānumodanā)', bad: ['😒', 'Being jealous of others'], good: ['😊', 'Rejoicing in good deeds of others'] },
   { icon: '👂', part: 'Dhammassavana', badName: 'Not listening', goodName: 'Listening to the Dhamma (dhammassavana)', bad: ['🙉', 'Not listening, only chatting'], good: ['👂', 'Listening to the Dhamma'] },
   { icon: '📢', part: 'Dhammadesana', badName: 'Keeping good knowledge to oneself', goodName: 'Teaching the Dhamma to others (dhammadesanā)', bad: ['🤐', 'Hiding the Dhamma from others'], good: ['📢', 'Teaching the Dhamma to others'] },
   { icon: '☸️', part: 'Ditthujukamma', badName: 'Wrong view', goodName: 'Straightening the view: knowing that kamma is real (diṭṭhujukamma)', bad: ['🌫️', 'Believing kamma is nothing'], good: ['☸️', 'Right view: kamma is real'] },
