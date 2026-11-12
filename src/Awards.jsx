@@ -23,7 +23,27 @@ export const JOY_AWARDS = [
   { tier: 2, metal: 'silver', en: 'Cheerful Heart Award', emoji: '🥈' },
   { tier: 3, metal: 'bronze', en: 'Happy Learner Award', emoji: '🥉' },
 ];
-const LISTS = { trophy: AWARDS, holy: HOLY_AWARDS, joy: JOY_AWARDS };
+// For the three students who have finished the most lessons in each of the three study apps (an open book on the Avatar).
+export const SS_AWARDS = [
+  { tier: 1, metal: 'gold', en: 'Smart Study Grand Scholar Award', emoji: '🥇' },
+  { tier: 2, metal: 'silver', en: 'Smart Study Bright Scholar Award', emoji: '🥈' },
+  { tier: 3, metal: 'bronze', en: 'Smart Study Rising Scholar Award', emoji: '🥉' },
+];
+export const ABHI_AWARDS = [
+  { tier: 1, metal: 'gold', en: 'Abhidhamma Grand Scholar Award', emoji: '🥇' },
+  { tier: 2, metal: 'silver', en: 'Abhidhamma Bright Scholar Award', emoji: '🥈' },
+  { tier: 3, metal: 'bronze', en: 'Abhidhamma Rising Scholar Award', emoji: '🥉' },
+];
+export const DS_AWARDS = [
+  { tier: 1, metal: 'gold', en: 'Dhammaschool Grand Scholar Award', emoji: '🥇' },
+  { tier: 2, metal: 'silver', en: 'Dhammaschool Bright Scholar Award', emoji: '🥈' },
+  { tier: 3, metal: 'bronze', en: 'Dhammaschool Rising Scholar Award', emoji: '🥉' },
+];
+export const STUDY_KINDS = ['ss', 'abhi', 'ds'];
+const STUDY_SYMBOL = { ss: '💡', abhi: '☸️', ds: '🏫' };
+const STUDY_WHAT = { ss: 'Smart Study lessons', abhi: 'Abhidhamma lessons', ds: 'Dhammaschool lessons' };
+const LISTS = { trophy: AWARDS, holy: HOLY_AWARDS, joy: JOY_AWARDS, ss: SS_AWARDS, abhi: ABHI_AWARDS, ds: DS_AWARDS };
+export const AWARD_LIST_BY_KIND = LISTS;
 
 const METALS = {
   gold: { light: '#fff6b0', mid: '#f5c518', dark: '#a87a06', edge: '#7a5600', plate: ['#fff1a6', '#e8b923', '#c99710'] },
@@ -43,7 +63,8 @@ const loadTop = () => {
     topPromise = Promise.all([
       fetch(`${base}weeklySnapshot.json`).then(r => (r.ok ? r.json() : null)).catch(() => null),
       fetch(`${base}rosterSnapshots/artifacts__shrine-room-app__public__data__roster.json`).then(r => (r.ok ? r.json() : null)).catch(() => null),
-    ]).then(([snap, shrine]) => {
+      fetch(`${base}lessonTop.json`).then(r => (r.ok ? r.json() : null)).catch(() => null), // the weekly job's top three by lessons finished
+    ]).then(([snap, shrine, lessons]) => {
       const trophy = withPlaces(((snap && snap.trophyList) || []).filter(s => (s.trophyCount || 0) > 0)
         .sort((a, b) => (b.trophyCount || 0) - (a.trophyCount || 0)), s => s.trophyCount || 0,
         (s, tier) => ({ id: s.id, name: s.name, count: s.trophyCount || 0, tier }));
@@ -53,14 +74,15 @@ const loadTop = () => {
       const joy = withPlaces(((snap && snap.attendanceRankedList) || []).filter(s => !s.isOffline && (s.attended || 0) > 0)
         .sort((a, b) => (b.attended || 0) - (a.attended || 0)), s => s.attended || 0,
         (s, tier) => ({ id: s.id, name: s.name, count: s.attended || 0, tier }));
-      return { trophy, holy, joy, generatedAt: (snap && snap.generatedAt) || (shrine && shrine.generatedAt) || null };
-    }).catch(() => { topPromise = null; return { trophy: [], holy: [], joy: [], generatedAt: null }; });
+      const study = Object.fromEntries(STUDY_KINDS.map(k => [k, ((lessons && lessons[k]) || []).filter(x => x.tier >= 1 && x.tier <= 3)]));
+      return { trophy, holy, joy, ...study, generatedAt: (snap && snap.generatedAt) || (shrine && shrine.generatedAt) || null };
+    }).catch(() => { topPromise = null; return { trophy: [], holy: [], joy: [], ss: [], abhi: [], ds: [], generatedAt: null }; });
   }
   return topPromise;
 };
 
 export function useTopThree() {
-  const [data, setData] = useState({ trophy: [], holy: [], joy: [], generatedAt: null });
+  const [data, setData] = useState({ trophy: [], holy: [], joy: [], ss: [], abhi: [], ds: [], generatedAt: null });
   useEffect(() => { let off = false; loadTop().then(d => { if (!off) setData(d); }); return () => { off = true; }; }, []);
   return data;
 }
@@ -75,6 +97,10 @@ export function awardsFor(top, { name, id } = {}) {
   if (h) list.push({ kind: 'holy', tier: h.tier, name: h.name, count: h.count, info: HOLY_AWARDS[h.tier - 1] });
   const j = (joy || []).find(s => (id && s.id === id) || (name && s.name === name));
   if (j) list.push({ kind: 'joy', tier: j.tier, name: j.name, count: j.count, info: JOY_AWARDS[j.tier - 1] });
+  STUDY_KINDS.forEach(kind => {
+    const w = (top[kind] || []).find(s => (id && s.id === id) || (name && s.name === name));
+    if (w) list.push({ kind, tier: w.tier, name: w.name, count: w.count, info: LISTS[kind][w.tier - 1] });
+  });
   return list;
 }
 
@@ -217,7 +243,38 @@ export function JoySun({ tier = 1, size = 96, className = '' }) {
   );
 }
 
+// An open book on a small stand, with the symbol of the study app above it.
+export function StudyBook({ kind = 'ss', tier = 1, size = 96, className = '' }) {
+  const list = LISTS[kind];
+  const m = METALS[list[tier - 1].metal];
+  const gid = `book-${kind}-${tier}`;
+  return (
+    <svg viewBox="0 0 100 112" width={size} height={size * 1.12} className={className} role="img" aria-label={list[tier - 1].en}>
+      <defs>
+        <linearGradient id={`${gid}-s`} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stopColor={m.dark} /><stop offset="0.4" stopColor={m.light} /><stop offset="1" stopColor={m.dark} />
+        </linearGradient>
+        <radialGradient id={`${gid}-g`} cx="0.5" cy="0.5" r="0.5">
+          <stop offset="0" stopColor="#fff8c8" stopOpacity="0.85" /><stop offset="1" stopColor="#fff8c8" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+      <circle cx="50" cy="48" r="47" fill={`url(#${gid}-g)`} />
+      <text x="50" y="26" textAnchor="middle" fontSize="24">{STUDY_SYMBOL[kind]}</text>
+      <path d="M8 40 Q29 34 50 44 L50 82 Q29 72 8 78 Z" fill="#fffdf2" stroke={m.edge} strokeWidth="2.2" strokeLinejoin="round" />
+      <path d="M92 40 Q71 34 50 44 L50 82 Q71 72 92 78 Z" fill="#fff8de" stroke={m.edge} strokeWidth="2.2" strokeLinejoin="round" />
+      <path d="M4 44 L8 40 L8 78 L4 82 Z" fill={`url(#${gid}-s)`} stroke={m.edge} strokeWidth="1.4" /><path d="M96 44 L92 40 L92 78 L96 82 Z" fill={`url(#${gid}-s)`} stroke={m.edge} strokeWidth="1.4" />
+      <g stroke={m.mid} strokeWidth="2" strokeLinecap="round" opacity="0.8">
+        <path d="M15 50 Q30 47 44 54" /><path d="M15 58 Q30 55 44 62" /><path d="M15 66 Q30 63 44 70" />
+        <path d="M85 50 Q70 47 56 54" /><path d="M85 58 Q70 55 56 62" /><path d="M85 66 Q70 63 56 70" />
+      </g>
+      <path d="M34 98 L66 98 L72 110 L28 110 Z" fill={`url(#${gid}-s)`} stroke={m.edge} strokeWidth="1.6" strokeLinejoin="round" />
+      <rect x="44" y="84" width="12" height="15" fill={m.mid} stroke={m.edge} strokeWidth="1.2" />
+    </svg>
+  );
+}
+
 export function AwardEmblem({ kind, tier, size }) {
+  if (STUDY_KINDS.includes(kind)) return <StudyBook kind={kind} tier={tier} size={size} />;
   if (kind === 'holy') return <DhammaWheel tier={tier} size={size} />;
   if (kind === 'joy') return <JoySun tier={tier} size={size} />;
   return <TrophyCup tier={tier} size={size} />;
@@ -235,10 +292,14 @@ export function AwardMedal({ kind = 'trophy', tier = 1, size = 26 }) {
           <stop offset="0" stopColor={m.light} /><stop offset="0.55" stopColor={m.mid} /><stop offset="1" stopColor={m.dark} />
         </radialGradient>
       </defs>
-      <path d="M9 0 L20 22 L14 24 L2 2 Z" fill={kind === 'holy' ? '#b9770e' : kind === 'joy' ? '#e67e22' : '#c0392b'} /><path d="M31 0 L20 22 L26 24 L38 2 Z" fill={kind === 'holy' ? '#e08e0b' : kind === 'joy' ? '#f5a623' : '#e74c3c'} />
+      <path d="M9 0 L20 22 L14 24 L2 2 Z" fill={kind === 'holy' ? '#b9770e' : kind === 'joy' ? '#e67e22' : STUDY_KINDS.includes(kind) ? '#1f6f8b' : '#c0392b'} /><path d="M31 0 L20 22 L26 24 L38 2 Z" fill={kind === 'holy' ? '#e08e0b' : kind === 'joy' ? '#f5a623' : STUDY_KINDS.includes(kind) ? '#2a9bc0' : '#e74c3c'} />
       <circle cx="20" cy="33" r="15" fill={`url(#${gid})`} stroke={m.edge} strokeWidth="2" />
       <circle cx="20" cy="33" r="10.5" fill="none" stroke={m.edge} strokeOpacity="0.55" strokeWidth="1.2" />
-      {kind === 'joy' ? (
+      {STUDY_KINDS.includes(kind) ? (
+        <g transform="translate(20 33)" fill="#fffbe0" stroke={m.edge} strokeWidth="0.9" strokeLinejoin="round">
+          <path d="M-9 -5 Q-4.5 -7 0 -4 L0 7 Q-4.5 4 -9 6 Z" /><path d="M9 -5 Q4.5 -7 0 -4 L0 7 Q4.5 4 9 6 Z" />
+        </g>
+      ) : kind === 'joy' ? (
         <g transform="translate(20 33)" fill="none" stroke="#fffbe0" strokeLinecap="round">
           {Array.from({ length: 8 }, (_, i) => <line key={i} x1="0" y1="-8" x2="0" y2="-11" strokeWidth="1.6" transform={`rotate(${i * 45})`} />)}
           <circle cx="-2.8" cy="-1.5" r="1.1" fill="#fffbe0" stroke="none" /><circle cx="2.8" cy="-1.5" r="1.1" fill="#fffbe0" stroke="none" />
@@ -263,7 +324,7 @@ export function AwardPlaque({ award, compact = false }) {
   const { kind, tier, name, count, info, generatedAt } = award;
   const m = METALS[info.metal];
   const engraved = { color: '#3b2a0c', textShadow: '0 1px 0 rgba(255,255,255,.65), 0 -1px 0 rgba(0,0,0,.25)' };
-  const what = kind === 'holy' ? `🪷 ${count} lotus flowers` : kind === 'joy' ? `☀️ ${count} classes` : `🏆 ${count} trophies`;
+  const what = STUDY_KINDS.includes(kind) ? `📖 ${count} ${STUDY_WHAT[kind]}` : kind === 'holy' ? `🪷 ${count} lotus flowers` : kind === 'joy' ? `☀️ ${count} classes` : `🏆 ${count} trophies`;
   return (
     <div
       className="rounded-2xl p-1.5 shadow-xl w-full"

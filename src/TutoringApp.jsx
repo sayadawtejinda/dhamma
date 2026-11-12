@@ -6,7 +6,7 @@ import { useAwards, AwardEmblem, HallOfExcellence, saveGivenCopy } from './Award
 import { BadgeShelf } from './Badges';
 import BadgeCeremony from './BadgeCeremony';
 import { useBadgeData } from './badgeData';
-import { useTopThree, awardsFor, AWARDS, HOLY_AWARDS, JOY_AWARDS } from './Awards';
+import { useTopThree, awardsFor, AWARD_LIST_BY_KIND } from './Awards';
 import { badgeMeta, BADGE_DEFS, BADGE_GROUPS, ladderOf, ladderRank } from './badgeDefs';
 import { STAGE_NAMES } from './bodhiLevels';
 import ParamiReportEditor from './ParamiReportEditor';
@@ -11728,7 +11728,8 @@ function TeacherRefreshButton() {
 // What a student has EARNED comes from the weekly file public/badges.json; what was GIVEN is on the student's record
 // (badgesGiven), which this screen already holds live -- so working out who is waiting for what costs no read. Giving a badge writes
 // ONE small update on that student's record; their Home page shows the celebration when they open it (see BadgeCeremony).
-const AWARD_LISTS = { trophy: AWARDS, holy: HOLY_AWARDS, joy: JOY_AWARDS };
+const AWARD_LISTS = AWARD_LIST_BY_KIND;
+const AWARD_WHAT = { trophy: 'Most trophies', holy: 'Most lotus flowers', joy: 'Most classes attended', ss: 'Most Smart Study lessons', abhi: 'Most Abhidhamma lessons', ds: 'Most Dhammaschool lessons' };
 const badgeWeight = (b) => (b.master ? 0 : b.metal === 'gold' ? 1 : b.metal === 'silver' ? 2 : 3);
 function BadgeApprovals({ students, sessions }) {
   const [open, setOpen] = useState(false);
@@ -11758,7 +11759,7 @@ function BadgeApprovals({ students, sessions }) {
   const pendingFor = (s) => {
     const given = s.badgesGiven || {};
     const items = [];
-    awardsFor(top, { name: s.name, id: s.id }).forEach(a => { if (given[`award-${a.kind}`] !== a.tier) items.push({ award: true, kind: a.kind, tier: a.tier, title: a.info.en, sub: `${a.kind === 'trophy' ? 'Most trophies' : a.kind === 'holy' ? 'Most lotus flowers' : 'Most classes attended'} · place ${a.tier}`, weight: -1 }); });
+    awardsFor(top, { name: s.name, id: s.id }).forEach(a => { if (given[`award-${a.kind}`] !== a.tier) items.push({ award: true, kind: a.kind, tier: a.tier, title: a.info.en, sub: `${AWARD_WHAT[a.kind]} · place ${a.tier}`, weight: -1 }); });
     // badges of one kind (a ladder) are given together, lowest first: ONE line per ladder, the highest waiting badge named
     const ladders = new Map();
     ((data.earned.students || {})[s.name] || []).forEach(id => {
@@ -11877,7 +11878,7 @@ function BadgeApprovals({ students, sessions }) {
                     ])}
                   </optgroup>
                   <optgroup label="Top-three honours (the ceremony; the honour itself shows only while the student really holds that place)">
-                    {['trophy', 'holy', 'joy'].flatMap(k => [1, 2, 3].map(t => <option key={`${k}${t}`} value={`a:${k}:${t}`}>{AWARD_LISTS[k][t - 1].en} (place {t})</option>))}
+                    {['trophy', 'holy', 'joy', 'ss', 'abhi', 'ds'].flatMap(k => [1, 2, 3].map(t => <option key={`${k}${t}`} value={`a:${k}:${t}`}>{AWARD_LISTS[k][t - 1].en} (place {t})</option>))}
                   </optgroup>
                 </select>
                 <button

@@ -52,11 +52,11 @@ body += `<h2>Bodhi Tree (levels this year, ${year})</h2><div class="ladder"><div
 body += `<h2>Years with us (you give these by hand: Badges to give → Give any badge by hand)</h2><div class="ladder"><div class="lt">one for every year a student has studied with you · 2020-2025 you give by hand; from 2026 on the medal is the Bodhi Tree's last level of that year (gold, with the year and the weeks of coming to class; the last card is an EXAMPLE: level 9, 37 weeks), worked out when the year ends</div><div class="row">${yearsWithUs.map(cardDyn).join('')}</div></div>`;
 total += yearsWithUs.length;
 // the top-three honours (cup / Dhamma wheel / sun): the plaque as it shows in the Avatar, Shrine Room and Bodhi Tree, and the emblem
-const KINDS = [['trophy', 'Most trophies', aw.AWARDS, 'Avatar room (right under the wallet) and Home'], ['holy', 'Most lotus flowers in the Shrine Room', aw.HOLY_AWARDS, 'Shrine Room (left corner)'], ['joy', 'Most classes attended (this year)', aw.JOY_AWARDS, 'Bodhi Tree (right corner)']];
+const KINDS = [['trophy', 'Most trophies', aw.AWARDS, 'Avatar room (right under the wallet) and Home'], ['holy', 'Most lotus flowers in the Shrine Room', aw.HOLY_AWARDS, 'Shrine Room (left corner)'], ['joy', 'Most classes attended (this year)', aw.JOY_AWARDS, 'Bodhi Tree (right corner)'], ['ss', 'Most Smart Study lessons finished', aw.SS_AWARDS, 'Avatar (small medal, top left corner), Avatar room plaque, Home'], ['abhi', 'Most Abhidhamma lessons finished', aw.ABHI_AWARDS, 'Avatar (small medal, top left corner), Avatar room plaque, Home'], ['ds', 'Most Dhammaschool lessons finished', aw.DS_AWARDS, 'Avatar (small medal, top left corner), Avatar room plaque, Home']];
 body += `<h2>Top-three honours (you give these by hand, during class; each shows only while the student really holds that place)</h2>`;
 for (const [kind, what, list, where] of KINDS) {
   const items = list.map((info, i) => {
-    const award = { kind, tier: i + 1, name: 'Student name', count: kind === 'holy' ? 1500 - i * 200 : kind === 'joy' ? 58 - i * 2 : 369 - i * 6, info, generatedAt: new Date().toISOString() };
+    const award = { kind, tier: i + 1, name: 'Student name', count: kind === 'holy' ? 1500 - i * 200 : kind === 'joy' ? 58 - i * 2 : ['ss', 'abhi', 'ds'].includes(kind) ? 160 - i * 6 : 369 - i * 6, info, generatedAt: new Date().toISOString() };
     const plaque = renderToStaticMarkup(React.createElement('div', { style: { width: 250 } }, React.createElement(aw.AwardPlaque, { award, compact: true })));
     const emblem = renderToStaticMarkup(React.createElement(aw.AwardEmblem, { kind, tier: i + 1, size: 80 }));
     return `<div class="card wide">${emblem}<b>${esc(info.en)}</b><span class="d">place ${i + 1}</span>${plaque}</div>`;

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { badgeMeta } from './badgeDefs';
 import { BadgeSvg } from './Badges';
-import { AwardEmblem, AWARDS, HOLY_AWARDS, JOY_AWARDS } from './Awards';
+import { AwardEmblem, AWARD_LIST_BY_KIND } from './Awards';
 import { AvatarThumb } from './AvatarPeek';
 import { sounds } from './badgeSounds';
 
@@ -12,8 +12,8 @@ import { sounds } from './badgeSounds';
 //   top-three     a podium with the student on their place, the trophy / wheel / sun rises, fireworks and a fanfare
 // `queue` entries: 'b:<badgeId>' or 'a:<kind>:<tier>'. Nothing here reads from Firebase.
 
-const AWARD_LISTS = { trophy: AWARDS, holy: HOLY_AWARDS, joy: JOY_AWARDS };
-const AWARD_TEXT = { trophy: 'You have the most trophies!', holy: 'You have the most lotus flowers in the Shrine Room!', joy: 'You came to class the most this year!' };
+const AWARD_LISTS = AWARD_LIST_BY_KIND;
+const AWARD_TEXT = { trophy: 'You have the most trophies!', holy: 'You have the most lotus flowers in the Shrine Room!', joy: 'You came to class the most this year!', ss: 'You finished the most Smart Study lessons!', abhi: 'You finished the most Abhidhamma lessons!', ds: 'You finished the most Dhammaschool lessons!' };
 
 export function parseEntry(entry) {
   if (entry.startsWith('a:')) {

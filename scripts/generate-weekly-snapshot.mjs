@@ -521,6 +521,7 @@ async function main() {
   const rosterCutoff = Date.now() - 14 * 24 * 60 * 60 * 1000;
   // the Tutoring student records: who is still active, and the lessons each has finished (one read of about 100 docs)
   const lessonCtx = loadLessonContext((await getDocs(collection(db, `${publicDataPath}/students`))).docs.map(d => ({ id: d.id, ...d.data() })));
+  const lessonTop = {};
   for (const target of rosterTargets) {
     try {
       const snap = await getDocs(collection(db, target.path));
@@ -530,11 +531,17 @@ async function main() {
       if (target.lessons) {
         const ranked = rankRoster(target.lessons, docs.filter(target.keep), lessonCtx, target.nameOf, d => msOf(d[target.field]));
         docs = ranked.list;
+        // the three students with the most lessons finished (ties share a place): the honours worn on the Avatar (src/Awards.jsx)
+        const rowsTop = ranked.list.filter(r => (r.lessonsDone || 0) > 0);
+        lessonTop[{ smartstudy: 'ss', abhidhamma: 'abhi', dhammaschool: 'ds' }[target.lessons]] = rowsTop
+          .map(r => ({ id: r.tutoringId, name: r.tutoringName, count: r.lessonsDone, tier: 1 + rowsTop.filter(o => o.lessonsDone > r.lessonsDone).length }))
+          .filter(r => r.tier <= 3);
         if (ranked.unmatched.length) console.log(`${target.lessons}: not found among the Tutoring students (left out): ${[...new Set(ranked.unmatched)].join(', ')}`);
       }
       writeFileSync(join(ROSTER_DIR, `${target.path.replace(/\//g, '__')}.json`), JSON.stringify({ generatedAt, docs }));
     } catch (e) { console.error('Roster snapshot failed for', target.path, e.message); }
   }
+  writeFileSync(join(__dirname, '..', 'public', 'lessonTop.json'), JSON.stringify({ generatedAt, ...lessonTop }));
   }
   process.exit(0);
 }

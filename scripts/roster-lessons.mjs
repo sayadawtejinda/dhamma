@@ -58,9 +58,9 @@ export function rankRoster(app, docs, ctx, nameOf, lastSeenOf) {
     const nameAlso = student.name && key(student.name) !== key(name) ? sizeOf(ctx.own[app].get(key(student.name))) : 0;
     const lessonsDone = Math.max(recordedUnits(student, app), own, nameAlso);
     const prev = rows.get(student.id);
-    if (!prev || lastSeenOf(d) > lastSeenOf(prev.doc)) rows.set(student.id, { doc: d, lessonsDone });
+    if (!prev || lastSeenOf(d) > lastSeenOf(prev.doc)) rows.set(student.id, { doc: d, lessonsDone, student });
   });
-  const list = [...rows.values()].map(r => ({ ...r.doc, lessonsDone: r.lessonsDone }))
+  const list = [...rows.values()].map(r => ({ ...r.doc, lessonsDone: r.lessonsDone, tutoringId: r.student.id, tutoringName: r.student.name }))
     .sort((a, b) => b.lessonsDone - a.lessonsDone || String(nameOf(a)).localeCompare(String(nameOf(b))));
   return { list, unmatched };
 }
