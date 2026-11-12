@@ -2339,10 +2339,144 @@ export const SchoolOfSkillsGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
 };
 
 // ---------------------------------------------------------------------------------------------------------------
+// Game 18: the ten wrong deeds and the ten right deeds (duccarita and sucarita: 3 of body, 4 of speech, 3 of mind). Ten rounds, one
+// for each pair: a bad deed and its good opposite (killing / protecting life, stealing / guarding others' things, ...) are thrown up
+// from the two sides in arcs and fall back down, like the heron game. Tap the GOOD deed while it flies for 2 or 3 coins. Tapping the
+// bad deed, or being too slow, gives no coins; the box then says which was which, so the child learns the ten pairs.
+const TEN_ROUNDS = 10;
+const TEN_ASK_MS = 5000;
+const TEN_RESULT_MS = 2600;
+const TEN_PAIRS = [
+  { part: 'Body', badName: 'Killing (pāṇātipāta)', goodName: 'Protecting life (the opposite of killing)', bad: ['🗡️', 'Killing'], good: ['🕊️', 'Helping others live long'] },
+  { part: 'Body', badName: 'Stealing (adinnādāna)', goodName: 'Guarding other people\'s things (the opposite of stealing)', bad: ['🦹', 'Stealing'], good: ['🛡️', 'Guarding others\' things'] },
+  { part: 'Body', badName: 'Sexual misconduct (kāmesumicchācāra)', goodName: 'Respecting other people\'s families (the opposite of misconduct)', bad: ['💔', 'Misconduct with others\' families'], good: ['🏠', 'Respecting others\' families'] },
+  { part: 'Speech', badName: 'Lying (musāvāda)', goodName: 'Telling the truth (the opposite of lying)', bad: ['🤥', 'Lying'], good: ['🗣️', 'Telling the truth'] },
+  { part: 'Speech', badName: 'Slander (pisuṇāvācā)', goodName: 'Words that unite friends (the opposite of slander)', bad: ['🐍', 'Words that divide friends'], good: ['🤝', 'Words that unite friends'] },
+  { part: 'Speech', badName: 'Harsh speech (pharusāvācā)', goodName: 'Gentle, kind words (the opposite of harsh speech)', bad: ['😠', 'Harsh, rude words'], good: ['🌸', 'Gentle, kind words'] },
+  { part: 'Speech', badName: 'Idle chatter (samphappalāpa)', goodName: 'Useful, meaningful words (the opposite of idle chatter)', bad: ['💬', 'Idle, useless chatter'], good: ['📖', 'Useful, meaningful words'] },
+  { part: 'Mind', badName: 'Greed (abhijjhā)', goodName: 'Contentment and giving (the opposite of greed)', bad: ['🤑', 'Wanting others\' things'], good: ['🎁', 'Contentment and giving'] },
+  { part: 'Mind', badName: 'Ill-will (byāpāda)', goodName: 'Loving-kindness (the opposite of ill-will)', bad: ['🔥', 'Anger and ill-will'], good: ['💗', 'Loving-kindness'] },
+  { part: 'Mind', badName: 'Wrong view (micchādiṭṭhi)', goodName: 'Right view: kamma is real (the opposite of wrong view)', bad: ['🌫️', 'Wrong view'], good: ['☸️', 'Right view: kamma is real'] },
+];
+const PART_EMOJI = { Body: '🧍', Speech: '🗣️', Mind: '🧠' };
+const makeTenRounds = () => {
+  const items = [...TEN_PAIRS];
+  for (let i = items.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [items[i], items[j]] = [items[j], items[i]]; }
+  return items.map(x => ({ ...x, flip: Math.random() < 0.5 })); // which one is thrown up from the left
+};
+export const TenDeedsGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
+  const [rounds] = useState(makeTenRounds);
+  const [r, setR] = useState(0);
+  const [phase, setPhase] = useState('ask');      // ask | result
+  const [outcome, setOutcome] = useState(null);   // good | bad | late
+  const [outcomes, setOutcomes] = useState([]);
+  const [won, setWon] = useState([]);
+  const [finished, setFinished] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const soundRef = useRef(null);
+  const total = won.reduce((a, b) => a + b, 0);
+  const goodCount = outcomes.filter(o => o === 'good').length;
+  const it = rounds[r];
+
+  // too slow: nothing is chosen, no coins
+  useEffect(() => {
+    if (finished || phase !== 'ask') return undefined;
+    const t = setTimeout(() => settle('late', 0), TEN_ASK_MS);
+    return () => clearTimeout(t);
+  }, [r, phase, finished]); // eslint-disable-line react-hooks/exhaustive-deps
+  // after the result is shown: next pair, or the end
+  useEffect(() => {
+    if (finished || phase !== 'result') return undefined;
+    const t = setTimeout(() => {
+      if (r + 1 >= TEN_ROUNDS) setFinished(true);
+      else { setR(r + 1); setPhase('ask'); setOutcome(null); }
+    }, TEN_RESULT_MS);
+    return () => clearTimeout(t);
+  }, [r, phase, finished]);
+
+  function settle(kind, coins) {
+    setOutcome(kind);
+    setOutcomes(o => [...o, kind]);
+    setWon(w => [...w, coins]);
+    setPhase('result');
+  }
+  const choose = (isGood) => {
+    if (phase !== 'ask') return;
+    if (isGood) { settle('good', Math.max(0, Math.min(2 + Math.floor(Math.random() * 2), coinsLeft - total))); playCoinSound(soundRef); }
+    else settle('bad', 0);
+  };
+  const lastCoins = won[won.length - 1] || 0;
+  const message = it ? {
+    good: `Well done! ${it.goodName}.`,
+    bad: `That is the wrong deed: ${it.badName}. The good deed is: ${it.goodName}.`,
+    late: `Too slow. The wrong deed was ${it.badName}. The good deed is: ${it.goodName}.`,
+  }[outcome] || '' : '';
+
+  return (
+    <div className="relative overflow-hidden text-white h-screen" style={{ height: '100dvh', minHeight: 420, background: 'linear-gradient(180deg,#312e81 0%,#6d28d9 45%,#f0abfc 100%)' }}>
+      <style>{`
+        @keyframes tenBar { 0% { width: 100% } 100% { width: 0% } }
+        @keyframes tenIn { 0% { transform: translateY(-24px) scale(.8); opacity: 0 } 100% { transform: translateY(0) scale(1); opacity: 1 } }
+        @keyframes tenArcA { 0% { left: 22%; top: 94%; animation-timing-function: cubic-bezier(.2,.7,.4,1) } 45% { left: 28%; top: var(--peak); animation-timing-function: cubic-bezier(.6,0,.8,.3) } 100% { left: 34%; top: 94% } }
+        @keyframes tenArcB { 0% { left: 78%; top: 94%; animation-timing-function: cubic-bezier(.2,.7,.4,1) } 45% { left: 72%; top: var(--peak); animation-timing-function: cubic-bezier(.6,0,.8,.3) } 100% { left: 66%; top: 94% } }
+        @keyframes tenUp { 0% { transform: translateY(0); opacity: 0 } 15% { opacity: 1 } 100% { transform: translateY(-40px); opacity: 0 } }
+      `}</style>
+      <div className="absolute top-0 inset-x-0 flex items-center justify-between gap-2 px-3 py-3 z-10">
+        <div className="bg-white/85 text-violet-900 font-bold text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 ml-12 sm:ml-16 min-w-0 truncate">☸️ Ten wrong, ten right deeds</div>
+        <div className="bg-yellow-300 text-yellow-900 font-black text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 shadow whitespace-nowrap flex-shrink-0">🪙 {total}{coinsLeft <= 0 ? ' (limit reached)' : ''}</div>
+      </div>
+      {/* the ten pairs: green = the good deed was chosen, red = missed */}
+      <div className="absolute inset-x-0 flex items-center justify-center gap-1 px-3" style={{ top: 62, zIndex: 4 }}>
+        {Array.from({ length: TEN_ROUNDS }, (_, i) => (
+          <span key={i} className="rounded-full" style={{ width: 'clamp(14px, 4vmin, 22px)', height: 'clamp(14px, 4vmin, 22px)', background: i < outcomes.length ? (outcomes[i] === 'good' ? '#4ade80' : '#f87171') : (i === r ? '#fde047' : 'rgba(255,255,255,.55)') }} />
+        ))}
+      </div>
+      {!finished && it && (
+        <>
+          <div key={r} className="absolute left-1/2 text-center" style={{ top: '14%', transform: 'translateX(-50%)', width: 'min(92%, 420px)', zIndex: 5, animation: 'tenIn .4s ease-out' }}>
+            <div className="select-none" style={{ fontSize: 'clamp(44px, 11vmin, 80px)', lineHeight: 1 }}>{PART_EMOJI[it.part]}</div>
+            <div className="mt-1 font-bold text-xs rounded-full px-3 py-0.5 inline-block shadow bg-white" style={{ color: '#5b21b6' }}>Deeds of the {it.part.toLowerCase()}</div>
+            <div className="mt-2 bg-white text-gray-800 font-bold text-sm sm:text-base rounded-2xl px-4 py-3 shadow-lg">{phase === 'ask' ? 'Tap the GOOD deed before it falls!' : message}</div>
+            {phase === 'result' && lastCoins > 0 && <div className="font-black text-yellow-300 drop-shadow mt-1" style={{ animation: 'tenUp 2s ease-out forwards' }}>+{lastCoins} 🪙</div>}
+          </div>
+          {phase === 'ask' && (
+            <>
+              <div className="absolute left-1/2 -translate-x-1/2 rounded-full overflow-hidden bg-white/50" style={{ top: 92, width: 'min(80%, 360px)', height: 8, zIndex: 5 }}>
+                <div key={r} className="h-full bg-yellow-300" style={{ animation: `tenBar ${TEN_ASK_MS}ms linear forwards` }} />
+              </div>
+              {/* the good deed and the bad deed are thrown up from the bottom in arcs, one from each side, and fall back down on the same side */}
+              {[{ good: true, d: it.good, cls: 'bg-emerald-500', peak: '52%' }, { good: false, d: it.bad, cls: 'bg-rose-500', peak: '60%' }].map((a, k) => (
+                <button
+                  key={`${r}-${a.good}`}
+                  onClick={() => choose(a.good)}
+                  className="absolute font-extrabold text-white rounded-2xl shadow-xl px-3 py-2 text-center leading-tight bg-indigo-500"
+                  style={{ zIndex: 6, transform: 'translate(-50%,-50%)', width: 'clamp(120px, 38vw, 170px)', fontSize: 'clamp(12px, 3.2vw, 15px)', '--peak': a.peak, animation: `${(k === 0) !== it.flip ? 'tenArcA' : 'tenArcB'} ${TEN_ASK_MS}ms linear forwards` }}
+                ><span className="block text-2xl">{a.d[0]}</span>{a.d[1]}</button>
+              ))}
+            </>
+          )}
+        </>
+      )}
+      {finished && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20 px-4">
+          <div className="bg-white text-gray-900 rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
+            <div className="text-5xl mb-2">{goodCount >= TEN_ROUNDS ? '🌟' : '☸️'}</div>
+            <h2 className="text-2xl font-extrabold mb-1">{goodCount >= TEN_ROUNDS ? 'All ten good deeds!' : `${goodCount} of ${TEN_ROUNDS} good deeds chosen`}</h2>
+            <p className="text-sm text-gray-600 mb-2">Three deeds of the body, four of the speech and three of the mind. Leave the wrong deeds, do the right deeds, and your life becomes happy.</p>
+            <p className="text-lg font-bold text-yellow-600 mb-4">{total > 0 ? `🪙 +${total} coins for your Shrine Room wallet` : (coinsLeft <= 0 ? 'You have already earned all the coins for this lesson. Great job!' : 'No coins this time.')}</p>
+            <GameButton disabled={leaving} onClick={() => { setLeaving(true); onDone(total); }} className="bg-sky-500 hover:bg-sky-600 text-white w-full text-xl">Continue →</GameButton>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------------------------------------------
 // The games, in the order they are handed out. A lesson always gets the same game (so a retake feels familiar and the
 // coin cap stays one per lesson), but neighbouring lessons get different ones, so the break does not become boring.
 // To add a game: write it above with the same two props and put it in this list.
-export const QUIZ_BREAK_GAMES = [BirdRescueGame, FlowerOfferingGame, LitterPickingGame, AnimalRescueGame, WoodcutterAxeGame, AntGatheringGame, WaterAnimalsGame, HelpFriendsGame, PayRespectGame, TenGiftsGame, ReturnLostItemsGame, HelpParentsGame, AlmsRoundGame, GoldenEggDuckGame, CunningHeronGame, ShareWaterGame, SchoolOfSkillsGame];
+export const QUIZ_BREAK_GAMES = [BirdRescueGame, FlowerOfferingGame, LitterPickingGame, AnimalRescueGame, WoodcutterAxeGame, AntGatheringGame, WaterAnimalsGame, HelpFriendsGame, PayRespectGame, TenGiftsGame, ReturnLostItemsGame, HelpParentsGame, AlmsRoundGame, GoldenEggDuckGame, CunningHeronGame, ShareWaterGame, SchoolOfSkillsGame, TenDeedsGame];
 const hashOf = (s) => { let h = 0; String(s ?? '').split('').forEach(ch => { h = (h * 31 + ch.charCodeAt(0)) >>> 0; }); return h; };
 export const quizBreakGameFor = (lessonId) => QUIZ_BREAK_GAMES[hashOf(lessonId) % QUIZ_BREAK_GAMES.length];
 export const QuizBreakGame = ({ lessonId, ...rest }) => {
