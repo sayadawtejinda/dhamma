@@ -4,7 +4,7 @@
 //  3. commits and pushes only those files, so the site updates by itself and the houses appear in the shop
 //  4. once the push has worked, deletes the numbered copies from the Pic folder (the pictures live on GitHub now)
 // Names: a picture the teacher named herself ("Swiss Alpine Chalet.jpg") keeps that name; a Gemini_Generated... picture gets the next
-// unused name from scripts/house-names.txt (draw in that order), or "House N" when the list has run out.
+// unused name from Pic/house-names.txt (draw in that order), or "House N" when the list has run out.
 // Prices: HOME_COST (default for every new house) and HOME_PRICES (one price per picture, in order) come from Add-New-Homes.bat.
 // A house can be owned by one student only; the shop shows at most 6 unsold houses at a time (see AvatarApp.jsx).
 import { readdirSync, statSync, renameSync, copyFileSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs';
@@ -16,7 +16,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PIC = join(ROOT, 'Pic');
 const IMAGES = join(ROOT, 'public', 'images');
 const JSON_PATH = join(ROOT, 'src', 'homesExtra.json');
-const NAMES_PATH = join(ROOT, 'scripts', 'house-names.txt');
+const NAMES_PATH = join(ROOT, 'Pic', 'house-names.txt');
 const DEFAULT_COST = Math.max(0, parseInt(process.env.HOME_COST, 10) || 12000);
 const PRICES = (process.env.HOME_PRICES || '').split(/[\s,]+/).filter(Boolean).map(n => parseInt(n, 10)).filter(n => n >= 0);
 const dry = process.argv.includes('--dry-run');
