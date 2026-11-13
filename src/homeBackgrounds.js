@@ -11,7 +11,12 @@
 // Prices are per-item (not a single flat rate) since the teacher expects
 // future backgrounds to be priced differently depending on the image --
 // just add a new entry here with its own `cost`.
-export const HOME_BACKGROUNDS = [
+// New houses are added by the "Add-New-Homes.bat" button (scripts/add-new-homes.mjs): it numbers the pictures, copies them to
+// public/images, lists them in homesExtra.json and publishes. They come after the built-in ones below.
+import extra from './homesExtra.json';
+// Each house can be owned by ONE student only (see buyHome in AvatarApp.jsx); the shop offers at most this many at a time.
+export const HOME_SHOP_MAX = 6;
+const BUILT_IN_HOMES = [
   { id: 'default', name: 'Traditional Wooden House', image: 'images/0003.jpg', cost: 0 },
   { id: 'condo', name: 'Modern City Condo', image: 'images/0004.jpg', cost: 10000 },
   { id: 'glass-house', name: 'Modern Glass House', image: 'images/0006.jpg', cost: 10000 },
@@ -19,5 +24,6 @@ export const HOME_BACKGROUNDS = [
   { id: 'treehouse', name: 'Starlight Treehouse', image: 'images/0008.jpg', cost: 12000 },
   { id: 'space-station', name: 'Space Station', image: 'images/0009.jpg', cost: 12000 },
 ];
+export const HOME_BACKGROUNDS = [...BUILT_IN_HOMES, ...((extra && extra.homes) || [])];
 
 export const getHomeBackground = (id) => HOME_BACKGROUNDS.find(b => b.id === id) || HOME_BACKGROUNDS[0];

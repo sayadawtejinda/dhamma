@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { doc, getDoc, setDoc, increment, collection, runTransaction, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { db } from './firebase';
 import { appId } from './firebaseConfig';
-import { HOME_BACKGROUNDS } from './homeBackgrounds';
+import { HOME_BACKGROUNDS, HOME_SHOP_MAX } from './homeBackgrounds';
 import OnlineStatusWidget from './OnlineStatusWidget';
 import { FESTIVAL_AVATAR_ITEMS } from './festivals';
 import { STAR_MAX_LIVE } from './starAnnouncementConfig';
@@ -27,6 +27,9 @@ const sanitizeShrineKey = (key) => (key || 'unknown').trim().replace(/[.$#/\[\]]
 // profile doc purely so the home page can pick it up without its own extra
 // Firestore listener. See handleEquip's homeBackground special-case below.
 const STUDENTS_COLLECTION_PATH = `artifacts/${appId}/public/data/students`;
+// Houses (home wallpapers) are one-of-a-kind: the first student to buy one owns it, nobody else can, and it leaves the shop.
+// One small doc holds who bought which house: { [houseId]: { name, uid } }. The purchase is a transaction on it (see buyHome).
+const HOME_CLAIMS_PATH = `artifacts/${appId}/public/data/homeClaims`;
 
 // Students can announce themselves as "outstanding" (the strip that scrolls
 // across the top of every app -- see StarTicker.jsx). Costs Shrine coins, one
@@ -133,6 +136,8 @@ export default function AvatarApp({ entryRequest, onExit }) {
   const [owned, setOwned] = useState({ hair: ['short-black'], outfit: ['blue'], accessory: ['none'], bg: ['sky'], homeBackground: ['default'] });
   const [activeCategory, setActiveCategory] = useState('hair');
   const [toast, setToast] = useState(null);
+  const [homeClaims, setHomeClaims] = useState(null); // null = not known yet (no house is offered for sale until it is)
+  const [homeBuying, setHomeBuying] = useState(false);
 
   // Lotus flowers (🪷) are Shrine Room's chanting/meditation currency, kept
   // on the same roster doc as coinBalance -- read alongside it below. The
@@ -158,10 +163,12 @@ export default function AvatarApp({ entryRequest, onExit }) {
     let isMounted = true;
     (async () => {
       try {
-        const [snap, studentSnap] = await Promise.all([
+        const [snap, studentSnap, claimsSnap] = await Promise.all([
           rosterRef ? getDoc(rosterRef) : Promise.resolve(null),
           getDoc(doc(db, STUDENTS_COLLECTION_PATH, studentUid)),
+          getDoc(doc(db, HOME_CLAIMS_PATH, 'owners')).catch(() => null),
         ]);
+        if (isMounted && claimsSnap) setHomeClaims(claimsSnap.exists() ? claimsSnap.data() : {});
         if (snap && snap.exists()) {
           const data = snap.data();
           if (isMounted) {
@@ -313,6 +320,62 @@ export default function AvatarApp({ entryRequest, onExit }) {
   }, []);
   const isOwned = (categoryKey, id) => owned[categoryKey]?.includes(id);
 
+  // Buying a house: one transaction that checks nobody has it yet, takes the coins and records the owner, so two students
+  // tapping "buy" at the same moment can never both get it.
+  const buyHome = async (option) => {
+    if (homeBuying || !rosterRef || !studentUid) return;
+    if (coinBalance < option.cost) { showToast('Not enough coins.'); return; }
+    if (!window.confirm(`Buy "${option.name}" for ${option.cost.toLocaleString('en-US')} coins?
+
+Only ONE student can own each house. You have ${coinBalance.toLocaleString('en-US')} coins now and will have ${(coinBalance - option.cost).toLocaleString('en-US')} left.`)) return;
+    setHomeBuying(true);
+    try {
+      const claimsRef = doc(db, HOME_CLAIMS_PATH, 'owners');
+      const res = await runTransaction(db, async (tx) => {
+        const claimSnap = await tx.get(claimsRef);
+        const rosterSnap = await tx.get(rosterRef);
+        const claims = claimSnap.exists() ? claimSnap.data() : {};
+        if (claims[option.id]) return { ok: false, reason: 'sold', claims };
+        const rd = rosterSnap.exists() ? rosterSnap.data() : {};
+        const bal = rd.coinBalance ?? 0;
+        if (bal < option.cost) return { ok: false, reason: 'coins', balance: bal };
+        const ownedNow = readNestedWithLegacyFallback(rd, 'avatarOwned').homeBackground || [];
+        const newOwned = Array.from(new Set([...ownedNow, option.id]));
+        tx.set(claimsRef, { [option.id]: { name: studentName, uid: studentUid, at: Date.now() } }, { merge: true });
+        tx.set(rosterRef, { studentName, coinBalance: increment(-option.cost), avatar: { homeBackground: option.id }, avatarOwned: { homeBackground: newOwned } }, { merge: true });
+        return { ok: true };
+      });
+      if (res.ok) {
+        setHomeClaims(c => ({ ...(c || {}), [option.id]: { name: studentName, uid: studentUid } }));
+        setCoinBalance(b => b - option.cost);
+        setOwned(prev => ({ ...prev, homeBackground: Array.from(new Set([...(prev.homeBackground || []), option.id])) }));
+        setConfig(prev => ({ ...prev, homeBackground: option.id }));
+        const look = {};
+        ['skin', 'hair', 'outfit', 'accessory', 'bg'].forEach(k => { if (config[k]) look[k] = config[k]; });
+        look.homeBackground = option.id;
+        setDoc(doc(db, STUDENTS_COLLECTION_PATH, studentUid), { homeBackground: option.id, avatarLook: look }, { merge: true }).catch(() => {});
+        showToast(`${option.name} is yours!`);
+      } else if (res.reason === 'sold') {
+        setHomeClaims(res.claims);
+        showToast('Sorry, someone just bought this house.');
+      } else {
+        setCoinBalance(res.balance);
+        showToast('Not enough coins.');
+      }
+    } catch (e) {
+      console.error('Error buying a house:', e);
+      showToast('Something went wrong. Please try again.');
+    }
+    setHomeBuying(false);
+  };
+
+  // The houses on sale right now: only ones nobody owns, at most HOME_SHOP_MAX at a time (the next one appears when one is sold).
+  const homesForSaleIds = (() => {
+    if (!homeClaims) return new Set();
+    const ids = HOME_BACKGROUNDS.filter(h => h.cost > 0 && !homeClaims[h.id] && !isOwned('homeBackground', h.id)).slice(0, HOME_SHOP_MAX).map(h => h.id);
+    return new Set(ids);
+  })();
+
   const handleEquip = (categoryKey, option) => {
     if (isTeacherPreview) { showToast('Preview mode -- changes here are not saved.'); }
     const owns = isTeacherPreview || isOwned(categoryKey, option.id);
@@ -322,6 +385,7 @@ export default function AvatarApp({ entryRequest, onExit }) {
       if (categoryKey === 'homeBackground') mirrorHomeBackgroundToProfile(option.id);
       return;
     }
+    if (categoryKey === 'homeBackground') { buyHome(option); return; }
     if (coinBalance < option.cost) { showToast('Not enough coins.'); return; }
     // never spend by accident: every paid item (a house wallpaper costs thousands) is confirmed first
     if (option.cost > 0 && !window.confirm(`Buy "${option.name}" for ${option.cost.toLocaleString('en-US')} coins?
@@ -586,7 +650,7 @@ You have ${coinBalance.toLocaleString('en-US')} coins now and will have ${(coinB
           const gifts = activeCat.options.filter(o => o.festival && (isTeacherPreview || list.includes(o.id)));
           // newest = the one added to the owned list last
           const newest = gifts.slice().sort((a, b) => list.indexOf(b.id) - list.indexOf(a.id))[0];
-          return activeCat.options.filter(o => !o.festival || isTeacherPreview || (isOwned(activeCategory, o.id) && (giftsOpen || isTeacherPreview || gifts.length <= 1 || o === newest || config[activeCategory] === o.id)));
+          return activeCat.options.filter(o => (activeCategory !== 'homeBackground' || isTeacherPreview || o.cost === 0 || isOwned('homeBackground', o.id) || homesForSaleIds.has(o.id)) && (!o.festival || isTeacherPreview || (isOwned(activeCategory, o.id) && (giftsOpen || isTeacherPreview || gifts.length <= 1 || o === newest || config[activeCategory] === o.id))));
         })().sort((a, b) => (b.festival ? 1 : 0) - (a.festival ? 1 : 0)).map(option => {
           const owns = isTeacherPreview || isOwned(activeCategory, option.id);
           const equipped = config[activeCategory] === option.id;
