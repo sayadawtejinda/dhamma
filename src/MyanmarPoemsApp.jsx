@@ -273,10 +273,11 @@ export default function MyanmarPoemsApp({ entryRequest, onExit, hideOwnOnlineBad
 
   // A rest game for every 5 poems the student really sang themselves (the confirmed self-recitations the app already counts,
   // at most once per poem per day). Counted on this device only (localStorage, no Firebase); a ready game waits behind the
-  // 🎮 button (at most 3 saved up); the games rotate through the whole list; the game pays up to POEM_GAME_COINS into this
+  // 🎮 button (at most 3 saved up); the games rotate through the whole list; the games pay 100 coins in all (POEM_GAME_COIN_TOTAL) into this
   // app's own coins (the vanilla code below does the paying, see 'mpoems-game-coins').
   const POEM_GAME_EVERY = 5;
-  const POEM_GAME_COINS = 20;
+  const POEM_GAME_COIN_TOTAL = 100; // game coins in all, for ever, per student (kept on the roster doc as gameCoins), whatever else is earned
+  const gameCoinsRef = useRef(0);
   const [gamesReady, setGamesReady] = useState(0);
   const [gameBanner, setGameBanner] = useState(false);
   const [playingGame, setPlayingGame] = useState(false);
@@ -287,6 +288,7 @@ export default function MyanmarPoemsApp({ entryRequest, onExit, hideOwnOnlineBad
     if (!studentName) return undefined;
     setGamesReady(readGame().ready);
     const onSung = () => {
+      if (gameCoinsRef.current >= POEM_GAME_COIN_TOTAL) return; // all 100 game coins given: no more games
       const g = readGame();
       const n = g.n + 1;
       const earned = n >= POEM_GAME_EVERY;
@@ -298,9 +300,9 @@ export default function MyanmarPoemsApp({ entryRequest, onExit, hideOwnOnlineBad
     return () => window.removeEventListener('mpoems-sung', onSung);
   }, [studentName]); // eslint-disable-line react-hooks/exhaustive-deps
   const finishPoemGame = (coins) => {
-    if (coins > 0) window.dispatchEvent(new CustomEvent('mpoems-game-coins', { detail: coins }));
+    if (coins > 0) { gameCoinsRef.current += coins; window.dispatchEvent(new CustomEvent('mpoems-game-coins', { detail: coins })); }
     const g = readGame();
-    const next = { n: g.n, ready: Math.max(0, g.ready - 1), idx: g.idx + 1 };
+    const next = { n: g.n, ready: gameCoinsRef.current >= POEM_GAME_COIN_TOTAL ? 0 : Math.max(0, g.ready - 1), idx: g.idx + 1 };
     writeGame(next);
     setGamesReady(next.ready);
     setPlayingGame(false);
@@ -2135,6 +2137,7 @@ export default function MyanmarPoemsApp({ entryRequest, onExit, hideOwnOnlineBad
                     if (!completedPoemIds.includes(i)) completedPoemIds.push(i);
                 }
                 coinBalanceRef.current = data.coinBalance || 0;
+                gameCoinsRef.current = data.gameCoins || 0;
                 setMyCoinBalance(coinBalanceRef.current);
                 const nextNewIndex = poemsData.findIndex((_, i) => !completedPoemIds.includes(i));
                 if (nextNewIndex >= 0) currentPoemIndex = nextNewIndex;
@@ -2581,7 +2584,11 @@ export default function MyanmarPoemsApp({ entryRequest, onExit, hideOwnOnlineBad
             });
         }
         Promise.all([ensureLucideLoaded(), loadPoemProgress()]).then(runMasterInit);
-        const onGameCoins = (e) => { if (e.detail > 0) awardCoins(e.detail); };
+        const onGameCoins = (e) => {
+          if (!(e.detail > 0)) return;
+          awardCoins(e.detail);
+          if (progressRosterRef) setDoc(progressRosterRef, { gameCoins: increment(e.detail) }, { merge: true }).catch(() => {});
+        };
         window.addEventListener('mpoems-game-coins', onGameCoins);
 
     // Stop any playing poem audio -- otherwise it keeps going after this
@@ -2613,7 +2620,7 @@ export default function MyanmarPoemsApp({ entryRequest, onExit, hideOwnOnlineBad
       )}
       {playingGame && (() => {
         const Game = QUIZ_BREAK_GAMES[readGame().idx % QUIZ_BREAK_GAMES.length];
-        return <div className="fixed inset-0 z-[10060] bg-black"><Game coinsLeft={POEM_GAME_COINS} onDone={finishPoemGame} /></div>;
+        return <div className="fixed inset-0 z-[10060] bg-black"><Game coinsLeft={Math.max(0, POEM_GAME_COIN_TOTAL - gameCoinsRef.current)} onDone={finishPoemGame} /></div>;
       })()}
       {!hideOwnOnlineBadge && (
         <OnlineStatusWidget

@@ -846,9 +846,10 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
   // the spendable balance, which a student can deposit away at any time).
   // A rest game for every 300 points of reading (reading is tiring): the points are counted on this device only (localStorage,
   // no Firebase), a ready game waits behind the 🎮 button (at most 3 saved up), and the games rotate through the whole list.
-  // The game pays up to READER_GAME_COINS coins into this student's Reader wallet.
+  // The games pay into this student's Reader wallet, 100 coins in all (READER_GAME_COIN_TOTAL), and then stop.
   const READER_GAME_EVERY = 300;
-  const READER_GAME_COINS = 20;
+  const READER_GAME_COIN_TOTAL = 100; // game coins in all, for ever, per student (kept on the roster doc as gameCoins), whatever else is earned
+  const gameCoinsRef = useRef(0);
   const [gamesReady, setGamesReady] = useState(0);
   const [gameBanner, setGameBanner] = useState(false);
   const [playingGame, setPlayingGame] = useState(false);
@@ -857,7 +858,7 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
   const writeGameStore = (g) => { try { localStorage.setItem(gameStoreKey(), JSON.stringify(g)); } catch (e) { /* optional */ } };
   useEffect(() => { setGamesReady(studentName ? readGameStore().ready : 0); }, [studentName]); // eslint-disable-line react-hooks/exhaustive-deps
   const trackGamePoints = (amount) => {
-    if (!studentName || isTeacherMode) return;
+    if (!studentName || isTeacherMode || gameCoinsRef.current >= READER_GAME_COIN_TOTAL) return; // all 100 game coins given: no more games
     const g = readGameStore();
     const pts = g.pts + amount;
     const earned = Math.floor(pts / READER_GAME_EVERY);
@@ -870,11 +871,12 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
   };
   const finishReaderGame = (coins) => {
     if (coins > 0 && studentName && userId) {
+      gameCoinsRef.current += coins;
       setCoinBalance(b => b + coins);
-      setDoc(readerRosterDocRef(studentName), { coinBalance: increment(coins) }, { merge: true }).catch(() => {});
+      setDoc(readerRosterDocRef(studentName), { coinBalance: increment(coins), gameCoins: increment(coins) }, { merge: true }).catch(() => {});
     }
     const g = readGameStore();
-    const next = { pts: g.pts, ready: Math.max(0, g.ready - 1), idx: g.idx + 1 };
+    const next = { pts: g.pts, ready: gameCoinsRef.current >= READER_GAME_COIN_TOTAL ? 0 : Math.max(0, g.ready - 1), idx: g.idx + 1 };
     writeGameStore(next);
     setGamesReady(next.ready);
     setPlayingGame(false);
@@ -1145,6 +1147,7 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
           setLastActivePosition({ chapterNum: dt.lastChapterNum, sheetName: dt.lastSheetName, index: dt.lastIndex });
         }
         setCoinBalance(dt.coinBalance || 0);
+        gameCoinsRef.current = dt.gameCoins || 0;
         // Today's re-reading total: keep the larger of what is saved and what
         // this screen has already counted, so a snapshot that lands a moment
         // behind a just-made award can't wind it back.
@@ -3531,7 +3534,7 @@ useEffect(() => {
       )}
       {playingGame && (() => {
           const Game = QUIZ_BREAK_GAMES[readGameStore().idx % QUIZ_BREAK_GAMES.length];
-          return <div className="fixed inset-0 z-[10060] bg-black"><Game coinsLeft={READER_GAME_COINS} onDone={finishReaderGame} /></div>;
+          return <div className="fixed inset-0 z-[10060] bg-black"><Game coinsLeft={Math.max(0, READER_GAME_COIN_TOTAL - gameCoinsRef.current)} onDone={finishReaderGame} /></div>;
       })()}
 
       {flyingCoins.map(c => (
