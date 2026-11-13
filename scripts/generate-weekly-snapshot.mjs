@@ -64,7 +64,17 @@ function getStudentAttendanceForEntry(entry, studentUid, sessions) {
 // still have real dated docs (everything before this change shipped, plus
 // the very week it shipped in, which is what seeded recurringSchedule) are
 // left exactly as they were -- this only fills the gap going forward.
-function synthesizeOccurrencesFromRecurringSchedule(recurringSlots, realSchedule, startOfYear, now) {
+function synthesizeOccurrencesFromRecurringSchedule(recurringSlots, realSchedule, startOfYear, now, sessions = []) {
+  // A student's first class is often attended a day or two BEFORE the teacher saves their weekly slot, so counting only from the
+  // slot's creation day lost that class (it showed 0 attended). When the student's first session falls up to 21 days before the
+  // slot was created, the count starts from that session's day instead (never earlier: a stray old session must not make a new
+  // student look absent for months).
+  const firstSessionMs = {};
+  sessions.forEach(x => {
+    if (!x.studentUid || !x.startTime || typeof x.startTime.toMillis !== 'function') return;
+    const t = x.startTime.toMillis();
+    if (!(firstSessionMs[x.studentUid] <= t)) firstSessionMs[x.studentUid] = t;
+  });
   const covered = new Set(); // `${studentKey}_${yyyy-mm-dd}`
   realSchedule.forEach(e => {
     const d = e.startTime.toDate();
@@ -80,7 +90,9 @@ function synthesizeOccurrencesFromRecurringSchedule(recurringSlots, realSchedule
     // Walk every date in range, pick out the ones matching this slot's weekday -- but only from the day the slot was
     // created (a new student's slot must not be counted for the weeks before they ever came: that made brand-new
     // students look like "missed 10 weeks in a row" and switched them off).
-    const createdMs = slot.createdAt && typeof slot.createdAt.toMillis === 'function' ? slot.createdAt.toMillis() : 0;
+    let createdMs = slot.createdAt && typeof slot.createdAt.toMillis === 'function' ? slot.createdAt.toMillis() : 0;
+    const firstMs = firstSessionMs[slot.studentUid];
+    if (createdMs && firstMs && firstMs < createdMs && createdMs - firstMs <= 21 * 24 * 60 * 60 * 1000) createdMs = firstMs;
     const cursor = new Date(Math.max(startOfYear.getTime(), createdMs ? new Date(new Date(createdMs).getFullYear(), new Date(createdMs).getMonth(), new Date(createdMs).getDate()).getTime() : 0));
     while (cursor <= now) {
       if (cursor.getDay() === slot.dayOfWeek) {
@@ -176,7 +188,7 @@ async function main() {
   const sessions = allSessions.filter(inYear);
 
   const now = new Date();
-  const synthetic = synthesizeOccurrencesFromRecurringSchedule(recurringSlots, realSchedule, startOfYear, now);
+  const synthetic = synthesizeOccurrencesFromRecurringSchedule(recurringSlots, realSchedule, startOfYear, now, sessions);
   const schedule = [...realSchedule, ...synthetic];
 
   // ---- Automatic deactivation ----
@@ -367,7 +379,7 @@ async function main() {
   // ---- Per-student "weeks attended" (all time), for the Bodhi Tree and Shrine Room ----
   // Both used to read a student's whole schedule + whole session history every time
   // they were opened. One small static file replaces that (up to a week old).
-  const allSchedule = [...allRealSchedule, ...synthesizeOccurrencesFromRecurringSchedule(recurringSlots, allRealSchedule, startOfYear, now)];
+  const allSchedule = [...allRealSchedule, ...synthesizeOccurrencesFromRecurringSchedule(recurringSlots, allRealSchedule, startOfYear, now, allSessions)];
   const weekKeyOf = (date) => {
     const day = date.getDay();
     const monday = new Date(date.getFullYear(), date.getMonth(), date.getDate() + ((day === 0 ? -6 : 1) - day));
