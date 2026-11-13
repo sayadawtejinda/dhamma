@@ -1,3 +1,40 @@
 {
-  "homes": []
+  "homes": [
+    {
+      "id": "house-0010",
+      "name": "House 10",
+      "image": "images/0010.jpg",
+      "cost": 12000
+    },
+    {
+      "id": "house-0011",
+      "name": "House 11",
+      "image": "images/0011.jpg",
+      "cost": 12000
+    },
+    {
+      "id": "house-0012",
+      "name": "House 12",
+      "image": "images/0012.jpg",
+      "cost": 12000
+    },
+    {
+      "id": "house-0013",
+      "name": "House 13",
+      "image": "images/0013.jpg",
+      "cost": 12000
+    },
+    {
+      "id": "house-0014",
+      "name": "House 14",
+      "image": "images/0014.jpg",
+      "cost": 12000
+    },
+    {
+      "id": "house-0015",
+      "name": "House 15",
+      "image": "images/0015.jpg",
+      "cost": 12000
+    }
+  ]
 }
