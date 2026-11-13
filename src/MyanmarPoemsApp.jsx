@@ -11,6 +11,7 @@ const TUTORING_STUDENTS_PATH = 'artifacts/dhamma-tutoring-app/public/data/studen
 const POEMS_PER_TROPHY = 2;
 import OnlineStatusWidget from './OnlineStatusWidget';
 import { spawnFlyingCoins, trackLastClickPoint } from './flyingCoins';
+import { QUIZ_BREAK_GAMES } from './quizBreakGames';
 
 // ── Ported from the standalone "မြန်မာကဗျာ သင်ကြားရေး" (Myanmar Poems) HTML app ──
 // Same hybrid approach as the other ported apps in this project: the
@@ -269,6 +270,41 @@ export default function MyanmarPoemsApp({ entryRequest, onExit, hideOwnOnlineBad
   // mirror for the online-status pill (same split as ConsonantPracticeApp).
   const coinBalanceRef = useRef(0);
   const [myCoinBalance, setMyCoinBalance] = useState(0);
+
+  // A rest game for every 5 poems the student really sang themselves (the confirmed self-recitations the app already counts,
+  // at most once per poem per day). Counted on this device only (localStorage, no Firebase); a ready game waits behind the
+  // 🎮 button (at most 3 saved up); the games rotate through the whole list; the game pays up to POEM_GAME_COINS into this
+  // app's own coins (the vanilla code below does the paying, see 'mpoems-game-coins').
+  const POEM_GAME_EVERY = 5;
+  const POEM_GAME_COINS = 20;
+  const [gamesReady, setGamesReady] = useState(0);
+  const [gameBanner, setGameBanner] = useState(false);
+  const [playingGame, setPlayingGame] = useState(false);
+  const gameKey = `poemGame:${(studentName || '').trim()}`;
+  const readGame = () => { try { const j = JSON.parse(localStorage.getItem(gameKey) || '{}'); return { n: +j.n || 0, ready: +j.ready || 0, idx: +j.idx || 0 }; } catch (e) { return { n: 0, ready: 0, idx: 0 }; } };
+  const writeGame = (g) => { try { localStorage.setItem(gameKey, JSON.stringify(g)); } catch (e) { /* optional */ } };
+  useEffect(() => {
+    if (!studentName) return undefined;
+    setGamesReady(readGame().ready);
+    const onSung = () => {
+      const g = readGame();
+      const n = g.n + 1;
+      const earned = n >= POEM_GAME_EVERY;
+      const next = { n: earned ? 0 : n, ready: Math.min(3, g.ready + (earned ? 1 : 0)), idx: g.idx };
+      writeGame(next);
+      if (next.ready !== g.ready) { setGamesReady(next.ready); setGameBanner(true); setTimeout(() => setGameBanner(false), 5000); }
+    };
+    window.addEventListener('mpoems-sung', onSung);
+    return () => window.removeEventListener('mpoems-sung', onSung);
+  }, [studentName]); // eslint-disable-line react-hooks/exhaustive-deps
+  const finishPoemGame = (coins) => {
+    if (coins > 0) window.dispatchEvent(new CustomEvent('mpoems-game-coins', { detail: coins }));
+    const g = readGame();
+    const next = { n: g.n, ready: Math.max(0, g.ready - 1), idx: g.idx + 1 };
+    writeGame(next);
+    setGamesReady(next.ready);
+    setPlayingGame(false);
+  };
 
   // User-initiated deposit into the Shrine Room wallet -- same pattern as
   // SmartStudy's coin badge: click, confirm, and the coins move over.
@@ -2221,6 +2257,7 @@ export default function MyanmarPoemsApp({ entryRequest, onExit, hideOwnOnlineBad
                         const today = todayKey();
                         recitedDates[askedIndex] = today;
                         awardCoins(50);
+                        window.dispatchEvent(new CustomEvent('mpoems-sung')); // counts towards the rest game
                         const rosterPatch = { recitedDates: { [askedIndex]: today } };
                         if (!completedPoemIds.includes(askedIndex) && newPoemsCountedThisSession < MAX_NEW_POEMS_PER_SESSION) {
                             completedPoemIds.push(askedIndex);
@@ -2544,11 +2581,14 @@ export default function MyanmarPoemsApp({ entryRequest, onExit, hideOwnOnlineBad
             });
         }
         Promise.all([ensureLucideLoaded(), loadPoemProgress()]).then(runMasterInit);
+        const onGameCoins = (e) => { if (e.detail > 0) awardCoins(e.detail); };
+        window.addEventListener('mpoems-game-coins', onGameCoins);
 
     // Stop any playing poem audio -- otherwise it keeps going after this
     // component unmounts, since the Audio object isn't tied to React's
     // lifecycle.
     return () => {
+      window.removeEventListener('mpoems-game-coins', onGameCoins);
       clickTracker.stop();
       if (currentAudio) {
         currentAudio.pause();
@@ -2565,6 +2605,16 @@ export default function MyanmarPoemsApp({ entryRequest, onExit, hideOwnOnlineBad
         className="mpoems-app-root selection:bg-yellow-200"
         dangerouslySetInnerHTML={{ __html: MPOEMS_APP_BODY_HTML }}
       />
+      {gameBanner && !playingGame && (
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-[10040] bg-purple-600 text-white font-extrabold text-sm sm:text-base rounded-full px-4 py-2 shadow-xl pointer-events-none">🎮 You sang {POEM_GAME_EVERY} poems! A game is ready!</div>
+      )}
+      {gamesReady > 0 && !playingGame && studentName && (
+        <button onClick={() => setPlayingGame(true)} className="fixed left-3 bottom-20 z-[10040] bg-purple-600 hover:bg-purple-700 text-white font-extrabold rounded-full shadow-xl px-4 py-3 animate-bounce" aria-label="Play a game">🎮 Play a game{gamesReady > 1 ? ` (${gamesReady})` : ''}</button>
+      )}
+      {playingGame && (() => {
+        const Game = QUIZ_BREAK_GAMES[readGame().idx % QUIZ_BREAK_GAMES.length];
+        return <div className="fixed inset-0 z-[10060] bg-black"><Game coinsLeft={POEM_GAME_COINS} onDone={finishPoemGame} /></div>;
+      })()}
       {!hideOwnOnlineBadge && (
         <OnlineStatusWidget
           rosterPath={MPOEMS_ROSTER_PATH}

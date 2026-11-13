@@ -13,12 +13,32 @@ import { presenceIntervalMs, isOnlineStatusDay } from './presenceDay';
 import { AvatarPeekModal } from './AvatarPeek';
 import { loadClassMeta, setClassMeta } from './classMeta';
 import OnlineStatusWidget from './OnlineStatusWidget';
+import { QuizBreakGame, BIRD_COIN_CAP } from './quizBreakGames';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const ABHIDHAMMA_APP_ID = 'lesson-translator-app-v6';
 const DEFAULT_IMG_BASE  = 'https://raw.githubusercontent.com/nathantun93/dhamma4/main/';
 const AUDIO_BASE_URL    = 'https://raw.githubusercontent.com/nathantun93/bell/main/';
 const TEACHER_PASSCODE  = '1';
+
+// Game coins after every 5 quiz questions, paid exactly like Smart Study's: straight into the student's Shrine Room wallet,
+// only the FIRST time a lesson is taken, at most BIRD_COIN_CAP (30) per lesson (a fixed reward id per class+student+lesson,
+// so it can never be paid twice, from any device).
+const payAbhiGameCoins = async ({ rewardId, amount, shrineName, studentName }) => {
+  if (!amount || amount <= 0) return 0;
+  const rewardRef = doc(db, 'artifacts', ABHIDHAMMA_APP_ID, 'public', 'data', 'abhiQuizCoins', rewardId);
+  const shrineRef = doc(db, 'artifacts/shrine-room-app/public/data/roster', (shrineName || 'unknown').trim().replace(/[.$#/\[\]]/g, '_'));
+  return runTransaction(db, async (tx) => {
+    const [r, sh] = await Promise.all([tx.get(rewardRef), tx.get(shrineRef)]);
+    const already = r.exists() ? (r.data().amount || 0) : 0;
+    const pay = Math.max(0, Math.min(amount, BIRD_COIN_CAP - already));
+    if (pay <= 0) return 0;
+    tx.set(rewardRef, { studentName, amount: already + pay, at: Date.now() });
+    const hadBalance = sh.exists() && sh.data().coinBalance != null;
+    tx.set(shrineRef, { studentName: shrineName, coinBalance: hadBalance ? increment(pay) : 20 + pay }, { merge: true });
+    return pay;
+  });
+};
 
 // Normalize an image-base URL the teacher pastes into "Class Default Image URL" / "Lesson Override URL".
 // Auto-fixes the #1 reason pasted image links break: a normal github.com page link (blob/tree) instead
@@ -147,16 +167,29 @@ const SmartContent = ({ text, imageBase }) => {
 const QuizModule = ({ classId,lessonId,lessonTitle,userId,userName,ageGroup,quizData,onClose }) => {
   const [state,setState]=useState('playing');const [qi,setQi]=useState(0);const [score,setScore]=useState(0);
   const [tl,setTl]=useState(30);const [show,setShow]=useState(false);const [sel,setSel]=useState(null);const [fb,setFb]=useState(null);const [proc,setProc]=useState(false);const [correct,setCorrect]=useState(0);
-  useEffect(()=>{if(state!=='playing'||show)return;const t=setTimeout(()=>setShow(true),5000);return()=>clearTimeout(t);},[state,show,qi]);
-  useEffect(()=>{if(state!=='playing'||!show||proc)return;const t=setInterval(()=>setTl(p=>p-1),1000);return()=>clearInterval(t);},[state,show,proc,qi]);
-  useEffect(()=>{if(tl<=0&&show&&!proc&&state==='playing')handleAnswer(-1,true);},[tl,show,proc,state]);
+  // the rest game after every 5 questions: only on the first take of a lesson (the same rule as Smart Study)
+  const [brk,setBrk]=useState(false);const [gameElig,setGameElig]=useState(false);const [gameLeft,setGameLeft]=useState(BIRD_COIN_CAP);
+  const rewardId=`${classId}_${encodeURIComponent(userName)}_${lessonId}_birds`;
+  useEffect(()=>{let off=false;(async()=>{try{
+    const sn=await getDoc(doc(abhiScoresRef(),`${userId}_${lessonId}`));if(off||sn.exists())return;
+    const rw=await getDoc(doc(db,'artifacts',ABHIDHAMMA_APP_ID,'public','data','abhiQuizCoins',rewardId));
+    if(off)return;setGameLeft(Math.max(0,BIRD_COIN_CAP-(rw.exists()?(rw.data().amount||0):0)));setGameElig(true);
+  }catch(e){/* no game then */}})();return()=>{off=true;};},[]);// eslint-disable-line react-hooks/exhaustive-deps
+  const gameDone=async(coins)=>{
+    setBrk(false);setQi(p=>p+1);setShow(false);setTl(30);
+    if(coins>0){setGameLeft(l=>Math.max(0,l-coins));
+      for(let i=0;i<3;i++){try{const paid=await payAbhiGameCoins({rewardId,amount:coins,shrineName:userName,studentName:userName});if(paid>0)window.dispatchEvent(new CustomEvent('dhamma-wallet-gift',{detail:{coins:paid}}));break;}catch(e){await new Promise(r=>setTimeout(r,700*(i+1)));}}}
+  };
+  useEffect(()=>{if(state!=='playing'||show||brk)return;const t=setTimeout(()=>setShow(true),5000);return()=>clearTimeout(t);},[state,show,qi,brk]);
+  useEffect(()=>{if(state!=='playing'||!show||proc||brk)return;const t=setInterval(()=>setTl(p=>p-1),1000);return()=>clearInterval(t);},[state,show,proc,qi,brk]);
+  useEffect(()=>{if(tl<=0&&show&&!proc&&!brk&&state==='playing')handleAnswer(-1,true);},[tl,show,proc,state,brk]);
   const handleAnswer=async(idx,timeout=false)=>{
     if(proc)return;setProc(true);setSel(idx);
     const q=quizData.questions[qi];const ok=!timeout&&q.correctAnswerIndex!==undefined&&idx===q.correctAnswerIndex;setFb(ok?'correct':'incorrect');
     const pts=ok?Math.max(100,Math.ceil((tl/30)*1000)):0;const nc=ok?correct+1:correct;if(ok)setCorrect(nc);
     setTimeout(async()=>{
       setScore(p=>p+pts);setFb(null);setSel(null);setProc(false);
-      if(qi+1<quizData.questions.length){setQi(p=>p+1);setShow(false);setTl(30);}
+      if(qi+1<quizData.questions.length){if(gameElig&&(qi+1)%5===0){setShow(false);setTl(30);setBrk(true);return;}setQi(p=>p+1);setShow(false);setTl(30);}
       else{const fs=score+pts;if(nc<8){setState('failed');return;}setState('finished');
         try{
           // Save quiz result (completion tracking) 
@@ -174,6 +207,7 @@ const QuizModule = ({ classId,lessonId,lessonTitle,userId,userName,ageGroup,quiz
       }
     },1500);
   };
+  if(brk)return<div className="fixed inset-0 z-[60] bg-black"><QuizBreakGame key={qi} lessonId={lessonId} coinsLeft={gameLeft} onDone={gameDone}/></div>;
   if(state==='failed')return<div className="fixed inset-0 bg-gray-900 z-50 flex items-center justify-center p-4"><div className="bg-gray-800 p-8 rounded-2xl text-center border border-red-500"><div className="text-6xl mb-4">😔</div><h2 className="text-3xl font-bold text-red-400 mb-2">Not Enough Correct!</h2><p className="text-gray-300 mb-6">Need <span className="text-yellow-400 font-black">8+ correct</span> to pass.</p><button onClick={onClose} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-full">Go Back & Review</button></div></div>;
   if(state==='finished')return<div className="fixed inset-0 bg-gray-900 z-50 flex items-center justify-center p-4"><div className="bg-gray-800 p-8 rounded-2xl text-center"><Trophy className="w-20 h-20 text-yellow-400 mx-auto mb-4"/><h2 className="text-3xl font-bold text-white mb-2">Quiz Completed!</h2><p className="text-gray-400 text-lg mb-6">Score: <span className="text-indigo-400 font-bold">{score}</span></p><button onClick={onClose} className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-full">Finish</button></div></div>;
   return(
