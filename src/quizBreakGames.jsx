@@ -2841,10 +2841,130 @@ export const FinishProverbGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
 };
 
 // ---------------------------------------------------------------------------------------------------------------
+// Game 22: the brave puppy. A Paccekabuddha lives in the forest, and his puppy goes to fetch his alms food. On the way, wild beasts
+// (a tiger, a snake, a boar, a wolf, a bear, a leopard, a lion) hide in bushes, behind trees and rocks and pop out one after another.
+// Tap the beast: the puppy runs up and barks "Woof!" and the beast runs away -- 2 or 3 coins. A beast that is not barked at in time
+// slips back into hiding (no coins). Nothing is hurt or shown cruelly; seven beasts per game, same timing and coins as the birds.
+const PUPPY_BEASTS = [
+  { emoji: '🐅', name: 'tiger' }, { emoji: '🐍', name: 'snake' }, { emoji: '🐗', name: 'boar' }, { emoji: '🐺', name: 'wolf' },
+  { emoji: '🐻', name: 'bear' }, { emoji: '🐆', name: 'leopard' }, { emoji: '🦁', name: 'lion' },
+];
+const PUPPY_SPOTS = [
+  { x: 14, y: 30, hide: '🌳' }, { x: 84, y: 28, hide: '🌿' }, { x: 10, y: 48, hide: '🪨' }, { x: 88, y: 46, hide: '🌳' },
+  { x: 20, y: 64, hide: '🌿' }, { x: 80, y: 62, hide: '🪨' }, { x: 30, y: 40, hide: '🌳' },
+];
+const PUPPY_COUNT = 7;
+const PUPPY_FIRST_MS = 900;
+const PUPPY_EVERY_MS = 1600;
+const PUPPY_VISIBLE_MS = 3200;
+const PUPPY_BEAST_SIZE = 'clamp(40px, 10vmin, 70px)';
+const PUPPY_HIDE_SIZE = 'clamp(46px, 11vmin, 76px)';
+export const BravePuppyGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
+  const [order] = useState(() => {   // which hiding place each beast uses (all different), and the beasts in a random order
+    const a = PUPPY_SPOTS.map((_, i) => i), b = [...PUPPY_BEASTS];
+    for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+    for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; }
+    return a.map((spot, i) => ({ spot, beast: b[i] }));
+  });
+  const [state, setState] = useState(() => Array(PUPPY_COUNT).fill('waiting')); // waiting | out | fled | missed
+  const [won, setWon] = useState(() => Array(PUPPY_COUNT).fill(0));
+  const [bark, setBark] = useState(null);       // index of the beast the puppy is barking at (for the "Woof!" bubble)
+  const [finished, setFinished] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const total = won.reduce((a, b) => a + b, 0);
+  const fled = state.filter(v => v === 'fled').length;
+  const soundRef = useRef(null);
+
+  useEffect(() => {
+    const timers = [];
+    for (let i = 0; i < PUPPY_COUNT; i++) {
+      const start = PUPPY_FIRST_MS + i * PUPPY_EVERY_MS;
+      timers.push(setTimeout(() => setState(st => st.map((v, k) => (k === i && v === 'waiting' ? 'out' : v))), start));
+      timers.push(setTimeout(() => setState(st => st.map((v, k) => (k === i && v === 'out' ? 'missed' : v))), start + PUPPY_VISIBLE_MS));
+    }
+    return () => timers.forEach(clearTimeout);
+  }, []);
+  useEffect(() => {
+    if (finished || !state.every(v => v === 'fled' || v === 'missed')) return undefined;
+    const t = setTimeout(() => setFinished(true), 1200);
+    return () => clearTimeout(t);
+  }, [state, finished]);
+
+  const barkAt = (i) => {
+    if (state[i] !== 'out') return;
+    const coins = Math.max(0, Math.min(2 + Math.floor(Math.random() * 2), coinsLeft - total)); // 2 or 3, never past the lesson's limit
+    setState(st => st.map((v, k) => (k === i ? 'fled' : v)));
+    setWon(w => w.map((v, k) => (k === i ? coins : v)));
+    setBark(i); setTimeout(() => setBark(b => (b === i ? null : b)), 1000);
+    playCoinSound(soundRef);
+  };
+  // the puppy walks up the path a little with every beast sent away
+  const puppyY = 84 - fled * 6;
+
+  return (
+    <div className="relative overflow-hidden text-white h-screen" style={{ height: '100dvh', minHeight: 420, background: 'linear-gradient(180deg,#bbf7d0 0%,#86efac 45%,#4ade80 100%)' }}>
+      <style>{`
+        @keyframes puppyPop { 0% { transform: translate(-50%,10px) scale(.3); opacity: 0 } 60% { transform: translate(-50%,-6px) scale(1.15); opacity: 1 } 100% { transform: translate(-50%,0) scale(1); opacity: 1 } }
+        @keyframes puppyRun { 0% { transform: translate(-50%,0) scale(1); opacity: 1 } 100% { transform: translate(var(--dx),-30px) scale(.5); opacity: 0 } }
+        @keyframes puppyUp { 0% { transform: translateY(0); opacity: 0 } 15% { opacity: 1 } 100% { transform: translateY(-46px); opacity: 0 } }
+        @keyframes puppyWag { 0%,100% { transform: translate(-50%,-50%) rotate(-6deg) } 50% { transform: translate(-50%,-50%) rotate(6deg) } }
+      `}</style>
+      <div className="absolute top-0 inset-x-0 flex items-center justify-between gap-2 px-3 py-3 z-10">
+        <div className="bg-white/80 text-green-900 font-bold text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 ml-12 sm:ml-16 min-w-0 truncate">🐕 The brave puppy</div>
+        <div className="bg-yellow-300 text-yellow-900 font-black text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 shadow whitespace-nowrap flex-shrink-0">🪙 {total}{coinsLeft <= 0 ? ' (limit reached)' : ''}</div>
+      </div>
+      {/* the forest path up to the Paccekabuddha's hut */}
+      <div className="absolute left-1/2 -translate-x-1/2 rounded-full" style={{ top: '16%', bottom: 0, width: 'clamp(44px, 12vmin, 90px)', background: 'linear-gradient(180deg,#d6b98c,#b8956a)', opacity: .85, zIndex: 1 }} />
+      <div className="absolute text-center select-none" style={{ left: '50%', top: '7%', transform: 'translateX(-50%)', fontSize: 'clamp(30px, 8vmin, 56px)', zIndex: 2 }}>🛖🧘</div>
+      <div className="absolute pointer-events-none bg-white/80 text-green-900 font-bold text-xs sm:text-sm rounded-full px-3 py-1 shadow" style={{ right: '3%', bottom: '3%' }}>🛡️ {fled} / {PUPPY_COUNT}</div>
+      {/* hiding places and the beasts that pop out of them */}
+      {order.map(({ spot, beast }, i) => {
+        const sp = PUPPY_SPOTS[spot];
+        const st = state[i];
+        return (
+          <React.Fragment key={i}>
+            <span className="absolute select-none pointer-events-none" style={{ left: `${sp.x}%`, top: `${sp.y}%`, transform: 'translate(-50%,-50%)', fontSize: PUPPY_HIDE_SIZE, zIndex: 3 }}>{sp.hide}</span>
+            {st === 'out' && (
+              <button onClick={() => barkAt(i)} aria-label={`A ${beast.name}! Bark!`} className="absolute" style={{ left: `${sp.x}%`, top: `${sp.y - 7}%`, transform: 'translate(-50%,0)', zIndex: 5, padding: 12, animation: 'puppyPop .4s ease-out' }}>
+                <span className="block select-none" style={{ fontSize: PUPPY_BEAST_SIZE, lineHeight: 1 }}>{beast.emoji}</span>
+              </button>
+            )}
+            {st === 'fled' && (
+              <>
+                <span className="absolute pointer-events-none select-none" style={{ left: `${sp.x}%`, top: `${sp.y - 7}%`, '--dx': sp.x < 50 ? '-260%' : '160%', fontSize: PUPPY_BEAST_SIZE, zIndex: 5, animation: 'puppyRun .9s ease-in forwards' }}>{beast.emoji}💨</span>
+                <div className="absolute pointer-events-none font-black text-yellow-600 drop-shadow whitespace-nowrap" style={{ left: `${sp.x}%`, top: `${sp.y - 12}%`, transform: 'translateX(-50%)', zIndex: 6, animation: 'puppyUp 1.6s ease-out forwards' }}>+{won[i]} 🪙</div>
+              </>
+            )}
+          </React.Fragment>
+        );
+      })}
+      {/* the puppy with the alms bowl, and its bark */}
+      <div className="absolute select-none pointer-events-none" style={{ left: '50%', top: `${puppyY}%`, fontSize: 'clamp(40px, 10vmin, 70px)', lineHeight: 1, zIndex: 4, transition: 'top .8s ease', animation: 'puppyWag 1s ease-in-out infinite' }}>🐕🍲</div>
+      {bark !== null && (
+        <div className="absolute pointer-events-none bg-white text-gray-800 font-black rounded-2xl px-3 py-1 shadow-lg whitespace-nowrap" style={{ left: '50%', top: `${puppyY - 9}%`, transform: 'translateX(-50%)', zIndex: 7 }}>Woof! Woof! 🐶</div>
+      )}
+      {finished && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20 px-4">
+          <div className="bg-white text-gray-900 rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
+            <div className="text-5xl mb-2">{fled >= PUPPY_COUNT ? '🐕' : '🧘'}</div>
+            <h2 className="text-2xl font-extrabold mb-1">{fled > 0 ? `${fled} beast${fled === 1 ? '' : 's'} sent away!` : 'Nice try!'}</h2>
+            <p className="text-sm text-gray-600 mb-2">{fled >= PUPPY_COUNT
+              ? 'The brave puppy kept the path safe and brought the alms food to the Paccekabuddha. Courage and loyalty protect those we love.'
+              : (fled > 0 ? 'The puppy was brave and barked when the beasts came. Watch every hiding place to keep the path safe.' : 'Be quick: when a beast peeks out, tap it so the puppy can bark.')}</p>
+            <p className="text-lg font-bold text-yellow-600 mb-4">{total > 0 ? `🪙 +${total} coins for your Shrine Room wallet` : (coinsLeft <= 0 ? 'You have already earned all the coins for this lesson. Great job!' : 'No coins this time.')}</p>
+            <GameButton disabled={leaving} onClick={() => { setLeaving(true); onDone(total); }} className="bg-sky-500 hover:bg-sky-600 text-white w-full text-xl">Continue →</GameButton>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------------------------------------------
 // The games, in the order they are handed out. A lesson always gets the same game (so a retake feels familiar and the
 // coin cap stays one per lesson), but neighbouring lessons get different ones, so the break does not become boring.
 // To add a game: write it above with the same two props and put it in this list.
-export const QUIZ_BREAK_GAMES = [BirdRescueGame, FlowerOfferingGame, LitterPickingGame, AnimalRescueGame, WoodcutterAxeGame, AntGatheringGame, WaterAnimalsGame, HelpFriendsGame, PayRespectGame, TenGiftsGame, ReturnLostItemsGame, HelpParentsGame, AlmsRoundGame, GoldenEggDuckGame, CunningHeronGame, ShareWaterGame, SchoolOfSkillsGame, TenDeedsGame, TenMeritGame, TigerInTrapGame, FinishProverbGame];
+export const QUIZ_BREAK_GAMES = [BirdRescueGame, FlowerOfferingGame, LitterPickingGame, AnimalRescueGame, WoodcutterAxeGame, AntGatheringGame, WaterAnimalsGame, HelpFriendsGame, PayRespectGame, TenGiftsGame, ReturnLostItemsGame, HelpParentsGame, AlmsRoundGame, GoldenEggDuckGame, CunningHeronGame, ShareWaterGame, SchoolOfSkillsGame, TenDeedsGame, TenMeritGame, TigerInTrapGame, FinishProverbGame, BravePuppyGame];
 const hashOf = (s) => { let h = 0; String(s ?? '').split('').forEach(ch => { h = (h * 31 + ch.charCodeAt(0)) >>> 0; }); return h; };
 export const quizBreakGameFor = (lessonId) => QUIZ_BREAK_GAMES[hashOf(lessonId) % QUIZ_BREAK_GAMES.length];
 export const QuizBreakGame = ({ lessonId, ...rest }) => {
