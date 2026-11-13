@@ -17,10 +17,7 @@
 // stale -- fine for a leaderboard, not something anyone needs to the second.
 // (Sending a ❤️ on the Trophies tab is still a live Firestore write -- only
 // the DISPLAYED counts are the once-a-week snapshot.)
-// The teacher's classes are in Pacific time, and "attended" means a session on the same CALENDAR DAY as the class. GitHub's runner
-// is in UTC, where a Sunday 5 pm class falls on Monday and a student who joins a few minutes early falls on Sunday: that counted real
-// absences that never happened and doubled every weekly slot (the slot's Sunday + the real class's Monday). Set before any date is made.
-process.env.TZ = process.env.TZ || 'America/Los_Angeles';
+import './class-timezone.mjs'; // FIRST: dates are counted in Pacific time (see that file)
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously } from 'firebase/auth';
 import { getFirestore, collection, query, where, getDocs, getDoc, Timestamp, doc, updateDoc, increment } from 'firebase/firestore';
@@ -30,6 +27,8 @@ import { dirname, join } from 'node:path';
 import { firebaseConfig, appId } from '../src/firebaseConfig.js';
 import { refreshClassSnapshots, refreshClassDocSnapshots, refreshAbhidhammaClassFiles, refreshDhammaschoolProgress, refreshFestivalDeeds, CLASS_DIR } from './class-snapshots.mjs';
 import { loadLessonContext, rankRoster } from './roster-lessons.mjs';
+import { getStudentAttendanceForEntry, synthesizeOccurrencesFromRecurringSchedule, computeAttendance, checkAttendanceAgainstPrevious } from './attendance-rules.mjs';
+import { assertClassTimezone } from './class-timezone.mjs';
 import { refreshContentSnapshots, refreshAnnouncementsSnapshot, refreshAvatarSnapshot, refreshScheduleSnapshot } from './content-snapshots.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -41,80 +40,7 @@ const db = getFirestore(app);
 
 const publicDataPath = `/artifacts/${appId}/public/data`;
 
-// Same attendance rule as getStudentAttendanceForEntry in TutoringApp.jsx --
-// kept in sync by hand since this script runs outside the React app.
-function getStudentAttendanceForEntry(entry, studentUid, sessions) {
-  if (entry.overrideStatus === 'attended') return 'attended';
-  if (entry.overrideStatus === 'absent') return 'absent';
-  if (entry.studentUid !== 'offline') {
-    const entryDate = entry.startTime.toDate();
-    const startOfDay = new Date(entryDate.getFullYear(), entryDate.getMonth(), entryDate.getDate());
-    const endOfDay = new Date(entryDate.getFullYear(), entryDate.getMonth(), entryDate.getDate(), 23, 59, 59);
-    const didAttend = (sessions || []).some(s => s.studentUid === entry.studentUid && s.startTime.toDate() >= startOfDay && s.startTime.toDate() <= endOfDay);
-    return didAttend ? 'attended' : 'absent';
-  }
-  return 'absent';
-}
-
-// The app no longer creates a new dated teacherSchedule doc for every week
-// (see recurringSchedule / migrate-to-recurring-schedule.mjs) -- a student's
-// weekly slot is now one persistent doc that this script has to map onto
-// real calendar dates itself for any week that doesn't already have a real
-// dated teacherSchedule doc (i.e. every week from here on). Weeks that DO
-// still have real dated docs (everything before this change shipped, plus
-// the very week it shipped in, which is what seeded recurringSchedule) are
-// left exactly as they were -- this only fills the gap going forward.
-function synthesizeOccurrencesFromRecurringSchedule(recurringSlots, realSchedule, startOfYear, now, sessions = []) {
-  // A student's first class is often attended a day or two BEFORE the teacher saves their weekly slot, so counting only from the
-  // slot's creation day lost that class (it showed 0 attended). When the student's first session falls up to 21 days before the
-  // slot was created, the count starts from that session's day instead (never earlier: a stray old session must not make a new
-  // student look absent for months).
-  const firstSessionMs = {};
-  sessions.forEach(x => {
-    if (!x.studentUid || !x.startTime || typeof x.startTime.toMillis !== 'function') return;
-    const t = x.startTime.toMillis();
-    if (!(firstSessionMs[x.studentUid] <= t)) firstSessionMs[x.studentUid] = t;
-  });
-  const covered = new Set(); // `${studentKey}_${yyyy-mm-dd}`
-  realSchedule.forEach(e => {
-    const d = e.startTime.toDate();
-    const key = e.studentUid === 'offline' ? `offline:${e.studentName}` : `uid:${e.studentUid}`;
-    covered.add(`${key}_${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`);
-  });
-
-  const synthetic = [];
-  for (const slot of recurringSlots) {
-    const key = slot.studentUid === 'offline' ? `offline:${slot.studentName}` : `uid:${slot.studentUid}`;
-    const [sh, sm] = (slot.startTime || '00:00').split(':').map(Number);
-    const [eh, em] = (slot.endTime || '00:00').split(':').map(Number);
-    // Walk every date in range, pick out the ones matching this slot's weekday -- but only from the day the slot was
-    // created (a new student's slot must not be counted for the weeks before they ever came: that made brand-new
-    // students look like "missed 10 weeks in a row" and switched them off).
-    let createdMs = slot.createdAt && typeof slot.createdAt.toMillis === 'function' ? slot.createdAt.toMillis() : 0;
-    const firstMs = firstSessionMs[slot.studentUid];
-    if (createdMs && firstMs && firstMs < createdMs && createdMs - firstMs <= 21 * 24 * 60 * 60 * 1000) createdMs = firstMs;
-    const cursor = new Date(Math.max(startOfYear.getTime(), createdMs ? new Date(new Date(createdMs).getFullYear(), new Date(createdMs).getMonth(), new Date(createdMs).getDate()).getTime() : 0));
-    while (cursor <= now) {
-      if (cursor.getDay() === slot.dayOfWeek) {
-        const dateKey = `${key}_${cursor.getFullYear()}-${cursor.getMonth()}-${cursor.getDate()}`;
-        if (!covered.has(dateKey)) {
-          const start = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate(), sh, sm);
-          const end = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate(), eh, em);
-          synthetic.push({
-            id: `synthetic-${slot.id}-${dateKey}`,
-            studentUid: slot.studentUid,
-            studentName: slot.studentName,
-            startTime: Timestamp.fromDate(start),
-            endTime: Timestamp.fromDate(end),
-            overrideStatus: null,
-          });
-        }
-      }
-      cursor.setDate(cursor.getDate() + 1);
-    }
-  }
-  return synthetic;
-}
+// The attendance rules (what counts as attended, how weekly slots become dated classes) live in attendance-rules.mjs, with tests.
 
 async function main() {
   await signInAnonymously(auth);
@@ -188,8 +114,24 @@ async function main() {
   const sessions = allSessions.filter(inYear);
 
   const now = new Date();
-  const synthetic = synthesizeOccurrencesFromRecurringSchedule(recurringSlots, realSchedule, startOfYear, now, sessions);
+  const synthetic = synthesizeOccurrencesFromRecurringSchedule(recurringSlots, realSchedule, startOfYear, now, sessions, Timestamp.fromDate);
   const schedule = [...realSchedule, ...synthetic];
+
+  // ---- Stop before writing anything if the numbers look wrong ----
+  // (the zone must be Pacific; and against the list published now, attended counts only go up and class counts grow by a few a
+  // week -- many drops or a big jump means the data or the rules are wrong, and the old, correct list should stay up.)
+  assertClassTimezone();
+  {
+    let previousRows = [];
+    try { previousRows = JSON.parse(readFileSync(OUT_PATH, 'utf8')).attendanceRankedList || []; } catch (e) { /* first run */ }
+    const guardRows = computeAttendance(students.filter(x => x.isActive === true).map(x => ({ id: x.id, name: x.name, isOffline: false })), schedule, sessions, now, startOfYear).filter(r => r.total > 0);
+    const problems = checkAttendanceAgainstPrevious(previousRows, guardRows);
+    if (problems.length) {
+      console.error(['ATTENDANCE LOOKS WRONG -- nothing was written:', ...problems].join('\n - '));
+      if (!process.argv.includes('--force')) throw new Error('Attendance sanity check failed (run with --force only after checking the numbers).');
+      console.error('--force given: going on anyway.');
+    }
+  }
 
   // ---- Automatic deactivation ----
   // A student who has missed their last 10 scheduled WEEKS in a row (a week counts as
@@ -245,22 +187,7 @@ async function main() {
   const onlineEntries = students.filter(s => s.isActive === true).map(s => ({ id: s.id, name: s.name, isOffline: false }));
   const allEntries = onlineEntries;
 
-  const computed = allEntries.map(entry => {
-    let attended = 0, absent = 0, monthAttended = 0, monthAbsent = 0;
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    schedule.forEach(sched => {
-      const entryDate = sched.startTime.toDate();
-      if (entryDate > now || entryDate < startOfYear) return;
-      const isMatch = entry.isOffline
-        ? (sched.studentUid === 'offline' && sched.studentName === entry.name)
-        : (sched.studentUid === entry.id);
-      if (!isMatch) return;
-      const status = getStudentAttendanceForEntry(sched, entry.id, sessions);
-      if (status === 'attended') attended++; else absent++;
-      if (entryDate >= monthStart) { if (status === 'attended') monthAttended++; else monthAbsent++; }
-    });
-    return { id: entry.id, name: entry.name, isOffline: entry.isOffline, attended, absent, total: attended + absent, monthAttended, monthAbsent };
-  });
+  const computed = computeAttendance(allEntries, schedule, sessions, now, startOfYear);
 
   // "This Year's Attendance" board -- only students/classes with at least
   // one scheduled session this year show up at all.
@@ -379,7 +306,7 @@ async function main() {
   // ---- Per-student "weeks attended" (all time), for the Bodhi Tree and Shrine Room ----
   // Both used to read a student's whole schedule + whole session history every time
   // they were opened. One small static file replaces that (up to a week old).
-  const allSchedule = [...allRealSchedule, ...synthesizeOccurrencesFromRecurringSchedule(recurringSlots, allRealSchedule, startOfYear, now, allSessions)];
+  const allSchedule = [...allRealSchedule, ...synthesizeOccurrencesFromRecurringSchedule(recurringSlots, allRealSchedule, startOfYear, now, allSessions, Timestamp.fromDate)];
   const weekKeyOf = (date) => {
     const day = date.getDay();
     const monday = new Date(date.getFullYear(), date.getMonth(), date.getDate() + ((day === 0 ? -6 : 1) - day));

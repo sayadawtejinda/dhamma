@@ -39,6 +39,10 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      # The attendance rules are tested first: if a test fails, nothing is regenerated or published
+      - name: Test the attendance rules
+        run: npm run test:attendance
+
       - name: Regenerate snapshot
         run: |
           if [ "${{ github.event_name }}" = "schedule" ]; then

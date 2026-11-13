@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "snapshot:weekly": "node scripts/generate-weekly-snapshot.mjs",
+    "test:attendance": "node --test scripts/test-attendance.mjs",
     "snapshot:classes": "node scripts/refresh-class-snapshots.mjs",
     "snapshot:boards": "node scripts/refresh-class-snapshots.mjs --boards-only"
   },
