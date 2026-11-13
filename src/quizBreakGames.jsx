@@ -2841,7 +2841,7 @@ export const FinishProverbGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
 };
 
 // ---------------------------------------------------------------------------------------------------------------
-// Game 22: the brave puppy. A Paccekabuddha lives in the forest, and his puppy goes to fetch his alms food. On the way, wild beasts
+// Game 22: the brave puppy. A Paccekabuddha walks to the village for alms with his bowl; his puppy, who cannot carry a bowl, leads the way and gives the gift of its voice. On the way, wild beasts
 // (a tiger, a snake, a boar, a wolf, a bear, a leopard, a lion) hide in bushes, behind trees and rocks and pop out one after another.
 // Tap the beast: the puppy runs up and barks "Woof!" and the beast runs away -- 2 or 3 coins. A beast that is not barked at in time
 // slips back into hiding (no coins). Nothing is hurt or shown cruelly; seven beasts per game, same timing and coins as the birds.
@@ -2899,7 +2899,7 @@ export const BravePuppyGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
     playCoinSound(soundRef);
   };
   // the puppy walks up the path a little with every beast sent away
-  const puppyY = 84 - fled * 6;
+  const puppyY = 70 - fled * 5;   // the puppy leads the way; the Paccekabuddha follows behind it with his own bowl
 
   return (
     <div className="relative overflow-hidden text-white h-screen" style={{ height: '100dvh', minHeight: 420, background: 'linear-gradient(180deg,#bbf7d0 0%,#86efac 45%,#4ade80 100%)' }}>
@@ -2915,7 +2915,7 @@ export const BravePuppyGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
       </div>
       {/* the forest path up to the Paccekabuddha's hut */}
       <div className="absolute left-1/2 -translate-x-1/2 rounded-full" style={{ top: '16%', bottom: 0, width: 'clamp(44px, 12vmin, 90px)', background: 'linear-gradient(180deg,#d6b98c,#b8956a)', opacity: .85, zIndex: 1 }} />
-      <div className="absolute text-center select-none" style={{ left: '50%', top: '7%', transform: 'translateX(-50%)', fontSize: 'clamp(30px, 8vmin, 56px)', zIndex: 2 }}>🛖🧘</div>
+      <div className="absolute text-center select-none" style={{ left: '50%', top: '7%', transform: 'translateX(-50%)', fontSize: 'clamp(30px, 8vmin, 56px)', zIndex: 2 }}>🏘️</div>
       <div className="absolute pointer-events-none bg-white/80 text-green-900 font-bold text-xs sm:text-sm rounded-full px-3 py-1 shadow" style={{ right: '3%', bottom: '3%' }}>🛡️ {fled} / {PUPPY_COUNT}</div>
       {/* hiding places and the beasts that pop out of them */}
       {order.map(({ spot, beast }, i) => {
@@ -2939,7 +2939,8 @@ export const BravePuppyGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
         );
       })}
       {/* the puppy with the alms bowl, and its bark */}
-      <div className="absolute select-none pointer-events-none" style={{ left: '50%', top: `${puppyY}%`, fontSize: 'clamp(40px, 10vmin, 70px)', lineHeight: 1, zIndex: 4, transition: 'top .8s ease', animation: 'puppyWag 1s ease-in-out infinite' }}>🐕🍲</div>
+      <div className="absolute select-none pointer-events-none" style={{ left: '50%', top: `${puppyY}%`, fontSize: 'clamp(40px, 10vmin, 70px)', lineHeight: 1, zIndex: 4, transition: 'top .8s ease', animation: 'puppyWag 1s ease-in-out infinite' }}>🐕</div>
+      <div className="absolute select-none pointer-events-none" style={{ left: '50%', top: `${puppyY + 15}%`, transform: 'translateX(-50%)', fontSize: 'clamp(40px, 10vmin, 70px)', lineHeight: 1, zIndex: 4, transition: 'top .8s ease' }}>🧘🥣</div>
       {bark !== null && (
         <div className="absolute pointer-events-none bg-white text-gray-800 font-black rounded-2xl px-3 py-1 shadow-lg whitespace-nowrap" style={{ left: '50%', top: `${puppyY - 9}%`, transform: 'translateX(-50%)', zIndex: 7 }}>Woof! Woof! 🐶</div>
       )}
@@ -2949,7 +2950,7 @@ export const BravePuppyGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
             <div className="text-5xl mb-2">{fled >= PUPPY_COUNT ? '🐕' : '🧘'}</div>
             <h2 className="text-2xl font-extrabold mb-1">{fled > 0 ? `${fled} beast${fled === 1 ? '' : 's'} sent away!` : 'Nice try!'}</h2>
             <p className="text-sm text-gray-600 mb-2">{fled >= PUPPY_COUNT
-              ? 'The brave puppy kept the path safe and brought the alms food to the Paccekabuddha. Courage and loyalty protect those we love.'
+              ? 'The brave puppy led the Paccekabuddha safely along the path to collect alms food. Even a puppy can give the gift of a brave voice.'
               : (fled > 0 ? 'The puppy was brave and barked when the beasts came. Watch every hiding place to keep the path safe.' : 'Be quick: when a beast peeks out, tap it so the puppy can bark.')}</p>
             <p className="text-lg font-bold text-yellow-600 mb-4">{total > 0 ? `🪙 +${total} coins for your Shrine Room wallet` : (coinsLeft <= 0 ? 'You have already earned all the coins for this lesson. Great job!' : 'No coins this time.')}</p>
             <GameButton disabled={leaving} onClick={() => { setLeaving(true); onDone(total); }} className="bg-sky-500 hover:bg-sky-600 text-white w-full text-xl">Continue →</GameButton>
