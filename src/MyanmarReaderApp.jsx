@@ -7,6 +7,7 @@ import { auth, db } from './firebase';
 import { presenceIntervalMs, listenLiveOrOnce } from './presenceDay';
 import { rosterDocRefByUid, migrateNameKeyedRosterDoc } from './studentRosterIdentity';
 import coinDropSound from '../audio/coin-drop.mp3';
+import { QUIZ_BREAK_GAMES } from './quizBreakGames';
 
 const MYANMAR_READER_APP_ID = 'myanmar-reader-app';
 
@@ -843,9 +844,45 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
   //     a quarter. Never less than 1 coin per award.
   // The day's re-reading total is kept on the roster doc (not derived from
   // the spendable balance, which a student can deposit away at any time).
+  // A rest game for every 300 points of reading (reading is tiring): the points are counted on this device only (localStorage,
+  // no Firebase), a ready game waits behind the 🎮 button (at most 3 saved up), and the games rotate through the whole list.
+  // The game pays up to READER_GAME_COINS coins into this student's Reader wallet.
+  const READER_GAME_EVERY = 300;
+  const READER_GAME_COINS = 20;
+  const [gamesReady, setGamesReady] = useState(0);
+  const [gameBanner, setGameBanner] = useState(false);
+  const [playingGame, setPlayingGame] = useState(false);
+  const gameStoreKey = () => `readerGame:${(studentName || '').trim()}`;
+  const readGameStore = () => { try { const j = JSON.parse(localStorage.getItem(gameStoreKey()) || '{}'); return { pts: +j.pts || 0, ready: +j.ready || 0, idx: +j.idx || 0 }; } catch (e) { return { pts: 0, ready: 0, idx: 0 }; } };
+  const writeGameStore = (g) => { try { localStorage.setItem(gameStoreKey(), JSON.stringify(g)); } catch (e) { /* optional */ } };
+  useEffect(() => { setGamesReady(studentName ? readGameStore().ready : 0); }, [studentName]); // eslint-disable-line react-hooks/exhaustive-deps
+  const trackGamePoints = (amount) => {
+    if (!studentName || isTeacherMode) return;
+    const g = readGameStore();
+    const pts = g.pts + amount;
+    const earned = Math.floor(pts / READER_GAME_EVERY);
+    const next = { pts: pts % READER_GAME_EVERY, ready: Math.min(3, g.ready + earned), idx: g.idx };
+    writeGameStore(next);
+    if (next.ready !== g.ready) {
+      setGamesReady(next.ready);
+      if (earned > 0) { setGameBanner(true); setTimeout(() => setGameBanner(false), 5000); }
+    }
+  };
+  const finishReaderGame = (coins) => {
+    if (coins > 0 && studentName && userId) {
+      setCoinBalance(b => b + coins);
+      setDoc(readerRosterDocRef(studentName), { coinBalance: increment(coins) }, { merge: true }).catch(() => {});
+    }
+    const g = readGameStore();
+    const next = { pts: g.pts, ready: Math.max(0, g.ready - 1), idx: g.idx + 1 };
+    writeGameStore(next);
+    setGamesReady(next.ready);
+    setPlayingGame(false);
+  };
   const awardScore = (amount) => {
     if (!amount) return;
     setScore(prev => prev + amount);
+    trackGamePoints(amount);
     if (studentName && userId) {
       const alreadyHasTrophy = effectiveCompletedFullChapters.has(getColumnIndex(selectedColumn));
       const patch = {};
@@ -3485,6 +3522,17 @@ useEffect(() => {
               <span className={`font-extrabold text-amber-950 drop-shadow-sm ${isPhone ? 'text-xl' : 'text-3xl'}`}>{Math.round(score)}</span>
           </div>
       )}
+
+      {gameBanner && !playingGame && (
+          <div className="fixed top-16 left-1/2 -translate-x-1/2 z-[10040] bg-purple-600 text-white font-extrabold text-sm sm:text-base rounded-full px-4 py-2 shadow-xl pointer-events-none">🎮 You earned {READER_GAME_EVERY} points! A game is ready!</div>
+      )}
+      {gamesReady > 0 && !playingGame && studentName && !isTeacherMode && (
+          <button onClick={() => setPlayingGame(true)} className="fixed left-3 bottom-20 z-[10040] bg-purple-600 hover:bg-purple-700 text-white font-extrabold rounded-full shadow-xl px-4 py-3 flex items-center gap-2 animate-bounce" aria-label="Play a game">🎮 Play a game{gamesReady > 1 ? ` (${gamesReady})` : ''}</button>
+      )}
+      {playingGame && (() => {
+          const Game = QUIZ_BREAK_GAMES[readGameStore().idx % QUIZ_BREAK_GAMES.length];
+          return <div className="fixed inset-0 z-[10060] bg-black"><Game coinsLeft={READER_GAME_COINS} onDone={finishReaderGame} /></div>;
+      })()}
 
       {flyingCoins.map(c => (
           <FlyingCoin key={c.id} from={c.from} to={c.to} delay={c.delay} duration={c.duration} onDone={() => removeFlyingCoin(c.id)} />

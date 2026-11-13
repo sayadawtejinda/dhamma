@@ -1792,8 +1792,8 @@ export const AlmsRoundGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
 
 // ---------------------------------------------------------------------------------------------------------------
 // Game 14: the duck that lays a golden egg every day (greed). One day = about 2.6 seconds: the duck lays one golden egg, tap it to
-// pick it up (2 or 3 coins). From the second day a tempting button offers ALL the gold at once -- but taking it ends the game:
-// the duck is gone, nothing inside, and no more eggs or coins. Seven days in all; the end screen shows how many eggs were missed
+// pick it up (2 or 3 coins). From the second day a big pile of golden eggs and a tempting voice say "take MANY eggs at once" -- but taking
+// them ends the game: the duck runs away, and there are no more eggs or coins. Seven days in all; the end screen shows how many eggs were missed
 // by being greedy ("he who wants too much gets too little").
 const DUCK_DAYS = 7;
 const DUCK_FIRST_MS = 500;
@@ -1859,19 +1859,20 @@ export const GoldenEggDuckGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
         @keyframes duckTwinkle { 0%,100% { transform: scale(.7); opacity: .6 } 50% { transform: scale(1.2); opacity: 1 } }
         @keyframes duckWin { 0% { transform: translateY(0); opacity: 0 } 15% { opacity: 1 } 100% { transform: translateY(-46px); opacity: 0 } }
         @keyframes duckShake { 0%,100% { transform: translate(-50%,0) rotate(0) } 25% { transform: translate(-50%,0) rotate(-12deg) } 75% { transform: translate(-50%,0) rotate(12deg) } }
+        @keyframes duckRun { 0% { transform: translate(-50%,0) } 100% { transform: translate(-260%,-12px) } }
         @keyframes duckBeg { 0%,100% { transform: scale(1) } 50% { transform: scale(1.07) } }
       `}</style>
       <div className="absolute top-0 inset-x-0 flex items-center justify-between gap-2 px-3 py-3 z-10">
-        <div className="bg-white/80 text-sky-900 font-bold text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 ml-12 sm:ml-16 min-w-0 truncate">🦆 {killed ? 'The duck is gone' : (day > 0 ? `Day ${day} of ${DUCK_DAYS}` : 'The golden egg duck')}</div>
+        <div className="bg-white/80 text-sky-900 font-bold text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 ml-12 sm:ml-16 min-w-0 truncate">🦆 {killed ? 'The duck ran away' : (day > 0 ? `Day ${day} of ${DUCK_DAYS}` : 'The golden egg duck')}</div>
         <div className="bg-yellow-300 text-yellow-900 font-black text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 shadow whitespace-nowrap flex-shrink-0">🪙 {total}{coinsLeft <= 0 ? ' (limit reached)' : ''}</div>
       </div>
       <div className="absolute pointer-events-none" style={{ left: '6%', top: '14%', fontSize: 'clamp(34px, 8vmin, 66px)' }}>{killed ? '☁️' : '🌳'}</div>
       <div className="absolute pointer-events-none" style={{ right: '8%', top: '10%', fontSize: 'clamp(40px, 9vmin, 80px)' }}>{killed ? '🌙' : '☀️'}</div>
       {/* the duck, always in the middle of the field */}
-      <div className="absolute select-none" style={{ left: '50%', top: '44%', fontSize: DUCK_SIZE, lineHeight: 1, zIndex: 3, animation: killed ? 'duckShake .5s ease-in-out 3' : 'duckBob 1.4s ease-in-out infinite' }}>{killed ? '👻' : '🦆'}</div>
+      <div className="absolute select-none" style={{ left: '50%', top: '44%', fontSize: DUCK_SIZE, lineHeight: 1, zIndex: 3, animation: killed ? 'duckRun 1.8s ease-in forwards' : 'duckBob 1.4s ease-in-out infinite' }}>{killed ? '🦆💨' : '🦆'}</div>
       {killed && (
         <div className="absolute text-center" style={{ left: '50%', top: '30%', transform: 'translateX(-50%)', zIndex: 8 }}>
-          <div className="bg-white text-gray-800 font-bold text-sm sm:text-base rounded-2xl px-4 py-2 shadow-lg whitespace-nowrap">😢 Nothing inside! No more golden eggs.</div>
+          <div className="bg-white text-gray-800 font-bold text-sm sm:text-base rounded-2xl px-4 py-2 shadow-lg whitespace-nowrap">💨 The duck ran away! No more golden eggs.</div>
         </div>
       )}
       {!killed && day > 0 && !finished && <div className="absolute pointer-events-none bg-white text-yellow-700 font-black text-sm rounded-full px-3 py-1 shadow" style={{ left: '4%', bottom: '3%' }}>🥚 {eggs}</div>}
@@ -1893,12 +1894,18 @@ export const GoldenEggDuckGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
       })}
       {/* the temptation: ALL the gold now -- from day 2 on */}
       {!killed && !finished && day >= 2 && (
-        <button
-          onClick={() => setKilled(true)}
-          aria-label="Take all the gold now"
-          className="absolute left-1/2 -translate-x-1/2 bg-red-600 hover:bg-red-700 text-white font-extrabold rounded-full shadow-xl px-4 py-2 text-sm sm:text-base"
-          style={{ bottom: '3%', zIndex: 7, animation: 'duckBeg 1s ease-in-out infinite', maxWidth: '78%' }}
-        >😈 Take ALL the gold now!</button>
+        <>
+          <div className="absolute left-1/2 text-center" style={{ transform: 'translateX(-50%)', top: '13%', zIndex: 7, width: 'min(62%, 340px)', pointerEvents: 'none' }}>
+            <div className="bg-white text-red-700 font-extrabold text-xs sm:text-base rounded-2xl px-3 py-2 shadow-lg">😈 Look at all the golden eggs! Why wait for one a day? Take MANY at once and be rich!</div>
+            <div className="select-none mt-1" style={{ fontSize: 'clamp(22px, 6vmin, 36px)', letterSpacing: 2, filter: 'drop-shadow(0 0 8px rgba(253,224,71,.9))' }}>🥚🥚🥚🥚🥚🥚🥚🥚</div>
+          </div>
+          <button
+            onClick={() => setKilled(true)}
+            aria-label="Take many golden eggs at once"
+            className="absolute left-1/2 -translate-x-1/2 bg-red-600 hover:bg-red-700 text-white font-extrabold rounded-full shadow-xl px-4 py-2 text-sm sm:text-base"
+            style={{ bottom: '3%', zIndex: 7, animation: 'duckBeg 1s ease-in-out infinite', maxWidth: '88%' }}
+          >😈 Take MANY golden eggs now!</button>
+        </>
       )}
       {finished && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20 px-4">
@@ -1906,7 +1913,7 @@ export const GoldenEggDuckGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
             <div className="text-5xl mb-2">{killed ? '😢' : '🥚'}</div>
             <h2 className="text-2xl font-extrabold mb-1">{killed ? 'Too greedy!' : (eggs > 0 ? `You collected ${eggs} golden egg${eggs === 1 ? '' : 's'}!` : 'Nice try!')}</h2>
             <p className="text-sm text-gray-600 mb-2">{killed
-              ? `You wanted everything at once, so the duck was lost and ${missedByGreed} more golden egg${missedByGreed === 1 ? '' : 's'} never came. If we want too much, we get less.`
+              ? `You wanted many eggs at once, so the duck ran away and ${missedByGreed} more golden egg${missedByGreed === 1 ? '' : 's'} never came. If we want too much, we get less.`
               : (eggs > 0 ? 'You were patient and content with one egg a day. Being content brings the most.' : 'Be quick, the golden egg only stays a little while.')}</p>
             <p className="text-lg font-bold text-yellow-600 mb-4">{total > 0 ? `🪙 +${total} coins for your Shrine Room wallet` : (coinsLeft <= 0 ? 'You have already earned all the coins for this lesson. Great job!' : 'No coins this time.')}</p>
             <GameButton disabled={leaving} onClick={() => { setLeaving(true); onDone(total); }} className="bg-sky-500 hover:bg-sky-600 text-white w-full text-xl">Continue →</GameButton>
