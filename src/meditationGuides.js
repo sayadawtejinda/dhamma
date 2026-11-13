@@ -1,4 +1,4 @@
-// The guided meditations of the Shrine Room. Each one is a plain text file in the folder src/meditations (see README.md there);
+// The guided meditations of the Shrine Room. Each one is a plain text file in the folder audio/meditations (see README.md there);
 // this file only reads them -- nothing here needs editing to add a meditation.
 //
 // A new line appears every 9 seconds from the start of the sit, whether or not a recording plays (the recording starts with the sit and
@@ -59,7 +59,7 @@ const parseFile = (path, raw) => {
   };
 };
 
-const FILES = import.meta.glob('./meditations/*.txt', { eager: true, query: '?raw', import: 'default' });
+const FILES = import.meta.glob('../audio/meditations/*.txt', { eager: true, query: '?raw', import: 'default' });
 export const MEDITATION_GUIDES = Object.entries(FILES)
   .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }))
   .map(([path, raw]) => parseFile(path, raw))
