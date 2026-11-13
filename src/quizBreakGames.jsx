@@ -2503,10 +2503,142 @@ export const TenMeritGame = (props) => <ArcDeedsGame cfg={{
 }} {...props} />;
 
 // ---------------------------------------------------------------------------------------------------------------
+// Game 20: the tiger in the trap (do not trust sad stories and big promises). A tiger is caught in a trap and begs the passer-by
+// (the child) to let it out with a different plea each time (seven in all, e.g. "I will not eat you", "my cubs are waiting"). Two
+// answers are thrown up in arcs from the two sides, like the heron game: "Save the tiger" or "Do not save it". Not saving gives 2 or
+// 3 coins (you stay safe). Saving costs nothing but the coins: the tiger breaks its promise and chases the child away (nothing cruel
+// is shown). No answer in time: nothing happens, no coins. The end screen links it to today's tricksters who beg for pity.
+const TIGER_ROUNDS = 7;
+const TIGER_ASK_MS = 5500;
+const TIGER_RESULT_MS = 2300;
+const TIGER_PLEAS = [
+  'Please save me! I promise I will never eat you!',
+  'I am so hungry and weak... I am only a poor tiger. Please help me!',
+  'Pull me out and I will be your friend forever!',
+  'Look at my tears. I am so sorry for my bad deeds. I have changed!',
+  'My little cubs are waiting for me at home. Have pity on me!',
+  'I swear on all the gods, I will never hurt you!',
+  'You are so kind and good. Only a kind person like you can save me!',
+];
+const makeTigerRounds = () => {
+  const items = TIGER_PLEAS.map(says => ({ says }));
+  for (let i = items.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [items[i], items[j]] = [items[j], items[i]]; }
+  return items.map(x => ({ ...x, flip: Math.random() < 0.5 })); // which answer comes up on the left
+};
+export const TigerInTrapGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
+  const [rounds] = useState(makeTigerRounds);
+  const [r, setR] = useState(0);
+  const [phase, setPhase] = useState('ask');       // ask | result
+  const [outcome, setOutcome] = useState(null);    // wise | fooled | late
+  const [outcomes, setOutcomes] = useState([]);
+  const [won, setWon] = useState([]);
+  const [finished, setFinished] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const soundRef = useRef(null);
+  const total = won.reduce((a, b) => a + b, 0);
+  const fooled = outcomes.filter(o => o === 'fooled').length;
+  const it = rounds[r];
+
+  // the time to choose runs out: nothing is decided, no coins
+  useEffect(() => {
+    if (finished || phase !== 'ask') return undefined;
+    const t = setTimeout(() => settle('late', 0), TIGER_ASK_MS);
+    return () => clearTimeout(t);
+  }, [r, phase, finished]); // eslint-disable-line react-hooks/exhaustive-deps
+  // after the result is shown: next plea, or the end
+  useEffect(() => {
+    if (finished || phase !== 'result') return undefined;
+    const t = setTimeout(() => {
+      if (r + 1 >= TIGER_ROUNDS) setFinished(true);
+      else { setR(r + 1); setPhase('ask'); setOutcome(null); }
+    }, TIGER_RESULT_MS);
+    return () => clearTimeout(t);
+  }, [r, phase, finished]);
+
+  function settle(kind, coins) {
+    setOutcome(kind);
+    setOutcomes(o => [...o, kind]);
+    setWon(w => [...w, coins]);
+    setPhase('result');
+  }
+  const choose = (save) => {
+    if (phase !== 'ask') return;
+    if (save) settle('fooled', 0);
+    else { settle('wise', Math.max(0, Math.min(2 + Math.floor(Math.random() * 2), coinsLeft - total))); playCoinSound(soundRef); }
+  };
+  const lastCoins = won[won.length - 1] || 0;
+  const message = {
+    wise: 'You did not save it. Good! A tiger stays a tiger, and sweet words are not a reason to trust it.',
+    fooled: `Oh no! The tiger broke its promise and chased you away! You were fooled ${fooled} ${fooled === 1 ? 'time' : 'times'}. Do not trust sad stories and big promises!`,
+    late: 'Too slow to decide. The tiger is still in the trap, for now.',
+  }[outcome] || '';
+
+  return (
+    <div className="relative overflow-hidden text-white h-screen" style={{ height: '100dvh', minHeight: 420, background: 'linear-gradient(180deg,#bbf7d0 0%,#86efac 40%,#a16207 40%,#78350f 100%)' }}>
+      <style>{`
+        @keyframes tigerBar { 0% { width: 100% } 100% { width: 0% } }
+        @keyframes tigerIn { 0% { transform: translateY(-30px) scale(.6); opacity: 0 } 100% { transform: translateY(0) scale(1); opacity: 1 } }
+        @keyframes tigerArcA { 0% { left: 22%; top: 94%; animation-timing-function: cubic-bezier(.2,.7,.4,1) } 45% { left: 28%; top: var(--peak); animation-timing-function: cubic-bezier(.6,0,.8,.3) } 100% { left: 34%; top: 94% } }
+        @keyframes tigerArcB { 0% { left: 78%; top: 94%; animation-timing-function: cubic-bezier(.2,.7,.4,1) } 45% { left: 72%; top: var(--peak); animation-timing-function: cubic-bezier(.6,0,.8,.3) } 100% { left: 66%; top: 94% } }
+        @keyframes tigerUp { 0% { transform: translateY(0); opacity: 0 } 15% { opacity: 1 } 100% { transform: translateY(-40px); opacity: 0 } }
+        @keyframes tigerShake { 0%,100% { transform: translateX(0) } 25% { transform: translateX(-5px) } 75% { transform: translateX(5px) } }
+      `}</style>
+      <div className="absolute top-0 inset-x-0 flex items-center justify-between gap-2 px-3 py-3 z-10">
+        <div className="bg-white/80 text-emerald-900 font-bold text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 ml-12 sm:ml-16 min-w-0 truncate">🐯 The tiger in the trap</div>
+        <div className="bg-yellow-300 text-yellow-900 font-black text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 shadow whitespace-nowrap flex-shrink-0">🪙 {total}{coinsLeft <= 0 ? ' (limit reached)' : ''}</div>
+      </div>
+      <div className="absolute pointer-events-none bg-white font-black text-sm rounded-full px-3 py-1 shadow" style={{ left: '4%', bottom: '3%', color: fooled > 0 ? '#b91c1c' : '#047857', zIndex: 6 }}>{fooled > 0 ? `😢 Fooled ${fooled} ${fooled === 1 ? 'time' : 'times'}` : '🛡️ Not fooled yet'}</div>
+      {/* the trap: a deep pit with the tiger inside, and the passer-by standing at the edge */}
+      <div className="absolute left-1/2 -translate-x-1/2 rounded-[50%] flex items-center justify-center" style={{ bottom: '26%', width: 'min(70%, 300px)', height: 'clamp(60px, 13vh, 100px)', background: 'radial-gradient(circle at 50% 40%, #44403c, #1c1917)', border: '5px solid #92400e', boxShadow: 'inset 0 4px 12px rgba(0,0,0,.5)' }}>
+        <span className="select-none" style={{ fontSize: 'clamp(30px, 8vmin, 54px)', animation: !finished && phase === 'ask' ? 'tigerShake 1.2s ease-in-out infinite' : 'none' }}>{phase === 'result' && outcome === 'fooled' ? '🐅' : '🐯'}</span>
+      </div>
+      <span className="absolute select-none" style={{ left: 'calc(50% + min(35%, 150px) - 8px)', bottom: '30%', fontSize: 'clamp(28px, 7vmin, 46px)' }}>🧑</span>
+      {!finished && it && (
+        <>
+          <div key={r} className="absolute left-1/2 text-center" style={{ top: '13%', transform: 'translateX(-50%)', width: 'min(90%, 420px)', zIndex: 5, animation: 'tigerIn .4s ease-out' }}>
+            <div className="select-none" style={{ fontSize: 'clamp(54px, 13vmin, 100px)', lineHeight: 1 }}>{phase === 'result' && outcome === 'fooled' ? '😾' : (phase === 'result' && outcome === 'wise' ? '😿' : '🐯')}</div>
+            <div className="mt-1 font-bold text-xs rounded-full px-2 py-0.5 inline-block shadow bg-white" style={{ color: '#78350f' }}>Tiger in the trap</div>
+            <div className="mt-2 bg-white text-gray-800 font-bold text-sm sm:text-base rounded-2xl px-4 py-3 shadow-lg">{phase === 'ask' ? `“${it.says}”` : message}</div>
+            {phase === 'result' && lastCoins > 0 && <div className="font-black text-yellow-600 drop-shadow mt-1" style={{ animation: 'tigerUp 1.8s ease-out forwards' }}>+{lastCoins} 🪙</div>}
+          </div>
+          {phase === 'ask' && (
+            <>
+              <div className="absolute left-1/2 -translate-x-1/2 rounded-full overflow-hidden bg-white/60" style={{ top: '62%', width: 'min(80%, 360px)', height: 10, zIndex: 5 }}>
+                <div key={r} className="h-full bg-red-500" style={{ animation: `tigerBar ${TIGER_ASK_MS}ms linear forwards` }} />
+              </div>
+              {/* the two answers are thrown up from the bottom in arcs, one from each side, and fall back down on the same side */}
+              {[{ save: true, label: '🪢 Save the tiger', cls: 'bg-emerald-500', peak: '50%' }, { save: false, label: '🙅 Do not save it', cls: 'bg-rose-500', peak: '58%' }].map((a, k) => (
+                <button
+                  key={`${r}-${a.save}`}
+                  onClick={() => choose(a.save)}
+                  className={`absolute font-extrabold text-white rounded-full shadow-xl px-3 py-3 text-center leading-tight ${a.cls}`}
+                  style={{ zIndex: 6, transform: 'translate(-50%,-50%)', width: 'clamp(120px, 38vw, 170px)', fontSize: 'clamp(13px, 3.4vw, 16px)', '--peak': a.peak, animation: `${(k === 0) !== it.flip ? 'tigerArcA' : 'tigerArcB'} ${TIGER_ASK_MS}ms linear forwards` }}
+                >{a.label}</button>
+              ))}
+            </>
+          )}
+        </>
+      )}
+      {finished && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20 px-4">
+          <div className="bg-white text-gray-900 rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
+            <div className="text-5xl mb-2">{fooled === 0 ? '🛡️' : '🐯'}</div>
+            <h2 className="text-2xl font-extrabold mb-1">{fooled === 0 ? 'You were never fooled!' : `Fooled ${fooled} ${fooled === 1 ? 'time' : 'times'}`}</h2>
+            <p className="text-sm text-gray-600 mb-2">Tricksters today beg for pity with sad stories, big promises and kind words, just like the tiger. Do not trust them quickly: think first, and ask a parent or teacher.</p>
+            <p className="text-lg font-bold text-yellow-600 mb-4">{total > 0 ? `🪙 +${total} coins for your Shrine Room wallet` : (coinsLeft <= 0 ? 'You have already earned all the coins for this lesson. Great job!' : 'No coins this time.')}</p>
+            <GameButton disabled={leaving} onClick={() => { setLeaving(true); onDone(total); }} className="bg-sky-500 hover:bg-sky-600 text-white w-full text-xl">Continue →</GameButton>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------------------------------------------
 // The games, in the order they are handed out. A lesson always gets the same game (so a retake feels familiar and the
 // coin cap stays one per lesson), but neighbouring lessons get different ones, so the break does not become boring.
 // To add a game: write it above with the same two props and put it in this list.
-export const QUIZ_BREAK_GAMES = [BirdRescueGame, FlowerOfferingGame, LitterPickingGame, AnimalRescueGame, WoodcutterAxeGame, AntGatheringGame, WaterAnimalsGame, HelpFriendsGame, PayRespectGame, TenGiftsGame, ReturnLostItemsGame, HelpParentsGame, AlmsRoundGame, GoldenEggDuckGame, CunningHeronGame, ShareWaterGame, SchoolOfSkillsGame, TenDeedsGame, TenMeritGame];
+export const QUIZ_BREAK_GAMES = [BirdRescueGame, FlowerOfferingGame, LitterPickingGame, AnimalRescueGame, WoodcutterAxeGame, AntGatheringGame, WaterAnimalsGame, HelpFriendsGame, PayRespectGame, TenGiftsGame, ReturnLostItemsGame, HelpParentsGame, AlmsRoundGame, GoldenEggDuckGame, CunningHeronGame, ShareWaterGame, SchoolOfSkillsGame, TenDeedsGame, TenMeritGame, TigerInTrapGame];
 const hashOf = (s) => { let h = 0; String(s ?? '').split('').forEach(ch => { h = (h * 31 + ch.charCodeAt(0)) >>> 0; }); return h; };
 export const quizBreakGameFor = (lessonId) => QUIZ_BREAK_GAMES[hashOf(lessonId) % QUIZ_BREAK_GAMES.length];
 export const QuizBreakGame = ({ lessonId, ...rest }) => {
