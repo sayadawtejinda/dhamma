@@ -17,6 +17,10 @@
 // stale -- fine for a leaderboard, not something anyone needs to the second.
 // (Sending a ❤️ on the Trophies tab is still a live Firestore write -- only
 // the DISPLAYED counts are the once-a-week snapshot.)
+// The teacher's classes are in Pacific time, and "attended" means a session on the same CALENDAR DAY as the class. GitHub's runner
+// is in UTC, where a Sunday 5 pm class falls on Monday and a student who joins a few minutes early falls on Sunday: that counted real
+// absences that never happened and doubled every weekly slot (the slot's Sunday + the real class's Monday). Set before any date is made.
+process.env.TZ = process.env.TZ || 'America/Los_Angeles';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously } from 'firebase/auth';
 import { getFirestore, collection, query, where, getDocs, getDoc, Timestamp, doc, updateDoc, increment } from 'firebase/firestore';

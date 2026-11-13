@@ -24,6 +24,8 @@ permissions:
 jobs:
   snapshot:
     runs-on: ubuntu-latest
+    env:
+      TZ: America/Los_Angeles # the classes are in Pacific time: a day means a Pacific calendar day
     steps:
       - name: Checkout
         uses: actions/checkout@v4
