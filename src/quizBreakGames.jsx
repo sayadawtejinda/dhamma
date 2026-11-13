@@ -2635,10 +2635,159 @@ export const TigerInTrapGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
 };
 
 // ---------------------------------------------------------------------------------------------------------------
+// Game 21: finish the proverb (English proverbs for students). The first half of a proverb is shown; pick the right second half
+// out of two. A right answer gives 2 or 3 coins, shows the whole proverb with its meaning, and the next proverb comes. A wrong
+// answer ends the game (the right ending is shown; the coins won so far are kept). Seven proverbs per game, picked at random from
+// a bigger list; finish all seven and the end screen says so. To add proverbs: add a line [start, right ending, wrong ending, meaning].
+const PROVERB_ROUNDS = 7;
+const PROVERB_RESULT_MS = 2800;
+const PROVERBS = [
+  ['A stitch in time', 'saves nine.', 'makes a hole.', 'Fix a small problem at once, before it becomes a big one.'],
+  ['Practice makes', 'perfect.', 'problems.', 'The more you practise, the better you become.'],
+  ['Slow and steady', 'wins the race.', 'loses the race.', 'Work carefully and keep going; do not rush.'],
+  ['Honesty is', 'the best policy.', 'the hardest rule.', 'Telling the truth is always the wisest way.'],
+  ['Where there is a will,', 'there is a way.', 'there is a wall.', 'If you really want to do something, you will find a way.'],
+  ['Look before', 'you leap.', 'you sleep.', 'Think carefully before you act.'],
+  ['Rome was not built', 'in a day.', 'with one stone.', 'Big things take a long time and many steps.'],
+  ['Actions speak', 'louder than words.', 'softer than whispers.', 'What you do matters more than what you say.'],
+  ['Early to bed and early to rise', 'makes a man healthy, wealthy and wise.', 'makes a man tired and shy.', 'Good daily habits bring a good life.'],
+  ['Do not count your chickens', 'before they hatch.', 'before breakfast.', 'Do not be sure of something before it has really happened.'],
+  ['Every cloud has', 'a silver lining.', 'a thunderbolt.', 'There is something good even in a sad or hard time.'],
+  ['A friend in need is', 'a friend indeed.', 'a friend to avoid.', 'A true friend helps you when you are in trouble.'],
+  ['Better late', 'than never.', 'than early.', 'It is better to do something late than not to do it at all.'],
+  ['Two heads are', 'better than one.', 'too many to think.', 'Two people thinking together can solve a problem better.'],
+  ['The early bird', 'catches the worm.', 'sleeps till noon.', 'Those who start early get the best chance.'],
+  ['Do not judge a book', 'by its cover.', 'by its length.', 'Do not judge people or things by how they look.'],
+  ['All that glitters is', 'not gold.', 'pure gold.', 'Something that looks beautiful may not be valuable.'],
+  ['Many hands', 'make light work.', 'make more mess.', 'A job is easy when many people help.'],
+  ['A rolling stone', 'gathers no moss.', 'grows very tall.', 'A person who keeps moving from place to place and job to job gains little.'],
+  ['Birds of a feather', 'flock together.', 'fly alone.', 'People with the same nature stay together.'],
+  ['Prevention is', 'better than cure.', 'worse than cure.', 'It is better to stop a problem than to fix it later.'],
+  ['Do not put all your eggs', 'in one basket.', 'in the river.', 'Do not risk everything on one thing.'],
+  ['If at first you do not succeed,', 'try, try again.', 'give up and rest.', 'Do not give up; keep trying.'],
+  ['Knowledge is', 'power.', 'a burden.', 'Learning makes you strong and wise.'],
+  ['Time and tide', 'wait for no man.', 'wait for everyone.', 'Time does not stop for anyone, so use it well.'],
+  ['Too many cooks', 'spoil the broth.', 'cook it faster.', 'Too many people in charge of one job can spoil it.'],
+  ['Waste not,', 'want not.', 'want more.', 'If you do not waste things, you will always have enough.'],
+  ['A penny saved is', 'a penny earned.', 'a penny lost.', 'Saving money is as good as earning it.'],
+  ['Little strokes', 'fell great oaks.', 'plant small seeds.', 'Small steps, kept up for long, can do great things.'],
+  ['Empty vessels make', 'the most noise.', 'the best music.', 'People who know little often talk the loudest.'],
+  ['As you sow,', 'so shall you reap.', 'so shall you sleep.', 'What you do now will come back to you as your result.'],
+  ['Do not cry over', 'spilt milk.', 'a good meal.', 'Do not be sad about what is done and cannot be changed.'],
+  ['The pen is mightier than', 'the sword.', 'the paper.', 'Words and ideas are stronger than force.'],
+  ['Well begun is', 'half done.', 'never done.', 'A good start makes the rest of the job easier.'],
+  ['Laughter is', 'the best medicine.', 'a bad habit.', 'Being happy and laughing helps us feel well.'],
+  ['Strike while', 'the iron is hot.', 'the sun is high.', 'Act at the right moment, while the chance is there.'],
+  ['Health is', 'wealth.', 'no use.', 'Being healthy is worth more than money.'],
+  ['Patience is', 'a virtue.', 'a waste of time.', 'Waiting calmly is a good quality.'],
+  ['No pain,', 'no gain.', 'no rain.', 'You must work hard to get good results.'],
+  ['A bad workman', 'blames his tools.', 'uses the best tools.', 'Someone who does a poor job blames anything but himself.'],
+  ['Beggars cannot be', 'choosers.', 'singers.', 'If you are given a gift, do not complain about it.'],
+  ['One good turn', 'deserves another.', 'ends the story.', 'If someone helps you, help them in return.'],
+  ['Better safe', 'than sorry.', 'than rich.', 'Be careful now so you do not regret it later.'],
+  ['Where there is smoke,', 'there is fire.', 'there is rain.', 'Rumours usually have some reason behind them.'],
+  ['Honesty and kindness', 'cost nothing but are worth everything.', 'are only for the weak.', 'Being honest and kind costs you nothing and gives a lot.'],
+];
+const makeProverbRounds = () => {
+  const items = [...PROVERBS];
+  for (let i = items.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [items[i], items[j]] = [items[j], items[i]]; }
+  return items.slice(0, PROVERB_ROUNDS).map(([start, right, wrong, meaning]) => ({ start, right, wrong, meaning, flip: Math.random() < 0.5 }));
+};
+export const FinishProverbGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
+  const [rounds] = useState(makeProverbRounds);
+  const [r, setR] = useState(0);
+  const [phase, setPhase] = useState('ask');      // ask | result
+  const [ok, setOk] = useState(true);             // was the last answer right
+  const [won, setWon] = useState([]);             // coins per right answer
+  const [finished, setFinished] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const soundRef = useRef(null);
+  const total = won.reduce((a, b) => a + b, 0);
+  const rightCount = won.length;                  // one entry per right answer
+  const it = rounds[r];
+
+  // after the whole proverb is shown: the next one, or the end (a wrong answer ends the game)
+  useEffect(() => {
+    if (finished || phase !== 'result') return undefined;
+    const t = setTimeout(() => {
+      if (!ok || r + 1 >= PROVERB_ROUNDS) setFinished(true);
+      else { setR(r + 1); setPhase('ask'); }
+    }, PROVERB_RESULT_MS);
+    return () => clearTimeout(t);
+  }, [r, phase, ok, finished]);
+
+  const choose = (isRight) => {
+    if (phase !== 'ask') return;
+    setOk(isRight);
+    if (isRight) {
+      const coins = Math.max(0, Math.min(2 + Math.floor(Math.random() * 2), coinsLeft - total));
+      setWon(w => [...w, coins]);
+      if (coins > 0) playCoinSound(soundRef);
+    }
+    setPhase('result');
+  };
+  const lastCoins = ok ? (won[won.length - 1] || 0) : 0;
+  const options = it ? (it.flip ? [[false, it.wrong], [true, it.right]] : [[true, it.right], [false, it.wrong]]) : [];
+
+  return (
+    <div className="relative overflow-hidden text-white h-screen" style={{ height: '100dvh', minHeight: 420, background: 'linear-gradient(180deg,#fef3c7 0%,#fde68a 100%)' }}>
+      <style>{`
+        @keyframes proverbIn { 0% { transform: translateY(-24px) scale(.8); opacity: 0 } 100% { transform: translateY(0) scale(1); opacity: 1 } }
+        @keyframes proverbUp { 0% { transform: translateY(0); opacity: 0 } 15% { opacity: 1 } 100% { transform: translateY(-40px); opacity: 0 } }
+      `}</style>
+      <div className="absolute top-0 inset-x-0 flex items-center justify-between gap-2 px-3 py-3 z-10">
+        <div className="bg-white/85 text-amber-900 font-bold text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 ml-12 sm:ml-16 min-w-0 truncate">📜 Finish the proverb</div>
+        <div className="bg-yellow-300 text-yellow-900 font-black text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 shadow whitespace-nowrap flex-shrink-0">🪙 {total}{coinsLeft <= 0 ? ' (limit reached)' : ''}</div>
+      </div>
+      {/* seven steps: green = finished right, red = the wrong answer that ended the game */}
+      <div className="absolute inset-x-0 flex items-center justify-center gap-1 px-3" style={{ top: 62, zIndex: 4 }}>
+        {Array.from({ length: PROVERB_ROUNDS }, (_, i) => (
+          <span key={i} className="rounded-full" style={{ width: 'clamp(16px, 4.5vmin, 24px)', height: 'clamp(16px, 4.5vmin, 24px)', background: i < rightCount ? '#4ade80' : (i === r && phase === 'result' && !ok ? '#f87171' : (i === r && !finished ? '#f59e0b' : 'rgba(120,53,15,.25)')) }} />
+        ))}
+      </div>
+      {!finished && it && (
+        <div key={r} className="absolute left-1/2 text-center" style={{ top: 100, transform: 'translateX(-50%)', width: 'min(92%, 440px)', zIndex: 5, animation: 'proverbIn .4s ease-out' }}>
+          <div className="select-none" style={{ fontSize: 'clamp(44px, 10vmin, 76px)', lineHeight: 1 }}>{phase === 'result' ? (ok ? '🌟' : '🤔') : '📜'}</div>
+          <div className="mt-3 bg-white text-amber-900 font-extrabold text-xl sm:text-2xl rounded-2xl px-4 py-4 shadow-lg" style={{ lineHeight: 1.3 }}>
+            {it.start} <span style={{ color: phase === 'result' ? (ok ? '#047857' : '#b91c1c') : '#a8a29e' }}>{phase === 'result' ? it.right : '…'}</span>
+          </div>
+          {phase === 'ask' && (
+            <div className="mt-4 flex flex-col gap-3 items-center">
+              {options.map(([good, label]) => (
+                <GameButton key={String(good)} onClick={() => choose(good)} className="bg-amber-500 hover:bg-amber-600 text-white w-full max-w-[340px] text-base sm:text-lg">{label}</GameButton>
+              ))}
+            </div>
+          )}
+          {phase === 'result' && (
+            <>
+              <div className="mt-3 bg-white/90 text-gray-800 font-semibold text-sm sm:text-base rounded-2xl px-4 py-3 shadow">
+                {ok ? 'Right! ' : 'Not quite. The proverb ends this way. '}<span className="font-bold">Meaning:</span> {it.meaning}
+              </div>
+              {lastCoins > 0 && <div className="font-black text-yellow-600 drop-shadow mt-2" style={{ animation: 'proverbUp 2s ease-out forwards' }}>+{lastCoins} 🪙</div>}
+            </>
+          )}
+        </div>
+      )}
+      {finished && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20 px-4">
+          <div className="bg-white text-gray-900 rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
+            <div className="text-5xl mb-2">{rightCount >= PROVERB_ROUNDS ? '🏆' : '📜'}</div>
+            <h2 className="text-2xl font-extrabold mb-1">{rightCount >= PROVERB_ROUNDS ? 'All seven proverbs finished!' : (rightCount > 0 ? `${rightCount} proverb${rightCount === 1 ? '' : 's'} finished` : 'Nice try!')}</h2>
+            <p className="text-sm text-gray-600 mb-2">{rightCount >= PROVERB_ROUNDS ? 'You know your proverbs. Wise old sayings help us live well.' : 'A wrong ending stops the game, so think carefully before you choose. Try again later!'}</p>
+            <p className="text-lg font-bold text-yellow-600 mb-4">{total > 0 ? `🪙 +${total} coins for your Shrine Room wallet` : (coinsLeft <= 0 ? 'You have already earned all the coins for this lesson. Great job!' : 'No coins this time.')}</p>
+            <GameButton disabled={leaving} onClick={() => { setLeaving(true); onDone(total); }} className="bg-sky-500 hover:bg-sky-600 text-white w-full text-xl">Continue →</GameButton>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------------------------------------------
 // The games, in the order they are handed out. A lesson always gets the same game (so a retake feels familiar and the
 // coin cap stays one per lesson), but neighbouring lessons get different ones, so the break does not become boring.
 // To add a game: write it above with the same two props and put it in this list.
-export const QUIZ_BREAK_GAMES = [BirdRescueGame, FlowerOfferingGame, LitterPickingGame, AnimalRescueGame, WoodcutterAxeGame, AntGatheringGame, WaterAnimalsGame, HelpFriendsGame, PayRespectGame, TenGiftsGame, ReturnLostItemsGame, HelpParentsGame, AlmsRoundGame, GoldenEggDuckGame, CunningHeronGame, ShareWaterGame, SchoolOfSkillsGame, TenDeedsGame, TenMeritGame, TigerInTrapGame];
+export const QUIZ_BREAK_GAMES = [BirdRescueGame, FlowerOfferingGame, LitterPickingGame, AnimalRescueGame, WoodcutterAxeGame, AntGatheringGame, WaterAnimalsGame, HelpFriendsGame, PayRespectGame, TenGiftsGame, ReturnLostItemsGame, HelpParentsGame, AlmsRoundGame, GoldenEggDuckGame, CunningHeronGame, ShareWaterGame, SchoolOfSkillsGame, TenDeedsGame, TenMeritGame, TigerInTrapGame, FinishProverbGame];
 const hashOf = (s) => { let h = 0; String(s ?? '').split('').forEach(ch => { h = (h * 31 + ch.charCodeAt(0)) >>> 0; }); return h; };
 export const quizBreakGameFor = (lessonId) => QUIZ_BREAK_GAMES[hashOf(lessonId) % QUIZ_BREAK_GAMES.length];
 export const QuizBreakGame = ({ lessonId, ...rest }) => {
