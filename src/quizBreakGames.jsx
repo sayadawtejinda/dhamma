@@ -2688,10 +2688,57 @@ const PROVERBS = [
   ['Where there is smoke,', 'there is fire.', 'there is rain.', 'Rumours usually have some reason behind them.'],
   ['Honesty and kindness', 'cost nothing but are worth everything.', 'are only for the weak.', 'Being honest and kind costs you nothing and gives a lot.'],
 ];
+const PROVERB_PICS = { // start of the proverb -> [picture of the right ending, picture of the wrong ending]
+  'A stitch in time': ['🧵', '🕳️'],
+  'Practice makes': ['🏆', '🤯'],
+  'Slow and steady': ['🐢🏆', '🐢😢'],
+  'Honesty is': ['😇👍', '😰'],
+  'Where there is a will,': ['🛤️', '🧱'],
+  'Look before': ['👀🏃', '😴'],
+  'Rome was not built': ['🏛️📅', '🪨'],
+  'Actions speak': ['🔊', '🤫'],
+  'Early to bed and early to rise': ['💪💰🧠', '😴😳'],
+  'Do not count your chickens': ['🥚🐣', '🍳'],
+  'Every cloud has': ['☁️✨', '⚡'],
+  'A friend in need is': ['🤝', '🏃💨'],
+  'Better late': ['🏃⏰', '🌅'],
+  'Two heads are': ['🧠🧠', '😵‍💫'],
+  'The early bird': ['🐦🪱', '😴🌞'],
+  'Do not judge a book': ['📕', '📏'],
+  'All that glitters is': ['🪨✨', '🥇'],
+  'Many hands': ['🙌😊', '🗑️'],
+  'A rolling stone': ['🪨💨', '📈'],
+  'Birds of a feather': ['🐦🐦🐦', '🐦'],
+  'Prevention is': ['🛡️', '🤒'],
+  'Do not put all your eggs': ['🥚🧺', '🥚🌊'],
+  'If at first you do not succeed,': ['🔁💪', '🏳️'],
+  'Knowledge is': ['📚⚡', '🎒😩'],
+  'Time and tide': ['⏳🌊', '⏳👥'],
+  'Too many cooks': ['👨‍🍳👩‍🍳🥣', '⏩🍳'],
+  'Waste not,': ['🍚✅', '🛍️'],
+  'A penny saved is': ['🪙💰', '🪙😢'],
+  'Little strokes': ['🪓🌳', '🌱'],
+  'Empty vessels make': ['🥁🔊', '🎻'],
+  'As you sow,': ['🌾', '😴'],
+  'Do not cry over': ['🥛😢', '🍽️'],
+  'The pen is mightier than': ['⚔️', '📄'],
+  'Well begun is': ['🏁', '♾️'],
+  'Laughter is': ['😂💊', '🙈'],
+  'Strike while': ['🔨🔥', '☀️'],
+  'Health is': ['💪💎', '🚫'],
+  'Patience is': ['🧘', '🗑️⏰'],
+  'No pain,': ['💪🏅', '🌧️'],
+  'A bad workman': ['🔧😤', '🧰✨'],
+  'Beggars cannot be': ['🙏🎁', '🎤'],
+  'One good turn': ['🤝🔄', '🔚'],
+  'Better safe': ['⛑️', '💰'],
+  'Where there is smoke,': ['🔥💨', '🌧️'],
+  'Honesty and kindness': ['💝', '💪🚫'],
+};
 const makeProverbRounds = () => {
   const items = [...PROVERBS];
   for (let i = items.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [items[i], items[j]] = [items[j], items[i]]; }
-  return items.slice(0, PROVERB_ROUNDS).map(([start, right, wrong, meaning]) => ({ start, right, wrong, meaning, flip: Math.random() < 0.5 }));
+  return items.slice(0, PROVERB_ROUNDS).map(([start, right, wrong, meaning]) => { const pic = PROVERB_PICS[start] || ['✅', '❌']; return { start, right, wrong, meaning, rightPic: pic[0], wrongPic: pic[1], flip: Math.random() < 0.5 }; });
 };
 export const FinishProverbGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
   const [rounds] = useState(makeProverbRounds);
@@ -2727,7 +2774,7 @@ export const FinishProverbGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
     setPhase('result');
   };
   const lastCoins = ok ? (won[won.length - 1] || 0) : 0;
-  const options = it ? (it.flip ? [[false, it.wrong], [true, it.right]] : [[true, it.right], [false, it.wrong]]) : [];
+  const options = it ? (it.flip ? [[false, it.wrong, it.wrongPic], [true, it.right, it.rightPic]] : [[true, it.right, it.rightPic], [false, it.wrong, it.wrongPic]]) : [];
 
   return (
     <div className="relative overflow-hidden text-white h-screen" style={{ height: '100dvh', minHeight: 420, background: 'linear-gradient(180deg,#fef3c7 0%,#fde68a 100%)' }}>
@@ -2747,14 +2794,17 @@ export const FinishProverbGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
       </div>
       {!finished && it && (
         <div key={r} className="absolute left-1/2 text-center" style={{ top: 100, transform: 'translateX(-50%)', width: 'min(92%, 440px)', zIndex: 5, animation: 'proverbIn .4s ease-out' }}>
-          <div className="select-none" style={{ fontSize: 'clamp(44px, 10vmin, 76px)', lineHeight: 1 }}>{phase === 'result' ? (ok ? '🌟' : '🤔') : '📜'}</div>
+          <div className="select-none" style={{ fontSize: 'clamp(44px, 10vmin, 76px)', lineHeight: 1 }}>{phase === 'result' ? (ok ? it.rightPic : '🤔') : '📜'}</div>
           <div className="mt-3 bg-white text-amber-900 font-extrabold text-xl sm:text-2xl rounded-2xl px-4 py-4 shadow-lg" style={{ lineHeight: 1.3 }}>
             {it.start} <span style={{ color: phase === 'result' ? (ok ? '#047857' : '#b91c1c') : '#a8a29e' }}>{phase === 'result' ? it.right : '…'}</span>
           </div>
           {phase === 'ask' && (
-            <div className="mt-4 flex flex-col gap-3 items-center">
-              {options.map(([good, label]) => (
-                <GameButton key={String(good)} onClick={() => choose(good)} className="bg-amber-500 hover:bg-amber-600 text-white w-full max-w-[340px] text-base sm:text-lg">{label}</GameButton>
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              {options.map(([good, label, pic]) => (
+                <GameButton key={String(good)} onClick={() => choose(good)} className="bg-white hover:bg-amber-100 text-amber-900 border-4 border-amber-400 flex flex-col items-center justify-center gap-1 text-sm sm:text-base leading-tight">
+                  <span className="select-none" style={{ fontSize: 'clamp(40px, 11vmin, 64px)', lineHeight: 1.1 }}>{pic}</span>
+                  <span>{label}</span>
+                </GameButton>
               ))}
             </div>
           )}
