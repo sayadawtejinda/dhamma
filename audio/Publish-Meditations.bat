@@ -1,13 +1,13 @@
 @echo off
 chcp 65001 >nul
-cd /d "%~dp0"
+cd /d "%~dp0.."
 echo.
 echo  Publishing the meditation texts and audio files ...
-echo  (src\meditations and the audio folder only - nothing else is touched)
+echo  (the audio folder only - nothing else is touched)
 echo.
 
-git add -A -- "src/meditations" "audio"
-git diff --cached --quiet -- "src/meditations" "audio"
+git add -A -- "audio"
+git diff --cached --quiet -- "audio"
 if not errorlevel 1 (
   echo  Nothing new to publish. All the meditation files are already up.
   echo.
@@ -15,7 +15,7 @@ if not errorlevel 1 (
   exit /b 0
 )
 
-git commit -m "Meditations: new text and audio files" -- "src/meditations" "audio"
+git commit -m "Meditations: new text and audio files" -- "audio"
 if errorlevel 1 goto failed
 
 git pull --rebase --autostash origin main
