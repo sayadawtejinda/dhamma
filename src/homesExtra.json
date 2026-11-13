@@ -35,6 +35,18 @@
       "name": "Underwater Dome Home",
       "image": "images/0015.jpg",
       "cost": 12000
+    },
+    {
+      "id": "house-0016",
+      "name": "Inle Lake Floating House",
+      "image": "images/0016.jpg",
+      "cost": 12000
+    },
+    {
+      "id": "house-0017",
+      "name": "Bagan Temple-View Villa",
+      "image": "images/0017.jpg",
+      "cost": 12000
     }
   ]
 }
