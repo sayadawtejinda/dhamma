@@ -2204,12 +2204,12 @@ export const ShareWaterGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
 };
 
 // ---------------------------------------------------------------------------------------------------------------
-// Game 17: the school of many skills (learn something useful). Eight lessons, half about making an honest living (farming,
+// Game 17: the school of many skills (learn something useful). Seven lessons, three or four about making an honest living (farming,
 // carpentry, sewing, pottery, cooking, healing, teaching, Right Livelihood), half about the Dhamma (Four Noble Truths, Eightfold
 // Path, Five Precepts, loving-kindness, breathing meditation, giving/morality/mind training, Three Jewels, kamma). Each lesson first
 // shows a short teaching card (no timer, read at your own pace), then asks one question with two answers. A right answer gives 2 or 3
 // coins; a wrong one shows the right answer and gives none. The student learns first, so the coins are earned by learning.
-const SCHOOL_ROUNDS = 8;
+const SCHOOL_ROUNDS = 7;
 const SCHOOL_RESULT_MS = 2300;
 const SCHOOL_LESSONS = [
   { kind: 'Livelihood', emoji: '🌾', title: 'Farming', teach: 'A farmer ploughs the field, sows the seed and waters the plants. After the rains the rice is harvested and shared with everyone.', q: 'What does a farmer grow in the field?', right: 'Rice and vegetables', wrong: 'Bricks and roofs' },
@@ -2231,9 +2231,9 @@ const SCHOOL_LESSONS = [
 ];
 const shuffled = (a) => { const b = [...a]; for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } return b; };
 const makeSchoolRounds = () => {
-  const half = SCHOOL_ROUNDS / 2;
-  const pick = (kind) => shuffled(SCHOOL_LESSONS.filter(l => l.kind === kind)).slice(0, half);
-  return shuffled([...pick('Livelihood'), ...pick('Dhamma')]).map(l => ({ ...l, flip: Math.random() < 0.5 }));
+  const nLive = Math.random() < 0.5 ? 3 : 4; // 3 or 4 livelihood lessons, the rest Dhamma
+  const pick = (kind, n) => shuffled(SCHOOL_LESSONS.filter(l => l.kind === kind)).slice(0, n);
+  return shuffled([...pick('Livelihood', nLive), ...pick('Dhamma', SCHOOL_ROUNDS - nLive)]).map(l => ({ ...l, flip: Math.random() < 0.5 }));
 };
 export const SchoolOfSkillsGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
   const [rounds] = useState(makeSchoolRounds);
@@ -2339,11 +2339,11 @@ export const SchoolOfSkillsGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
 };
 
 // ---------------------------------------------------------------------------------------------------------------
-// Game 18: the ten wrong deeds and the ten right deeds (duccarita and sucarita: 3 of body, 4 of speech, 3 of mind). Ten rounds, one
+// Game 18: the ten wrong deeds and the ten right deeds (duccarita and sucarita: 3 of body, 4 of speech, 3 of mind). Seven rounds (of the ten pairs), one
 // for each pair: a bad deed and its good opposite (killing / protecting life, stealing / guarding others' things, ...) are thrown up
 // from the two sides in arcs and fall back down, like the heron game. Tap the GOOD deed while it flies for 2 or 3 coins. Tapping the
 // bad deed, or being too slow, gives no coins; the box then says which was which, so the child learns the ten pairs.
-const TEN_ROUNDS = 10;
+const TEN_ROUNDS = 7; // seven pairs per game, picked at random from the ten
 const TEN_ASK_MS = 5000;
 const TEN_RESULT_MS = 2600;
 const TEN_PAIRS = [
@@ -2362,7 +2362,7 @@ const PART_EMOJI = { Body: '🧍', Speech: '🗣️', Mind: '🧠' };
 const makeTenRounds = (pairs) => () => {
   const items = [...pairs];
   for (let i = items.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [items[i], items[j]] = [items[j], items[i]]; }
-  return items.map(x => ({ ...x, flip: Math.random() < 0.5 })); // which one is thrown up from the left
+  return items.slice(0, TEN_ROUNDS).map(x => ({ ...x, flip: Math.random() < 0.5 })); // which one is thrown up from the left
 };
 // the same game for any list of ten good/bad pairs; cfg = { pairs, title, partText(pair), prompt, doneAll, doneSome(n), doneText }
 const ArcDeedsGame = ({ cfg, onDone, coinsLeft = BIRD_COIN_CAP }) => {
@@ -2475,7 +2475,7 @@ const ArcDeedsGame = ({ cfg, onDone, coinsLeft = BIRD_COIN_CAP }) => {
 
 export const TenDeedsGame = (props) => <ArcDeedsGame cfg={{
   pairs: TEN_PAIRS, title: '☸️ Ten wrong, ten right deeds', partText: (it) => `Deeds of the ${it.part.toLowerCase()}`, prompt: 'Tap the GOOD deed before it falls!',
-  doneAll: 'All ten good deeds!', doneSome: (n) => `${n} of ${TEN_ROUNDS} good deeds chosen`,
+  doneAll: 'All seven good deeds!', doneSome: (n) => `${n} of ${TEN_ROUNDS} good deeds chosen`,
   doneText: 'Three deeds of the body, four of the speech and three of the mind. Leave the wrong deeds, do the right deeds, and your life becomes happy.',
 }} {...props} />;
 
@@ -2498,7 +2498,7 @@ const MERIT_PAIRS = [
 ];
 export const TenMeritGame = (props) => <ArcDeedsGame cfg={{
   pairs: MERIT_PAIRS, title: '🪷 Ten ways to make merit', partText: (it) => `Making merit: ${it.part}`, prompt: 'Tap the way to make MERIT before it falls!',
-  doneAll: 'All ten ways of merit!', doneSome: (n) => `${n} of ${TEN_ROUNDS} ways of merit chosen`,
+  doneAll: 'All seven ways of merit!', doneSome: (n) => `${n} of ${TEN_ROUNDS} ways of merit chosen`,
   doneText: 'Giving, good conduct, meditation, respect, service, sharing merit, rejoicing, listening, teaching and straight view: ten ways to make merit and a happy life.',
 }} {...props} />;
 
