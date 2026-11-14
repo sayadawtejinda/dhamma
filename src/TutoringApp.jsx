@@ -8412,6 +8412,13 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
     };
   }, [mySchedule, myRecurringSchedule, mySessions, studentUid]);
 
+  // The student's own numbers up to this minute, for their own row of the weekly attendance board (that board is a weekly snapshot, so it
+  // would otherwise be one class behind whenever the student has attended since the last weekly run).
+  useEffect(() => {
+    if (!studentUid) return;
+    window.__dhammaLiveAttendance = { uid: studentUid, attended: attendanceSummary.yearAttended, total: attendanceSummary.yearAttended + attendanceSummary.yearAbsent };
+  }, [studentUid, attendanceSummary.yearAttended, attendanceSummary.yearAbsent]);
+
   // ---- Attendance coins, paid AT ONCE: the moment today's scheduled class shows as attended (green) on this Home page. The coins are 100 for the first
   // class of a streak, +25 for every scheduled class attended in a row before it (a red chip ends the streak), at most 500 -- worked out from the same
   // chips the attendance bar shows, so it costs no read. They arrive as a gift box. The day is written on the student's record (streakPaidDays) first,
@@ -11503,6 +11510,9 @@ function YearAttendanceBoard({ role, targetStudentUid }) {
         ) : (
           visibleList.map((entry, idx) => {
             const isMine = targetStudentUid && !entry.isOffline && entry.id === targetStudentUid;
+            // the student's own row shows their numbers up to this minute (the same as the bar on their Home page), never fewer than the weekly file
+            const live = isMine && window.__dhammaLiveAttendance && window.__dhammaLiveAttendance.uid === entry.id ? window.__dhammaLiveAttendance : null;
+            if (live && live.attended >= entry.attended && live.total >= entry.total) entry = { ...entry, attended: live.attended, total: live.total };
             return (
             <div key={entry.id} ref={isMine ? myRowRef : null} className={`bg-white p-4 rounded-xl shadow-md flex items-center justify-between border ${isMine ? 'border-indigo-500 ring-2 ring-indigo-500' : 'border-gray-100'}`}>
               <div className="flex items-center">
