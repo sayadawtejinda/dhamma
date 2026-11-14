@@ -1,1 +1,7 @@
+# The picture repos, in the order they are used (owner/name). A repo is used until it is about 700 MB full, then the next one.
+# Each one must exist on GitHub first: Public, empty.
 sayadawtejinda/dhammaschool
+sayadawtejinda/dhammaschool-2
+sayadawtejinda/dhammaschool-3
+sayadawtejinda/dhammaschool-4
+sayadawtejinda/dhammaschool-5

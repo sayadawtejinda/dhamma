@@ -22,7 +22,7 @@ import { firebaseConfig, appId } from '../src/firebaseConfig.js';
 import { loadKey, GEMINI_KEY_FILE } from './gemini.mjs';
 import { makeVariant, AGE_GROUPS } from './abhi-variants.mjs';
 import { KEYED_RE, listKeyed, planPictures } from './picture-slots.mjs';
-import { scanRepo, chooseFolder, repoSizeMB, FOLDER_CAP, REPO_WARN_MB, REPO_STOP_MB } from './repo-folders.mjs';
+import { scanRepo, chooseFolder, repoSizeMB, FOLDER_CAP, REPO_SWITCH_MB, REPO_SOON_MB, AVG_PICTURE_MB } from './repo-folders.mjs';
 
 const DRY = process.argv.includes('--dry');
 // --pictures-only: only upload the pictures to GitHub and print their numbers / addresses (for lessons made in the Gemini Canvas apps);
@@ -31,11 +31,15 @@ const PICS_ONLY = process.argv.includes('--pictures-only');
 // The pictures are taken from Downloads\lesson-pictures (where split-sheets.bat puts them) AND from Pictures\Screenshots, oldest first.
 const PICTURE_DIRS = process.env.LESSON_PICTURES ? [process.env.LESSON_PICTURES] : [join(homedir(), 'Downloads', 'lesson-pictures'), join(homedir(), 'Pictures', 'Screenshots')];
 const SCREENSHOTS = PICTURE_DIRS.join(' + ');
-// The GitHub repo the pictures go to is written in scripts/picture-repo.txt (one line: owner/name). When a repo is full, create an empty
-// one on GitHub, write its name there, and every new picture goes to it (old lessons keep their old picture addresses).
-const IMAGE_REPO = (existsSync(new URL('./picture-repo.txt', import.meta.url)) ? readFileSync(new URL('./picture-repo.txt', import.meta.url), 'utf8').split(String.fromCharCode(10))[0].trim() : '') || 'sayadawtejinda/dhammaschool';
-// the work copy of the repo on this computer (the first repo keeps its old folder name)
-const REPO_DIR = process.env.LESSON_IMAGE_REPO_DIR || join(homedir(), IMAGE_REPO === 'sayadawtejinda/dhammaschool' ? 'dhammaschool-images' : `${IMAGE_REPO.split('/').pop()}-images`);
+// The GitHub repos the pictures go to are listed in scripts/picture-repo.txt, one per line (owner/name), in the order they are used. A repo is
+// used until it is about REPO_SWITCH_MB full; then the next one in the list is used. (A repo has to be created on GitHub first: public, empty.)
+const REPO_LIST = (existsSync(new URL('./picture-repo.txt', import.meta.url)) ? readFileSync(new URL('./picture-repo.txt', import.meta.url), 'utf8') : '')
+  .split(String.fromCharCode(10)).map(l => l.trim()).filter(l => l && !l.startsWith('#'));
+if (!REPO_LIST.length) REPO_LIST.push('sayadawtejinda/dhammaschool');
+let IMAGE_REPO = REPO_LIST[0];
+// the work copy of a repo on this computer (the first repo keeps its old folder name)
+const repoDirFor = (name) => process.env.LESSON_IMAGE_REPO_DIR || join(homedir(), name === 'sayadawtejinda/dhammaschool' ? 'dhammaschool-images' : `${name.split('/').pop()}-images`);
+let REPO_DIR = repoDirFor(IMAGE_REPO);
 const RAW_BASE = (branch) => `https://raw.githubusercontent.com/${IMAGE_REPO}/${branch}/`;
 const ABHI = 'artifacts/lesson-translator-app-v6/public/data';
 const IMAGES_PER_LESSON = 5;
@@ -72,26 +76,48 @@ const listScreenshots = () => {
     .sort((a, b) => statSync(a).mtimeMs - statSync(b).mtimeMs || (a < b ? -1 : 1));
 };
 
-function prepareRepo(digits, needed) {
+// Gets the work copy of the current repo (IMAGE_REPO / REPO_DIR) up to date.
+function syncRepo() {
   if (!existsSync(join(REPO_DIR, '.git'))) {
     console.log(`Getting a copy of ${IMAGE_REPO} into ${REPO_DIR} (first time only)...`);
-    execFileSync('git', ['clone', `https://github.com/${IMAGE_REPO}.git`, REPO_DIR], { stdio: 'inherit' });
+    try { execFileSync('git', ['clone', `https://github.com/${IMAGE_REPO}.git`, REPO_DIR], { stdio: 'inherit' }); }
+    catch (e) { die(`I could not get the picture repo ${IMAGE_REPO} from GitHub. If it does not exist yet: on github.com create a new repository with exactly that name (Public, empty, nothing added). Nothing was changed.`); }
   } else {
     // this folder is only a work copy for the pictures: throw away anything left over from an earlier failed run
     git(['reset', '--hard']);
     git(['clean', '-fdq']);
-    git(['pull', '--ff-only']);
+    try { git(['pull', '--ff-only']); } catch (e) { /* a repo that is still empty has nothing to pull */ }
   }
   // commits need a name and an email; use the computer's Git ones, or fall back to these for this folder only
   const has = (k) => { try { return !!git(['config', k]); } catch (e) { return false; } };
   if (!has('user.name')) git(['config', 'user.name', 'sayadawtejinda']);
   if (!has('user.email')) git(['config', 'user.email', 'sayadawtejinda@gmail.com']);
-  const branch = git(['rev-parse', '--abbrev-ref', 'HEAD']);
+}
+
+// Uses the first repo of the list that still has room (REPO_SWITCH_MB); the numbers of the pictures keep counting up across all the repos.
+function prepareRepo(digits, needed) {
+  let before = 0;                                   // the highest picture number in the repos that are full
+  for (const [i, name] of REPO_LIST.entries()) {
+    IMAGE_REPO = name; REPO_DIR = repoDirFor(name);
+    syncRepo();
+    const sizeMB = repoSizeMB(REPO_DIR);
+    const last = i === REPO_LIST.length - 1;
+    if (sizeMB + needed * AVG_PICTURE_MB < REPO_SWITCH_MB) {
+      if (last && sizeMB >= REPO_SOON_MB) console.log(`⚠ The picture repo ${name} is ${Math.round(sizeMB)} MB of about ${REPO_SWITCH_MB}. Create the next repo on GitHub (Public, empty) and add its name as a new line in scripts/picture-repo.txt, or ask Claude.`);
+      break;
+    }
+    if (last) die(`All the picture repos are full (${REPO_LIST.join(', ')}). Create a new repo on GitHub (Public, empty) and add its name as a new line in scripts/picture-repo.txt, or ask Claude. Nothing was changed.`);
+    console.log(`${name} is full (${Math.round(sizeMB)} MB), so the next picture repo is used.`);
+    before = Math.max(before, scanRepo(REPO_DIR, digits).next - 1);
+  }
+  // an empty repo has no branch yet: ask Git for the name it will get
+  let branch;
+  try { branch = git(['rev-parse', '--abbrev-ref', 'HEAD']); } catch (e) { branch = git(['symbolic-ref', '--short', 'HEAD']); }
   // SmartStudy pictures are numbered with 4 digits (0001.png ...), Abhidhamma's with 6 (001305.png ...): each series continues on its own,
-  // across all the folders. The pictures go in the last folder; when it would be full (FOLDER_CAP) a new folder is started automatically.
+  // across all the folders and repos. The pictures go in the last folder; when it would be full (FOLDER_CAP) a new folder is started automatically.
   const { folders, counts, next } = scanRepo(REPO_DIR, digits);
   const { folder, isNew } = chooseFolder(folders, counts, needed);
-  return { branch, next, folder, isNew, folders, counts, sizeMB: repoSizeMB(REPO_DIR) };
+  return { branch, next: Math.max(next, before + 1), folder, isNew, folders, counts, sizeMB: repoSizeMB(REPO_DIR) };
 }
 
 // ---- Firestore: connect -------------------------------------------------------------------------------------------
@@ -188,10 +214,8 @@ const DIGITS = which === 'smartstudy' ? 4 : 6;
 const { branch, next, folder, isNew, folders, counts, sizeMB } = prepareRepo(DIGITS, needed);
 // where the pictures are on the internet (the folder inside the repo, when it is not the main one)
 const imgBase = RAW_BASE(branch) + (folder ? folder + '/' : '');
-console.log(`GitHub picture repo: ${counts.reduce((a, b) => a + b, 0)} pictures in ${folders.length} folder(s), about ${Math.round(sizeMB)} MB (a folder holds up to ${FOLDER_CAP} pictures).`);
+console.log(`GitHub picture repo ${IMAGE_REPO}: ${counts.reduce((a, b) => a + b, 0)} pictures in ${folders.length} folder(s), about ${Math.round(sizeMB)} MB (a folder holds up to ${FOLDER_CAP} pictures).`);
 if (needed && isNew) console.log(`The folder "${folders[folders.length - 1] || 'main'}" is full, so the new pictures go in a NEW folder: ${folder}/  (done automatically).`);
-if (needed && sizeMB >= REPO_STOP_MB) die(`The picture repo is ${Math.round(sizeMB)} MB. GitHub asks for repositories under about 1 GB, so no more pictures are added here. A new picture repo is needed: tell Claude. Nothing was changed.`);
-if (needed && sizeMB >= REPO_WARN_MB) console.log(`⚠ The picture repo is ${Math.round(sizeMB)} MB of about 1000 MB. It will need a new repo soon: tell Claude before it is full.`);
 const pad = (n) => String(n).padStart(DIGITS, '0');
 const newNames = use.map((f, i) => `${pad(next + i)}${extname(f).toLowerCase() === '.jpeg' ? '.jpg' : extname(f).toLowerCase()}`);
 if (needed) console.log(`The pictures will be named ${newNames[0]} ... ${newNames[newNames.length - 1]} (the repo now ends at ${pad(next - 1)}).`);
@@ -228,7 +252,7 @@ if (needed) {
   try {
     git(['add', ...rel]);
     git(['commit', '-m', `Add lesson pictures ${newNames[0]} - ${newNames[newNames.length - 1]}`]);
-    git(['push']);
+    git(['push', 'origin', 'HEAD']);
   } catch (e) {
     die(`Could not push the pictures to GitHub (${String(e.stderr || e.message).trim().split(/\r?\n/).slice(-2).join(' ')}). The lessons were NOT loaded. Fix the problem (is Git signed in?) and run it again; the copied pictures in ${REPO_DIR} can be left as they are.`);
   }

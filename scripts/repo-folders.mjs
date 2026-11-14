@@ -6,8 +6,10 @@ import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 export const FOLDER_CAP = 900;        // pictures in one folder
-export const REPO_WARN_MB = 700;      // GitHub asks for repositories under about 1 GB: warn from here
-export const REPO_STOP_MB = 950;      // ... and do not add any more from here (a new picture repo is needed)
+// GitHub asks for repositories under about 1 GB, so a repo is used until it is about REPO_SWITCH_MB full; then the next repo is used.
+export const REPO_SWITCH_MB = Number(process.env.LESSON_REPO_SWITCH_MB) || 700;   // (the variable is only for testing)
+export const REPO_SOON_MB = 600;      // from here the last repo of the list says that the next one must be created soon
+export const AVG_PICTURE_MB = 0.5;    // a picture's size, to see whether a new batch still fits
 const FOLDER_RE = /^images-(\d{2,3})$/;
 const PIC_RE = /^(\d{4,6})\.(?:png|jpe?g)$/i;
 
