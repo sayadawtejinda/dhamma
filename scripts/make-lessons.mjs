@@ -15,6 +15,9 @@ import { join, isAbsolute, dirname, basename, extname } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { gemini, loadKey, GEMINI_KEY_FILE, GAP_MS } from './gemini.mjs';
+import { parseMarkdownArticles, looksLikeMarkdownArticle, naturalSort } from './article-md.mjs';
+import { SLOTS_PER_LESSON, slotBase } from './picture-slots.mjs';
+import { readdirSync } from 'node:fs';
 import { AGE_LEVELS, LEVEL_SPECS, countWords, levelMaxWords, cleanLessonText, checkLevelText, alignAnswer, checkQuiz, baseRules, levelRules, quizSchema } from './lesson-rules.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -32,6 +35,26 @@ const findFile = (name) => {
   ];
   return candidates.find(p => existsSync(p) && statSync(p).isFile());
 };
+
+// The file name may also be several files: a comma list ("a.md, b.md"), or a pattern with * ("article-*.md"), looked for in the same
+// folders. They are used in natural order (article-2 before article-10).
+const searchDirs = () => [process.cwd(), join(homedir(), 'Downloads'), join(homedir(), 'Desktop'), join(homedir(), 'Documents')];
+function findFiles(spec) {
+  const out = [];
+  for (const part of spec.split(',').map(s => s.trim()).filter(Boolean)) {
+    if (part.includes('*')) {
+      const pat = isAbsolute(part) ? basename(part) : part;
+      const re = new RegExp('^' + pat.split('*').map(s => s.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*') + '$', 'i');
+      const dirs = isAbsolute(part) ? [dirname(part)] : searchDirs();
+      const hit = dirs.find(d => existsSync(d) && readdirSync(d).some(f => re.test(f)));
+      if (hit) readdirSync(hit).filter(f => re.test(f)).sort(naturalSort).forEach(f => out.push(join(hit, f)));
+    } else {
+      const f = findFile(part);
+      if (f) out.push(f);
+    }
+  }
+  return [...new Set(out)];
+}
 
 // ---- the stories --------------------------------------------------------------------------------------------------
 // How the lessons are told apart (the first one that is found in the file is used):
@@ -158,30 +181,87 @@ async function makeLesson(key, story, index) {
 // ---- main ---------------------------------------------------------------------------------------------------------
 console.log(DRY ? '\n(--dry: Gemini is not called)\n' : '\n📝 Make lessons with Gemini\n');
 const abhi = (await ask('1 = SmartStudy lessons, 2 = Abhidhamma lessons', '1')) === '2';
-const name = await ask('Stories file name (the notebook .txt)');
-const file = findFile(name);
-if (!file) die(`I could not find "${name}" (looked in this folder, Downloads, Desktop and Documents).`);
-const stories = parseStories(readFileSync(file, 'utf8').replace(/^﻿/, ''));
-if (!stories.length) die('No lessons found. Start each lesson with a line like:  === Title of the lesson ===');
-console.log(`Found ${stories.length} stories:`);
+const name = await ask('Stories file name(s) (a notebook .txt, or .md articles: one name, a comma list, or article-*.md)');
+const files = findFiles(name);
+if (!files.length) die(`I could not find "${name}" (looked in this folder, Downloads, Desktop and Documents).`);
+const file = files[0];
+// Each file is read the way it is written: the old notebook files (=== lines or 📖 lines) as before, Markdown articles
+// (# title, ## sections) as ONE lesson per article.
+const stories = [];
+for (const f of files) {
+  const text = readFileSync(f, 'utf8').replace(/^﻿/, '');
+  const found = looksLikeMarkdownArticle(text) || /\.md$/i.test(f)
+    ? parseMarkdownArticles(text, basename(f, extname(f)))
+    : parseStories(text);
+  if (!found.length) console.log(`  (no lessons found in ${basename(f)})`);
+  stories.push(...found.map(x => ({ ...x, from: basename(f) })));
+}
+if (!stories.length) die('No lessons found. Start each lesson with a line like:  === Title of the lesson ===   (or give Markdown articles that start with  # Title ).');
+console.log(`Found ${stories.length} stories${files.length > 1 ? ` in ${files.length} files` : ''}:`);
 stories.forEach((s, i) => console.log(`  ${i + 1}. ${s.heading.slice(0, 70)}  (${s.text.length} characters)`));
+// the default output name comes from the STORIES file(s), not from the clock: run it again with the same files and it continues where it stopped
+const stampBase = files.length > 1
+  ? `${basename(files[0], extname(files[0])).replace(/[-_ ]?\d.*$/, '') || 'stories'}s-${files.length}`
+  : basename(file, extname(file));
 if (DRY) { rl.close(); process.exit(0); }
 
-// Abhidhamma: the lesson is the Burmese text itself. Nothing is asked from Gemini here: add-lessons.bat adds the 5
+// Pictures that keep their order: for every lesson 5 picture slots (L01-P1 ... L01-P5) with a Gemini prompt for each. The pictures are
+// then saved under those names (name-pictures.bat does it for you, one by one) and add-lessons.bat reads them by NAME, not by the time
+// they were made, so the order can never get mixed up.
+const PICTURE_STYLE = 'A warm, friendly hand-painted illustration for a children\'s Dhamma book, soft colours, no text or letters in the picture.';
+async function makePicturePlan(lessons) {
+  let key0 = loadKey();   // set to '' after the first failure: Gemini is busy or out of quota, so the other lessons use their own text instead of waiting again
+  const plan = [];
+  for (const [i, l] of lessons.entries()) {
+    let scenes = [];
+    if (key0) {
+      try {
+        process.stdout.write(`   picture ideas for lesson ${i + 1}... `);
+        const raw = await gemini(key0, {
+          contents: [{ parts: [{ text: `Lesson title: ${l.title}\n\nLesson text (Burmese):\n${l.burmeseContent.slice(0, 9000)}` }] }],
+          systemInstruction: { parts: [{ text: `You plan the pictures of a children's Buddhist Abhidhamma lesson. Give exactly ${SLOTS_PER_LESSON} picture ideas that follow the lesson from beginning to end, in the order of the lesson. Each idea is one short English sentence (max 30 words) describing ONE clear scene a child can understand (people, objects, a simple visual metaphor from the lesson), with no text inside the picture. Return JSON.` }] },
+          generationConfig: { responseMimeType: 'application/json', responseSchema: { type: 'OBJECT', properties: { scenes: { type: 'ARRAY', items: { type: 'STRING' } } }, required: ['scenes'] } },
+        }, 2);
+        scenes = (JSON.parse(raw).scenes || []).map(x => String(x).trim()).filter(Boolean).slice(0, SLOTS_PER_LESSON);
+        console.log('ok');
+      } catch (e) { console.log('failed (' + String(e.message).slice(0, 60) + ') - the picture ideas will be taken from the lesson text instead'); scenes = []; key0 = ''; }
+    }
+    if (scenes.length < SLOTS_PER_LESSON) {
+      // fallback: five evenly spaced paragraphs of the lesson itself, to paste into Gemini
+      const paras = l.burmeseContent.split(/\n{2,}/).map(x => x.replace(/\s+/g, ' ').trim()).filter(x => x.length > 20);
+      scenes = [];
+      for (let k = 0; k < SLOTS_PER_LESSON; k++) scenes.push('Illustrate this part of the lesson: ' + (paras[Math.min(paras.length - 1, Math.floor((k * paras.length) / SLOTS_PER_LESSON))] || l.title).slice(0, 220));
+    }
+    plan.push({ lesson: i + 1, key: slotBase(i + 1, 1).split('-')[0], title: l.title, slots: scenes.map((sc, k) => ({ name: slotBase(i + 1, k + 1), prompt: sc })) });
+  }
+  return plan;
+}
+
+// Abhidhamma: the lesson is the Burmese text itself. add-lessons.bat adds the 5
 // picture names to each lesson and then makes the 4 age versions (English text, discussion questions, quiz).
 if (abhi) {
-  // the default name comes from the STORIES file, not from the clock: run it again with the same stories file and it continues where it stopped
-  const stampA = basename(file, extname(file)).replace(/[^\p{L}\p{N}_-]+/gu, '-');
-  const outA = await ask('Save the lessons as', `abhidhamma-${stampA}.json`);
+  const outA = await ask('Save the lessons as', `abhidhamma-${stampBase.replace(/[^\p{L}\p{N}_-]+/gu, '-')}.json`);
   const fileA = isAbsolute(outA) ? outA : join(homedir(), 'Downloads', outA);
   const lessonsA = stories.map((s, i) => ({
     title: s.heading.replace(/^ကလေးများအတွက်\s*/, '').trim() || `Lesson ${i + 1}`,
     burmeseContent: s.text,
   }));
-  writeFileSync(fileA, JSON.stringify({ lessons: lessonsA }, null, 2));
+  const wantPlan = (await ask('Make a picture plan, so the pictures keep their order? (y/n)', 'y')).toLowerCase().startsWith('y');
+  let planFile = null;
+  let plan = null;
+  if (wantPlan) {
+    plan = await makePicturePlan(lessonsA);
+    planFile = fileA.replace(/\.json$/i, '') + '-picture-plan.json';
+    writeFileSync(planFile, JSON.stringify({ style: PICTURE_STYLE, lessonsFile: basename(fileA), plan }, null, 2));
+    const txt = [`PICTURE PLAN for ${basename(fileA)}`, `Add this style line to every prompt:  ${PICTURE_STYLE}`, '',
+      ...plan.flatMap(p => [`=== Lesson ${p.lesson}: ${p.title} ===`, ...p.slots.map(s => `${s.name}:  ${s.prompt}`), ''])].join('\n');
+    writeFileSync(planFile.replace(/\.json$/i, '.txt'), txt);
+  }
+  writeFileSync(fileA, JSON.stringify({ ...(wantPlan ? { picturePlan: true } : {}), lessons: lessonsA }, null, 2));
   console.log(`
 Done: ${lessonsA.length} lesson(s) in ${fileA}`);
-  console.log('Next: put the pictures in Pictures\\Screenshots (split-sheets.bat if they are sheets) and double-click add-lessons.bat, choose 2 = Abhidhamma.');
+  if (wantPlan) console.log(`Picture plan: ${planFile.replace(/\.json$/i, '.txt')}\nNext: double-click name-pictures.bat (it saves each picture you make under its right name), then add-lessons.bat, choose 2 = Abhidhamma.`);
+  else console.log('Next: put the pictures in Pictures\\Screenshots (split-sheets.bat if they are sheets) and double-click add-lessons.bat, choose 2 = Abhidhamma.');
   rl.close();
   process.exit(0);
 }
@@ -191,7 +271,7 @@ if (!key) die(`No Gemini key. Save your key as one line in ${GEMINI_KEY_FILE} (g
 
 // the default name comes from the STORIES file, not from the clock: run it again with the same stories file and the lessons that are already
 // finished are kept (it carries on after them) instead of everything being made again
-const stamp = basename(file, extname(file)).replace(/[^\p{L}\p{N}_-]+/gu, '-');
+const stamp = stampBase.replace(/[^\p{L}\p{N}_-]+/gu, '-');
 const outName = await ask('Save the lessons as', `lessons-${stamp}.json`);
 const outFile = isAbsolute(outName) ? outName : join(homedir(), 'Downloads', outName);
 let done = [];

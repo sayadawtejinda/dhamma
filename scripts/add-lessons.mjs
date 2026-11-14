@@ -21,6 +21,7 @@ import { getFirestore, collection, doc, getDocs, getDoc, setDoc, updateDoc, serv
 import { firebaseConfig, appId } from '../src/firebaseConfig.js';
 import { loadKey, GEMINI_KEY_FILE } from './gemini.mjs';
 import { makeVariant, AGE_GROUPS } from './abhi-variants.mjs';
+import { KEYED_RE, listKeyed, checkKeyed, slotBase } from './picture-slots.mjs';
 
 const DRY = process.argv.includes('--dry');
 // The pictures are taken from Downloads\lesson-pictures (where split-sheets.bat puts them) AND from Pictures\Screenshots, oldest first.
@@ -46,8 +47,10 @@ function findLessonsFile(name) {
   ];
   return candidates.find(p => existsSync(p) && statSync(p).isFile());
 }
+let picturePlan = false; // the lessons file came with a picture plan: pictures are read by NAME (L01-P1 ...), not by the time they were made
 const readLessons = (file) => {
   const data = JSON.parse(readFileSync(file, 'utf8').replace(/^\uFEFF/, ''));
+  picturePlan = !Array.isArray(data) && data.picturePlan === true;
   const list = Array.isArray(data) ? data : (data.lessons || []);
   if (!list.length) die('There are no lessons in that file.');
   return list;
@@ -58,7 +61,7 @@ const listScreenshots = () => {
   const dirs = PICTURE_DIRS.filter(d => existsSync(d));
   if (dirs.length === 0) die(`None of these folders exists: ${SCREENSHOTS}`);
   // full paths; a sheet that is still waiting to be split (Gemini_Generated_Image_xxxx.jpg, no _number at the end) is not a picture; the 'sheets' folder is not read
-  return dirs.flatMap(d => readdirSync(d).filter(f => /\.(png|jpg|jpeg)$/i.test(f) && !/^gemini_generated_image_[a-z0-9]+\.(png|jpg|jpeg)$/i.test(f) && statSync(join(d, f)).isFile()).map(f => join(d, f)))
+  return dirs.flatMap(d => readdirSync(d).filter(f => /\.(png|jpg|jpeg)$/i.test(f) && !/^gemini_generated_image_[a-z0-9]+\.(png|jpg|jpeg)$/i.test(f) && !KEYED_RE.test(f) && statSync(join(d, f)).isFile()).map(f => join(d, f)))
     .sort((a, b) => statSync(a).mtimeMs - statSync(b).mtimeMs || (a < b ? -1 : 1));
 };
 
@@ -129,14 +132,31 @@ const needFor = (l) => (which === 'smartstudy'
   : Math.max(0, IMAGES_PER_LESSON - [...String(l.burmeseContent || l.content || '').matchAll(IMG_RE)].length));
 const needed = lessons.reduce((n, l) => n + needFor(l), 0);
 
-const shots = listScreenshots();
-console.log(`The lessons need ${needed} picture(s); ${shots.length} found in ${SCREENSHOTS}.`);
-if (shots.length < needed) die(`${needed - shots.length} more picture(s) are needed in ${SCREENSHOTS}.`);
-if (shots.length > needed) {
-  const go = (await ask(`There are ${shots.length - needed} extra picture(s). Use only the first ${needed}? (y/n)`, 'y')).toLowerCase();
-  if (!go.startsWith('y')) die('Stopped. Take the extra pictures out of the folder and run it again.');
+// Pictures. With a picture plan they are found by NAME (L03-P2 = lesson 3, picture 2); otherwise (the old way) the oldest pictures first.
+let use;
+if (which === 'abhidhamma' && picturePlan) {
+  const keyed = listKeyed(PICTURE_DIRS);
+  const needs = lessons.map((l, i) => ({ no: i + 1, count: needFor(l) })).filter(n => n.count > 0);
+  console.log(`The lessons need ${needed} picture(s); named pictures (L01-P1 ...) are looked for in ${SCREENSHOTS}.`);
+  const { use: found, missing } = checkKeyed(needs, keyed);
+  console.log('\nPictures per lesson:');
+  lessons.forEach((l, i) => {
+    const n = needFor(l);
+    const marks = Array.from({ length: n }, (_, k) => `P${k + 1}${keyed.has(slotBase(i + 1, k + 1)) ? '✓' : '✗'}`).join(' ');
+    console.log(`  Lesson ${String(i + 1).padStart(2)}: ${n ? marks : 'has its pictures already'}   ${String(l.title || '').slice(0, 40)}`);
+  });
+  if (missing.length) die(`${missing.length} picture(s) are missing: ${missing.slice(0, 12).join(', ')}${missing.length > 12 ? ' ...' : ''}\nMake them with name-pictures.bat, then run this again. Nothing was changed.`);
+  use = found;
+} else {
+  const shots = listScreenshots();
+  console.log(`The lessons need ${needed} picture(s); ${shots.length} found in ${SCREENSHOTS}.`);
+  if (shots.length < needed) die(`${needed - shots.length} more picture(s) are needed in ${SCREENSHOTS}.`);
+  if (shots.length > needed) {
+    const go = (await ask(`There are ${shots.length - needed} extra picture(s). Use only the first ${needed}? (y/n)`, 'y')).toLowerCase();
+    if (!go.startsWith('y')) die('Stopped. Take the extra pictures out of the folder and run it again.');
+  }
+  use = shots.slice(0, needed);
 }
-const use = shots.slice(0, needed);
 
 // numbering
 const DIGITS = which === 'smartstudy' ? 4 : 6;
