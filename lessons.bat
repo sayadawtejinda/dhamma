@@ -16,6 +16,7 @@ echo    6  Save the pictures one by one under the right names  (after 1, with a 
 echo    3  Add to the app   (upload pictures + load lessons)
 echo    4  Same as 3 but only LOOK (changes nothing)
 echo    7  Upload the pictures ONLY to GitHub  (for lessons made in the Canvas apps)
+echo    8  Put the Canvas age versions (backup .json) into a class, with the pictures
 echo    5  Open the guide (Burmese, step by step)
 echo    0  Exit
 echo.
@@ -27,5 +28,6 @@ if "%c%"=="4" call add-lessons.bat --dry & goto menu
 if "%c%"=="5" start "" notepad "%~dp0Lessons\START-HERE.txt" & goto menu
 if "%c%"=="6" call name-pictures.bat & goto menu
 if "%c%"=="7" call add-lessons.bat --pictures-only & goto menu
+if "%c%"=="8" call merge-variants.bat & goto menu
 if "%c%"=="0" exit /b
 goto menu

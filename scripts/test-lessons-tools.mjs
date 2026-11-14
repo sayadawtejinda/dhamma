@@ -78,3 +78,33 @@ test('mixed: a lesson with all its named pictures uses them, a lesson with none 
   assert.equal(planPictures([{ no: 2, count: 5 }], keyed, pool, true).problems.length, 1);    // strict (picture plan): no loose pictures
   assert.equal(planPictures([{ no: 2, count: 5 }], keyed, ['a', 'b']).problems.length, 1);    // not enough loose pictures
 });
+
+import { spreadImages, matchLesson, buildVariants, imageNamesOf } from './merge-variants-lib.mjs';
+test('pictures are spread between the paragraphs, in order, every picture once', () => {
+  const five = ['001.png', '002.png', '003.png', '004.png', '005.png'].map(n => '00' + n);
+  const t6 = Array.from({ length: 6 }, (_, i) => 'Paragraph ' + (i + 1)).join('\n\n');
+  const out = spreadImages(t6, five);
+  assert.deepEqual(imageNamesOf(out), five);                          // all five, once each, in order
+  assert.ok(out.indexOf('Paragraph 1') < out.indexOf(five[0]) && out.indexOf(five[0]) < out.indexOf('Paragraph 2'));
+  const t2 = 'First paragraph.\n\nSecond paragraph.';
+  const o2 = spreadImages(t2, five);
+  assert.deepEqual(imageNamesOf(o2), five); assert.ok(o2.indexOf('Second paragraph.') < o2.indexOf(five[4]));   // fewer paragraphs: some get two
+  assert.equal(spreadImages(o2, five), o2.trim());                    // text that has pictures already is left alone
+  assert.equal(spreadImages('text', []), 'text');
+});
+test('a backup lesson is matched to the class lesson by title; two with the same title are not guessed', () => {
+  const cls = [{ id: 'a', title: 'စေတသိက်  ၅၂' }, { id: 'b', title: 'Other' }, { id: 'c', title: 'Dup' }, { id: 'd', title: 'dup' }];
+  assert.equal(matchLesson({ title: 'စေတသိက် ၅၂' }, cls).id, 'a');
+  assert.equal(matchLesson({ title: 'nothing' }, cls), null);
+  assert.equal(matchLesson({ title: 'DUP' }, cls).ambiguous.length, 2);
+});
+test('age versions are added with the lesson pictures; a version the class already has is kept', () => {
+  const v = (b, e) => ({ burmese: b, english: e, englishTitle: 'T', quiz: { questions: [1] }, discussionQuestions: ['q'] });
+  const lesson = { burmeseContent: 'text\n001346.png\n001347.png', variants: { storytellers: { burmese: 'old', english: 'old' } } };
+  const r = buildVariants({ storytellers: v('A\n\nB', 'A\n\nB'), explorers: v('C\n\nD', 'C\n\nD') }, lesson);
+  assert.deepEqual(r.added, ['explorers']); assert.deepEqual(r.kept, ['storytellers']);
+  assert.equal(r.variants.storytellers.burmese, 'old');
+  assert.deepEqual(imageNamesOf(r.variants.explorers.english), ['001346.png', '001347.png']);
+  assert.equal(r.variants.explorers.quiz.questions.length, 1);          // everything else of the version is kept as it was
+  assert.deepEqual(buildVariants({ storytellers: v('A', 'A') }, lesson, { overwrite: true }).added, ['storytellers']);
+});
