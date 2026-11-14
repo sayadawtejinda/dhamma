@@ -1,0 +1,2155 @@
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
+import { getFirestore, collection, doc, setDoc, updateDoc, arrayUnion, onSnapshot, query, orderBy, serverTimestamp, addDoc, getDoc, where, getDocs, limit, deleteDoc } from 'firebase/firestore';
+import { 
+    BookOpen, Edit2, Zap, RotateCw, Upload, Download, CheckCircle, 
+    MessageCircle, Send, Heart, Trophy, Timer, Pause, 
+    ChevronDown, ChevronRight, Gamepad2, X, ExternalLink, Youtube, Music, User,
+    Baby, Compass, Map, Ship, Globe, Sparkles, Image as ImageIcon, Wand2, Lock, CheckCheck,
+    AlertCircle, ArrowUp, ArrowDown, Key, ChevronLeft, Users, UserCheck, UserX, Circle, Trash2, Bell,
+    ToggleLeft, ToggleRight
+} from 'lucide-react';
+
+// Required Global Variables
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'lesson-translator-app-v6';
+const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+const API_KEY = ""; // Managed by Canvas
+const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${API_KEY}`;
+
+// Specific Base URLs defined by user
+const IMG_BASE_URL = 'https://raw.githubusercontent.com/nathantun93/dhamma4/main/';
+const AUDIO_BASE_URL = 'https://raw.githubusercontent.com/nathantun93/bell/main/';
+const TEACHER_PASSCODE = "1"; // Passcode
+
+// Age Groups Configuration
+const AGE_GROUPS = {
+    storytellers: { label: 'Storytellers (Ages 5-)', icon: <Baby className="w-4 h-4"/>, length: 'short (approx 150 words)', pages: '0.5 pages' },
+    explorers: { label: 'Explorers (Ages 6-8)', icon: <Compass className="w-4 h-4"/>, length: 'medium (approx 300 words)', pages: '1 page' },
+    adventurers: { label: 'Adventurers (Ages 9-11)', icon: <Map className="w-4 h-4"/>, length: 'long (approx 450 words)', pages: '1.5 pages' },
+    voyagers: { label: 'Voyagers (Ages 12+)', icon: <Ship className="w-4 h-4"/>, length: 'detailed (approx 600 words)', pages: '2 pages' }
+};
+
+// Firebase Services
+let app, db, auth;
+
+// --- API Helpers ---
+
+const generateContent = async (prompt, systemInstruction) => {
+    const payload = {
+        contents: [{ parts: [{ text: prompt }] }],
+        systemInstruction: { parts: [{ text: systemInstruction }] },
+        generationConfig: { responseMimeType: "application/json" }
+    };
+
+    const MAX_TRIES = 4;
+    for (let attempt = 0; attempt < MAX_TRIES; attempt++) {
+        let status = 0;
+        try {
+            const response = await fetch(API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            status = response.status;
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            const result = await response.json();
+            const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (text) return JSON.parse(text.replace(/^```json\s*|\s*```$/g, '').trim());
+            throw new Error("No content");
+        } catch (e) {
+            if (attempt === MAX_TRIES - 1) throw e;
+            // 429 / 503 = Gemini asks us to slow down: wait 10, 20, 30 seconds. Anything else: 1 second as before.
+            await new Promise(r => setTimeout(r, (status === 429 || status === 503) ? 10000 * (attempt + 1) : 1000));
+        }
+    }
+};
+
+const translateText = async (text, targetLang) => {
+    const prompt = `Translate the following text to ${targetLang === 'en' ? 'English' : 'Burmese'}: "${text}"`;
+    const sys = `You are a translator. Return JSON: { "translatedText": string }`;
+    return generateContent(prompt, sys);
+};
+
+const buildVariantPrompt = (title, content, group, fix = '') => {
+    const conf = AGE_GROUPS[group];
+    const spec = ABHI_SPECS[group];
+    let toneInstruction = "";
+    switch(group) {
+        case 'storytellers': toneInstruction = "TONE: Very simple, playful, and warm."; break;
+        case 'explorers': toneInstruction = "TONE: Simple, clear, and engaging."; break;
+        case 'adventurers': toneInstruction = "TONE: Conversational and descriptive."; break;
+        case 'voyagers': toneInstruction = "TONE: Mature, reflective, and detailed."; break;
+        default: toneInstruction = "TONE: Educational and clear.";
+    }
+
+    return `
+    Base Title: "${title}"
+    Base Content: "${content}"
+
+    INSTRUCTIONS FOR AGE GROUP: ${group} (${conf.label})
+    1. Analyze the Base Content for image filenames (e.g., 000101.png) AND LINKS (e.g., YouTube URLs).
+    2. Generate a version of this lesson. HARD LIMITS (they will be checked): the ENGLISH text must have between ${spec.minWords} and ${spec.maxWords} words (not counting image filenames) and no English sentence longer than ${spec.maxSentenceWords} words. The Burmese text must say the same things at about the same length. ${toneInstruction}
+    3. Provide an "englishTitle" and EXACTLY 10 "discussionQuestions" in English.
+    4. PRESERVE LINKS. Use formatting: **bold**, *italics*, ==highlight==.
+    5. CRITICAL: Split the content into paragraphs. You MUST insert exactly one image filename from the Base Content after EACH paragraph in BOTH the burmese and english text. DO NOT SKIP IMAGES, and use every image filename of the Base Content.
+    6. Generate EXACTLY 10 multiple-choice questions for the quiz (English Only). Each question MUST have EXACTLY 4 different options and one correctAnswerIndex (0 to 3). Quiz questions are at most ${spec.maxQuestionWords} words.
+    7. IMPORTANT LANGUAGE RULE: Use very simple language appropriate for children. Strictly minimize the use of complex Pali words or difficult vocabulary in the Burmese text.
+
+    Respond strictly with this JSON structure:
+    {
+        "englishTitle": "string",
+        "burmese": "string (with image filenames interspersed)",
+        "english": "string (with image filenames interspersed)",
+        "discussionQuestions": ["string", "string", "string", "string", "string", "string", "string", "string", "string", "string"],
+        "quiz": {
+          "questions": [
+            {
+              "question": "string",
+              "options": ["string", "string", "string", "string"],
+              "correctAnswerIndex": 0
+            }
+          ]
+        }
+    }
+    ${fix}`;
+};
+const VARIANT_SYSTEM = "You are an expert curriculum developer. You strictly return JSON. You ALWAYS include the exact image filenames from the source text into your generated text.";
+
+// Asks Gemini; checks the answer against the age rules; when a real problem is found (not only wording) asks ONE more time, telling Gemini
+// what was wrong. The better of the two answers is kept. Returns { data, problems } so the caller can say what is still not perfect.
+const generateSingleVariantChecked = async (title, content, group) => {
+    let best = null;
+    let fix = '';
+    for (let attempt = 0; attempt < 2; attempt++) {
+        const data = await generateContent(buildVariantPrompt(title, content, group, fix), VARIANT_SYSTEM);
+        const problems = checkVariant(data, group, content);
+        const hard = problems.filter(p => !isSoftProblem(p));
+        if (!best || hard.length < best.hard) best = { data, problems, hard: hard.length };
+        if (!hard.length) break;
+        fix = `\n    YOUR PREVIOUS ANSWER WAS REJECTED because: ${hard.join('; ')}. Write the whole lesson again and fix this. Respect every limit.`;
+    }
+    return { data: best.data, problems: best.problems };
+};
+
+// (the same as before for the Jr. / Sr. buttons; now it also follows the age rules)
+const generateSingleVariant = async (title, content, group) => (await generateSingleVariantChecked(title, content, group)).data;
+
+const generateLessonVariants = async (title, content, mode) => {
+    let targetGroups = mode === 'junior' ? ['storytellers', 'explorers'] : ['adventurers', 'voyagers'];
+    const results = {};
+    
+    const promises = targetGroups.map(async (g) => {
+        const data = await generateSingleVariant(title, content, g);
+        return { group: g, data };
+    });
+    
+    const completed = await Promise.all(promises);
+    completed.forEach(item => {
+        results[item.group] = item.data;
+    });
+    
+    return results;
+};
+
+// ====================================================================================================
+// AGE RULES for the Abhidhamma lessons (the same idea as in the SmartStudy app): every age group has a word range for its
+// ENGLISH text and a longest sentence. They are CHECKED after Gemini answers; when the text is outside them, Gemini is asked once more.
+// Abhidhamma ideas are harder than a SmartStudy story, so the ranges are longer than SmartStudy's.
+// (The Burmese text must say the same things at about the same length; Burmese cannot be counted in words.)
+// ====================================================================================================
+const ABHI_SPECS = {
+    storytellers: { minWords: 60, maxWords: 120, maxSentenceWords: 10, maxQuestionWords: 12 },
+    explorers:    { minWords: 150, maxWords: 250, maxSentenceWords: 14, maxQuestionWords: 16 },
+    adventurers:  { minWords: 250, maxWords: 350, maxSentenceWords: 20, maxQuestionWords: 22 },
+    voyagers:     { minWords: 350, maxWords: 500, maxSentenceWords: 28, maxQuestionWords: 30 }
+};
+const ALL_GROUPS = ['storytellers', 'explorers', 'adventurers', 'voyagers'];
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+const INNER_GAP_MS = 2000;   // a short rest between two Gemini calls of the same lesson
+const wordCount = (t) => (String(t || '').trim().match(/\S+/g) || []).length;
+const IMAGE_NAME_RE = /\b[\w-]+\.(?:png|jpe?g|webp|gif)\b/gi;
+const imageNamesIn = (t) => Array.from(new Set(String(t || '').match(IMAGE_NAME_RE) || []));
+// the English text without image names, links and markdown marks (they are not words to read)
+const plainEnglish = (t) => String(t || '').replace(IMAGE_NAME_RE, ' ').replace(/https?:\/\/\S+/g, ' ').replace(/[*=_#`]+/g, '');
+const sentencesOf = (t) => plainEnglish(t).split(/(?<=[.!?])\s+/).map(s => s.trim()).filter(Boolean);
+
+// A list of problems with one generated age version (an empty list = fine).
+const checkVariant = (data, group, baseContent) => {
+    const spec = ABHI_SPECS[group];
+    const problems = [];
+    if (!data || typeof data !== 'object') return ['Gemini did not return a lesson'];
+    const english = plainEnglish(data.english);
+    const words = wordCount(english);
+    if (words > spec.maxWords) problems.push(`the English text has ${words} words; the maximum is ${spec.maxWords}`);
+    if (words < spec.minWords * 0.8) problems.push(`the English text has only ${words} words; it should have ${spec.minWords} to ${spec.maxWords}`);
+    const longest = Math.max(0, ...sentencesOf(data.english).map(wordCount));
+    if (longest > spec.maxSentenceWords + 4) problems.push(`one English sentence has ${longest} words; sentences must be at most ${spec.maxSentenceWords} words`);
+    const needed = imageNamesIn(baseContent);
+    const lostB = needed.filter(n => !String(data.burmese || '').includes(n));
+    const lostE = needed.filter(n => !String(data.english || '').includes(n));
+    if (lostB.length) problems.push(`the Burmese text lost these images: ${lostB.join(', ')}`);
+    if (lostE.length) problems.push(`the English text lost these images: ${lostE.join(', ')}`);
+    if (!data.englishTitle || !String(data.englishTitle).trim()) problems.push('there is no English title');
+    if (!Array.isArray(data.discussionQuestions) || data.discussionQuestions.length !== 10) problems.push(`there are ${Array.isArray(data.discussionQuestions) ? data.discussionQuestions.length : 0} discussion questions; there must be exactly 10`);
+    const qs = data.quiz && Array.isArray(data.quiz.questions) ? data.quiz.questions : [];
+    if (qs.length !== 10) problems.push(`the quiz has ${qs.length} questions; there must be exactly 10`);
+    qs.forEach((q, i) => {
+        const opts = Array.isArray(q.options) ? q.options.map(o => String(o).trim().toLowerCase()) : [];
+        if (opts.length !== 4 || new Set(opts).size !== 4) problems.push(`quiz question ${i + 1} must have 4 different options`);
+        else if (!Number.isInteger(q.correctAnswerIndex) || q.correctAnswerIndex < 0 || q.correctAnswerIndex > 3) problems.push(`quiz question ${i + 1} has no correct answer`);
+        if (wordCount(q.question) > spec.maxQuestionWords + 6) problems.push(`quiz question ${i + 1} is too long for this age`);
+    });
+    return problems;
+};
+// wording-only problems do not justify another Gemini call
+const isSoftProblem = (p) => /one English sentence has|too long for this age/.test(p);
+
+// ---- reading the lessons file (many lessons at once) ----
+// a pasted chat answer has no # or === lines: a line that starts with "Lesson 3", "Article 3", "ဆောင်းပါး (၃)" or "သင်ခန်းစာ ၃" starts a lesson
+const BULK_HEAD_RE = /^[*#\s]*(?:ဆောင်းပါး|သင်ခန်းစာ|article|lesson|chapter)\s*\(?\s*[0-9၀-၉]+\s*\)?\s*[-–—:.။)]?/i;
+const bulkCleanTitle = (x) => String(x || '').replace(/\*\*|__/g, '').replace(/^(ဆောင်းပါး|article|သင်ခန်းစာ|lesson)\s*\(?\s*[0-9၀-၉]+\s*\)?\s*[-–—:.။]?\s*/i, '').trim();
+// Markdown -> plain text: no #, no **, no ---, tables as lines of " – " separated cells.
+const bulkMdToPlain = (md) => {
+    const out = [];
+    for (const raw of String(md || '').replace(/\r/g, '').split('\n')) {
+        let line = raw.trimEnd();
+        const t = line.trim();
+        if (/^([-*_])(\s*\1){2,}$/.test(t)) { out.push(''); continue; }
+        if (/^\|?[\s:|-]+\|?$/.test(t) && t.includes('-') && t.includes('|')) continue;
+        if (/^\|.*\|$/.test(t)) line = t.replace(/^\||\|$/g, '').split('|').map(c => c.trim()).filter(Boolean).join(' – ');
+        line = line.replace(/^\s{0,3}#{1,6}\s+/, '').replace(/^\s*>\s?/, '');
+        line = line.replace(/\*\*(.+?)\*\*/g, '$1').replace(/__(.+?)__/g, '$1');
+        out.push(line);
+    }
+    return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+};
+// One file -> [{ title, content }].
+//   .json            : { lessons: [ { title, burmeseContent } ] }  (what the make-lessons tool writes), or the app's own exported lessons
+//   text / markdown  : a lesson starts with a line  "# Title"  or  "=== Title ===" ; no such line = the whole file is one lesson
+const parseBulkFile = (fileName, text) => {
+    if (/\.json$/i.test(fileName)) {
+        const data = JSON.parse(String(text || '').replace(/^﻿/, ''));
+        const list = Array.isArray(data) ? data : (data.lessons || []);
+        return list.map(l => ({ title: String(l.title || ''), content: String(l.burmeseContent || l.content || '') })).filter(d => d.content.length > 40);
+    }
+    const lines = String(text || '').replace(/^﻿/, '').replace(/\r/g, '').split('\n');
+    const marker = lines.some(l => /^\s*===\s*\S/.test(l));
+    const h1 = !marker && lines.some(l => /^#\s+\S/.test(l));
+    const numbered = !marker && !h1 && lines.some(l => BULK_HEAD_RE.test(l.trim()));
+    const stories = []; let cur = null;
+    for (const raw of lines) {
+        const line = raw.trim();
+        if (marker && /^===\s*\S/.test(line)) { cur = { heading: bulkCleanTitle(line.replace(/^=+\s*/, '').replace(/\s*=+$/, '')), body: [] }; stories.push(cur); continue; }
+        if (h1 && /^#\s+\S/.test(raw)) { cur = { heading: bulkCleanTitle(raw.replace(/^#\s+/, '')), body: [] }; stories.push(cur); continue; }
+        if (numbered && BULK_HEAD_RE.test(line)) { cur = { heading: bulkCleanTitle(line.replace(/^[*#\s]+|[*\s]+$/g, '')), body: [] }; stories.push(cur); continue; }
+        if (cur) cur.body.push(raw);
+        else if (!marker && !h1 && !numbered) { if (!stories.length) { cur = { heading: '', body: [] }; stories.push(cur); } cur.body.push(raw); }
+    }
+    return stories.map(s => ({ title: s.heading, content: bulkMdToPlain(s.body.join('\n')) })).filter(d => d.content.length > 40);
+};
+
+// Five picture names in a row for lesson k: first number n -> n+5k ... n+5k+4, written like the "auto-generates 5 .png images" button does.
+const imageLinesFor = (firstNum, k) => {
+    const s = String(firstNum || '').trim();
+    if (!/^\d+$/.test(s)) return '';
+    const n = parseInt(s, 10) + 5 * k;
+    return Array.from({ length: 5 }, (_, i) => `${String(n + i).padStart(s.length, '0')}.png`).join('\n');
+};
+const lessonHasAllVariants = (l) => !!l.variants && ALL_GROUPS.every(g => l.variants[g] && l.variants[g].burmese && l.variants[g].english);
+
+const BulkLessonsCard = ({ bulk }) => {
+    const { drafts, running, stage, log, pauseSec, setPauseSec, firstImageNum, setFirstImageNum, onFiles, setTitle, removeDraft, clearDrafts, saveAll, generateAll, stop, lessonsWaiting } = bulk;
+    const fileRef = useRef(null);
+    return (
+        <div className="bg-gray-800 p-6 rounded-xl shadow-xl border border-purple-700 space-y-4">
+            <h3 className="text-xl font-bold text-purple-300 flex items-center gap-2"><Upload className="w-5 h-5" /> Bulk lessons: many lessons from one file</h3>
+            <p className="text-sm text-gray-300">3 buttons: <b>1)</b> load the file, <b>2)</b> check the titles and save all the lessons, <b>3)</b> make the 4 age versions (English text, discussion questions, quiz) of every lesson, one after another with a rest in between. You can stop and carry on later.</p>
+            <div className="flex flex-wrap items-center gap-3">
+                <input type="file" ref={fileRef} onChange={onFiles} accept=".json,.md,.txt" multiple className="hidden" />
+                <button type="button" onClick={() => fileRef.current && fileRef.current.click()} disabled={running} className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded font-bold text-sm flex items-center gap-2 disabled:opacity-50"><Upload className="w-4 h-4" /> 1) Load lessons file(s)</button>
+                {drafts.length > 0 && <button type="button" onClick={clearDrafts} disabled={running} className="bg-gray-600 hover:bg-gray-500 px-3 py-2 rounded text-sm disabled:opacity-50">Clear the list</button>}
+                <label className="text-sm text-gray-300 flex items-center gap-2">Rest between lessons
+                    <input type="number" min="0" max="120" value={pauseSec} onChange={e => setPauseSec(e.target.value)} className="w-20 p-1 bg-gray-900 border border-gray-600 rounded text-white" /> seconds
+                </label>
+            </div>
+            {drafts.length > 0 && (
+                <div className="space-y-3">
+                    <div className="space-y-2">
+                        {drafts.map((d, i) => (
+                            <div key={d.key} className="flex items-center gap-2 bg-gray-900 border border-gray-700 rounded p-2">
+                                <span className="text-gray-400 w-8 text-sm">{i + 1}.</span>
+                                <input value={d.title} onChange={e => setTitle(i, e.target.value)} placeholder="Title" className="flex-1 p-2 bg-gray-800 border border-gray-600 rounded text-white text-sm" />
+                                <span className="text-xs text-gray-400 whitespace-nowrap">{d.content.length.toLocaleString()} characters</span>
+                                <button type="button" onClick={() => removeDraft(i)} disabled={running} className="text-red-400 hover:text-red-300 disabled:opacity-30"><Trash2 className="w-4 h-4" /></button>
+                            </div>
+                        ))}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 bg-gray-900 p-2 rounded border border-gray-600">
+                        <ImageIcon className="w-4 h-4 text-gray-400 ml-2" />
+                        <input type="text" placeholder="first picture number, e.g. 001346" value={firstImageNum} onChange={e => setFirstImageNum(e.target.value)} className="bg-transparent text-white text-sm focus:outline-none w-56 border-b border-gray-600" />
+                        <span className="text-gray-500 text-xs">optional: each lesson gets 5 pictures in a row (.png) added to its end</span>
+                    </div>
+                    <button type="button" onClick={saveAll} disabled={running} className="bg-teal-600 hover:bg-teal-700 px-4 py-2 rounded font-bold text-sm disabled:opacity-50">2) Save all {drafts.length} lessons</button>
+                </div>
+            )}
+            <div className="border-t border-gray-700 pt-4">
+                <p className="text-sm text-gray-300 mb-2">{lessonsWaiting === 0 ? 'Every lesson has its 4 age versions.' : `${lessonsWaiting} lesson(s) still need their age versions.`}</p>
+                <button type="button" onClick={generateAll} disabled={running || lessonsWaiting === 0} className="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded font-bold text-sm flex items-center gap-2 disabled:opacity-50">
+                    {running ? <RotateCw className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />} 3) Make the 4 age versions for ALL lessons
+                </button>
+            </div>
+            {(running || log.length > 0) && (
+                <div>
+                    <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm font-bold text-gray-200">{running ? (stage || 'Working...') : 'Finished'}</span>
+                        {running && <button type="button" onClick={stop} className="bg-red-600 hover:bg-red-700 px-3 py-1 rounded text-xs font-bold">Stop after this lesson</button>}
+                    </div>
+                    <div className="bg-black text-green-300 text-xs font-mono rounded p-3 max-h-64 overflow-y-auto whitespace-pre-wrap">{log.join('\n')}</div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+// --- Smart Media Components ---
+
+const AudioPlayer = ({ src }) => {
+    const [playing, setPlaying] = useState(false);
+    const audioRef = useRef(null);
+
+    const togglePlay = () => {
+        if (!audioRef.current) {
+            audioRef.current = new Audio(src);
+            audioRef.current.onended = () => setPlaying(false);
+        }
+        if (playing) audioRef.current.pause();
+        else audioRef.current.play().catch(e => console.error(e));
+        setPlaying(!playing);
+    };
+
+    return (
+        <button onClick={togglePlay} className="inline-flex items-center gap-1 px-2 py-1 bg-pink-600/20 text-pink-400 rounded-full hover:bg-pink-600/40 transition border border-pink-500/30 mx-1">
+            {playing ? <Pause className="w-4 h-4" /> : <Music className="w-4 h-4" />}
+            <span className="text-xs font-bold">Play</span>
+        </button>
+    );
+};
+
+const SmartContent = ({ text }) => {
+    if (!text) return null;
+    const formatText = (content) => {
+        const parts = content.split(/(\*\*.*?\*\*|\*.*?\*|==.*?==)/g);
+        return parts.map((part, idx) => {
+            if (part.startsWith('**') && part.endsWith('**')) return <strong key={idx} className="text-yellow-200 font-bold">{part.slice(2, -2)}</strong>;
+            if (part.startsWith('*') && part.endsWith('*')) return <em key={idx} className="text-indigo-300 italic">{part.slice(1, -1)}</em>;
+            if (part.startsWith('==') && part.endsWith('==')) return <span key={idx} className="bg-yellow-600/40 px-1 rounded text-white border border-yellow-500/30 mx-0.5 shadow-sm box-decoration-clone">{part.slice(2, -2)}</span>;
+            return part;
+        });
+    };
+
+    const regex = /((?:https?:\/\/[^\s]+)|(?:\b[\w-]+\.(?:png|jpg|jpeg|gif|mp3)\b))/gi;
+    const parts = text.split(regex);
+
+    return (
+        <span className="leading-relaxed">
+            {parts.map((part, i) => {
+                if (!part) return null;
+                const isUrl = part.match(/^https?:\/\//i);
+                const isImage = part.match(/\.(png|jpg|jpeg|gif)$/i);
+                const isAudio = part.match(/\.mp3$/i);
+
+                if (isUrl) {
+                    if (part.match(/(youtube\.com|youtu\.be)/i)) return <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-red-400 hover:text-red-300 mx-1 font-semibold"><Youtube className="w-5 h-5 mr-1" /> Video</a>;
+                    if (isAudio) return <AudioPlayer key={i} src={part} />;
+                    if (isImage) return <div key={i} className="my-2"><img src={part} className="max-w-full h-auto rounded-lg shadow-md border border-gray-600 mx-auto" onError={(e) => e.target.style.display = 'none'} /></div>;
+                    return <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline inline-flex items-center mx-1">Link <ExternalLink className="w-3 h-3 ml-1" /></a>;
+                }
+                
+               if (isImage) return <div key={i} className="my-2"><img src={`${IMG_BASE_URL}${part}`} className="max-w-full h-auto rounded-lg shadow-md border border-gray-600 mx-auto" onError={(e) => e.target.style.display = 'none'} /></div>;
+                if (isAudio) return <AudioPlayer key={i} src={`${AUDIO_BASE_URL}${part}`} />;
+                
+                return <span key={i}>{formatText(part)}</span>;
+            })}
+        </span>
+    );
+};
+
+// --- Quiz & UI Sub-Components ---
+
+const NotificationBell = ({ userId }) => {
+    const [notifications, setNotifications] = useState([]);
+    const [isOpen, setIsOpen] = useState(false);
+    const [lastRead, setLastRead] = useState(() => {
+        return parseInt(localStorage.getItem(`last_read_notif_${userId}`)) || 0;
+    });
+
+    useEffect(() => {
+        if (!db || !userId) return;
+        const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'activity_feed'), orderBy('timestamp', 'desc'), limit(15));
+        const unsub = onSnapshot(q, (snap) => {
+            const notifs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            setNotifications(notifs);
+        });
+        return () => unsub();
+    }, [userId]);
+
+    const unreadCount = notifications.filter(n => {
+        const ts = n.timestamp?.toMillis ? n.timestamp.toMillis() : (n.timestamp?.seconds * 1000) || 0;
+        return ts > lastRead;
+    }).length;
+
+    const handleToggle = () => {
+        if (!isOpen) {
+            const now = Date.now();
+            setLastRead(now);
+            localStorage.setItem(`last_read_notif_${userId}`, now);
+        }
+        setIsOpen(!isOpen);
+    };
+
+    return (
+        <div className="relative">
+            <button onClick={handleToggle} className="p-2 bg-gray-700 hover:bg-gray-600 rounded-full transition relative shadow-lg">
+                <Bell className="w-5 h-5 text-gray-300" />
+                {unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full animate-pulse shadow-md">
+                        {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
+                )}
+            </button>
+
+            {isOpen && (
+                <div className="absolute right-0 mt-2 w-72 max-w-[90vw] bg-gray-800 border border-gray-600 rounded-xl shadow-2xl z-50 overflow-hidden animate-bounce-in">
+                    <div className="p-3 bg-gray-750 border-b border-gray-700 flex justify-between items-center">
+                        <h4 className="font-bold text-white text-sm flex items-center gap-2">
+                            <Bell className="w-4 h-4 text-indigo-400" /> Notifications
+                        </h4>
+                        <button onClick={() => setIsOpen(false)} className="text-gray-400 hover:text-white"><X className="w-4 h-4"/></button>
+                    </div>
+                    <div className="max-h-64 overflow-y-auto custom-scrollbar p-2 space-y-2">
+                        {notifications.length === 0 ? (
+                            <p className="text-center text-gray-500 text-xs py-6 italic">No new notifications</p>
+                        ) : (
+                            notifications.map(n => (
+                                <div key={n.id} className="bg-gray-700/50 p-3 rounded-lg border border-gray-600/50 flex items-start gap-3">
+                                    <div className="mt-1"><Trophy className="w-4 h-4 text-yellow-400" /></div>
+                                    <div>
+                                        <p className="text-xs font-bold text-white"><span className="text-indigo-300">{n.studentName}</span> finished a quiz!</p>
+                                        <p className="text-[10px] text-gray-400 truncate mt-0.5">{n.lessonTitle}</p>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+const LeaderboardView = ({ leaderboard, title, onClose, loading, isGlobal = false, currentUserId }) => (
+    <div className="fixed inset-0 bg-gray-900/95 z-50 flex items-center justify-center p-4">
+        <div className="bg-gray-800 w-full max-w-lg rounded-2xl shadow-2xl p-6 border border-gray-700 relative animate-bounce-in">
+            <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-white"><X className="w-6 h-6"/></button>
+            <div className="text-center mb-6">
+                <Trophy className="w-16 h-16 text-yellow-400 mx-auto mb-2" />
+                <h3 className="text-2xl font-black text-white">{title}</h3>
+                <p className="text-gray-400">{isGlobal ? "All Lessons & Classes Standings" : "Class Standings"}</p>
+            </div>
+            <div className="space-y-2 max-h-[60vh] overflow-y-auto custom-scrollbar touch-pan-y" style={{ WebkitOverflowScrolling: 'touch' }}>
+                {loading ? <RotateCw className="animate-spin mx-auto text-white"/> : (
+                    leaderboard.length > 0 ? leaderboard.map((entry, idx) => {
+                        const isMe = entry.userId === currentUserId;
+                        const rowClass = isMe 
+                            ? 'bg-indigo-600 border border-indigo-400 shadow-lg transform scale-[1.02] z-10' 
+                            : (idx === 0 ? 'bg-yellow-500/20 border border-yellow-500/50' : 'bg-gray-700');
+
+                        return (
+                            <div key={idx} className={`flex justify-between items-center p-3 rounded transition-all ${rowClass}`}>
+                                <div className="flex items-center gap-3">
+                                    <span className={`font-bold w-6 ${idx < 3 && !isMe ? 'text-yellow-400' : (isMe ? 'text-white' : 'text-gray-400')}`}>#{idx + 1}</span>
+                                    <div className="flex flex-col">
+                                        <span className={`font-semibold flex items-center gap-2 ${isMe ? 'text-white' : 'text-white'}`}>
+                                            {entry.name}
+                                            {isMe && <span className="text-[10px] bg-white text-indigo-600 px-1.5 py-0.5 rounded-full font-bold shadow-sm">ME</span>}
+                                        </span>
+                                        {entry.group && (
+                                            <span className={`text-[10px] uppercase flex items-center gap-1 ${isMe ? 'text-indigo-200' : 'text-gray-400'}`}>
+                                                {AGE_GROUPS[entry.group]?.icon} {AGE_GROUPS[entry.group]?.label.split(' ')[0]}
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                                <span className={`font-mono font-bold ${isMe ? 'text-white' : 'text-indigo-300'}`}>{entry.score} pts</span>
+                            </div>
+                        );
+                    }) : <p className="text-center text-gray-500">No scores yet. Be the first!</p>
+                )}
+            </div>
+        </div>
+    </div>
+);
+
+const QuizModule = ({ lessonId, lessonTitle, userId, userName, ageGroup, quizData, onClose }) => {
+    const [gameState, setGameState] = useState('playing'); 
+    const [currentQIndex, setCurrentQIndex] = useState(0);
+    const [score, setScore] = useState(0);
+    const [timeLeft, setTimeLeft] = useState(30);
+    const [showOptions, setShowOptions] = useState(false);
+    
+    const [selectedOption, setSelectedOption] = useState(null);
+    const [feedbackStatus, setFeedbackStatus] = useState(null);
+    const [isProcessing, setIsProcessing] = useState(false);
+const [correctCount, setCorrectCount] = useState(0);
+
+    useEffect(() => {
+        if (gameState !== 'playing' || showOptions) return;
+        const t1 = setTimeout(() => setShowOptions(true), 5000); 
+        return () => clearTimeout(t1);
+    }, [gameState, showOptions, currentQIndex]);
+
+    useEffect(() => {
+        if (gameState !== 'playing' || !showOptions || isProcessing) return;
+
+        const timer = setInterval(() => {
+            setTimeLeft(prev => prev - 1);
+        }, 1000);
+        return () => clearInterval(timer);
+    }, [gameState, showOptions, isProcessing, currentQIndex]);
+
+    useEffect(() => {
+        if (timeLeft <= 0 && showOptions && !isProcessing && gameState === 'playing') {
+            handleAnswer(-1, true);
+        }
+    }, [timeLeft, showOptions, isProcessing, gameState]);
+
+    const handleAnswer = async (optionIndex, isTimeout = false) => {
+        if (isProcessing) return;
+        setIsProcessing(true);
+        setSelectedOption(optionIndex);
+
+        const currentQ = quizData.questions[currentQIndex];
+        let isCorrect = false;
+        if (!isTimeout && currentQ.correctAnswerIndex !== undefined) isCorrect = optionIndex === currentQ.correctAnswerIndex;
+
+        setFeedbackStatus(isCorrect ? 'correct' : 'incorrect');
+
+        let points = 0;
+        if (isCorrect) points = Math.max(100, Math.ceil((timeLeft / 30) * 1000));
+        const newCorrectCount = isCorrect ? correctCount + 1 : correctCount;
+        if (isCorrect) setCorrectCount(newCorrectCount);
+        
+        setTimeout(async () => {
+            setScore(prev => prev + points);
+            setFeedbackStatus(null); 
+            setSelectedOption(null); 
+            setIsProcessing(false);
+
+            if (currentQIndex + 1 < quizData.questions.length) {
+                setCurrentQIndex(prev => prev + 1); 
+                setShowOptions(false); 
+                setTimeLeft(30);
+            } else {
+                const finalScore = score + points;
+                const PASS_MARK = 8;
+
+                if (newCorrectCount < PASS_MARK) {
+                    setGameState('failed');
+                    return;
+                }
+
+                setGameState('finished');
+                window._quizCorrectCount = 0;
+                
+                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'lessons', lessonId, 'quiz', ageGroup, 'results'), {
+                    name: userName, score: finalScore, userId: userId, group: ageGroup, timestamp: serverTimestamp()
+                });
+
+                const globalDocId = `${userId}_${lessonId}_${ageGroup}`;
+                const globalDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'global_scores', globalDocId);
+                try {
+                    const docSnap = await getDoc(globalDocRef);
+                    if (!docSnap.exists()) {
+                        await setDoc(globalDocRef, { userId, name: userName, group: ageGroup, score: finalScore, lessonId, timestamp: serverTimestamp() });
+                    }
+                } catch (e) { console.error("Error saving global score", e); }
+
+                try {
+                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'activity_feed'), {
+                        type: 'quiz_completed',
+                        studentName: userName,
+                        lessonTitle: lessonTitle,
+                        group: ageGroup,
+                        timestamp: serverTimestamp()
+                    });
+                } catch (e) { console.error("Error posting notification", e); }
+            }
+        }, 1500);
+    };
+if (gameState === 'failed') {
+        return (
+            <div className="fixed inset-0 bg-gray-900 z-50 flex items-center justify-center p-4">
+                <div className="bg-gray-800 p-8 rounded-2xl text-center shadow-2xl animate-bounce-in border border-red-500">
+                    <div className="text-6xl mb-4">😔</div>
+                    <h2 className="text-3xl font-bold text-red-400 mb-2">Not Enough Correct!</h2>
+                    <p className="text-gray-300 text-lg mb-2">You need at least <span className="text-yellow-400 font-black">8 correct answers</span> to pass.</p>
+                    <p className="text-gray-400 mb-6">Please read the lesson again and try your best!</p>
+                    <button onClick={onClose} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-full shadow-lg transition transform hover:scale-105">
+                        Go Back & Review
+                    </button>
+                </div>
+            </div>
+        );
+    }
+    if (gameState === 'finished') {
+        return (
+             <div className="fixed inset-0 bg-gray-900 z-50 flex items-center justify-center p-4">
+                <div className="bg-gray-800 p-8 rounded-2xl text-center shadow-2xl animate-bounce-in">
+                    <Trophy className="w-20 h-20 text-yellow-400 mx-auto mb-4" />
+                    <h2 className="text-3xl font-bold text-white mb-2">Quiz Completed!</h2>
+                    <p className="text-gray-400 text-lg mb-6">Your Score: <span className="text-indigo-400 font-bold">{score}</span></p>
+                    <button onClick={onClose} className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-full shadow-lg transition transform hover:scale-105">
+                        Finish & Mark Complete
+                    </button>
+                </div>
+             </div>
+        );
+    }
+
+    return (
+        <div className="fixed inset-0 bg-gray-900 z-50 flex flex-col items-center justify-center p-4 overflow-y-auto">
+            <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-white"><X className="w-8 h-8"/></button>
+            <div className="w-full max-w-3xl flex flex-col h-full justify-center">
+                <div className="flex justify-between items-center mb-6 px-4">
+                    <div className="bg-gray-800 px-4 py-2 rounded-full border border-gray-600 text-white font-bold">Q {currentQIndex + 1}/{quizData.questions.length}</div>
+                    {showOptions && <div className="bg-yellow-500 text-black px-6 py-2 rounded-full font-black text-xl shadow-lg flex items-center"><Timer className="w-5 h-5 mr-2" /> {timeLeft}s</div>}
+                    <div className="bg-indigo-600 px-4 py-2 rounded-full text-white font-bold">Score: {score}</div>
+                </div>
+
+                <div className="bg-white text-black p-8 rounded-xl shadow-2xl mb-8 text-center min-h-[200px] flex items-center justify-center relative overflow-hidden">
+                    <h2 className="text-2xl md:text-3xl font-bold z-10">{quizData.questions[currentQIndex].question}</h2>
+                    {feedbackStatus && (
+                        <div className={`absolute inset-0 flex items-center justify-center z-20 ${feedbackStatus === 'correct' ? 'bg-green-100/90 text-green-700' : 'bg-red-100/90 text-red-700'}`}>
+                            <div className="text-4xl font-black animate-bounce-in">{feedbackStatus === 'correct' ? "CORRECT!" : "WRONG!"}</div>
+                        </div>
+                    )}
+                </div>
+
+                {showOptions ? (
+                    <div className={`grid gap-4 ${quizData.questions[currentQIndex].options.length === 2 ? 'grid-cols-2' : 'grid-cols-1 md:grid-cols-2'}`}>
+                        {quizData.questions[currentQIndex].options.map((opt, idx) => {
+                            let btnClass = "hover:scale-105 active:scale-95";
+                            let bgClass = ['bg-red-500', 'bg-blue-500', 'bg-yellow-500', 'bg-green-500'][idx % 4];
+                            if (feedbackStatus) {
+                                btnClass = "cursor-not-allowed opacity-50"; 
+                                if (idx === quizData.questions[currentQIndex].correctAnswerIndex) bgClass = "bg-green-600 ring-4 ring-green-300 opacity-100"; 
+                                else if (idx === selectedOption && feedbackStatus === 'incorrect') bgClass = "bg-red-600 ring-4 ring-red-300 opacity-100"; 
+                            }
+                            return (
+                                <button key={idx} onClick={() => handleAnswer(idx)} disabled={isProcessing} className={`${bgClass} text-white font-bold text-lg p-6 rounded-xl shadow-lg transform transition flex items-center ${btnClass}`}>
+                                    <span className="bg-black/20 w-8 h-8 rounded flex items-center justify-center mr-4">{['A','B','C','D'][idx]}</span>{opt}
+                                </button>
+                            );
+                        })}
+                    </div>
+                ) : <div className="text-center py-20"><div className="animate-pulse text-4xl font-black text-yellow-400">Get Ready... (5s)</div></div>}
+            </div>
+        </div>
+    );
+};
+
+const QAList = ({ lessonId, isTeacher, userId, userName, suggestedQuestions = [], lessonContext = "" }) => {
+    const [questions, setQuestions] = useState([]);
+    const [newQuestion, setNewQuestion] = useState('');
+    const [replyInputs, setReplyInputs] = useState({});
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [aiGenerating, setAiGenerating] = useState(null);
+    const [visibleSuggestions, setVisibleSuggestions] = useState([]);
+    const [suggestionPool, setSuggestionPool] = useState([]);
+    const topRef = useRef(null);
+    const bottomRef = useRef(null);
+
+    useEffect(() => {
+        if (suggestedQuestions.length > 0) {
+            setVisibleSuggestions(suggestedQuestions.slice(0, 3));
+            setSuggestionPool(suggestedQuestions.slice(3));
+        }
+    }, [suggestedQuestions]);
+
+    useEffect(() => {
+        if (!db) return;
+        const qRef = collection(db, 'artifacts', appId, 'public', 'data', 'lessons', lessonId, 'questions');
+        const q = query(qRef, orderBy('timestamp', 'asc'));
+        return onSnapshot(q, (snap) => setQuestions(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+    }, [lessonId]);
+
+    const handleUseSuggestion = (suggestion, index) => {
+        setNewQuestion(suggestion);
+        if (suggestionPool.length > 0) {
+            const randomIndex = Math.floor(Math.random() * suggestionPool.length);
+            const newVisible = [...visibleSuggestions];
+            newVisible[index] = suggestionPool[randomIndex];
+            const newPool = [...suggestionPool];
+            newPool.splice(randomIndex, 1);
+            setVisibleSuggestions(newVisible); setSuggestionPool(newPool);
+        }
+        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    };
+
+    const handleAsk = async (textToAsk = newQuestion) => {
+        if (!textToAsk.trim() || isSubmitting) return;
+        setIsSubmitting(true);
+        try {
+            let translation = '';
+            let originalLang = isTeacher ? 'mm' : 'en';
+            try { const res = await translateText(textToAsk, isTeacher ? 'en' : 'mm'); translation = res.translatedText; } catch (err) { translation = textToAsk; }
+            await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'lessons', lessonId, 'questions'), {
+                studentId: userId, studentName: userName || "Anonymous", text: textToAsk, translation, originalLang, timestamp: serverTimestamp(), replies: [], likes: []
+            });
+            setNewQuestion('');
+        } catch (e) { console.error(e); } finally { setIsSubmitting(false); }
+    };
+
+    const handleReply = async (questionId) => {
+        const text = replyInputs[questionId];
+        if (!text?.trim() || isSubmitting) return;
+        setIsSubmitting(true);
+        try {
+            let translation = '';
+            let originalLang = isTeacher ? 'mm' : 'en';
+            try { const res = await translateText(text, isTeacher ? 'en' : 'mm'); translation = res.translatedText; } catch(err) { translation = text; }
+            const reply = { id: crypto.randomUUID(), userId, userName: userName || (isTeacher ? "Teacher" : "Student"), role: isTeacher ? 'Teacher' : 'Student', text: text.trim(), translation, originalLang, timestamp: new Date().toISOString(), likes: [] };
+            await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lessons', lessonId, 'questions', questionId), { replies: arrayUnion(reply) });
+            setReplyInputs(prev => ({ ...prev, [questionId]: '' }));
+        } catch (e) { console.error(e); } finally { setIsSubmitting(false); }
+    };
+
+    const generateAIReply = async (qId, questionText) => {
+        setAiGenerating(qId);
+        try {
+            const contextSnippet = lessonContext ? lessonContext.substring(0, 1500) : "No context available";
+            const prompt = `Context: "${contextSnippet}"\nStudent Question: "${questionText}"\nInstruction: Provide a brief, helpful, educational answer. Return JSON: { "reply": "Your string" }`;
+            const jsonRes = await generateContent(prompt, "You are a helpful teacher assistant.");
+            setReplyInputs(prev => ({ ...prev, [qId]: jsonRes.reply }));
+        } catch(e) { console.error(e); } finally { setAiGenerating(null); }
+    };
+
+    const toggleLike = async (qId, reply = null) => {
+        const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'lessons', lessonId, 'questions', qId);
+        try {
+            const snap = await getDoc(docRef);
+            const data = snap.data();
+            if (reply) {
+                const updatedReplies = data.replies.map(r => {
+                    if (r.id === reply.id) {
+                        const likes = r.likes || [];
+                        return { ...r, likes: likes.includes(userId) ? likes.filter(id => id !== userId) : [...likes, userId] };
+                    }
+                    return r;
+                });
+                await updateDoc(docRef, { replies: updatedReplies });
+            } else {
+                const likes = data.likes || [];
+                await updateDoc(docRef, { likes: likes.includes(userId) ? likes.filter(id => id !== userId) : [...likes, userId] });
+            }
+        } catch(e) { console.error(e); }
+    };
+
+    const renderText = (item) => {
+        let displayContent = item.text;
+        if (isTeacher && item.originalLang === 'en') displayContent = item.translation || item.text;
+        else if (!isTeacher && item.originalLang === 'mm') displayContent = item.translation || item.text;
+        return <SmartContent text={displayContent} />;
+    };
+
+    return (
+        <div className="space-y-6 mt-4 relative">
+            <div ref={topRef}></div>
+            <div className="fixed bottom-10 right-6 flex flex-col gap-3 z-40">
+                <button onClick={() => topRef.current?.scrollIntoView({ behavior: 'smooth' })} className="p-3 bg-indigo-600/90 hover:bg-indigo-500 text-white rounded-full shadow-2xl backdrop-blur transition-transform hover:scale-110 border border-indigo-400/50" title="Scroll to Top"><ArrowUp className="w-5 h-5"/></button>
+                <button onClick={() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' })} className="p-3 bg-indigo-600/90 hover:bg-indigo-500 text-white rounded-full shadow-2xl backdrop-blur transition-transform hover:scale-110 border border-indigo-400/50" title="Scroll to Bottom"><ArrowDown className="w-5 h-5"/></button>
+            </div>
+
+            {!isTeacher && visibleSuggestions.length > 0 && (
+                <div className="bg-indigo-900/30 p-4 rounded-xl border border-indigo-500/30 mb-6 transition-all duration-300">
+                    <h4 className="text-indigo-300 text-sm font-bold mb-3 flex items-center gap-2"><Sparkles className="w-4 h-4"/> Curious? Try asking:</h4>
+                    <div className="flex flex-wrap gap-2">
+                        {visibleSuggestions.map((sq, idx) => (
+                            <button key={idx} onClick={() => handleUseSuggestion(sq, idx)} className="text-left text-xs bg-indigo-800/50 hover:bg-indigo-700 text-indigo-100 px-3 py-2 rounded-lg border border-indigo-600 transition hover:scale-105 active:scale-95">{sq}</button>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {questions.map(q => (
+                <div key={q.id} className="p-4 rounded-xl bg-gray-800/50 border border-gray-700/50 shadow-sm">
+                    <div className="flex justify-between items-start mb-2">
+                        <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                                <span className="text-xs font-bold px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 flex items-center gap-1"><User className="w-3 h-3"/> {q.studentName || "Student"}</span>
+                            </div>
+                            <div className="text-white font-medium">{renderText(q)}</div>
+                        </div>
+                        <button onClick={() => toggleLike(q.id)} className={`flex items-center gap-1 text-xs px-2 py-1 rounded transition ${q.likes?.includes(userId) ? 'text-pink-500 bg-pink-500/10' : 'text-gray-500 hover:bg-gray-700'}`}>
+                            <Heart className={`w-3 h-3 ${q.likes?.includes(userId) ? 'fill-current' : ''}`} /> {q.likes?.length || 0}
+                        </button>
+                    </div>
+
+                    <div className="ml-2 pl-3 border-l-2 border-gray-700 space-y-3 mt-3">
+                        {q.replies && q.replies.map((reply, idx) => (
+                            <div key={idx} className={`text-sm ${reply.role === 'Teacher' ? 'bg-teal-900/20 border-teal-800/50' : 'bg-gray-700/30 border-gray-600/50'} p-3 rounded-lg border`}>
+                                <div className="flex justify-between items-start">
+                                    <div className="flex-1">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <span className={`text-xs font-bold ${reply.role === 'Teacher' ? 'text-teal-400' : 'text-gray-400'} flex items-center gap-1`}>
+                                                {reply.role === 'Teacher' ? <Wand2 className="w-3 h-3"/> : <User className="w-3 h-3"/>} {reply.userName || reply.role}
+                                            </span>
+                                        </div>
+                                        <div className="text-gray-200">{renderText(reply)}</div>
+                                    </div>
+                                    <button onClick={() => toggleLike(q.id, reply)} className={`flex items-center gap-1 text-xs px-2 py-1 rounded transition ${reply.likes?.includes(userId) ? 'text-pink-500 bg-pink-500/10' : 'text-gray-500 hover:bg-gray-700'}`}>
+                                        <Heart className={`w-3 h-3 ${reply.likes?.includes(userId) ? 'fill-current' : ''}`} /> {reply.likes?.length || 0}
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="mt-3 flex flex-col gap-2">
+                        {isTeacher && (!q.replies || q.replies.length === 0) && (
+                            <div className="flex justify-end">
+                                <button onClick={() => generateAIReply(q.id, q.translation || q.text)} className="text-xs flex items-center gap-1 text-purple-400 hover:text-purple-300 transition" disabled={aiGenerating === q.id}>
+                                    {aiGenerating === q.id ? <RotateCw className="w-3 h-3 animate-spin"/> : <Wand2 className="w-3 h-3" />}
+                                    {aiGenerating === q.id ? "Generating..." : "AI Suggestion"}
+                                </button>
+                            </div>
+                        )}
+                        <div className="flex gap-2">
+                            <input value={replyInputs[q.id] || ''} onChange={e => setReplyInputs(prev => ({ ...prev, [q.id]: e.target.value }))} placeholder="Write a reply..." className="flex-1 bg-gray-900 text-white text-sm px-3 py-2 rounded-lg border border-gray-600 focus:border-indigo-500 focus:outline-none transition" onKeyDown={e => e.key === 'Enter' && handleReply(q.id)} />
+                            <button onClick={() => handleReply(q.id)} disabled={isSubmitting} className="p-2 bg-indigo-600 rounded-lg text-white hover:bg-indigo-700 transition shadow-lg"><Send className="w-4 h-4" /></button>
+                        </div>
+                    </div>
+                </div>
+            ))}
+
+            <div className="pt-4 border-t border-gray-700 pb-10" ref={bottomRef}>
+                <p className="text-xs text-gray-400 mb-2 font-bold uppercase tracking-wider">New Question</p>
+                <div className="flex gap-2">
+                    <input value={newQuestion} onChange={e => setNewQuestion(e.target.value)} placeholder="Ask a question..." className="flex-1 bg-gray-900 text-white text-sm p-3 rounded-xl border border-gray-600 focus:border-indigo-500 focus:outline-none shadow-inner" disabled={isSubmitting} onKeyDown={e => e.key === 'Enter' && handleAsk()} />
+                    <button onClick={() => handleAsk()} disabled={isSubmitting || !newQuestion} className="bg-green-600 px-6 py-2 rounded-xl text-white font-bold hover:bg-green-700 transition shadow-lg flex items-center">Ask</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const LessonItem = ({ lesson, isTeacher, studentAgeGroup, studentName, onGenerateVariants, onTakeQuiz, onEdit, isGenerating, userId, isOpen, onToggle }) => {
+    const [activeTab, setActiveTab] = useState('content');
+    const [showLeaderboard, setShowLeaderboard] = useState(false);
+    const [leaderboardData, setLeaderboardData] = useState([]);
+    const [loadingLB, setLoadingLB] = useState(false);
+    const [hasUnread, setHasUnread] = useState(false);
+    const [hasAsked, setHasAsked] = useState(false);
+    const [hasReplied, setHasReplied] = useState(false);
+    const [isCompleted, setIsCompleted] = useState(false);
+    const lessonRef = useRef(null);
+
+    useEffect(() => {
+        if (isOpen && lessonRef.current) {
+            setTimeout(() => {
+                const y = lessonRef.current.getBoundingClientRect().top + window.scrollY - 80;
+                window.scrollTo({ top: y, behavior: 'smooth' });
+            }, 100);
+        }
+    }, [isOpen]);
+
+    useEffect(() => {
+        if (!db || !userId) return;
+        const qRef = collection(db, 'artifacts', appId, 'public', 'data', 'lessons', lesson.id, 'questions');
+        const unsub = onSnapshot(qRef, (snap) => {
+            let unread = false; let asked = false; let replied = false;
+            snap.docs.forEach(d => {
+                const q = d.data();
+                if (q.studentId === userId) asked = true;
+                if (q.studentId !== userId && (!q.likes || !q.likes.includes(userId))) unread = true;
+                if (q.replies) {
+                    q.replies.forEach(r => {
+                        if (r.userId === userId) replied = true;
+                        if (r.userId !== userId && (!r.likes || !r.likes.includes(userId))) unread = true;
+                    });
+                }
+            });
+            setHasUnread(unread); setHasAsked(asked); setHasReplied(replied);
+        });
+
+        if (studentAgeGroup) {
+            const resultRef = collection(db, 'artifacts', appId, 'public', 'data', 'lessons', lesson.id, 'quiz', studentAgeGroup, 'results');
+            const unsubResult = onSnapshot(query(resultRef, where('userId', '==', userId)), (snap) => setIsCompleted(!snap.empty));
+            return () => { unsub(); unsubResult(); };
+        }
+        return () => unsub();
+    }, [lesson.id, userId, studentAgeGroup]);
+
+    useEffect(() => {
+        if (!showLeaderboard || !db) return;
+        setLoadingLB(true);
+        const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'global_scores'), where('lessonId', '==', lesson.id));
+        const unsub = onSnapshot(q, (snap) => {
+            const results = snap.docs.map(d => d.data());
+            results.sort((a, b) => b.score - a.score);
+            setLeaderboardData(results); setLoadingLB(false);
+        });
+        return () => unsub();
+    }, [showLeaderboard, lesson.id]);
+
+    let displayContent = "";
+    let displayTitle = lesson.title;
+    let quizAvailable = false;
+    let quizDataForStudent = null;
+    let discussionQuestions = [];
+
+    const variants = lesson.variants || {};
+    const hasVariants = Object.keys(variants).length > 0;
+    const hasJunior = variants.storytellers && variants.explorers;
+    const hasSenior = variants.adventurers && variants.voyagers;
+
+    if (!isTeacher) {
+        const myVariant = variants[studentAgeGroup];
+        if (myVariant) {
+            displayContent = myVariant.english;
+            displayTitle = myVariant.englishTitle || lesson.translations?.englishTitle || lesson.title; 
+            quizAvailable = !!myVariant.quiz;
+            quizDataForStudent = myVariant.quiz;
+            discussionQuestions = myVariant.discussionQuestions || [];
+        } else {
+            displayContent = "Lesson content not available for your age group yet.";
+        }
+    }
+
+    const isQuizLocked = !isTeacher && (!hasAsked || !hasReplied);
+
+    return (
+        <div ref={lessonRef} className={`relative rounded-xl shadow-md overflow-hidden border transition hover:shadow-lg mb-4 ${isTeacher ? 'bg-gray-800 border-gray-700' : 'bg-gray-700 border-gray-600'}`}>
+            
+            {/* Generating Overlay */}
+            {isGenerating && (
+                <div className="absolute inset-0 bg-gray-900/80 z-[60] flex flex-col items-center justify-center backdrop-blur-sm rounded-xl">
+                    <RotateCw className="w-12 h-12 text-teal-400 animate-spin mb-4" />
+                    <h3 className="text-xl font-bold text-white mb-2">AI is Generating Lesson...</h3>
+                    <p className="text-gray-300 text-sm">Please wait. This usually takes about 15-30 seconds.</p>
+                </div>
+            )}
+
+            <div onClick={onToggle} className="p-4 cursor-pointer hover:bg-gray-600/50 transition flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                    {isOpen ? <ChevronDown className="w-5 h-5 text-gray-400" /> : <ChevronRight className="w-5 h-5 text-gray-400" />}
+                    <div className="flex flex-col">
+                        <h3 className={`text-lg font-bold flex items-center gap-2 ${isTeacher ? 'text-teal-300' : 'text-white'}`}>
+                            {displayTitle}
+                            {isCompleted && <span className="bg-green-500/20 text-green-400 text-xs px-2 py-0.5 rounded-full flex items-center gap-1 border border-green-500/30"><CheckCheck className="w-3 h-3"/> Completed</span>}
+                            {hasUnread && <span className="w-3 h-3 bg-red-500 rounded-full animate-pulse shadow-[0_0_8px_red]"></span>}
+                        </h3>
+                        {isTeacher && <span className="text-xs text-gray-500 flex gap-2">
+                             {hasJunior && hasSenior ? ( <span className="text-green-400 flex items-center"><CheckCircle className="w-3 h-3 mr-1"/> Ready</span> ) : (
+                                <span className="text-yellow-500 flex items-center gap-1">Pending: {!hasJunior && <span className="bg-yellow-900/40 px-1 rounded">Junior</span>} {!hasSenior && <span className="bg-yellow-900/40 px-1 rounded">Senior</span>}</span>
+                             )}
+                        </span>}
+                    </div>
+                </div>
+                <div className="flex items-center gap-2">
+                    <button onClick={(e) => { e.stopPropagation(); setShowLeaderboard(true); }} className="p-2 text-yellow-500 hover:text-yellow-400 hover:bg-yellow-500/10 rounded-full transition relative z-20" title="View Class Leaderboard"><Trophy className="w-5 h-5" /></button>
+                    {isTeacher && (
+                        <div className="flex items-center gap-1 mr-2" onClick={e => e.stopPropagation()}>
+                            <button onClick={() => onEdit(lesson)} className="p-2 bg-blue-600 rounded hover:bg-blue-700 transition text-white" title="Edit Lesson"><Edit2 className="w-3 h-3" /></button>
+                            <button onClick={() => onGenerateVariants(lesson, 'junior')} className="px-3 py-1 bg-purple-600 rounded hover:bg-purple-700 transition text-white text-xs font-bold flex items-center gap-1" title="Storytellers & Explorers"><Zap className="w-3 h-3" /> Jr.</button>
+                            <button onClick={() => onGenerateVariants(lesson, 'senior')} className="px-3 py-1 bg-pink-600 rounded hover:bg-pink-700 transition text-white text-xs font-bold flex items-center gap-1" title="Adventurers & Voyagers"><Zap className="w-3 h-3" /> Sr.</button>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {isOpen && (
+                <div className="border-t border-gray-600/50 bg-gray-900/30">
+                    <div className="flex border-b border-gray-700">
+                        <button onClick={() => setActiveTab('content')} className={`flex-1 py-3 text-sm font-bold flex items-center justify-center gap-2 transition ${activeTab === 'content' ? 'text-teal-400 border-b-2 border-teal-400 bg-gray-800' : 'text-gray-400 hover:text-white'}`}><BookOpen className="w-4 h-4"/> Lesson</button>
+                        <button onClick={() => setActiveTab('discussion')} className={`flex-1 py-3 text-sm font-bold flex items-center justify-center gap-2 transition ${activeTab === 'discussion' ? 'text-indigo-400 border-b-2 border-indigo-400 bg-gray-800' : 'text-gray-400 hover:text-white'}`}><MessageCircle className="w-4 h-4"/> Discussion {(!hasAsked || !hasReplied) && !isTeacher && <span className="text-[10px] ml-1 bg-yellow-600 text-white px-1 rounded animate-pulse">!</span>} {hasUnread && <span className="w-2 h-2 bg-red-500 rounded-full ml-1"></span>}</button>
+                    </div>
+
+                    <div className="p-5">
+                        {activeTab === 'content' && (
+                            <div className="space-y-6">
+                                {isTeacher ? (
+                                    <div className="space-y-4">
+                                        <div className="p-4 bg-gray-900 rounded-xl border border-gray-700 shadow-inner">
+                                            <h4 className="font-bold text-teal-400 mb-4 text-lg border-b border-gray-700 pb-2">Original Lesson Content</h4>
+                                            <div className="text-white whitespace-pre-wrap leading-relaxed text-lg"><SmartContent text={lesson.burmeseContent}/></div>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-4">
+                                        <div className="text-yellow-100 whitespace-pre-wrap leading-relaxed text-lg"><SmartContent text={displayContent} /></div>
+                                        {quizAvailable && (
+                                            <div className="mt-6">
+                                                {isQuizLocked && !isCompleted ? (
+                                                    <div className="bg-gray-800/80 p-4 rounded-xl border border-gray-600 flex flex-col items-center text-center">
+                                                        <Lock className="w-8 h-8 text-gray-400 mb-2" />
+                                                        <h4 className="text-white font-bold mb-1">Quiz Locked</h4>
+                                                        <p className="text-gray-400 text-sm mb-3">Complete discussion tasks to unlock:</p>
+                                                        <div className="flex gap-4 text-xs font-semibold">
+                                                            <span className={`flex items-center gap-1 ${hasAsked ? 'text-green-400' : 'text-gray-500'}`}>{hasAsked ? <CheckCircle className="w-4 h-4"/> : <div className="w-4 h-4 rounded-full border border-gray-500"/>} Ask 1 Question</span>
+                                                            <span className={`flex items-center gap-1 ${hasReplied ? 'text-green-400' : 'text-gray-500'}`}>{hasReplied ? <CheckCircle className="w-4 h-4"/> : <div className="w-4 h-4 rounded-full border border-gray-500"/>} Answer 1 Question</span>
+                                                        </div>
+                                                        <button onClick={() => setActiveTab('discussion')} className="mt-4 text-indigo-400 hover:text-indigo-300 text-sm font-bold">Go to Discussion</button>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex flex-col gap-4">
+                                                        <button onClick={(e) => { e.stopPropagation(); onTakeQuiz(lesson.id, displayTitle, quizDataForStudent); }} className={`w-full py-3 font-black rounded-xl shadow-lg transform transition hover:scale-[1.02] flex items-center justify-center gap-2 ${isCompleted ? 'bg-gradient-to-r from-green-600 to-teal-600 text-white' : 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white'}`}>
+                                                            {isCompleted ? <><Trophy className="w-6 h-6"/> QUIZ COMPLETED</> : <><Gamepad2 className="w-6 h-6" /> PLAY QUIZ ({studentAgeGroup})</>}
+                                                        </button>
+                                                        {isCompleted && <div className="text-center animate-bounce text-yellow-400 font-bold flex items-center justify-center gap-2"><span className="text-2xl">☝️</span> Click the trophy icon to view the leaderboard!</div>}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {activeTab === 'discussion' && <QAList lessonId={lesson.id} isTeacher={isTeacher} userId={userId} userName={studentName} suggestedQuestions={discussionQuestions} lessonContext={lesson.burmeseContent} />}
+                    </div>
+                </div>
+            )}
+            
+            {showLeaderboard && <LeaderboardView leaderboard={leaderboardData} title={displayTitle} loading={loadingLB} onClose={() => setShowLeaderboard(false)} currentUserId={userId} />}
+        </div>
+    );
+};
+
+// --- Student Registration & Waiting Room ---
+
+const WelcomeModal = ({ userId, onStudentComplete, onTeacherComplete }) => {
+    const [step, setStep] = useState('role_select');
+    const [name, setName] = useState('');
+    const [selectedGroup, setSelectedGroup] = useState(null);
+    const [passcode, setPasscode] = useState('');
+    const [error, setError] = useState('');
+    const [previousName, setPreviousName] = useState(null);
+    const [isSubmittingProfile, setIsSubmittingProfile] = useState(false);
+
+    useEffect(() => {
+        if (!userId || step !== 'waiting_approval') return;
+        const unsub = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'students', userId), (snap) => {
+            if (snap.exists() && snap.data().status !== 'deleted' && snap.data().status !== 'rejected') {
+                const data = snap.data();
+                if (data.status === 'approved') {
+                    onStudentComplete({ ...data, name: data.name, group: data.group || selectedGroup });
+                } else if (data.status === 'rejected') {
+                    setStep('rejected');
+                }
+            } else {
+                setStep('role_select'); 
+            }
+        });
+        return () => unsub();
+    }, [userId, step, onStudentComplete, selectedGroup]);
+
+    const handleStudentSubmit = async () => {
+        if (!name.trim() || !selectedGroup) return;
+        setIsSubmittingProfile(true);
+        try {
+            const prefSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'preferences'));
+            const autoApprove = prefSnap.exists() ? prefSnap.data().autoApprove : false;
+
+            const studentRef = doc(db, 'artifacts', appId, 'public', 'data', 'students', userId);
+            const snap = await getDoc(studentRef);
+
+            let initialStatus = autoApprove ? 'approved' : 'pending';
+            let studentNumber = null;
+
+            if (initialStatus === 'approved') {
+                const sSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'students'));
+                const approved = sSnap.docs.map(d=>d.data()).filter(s=>s.status==='approved');
+                studentNumber = approved.reduce((max, s) => (s.studentNumber || 0) > max ? s.studentNumber : max, 0) + 1;
+            }
+
+            if (snap.exists() && snap.data().status !== 'deleted' && snap.data().status !== 'rejected') {
+                const data = snap.data();
+                if (data.status === 'approved') {
+                    if (data.name.toLowerCase() === name.trim().toLowerCase()) {
+                        onStudentComplete({ ...data, name: data.name, group: selectedGroup });
+                        return;
+                    } else {
+                        setPreviousName(data.name);
+                        await updateDoc(studentRef, { pendingName: name.trim(), status: initialStatus, group: selectedGroup, ...(studentNumber && {studentNumber}) });
+                        setStep('waiting_approval');
+                    }
+                } else if (data.status === 'rejected') {
+                     await updateDoc(studentRef, { name: name.trim(), status: initialStatus, group: selectedGroup, pendingName: null, ...(studentNumber && {studentNumber}) });
+                     setStep('waiting_approval');
+                } else {
+                     await updateDoc(studentRef, { name: name.trim(), group: selectedGroup, status: initialStatus, ...(studentNumber && {studentNumber}) });
+                     setStep('waiting_approval');
+                }
+            } else {
+                await setDoc(studentRef, { userId, name: name.trim(), group: selectedGroup, status: initialStatus, timestamp: serverTimestamp(), ...(studentNumber && {studentNumber}) });
+                setStep('waiting_approval');
+            }
+        } catch (error) { 
+            console.error("Error submitting student data:", error); 
+        } finally {
+            setIsSubmittingProfile(false);
+        }
+    };
+
+    const handleUsePreviousName = async () => {
+        try {
+            const studentRef = doc(db, 'artifacts', appId, 'public', 'data', 'students', userId);
+            await updateDoc(studentRef, { status: 'approved', pendingName: null });
+        } catch (e) { console.error(e); }
+    };
+
+    const handleTeacherSubmit = () => {
+        if (passcode === TEACHER_PASSCODE) onTeacherComplete();
+        else setError('Incorrect Passcode.');
+    };
+
+    return (
+        <div className="fixed inset-0 bg-gray-900 z-[60] flex items-center justify-center p-4">
+            <div className="bg-indigo-900/90 border border-indigo-500 p-8 rounded-2xl shadow-2xl max-w-md w-full backdrop-blur-sm text-center relative overflow-hidden">
+                {step !== 'role_select' && step !== 'waiting_approval' && step !== 'rejected' && (
+                    <button onClick={() => { setStep('role_select'); setError(''); setPasscode(''); }} className="absolute top-4 left-4 text-indigo-300 hover:text-white transition z-10">
+                        <ChevronLeft className="w-8 h-8"/>
+                    </button>
+                )}
+
+                {step === 'role_select' && (
+                    <div className="animate-bounce-in">
+                        <Globe className="w-16 h-16 mx-auto text-cyan-400 mb-4 animate-pulse" />
+                        <h2 className="text-3xl font-black text-white mb-8">Welcome!</h2>
+                        
+                        <div className="space-y-4">
+                            <button onClick={() => setStep('student_setup')} className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xl py-4 rounded-xl shadow-lg transition flex items-center justify-center gap-3">
+                                <User className="w-6 h-6"/> Student
+                            </button>
+                            <button onClick={() => setStep('teacher_login')} className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold text-xl py-4 rounded-xl shadow-lg transition flex items-center justify-center gap-3">
+                                <Key className="w-6 h-6"/> Teacher
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {step === 'student_setup' && (
+                    <div className="animate-bounce-in">
+                        <User className="w-16 h-16 mx-auto text-cyan-400 mb-4 animate-pulse" />
+                        <h2 className="text-3xl font-black text-white mb-2">Student Setup</h2>
+                        <p className="text-indigo-200 mb-6">Enter your real name and group.</p>
+                        
+                        <input 
+                            className="w-full p-4 rounded-xl text-black font-bold text-center text-xl mb-6 focus:ring-4 ring-cyan-400 outline-none"
+                            placeholder="Enter Your Full Name"
+                            value={name}
+                            onChange={e => setName(e.target.value)}
+                            disabled={isSubmittingProfile}
+                        />
+                        
+                        <div className="grid grid-cols-2 gap-3 mb-6">
+                            {Object.entries(AGE_GROUPS).map(([key, info]) => (
+                                <button key={key} onClick={() => setSelectedGroup(key)} disabled={isSubmittingProfile} className={`p-3 rounded-lg border flex flex-col items-center gap-2 transition ${selectedGroup === key ? 'bg-cyan-500 border-cyan-300 text-white shadow-lg scale-105' : 'bg-gray-800 border-gray-600 text-gray-400 hover:bg-gray-700'}`}>
+                                    {info.icon}
+                                    <span className="text-xs font-bold">{info.label}</span>
+                                </button>
+                            ))}
+                        </div>
+
+                        <button onClick={handleStudentSubmit} disabled={!name || !selectedGroup || isSubmittingProfile} className="w-full bg-green-500 hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black text-xl py-4 rounded-xl shadow-[0_4px_0_rgb(21,128,61)] active:shadow-none active:translate-y-1 transition">
+                            {isSubmittingProfile ? <RotateCw className="w-6 h-6 mx-auto animate-spin" /> : "ENTER CLASSROOM"}
+                        </button>
+                    </div>
+                )}
+
+                {step === 'waiting_approval' && (
+                    <div className="animate-bounce-in">
+                        <Lock className="w-16 h-16 mx-auto text-yellow-400 mb-4 animate-pulse" />
+                        <h2 className="text-2xl font-black text-white mb-4">Is this your real name?</h2>
+                        <p className="text-indigo-200 mb-6">Please ask your teacher for access. Waiting for approval...</p>
+                        
+                        {previousName && (
+                            <div className="bg-indigo-800/50 p-4 rounded-lg mb-6 text-sm border border-indigo-500/30">
+                                <p className="text-gray-300 mb-2">Or use your previously approved name to enter immediately:</p>
+                                <button onClick={handleUsePreviousName} className="w-full text-white font-bold bg-indigo-600 hover:bg-indigo-500 px-4 py-3 rounded shadow-lg transition">
+                                    Login as: {previousName}
+                                </button>
+                            </div>
+                        )}
+                        
+                        <RotateCw className="w-8 h-8 mx-auto text-cyan-400 animate-spin" />
+                    </div>
+                )}
+
+                {step === 'rejected' && (
+                    <div className="animate-bounce-in">
+                        <AlertCircle className="w-16 h-16 mx-auto text-red-400 mb-4" />
+                        <h2 className="text-2xl font-black text-white mb-4">Access Denied</h2>
+                        <p className="text-indigo-200 mb-6">Please use your real name or your previously approved name.</p>
+                        <button onClick={() => setStep('student_setup')} className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-4 rounded-xl transition shadow-lg">
+                            Try Again
+                        </button>
+                    </div>
+                )}
+
+                {step === 'teacher_login' && (
+                    <div className="animate-bounce-in">
+                        <Wand2 className="w-16 h-16 mx-auto text-purple-400 mb-4 animate-pulse" />
+                        <h2 className="text-3xl font-black text-white mb-2">Teacher Login</h2>
+                        <p className="text-indigo-200 mb-6">Enter secure passcode.</p>
+                        
+                        <input type="password" className="w-full p-4 rounded-xl text-black font-bold text-center text-xl mb-4 focus:ring-4 ring-purple-400 outline-none" placeholder="Passcode" value={passcode} onChange={e => { setPasscode(e.target.value); setError(''); }} onKeyDown={e => e.key === 'Enter' && handleTeacherSubmit()} />
+                        {error && <p className="text-red-400 mb-4 text-sm font-bold animate-pulse">{error}</p>}
+
+                        <button onClick={handleTeacherSubmit} disabled={!passcode} className="w-full bg-purple-500 hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black text-xl py-4 rounded-xl shadow-[0_4px_0_rgb(147,51,234)] active:shadow-none active:translate-y-1 transition">
+                            LOGIN
+                        </button>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
+// --- Teacher Dashboard Components ---
+
+const ClassRoster = ({ userId }) => {
+    const [students, setStudents] = useState([]);
+    const [isOpen, setIsOpen] = useState(true);
+    const [nowTime, setNowTime] = useState(Date.now());
+    const [autoApprove, setAutoApprove] = useState(false);
+   
+    useEffect(() => {
+        const interval = setInterval(() => setNowTime(Date.now()), 10000); 
+        return () => clearInterval(interval);
+    }, []);
+
+    useEffect(() => {
+        if (!db || !userId) return; 
+        const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'students'));
+        return onSnapshot(q, (snap) => {
+    const now = Date.now();
+    const studentList = snap.docs.map(d => {
+        const data = d.data();
+        const lastPing = data.lastPing;
+        if (data.isOnline && lastPing) {
+            const pingMs = lastPing.toMillis ? lastPing.toMillis() : (lastPing.seconds * 1000);
+            const diffMins = (now - pingMs) / 60000;
+            if (diffMins > 2) {
+                return { id: d.id, ...data, isOnline: false };
+            }
+        }
+        return { id: d.id, ...data };
+    });
+    setStudents(studentList);
+});
+    }, [userId]);
+
+   useEffect(() => {
+        if (!db) return;
+        const prefRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'preferences');
+        const unsub = onSnapshot(prefRef, (snap) => {
+            if (snap.exists()) {
+                setAutoApprove(snap.data().autoApprove || false);
+            }
+        });
+        return () => unsub();
+    }, []);
+       const toggleAutoApprove = async (e) => {
+        e.stopPropagation();
+        const prefRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'preferences');
+        await setDoc(prefRef, { autoApprove: !autoApprove }, { merge: true });
+    };
+
+    const handleApprove = async (studentId, currentStatus, intendedName) => {
+        const studentRef = doc(db, 'artifacts', appId, 'public', 'data', 'students', studentId);
+        const studentSnap = await getDoc(studentRef);
+        if (!studentSnap.exists()) return;
+        const existingData = studentSnap.data();
+
+        let finalNum = existingData.studentNumber;
+        if (!finalNum) {
+            const approvedStudents = students.filter(s => s.status === 'approved');
+            const maxNum = approvedStudents.reduce((max, s) => s.studentNumber > max ? s.studentNumber : max, 0);
+            finalNum = maxNum + 1;
+        }
+
+        await updateDoc(studentRef, {
+            status: 'approved',
+            name: intendedName || existingData.name,
+            pendingName: null,
+            studentNumber: finalNum
+        });
+    };
+
+    useEffect(() => {
+        if (autoApprove && students.length > 0) {
+            const pendingStudents = students.filter(s => s.status === 'pending');
+            pendingStudents.forEach(s => {
+                handleApprove(s.id, s.status, s.pendingName || s.name);
+            });
+        }
+    }, [students, autoApprove]);
+
+    const handleReject = async (studentId) => {
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'students', studentId), {
+            status: 'rejected',
+            pendingName: null
+        });
+    };
+
+    const handleRemoveStudent = async (e, studentId, studentName) => {
+        e.stopPropagation();
+        try {
+                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'students', studentId));
+            } catch(err) {
+                console.error("Delete failed:", err.message);
+            }
+    };
+
+    const pending = students.filter(s => s.status === 'pending');
+    const online = students.filter(s => s.status === 'approved' && s.isOnline).sort((a,b) => a.studentNumber - b.studentNumber);
+    const offline = students.filter(s => s.status === 'approved' && !s.isOnline).sort((a,b) => a.studentNumber - b.studentNumber);
+
+    const offlineProcessed = offline.map(s => {
+    let isWarning = false;
+    const checkTime = s.lastSeen || s.lastPing;
+    if (checkTime) {
+        const lastSeenMs = checkTime.toMillis ? checkTime.toMillis() : (checkTime.seconds * 1000);
+        const diffMins = (nowTime - lastSeenMs) / 60000;
+        if (diffMins >= 3 && diffMins <= 8) {
+            isWarning = true;
+        }
+    }
+    return { ...s, isWarning };
+});
+
+    return (
+        <div className="bg-gray-800 rounded-xl shadow-xl border border-gray-700 mb-6 overflow-hidden">
+            <div onClick={() => setIsOpen(!isOpen)} className="p-4 bg-gray-750 border-b border-gray-700 cursor-pointer flex flex-wrap gap-3 justify-between items-center hover:bg-gray-700 transition">
+                <div className="flex items-center gap-4">
+                    <h3 className="font-bold text-white flex items-center gap-2"><Users className="w-5 h-5 text-indigo-400"/> Class Roster Tracker</h3>
+                    <button 
+                        onClick={toggleAutoApprove}
+                        className={`flex items-center gap-1 text-xs px-3 py-1 rounded-full font-bold transition-all shadow-sm ${autoApprove ? 'bg-green-500/20 text-green-400 border border-green-500/50 hover:bg-green-500/30' : 'bg-gray-800 text-gray-400 border border-gray-600 hover:bg-gray-700'}`}
+                        title="When ON, new student requests will be approved automatically."
+                    >
+                        {autoApprove ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}
+                        Auto-Approve
+                    </button>
+                </div>
+                <div className="flex items-center gap-4 text-sm font-semibold">
+                    <span className="text-yellow-400 flex items-center gap-1">{pending.length} Pending</span>
+                    <span className="text-green-400 flex items-center gap-1">{online.length} Online</span>
+                    <span className="text-gray-400 flex items-center gap-1">{online.length + offlineProcessed.length} Total</span>
+                    {isOpen ? <ChevronDown className="w-5 h-5 text-gray-400"/> : <ChevronLeft className="w-5 h-5 text-gray-400"/>}
+                </div>
+            </div>
+
+            {isOpen && (
+                <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-900/50">
+                
+                    <div className="space-y-3">
+                        <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-2">Pending Requests {pending.length > 0 && <span className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></span>}</h4>
+                        {pending.length === 0 ? <p className="text-gray-500 text-sm italic">No pending requests.</p> : null}
+                        {pending.map(s => (
+                            <div key={s.id} className="bg-gray-800 p-3 rounded-lg border border-yellow-600/30 flex justify-between items-center shadow-lg">
+                                <div>
+                                    <p className="font-bold text-white">{s.pendingName || s.name}</p>
+                                    {s.pendingName && <p className="text-xs text-yellow-400">Previous Name: {s.name}</p>}
+                                </div>
+                                <div className="flex gap-2">
+                                    <button onClick={() => handleApprove(s.id, s.status, s.pendingName || s.name)} className="p-2 bg-green-600 hover:bg-green-500 rounded text-white shadow" title="Approve"><UserCheck className="w-4 h-4"/></button>
+                                    <button onClick={() => handleReject(s.id)} className="p-2 bg-red-600 hover:bg-red-500 rounded text-white shadow" title="Reject"><UserX className="w-4 h-4"/></button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="space-y-4">
+                        <div>
+                            <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2 border-b border-gray-700 pb-1">Online ({online.length})</h4>
+                            <div className="flex flex-wrap gap-3">
+                                {online.length === 0 ? <span className="text-gray-600 text-sm italic">Nobody online.</span> : null}
+                                {online.map(s => (
+                                    <div key={s.id} className="bg-indigo-900/60 border border-indigo-500/50 p-2 rounded-xl flex flex-col gap-1 min-w-[150px] shadow-sm relative group">
+                                        <div className="flex items-center justify-between gap-2 text-sm w-full">
+                                            <div className="flex items-center gap-2">
+                                                <Circle className="w-2 h-2 fill-green-500 text-green-500" />
+                                                <span className="font-mono font-bold text-indigo-300">#{s.studentNumber}</span>
+                                                <span className="text-white font-semibold truncate max-w-[100px]">{s.name}</span>
+                                            </div>
+                                            <button onClick={(e) => handleRemoveStudent(e, s.id, s.name)} className="text-gray-500 hover:text-red-400 transition ml-2" title="Remove Student">
+                                                <Trash2 className="w-3 h-3" />
+                                            </button>
+                                        </div>
+                                        {s.currentLesson ? (
+                                            <div className="text-[10px] text-indigo-200 flex items-center gap-1 bg-indigo-950/50 px-2 py-1 rounded border border-indigo-800/50">
+                                                <BookOpen className="w-3 h-3 min-w-[12px]"/> <span className="truncate" title={s.currentLesson}>{s.currentLesson}</span>
+                                            </div>
+                                        ) : (
+                                            <div className="text-[10px] text-gray-500 italic px-2 py-1">Dashboard Navigation...</div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div>
+                            <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2 border-b border-gray-700 pb-1">Offline ({offlineProcessed.length})</h4>
+                            <div className="flex flex-wrap gap-3 transition-opacity">
+                                {offlineProcessed.length === 0 ? <span className="text-gray-600 text-sm italic">No offline students.</span> : null}
+                                {offlineProcessed.map(s => (
+                                    <div key={s.id} className={`border px-3 py-1.5 rounded-full flex items-center gap-2 text-sm transition-all shadow-sm ${s.isWarning ? 'bg-red-950/80 border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]' : 'bg-gray-800 border-gray-600 grayscale opacity-60 hover:opacity-100'}`}>
+                                        {s.isWarning ? (
+                                            <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse shadow-[0_0_8px_red] flex-shrink-0"></div>
+                                        ) : (
+                                            <Circle className="w-2 h-2 fill-gray-500 text-gray-500 flex-shrink-0" />
+                                        )}
+                                        <span className={`font-mono font-bold ${s.isWarning ? 'text-red-300' : 'text-gray-400'}`}>#{s.studentNumber}</span>
+                                        <span className={`font-semibold ${s.isWarning ? 'text-white' : 'text-gray-300'} whitespace-nowrap`}>{s.name}</span>
+                                        {s.isWarning && <span className="text-xs text-red-400 font-bold ml-1 animate-pulse hidden sm:inline-block">Warning: Disconnected!</span>}
+                                        <button onClick={(e) => handleRemoveStudent(e, s.id, s.name)} className="ml-1 text-gray-500 hover:text-red-400 transition" title="Remove Student">
+                                            <Trash2 className="w-3 h-3" />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+const CompletionToastStack = ({ toasts }) => (
+    <div className="fixed top-24 right-4 z-[70] flex flex-col gap-2 items-end">
+        {toasts.map(t => (
+            <div key={t.id} className="bg-green-600 text-white px-4 py-3 rounded-xl shadow-2xl font-bold flex items-center gap-2 animate-bounce-in border border-green-400">
+                <CheckCircle className="w-5 h-5" />
+                <span>Lesson Completed! ({t.count} today)</span>
+            </div>
+        ))}
+    </div>
+);
+
+const FloatingStatsBar = ({ rank, totalLessons }) => {
+    const [pos, setPos] = useState({ x: null, y: 16 });
+    const dragging = useRef(false);
+    const offset = useRef({ x: 0, y: 0 });
+
+    const startDrag = (clientX, clientY, el) => {
+        dragging.current = true;
+        const rect = el.getBoundingClientRect();
+        offset.current = { x: clientX - rect.left, y: clientY - rect.top };
+    };
+    const onMove = (clientX, clientY) => {
+        if (!dragging.current) return;
+        setPos({ x: clientX - offset.current.x, y: clientY - offset.current.y });
+    };
+    const stopDrag = () => { dragging.current = false; };
+
+    useEffect(() => {
+        const mouseMove = (e) => onMove(e.clientX, e.clientY);
+        const touchMove = (e) => { if (e.touches[0]) onMove(e.touches[0].clientX, e.touches[0].clientY); };
+        window.addEventListener('mousemove', mouseMove);
+        window.addEventListener('touchmove', touchMove);
+        window.addEventListener('mouseup', stopDrag);
+        window.addEventListener('touchend', stopDrag);
+        return () => {
+            window.removeEventListener('mousemove', mouseMove);
+            window.removeEventListener('touchmove', touchMove);
+            window.removeEventListener('mouseup', stopDrag);
+            window.removeEventListener('touchend', stopDrag);
+        };
+    }, []);
+
+    const style = pos.x === null
+        ? { left: '50%', top: '16px', transform: 'translateX(-50%)' }
+        : { left: pos.x + 'px', top: pos.y + 'px' };
+
+    return (
+        <div
+            onMouseDown={(e) => startDrag(e.clientX, e.clientY, e.currentTarget)}
+            onTouchStart={(e) => e.touches[0] && startDrag(e.touches[0].clientX, e.touches[0].clientY, e.currentTarget)}
+            style={{ position: 'fixed', zIndex: 70, cursor: 'grab', ...style }}
+            className="bg-gray-800/95 border border-indigo-500 rounded-full shadow-2xl px-5 py-2 flex items-center gap-4 select-none backdrop-blur-md"
+        >
+            <span className="flex items-center gap-1 text-yellow-400 font-black"><Trophy className="w-4 h-4" /> #{rank || '-'}</span>
+            <span className="text-gray-500">|</span>
+            <span className="flex items-center gap-1 text-teal-300 font-bold"><BookOpen className="w-4 h-4" /> {totalLessons} Lessons</span>
+        </div>
+    );
+};
+
+// ====================================================================
+// Main App Component
+// ====================================================================
+
+const App = () => {
+    const [isAuthReady, setIsAuthReady] = useState(false);
+    const [userId, setUserId] = useState(null);
+    const [isTeacher, setIsTeacher] = useState(false);
+    const [lessons, setLessons] = useState([]);
+    const [currentRole, setCurrentRole] = useState('Student');
+    const [isLoading, setIsLoading] = useState(false);
+    const [editingLesson, setEditingLesson] = useState(null);
+    const [newLessonTitle, setNewLessonTitle] = useState('');
+    const [newLessonContent, setNewLessonContent] = useState('');
+    const [imageInput, setImageInput] = useState(() => localStorage.getItem('lastImageSeqNum') || '');
+    const [message, setMessage] = useState('');
+    const [activeQuizLessonId, setActiveQuizLessonId] = useState(null);
+    const [activeQuizData, setActiveQuizData] = useState(null);
+    const [studentProfile, setStudentProfile] = useState(null);
+    const [openLessonId, setOpenLessonId] = useState(null);
+
+    const [showGlobalLeaderboard, setShowGlobalLeaderboard] = useState(false);
+    const [globalLeaderboardData, setGlobalLeaderboardData] = useState([]);
+    const [loadingGlobalLB, setLoadingGlobalLB] = useState(false);
+    const [completionToasts, setCompletionToasts] = useState([]);
+const [studentRank, setStudentRank] = useState(null);
+const [studentTotalLessons, setStudentTotalLessons] = useState(0);
+const prevTodayCountRef = useRef(0);
+
+    const [networkOffline, setNetworkOffline] = useState(typeof navigator !== 'undefined' ? !navigator.onLine : false);
+    const [offlineTime, setOfflineTime] = useState(networkOffline ? Date.now() : null);
+    const [nowTime, setNowTime] = useState(Date.now());
+    const [isIdle, setIsIdle] = useState(false);
+    const [generatingLessonId, setGeneratingLessonId] = useState(null);
+    
+
+    const showMessage = (text) => { setMessage(text); setTimeout(() => setMessage(''), 3000); };
+
+    // Set Up Idle Tracking
+    useEffect(() => {
+        let timeoutId;
+        const resetTimer = () => {
+            if (isIdle) setIsIdle(false);
+            clearTimeout(timeoutId);
+            timeoutId = setTimeout(() => setIsIdle(true), 5 * 60 * 1000); // 5 minutes of no input
+        };
+
+        window.addEventListener('mousemove', resetTimer);
+        window.addEventListener('keydown', resetTimer);
+        window.addEventListener('touchstart', resetTimer);
+        window.addEventListener('scroll', resetTimer);
+        window.addEventListener('click', resetTimer);
+
+        resetTimer();
+
+        return () => {
+            window.removeEventListener('mousemove', resetTimer);
+            window.removeEventListener('keydown', resetTimer);
+            window.removeEventListener('touchstart', resetTimer);
+            window.removeEventListener('scroll', resetTimer);
+            window.removeEventListener('click', resetTimer);
+            clearTimeout(timeoutId);
+        };
+    }, [isIdle]);
+
+    useEffect(() => {
+        const interval = setInterval(() => setNowTime(Date.now()), 10000);
+        return () => clearInterval(interval);
+    }, []);
+
+    useEffect(() => {
+        const handleOffline = () => { setNetworkOffline(true); setOfflineTime(Date.now()); };
+        const handleOnline = () => { setNetworkOffline(false); setOfflineTime(null); };
+
+        window.addEventListener('offline', handleOffline);
+        window.addEventListener('online', handleOnline);
+
+        return () => {
+            window.removeEventListener('offline', handleOffline);
+            window.removeEventListener('online', handleOnline);
+        }
+    }, []);
+
+    let showStudentWarning = false;
+    if (networkOffline && offlineTime && currentRole === 'Student') {
+        const diffMins = (nowTime - offlineTime) / 60000;
+        if (diffMins >= 3 && diffMins <= 8) {
+            showStudentWarning = true;
+        }
+    }
+
+    useEffect(() => {
+        if (Object.keys(firebaseConfig).length === 0) return setIsAuthReady(true);
+        app = initializeApp(firebaseConfig);
+        db = getFirestore(app);
+        auth = getAuth(app);
+        const init = async () => { initialAuthToken ? await signInWithCustomToken(auth, initialAuthToken) : await signInAnonymously(auth); };
+        const unsub = onAuthStateChanged(auth, u => { setUserId(u ? u.uid : null); setIsAuthReady(true); });
+        init();
+        return () => unsub();
+    }, []);
+
+    useEffect(() => {
+        if (localStorage.getItem('isTeacher') === 'true') {
+            setIsTeacher(true);
+            setCurrentRole('Teacher');
+        }
+    }, []);
+
+    useEffect(() => {
+        if (!db || !userId || currentRole !== 'Student' || !studentProfile) return;
+
+        const studentRef = doc(db, 'artifacts', appId, 'public', 'data', 'students', userId);
+        const unsub = onSnapshot(studentRef, (snap) => {
+            if (!snap.exists() || snap.data().status === 'deleted') {
+                setStudentProfile(null);
+                localStorage.removeItem(`student_profile_${userId}`);
+            }
+        });
+
+        return () => unsub();
+    }, [db, userId, currentRole, studentProfile]);
+
+    useEffect(() => {
+        if (!db || !userId) return;
+        const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'lessons'), orderBy('timestamp', 'asc'));
+        const unsub = onSnapshot(q, (snap) => setLessons(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+
+        const savedProfile = localStorage.getItem(`student_profile_${userId}`);
+        if (savedProfile) setStudentProfile(JSON.parse(savedProfile));
+        
+        return () => unsub();
+    }, [isAuthReady, userId]);
+   
+    const currentLessonViewing = useMemo(() => {
+        if (!openLessonId) return null;
+        const lesson = lessons.find(l => l.id === openLessonId);
+        if (!lesson) return null;
+        
+        if (currentRole === 'Student' && studentProfile && lesson.variants && lesson.variants[studentProfile.group]) {
+            return lesson.variants[studentProfile.group].englishTitle || lesson.title;
+        }
+        return lesson.title;
+    }, [openLessonId, lessons, currentRole, studentProfile]);
+
+    // Student Online Presence Logic updated with isIdle
+    useEffect(() => {
+        if (!db || !userId || currentRole !== 'Student' || !studentProfile || studentProfile.status !== 'approved') return;
+        
+        const studentRef = doc(db, 'artifacts', appId, 'public', 'data', 'students', userId);
+        
+        const isCurrentlyOnline = !networkOffline && !isIdle;
+
+        updateDoc(studentRef, { 
+    isOnline: isCurrentlyOnline,
+    currentLesson: currentLessonViewing || "Dashboard",
+    lastSeen: isCurrentlyOnline ? null : serverTimestamp(),
+    lastPing: serverTimestamp()
+}).catch(e => console.error(e));
+        
+        const handleUnload = () => updateDoc(studentRef, { isOnline: false, currentLesson: null, lastSeen: serverTimestamp() }).catch(e => console.error(e));
+        window.addEventListener('beforeunload', handleUnload);
+        
+        return () => {
+            window.removeEventListener('beforeunload', handleUnload);
+            updateDoc(studentRef, { isOnline: false, currentLesson: null, lastSeen: serverTimestamp() }).catch(e => console.error(e));
+        };
+    }, [currentLessonViewing, userId, currentRole, studentProfile, isAuthReady, networkOffline, isIdle]);
+
+    useEffect(() => {
+        if (!showGlobalLeaderboard || !db) return;
+        setLoadingGlobalLB(true);
+        const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'global_scores'), orderBy('timestamp', 'desc'));
+        const unsub = onSnapshot(q, (snap) => {
+            const scores = snap.docs.map(d => d.data());
+            const grouped = {};
+            scores.forEach(s => {
+                const key = `${s.userId}_${s.group}`;
+                if (!grouped[key]) grouped[key] = { userId: s.userId, name: s.name, group: s.group, score: 0 };
+                grouped[key].score += s.score;
+            });
+            const flatResults = Object.values(grouped).sort((a, b) => b.score - a.score);
+            setGlobalLeaderboardData(flatResults);
+            console.log("Global scores fetched:", flatResults.length);
+            setLoadingGlobalLB(false);
+        });
+        return () => unsub();
+    }, [showGlobalLeaderboard]);
+
+useEffect(() => {
+    if (!db || !userId || currentRole !== 'Student' || !studentProfile || studentProfile.status !== 'approved') return;
+    const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'global_scores'), orderBy('timestamp', 'desc'));
+    const unsub = onSnapshot(q, (snap) => {
+        const scores = snap.docs.map(d => d.data());
+        const grouped = {};
+        scores.forEach(s => {
+            const key = `${s.userId}_${s.group}`;
+            if (!grouped[key]) grouped[key] = { userId: s.userId, score: 0 };
+            grouped[key].score += s.score;
+        });
+        const ranked = Object.values(grouped).sort((a, b) => b.score - a.score);
+        const myIndex = ranked.findIndex(r => r.userId === userId);
+        setStudentRank(myIndex >= 0 ? myIndex + 1 : null);
+
+        const myScores = scores.filter(s => s.userId === userId);
+        setStudentTotalLessons(myScores.length);
+
+        const today = new Date().toDateString();
+        const todayCount = myScores.filter(s => {
+            const ts = s.timestamp?.toMillis ? s.timestamp.toMillis() : (s.timestamp?.seconds * 1000);
+            return ts && new Date(ts).toDateString() === today;
+        }).length;
+
+        if (todayCount > prevTodayCountRef.current) {
+            const newId = Date.now();
+            setCompletionToasts(prev => [...prev, { id: newId, count: todayCount }]);
+            setTimeout(() => setCompletionToasts(prev => prev.filter(t => t.id !== newId)), 4000);
+        }
+        prevTodayCountRef.current = todayCount;
+    });
+    return () => unsub();
+}, [userId, currentRole, studentProfile]);
+
+    const handleTeacherLogin = () => {
+        const code = prompt("Enter Teacher Passcode:");
+        if (code === TEACHER_PASSCODE) {
+            setIsTeacher(true); setCurrentRole('Teacher'); localStorage.setItem('isTeacher', 'true'); showMessage("Successfully logged in as Teacher.");
+        } else { showMessage("Incorrect Passcode."); }
+    };
+
+    const handleTeacherLogout = () => {
+        setIsTeacher(false); setCurrentRole('Student'); localStorage.removeItem('isTeacher'); showMessage("Switched to Student mode.");
+    };
+
+    const handleSaveLesson = async (e) => {
+        e.preventDefault();
+        if (!newLessonTitle.trim() || !newLessonContent.trim()) return showMessage("Fields required!");
+        setIsLoading(true);
+        try {
+            const data = { title: newLessonTitle.trim(), burmeseContent: newLessonContent.trim() };
+            if (!editingLesson) { data.timestamp = serverTimestamp(); data.variants = {}; }
+            const ref = editingLesson ? doc(db, 'artifacts', appId, 'public', 'data', 'lessons', editingLesson.id) : doc(collection(db, 'artifacts', appId, 'public', 'data', 'lessons'));
+            await setDoc(ref, data, { merge: true });
+            
+            setNewLessonTitle(''); setNewLessonContent(''); setEditingLesson(null);
+            showMessage("Lesson saved.");
+        } catch (e) { console.error(e); } finally { setIsLoading(false); }
+    };
+
+    const handleEditLesson = (lesson) => {
+        setEditingLesson(lesson); setNewLessonTitle(lesson.title); setNewLessonContent(lesson.burmeseContent); setOpenLessonId(null); window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const insertImageSequence = () => {
+        if (!imageInput.trim()) return;
+        const inputStr = imageInput.trim();
+        if (!/^\d+$/.test(inputStr)) return showMessage("Numbers only (e.g., 001)");
+        const num = parseInt(inputStr, 10);
+        const padLen = inputStr.length; 
+        let seq = "";
+        for (let i = 0; i < 5; i++) {
+            const currentNum = String(num + i).padStart(padLen, '0');
+            seq += `${currentNum}.png\n`;
+        }
+        setNewLessonContent(prev => prev + (prev ? '\n' : '') + seq);
+
+        const nextNum = String(num + 5).padStart(padLen, '0');
+        localStorage.setItem('lastImageSeqNum', nextNum);
+        setImageInput(nextNum);
+    };
+
+
+    // ======================= BULK LESSONS =======================
+    const [bulkDrafts, setBulkDrafts] = useState([]);
+    const [bulkRunning, setBulkRunning] = useState(false);
+    const [bulkStage, setBulkStage] = useState('');
+    const [bulkLog, setBulkLog] = useState([]);
+    const [bulkPause, setBulkPause] = useState(10);
+    const [bulkFirstImage, setBulkFirstImage] = useState(() => localStorage.getItem('lastImageSeqNum') || '');
+    const bulkStopRef = useRef(false);
+    const bulkPauseRef = useRef(10);
+    bulkPauseRef.current = Math.max(0, Number(bulkPause) || 0);
+    const bulkAddLog = (msg) => setBulkLog(l => [...l.slice(-80), `${new Date().toLocaleTimeString()}  ${msg}`]);
+
+    const bulkAddFromTexts = (list, fileCount) => {
+        const found = [];
+        for (const { name, text } of list) {
+            try { found.push(...parseBulkFile(name, text)); } catch (e) { showMessage(`Could not read ${name}: ${e.message}`); }
+        }
+        if (!found.length) { showMessage('No lessons found. Each lesson needs a title line ("# Title" or "=== Title ===") and some text.'); return 0; }
+        setBulkDrafts(prev => [...prev, ...found.map(d => ({ ...d, key: Math.random().toString(36).slice(2) }))]);
+        bulkAddLog(`Loaded ${found.length} lesson(s) from ${fileCount} file(s).`);
+        return found.length;
+    };
+    const bulkOnFiles = (event) => {
+        const files = Array.from(event.target.files || []);
+        if (!files.length) return;
+        files.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+        Promise.all(files.map(f => f.text().then(t => ({ name: f.name, text: t })))).then(list => bulkAddFromTexts(list, files.length));
+        event.target.value = null;
+    };
+    const bulkSetTitle = (i, v) => setBulkDrafts(ds => ds.map((d, k) => (k === i ? { ...d, title: v } : d)));
+    const bulkRemove = (i) => setBulkDrafts(ds => ds.filter((d, k) => k !== i));
+    const bulkStop = () => { bulkStopRef.current = true; bulkAddLog('Stopping after this lesson...'); };
+
+    // STEP 2: save all the loaded lessons (one document each, in the order of the list)
+    const bulkSaveAll = async () => {
+        if (bulkRunning || !bulkDrafts.length) return;
+        if (bulkDrafts.some(d => !d.title.trim())) { showMessage('Please give every lesson a title first.'); return; }
+        setBulkRunning(true); setBulkStage('Saving the lessons...');
+        const base = Date.now();
+        try {
+            for (const [k, d] of bulkDrafts.entries()) {
+                const hasImages = imageNamesIn(d.content).length > 0;
+                const extra = hasImages ? '' : imageLinesFor(bulkFirstImage, k);
+                const content = (d.content.trim() + (extra ? '\n' + extra : '')).trim();
+                const ref = doc(collection(db, 'artifacts', appId, 'public', 'data', 'lessons'));
+                await setDoc(ref, { title: d.title.trim(), burmeseContent: content, timestamp: new Date(base + k * 1000), variants: {} });
+            }
+            const s = String(bulkFirstImage || '').trim();
+            if (/^\d+$/.test(s) && bulkDrafts.some(d => imageNamesIn(d.content).length === 0)) {
+                const next = String(parseInt(s, 10) + 5 * bulkDrafts.filter(d => imageNamesIn(d.content).length === 0).length).padStart(s.length, '0');
+                localStorage.setItem('lastImageSeqNum', next); setBulkFirstImage(next);
+            }
+            bulkAddLog(`SAVED ${bulkDrafts.length} lesson(s).`);
+            setBulkDrafts([]);
+            showMessage(`Saved ${bulkDrafts.length} lessons. Now press button 3.`);
+        } catch (err) { console.error(err); showMessage('Saving failed: ' + err.message); }
+        setBulkRunning(false); setBulkStage('');
+    };
+
+    // STEP 3: the 4 age versions of every lesson that has not got them, one lesson at a time (one Gemini call per age group), a rest between lessons
+    const lessonsWaitingCount = lessons.filter(l => !lessonHasAllVariants(l)).length;
+    const bulkGenerateAll = async () => {
+        if (bulkRunning) return;
+        const todo = lessons.filter(l => !lessonHasAllVariants(l));
+        if (!todo.length) { showMessage('Every lesson already has its 4 age versions.'); return; }
+        bulkStopRef.current = false; setBulkRunning(true);
+        let ok = 0, bad = 0;
+        for (const [n, l] of todo.entries()) {
+            if (bulkStopRef.current) break;
+            const variants = { ...(l.variants || {}) };
+            const notes = [];
+            try {
+                for (const group of ALL_GROUPS) {
+                    if (variants[group] && variants[group].burmese && variants[group].english) continue;
+                    setBulkStage(`Step 3: lesson ${n + 1} of ${todo.length} "${l.title}" -- ${group}`);
+                    const { data, problems } = await generateSingleVariantChecked(l.title, l.burmeseContent, group);
+                    variants[group] = data;
+                    if (problems.length) notes.push(`${group}: ${problems.join('; ')}`);
+                    if (data.quiz) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lessons', l.id, 'quiz', group), data.quiz);
+                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lessons', l.id), { variants }, { merge: true });   // saved after every age group
+                    await sleep(INNER_GAP_MS);
+                }
+                ok++;
+                bulkAddLog(`OK  ${l.title}: ${ALL_GROUPS.map(g => wordCount(plainEnglish(variants[g] && variants[g].english))).join(' / ')} English words${notes.length ? '  -- check: ' + notes.join(' | ') : ''}`);
+            } catch (err) {
+                bad++;
+                bulkAddLog(`FAILED  ${l.title}: ${err.message}  (the age groups that were finished are saved; press the button again to carry on)`);
+            }
+            if (n < todo.length - 1 && !bulkStopRef.current) { setBulkStage(`Resting ${bulkPauseRef.current} seconds...`); await sleep(bulkPauseRef.current * 1000); }
+        }
+        setBulkRunning(false); setBulkStage('');
+        showMessage(bulkStopRef.current ? `Stopped. ${ok} lesson(s) done.` : `Finished: ${ok} lesson(s) done${bad ? `, ${bad} failed (press the button again)` : ''}.`);
+    };
+
+    const bulkApi = {
+        drafts: bulkDrafts, running: bulkRunning, stage: bulkStage, log: bulkLog,
+        pauseSec: bulkPause, setPauseSec: setBulkPause, firstImageNum: bulkFirstImage, setFirstImageNum: setBulkFirstImage,
+        onFiles: bulkOnFiles, setTitle: bulkSetTitle, removeDraft: bulkRemove, clearDrafts: () => setBulkDrafts([]),
+        saveAll: bulkSaveAll, generateAll: bulkGenerateAll, stop: bulkStop, lessonsWaiting: lessonsWaitingCount,
+    };
+    // ======================= end of BULK LESSONS =======================
+
+    const handleGenerateVariants = async (lesson, mode) => {
+        setIsLoading(true); 
+        setGeneratingLessonId(lesson.id);
+        
+        try {
+            const newVariants = await generateLessonVariants(lesson.title, lesson.burmeseContent, mode);
+            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lessons', lesson.id), { variants: newVariants }, { merge: true });
+            for (const [group, data] of Object.entries(newVariants)) {
+                if (data.quiz) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lessons', lesson.id, 'quiz', group), data.quiz);
+            }
+            showMessage("Generated Successfully!");
+        } catch (e) { 
+            showMessage("Error generating."); 
+            console.error(e); 
+        } finally { 
+            setIsLoading(false); 
+            setGeneratingLessonId(null);
+        }
+    };
+
+    const handleExportLessons = async () => {
+        setIsLoading(true); showMessage("Exporting Full Database...");
+        try {
+            const lessonsSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'lessons'));
+            const scoresSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'global_scores'));
+            const studentsSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'students'));
+            const activityFeedSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'activity_feed'));
+
+            const toMillisSafely = (ts) => {
+                if (!ts) return null;
+                if (typeof ts.toMillis === 'function') return ts.toMillis();
+                if (ts.seconds) return ts.seconds * 1000;
+                return null;
+            };
+
+            const exportData = {
+                version: 3,
+                lessons: [],
+                globalScores: scoresSnap.docs.map(d => ({ id: d.id, ...d.data(), timestamp: toMillisSafely(d.data().timestamp) })),
+                students: studentsSnap.docs.map(d => ({ id: d.id, ...d.data(), timestamp: toMillisSafely(d.data().timestamp), lastSeen: toMillisSafely(d.data().lastSeen) })),
+                activityFeed: activityFeedSnap.docs.map(d => ({ id: d.id, ...d.data(), timestamp: toMillisSafely(d.data().timestamp) })),
+                questions: {},
+                quizResults: {}
+            };
+
+            for (const d of lessonsSnap.docs) {
+                const lData = d.data();
+                exportData.lessons.push({ id: d.id, ...lData, timestamp: toMillisSafely(lData.timestamp) });
+
+                const qSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'lessons', d.id, 'questions'));
+                if (!qSnap.empty) {
+                    exportData.questions[d.id] = qSnap.docs.map(q => ({ id: q.id, ...q.data(), timestamp: toMillisSafely(q.data().timestamp) }));
+                }
+
+                const groups = ['storytellers', 'explorers', 'adventurers', 'voyagers'];
+                for (const g of groups) {
+                    const rSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'lessons', d.id, 'quiz', g, 'results'));
+                    if (!rSnap.empty) {
+                        exportData.quizResults[`${d.id}_${g}`] = rSnap.docs.map(r => ({ id: r.id, ...r.data(), timestamp: toMillisSafely(r.data().timestamp) }));
+                    }
+                }
+            }
+
+            const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = `full_app_backup_${new Date().toISOString().slice(0, 10)}.json`;
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            showMessage("Exported Successfully!");
+        } catch(e) { console.error(e); showMessage("Error Exporting!"); } finally { setIsLoading(false); }
+    };
+
+    const handleImportLessons = (event) => {
+        const files = Array.from(event.target.files || []);
+        const file = files[0];
+        if (!file) return;
+        // A lessons file (several files, .md / .txt, or the .json that the make-lessons tool writes) goes into the "Bulk lessons" box below,
+        // where the titles are checked before saving. The old full-backup .json (made by Export Data) is restored as before.
+        const toBulk = (list) => { const n = bulkAddFromTexts(list, list.length); if (n) showMessage(`${n} lesson(s) loaded into the "Bulk lessons" box below. Check the titles, then press 2) Save all.`); };
+        if (files.length > 1 || !/\.json$/i.test(file.name)) {
+            files.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+            Promise.all(files.map(f => f.text().then(t => ({ name: f.name, text: t })))).then(toBulk);
+            event.target.value = '';
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const importedData = JSON.parse(e.target.result);
+                if (!Array.isArray(importedData) && importedData.version === undefined && Array.isArray(importedData.lessons)) {
+                    toBulk([{ name: file.name, text: e.target.result }]);
+                    event.target.value = '';
+                    return;
+                }
+                setIsLoading(true); 
+                let lCount = 0, sCount = 0, stuCount = 0, qCount = 0, qrCount = 0;
+                
+                const toDate = (ts) => ts ? new Date(ts) : serverTimestamp();
+
+                if (importedData.version >= 3) {
+                    for (const l of (importedData.lessons || [])) {
+                        const { id, timestamp, ...rest } = l;
+                        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lessons', id), { ...rest, timestamp: toDate(timestamp) });
+                        lCount++;
+                    }
+                    for (const s of (importedData.globalScores || [])) {
+                        const { id, timestamp, ...rest } = s;
+                        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'global_scores', id), { ...rest, timestamp: toDate(timestamp) });
+                        sCount++;
+                    }
+                    for (const stu of (importedData.students || [])) {
+                        const { id, timestamp, lastSeen, ...rest } = stu;
+                        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'students', id), { ...rest, timestamp: toDate(timestamp), lastSeen: toDate(lastSeen), isOnline: false, currentLesson: null });
+                        stuCount++;
+                    }
+                    for (const act of (importedData.activityFeed || [])) {
+                        const { id, timestamp, ...rest } = act;
+                        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'activity_feed', id), { ...rest, timestamp: toDate(timestamp) });
+                    }
+                    for (const [lessonId, qList] of Object.entries(importedData.questions || {})) {
+                        for (const q of qList) {
+                            const { id, timestamp, ...rest } = q;
+                            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lessons', lessonId, 'questions', id), { ...rest, timestamp: toDate(timestamp) });
+                            qCount++;
+                        }
+                    }
+                    for (const [key, rList] of Object.entries(importedData.quizResults || {})) {
+                        const [lessonId, group] = key.split('_');
+                        for (const r of rList) {
+                            const { id, timestamp, ...rest } = r;
+                            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lessons', lessonId, 'quiz', group, 'results', id), { ...rest, timestamp: toDate(timestamp) });
+                            qrCount++;
+                        }
+                    }
+                    showMessage(`Imported: ${lCount} lessons, ${stuCount} students, ${qCount} Qs.`);
+                } else if (importedData.version === 2) {
+                    for (const l of (importedData.lessons || [])) {
+                        const { id, timestamp, ...rest } = l;
+                        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'lessons', id), { ...rest, timestamp: toDate(timestamp) });
+                        lCount++;
+                    }
+                    for (const s of (importedData.globalScores || [])) {
+                        const { id, timestamp, ...rest } = s;
+                        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'global_scores', id), { ...rest, timestamp: toDate(timestamp) });
+                        sCount++;
+                    }
+                    showMessage(`Imported ${lCount} lessons & ${sCount} scores.`);
+                } else {
+                    let baseTime = Date.now();
+                    for (const item of (Array.isArray(importedData) ? importedData : [])) {
+                        if (item.title && item.burmeseContent) {
+                            await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'lessons'), { title: item.title, burmeseContent: item.burmeseContent, timestamp: new Date(baseTime), variants: {} });
+                            baseTime += 1000;
+                            lCount++;
+                        }
+                    }
+                    showMessage(`Imported ${lCount} lessons.`);
+                }
+            } catch (error) { showMessage(`Error: ${error.message}`); } finally { setIsLoading(false); }
+            event.target.value = ''; 
+        };
+        reader.readAsText(file);
+    };
+
+    const handleStudentOnboarding = (profile) => {
+        setStudentProfile(profile);
+        localStorage.setItem(`student_profile_${userId}`, JSON.stringify(profile));
+    };
+
+    if (!isAuthReady) return <div className="min-h-screen bg-gray-900 flex justify-center items-center text-teal-400"><RotateCw className="animate-spin w-8 h-8"/></div>;
+
+    return (
+        <div className="min-h-screen bg-gray-900 text-white font-sans p-4 sm:p-8">
+            <script src="https://cdn.tailwindcss.com"></script>
+            <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap'); * { font-family: 'Inter', sans-serif; } .animate-bounce-in { animation: bounceIn 0.5s ease-out; } @keyframes bounceIn { 0% { transform: scale(0.5); opacity: 0; } 80% { transform: scale(1.05); opacity: 1; } 100% { transform: scale(1); } } .custom-scrollbar::-webkit-scrollbar { width: 8px; } .custom-scrollbar::-webkit-scrollbar-thumb { background: #4B5563; border-radius: 4px; }`}</style>
+            
+            {!isTeacher && (!studentProfile || studentProfile.status !== 'approved') && (
+                <WelcomeModal 
+                    userId={userId}
+                    onStudentComplete={handleStudentOnboarding} 
+                    onTeacherComplete={() => { setIsTeacher(true); setCurrentRole('Teacher'); localStorage.setItem('isTeacher', 'true'); showMessage("Successfully logged in as Teacher."); }} 
+                />
+            )}
+
+            {/* Student Network Offline Warning */}
+            {showStudentWarning && (
+                <div className="fixed top-20 left-1/2 transform -translate-x-1/2 bg-red-900/95 text-white px-6 py-4 rounded-xl shadow-2xl z-[100] font-bold animate-pulse flex items-center gap-3 border border-red-500 backdrop-blur-md w-[90%] max-w-md">
+                    <div className="w-4 h-4 bg-red-500 rounded-full animate-ping flex-shrink-0"></div>
+                    <span className="text-sm">Warning: You have been offline for 3 minutes! Please check your internet connection to reconnect.</span>
+                </div>
+            )}
+
+            {activeQuizLessonId && activeQuizData && <QuizModule lessonTitle={currentLessonViewing} lessonId={activeQuizLessonId} userId={userId} userName={studentProfile?.name || 'Student'} ageGroup={studentProfile?.group} quizData={activeQuizData} onClose={() => { setActiveQuizLessonId(null); setActiveQuizData(null); }} />}
+            {showGlobalLeaderboard && <LeaderboardView leaderboard={globalLeaderboardData} title="Global Champion Board" loading={loadingGlobalLB} onClose={() => setShowGlobalLeaderboard(false)} isGlobal={true} currentUserId={userId} />}
+
+            <CompletionToastStack toasts={completionToasts} />
+{currentRole === 'Student' && studentProfile?.status === 'approved' && (
+    <FloatingStatsBar rank={studentRank} totalLessons={studentTotalLessons} />
+)}
+
+            <div className="max-w-4xl mx-auto">
+                <header className="mb-6 flex flex-col md:flex-row gap-4 justify-between items-center bg-gray-800 p-4 rounded-xl shadow-lg border border-gray-700 z-50 relative">
+                   <div className="flex flex-wrap items-center gap-2">
+                        {isTeacher ? (
+                            <div className="flex gap-2">
+                                <button onClick={() => setCurrentRole(currentRole === 'Teacher' ? 'Student' : 'Teacher')} className={`px-4 py-2 font-bold rounded shadow-lg transform transition hover:scale-105 ${currentRole === 'Teacher' ? 'bg-purple-600 hover:bg-purple-700' : 'bg-teal-600 hover:bg-teal-700'}`}>
+                                    {currentRole === 'Teacher' ? 'Switch to Student View' : 'Switch to Teacher View'}
+                                </button>
+                                <button onClick={handleTeacherLogout} className="px-4 py-2 font-bold rounded shadow-lg bg-red-600 hover:bg-red-700 transition">Teacher Logout</button>
+                            </div>
+                        ) : (
+                            <button onClick={handleTeacherLogin} className="px-4 py-2 font-bold rounded shadow-lg bg-gray-600 hover:bg-gray-500 transition flex items-center gap-2"><Key className="w-4 h-4"/> Teacher Login</button>
+                        )}
+
+                        {studentProfile && studentProfile.status === 'approved' && (
+                            <div className="flex items-center gap-3 ml-2">
+                                <span className="bg-gray-700 px-3 py-1 rounded text-gray-300 font-medium flex items-center gap-2"><User className="w-4 h-4"/> {studentProfile.name} <span className="text-xs bg-indigo-500 text-white rounded px-1">#{studentProfile.studentNumber}</span></span>
+                                <span className="bg-indigo-900/50 border border-indigo-500/30 px-3 py-1 rounded text-indigo-300 text-xs uppercase font-bold flex items-center gap-1">{AGE_GROUPS[studentProfile.group]?.icon} {AGE_GROUPS[studentProfile.group]?.label}</span>
+                                <button onClick={() => setShowGlobalLeaderboard(true)} className="p-2 bg-yellow-600/20 text-yellow-400 border border-yellow-500/50 rounded-full hover:bg-yellow-600/40 transition hover:scale-110 active:scale-90 shadow-[0_0_10px_rgba(234,179,8,0.3)]" title="View Global Leaderboard"><Trophy className="w-5 h-5" /></button>
+                            </div>
+                        )}
+                   </div>
+                   <div className="flex items-center gap-4">
+                       <div className="text-yellow-400 text-xs font-bold bg-gray-900 px-2 py-1 rounded border border-yellow-600">Active folder: {IMG_BASE_URL.split('/')[4]}</div>
+                       <div className="text-gray-400 text-sm font-semibold tracking-wide">{currentRole} View</div>
+                       
+                       {/* Notification Bell Integrated into Header Right Side */}
+                       <NotificationBell userId={userId} />
+                   </div>
+                </header>
+
+                {message && <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white px-6 py-2 rounded-full shadow-xl z-50 font-bold animate-bounce">{message}</div>}
+
+                {currentRole === 'Teacher' ? (
+                    <div className="space-y-6">
+                        <ClassRoster userId={userId} />
+
+                        <div className="bg-gray-800 p-6 rounded-xl shadow-xl border border-gray-700">
+                            <div className="flex justify-between items-center mb-4">
+                                <h3 className="text-xl font-bold text-teal-300">{editingLesson ? 'Edit Lesson' : 'Add New Lesson'}</h3>
+                                <div className="flex gap-2">
+                                     <label htmlFor="import-lessons" className="cursor-pointer bg-indigo-600 p-2 rounded hover:bg-indigo-700 transition flex items-center gap-1 text-sm" title="Import a lessons file (.json from make-lessons, or .md / .txt articles) or a full backup (.json from Export Data)">
+                                        <input type="file" id="import-lessons" accept=".json,.md,.txt" multiple onChange={handleImportLessons} className="hidden" />
+                                        <Upload className="w-4 h-4 text-white" /> Import Data / Lessons file
+                                     </label>
+                                     <button onClick={handleExportLessons} className="bg-pink-600 p-2 rounded hover:bg-pink-700 transition flex items-center gap-1 text-sm" title="Export JSON"><Download className="w-4 h-4 text-white" /> Export Data</button>
+                                </div>
+                            </div>
+                            <form onSubmit={handleSaveLesson} className="space-y-4">
+                                <input value={newLessonTitle} onChange={e => setNewLessonTitle(e.target.value)} placeholder="Lesson Title" className="w-full p-3 bg-gray-900 border border-gray-600 rounded text-white focus:border-teal-500 focus:outline-none" disabled={isLoading}/>
+                                <textarea value={newLessonContent} onChange={e => setNewLessonContent(e.target.value)} placeholder="Content (e.g., insert 000101.png)" rows="6" className="w-full p-3 bg-gray-900 border border-gray-600 rounded text-white focus:border-teal-500 focus:outline-none" disabled={isLoading}/>
+                                
+                                <div className="flex gap-2 items-center bg-gray-900 p-2 rounded border border-gray-600">
+                                    <ImageIcon className="w-4 h-4 text-gray-400 ml-2" />
+                                    <input type="text" placeholder="e.g. 001 or 000101" value={imageInput} onChange={e => setImageInput(e.target.value)} className="bg-transparent text-white text-sm focus:outline-none w-32 border-b border-gray-600 focus:border-teal-500" />
+                                    <span className="text-gray-500 text-xs">auto-generates 5 .png images</span>
+                                    <button type="button" onClick={insertImageSequence} className="text-xs bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded text-white">Add</button>
+                                </div>
+
+                                <div className="flex gap-2">
+                                    <button type="submit" className="flex-1 bg-teal-600 p-3 rounded hover:bg-teal-700 flex justify-center items-center font-bold shadow-lg transition" disabled={isLoading}>
+                                        {isLoading && !generatingLessonId ? <RotateCw className="animate-spin w-5 h-5 mr-2"/> : (editingLesson ? <Edit2 className="w-5 h-5 mr-2"/> : <BookOpen className="w-5 h-5 mr-2"/>)}{editingLesson ? 'Update' : 'Create & Save'}
+                                    </button>
+                                    {editingLesson && <button type="button" onClick={() => { setEditingLesson(null); setNewLessonTitle(''); setNewLessonContent(''); }} className="bg-gray-600 p-3 rounded hover:bg-gray-500 transition">Cancel</button>}
+                                </div>
+                            </form>
+                        </div>
+                        <BulkLessonsCard bulk={bulkApi} />
+                        <div className="space-y-4">
+                            {lessons.map(l => (
+                                <LessonItem key={l.id} lesson={l} isTeacher={true} onGenerateVariants={handleGenerateVariants} onEdit={handleEditLesson} isGenerating={generatingLessonId === l.id} userId={userId} isOpen={openLessonId === l.id} onToggle={() => setOpenLessonId(openLessonId === l.id ? null : l.id)} />
+                            ))}
+                        </div>
+                    </div>
+                ) : (
+                    <div className="space-y-6">
+                        {lessons.map(l => (
+                            <LessonItem key={l.id} lesson={l} isTeacher={false} studentAgeGroup={studentProfile?.group} studentName={studentProfile?.name} onTakeQuiz={(id, title, data) => { setActiveQuizLessonId(id); setActiveQuizData(data); }} isGenerating={false} userId={userId} isOpen={openLessonId === l.id} onToggle={() => setOpenLessonId(openLessonId === l.id ? null : l.id)} />
+                        ))}
+                        {lessons.length === 0 && <div className="text-center text-gray-500 py-10">No lessons available yet.</div>}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
+export default App;

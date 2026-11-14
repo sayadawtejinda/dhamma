@@ -15,7 +15,7 @@ import { join, isAbsolute, dirname, basename, extname } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { gemini, loadKey, GEMINI_KEY_FILE, GAP_MS } from './gemini.mjs';
-import { parseMarkdownArticles, looksLikeMarkdownArticle, naturalSort } from './article-md.mjs';
+import { parseMarkdownArticles, parseLooseText, looksLikeMarkdownArticle, naturalSort } from './article-md.mjs';
 import { SLOTS_PER_LESSON, slotBase } from './picture-slots.mjs';
 import { readdirSync } from 'node:fs';
 import { AGE_LEVELS, LEVEL_SPECS, countWords, levelMaxWords, cleanLessonText, checkLevelText, alignAnswer, checkQuiz, baseRules, levelRules, quizSchema } from './lesson-rules.mjs';
@@ -192,7 +192,7 @@ for (const f of files) {
   const text = readFileSync(f, 'utf8').replace(/^﻿/, '');
   const found = looksLikeMarkdownArticle(text) || /\.md$/i.test(f)
     ? parseMarkdownArticles(text, basename(f, extname(f)))
-    : parseStories(text);
+    : (parseStories(text).length ? parseStories(text) : parseLooseText(text, basename(f, extname(f))));
   if (!found.length) console.log(`  (no lessons found in ${basename(f)})`);
   stories.push(...found.map(x => ({ ...x, from: basename(f) })));
 }

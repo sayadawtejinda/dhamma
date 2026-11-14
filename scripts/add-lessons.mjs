@@ -24,6 +24,9 @@ import { makeVariant, AGE_GROUPS } from './abhi-variants.mjs';
 import { KEYED_RE, listKeyed, planPictures } from './picture-slots.mjs';
 
 const DRY = process.argv.includes('--dry');
+// --pictures-only: only upload the pictures to GitHub and print their numbers / addresses (for lessons made in the Gemini Canvas apps);
+// no class, no lessons file, nothing is loaded into the app.
+const PICS_ONLY = process.argv.includes('--pictures-only');
 // The pictures are taken from Downloads\lesson-pictures (where split-sheets.bat puts them) AND from Pictures\Screenshots, oldest first.
 const PICTURE_DIRS = process.env.LESSON_PICTURES ? [process.env.LESSON_PICTURES] : [join(homedir(), 'Downloads', 'lesson-pictures'), join(homedir(), 'Pictures', 'Screenshots')];
 const SCREENSHOTS = PICTURE_DIRS.join(' + ');
@@ -100,7 +103,9 @@ const db = await connect();
 // the class
 let classId;
 let classExists = false;
-if (which === 'smartstudy') {
+if (PICS_ONLY) {
+  // no class is needed
+} else if (which === 'smartstudy') {
   const classes = (await getDocs(collection(db, `artifacts/${appId}/public/data/classes`))).docs.map(d => d.id).sort();
   console.log('SmartStudy classes now: ' + (classes.join(', ') || '(none)'));
   classId = await ask('Class id (an existing one, or a new one to create)');
@@ -118,11 +123,18 @@ if (which === 'smartstudy') {
 }
 
 // the lessons file
-const fileName = await ask('Lessons file name (the .json file)');
-const file = findLessonsFile(fileName);
-if (!file) die(`I could not find "${fileName}" (looked in this folder, Downloads, Desktop and Documents).`);
-const lessons = readLessons(file);
-console.log(`Found ${lessons.length} lesson(s) in ${file}`);
+let lessons;
+if (PICS_ONLY) {
+  const n = parseInt(await ask('How many lessons are the pictures for (5 pictures each)', '10'), 10);
+  if (!(n >= 1 && n <= 200)) die('Type a number of lessons, like 10.');
+  lessons = Array.from({ length: n }, () => ({ title: '', burmeseContent: '' }));
+} else {
+  const fileName = await ask('Lessons file name (the .json file)');
+  const file = findLessonsFile(fileName);
+  if (!file) die(`I could not find "${fileName}" (looked in this folder, Downloads, Desktop and Documents).`);
+  lessons = readLessons(file);
+  console.log(`Found ${lessons.length} lesson(s) in ${file}`);
+}
 
 // how many pictures are needed
 const IMG_RE = /\b(\d{4,6})\.(?:png|jpg|jpeg)\b/gi;
@@ -190,7 +202,7 @@ const prepared = lessons.map(l => {
 });
 
 console.log('\nSummary');
-console.log(`  ${which === 'smartstudy' ? 'SmartStudy' : 'Abhidhamma'} class: ${classId} (${classExists ? 'existing' : 'NEW'})`);
+if (!PICS_ONLY) console.log(`  ${which === 'smartstudy' ? 'SmartStudy' : 'Abhidhamma'} class: ${classId} (${classExists ? 'existing' : 'NEW'})`);
 console.log(`  ${prepared.length} lesson(s): ${prepared.map(l => l.title || '(no title)').slice(0, 5).join(' | ')}${prepared.length > 5 ? ' ...' : ''}`);
 console.log(`  ${needed} picture(s) -> GitHub ${IMAGE_REPO}`);
 if (DRY) { console.log('\n--dry: stopping here.'); rl.close(); process.exit(0); }
@@ -209,8 +221,10 @@ if (needed) {
   console.log(`✅ ${needed} picture(s) pushed to GitHub.`);
 }
 
-// 2. lessons -> Firestore
-if (which === 'smartstudy') {
+// 2. lessons -> Firestore (not in pictures-only mode)
+if (PICS_ONLY) {
+  // nothing is loaded into the app
+} else if (which === 'smartstudy') {
   const ref = doc(db, 'artifacts', appId, 'public', 'data', 'classes', classId);
   const snap = await getDoc(ref);
   const existing = snap.exists() ? (snap.data().lessons || []) : [];
@@ -249,7 +263,7 @@ if (needed) {
   console.log(`🗑️ The ${needed} used screenshot(s) were deleted from ${SCREENSHOTS}.`);
 }
 // 4. Abhidhamma: the 4 age versions (English text, discussion questions, quiz) -- what the app's Generate button does
-if (which === 'abhidhamma' && abhiDocs.some(d => !d.hasVariants)) {
+if (!PICS_ONLY && which === 'abhidhamma' && abhiDocs.some(d => !d.hasVariants)) {
   const key = loadKey();
   if (!key) {
     console.log(`\nThe age versions were NOT made: no Gemini key (save it in ${GEMINI_KEY_FILE}), or use the Generate buttons in the app.`);
@@ -273,6 +287,12 @@ if (which === 'abhidhamma' && abhiDocs.some(d => !d.hasVariants)) {
   }
 }
 
-console.log('\nAll done. Open the app and refresh to see the new lessons.');
+if (PICS_ONLY) {
+  const first = newNames[0], last = newNames[newNames.length - 1];
+  console.log(`\n✅ ${needed} picture(s) are on GitHub: ${first} ... ${last}`);
+  console.log(`   Picture number to type in the app:  ${first.replace(/\.\w+$/, '')}   (lesson 1 gets the first 5, lesson 2 the next 5, and so on)`);
+  console.log(`   Full address of the first picture:  ${RAW_BASE(branch)}${first}`);
+  console.log('   SmartStudy Bulk tab: paste that address in the "first picture address" box. Abhidhamma Bulk box: type the number.');
+} else console.log('\nAll done. Open the app and refresh to see the new lessons.');
 rl.close();
 process.exit(0);

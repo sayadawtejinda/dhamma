@@ -50,3 +50,18 @@ export const looksLikeMarkdownArticle = (text) => {
 
 // Natural order of file names: article-2 before article-10.
 export const naturalSort = (a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+
+// A chat answer pasted into a .txt file (no # and no === lines): a line that starts with "Lesson 3", "Article 3", "ဆောင်းပါး (၃)" or
+// "သင်ခန်းစာ ၃" starts a lesson. No such line at all = the whole text is one lesson.
+export const LOOSE_HEAD_RE = /^[*#\s]*(?:ဆောင်းပါး|သင်ခန်းစာ|article|lesson|chapter)\s*\(?\s*[0-9၀-၉]+\s*\)?\s*[-–—:.။)]?/i;
+export function parseLooseText(text, fallbackName = 'Lesson') {
+  const lines = String(text || '').replace(/^\uFEFF/, '').replace(/\r/g, '').split('\n');
+  const heads = lines.some(l => LOOSE_HEAD_RE.test(l.trim()));
+  const out = []; let cur = null;
+  for (const raw of lines) {
+    if (heads && LOOSE_HEAD_RE.test(raw.trim())) { cur = { heading: cleanTitle(raw.replace(/^[*#\s]+|[*\s]+$/g, '')), body: [] }; out.push(cur); continue; }
+    if (cur) cur.body.push(raw);
+    else if (!heads) { if (!out.length) { cur = { heading: '', body: [] }; out.push(cur); } cur.body.push(raw); }
+  }
+  return out.map(a => ({ heading: a.heading || cleanTitle(fallbackName), text: mdToPlain(a.body.join('\n')) })).filter(a => a.text.length > 80);
+}
