@@ -49,7 +49,12 @@ const fileInto = (src, slot) => {
 const pending = slots.filter(s => !done().has(s.name));
 console.log(`${slots.length} pictures in the plan, ${slots.length - pending.length} already named, ${pending.length} to go.`);
 if (!pending.length) { console.log('Everything is named. Next: add-lessons.bat.'); rl.close(); process.exit(0); }
-const early = parseInt(await ask('How many pictures are ALREADY made and waiting (the newest ones, made in the order of the plan)? 0 if none', '0'), 10) || 0;
+let early = -1;
+while (early < 0 || early > pending.length) {
+  const a = await ask(`How many pictures are ALREADY made and waiting in Downloads/Screenshots? Type a number from 0 to ${pending.length} (0 = none, just press Enter)`, '0');
+  early = /^\d+$/.test(a) ? parseInt(a, 10) : -1;
+  if (early < 0 || early > pending.length) console.log('   Please type only a number.');
+}
 let startAt = 0;
 if (early > 0) {
   const waiting = waitingPictures().slice(-early);
@@ -69,6 +74,7 @@ for (let i = startAt; i < pending.length; i++) {
     const a = (await ask('Make it in Gemini, save/download it, then press Enter  (r = redo the previous, s = skip, q = stop)')).toLowerCase();
     if (a === 'q') { console.log('\nStopped. Run name-pictures.bat again to carry on.'); rl.close(); process.exit(0); }
     if (a === 's') break;
+    if (a !== '' && a !== 'r') { console.log(`   I did not understand "${a}". Press only Enter (take the new picture), r (redo the previous), s (skip) or q (stop).`); continue; }
     if (a === 'r') {
       if (!prev) { console.log('   Nothing to redo yet.'); continue; }
       const w = waitingPictures().filter(x => x.t >= prev.shownAt).pop();

@@ -243,8 +243,17 @@ def main():
         m_num = NUMBERED.match(name.lower())
         lesson_no = int(m_num.group(1)) if m_num else None
         if lesson_no is None:
-            ans = input('  Which LESSON is this sheet for? Type its number (Enter = no number, the old way): ').strip()
-            lesson_no = int(ans) if ans.isdigit() else None
+            # only a number, or Enter, is accepted; anything else is asked again (a typo must never decide the picture names)
+            while True:
+                ans = input('  Which LESSON is this sheet for? Type only its number, e.g. 3 (just Enter = no number, the old way): ').strip()
+                if ans == '':
+                    break
+                if ans.isdigit() and 1 <= int(ans) <= 200:
+                    lesson_no = int(ans)
+                    break
+                print('  That is not a lesson number. Type only digits, like 3, or just press Enter.')
+        if lesson_no:
+            print(f'  -> the pictures will be saved as L{lesson_no:02d}-P1 ... (lesson {lesson_no}).')
         saved = 0
         for n, box in enumerate(boxes, 1):
             if n in drop:
