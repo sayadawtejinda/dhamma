@@ -31,8 +31,11 @@ const PICS_ONLY = process.argv.includes('--pictures-only');
 // The pictures are taken from Downloads\lesson-pictures (where split-sheets.bat puts them) AND from Pictures\Screenshots, oldest first.
 const PICTURE_DIRS = process.env.LESSON_PICTURES ? [process.env.LESSON_PICTURES] : [join(homedir(), 'Downloads', 'lesson-pictures'), join(homedir(), 'Pictures', 'Screenshots')];
 const SCREENSHOTS = PICTURE_DIRS.join(' + ');
-const IMAGE_REPO = 'sayadawtejinda/dhammaschool';
-const REPO_DIR = process.env.LESSON_IMAGE_REPO_DIR || join(homedir(), 'dhammaschool-images');
+// The GitHub repo the pictures go to is written in scripts/picture-repo.txt (one line: owner/name). When a repo is full, create an empty
+// one on GitHub, write its name there, and every new picture goes to it (old lessons keep their old picture addresses).
+const IMAGE_REPO = (existsSync(new URL('./picture-repo.txt', import.meta.url)) ? readFileSync(new URL('./picture-repo.txt', import.meta.url), 'utf8').split(String.fromCharCode(10))[0].trim() : '') || 'sayadawtejinda/dhammaschool';
+// the work copy of the repo on this computer (the first repo keeps its old folder name)
+const REPO_DIR = process.env.LESSON_IMAGE_REPO_DIR || join(homedir(), IMAGE_REPO === 'sayadawtejinda/dhammaschool' ? 'dhammaschool-images' : `${IMAGE_REPO.split('/').pop()}-images`);
 const RAW_BASE = (branch) => `https://raw.githubusercontent.com/${IMAGE_REPO}/${branch}/`;
 const ABHI = 'artifacts/lesson-translator-app-v6/public/data';
 const IMAGES_PER_LESSON = 5;
