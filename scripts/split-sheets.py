@@ -237,13 +237,21 @@ def main():
             print('  Skipped.\n')
             continue
         base = os.path.splitext(name)[0]
+        # Which lesson is this sheet for? A sheet named by its number (03.jpg) is lesson 3; for any other sheet you are asked.
+        # With a lesson number the pictures are saved as L03-P1 ... L03-P5 (story order), which add-lessons.bat with a picture plan
+        # reads BY NAME, so the order cannot get mixed up. Enter = the old way (no name, the order of the files).
+        m_num = NUMBERED.match(name.lower())
+        lesson_no = int(m_num.group(1)) if m_num else None
+        if lesson_no is None:
+            ans = input('  Which LESSON is this sheet for? Type its number (Enter = no number, the old way): ').strip()
+            lesson_no = int(ans) if ans.isdigit() else None
         saved = 0
         for n, box in enumerate(boxes, 1):
             if n in drop:
                 continue
             x0, y0, x1, y1 = box
             tile = img.convert('RGB').crop((x0 + 2, y0 + 2, x1 - 2, y1 - 2))
-            out = os.path.join(WORK, f'{base}_{n}.png')
+            out = os.path.join(WORK, f'L{lesson_no:02d}-P{saved + 1}.png') if lesson_no else os.path.join(WORK, f'{base}_{n}.png')
             tile.save(out)
             clock += 2  # each piece one step newer than the last, so they stay in story order
             os.utime(out, (clock, clock))
