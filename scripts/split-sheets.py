@@ -172,11 +172,18 @@ def main():
         count = len(cols) * len(rows)
         if count < 2 or count > 12:
             print(f'  I could not find the pictures by their white lines ({count} found).')
-            layout = input('  Layout, across x down (for example 3x2): ').strip().lower()
-            try:
-                across, down, o = parse_layout(layout)
-            except Exception:
-                print('  Skipped this sheet.\n')
+            # Enter alone = 3x2 (3 across, 2 down: what a Gemini sheet nearly always is); s = skip this sheet (cut it yourself, see below)
+            across = down = o = None
+            while across is None:
+                layout = input('  Just press Enter to cut it as 3x2 (3 across, 2 down). Or type another layout like 2x3, or s to skip this sheet: ').strip().lower()
+                if layout == 's':
+                    break
+                try:
+                    across, down, o = parse_layout(layout or '3x2')
+                except Exception:
+                    print('  I did not understand that. Press Enter for 3x2, or type it like 2x3, or s to skip.')
+            if across is None:
+                print('  Skipped. If you cut it yourself: put its pictures in a folder named after the lesson number (for example 04) inside', WORK, '\n')
                 continue
             cols, rows = even_grid(img, across, down, o['t'], o['b'], o['s'], o['g'])
         else:

@@ -2,11 +2,11 @@
 // Run:  node --test scripts/test-lessons-tools.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { mdToPlain, parseMarkdownArticles, looksLikeMarkdownArticle, cleanTitle, naturalSort } from './article-md.mjs';
-import { listKeyed, checkKeyed, slotBase, KEYED_RE } from './picture-slots.mjs';
+import { listKeyed, checkKeyed, slotBase, KEYED_RE, planPictures } from './picture-slots.mjs';
 
 const long = 'မြန်မာစာသား '.repeat(20);
 
@@ -54,4 +54,27 @@ test('pictures are found by NAME, in any order they were made, and missing ones 
     assert.equal(slotBase(3, 2), 'L03-P2');
     assert.ok(KEYED_RE.test('L12-P5.JPEG') && !KEYED_RE.test('Gemini_Generated_Image_x.jpg'));
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('pictures you cut yourself: a folder named after the lesson, in the order of the file names', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'slots-'));
+  try {
+    mkdirSync(join(dir, '04')); mkdirSync(join(dir, 'lesson 5')); mkdirSync(join(dir, 'sheets'));
+    ['Screenshot 3.png', 'Screenshot 1.png', 'Screenshot 2.png'].forEach(f => writeFileSync(join(dir, '04', f), 'x'));
+    writeFileSync(join(dir, 'lesson 5', 'a.jpg'), 'x'); writeFileSync(join(dir, 'sheets', '01.jpg'), 'x');
+    const k = listKeyed([dir]);
+    assert.deepEqual([...k.keys()].sort(), ['L04-P1', 'L04-P2', 'L04-P3', 'L05-P1']);
+    assert.ok(k.get('L04-P1').endsWith('Screenshot 1.png') && k.get('L04-P3').endsWith('Screenshot 3.png'));
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+test('mixed: a lesson with all its named pictures uses them, a lesson with none takes loose ones, a half-done lesson is a problem', () => {
+  const keyed = new Map([1, 2, 3, 4, 5].map(k => [slotBase(1, k), `n1-${k}`]).concat([[slotBase(3, 1), 'n3-1']]));
+  const pool = ['a', 'b', 'c', 'd', 'e', 'f'];
+  const r = planPictures([{ no: 1, count: 5 }, { no: 2, count: 5 }], keyed, pool);
+  assert.deepEqual(r.problems, []);
+  assert.deepEqual(r.use, ['n1-1', 'n1-2', 'n1-3', 'n1-4', 'n1-5', 'a', 'b', 'c', 'd', 'e']);
+  assert.equal(r.poolUsed, 5);
+  assert.equal(planPictures([{ no: 3, count: 5 }], keyed, pool).problems.length, 1);          // only P1 of lesson 3
+  assert.equal(planPictures([{ no: 2, count: 5 }], keyed, pool, true).problems.length, 1);    // strict (picture plan): no loose pictures
+  assert.equal(planPictures([{ no: 2, count: 5 }], keyed, ['a', 'b']).problems.length, 1);    // not enough loose pictures
 });

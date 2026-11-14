@@ -21,7 +21,7 @@ import { getFirestore, collection, doc, getDocs, getDoc, setDoc, updateDoc, serv
 import { firebaseConfig, appId } from '../src/firebaseConfig.js';
 import { loadKey, GEMINI_KEY_FILE } from './gemini.mjs';
 import { makeVariant, AGE_GROUPS } from './abhi-variants.mjs';
-import { KEYED_RE, listKeyed, checkKeyed, slotBase } from './picture-slots.mjs';
+import { KEYED_RE, listKeyed, planPictures } from './picture-slots.mjs';
 
 const DRY = process.argv.includes('--dry');
 // The pictures are taken from Downloads\lesson-pictures (where split-sheets.bat puts them) AND from Pictures\Screenshots, oldest first.
@@ -132,21 +132,28 @@ const needFor = (l) => (which === 'smartstudy'
   : Math.max(0, IMAGES_PER_LESSON - [...String(l.burmeseContent || l.content || '').matchAll(IMG_RE)].length));
 const needed = lessons.reduce((n, l) => n + needFor(l), 0);
 
-// Pictures. With a picture plan they are found by NAME (L03-P2 = lesson 3, picture 2); otherwise (the old way) the oldest pictures first.
+// Pictures. Abhidhamma: every lesson uses its NAMED pictures when it has them (L03-P1 ... P5, or the pictures in a folder named 3 /
+// 03 inside lesson-pictures); a lesson with none takes the next loose pictures, oldest first (the old way) unless the lessons file has
+// a picture plan (then every lesson must have named pictures). SmartStudy: the oldest pictures first, as before.
 let use;
-if (which === 'abhidhamma' && picturePlan) {
+if (which === 'abhidhamma') {
   const keyed = listKeyed(PICTURE_DIRS);
+  const pool = listScreenshots();
   const needs = lessons.map((l, i) => ({ no: i + 1, count: needFor(l) })).filter(n => n.count > 0);
-  console.log(`The lessons need ${needed} picture(s); named pictures (L01-P1 ...) are looked for in ${SCREENSHOTS}.`);
-  const { use: found, missing } = checkKeyed(needs, keyed);
-  console.log('\nPictures per lesson:');
+  const plan = planPictures(needs, keyed, pool, picturePlan);
+  console.log(`The lessons need ${needed} picture(s) in ${SCREENSHOTS}; ${keyed.size} named and ${pool.length} loose picture(s) found.\n`);
+  const label = { named: 'named pictures (L..-P..)', loose: 'loose pictures, oldest first', partial: 'INCOMPLETE named pictures', none: 'NO pictures', short: 'NOT ENOUGH loose pictures' };
   lessons.forEach((l, i) => {
-    const n = needFor(l);
-    const marks = Array.from({ length: n }, (_, k) => `P${k + 1}${keyed.has(slotBase(i + 1, k + 1)) ? '✓' : '✗'}`).join(' ');
-    console.log(`  Lesson ${String(i + 1).padStart(2)}: ${n ? marks : 'has its pictures already'}   ${String(l.title || '').slice(0, 40)}`);
+    const row = plan.rows.find(r => r.no === i + 1);
+    console.log(`  Lesson ${String(i + 1).padStart(2)}: ${row ? label[row.source] : 'has its pictures already'}   ${String(l.title || '').slice(0, 40)}`);
   });
-  if (missing.length) die(`${missing.length} picture(s) are missing: ${missing.slice(0, 12).join(', ')}${missing.length > 12 ? ' ...' : ''}\nMake them with name-pictures.bat, then run this again. Nothing was changed.`);
-  use = found;
+  if (plan.problems.length) die(`\n${plan.problems.join('\n')}\nNothing was changed. Fix the pictures and run this again.`);
+  const extra = pool.length - plan.poolUsed;
+  if (extra > 0 && plan.rows.some(r => r.source === 'loose')) {
+    const go = (await ask(`\nThere are ${extra} extra loose picture(s) that will NOT be used (they stay). Go on? (y/n)`, 'y')).toLowerCase();
+    if (!go.startsWith('y')) die('Stopped. Take the extra pictures out of the folder and run it again.');
+  }
+  use = plan.use;
 } else {
   const shots = listScreenshots();
   console.log(`The lessons need ${needed} picture(s); ${shots.length} found in ${SCREENSHOTS}.`);
