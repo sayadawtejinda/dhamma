@@ -108,3 +108,24 @@ test('age versions are added with the lesson pictures; a version the class alrea
   assert.equal(r.variants.explorers.quiz.questions.length, 1);          // everything else of the version is kept as it was
   assert.deepEqual(buildVariants({ storytellers: v('A', 'A') }, lesson, { overwrite: true }).added, ['storytellers']);
 });
+
+import { scanRepo, chooseFolder, pictureFolders, repoSizeMB } from './repo-folders.mjs';
+test('pictures go in the last folder; a new folder is started by itself when it would be full; numbers keep counting across folders', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'repo-'));
+  try {
+    writeFileSync(join(dir, '0001.png'), 'x'); writeFileSync(join(dir, '0295.png'), 'x'); writeFileSync(join(dir, '001395.png'), 'x'); writeFileSync(join(dir, 'README.md'), 'x');
+    let r = scanRepo(dir, 6);
+    assert.deepEqual(r.folders, ['']); assert.deepEqual(r.counts, [3]); assert.equal(r.next, 1396);   // README is not a picture
+    assert.equal(scanRepo(dir, 4).next, 296);                                                         // the 4-digit series counts on its own
+    assert.deepEqual(chooseFolder(r.folders, r.counts, 50, 900), { folder: '', isNew: false });
+    assert.deepEqual(chooseFolder(['' ], [890], 50, 900), { folder: 'images-02', isNew: true });   // 890 + 50 > 900
+    mkdirSync(join(dir, 'images-02')); mkdirSync(join(dir, 'images-03')); mkdirSync(join(dir, 'sheets'));
+    writeFileSync(join(dir, 'images-02', '001396.png'), 'x'); writeFileSync(join(dir, 'images-02', '001397.png'), 'x');
+    r = scanRepo(dir, 6);
+    assert.deepEqual(pictureFolders(dir), ['', 'images-02', 'images-03']);                            // 'sheets' is not a picture folder
+    assert.equal(r.next, 1398); assert.deepEqual(r.counts, [3, 2, 0]);
+    assert.deepEqual(chooseFolder(r.folders, r.counts, 50, 900), { folder: 'images-03', isNew: false });
+    assert.deepEqual(chooseFolder(r.folders, [3, 900, 880], 50, 900), { folder: 'images-04', isNew: true });
+    assert.ok(repoSizeMB(dir) < 0.01);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});

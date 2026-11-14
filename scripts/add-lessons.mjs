@@ -11,7 +11,7 @@
 // pushed there, and once they are safely on GitHub (and the lessons are loaded) the used screenshots are deleted from the computer.
 import { createInterface } from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
-import { readFileSync, existsSync, readdirSync, copyFileSync, unlinkSync, statSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync, copyFileSync, unlinkSync, statSync, mkdirSync } from 'node:fs';
 import { join, basename, extname, isAbsolute } from 'node:path';
 import { homedir } from 'node:os';
 import { execFileSync } from 'node:child_process';
@@ -22,6 +22,7 @@ import { firebaseConfig, appId } from '../src/firebaseConfig.js';
 import { loadKey, GEMINI_KEY_FILE } from './gemini.mjs';
 import { makeVariant, AGE_GROUPS } from './abhi-variants.mjs';
 import { KEYED_RE, listKeyed, planPictures } from './picture-slots.mjs';
+import { scanRepo, chooseFolder, repoSizeMB, FOLDER_CAP, REPO_WARN_MB, REPO_STOP_MB } from './repo-folders.mjs';
 
 const DRY = process.argv.includes('--dry');
 // --pictures-only: only upload the pictures to GitHub and print their numbers / addresses (for lessons made in the Gemini Canvas apps);
@@ -68,7 +69,7 @@ const listScreenshots = () => {
     .sort((a, b) => statSync(a).mtimeMs - statSync(b).mtimeMs || (a < b ? -1 : 1));
 };
 
-function prepareRepo(digits) {
+function prepareRepo(digits, needed) {
   if (!existsSync(join(REPO_DIR, '.git'))) {
     console.log(`Getting a copy of ${IMAGE_REPO} into ${REPO_DIR} (first time only)...`);
     execFileSync('git', ['clone', `https://github.com/${IMAGE_REPO}.git`, REPO_DIR], { stdio: 'inherit' });
@@ -83,9 +84,11 @@ function prepareRepo(digits) {
   if (!has('user.name')) git(['config', 'user.name', 'sayadawtejinda']);
   if (!has('user.email')) git(['config', 'user.email', 'sayadawtejinda@gmail.com']);
   const branch = git(['rev-parse', '--abbrev-ref', 'HEAD']);
-  // SmartStudy pictures are numbered with 4 digits (0001.png ...), Abhidhamma's with 6 (001305.png ...): each series continues on its own
-  const numbers = readdirSync(REPO_DIR).map(f => (f.match(new RegExp('^(\\d{' + digits + '})\\.(png|jpg|jpeg)$', 'i')) || [])[1]).filter(Boolean).map(n => parseInt(n, 10));
-  return { branch, next: (numbers.length ? Math.max(...numbers) : 0) + 1 };
+  // SmartStudy pictures are numbered with 4 digits (0001.png ...), Abhidhamma's with 6 (001305.png ...): each series continues on its own,
+  // across all the folders. The pictures go in the last folder; when it would be full (FOLDER_CAP) a new folder is started automatically.
+  const { folders, counts, next } = scanRepo(REPO_DIR, digits);
+  const { folder, isNew } = chooseFolder(folders, counts, needed);
+  return { branch, next, folder, isNew, folders, counts, sizeMB: repoSizeMB(REPO_DIR) };
 }
 
 // ---- Firestore: connect -------------------------------------------------------------------------------------------
@@ -179,7 +182,13 @@ if (which === 'abhidhamma') {
 
 // numbering
 const DIGITS = which === 'smartstudy' ? 4 : 6;
-const { branch, next } = prepareRepo(DIGITS);
+const { branch, next, folder, isNew, folders, counts, sizeMB } = prepareRepo(DIGITS, needed);
+// where the pictures are on the internet (the folder inside the repo, when it is not the main one)
+const imgBase = RAW_BASE(branch) + (folder ? folder + '/' : '');
+console.log(`GitHub picture repo: ${counts.reduce((a, b) => a + b, 0)} pictures in ${folders.length} folder(s), about ${Math.round(sizeMB)} MB (a folder holds up to ${FOLDER_CAP} pictures).`);
+if (needed && isNew) console.log(`The folder "${folders[folders.length - 1] || 'main'}" is full, so the new pictures go in a NEW folder: ${folder}/  (done automatically).`);
+if (needed && sizeMB >= REPO_STOP_MB) die(`The picture repo is ${Math.round(sizeMB)} MB. GitHub asks for repositories under about 1 GB, so no more pictures are added here. A new picture repo is needed: tell Claude. Nothing was changed.`);
+if (needed && sizeMB >= REPO_WARN_MB) console.log(`⚠ The picture repo is ${Math.round(sizeMB)} MB of about 1000 MB. It will need a new repo soon: tell Claude before it is full.`);
 const pad = (n) => String(n).padStart(DIGITS, '0');
 const newNames = use.map((f, i) => `${pad(next + i)}${extname(f).toLowerCase() === '.jpeg' ? '.jpg' : extname(f).toLowerCase()}`);
 if (needed) console.log(`The pictures will be named ${newNames[0]} ... ${newNames[newNames.length - 1]} (the repo now ends at ${pad(next - 1)}).`);
@@ -190,13 +199,13 @@ const takeName = () => newNames[cursor++];
 const prepared = lessons.map(l => {
   const copy = JSON.parse(JSON.stringify(l));
   if (which === 'smartstudy') {
-    SS_FIELDS.forEach(k => { if (!String(copy[k] || '').trim()) copy[k] = RAW_BASE(branch) + takeName(); });
+    SS_FIELDS.forEach(k => { if (!String(copy[k] || '').trim()) copy[k] = imgBase + takeName(); });
   } else {
     let content = String(copy.burmeseContent || copy.content || '');
     const need = needFor(copy);
     for (let i = 0; i < need; i++) content += (content && !content.endsWith('\n') ? '\n' : '') + takeName();
     copy.burmeseContent = content;
-    copy.imageBaseUrl = RAW_BASE(branch);
+    copy.imageBaseUrl = imgBase;
   }
   return copy;
 });
@@ -204,15 +213,17 @@ const prepared = lessons.map(l => {
 console.log('\nSummary');
 if (!PICS_ONLY) console.log(`  ${which === 'smartstudy' ? 'SmartStudy' : 'Abhidhamma'} class: ${classId} (${classExists ? 'existing' : 'NEW'})`);
 console.log(`  ${prepared.length} lesson(s): ${prepared.map(l => l.title || '(no title)').slice(0, 5).join(' | ')}${prepared.length > 5 ? ' ...' : ''}`);
-console.log(`  ${needed} picture(s) -> GitHub ${IMAGE_REPO}`);
+console.log(`  ${needed} picture(s) -> GitHub ${IMAGE_REPO}${folder ? ' / ' + folder : ''}`);
 if (DRY) { console.log('\n--dry: stopping here.'); rl.close(); process.exit(0); }
 if (!(await ask('\nGo ahead? (y/n)', 'y')).toLowerCase().startsWith('y')) die('Nothing was changed.');
 
 // 1. pictures -> GitHub
 if (needed) {
-  use.forEach((f, i) => copyFileSync(f, join(REPO_DIR, newNames[i])));
+  const rel = newNames.map(n => (folder ? `${folder}/${n}` : n));
+  if (folder) mkdirSync(join(REPO_DIR, folder), { recursive: true });
+  use.forEach((f, i) => copyFileSync(f, join(REPO_DIR, rel[i])));
   try {
-    git(['add', ...newNames]);
+    git(['add', ...rel]);
     git(['commit', '-m', `Add lesson pictures ${newNames[0]} - ${newNames[newNames.length - 1]}`]);
     git(['push']);
   } catch (e) {
@@ -240,7 +251,7 @@ if (PICS_ONLY) {
   await setDoc(doc(db, `artifacts/${appId}/public/data/config/classMeta`), { versions: { [`ss:${classId}`]: Date.now() }, ...(snap.exists() ? {} : { autoApprove: { [classId]: false } }) }, { merge: true });
   console.log(`✅ ${added.length} lesson(s) added to SmartStudy class "${classId}" (now ${existing.length + added.length}).`);
 } else {
-  await setDoc(doc(db, `${ABHI}/classes/${classId}`), { classId, autoApprove: false, createdAt: serverTimestamp(), ...(classExists ? {} : { imageBaseUrl: RAW_BASE(branch) }) }, { merge: true });
+  await setDoc(doc(db, `${ABHI}/classes/${classId}`), { classId, autoApprove: false, createdAt: serverTimestamp(), ...(classExists ? {} : { imageBaseUrl: imgBase }) }, { merge: true });
   const existIds = new Set((await getDocs(collection(db, `${ABHI}/classes/${classId}/lessons`))).docs.map(d => d.id));
   const now = Date.now();
   let added = 0;
@@ -291,7 +302,7 @@ if (PICS_ONLY) {
   const first = newNames[0], last = newNames[newNames.length - 1];
   console.log(`\n✅ ${needed} picture(s) are on GitHub: ${first} ... ${last}`);
   console.log(`   Picture number to type in the app:  ${first.replace(/\.\w+$/, '')}   (lesson 1 gets the first 5, lesson 2 the next 5, and so on)`);
-  console.log(`   Full address of the first picture:  ${RAW_BASE(branch)}${first}`);
+  console.log(`   Full address of the first picture:  ${imgBase}${first}`);
   console.log('   SmartStudy Bulk tab: paste that address in the "first picture address" box. Abhidhamma Bulk box: type the number.');
 } else console.log('\nAll done. Open the app and refresh to see the new lessons.');
 rl.close();
