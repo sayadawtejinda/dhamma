@@ -182,7 +182,8 @@ def main():
         else:
             print(f'  Found {len(cols)} across x {len(rows)} down = {count} pictures.')
         boxes = [(c0, r0, c1, r1) for (r0, r1) in rows for (c0, c1) in cols]
-        pv_path = os.path.join(WORK, 'sheets', '_preview.png')
+        # a new file name for every sheet (and every run): a picture viewer that still has the previous preview open locks that file
+        pv_path = os.path.join(WORK, 'sheets', f'_preview_{os.path.splitext(name)[0]}_{int(time.time())}.png')
         preview(img, boxes, pv_path)
         try:
             if os.environ.get('LESSON_NO_OPEN'):
@@ -203,6 +204,7 @@ def main():
                     across, down, o = parse_layout(fix)
                     cols, rows = even_grid(img, across, down, o['t'], o['b'], o['s'], o['g'])
                     boxes = [(c0, r0, c1, r1) for (r0, r1) in rows for (c0, c1) in cols]
+                    pv_path = os.path.join(WORK, 'sheets', f'_preview_{os.path.splitext(name)[0]}_{int(time.time() * 1000)}.png')
                     preview(img, boxes, pv_path)
                     try:
                         if os.environ.get('LESSON_NO_OPEN'):
@@ -269,10 +271,12 @@ def main():
         if os.path.abspath(sheet) != os.path.abspath(dest):
             shutil.move(sheet, dest)
         print(f'  Saved {saved} pictures in {WORK}; the sheet was moved to {os.path.join(WORK, "sheets")}.\n')
-    try:
-        os.remove(os.path.join(WORK, 'sheets', '_preview.png'))
-    except Exception:
-        pass
+    for leftover in os.listdir(os.path.join(WORK, 'sheets')):
+        if leftover.startswith('_preview'):
+            try:
+                os.remove(os.path.join(WORK, 'sheets', leftover))
+            except Exception:
+                pass   # still open in a viewer: it is removed the next time
     print('Done. Next: double-click add-lessons.bat')
 
 
