@@ -85,3 +85,32 @@ test('the check against the published list: normal growth passes, mass drops and
   assert.equal(checkAttendanceAgainstPrevious(prev, prev.map((r, i) => (i === 0 ? { ...r, total: 25 } : r))).length, 1);
   assert.deepEqual(checkAttendanceAgainstPrevious(prev, prev.map((r, i) => (i < 6 ? { ...r, attended: 9 } : r))), []); // a few honest corrections are fine
 });
+
+import { weekKeyOf, attendedWeekKeys, mergeWeekKeys, weekTotals } from './attendance-rules.mjs';
+test('Bodhi weeks: a week is its Monday; a week counts once however many classes; an absent or future class does not count', () => {
+  assert.equal(weekKeyOf(pt(2026, 11, 8, 17)), '2026-11-02');   // a Sunday belongs to the week that began the Monday before
+  assert.equal(weekKeyOf(pt(2026, 11, 9, 0, 5)), '2026-11-09');
+  assert.equal(weekKeyOf(pt(2026, 1, 1, 12)), '2025-12-29');    // the week of New Year's Day starts in the old year
+  const sched = [entry('a', pt(2026, 11, 3, 17)), entry('a', pt(2026, 11, 5, 17)), entry('a', pt(2026, 11, 12, 17)), entry('a', pt(2026, 11, 20, 17)), entry('b', pt(2026, 11, 3, 17), { overrideStatus: 'attended' }), entry('a', pt(2026, 10, 27, 17), { overrideStatus: 'absent' })];
+  const sessions = [session('a', pt(2026, 11, 3, 17, 1)), session('a', pt(2026, 11, 5, 17, 1)), session('a', pt(2026, 10, 27, 17, 1)), session('a', pt(2026, 11, 20, 17, 1))];
+  const w = attendedWeekKeys(sched, sessions, NOW);              // NOW = Nov 10: the Nov 12 and Nov 20 classes are in the future
+  assert.deepEqual([...w.a], ['2026-11-02']);                    // two classes in one week = one week; the 'absent' Oct 27 mark wins over a session
+  assert.deepEqual([...w.b], ['2026-11-02']);                    // the teacher's mark counts
+});
+test('Bodhi weeks: this year is worked out again every run, so a week an old wrong run counted is dropped; earlier years stay', () => {
+  const previous = { a: new Set(['2025-06-02', '2025-12-29', '2026-03-02', '2026-03-09', '2026-08-03']) };   // 03-09 and 08-03 were wrong
+  const found = { a: new Set(['2026-03-02']) };
+  const merged = mergeWeekKeys(previous, found, 2026);
+  assert.deepEqual([...merged.a].sort(), ['2025-06-02', '2025-12-29', '2026-03-02']);
+  const { attendedWeeks, yearWeeks } = weekTotals(merged, { zz: 5, a: 1 }, 2026);
+  assert.equal(attendedWeeks.a, 3); assert.equal(yearWeeks.a, 1);          // the 2025-12-29 week is not "2026"
+  assert.equal(attendedWeeks.zz, 5); assert.equal(yearWeeks.zz, 5);        // a teacher grant is a minimum, and counts for this year
+  assert.equal(weekTotals({ a: new Set(['2026-01-05']) }, { a: 9 }, 2026).yearWeeks.a, 9);
+});
+test('Bodhi weeks can never be more than the classes attended (the mistake that showed in 15 students)', () => {
+  const sched = [], sessions = [];
+  for (let k = 0; k < 6; k++) { const d = pt(2026, 3, 2 + 7 * k, 17); sched.push(entry('a', d), entry('a', new Date(d.getTime() + 24 * 3600000))); if (k !== 2) sessions.push(session('a', d)); }
+  const weeks = attendedWeekKeys(sched, sessions, NOW).a.size;
+  const row = computeAttendance([{ id: 'a', name: 'a', isOffline: false }], sched, sessions, NOW, YEAR)[0];
+  assert.ok(weeks <= row.attended, `${weeks} weeks > ${row.attended} classes`);
+});

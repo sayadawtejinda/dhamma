@@ -110,3 +110,54 @@ export function checkAttendanceAgainstPrevious(previousRows, newRows, { maxDrops
   if (jumps.length > 0) problems.push(`${jumps.length} students' class counts jumped by more than ${maxTotalJump}: ${jumps.slice(0, 8).join('; ')}`);
   return problems;
 }
+
+// ---- Bodhi Tree weeks (the weeks a student attended) ---------------------------------------------------------------------
+// A "week key" is the Monday (Pacific date, YYYY-MM-DD) of the week a class falls in. Import ./class-timezone.mjs first.
+export const weekKeyOf = (date) => {
+  const day = date.getDay();
+  const monday = new Date(date.getFullYear(), date.getMonth(), date.getDate() + ((day === 0 ? -6 : 1) - day));
+  return `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`;
+};
+
+// For every student: the set of week keys in which they attended at least one class that is over (same rule as the attendance counts:
+// the teacher's mark, or a session on the same Pacific day). allSchedule = real + made-up weekly classes.
+export function attendedWeekKeys(allSchedule, allSessions, now) {
+  const dayOf = (d) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  const sessionDays = new Set(allSessions.filter(s => s.startTime && s.studentUid).map(s => `${s.studentUid}_${dayOf(s.startTime.toDate())}`));
+  const byUid = {};
+  allSchedule.forEach(e => {
+    if (!e.studentUid || e.studentUid === 'offline' || !e.endTime || !e.startTime) return;
+    if (e.endTime.toDate() >= now) return;
+    const d = e.startTime.toDate();
+    const attended = e.overrideStatus === 'attended' || (e.overrideStatus !== 'absent' && sessionDays.has(`${e.studentUid}_${dayOf(d)}`));
+    if (!attended) return;
+    (byUid[e.studentUid] = byUid[e.studentUid] || new Set()).add(weekKeyOf(d));
+  });
+  return byUid;
+}
+
+// The kept week keys of earlier runs + the weeks found now. The weeks of the CURRENT year are always worked out again from all of this
+// year's classes, so a week that an earlier (wrong) run counted and the corrected rules do not is dropped; earlier years' weeks are kept.
+export function mergeWeekKeys(previousByUid, foundByUid, year) {
+  const out = {};
+  Object.entries(previousByUid || {}).forEach(([uid, keys]) => { out[uid] = new Set([...keys].filter(k => !String(k).startsWith(String(year)))); });
+  Object.entries(foundByUid).forEach(([uid, set]) => { const k = (out[uid] = out[uid] || new Set()); set.forEach(w => k.add(w)); });
+  return out;
+}
+
+// { attendedWeeks (all time), yearWeeks (this year) } per student. grants = the teacher's own minimums (treeOverrides.json): they raise the
+// all-time number, and the year number when they are for this year.
+export function weekTotals(keysByUid, grants, year) {
+  const attendedWeeks = {}, yearWeeks = {};
+  Object.entries(keysByUid).forEach(([uid, set]) => {
+    attendedWeeks[uid] = set.size;
+    let n = 0; set.forEach(k => { if (String(k).startsWith(String(year))) n++; });
+    yearWeeks[uid] = n;
+  });
+  Object.entries(grants || {}).forEach(([uid, weeks]) => {
+    if (typeof weeks !== 'number') return;
+    attendedWeeks[uid] = Math.max(attendedWeeks[uid] || 0, weeks);
+    if (year === 2026) yearWeeks[uid] = Math.max(yearWeeks[uid] || 0, weeks);
+  });
+  return { attendedWeeks, yearWeeks };
+}

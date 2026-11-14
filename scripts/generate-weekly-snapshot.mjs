@@ -27,7 +27,7 @@ import { dirname, join } from 'node:path';
 import { firebaseConfig, appId } from '../src/firebaseConfig.js';
 import { refreshClassSnapshots, refreshClassDocSnapshots, refreshAbhidhammaClassFiles, refreshDhammaschoolProgress, refreshFestivalDeeds, CLASS_DIR } from './class-snapshots.mjs';
 import { loadLessonContext, rankRoster } from './roster-lessons.mjs';
-import { getStudentAttendanceForEntry, synthesizeOccurrencesFromRecurringSchedule, computeAttendance, checkAttendanceAgainstPrevious } from './attendance-rules.mjs';
+import { getStudentAttendanceForEntry, synthesizeOccurrencesFromRecurringSchedule, computeAttendance, checkAttendanceAgainstPrevious, attendedWeekKeys, mergeWeekKeys, weekTotals } from './attendance-rules.mjs';
 import { assertClassTimezone } from './class-timezone.mjs';
 import { refreshContentSnapshots, refreshAnnouncementsSnapshot, refreshAvatarSnapshot, refreshScheduleSnapshot } from './content-snapshots.mjs';
 
@@ -307,41 +307,19 @@ async function main() {
   // Both used to read a student's whole schedule + whole session history every time
   // they were opened. One small static file replaces that (up to a week old).
   const allSchedule = [...allRealSchedule, ...synthesizeOccurrencesFromRecurringSchedule(recurringSlots, allRealSchedule, startOfYear, now, allSessions, Timestamp.fromDate)];
-  const weekKeyOf = (date) => {
-    const day = date.getDay();
-    const monday = new Date(date.getFullYear(), date.getMonth(), date.getDate() + ((day === 0 ? -6 : 1) - day));
-    return monday.toISOString().slice(0, 10);
-  };
-  const sessionDays = new Set(allSessions.filter(s => s.startTime && s.studentUid).map(s => { const d = s.startTime.toDate(); return `${s.studentUid}_${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`; }));
-  const weeksByUid = {};
-  allSchedule.forEach(e => {
-    if (!e.studentUid || e.studentUid === 'offline' || !e.endTime || !e.startTime) return;
-    if (e.endTime.toDate() >= now) return;
-    const d = e.startTime.toDate();
-    const attended = e.overrideStatus === 'attended' || (e.overrideStatus !== 'absent' && sessionDays.has(`${e.studentUid}_${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`));
-    if (!attended) return;
-    (weeksByUid[e.studentUid] = weeksByUid[e.studentUid] || new Set()).add(weekKeyOf(d));
-  });
-  // a normal run only sees this year, so the weeks found are added to the weeks kept from the earlier runs
-  const keysByUid = {};
-  if (!FULL) { try { Object.entries(JSON.parse(readFileSync(KEYS_PATH, 'utf8')).weeks || {}).forEach(([uid, list]) => { keysByUid[uid] = new Set(list); }); } catch (e) { /* none yet */ } }
-  Object.entries(weeksByUid).forEach(([uid, set]) => { const k = (keysByUid[uid] = keysByUid[uid] || new Set()); set.forEach(w => k.add(w)); });
-  writeFileSync(KEYS_PATH, JSON.stringify({ weeks: Object.fromEntries(Object.entries(keysByUid).map(([uid, set]) => [uid, [...set].sort()])) }));
-  const attendedWeeks = {};
-  Object.entries(keysByUid).forEach(([uid, set]) => { attendedWeeks[uid] = set.size; });
-  // The teacher's own tree grants (scripts/treeOverrides.json): a minimum number of weeks for a student.
-  try {
-    const grants = JSON.parse(readFileSync(join(__dirname, 'treeOverrides.json'), 'utf8'));
-    Object.entries(grants).forEach(([uid, weeks]) => { if (typeof weeks === 'number') attendedWeeks[uid] = Math.max(attendedWeeks[uid] || 0, weeks); });
-  } catch (e) { /* no grants file */ }
-  // The Bodhi Tree starts again every January: this calendar year's weeks of attendance (a week belongs to the year of its Monday).
+  const weeksByUid = attendedWeekKeys(allSchedule, allSessions, now);
+  // A normal run only sees this year's classes, so the weeks of EARLIER years come from the keys kept by earlier runs. The weeks of THIS year are
+  // always worked out again from all of this year's classes (a week that an earlier, wrong run counted is dropped); see mergeWeekKeys.
   const treeYear = now.getFullYear();
-  const yearWeeks = {};
-  Object.entries(keysByUid).forEach(([uid, set]) => { let n = 0; set.forEach(k => { if (String(k).startsWith(String(treeYear))) n++; }); yearWeeks[uid] = n; });
-  try {
-    // the teacher's own grants (a minimum number of weeks) belong to the year they were made for: 2026
-    if (treeYear === 2026) Object.entries(JSON.parse(readFileSync(join(__dirname, 'treeOverrides.json'), 'utf8'))).forEach(([uid, weeks]) => { if (typeof weeks === 'number') yearWeeks[uid] = Math.max(yearWeeks[uid] || 0, weeks); });
-  } catch (e) { /* no grants file */ }
+  let previousKeys = {};
+  if (!FULL) { try { Object.entries(JSON.parse(readFileSync(KEYS_PATH, 'utf8')).weeks || {}).forEach(([uid, list]) => { previousKeys[uid] = new Set(list); }); } catch (e) { /* none yet */ } }
+  const keysByUid = mergeWeekKeys(previousKeys, weeksByUid, treeYear);
+  writeFileSync(KEYS_PATH, JSON.stringify({ weeks: Object.fromEntries(Object.entries(keysByUid).map(([uid, set]) => [uid, [...set].sort()])) }));
+  // The teacher's own tree grants (scripts/treeOverrides.json): a minimum number of weeks for a student. The Bodhi Tree starts again every January:
+  // yearWeeks are this calendar year's weeks of attendance (a week belongs to the year of its Monday).
+  let grants = {};
+  try { grants = JSON.parse(readFileSync(join(__dirname, 'treeOverrides.json'), 'utf8')); } catch (e) { /* no grants file */ }
+  const { attendedWeeks, yearWeeks } = weekTotals(keysByUid, grants, treeYear);
   writeFileSync(join(__dirname, '..', 'public', 'studentWeekly.json'), JSON.stringify({ generatedAt, year: treeYear, attendedWeeks, yearWeeks }));
 
   // ---- Each student's schedule + sessions for this year (their login used to read all of it) ----
