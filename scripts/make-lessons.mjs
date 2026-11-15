@@ -46,7 +46,9 @@ function findFiles(spec) {
       const pat = isAbsolute(part) ? basename(part) : part;
       const re = new RegExp('^' + pat.split('*').map(s => s.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*') + '$', 'i');
       const dirs = isAbsolute(part) ? [dirname(part)] : searchDirs();
-      const hit = dirs.find(d => existsSync(d) && readdirSync(d).some(f => re.test(f)));
+      // the folder whose matching file is the NEWEST wins (a pattern like *.md also matches old project notes in this folder)
+      const newest = (d) => Math.max(...readdirSync(d).filter(f => re.test(f)).map(f => { try { return statSync(join(d, f)).mtimeMs; } catch (e) { return 0; } }));
+      const hit = dirs.filter(d => existsSync(d) && readdirSync(d).some(f => re.test(f))).sort((a, b) => newest(b) - newest(a))[0];
       if (hit) readdirSync(hit).filter(f => re.test(f)).sort(naturalSort).forEach(f => out.push(join(hit, f)));
     } else {
       const f = findFile(part);
@@ -181,9 +183,29 @@ async function makeLesson(key, story, index) {
 // ---- main ---------------------------------------------------------------------------------------------------------
 console.log(DRY ? '\n(--dry: Gemini is not called)\n' : '\n📝 Make lessons with Gemini\n');
 const abhi = (await ask('1 = SmartStudy lessons, 2 = Abhidhamma lessons', '1')) === '2';
-const name = await ask('Stories file name(s) (a notebook .txt, or .md articles: one name, a comma list, or article-*.md)');
-const files = findFiles(name);
-if (!files.length) die(`I could not find "${name}" (looked in this folder, Downloads, Desktop and Documents).`);
+// The .md / .txt files that are lying in the usual folders, newest first: shown when the typed name finds nothing, so the real
+// names can be copied (a typed example such as "article-*.md" is a common slip: the example is not a real name).
+const storyFilesSeen = () => {
+  const seen = [];
+  for (const d of searchDirs()) {
+    try { readdirSync(d).filter(f => /\.(md|txt)$/i.test(f)).forEach(f => { try { seen.push({ f, d, t: statSync(join(d, f)).mtimeMs }); } catch (e) { /* skip */ } }); } catch (e) { /* folder missing */ }
+  }
+  return seen.sort((a, b) => b.t - a.t);
+};
+let name = '', files = [];
+for (let tryNo = 1; tryNo <= 4 && !files.length; tryNo++) {
+  name = await ask(tryNo === 1
+    ? 'Stories file name(s) (just press Enter for every .md file; or a notebook .txt, a comma list, or a pattern such as lesson-*.md)'
+    : 'Type the name again (copy one from the list above, or a pattern such as *.md)', tryNo === 1 ? '*.md' : '');
+  files = findFiles(name);
+  if (!files.length) {
+    console.log(`\n❌ I could not find "${name}" (looked in this folder, Downloads, Desktop and Documents).`);
+    const seen = storyFilesSeen().slice(0, 15);
+    if (seen.length) { console.log('   These .md / .txt files are there (newest first):'); seen.forEach(s => console.log(`     ${s.f}   (${basename(s.d)})`)); console.log('   Tip: *.md means every .md file; lesson-*.md means every file that starts with "lesson-". Names like article-*.md in the instructions are only examples.\n'); }
+    else console.log('   No .md or .txt files are in those folders at all: check that the files were saved there.\n');
+  }
+}
+if (!files.length) die('Still no file found. Nothing was changed; run it again when the files are in Downloads.');
 const file = files[0];
 // Each file is read the way it is written: the old notebook files (=== lines or 📖 lines) as before, Markdown articles
 // (# title, ## sections) as ONE lesson per article.
@@ -246,7 +268,7 @@ if (abhi) {
     title: s.heading.replace(/^ကလေးများအတွက်\s*/, '').trim() || `Lesson ${i + 1}`,
     burmeseContent: s.text,
   }));
-  const wantPlan = (await ask('Make a picture plan, so the pictures keep their order? (y/n)', 'y')).toLowerCase().startsWith('y');
+  const wantPlan = (await ask('Make a picture plan, so the pictures keep their order? (y/n)', 'n')).toLowerCase().startsWith('y');
   let planFile = null;
   let plan = null;
   if (wantPlan) {

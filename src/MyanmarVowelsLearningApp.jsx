@@ -5,6 +5,7 @@ import { presenceIntervalMs } from './presenceDay';
 import { rosterDocRefByUid, migrateNameKeyedRosterDoc } from './studentRosterIdentity';
 import OnlineStatusWidget from './OnlineStatusWidget';
 import { spawnFlyingCoins, trackLastClickPoint } from './flyingCoins';
+import { QUIZ_BREAK_GAMES } from './quizBreakGames';
 
 // ── Ported from the standalone "Myanmar Vowels Learning" HTML app ──
 // Same hybrid approach as ConsonantPracticeApp/BurmeseConsonantGameApp/
@@ -625,6 +626,41 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
   const coinBalanceRef = useRef(0);
   const [myCoinBalance, setMyCoinBalance] = useState(0);
 
+  // A rest game for every 5 steps the climber goes up (the steps are counted on this device only -- localStorage, no Firebase;
+  // a ready game waits behind the 🎮 button, at most 3 saved up; the games rotate through the whole list). The games pay 2-3 coins
+  // each into this student's coin balance, MVL_GAME_COIN_TOTAL coins in all (kept on the roster doc as gameCoins), then they stop.
+  const MVL_GAME_EVERY = 5;
+  const MVL_GAME_COIN_TOTAL = 100;
+  const gameCoinsRef = useRef(0);
+  const trackStepRef = useRef(null);
+  const [gamesReady, setGamesReady] = useState(0);
+  const [gameBanner, setGameBanner] = useState(false);
+  const [playingGame, setPlayingGame] = useState(false);
+  const gameStoreKey = `mvlGame:${studentUid || (studentName || '').trim()}`;
+  const readGameStore = () => { try { const j = JSON.parse(localStorage.getItem(gameStoreKey) || '{}'); return { pts: +j.pts || 0, ready: +j.ready || 0, idx: +j.idx || 0 }; } catch (e) { return { pts: 0, ready: 0, idx: 0 }; } };
+  const writeGameStore = (g) => { try { localStorage.setItem(gameStoreKey, JSON.stringify(g)); } catch (e) { /* optional */ } };
+  useEffect(() => { setGamesReady(studentName ? readGameStore().ready : 0); }, [studentName]); // eslint-disable-line react-hooks/exhaustive-deps
+  trackStepRef.current = () => {
+    if (!studentName || gameCoinsRef.current >= MVL_GAME_COIN_TOTAL) return;
+    const g = readGameStore();
+    const pts = g.pts + 1;
+    const earned = Math.floor(pts / MVL_GAME_EVERY);
+    const next = { pts: pts % MVL_GAME_EVERY, ready: Math.min(3, g.ready + earned), idx: g.idx };
+    writeGameStore(next);
+    if (next.ready !== g.ready) {
+      setGamesReady(next.ready);
+      if (earned > 0) { setGameBanner(true); setTimeout(() => setGameBanner(false), 5000); }
+    }
+  };
+  const finishMvlGame = (coins) => {
+    if (coins > 0) { gameCoinsRef.current += coins; window.__mvlApp?.awardGameCoins?.(coins); }
+    const g = readGameStore();
+    const next = { pts: g.pts, ready: gameCoinsRef.current >= MVL_GAME_COIN_TOTAL ? 0 : Math.max(0, g.ready - 1), idx: g.idx + 1 };
+    writeGameStore(next);
+    setGamesReady(next.ready);
+    setPlayingGame(false);
+  };
+
   // Roster heartbeat — only pings when opened for a student (entryRequest
   // carries their name); a teacher just observes.
   useEffect(() => {
@@ -800,6 +836,13 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
         // clamped at 0, same convention as ConsonantPracticeApp.
         const READ_COINS = 2;
         const CONSONANT_PICK_COINS = 5;
+        // Coins won in a rest game (see MVL_GAME_EVERY in the component): added to the balance, and counted in gameCoins.
+        function awardGameCoins(c) {
+            if (!progressRosterRef || !(c > 0)) return;
+            coinBalanceRef.current += c;
+            setMyCoinBalance(coinBalanceRef.current);
+            setDoc(progressRosterRef, { coinBalance: coinBalanceRef.current, gameCoins: increment(c) }, { merge: true }).catch(() => {});
+        }
         function awardCoins(delta) {
             if (!progressRosterRef) return;
             const newBalance = Math.max(0, coinBalanceRef.current + delta);
@@ -863,6 +906,7 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
                     const data = snap.exists() ? snap.data() : {};
                     completedGameIds = new Set(Array.isArray(data.completedGames) ? data.completedGames : []);
                     coinBalanceRef.current = data.coinBalance || 0;
+                    gameCoinsRef.current = data.gameCoins || 0;
                     setMyCoinBalance(coinBalanceRef.current);
                     updateModeButtonLockUI();
                 }).catch(e => console.error('Error loading Myanmar Vowels Learning progress:', e));
@@ -1116,6 +1160,7 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
             // trophies for it (see recordGameCompleted in gameWin below).
             if (currentGameType !== 'type') awardCoins(10);
             currentScore++;
+            if (trackStepRef.current) trackStepRef.current(); // one step up for the climber = one point towards the next rest game
             if (currentScore % 5 === 0 && currentScore > consonantStepDone && currentScore < currentTargetScore) {
                 consonantStepDone = currentScore;
                 pickRandomConsonant(currentMode === 'P'); // a different one, at random, so every letter comes up (Pro: of the same kind, see above)
@@ -1797,7 +1842,7 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
           stopGame, closeConsonantModal, closeGameMenu, switchMode,
           openConsonantModal, readAloud, openGameMenu, replayCurrentSound, cycleRepeatInterval,
           handleVowelClick, startGameSession,
-          depositCoinsToShrineRoom,
+          depositCoinsToShrineRoom, awardGameCoins,
         };
 
         runMasterInit();
@@ -1820,6 +1865,16 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
         className="mvl-app-root bg-gray-100"
         dangerouslySetInnerHTML={{ __html: MVL_APP_BODY_HTML }}
       />
+      {gameBanner && !playingGame && (
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-[10040] bg-purple-600 text-white font-extrabold text-sm sm:text-base rounded-full px-4 py-2 shadow-xl pointer-events-none">🎮 The climber went up {MVL_GAME_EVERY} steps! A game is ready!</div>
+      )}
+      {gamesReady > 0 && !playingGame && studentName && (
+        <button onClick={() => setPlayingGame(true)} className="fixed left-3 bottom-20 z-[10040] bg-purple-600 hover:bg-purple-700 text-white font-extrabold rounded-full shadow-xl px-4 py-3 flex items-center gap-2 animate-bounce" aria-label="Play a game">🎮 Play a game{gamesReady > 1 ? ` (${gamesReady})` : ''}</button>
+      )}
+      {playingGame && (() => {
+        const Game = QUIZ_BREAK_GAMES[readGameStore().idx % QUIZ_BREAK_GAMES.length];
+        return <div className="fixed inset-0 z-[10060] bg-black"><Game coinsLeft={Math.max(0, MVL_GAME_COIN_TOTAL - gameCoinsRef.current)} onDone={finishMvlGame} /></div>;
+      })()}
       {!hideOwnOnlineBadge && (
         <OnlineStatusWidget
           rosterPath={MVL_ROSTER_PATH}

@@ -194,7 +194,11 @@ const fetchWithRetry = async (url, options, maxRetries = 4) => {
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     let status = 0;
     try {
-      const response = await fetch(url, options);
+      // a call that has not answered after 90 seconds is cancelled and tried again (one stuck call once held a whole run for 52 minutes)
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 90000);
+      let response;
+      try { response = await fetch(url, { ...options, signal: ctrl.signal }); } finally { clearTimeout(timer); }
       status = response.status;
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
@@ -395,6 +399,76 @@ const BulkLessonsPanel = ({ bulk, lessons, classId }) => {
         <Button onClick={finishAll} disabled={running || needWork === 0} className="bg-orange-500 hover:bg-orange-600 flex items-center">
           {running ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <Sparkles className="w-5 h-5 mr-2" />}Format and make quizzes for all
         </Button>
+      </Card>
+
+      <Card>
+        <h3 className="text-2xl font-bold text-teal-600 mb-2">Step 4 (optional): short English titles</h3>
+        <p className="text-gray-600 mb-3">Gemini reads each lesson and suggests a short English title. Nothing is saved until you press Apply. You can change any title in the box first, or empty a box to keep the old title.</p>
+        <Button onClick={bulk.suggestTitles} disabled={running} className="bg-teal-500 hover:bg-teal-600 flex items-center mb-3">
+          {running ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <Sparkles className="w-5 h-5 mr-2" />}Suggest English titles
+        </Button>
+        {bulk.titles.length > 0 && (
+          <div className="space-y-2">
+            {bulk.titles.map((t, i) => (
+              <div key={t.lessonId} className="flex flex-wrap items-center gap-2">
+                <span className="font-bold text-gray-500 w-10">{t.lessonId}</span>
+                <span className="text-xs text-gray-500 flex-1 min-w-[160px]">{t.old}</span>
+                <input value={t.title} onChange={(e) => bulk.editTitle(i, e.target.value)} className="flex-1 min-w-[200px] border-2 border-gray-300 rounded-lg px-3 py-1" />
+              </div>
+            ))}
+            <Button onClick={bulk.applyTitles} disabled={running} className="bg-green-500 hover:bg-green-600 mt-2">Apply these titles</Button>
+          </div>
+        )}
+      </Card>
+
+      <Card>
+        <h3 className="text-2xl font-bold text-red-600 mb-2">Step 5 (optional): shorten texts that are too long</h3>
+        <p className="text-gray-600 mb-3">Works on class <b>{classId}</b> only. <b>1)</b> Download the backup. <b>2)</b> Check which texts are over the limits. <b>3)</b> Gemini writes a shorter text for each. <b>4)</b> You look at old and new side by side and press ✅ (use the new one) or ❌ (keep the original). <b>5)</b> Save: only the ✅ ones change, and their formatted text and quiz are made again. Scores, students, pictures are not touched.</p>
+        <div className="border-2 border-dashed border-red-300 rounded-xl p-3 mb-3">
+          <p className="text-sm text-gray-700 mb-2"><b>0) Only when the class has no lessons yet:</b> choose a "lessons-only" .json file (for example the one downloaded from the live app). Its lessons REPLACE the lessons of class <b>{classId}</b> here in Canvas. Nothing else is touched.</p>
+          <input type="file" accept=".json" onChange={bulk.restoreFile} disabled={running} className="text-sm mb-2" />
+          {bulk.restore && <div><Button onClick={bulk.restoreApply} disabled={running} className="bg-green-500 hover:bg-green-600">Put the {bulk.restore.lessons.length} lesson(s) into class {classId}</Button></div>}
+        </div>
+        <div className="flex flex-wrap gap-2 mb-3">
+          <Button onClick={() => { try { const blob = new Blob([JSON.stringify({ classId, timestamp: new Date().toISOString(), lessons }, null, 2)], { type: 'application/json' }); const href = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = href; a.download = `lessons-only-${classId}-${Date.now()}.json`; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(href); } catch (e) { /* ignore */ } }} className="bg-gray-500 hover:bg-gray-600">1) Download the backup of this class</Button>
+          <Button onClick={bulk.fixScan} disabled={running} className="bg-red-400 hover:bg-red-500">2) Check the limits</Button>
+          <Button onClick={bulk.fixMake} disabled={running || !bulk.fix.some(x => x.state === 'todo' || x.state === 'failed')} className="bg-red-500 hover:bg-red-600 flex items-center">
+            {running ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <Sparkles className="w-5 h-5 mr-2" />}3) Write the shorter texts
+          </Button>
+        </div>
+        {bulk.fixInfo && <p className="text-sm font-bold text-red-700 bg-red-50 rounded-lg p-2 mb-3">{bulk.fixInfo}</p>}
+        {bulk.fix.length > 0 && (
+          <div className="space-y-3">
+            {bulk.fix.some(x => x.state === 'failed') && <Button onClick={bulk.fixMake} disabled={running} className="bg-red-500 hover:bg-red-600">Try the {bulk.fix.filter(x => x.state === 'failed').length} failed one(s) again</Button>}
+            <p className="text-sm text-gray-600">{bulk.fix.length} text(s) over the limits; {bulk.fix.filter(x => x.state === 'made').length} shorter version(s) written; {bulk.fix.filter(x => x.choice === 'yes').length} chosen with ✅.</p>
+            {bulk.fix.some(x => x.state === 'made') && (
+              <div className="flex gap-2 flex-wrap">
+                <button onClick={() => bulk.fixChooseAll('yes')} disabled={running} className="px-3 py-1 rounded-lg font-bold border-2 border-green-500 text-green-700">✅ Use the shorter text for ALL</button>
+                <button onClick={() => bulk.fixChooseAll('no')} disabled={running} className="px-3 py-1 rounded-lg font-bold border-2 border-gray-400 text-gray-600">❌ Keep the original for ALL</button>
+              </div>
+            )}
+            {bulk.fix.map((x, i) => (
+              <div key={`${x.lessonId}|${x.level}`} className="border-2 border-gray-200 rounded-xl p-3 bg-white">
+                <div className="font-bold text-gray-700 mb-1">{x.lessonId} · {x.level} <span className="text-xs font-normal text-gray-500">{x.title}</span></div>
+                <div className="text-xs text-red-600 mb-2">{x.problems.join(' | ')}</div>
+                <div className="grid md:grid-cols-2 gap-3">
+                  <div><div className="text-xs font-bold text-gray-500 mb-1">Now ({countWords(x.old)} words, {splitSentences(x.old).length} sentences)</div><div className="text-sm whitespace-pre-wrap max-h-48 overflow-y-auto bg-gray-50 rounded p-2">{x.old}</div></div>
+                  <div><div className="text-xs font-bold text-green-700 mb-1">{x.state === 'made' ? `Shorter ( ${countWords(x.newText)} words, ${splitSentences(x.newText).length} sentences )` : x.state === 'failed' ? `Failed (${x.err || 'no answer'}) - press "Try the failed ones again"` : 'Not written yet'}</div>
+                    {x.state === 'made' && <div className="text-sm whitespace-pre-wrap max-h-48 overflow-y-auto bg-green-50 rounded p-2">{x.newText}</div>}
+                    {x.newProblems.length > 0 && <div className="text-xs text-red-600 mt-1">Still: {x.newProblems.join(' | ')}</div>}
+                  </div>
+                </div>
+                {x.state === 'made' && (
+                  <div className="flex gap-2 mt-2">
+                    <button onClick={() => bulk.fixChoose(i, 'yes')} disabled={running} className={`px-3 py-1 rounded-lg font-bold border-2 ${x.choice === 'yes' ? 'bg-green-500 text-white border-green-500' : 'border-green-500 text-green-700'}`}>✅ Use the shorter text</button>
+                    <button onClick={() => bulk.fixChoose(i, 'no')} disabled={running} className={`px-3 py-1 rounded-lg font-bold border-2 ${x.choice === 'no' ? 'bg-gray-500 text-white border-gray-500' : 'border-gray-400 text-gray-600'}`}>❌ Keep the original</button>
+                  </div>
+                )}
+              </div>
+            ))}
+            <Button onClick={bulk.fixApply} disabled={running || !bulk.fix.some(x => x.choice === 'yes')} className="bg-green-500 hover:bg-green-600">5) Save the ✅ ones (and make their formatted text and quiz again)</Button>
+          </div>
+        )}
       </Card>
 
       {(running || log.length > 0) && (
@@ -2783,7 +2857,7 @@ ${spec.rules.map(r => '- ' + r).join('\n')}
   const [bulkRunning, setBulkRunning] = useState(false);
   const [bulkStage, setBulkStage] = useState('');
   const [bulkLog, setBulkLog] = useState([]);
-  const [bulkPause, setBulkPause] = useState(10);
+  const [bulkPause, setBulkPause] = useState(3);
   const [bulkFirstImage, setBulkFirstImage] = useState('');
   const bulkStopRef = useRef(false);
   const bulkPauseRef = useRef(10);
@@ -2885,19 +2959,21 @@ ${spec.rules.map(r => '- ' + r).join('\n')}
       const content = l.content && typeof l.content === 'object' ? l.content : null;
       if (!content || !LEVELS.every(k => content[k])) { bulkAddLog(`SKIPPED  ${l.lessonId}: it does not have all 4 age levels yet`); continue; }
       setBulkStage(`Step 3: ${l.lessonId} ${l.title} (${n + 1} of ${todo.length})`);
+      const t0 = Date.now();
       try {
         if (lessonNeedsFormat(l)) {
-          const fc = {};
-          for (const lv of LEVELS) { fc[lv] = await formatLevelText(content[lv]); await sleep(INNER_GAP_MS); }
+          // the 4 age levels are asked at the SAME time (4x faster than one after another)
+          const res = await Promise.all(LEVELS.map(lv => formatLevelText(content[lv])));
+          const fc = {}; LEVELS.forEach((lv, k) => { fc[lv] = res[k]; });
           l.formattedContent = fc;
         }
         if (lessonNeedsQuiz(l)) {
-          const q = {};
-          for (const lv of LEVELS) { q[lv] = (await makeQuizForLevel(l.title, content[lv], lv)); await sleep(INNER_GAP_MS); }
+          const res = await Promise.all(LEVELS.map(lv => makeQuizForLevel(l.title, content[lv], lv)));
+          const q = {}; LEVELS.forEach((lv, k) => { q[lv] = res[k]; });
           l.questions = q;
         }
         ok++;
-        bulkAddLog(`OK  ${l.lessonId} ${l.title}: formatted, 4 quizzes`);
+        bulkAddLog(`OK  ${l.lessonId} ${l.title}: formatted, 4 quizzes (${Math.round((Date.now() - t0) / 1000)} s)`);
       } catch (err) {
         bad++;
         bulkAddLog(`FAILED  ${l.lessonId} ${l.title}: ${err.message}`);
@@ -2909,7 +2985,140 @@ ${spec.rules.map(r => '- ' + r).join('\n')}
     setModal({ message: bulkStopRef.current ? `Stopped. ${ok} lesson(s) finished. Press the button again to carry on.` : `Step 3 finished: ${ok} lesson(s) done${bad ? `, ${bad} failed (press the button again to retry them)` : ''}.`, type: bad ? 'error' : 'success', visible: true });
   };
 
+  // STEP 4 (optional): short English titles. Gemini PROPOSES a title for every lesson whose title is not English; you can change any of
+  // them, then press Apply. Nothing is saved until you press Apply.
+  const [bulkTitles, setBulkTitles] = useState([]);
+  const bulkSuggestTitles = async () => {
+    if (bulkRunning) return;
+    const todo = lessons.filter(l => /[^\x00-\x7F]/.test(l.title || '') && l.content && (l.content.adventurer || l.content.explorer));
+    if (!todo.length) { setModal({ message: 'Every lesson title is already in English.', type: 'success', visible: true }); return; }
+    bulkStopRef.current = false; setBulkRunning(true); setBulkTitles([]);
+    const found = [];
+    for (const [n, l] of todo.entries()) {
+      if (bulkStopRef.current) break;
+      setBulkStage(`Step 4: English title for ${l.lessonId} (${n + 1} of ${todo.length})`);
+      let t = '';
+      try { t = await generateLessonTitle(l.content.adventurer || l.content.explorer); } catch (e) { bulkAddLog(`FAILED title ${l.lessonId}: ${e.message}`); }
+      found.push({ lessonId: l.lessonId, old: l.title, title: t });
+      setBulkTitles([...found]);
+      await sleep(1500);
+    }
+    setBulkRunning(false); setBulkStage('');
+  };
+  const bulkEditTitle = (i, v) => setBulkTitles(ts => ts.map((t, k) => (k === i ? { ...t, title: v } : t)));
+  const bulkApplyTitles = async () => {
+    if (bulkRunning) return;
+    const map = new Map(bulkTitles.filter(t => t.title.trim()).map(t => [t.lessonId, t.title.trim()]));
+    if (!map.size) return;
+    try {
+      await updateDoc(getClassDocRef(classId), { lessons: lessons.map(l => (map.has(l.lessonId) ? { ...l, title: map.get(l.lessonId) } : l)) });
+      bulkAddLog(`TITLES changed for ${map.size} lesson(s).`);
+      setBulkTitles([]);
+      setModal({ message: `${map.size} title(s) saved.`, type: 'success', visible: true });
+    } catch (err) { setModal({ message: `Saving the titles failed: ${err.message}`, type: 'error', visible: true }); }
+  };
+
+  // STEP 5 (optional): shorten the texts of THIS class that are over the word / sentence limits. Gemini rewrites each too-long age level
+  // from the lesson's own text; you see the old and the new side by side and choose; only the ones you chose are saved. For every
+  // level you choose, its formatted text and its quiz are made again so they match the new text. Only the "lessons" part of the class
+  // is changed: scores, roster, completions, pictures and lesson numbers are not touched.
+  const [bulkFix, setBulkFix] = useState([]);
+  const [bulkFixInfo, setBulkFixInfo] = useState('');
+  // put a "lessons only" file straight into THIS class (only the lessons part of the class is replaced; nothing else is touched)
+  const [bulkRestore, setBulkRestore] = useState(null);
+  const bulkRestoreFile = (event) => {
+    const file = event.target.files && event.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(String(e.target.result).replace(/^﻿/, ''));
+        const list = Array.isArray(data) ? data : (data.lessons || []);
+        if (!list.length) { setBulkFixInfo('That file has no lessons in it.'); return; }
+        setBulkRestore({ name: file.name, lessons: list });
+        setBulkFixInfo(`File read: ${list.length} lesson(s). Press the green button to put them into class ${classId}.`);
+      } catch (err) { setBulkFixInfo(`Could not read the file: ${err.message}`); }
+    };
+    reader.readAsText(file);
+    event.target.value = '';
+  };
+  const bulkRestoreApply = async () => {
+    if (!bulkRestore || bulkRunning) return;
+    setBulkRunning(true); setBulkStage('Putting the lessons into the class...');
+    try {
+      await updateDoc(getClassDocRef(classId), { lessons: bulkRestore.lessons });
+      bulkAddLog(`PUT ${bulkRestore.lessons.length} lesson(s) from ${bulkRestore.name} into class ${classId}.`);
+      setBulkFixInfo(`Done: class ${classId} now has ${bulkRestore.lessons.length} lesson(s). Press "2) Check the limits".`);
+      setBulkRestore(null);
+    } catch (err) { setBulkFixInfo(`Failed: ${err.message}`); }
+    setBulkRunning(false); setBulkStage('');
+  };
+  const bulkFixScan = () => {
+    if (bulkRunning) return;
+    const out = [];
+    lessons.forEach(l => {
+      if (!l.content || typeof l.content !== 'object') return;
+      LEVELS.forEach(lv => {
+        const t = l.content[lv]; if (!t) return;
+        const pr = checkLevelText(t, lv, 0).filter(p => !/^it has only/.test(p));
+        if (pr.length) out.push({ lessonId: l.lessonId, title: l.title, level: lv, old: t, problems: pr, newText: '', newProblems: [], state: 'todo', choice: null });
+      });
+    });
+    setBulkFix(out);
+    const first = lessons[0];
+    setBulkFixInfo(`Checked class ${classId}: ${lessons.length} lesson(s) found.` + (first && first.content && typeof first.content === 'object' ? ` The first one (${first.lessonId}) has ${LEVELS.map(l => countWords(first.content[l])).join(' / ')} words in its 4 levels (limits: 80 / 170 / 300 / 450).` : ' (the first lesson has no age levels)') + ` ${out.length} age level(s) are over the limits.`);
+    bulkAddLog(`CHECK: ${out.length} age level(s) over the limits in ${new Set(out.map(o => o.lessonId)).size} lesson(s).`);
+    if (!out.length) setModal({ message: 'Every text of this class is inside the limits.', type: 'success', visible: true });
+  };
+  const bulkFixMake = async () => {
+    if (bulkRunning) return;
+    const items = bulkFix.map(x => ({ ...x }));
+    const todo = items.filter(x => x.state === 'todo' || x.state === 'failed');
+    if (!todo.length) return;
+    bulkStopRef.current = false; setBulkRunning(true);
+    for (const [n, it] of todo.entries()) {
+      if (bulkStopRef.current) break;
+      setBulkStage(`Step 5: shorter text for ${it.lessonId} ${it.level} (${n + 1} of ${todo.length})`);
+      try {
+        const r = await generateLevelContent(it.old, it.level);
+        it.newText = r.text; it.newProblems = r.problems; it.state = r.text ? 'made' : 'failed'; it.err = r.text ? '' : 'Gemini sent an empty answer';
+      } catch (err) { it.state = 'failed'; it.err = err.message; bulkAddLog(`FAILED ${it.lessonId} ${it.level}: ${err.message}`); }
+      setBulkFix(items.map(x => ({ ...x })));
+      if (n < todo.length - 1 && !bulkStopRef.current) await sleep(Math.min(5, Number(bulkPauseRef.current) || 0) * 1000 + 1000);
+    }
+    setBulkRunning(false); setBulkStage('');
+  };
+  const bulkFixChooseAll = (choice) => setBulkFix(fs => fs.map(x => (x.state === 'made' ? { ...x, choice } : x)));
+  const bulkFixChoose = (i, choice) => setBulkFix(fs => fs.map((x, k) => (k === i ? { ...x, choice: x.choice === choice ? null : choice } : x)));
+  const bulkFixApply = async () => {
+    if (bulkRunning) return;
+    const chosen = bulkFix.filter(x => x.state === 'made' && x.choice === 'yes' && x.newText);
+    if (!chosen.length) { setModal({ message: 'Nothing is chosen. Press ✅ on the new texts you want to use.', type: 'error', visible: true }); return; }
+    bulkStopRef.current = false; setBulkRunning(true);
+    const work = lessons.map(l => ({ ...l, content: { ...(l.content || {}) }, formattedContent: { ...(l.formattedContent || {}) }, questions: { ...(l.questions || {}) } }));
+    const applied = new Set();
+    for (const [n, it] of chosen.entries()) {
+      const l = work.find(x => x.lessonId === it.lessonId); if (!l) continue;
+      setBulkStage(`Step 5: formatting and quiz for ${it.lessonId} ${it.level} (${n + 1} of ${chosen.length})`);
+      try {
+        const [fmt, quiz] = await Promise.all([formatLevelText(it.newText), makeQuizForLevel(l.title, it.newText, it.level)]);
+        l.content[it.level] = it.newText; l.formattedContent[it.level] = fmt; l.questions[it.level] = quiz;
+        applied.add(`${it.lessonId}|${it.level}`);
+        bulkAddLog(`OK  ${it.lessonId} ${it.level}: ${countWords(it.old)} -> ${countWords(it.newText)} words, formatted, quiz made again`);
+      } catch (err) { bulkAddLog(`KEPT OLD  ${it.lessonId} ${it.level}: ${err.message}`); }
+      await sleep(1000);
+    }
+    try {
+      if (applied.size) await updateDoc(getClassDocRef(classId), { lessons: work });
+      setBulkFix(fs => fs.filter(x => !applied.has(`${x.lessonId}|${x.level}`)));
+      setModal({ message: `${applied.size} text(s) changed${applied.size < chosen.length ? `, ${chosen.length - applied.size} kept as before (see the log)` : ''}. Scores and students were not touched.`, type: applied.size < chosen.length ? 'error' : 'success', visible: true });
+    } catch (err) { setModal({ message: `Saving failed: ${err.message}. Nothing was changed.`, type: 'error', visible: true }); }
+    setBulkRunning(false); setBulkStage('');
+  };
+
   const bulkApi = {
+    restore: bulkRestore, restoreFile: bulkRestoreFile, restoreApply: bulkRestoreApply,
+    fixInfo: bulkFixInfo, fix: bulkFix, fixScan: bulkFixScan, fixMake: bulkFixMake, fixChoose: bulkFixChoose, fixChooseAll: bulkFixChooseAll, fixApply: bulkFixApply,
+    titles: bulkTitles, suggestTitles: bulkSuggestTitles, editTitle: bulkEditTitle, applyTitles: bulkApplyTitles,
     drafts: bulkDrafts, running: bulkRunning, stage: bulkStage, log: bulkLog,
     pauseSec: bulkPause, setPauseSec: setBulkPause, firstImageUrl: bulkFirstImage, setFirstImageUrl: setBulkFirstImage,
     onFiles: bulkOnFiles, setTitle: bulkSetTitle, removeDraft: bulkRemove, clearDrafts: bulkClear,

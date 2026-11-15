@@ -2117,7 +2117,7 @@ export const ShareWaterGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
   }, [items]);
   useEffect(() => {
     if (finished || !state.every(v => v === 'drinking' || v === 'gone')) return undefined;
-    const t = setTimeout(() => setFinished(true), 1800); // let the last animal finish drinking
+    const t = setTimeout(() => setFinished(true), 2800); // let the last animal walk to the pond and drink
     return () => clearTimeout(t);
   }, [state, finished]);
 
@@ -2137,6 +2137,7 @@ export const ShareWaterGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
         @keyframes shwPop { 0% { opacity: 0; transform: scale(.4) } 100% { opacity: 1; transform: scale(1) } }
         @keyframes shwShy { 0%,100% { transform: translateX(-3px) } 50% { transform: translateX(3px) } }
         @keyframes shwRun { 0% { transform: translateX(0) rotate(0); opacity: 1 } 100% { transform: translateX(calc(var(--run) * 120px)) rotate(calc(var(--run) * 14deg)); opacity: 0 } }
+        @keyframes shwWalk { 0% { transform: translate(calc(var(--dx) * 1vw), calc(var(--dy) * 1dvh)) } 100% { transform: translate(0, 0) } }
         @keyframes shwDrink { 0%,100% { transform: translateY(0) } 50% { transform: translateY(5px) } }
         @keyframes shwUp { 0% { transform: translateY(0); opacity: 0 } 15% { opacity: 1 } 100% { transform: translateY(-46px); opacity: 0 } }
         @keyframes shwSway { 0%,100% { transform: translateX(-50%) rotate(-3deg) } 50% { transform: translateX(-50%) rotate(3deg) } }
@@ -2161,12 +2162,21 @@ export const ShareWaterGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
         if (st === 'waiting' || st === 'gone') return null;
         const pos = { left: `${it.x}%`, top: `${it.y}%`, transform: 'translate(-50%,-50%)' };
         if (st === 'drinking') {
+          // once invited, the little animal walks over to the edge of the pond (the side it came from) and drinks there; animals
+          // on the same side stand one below the other, then further out
+          const sameSideBefore = items.filter(o => o.id < it.id && (o.x < 50) === (it.x < 50)).length;
+          const left = it.x < 50;
+          const tx = (left ? 37 : 63) + (left ? -1 : 1) * Math.floor(sameSideBefore / 3) * 9;
+          const ty = 60 + (sameSideBefore % 3) * 7;
+          const dockPos = { left: `${tx}%`, top: `${ty}%`, transform: 'translate(-50%,-50%)' };
           return (
-            <div key={it.id} className="absolute pointer-events-none" style={{ ...pos, zIndex: 6 }}>
-              <span className="block select-none" style={{ fontSize: SHARE_SIZE, lineHeight: 1, animation: 'shwDrink .5s ease-in-out infinite' }}>{it.animal.e}</span>
-              <span className="absolute select-none" style={{ left: it.toRight === -1 ? '90%' : '-40%', bottom: '-6%', fontSize: 'clamp(18px, 4vmin, 30px)' }}>💧</span>
-              <ShareLabel it={it} />
-              <div className="absolute left-1/2 -translate-x-1/2 text-center whitespace-nowrap" style={{ top: `calc(${SHARE_SIZE} * -0.9)`, animation: 'shwUp 2.2s ease-out forwards' }}>
+            <div key={it.id} className="absolute pointer-events-none" style={{ ...dockPos, zIndex: 6 }}>
+              <div style={{ '--dx': it.x - tx, '--dy': it.y - ty, animation: 'shwWalk 1s ease-in-out both' }}>
+                <span className="block select-none" style={{ fontSize: SHARE_SIZE, lineHeight: 1, animation: 'shwDrink .5s ease-in-out 1s infinite' }}>{it.animal.e}</span>
+                <span className="absolute select-none" style={{ left: it.toRight === -1 ? '90%' : '-40%', bottom: '-6%', fontSize: 'clamp(18px, 4vmin, 30px)', animation: 'shwPop .3s ease-out 1s both' }}>💧</span>
+                <ShareLabel it={it} />
+              </div>
+              <div className="absolute left-1/2 -translate-x-1/2 text-center whitespace-nowrap" style={{ top: `calc(${SHARE_SIZE} * -0.9)`, animation: 'shwUp 2.2s ease-out 0.9s both' }}>
                 <div className="bg-white text-sky-900 font-bold text-sm rounded-full px-3 py-1 shadow">🙏 {it.thanks}</div>
                 {won[i] > 0 && <div className="font-black text-yellow-600 drop-shadow">+{won[i]} 🪙</div>}
               </div>
@@ -2513,8 +2523,8 @@ export const TenMeritGame = (props) => <ArcDeedsGame cfg={{
 // Game 20: the tiger in the trap (do not trust sad stories and big promises). A tiger is caught in a trap and begs the passer-by
 // (the child) to let it out with a different plea each time (seven in all, e.g. "I will not eat you", "my cubs are waiting"). Two
 // answers are thrown up in arcs from the two sides, like the heron game: "Save the tiger" or "Do not save it". Not saving gives 2 or
-// 3 coins (you stay safe). Saving costs nothing but the coins: the tiger breaks its promise and chases the child away (nothing cruel
-// is shown). No answer in time: nothing happens, no coins. The end screen links it to today's tricksters who beg for pity.
+// 3 coins (you stay safe). Saving the tiger ENDS THE GAME: it breaks its promise and chases the child away (nothing cruel is
+// shown; the coins won so far are kept). The two answers fly up from random places each round. No answer in time: nothing happens, no coins. The end screen links it to today's tricksters who beg for pity.
 const TIGER_ROUNDS = 7;
 const TIGER_ASK_MS = 5500;
 const TIGER_RESULT_MS = 2300;
@@ -2530,7 +2540,16 @@ const TIGER_PLEAS = [
 const makeTigerRounds = () => {
   const items = TIGER_PLEAS.map(says => ({ says }));
   for (let i = items.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [items[i], items[j]] = [items[j], items[i]]; }
-  return items.map(x => ({ ...x, flip: Math.random() < 0.5 })); // which answer comes up on the left
+  // the two answers each fly up from a different place along the bottom (anywhere from the left to the right, at least 30% apart),
+  // drift sideways a little and fall back; [0] is "Save the tiger", [1] is "Do not save it"
+  return items.map(x => {
+    const a = 24 + Math.random() * 52;
+    let b = 24 + Math.random() * 52;
+    for (let n = 0; n < 20 && Math.abs(a - b) < 30; n++) b = 24 + Math.random() * 52;
+    if (Math.abs(a - b) < 30) b = a < 50 ? a + 32 : a - 32;
+    const arc = (c) => ({ x0: c + (Math.random() * 12 - 6), x1: c + (Math.random() * 10 - 5), x2: c + (Math.random() * 12 - 6), peak: 42 + Math.random() * 20 });
+    return { ...x, arcs: [arc(a), arc(b)] };
+  });
 };
 export const TigerInTrapGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
   const [rounds] = useState(makeTigerRounds);
@@ -2556,7 +2575,7 @@ export const TigerInTrapGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
   useEffect(() => {
     if (finished || phase !== 'result') return undefined;
     const t = setTimeout(() => {
-      if (r + 1 >= TIGER_ROUNDS) setFinished(true);
+      if (r + 1 >= TIGER_ROUNDS || outcome === 'fooled') setFinished(true); // saving the tiger ends the game
       else { setR(r + 1); setPhase('ask'); setOutcome(null); }
     }, TIGER_RESULT_MS);
     return () => clearTimeout(t);
@@ -2576,7 +2595,7 @@ export const TigerInTrapGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
   const lastCoins = won[won.length - 1] || 0;
   const message = {
     wise: 'You did not save it. Good! A tiger stays a tiger, and sweet words are not a reason to trust it.',
-    fooled: `Oh no! The tiger broke its promise and chased you away! You were fooled ${fooled} ${fooled === 1 ? 'time' : 'times'}. Do not trust sad stories and big promises!`,
+    fooled: 'Oh no! The tiger broke its promise and chased you away! Do not trust sad stories and big promises!',
     late: 'Too slow to decide. The tiger is still in the trap, for now.',
   }[outcome] || '';
 
@@ -2585,8 +2604,7 @@ export const TigerInTrapGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
       <style>{`
         @keyframes tigerBar { 0% { width: 100% } 100% { width: 0% } }
         @keyframes tigerIn { 0% { transform: translateY(-30px) scale(.6); opacity: 0 } 100% { transform: translateY(0) scale(1); opacity: 1 } }
-        @keyframes tigerArcA { 0% { left: 22%; top: 94%; animation-timing-function: cubic-bezier(.2,.7,.4,1) } 45% { left: 28%; top: var(--peak); animation-timing-function: cubic-bezier(.6,0,.8,.3) } 100% { left: 34%; top: 94% } }
-        @keyframes tigerArcB { 0% { left: 78%; top: 94%; animation-timing-function: cubic-bezier(.2,.7,.4,1) } 45% { left: 72%; top: var(--peak); animation-timing-function: cubic-bezier(.6,0,.8,.3) } 100% { left: 66%; top: 94% } }
+        @keyframes tigerArc { 0% { left: var(--x0); top: 94%; animation-timing-function: cubic-bezier(.2,.7,.4,1) } 45% { left: var(--x1); top: var(--peak); animation-timing-function: cubic-bezier(.6,0,.8,.3) } 100% { left: var(--x2); top: 94% } }
         @keyframes tigerUp { 0% { transform: translateY(0); opacity: 0 } 15% { opacity: 1 } 100% { transform: translateY(-40px); opacity: 0 } }
         @keyframes tigerShake { 0%,100% { transform: translateX(0) } 25% { transform: translateX(-5px) } 75% { transform: translateX(5px) } }
       `}</style>
@@ -2614,12 +2632,12 @@ export const TigerInTrapGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
                 <div key={r} className="h-full bg-red-500" style={{ animation: `tigerBar ${TIGER_ASK_MS}ms linear forwards` }} />
               </div>
               {/* the two answers are thrown up from the bottom in arcs, one from each side, and fall back down on the same side */}
-              {[{ save: true, label: '🪢 Save the tiger', cls: 'bg-emerald-500', peak: '50%' }, { save: false, label: '🙅 Do not save it', cls: 'bg-rose-500', peak: '58%' }].map((a, k) => (
+              {[{ save: true, label: '🪢 Save the tiger', cls: 'bg-emerald-500' }, { save: false, label: '🙅 Do not save it', cls: 'bg-rose-500' }].map((a, k) => (
                 <button
                   key={`${r}-${a.save}`}
                   onClick={() => choose(a.save)}
                   className={`absolute font-extrabold text-white rounded-full shadow-xl px-3 py-3 text-center leading-tight ${a.cls}`}
-                  style={{ zIndex: 6, transform: 'translate(-50%,-50%)', width: 'clamp(120px, 38vw, 170px)', fontSize: 'clamp(13px, 3.4vw, 16px)', '--peak': a.peak, animation: `${(k === 0) !== it.flip ? 'tigerArcA' : 'tigerArcB'} ${TIGER_ASK_MS}ms linear forwards` }}
+                  style={{ zIndex: 6, transform: 'translate(-50%,-50%)', width: 'clamp(120px, 38vw, 170px)', fontSize: 'clamp(13px, 3.4vw, 16px)', '--x0': `${it.arcs[k].x0}%`, '--x1': `${it.arcs[k].x1}%`, '--x2': `${it.arcs[k].x2}%`, '--peak': `${it.arcs[k].peak}%`, animation: `tigerArc ${TIGER_ASK_MS}ms linear forwards` }}
                 >{a.label}</button>
               ))}
             </>
@@ -2630,7 +2648,7 @@ export const TigerInTrapGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
         <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20 px-4">
           <div className="bg-white text-gray-900 rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
             <div className="text-5xl mb-2">{fooled === 0 ? '🛡️' : '🐯'}</div>
-            <h2 className="text-2xl font-extrabold mb-1">{fooled === 0 ? 'You were never fooled!' : `Fooled ${fooled} ${fooled === 1 ? 'time' : 'times'}`}</h2>
+            <h2 className="text-2xl font-extrabold mb-1">{fooled === 0 ? 'You were never fooled!' : 'The tiger fooled you!'}</h2>
             <p className="text-sm text-gray-600 mb-2">Tricksters today beg for pity with sad stories, big promises and kind words, just like the tiger. Do not trust them quickly: think first, and ask a parent or teacher.</p>
             <p className="text-lg font-bold text-yellow-600 mb-4">{total > 0 ? `🪙 +${total} coins for your Shrine Room wallet` : (coinsLeft <= 0 ? 'You have already earned all the coins for this lesson. Great job!' : 'No coins this time.')}</p>
             <GameButton disabled={leaving} onClick={() => { setLeaving(true); onDone(total); }} className="bg-sky-500 hover:bg-sky-600 text-white w-full text-xl">Continue →</GameButton>
@@ -2965,7 +2983,248 @@ export const BravePuppyGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
 // The games, in the order they are handed out. A lesson always gets the same game (so a retake feels familiar and the
 // coin cap stays one per lesson), but neighbouring lessons get different ones, so the break does not become boring.
 // To add a game: write it above with the same two props and put it in this list.
-export const QUIZ_BREAK_GAMES = [BirdRescueGame, FlowerOfferingGame, LitterPickingGame, AnimalRescueGame, WoodcutterAxeGame, AntGatheringGame, WaterAnimalsGame, HelpFriendsGame, PayRespectGame, TenGiftsGame, ReturnLostItemsGame, HelpParentsGame, AlmsRoundGame, GoldenEggDuckGame, CunningHeronGame, ShareWaterGame, SchoolOfSkillsGame, TenDeedsGame, TenMeritGame, TigerInTrapGame, FinishProverbGame, BravePuppyGame];
+// ---------------------------------------------------------------------------------------------------------------
+// Game 23: clean the house. A dusty, messy house stands in the middle. Cleaning things (broom, mop bucket, sponge, soap...) pop up
+// one after another around it. Tap one -- it flies to the house, one patch of dirt disappears and the house gets cleaner, and the
+// student gets 2 or 3 coins. Seven in all, same timing and coins as the birds; a tool that is not tapped just goes away.
+const CLEAN_COUNT = 7;
+const CLEAN_FIRST_MS = 800;
+const CLEAN_EVERY_MS = 1500;
+const CLEAN_VISIBLE_MS = 3400;
+const CLEAN_SIZE = 'clamp(50px, 11vmin, 88px)';
+const CLEAN_SPOTS = [{ x: 16, y: 26 }, { x: 84, y: 26 }, { x: 10, y: 52 }, { x: 90, y: 52 }, { x: 22, y: 80 }, { x: 78, y: 80 }, { x: 50, y: 22 }];
+const CLEAN_HOUSE = { x: 50, y: 56 };
+// One cleaning game, two places. cfg: place(size) draws the place, dirt = 7 patches of mess, tools = 7 things to clean with.
+const CLEAN_HOUSE_CFG = {
+  title: '🧹 Clean the house! Tap the cleaning things', ask: 'Use this to clean the house', icon: '🏡✨', iconPart: '🏠',
+  all: 'The whole house is clean!', some: 'part', someOf: 'the house', coinsWord: 'cleaning',
+  tools: ['🧹', '🪣', '🧽', '🧴', '🧼', '🧺', '🪠'],
+  thanks: ['Sweep, sweep!', 'Scrub, scrub!', 'So fresh!', 'Sparkling!', 'Much better!', 'Nice and tidy!', 'Shiny and clean!'],
+  dirt: [{ e: '🍂', dx: -36, dy: -22 }, { e: '🕸️', dx: 30, dy: -34 }, { e: '💨', dx: -10, dy: 6 }, { e: '🟤', dx: 34, dy: 10 }, { e: '🍃', dx: -34, dy: 30 }, { e: '🪰', dx: 6, dy: -10 }, { e: '🧦', dx: 6, dy: 36 }],
+  place: (size, filter) => <span className="block select-none" style={{ fontSize: size, lineHeight: 1, filter, transition: 'filter .6s' }}>🏠</span>,
+};
+// A golden pagoda (zedi) on its terrace, drawn here because there is no pagoda emoji.
+const PagodaPicture = ({ size, filter }) => (
+  <svg viewBox="0 0 100 120" aria-hidden="true" style={{ width: size, height: size, filter, transition: 'filter .6s' }}>
+    <rect x="8" y="104" width="84" height="10" rx="2" fill="#fde68a" stroke="#b45309" strokeWidth="1.5" />
+    <rect x="16" y="94" width="68" height="10" rx="2" fill="#fcd34d" stroke="#b45309" strokeWidth="1.5" />
+    <path d="M24 94 Q24 62 34 56 L66 56 Q76 62 76 94 Z" fill="#fbbf24" stroke="#b45309" strokeWidth="1.5" />
+    <rect x="30" y="50" width="40" height="7" rx="2" fill="#f59e0b" stroke="#b45309" strokeWidth="1.5" />
+    <path d="M34 50 Q38 30 50 20 Q62 30 66 50 Z" fill="#fcd34d" stroke="#b45309" strokeWidth="1.5" />
+    <rect x="40" y="18" width="20" height="4" rx="1.5" fill="#f59e0b" stroke="#b45309" strokeWidth="1" />
+    <rect x="44" y="12" width="12" height="4" rx="1.5" fill="#f59e0b" stroke="#b45309" strokeWidth="1" />
+    <path d="M50 12 L50 3" stroke="#b45309" strokeWidth="2" />
+    <circle cx="50" cy="3" r="2.5" fill="#ef4444" />
+  </svg>
+);
+const CLEAN_PAGODA_CFG = {
+  title: '🛕 Clean the pagoda grounds! Tap the cleaning things', ask: 'Use this to clean the pagoda grounds', icon: '🛕✨', iconPart: '🛕',
+  all: 'The whole pagoda is clean!', some: 'part', someOf: 'the pagoda grounds', coinsWord: 'pagoda-cleaning',
+  tools: ['🧹', '🪣', '🧽', '🧺', '🧼', '🪜', '🚿'],
+  thanks: ['Sadhu!', 'So peaceful!', 'A clean, holy place!', 'Sweep, sweep!', 'Sadhu, sadhu!', 'Shining bright!', 'May you be happy!'],
+  dirt: [{ e: '🍂', dx: -36, dy: -10 }, { e: '🕸️', dx: 30, dy: -34 }, { e: '🍃', dx: 34, dy: 14 }, { e: '🥀', dx: -22, dy: 36 }, { e: '💨', dx: -2, dy: -4 }, { e: '🪰', dx: -30, dy: -36 }, { e: '🟤', dx: 20, dy: 38 }],
+  place: (size, filter) => <PagodaPicture size={size} filter={filter} />,
+};
+const FlyingTool = ({ tool, stageRef, won }) => {
+  const [go, setGo] = useState(false);
+  useEffect(() => { const r = requestAnimationFrame(() => requestAnimationFrame(() => setGo(true))); return () => cancelAnimationFrame(r); }, []);
+  const st = stageRef.current;
+  const w = st ? st.clientWidth : 0, h = st ? st.clientHeight : 0;
+  return (
+    <div className="absolute pointer-events-none" style={{ zIndex: 6, left: w * (go ? CLEAN_HOUSE.x : tool.x) / 100, top: h * (go ? CLEAN_HOUSE.y : tool.y) / 100, opacity: go ? 0 : 1, transform: go ? 'scale(.5) rotate(25deg)' : 'scale(1)', transition: 'left .8s ease-in-out, top .8s ease-in-out, opacity .4s .5s, transform .8s' }}>
+      <span className="block select-none" style={{ fontSize: CLEAN_SIZE, lineHeight: 1, transform: 'translate(-50%,-50%)' }}>{tool.icon}</span>
+      <div className="absolute left-1/2 -translate-x-1/2 text-center whitespace-nowrap" style={{ top: `calc(${CLEAN_SIZE} / -2 - 3.2rem)`, animation: 'cleanThanks 1.8s ease-out forwards' }}>
+        <div className="bg-white text-sky-900 font-bold text-sm rounded-full px-3 py-1 shadow">{tool.thanks}</div>
+        {won > 0 && <div className="font-black text-yellow-600 drop-shadow">+{won} 🪙</div>}
+      </div>
+    </div>
+  );
+};
+const CleanPlaceGame = ({ cfg, onDone, coinsLeft = BIRD_COIN_CAP }) => {
+  const [tools] = useState(() => {
+    const spots = [...CLEAN_SPOTS].sort(() => Math.random() - 0.5);
+    const icons = [...cfg.tools].sort(() => Math.random() - 0.5);
+    return spots.map((s, i) => ({ id: i, x: s.x, y: s.y, icon: icons[i], thanks: cfg.thanks[i % cfg.thanks.length] }));
+  });
+  const [state, setState] = useState(() => Array(CLEAN_COUNT).fill('waiting')); // waiting | visible | cleaned | gone
+  const [won, setWon] = useState(() => Array(CLEAN_COUNT).fill(0));
+  const [finished, setFinished] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const total = won.reduce((a, b) => a + b, 0);
+  const cleaned = state.filter(v => v === 'cleaned').length;
+  const soundRef = useRef(null);
+  const stageRef = useRef(null);
+
+  useEffect(() => {
+    const timers = [];
+    tools.forEach((t) => {
+      const start = CLEAN_FIRST_MS + t.id * CLEAN_EVERY_MS;
+      timers.push(setTimeout(() => setState(st => st.map((v, i) => (i === t.id && v === 'waiting' ? 'visible' : v))), start));
+      timers.push(setTimeout(() => setState(st => st.map((v, i) => (i === t.id && v === 'visible' ? 'gone' : v))), start + CLEAN_VISIBLE_MS));
+    });
+    return () => timers.forEach(clearTimeout);
+  }, [tools]);
+  useEffect(() => {
+    if (finished || !state.every(v => v === 'cleaned' || v === 'gone')) return undefined;
+    const t = setTimeout(() => setFinished(true), 1100); // let the last tool reach the house first
+    return () => clearTimeout(t);
+  }, [state, finished]);
+
+  const useTool = (id) => {
+    if (state[id] !== 'visible') return;
+    const coins = Math.max(0, Math.min(2 + Math.floor(Math.random() * 2), coinsLeft - total)); // 2 or 3, never past the lesson's limit
+    setState(st => st.map((v, i) => (i === id ? 'cleaned' : v)));
+    setWon(w => w.map((v, i) => (i === id ? coins : v)));
+    playCoinSound(soundRef);
+  };
+  const dirtLeft = CLEAN_COUNT - cleaned;
+  const houseSize = 'clamp(150px, 36vmin, 280px)';
+
+  return (
+    <div ref={stageRef} className="relative overflow-hidden text-white h-screen" style={{ height: '100dvh', minHeight: 420, background: 'linear-gradient(180deg,#bae6fd 0%,#e0f2fe 58%,#86efac 58%,#4ade80 100%)' }}>
+      <style>{`
+        @keyframes cleanPop { 0% { transform: scale(0) rotate(-20deg); opacity: 0 } 60% { transform: scale(1.2) rotate(8deg); opacity: 1 } 100% { transform: scale(1) rotate(0); opacity: 1 } }
+        @keyframes cleanBob { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-6px) } }
+        @keyframes cleanThanks { 0% { transform: translateY(0); opacity: 0 } 15% { opacity: 1 } 100% { transform: translateY(-46px); opacity: 0 } }
+        @keyframes cleanSparkle { 0% { transform: scale(0); opacity: 0 } 40% { transform: scale(1.3); opacity: 1 } 100% { transform: scale(1) translateY(-14px); opacity: 0 } }
+        @keyframes cleanHouse { 0%,100% { transform: scale(1) } 40% { transform: scale(1.06) } }
+      `}</style>
+      <div className="absolute top-0 inset-x-0 flex items-center justify-between gap-2 px-3 py-3 z-10">
+        <div className="bg-white/80 text-sky-900 font-bold text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 ml-12 sm:ml-16 min-w-0 truncate">{cfg.title}</div>
+        <div className="bg-yellow-300 text-yellow-900 font-black text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 shadow whitespace-nowrap flex-shrink-0">🪙 {total}{coinsLeft <= 0 ? ' (limit reached)' : ''}</div>
+      </div>
+      <div className="absolute pointer-events-none" style={{ right: '8%', top: '12%', fontSize: 'clamp(40px, 9vmin, 80px)' }}>☀️</div>
+      {/* the house: it starts dull and grey and brightens with every tool */}
+      <div className="absolute pointer-events-none" style={{ left: `${CLEAN_HOUSE.x}%`, top: `${CLEAN_HOUSE.y}%`, width: houseSize, height: houseSize, transform: 'translate(-50%,-50%)' }}>
+        <div key={cleaned} className="relative w-full h-full flex items-center justify-center" style={{ animation: cleaned > 0 ? 'cleanHouse .5s ease-out' : 'none' }}>
+          {cfg.place(houseSize, `grayscale(${dirtLeft / CLEAN_COUNT * 0.9}) brightness(${1 - dirtLeft / CLEAN_COUNT * 0.35}) sepia(${dirtLeft / CLEAN_COUNT * 0.5})`)}
+          {cfg.dirt.map((d, i) => (i < dirtLeft ? (
+            <span key={i} className="absolute select-none" style={{ left: `calc(50% + ${d.dx}%)`, top: `calc(50% + ${d.dy}%)`, fontSize: 'clamp(22px, 5.5vmin, 42px)', lineHeight: 1, transform: 'translate(-50%,-50%)' }}>{d.e}</span>
+          ) : null))}
+          {cleaned === CLEAN_COUNT && ['✨', '✨', '✨'].map((s, i) => (
+            <span key={i} className="absolute select-none" style={{ left: `${25 + i * 25}%`, top: `${20 + (i % 2) * 30}%`, fontSize: 'clamp(24px, 6vmin, 46px)', animation: `cleanSparkle 1.4s ${i * 0.2}s ease-out infinite` }}>{s}</span>
+          ))}
+        </div>
+      </div>
+      {tools.map((t, i) => {
+        const st = state[i];
+        if (st === 'waiting' || st === 'gone') return null;
+        if (st === 'cleaned') return <FlyingTool key={t.id} tool={t} stageRef={stageRef} won={won[i]} />;
+        return (
+          <div key={t.id} className="absolute" style={{ left: `${t.x}%`, top: `${t.y}%`, zIndex: 5, animation: 'cleanPop .4s ease-out both' }}>
+            <button onClick={() => useTool(t.id)} aria-label={cfg.ask} className="block" style={{ width: CLEAN_SIZE, height: CLEAN_SIZE, marginLeft: `calc(${CLEAN_SIZE} / -2)`, marginTop: `calc(${CLEAN_SIZE} / -2)` }}>
+              <span className="block select-none text-center" style={{ fontSize: CLEAN_SIZE, lineHeight: 1, animation: 'cleanBob 1s ease-in-out infinite' }}>{t.icon}</span>
+            </button>
+          </div>
+        );
+      })}
+      {finished && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20 px-4">
+          <div className="bg-white text-gray-900 rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
+            <div className="text-5xl mb-2">{cleaned === CLEAN_COUNT ? cfg.icon : cleaned > 0 ? cfg.iconPart : '🌤️'}</div>
+            <h2 className="text-2xl font-extrabold mb-1">{cleaned === CLEAN_COUNT ? cfg.all : cleaned > 0 ? `You cleaned ${cleaned} part${cleaned === 1 ? '' : 's'} of ${cfg.someOf}!` : 'Nice try!'}</h2>
+            <p className="text-lg font-bold text-yellow-600 mb-4">{total > 0 ? `🪙 +${total} coins for your Shrine Room wallet` : (coinsLeft <= 0 ? `You have already earned all the ${cfg.coinsWord} coins for this lesson. Great job!` : 'No coins this time.')}</p>
+            <GameButton disabled={leaving} onClick={() => { setLeaving(true); onDone(total); }} className="bg-sky-500 hover:bg-sky-600 text-white w-full text-xl">Continue →</GameButton>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export const CleanHouseGame = (props) => <CleanPlaceGame cfg={CLEAN_HOUSE_CFG} {...props} />;
+export const CleanPagodaGame = (props) => <CleanPlaceGame cfg={CLEAN_PAGODA_CFG} {...props} />;
+
+// ---------------------------------------------------------------------------------------------------------------
+// Game 25: shopping at the market for the parents. Seven times a parent or grandparent is waiting at home; the market stall shows
+// three things. The student picks any one to take home -- every choice is a kind one, so every choice is thanked and pays 2 or 3
+// coins (never past the lesson's limit). No timer: the student can take a moment to choose.
+const MARKET_THANKS = ['Thank you, my child! I love it!', 'How thoughtful you are!', 'You remembered me. Sadhu!', 'What a kind child!', 'This is just what I wanted!', 'You make me so happy!', 'May you be well and happy!'];
+const MARKET_ROUNDS = [
+  { who: '👩', ask: "It is Mother's birthday. What will you buy for her?", items: [['🌸', 'Flowers'], ['🎂', 'Cake'], ['🧣', 'Scarf']] },
+  { who: '👨', ask: 'Father works hard all day. What will you buy for him?', items: [['🍵', 'Tea'], ['🍉', 'Watermelon'], ['🧢', 'Hat']] },
+  { who: '👵', ask: 'Grandmother is old and likes soft things. What will you buy?', items: [['🍌', 'Bananas'], ['🧦', 'Warm socks'], ['🥭', 'Mango']] },
+  { who: '👴', ask: 'Grandfather feels weak today. What will you buy for him?', items: [['🍲', 'Soup'], ['🧴', 'Balm'], ['🍐', 'Pears']] },
+  { who: '👩', ask: 'Mother is cooking dinner for the family. What will you buy?', items: [['🥬', 'Vegetables'], ['🐟', 'Fish'], ['🥚', 'Eggs']] },
+  { who: '👨', ask: 'It is raining, and Father must go out. What will you buy?', items: [['☂️', 'Umbrella'], ['🧥', 'Coat'], ['🍵', 'Hot tea']] },
+  { who: '👨‍👩‍👧', ask: 'You want to thank your parents. What will you buy?', items: [['🍎', 'Apples'], ['🍯', 'Honey'], ['🍇', 'Grapes']] },
+];
+const MARKET_NEXT_MS = 2100;
+const MARKET_ITEM_SIZE = 'clamp(54px, 13vmin, 96px)';
+export const MarketForParentsGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
+  const [rounds] = useState(() => [...MARKET_ROUNDS].sort(() => Math.random() - 0.5).map(r => ({ ...r, items: [...r.items].sort(() => Math.random() - 0.5) })));
+  const [round, setRound] = useState(0);
+  const [picked, setPicked] = useState(null);   // index of the item taken this round, or null
+  const [won, setWon] = useState([]);
+  const [finished, setFinished] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const soundRef = useRef(null);
+  const total = won.reduce((a, b) => a + b, 0);
+  const r = rounds[Math.min(round, rounds.length - 1)];
+
+  useEffect(() => {
+    if (picked === null) return undefined;
+    const t = setTimeout(() => {
+      if (round + 1 >= rounds.length) setFinished(true);
+      else { setRound(x => x + 1); setPicked(null); }
+    }, MARKET_NEXT_MS);
+    return () => clearTimeout(t);
+  }, [picked, round, rounds.length]);
+
+  const choose = (i) => {
+    if (picked !== null || finished) return;
+    const coins = Math.max(0, Math.min(2 + Math.floor(Math.random() * 2), coinsLeft - total));
+    setPicked(i);
+    setWon(w => [...w, coins]);
+    playCoinSound(soundRef);
+  };
+  const lastWon = won.length ? won[won.length - 1] : 0;
+
+  return (
+    <div className="relative overflow-hidden text-gray-900 h-screen flex flex-col" style={{ height: '100dvh', minHeight: 460, background: 'linear-gradient(180deg,#fef3c7 0%,#fde68a 100%)' }}>
+      <style>{`
+        @keyframes mktPop { 0% { transform: scale(.6); opacity: 0 } 100% { transform: scale(1); opacity: 1 } }
+        @keyframes mktGive { 0% { transform: translateY(0) scale(1); opacity: 1 } 100% { transform: translateY(-190%) scale(.6); opacity: 0 } }
+        @keyframes mktJoy { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-10px) } }
+      `}</style>
+      <div className="flex items-center justify-between gap-2 px-3 py-3 z-10">
+        <div className="bg-white/80 text-amber-900 font-bold text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 ml-12 sm:ml-16 min-w-0 truncate">🛒 Market for my family · {Math.min(round + 1, rounds.length)}/{rounds.length}</div>
+        <div className="bg-yellow-300 text-yellow-900 font-black text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 shadow whitespace-nowrap flex-shrink-0">🪙 {total}{coinsLeft <= 0 ? ' (limit reached)' : ''}</div>
+      </div>
+      {/* the parent waiting at home, with what they need */}
+      <div className="flex flex-col items-center px-4 pt-1">
+        <div key={`p${round}-${picked !== null}`} className="select-none" style={{ fontSize: 'clamp(56px, 14vmin, 110px)', lineHeight: 1, animation: picked !== null ? 'mktJoy .6s ease-in-out 2' : 'mktPop .4s ease-out' }}>{r.who}</div>
+        <div className="mt-2 bg-white rounded-2xl shadow px-4 py-3 max-w-md text-center font-bold text-base sm:text-lg" style={{ minHeight: '3.2rem' }}>
+          {picked === null ? r.ask : <span className="text-emerald-700">{MARKET_THANKS[round % MARKET_THANKS.length]}{lastWon > 0 && <span className="ml-2 text-yellow-600">+{lastWon} 🪙</span>}</span>}
+        </div>
+      </div>
+      {/* the market stall */}
+      <div className="mt-auto w-full max-w-xl mx-auto px-3 pb-5">
+        <div className="rounded-t-3xl" style={{ height: 22, background: 'repeating-linear-gradient(90deg,#ef4444 0 28px,#fff 28px 56px)' }} />
+        <div className="bg-amber-700/90 rounded-b-2xl shadow-lg px-3 py-4 grid grid-cols-3 gap-3">
+          {r.items.map(([icon, label], i) => (
+            <button key={`${round}-${i}`} onClick={() => choose(i)} disabled={picked !== null} aria-label={`Buy ${label}`} className="w-full bg-amber-50 rounded-xl py-3 shadow active:scale-95 transition flex flex-col items-center" style={{ animation: `mktPop .35s ${i * 0.08}s ease-out both`, opacity: picked !== null && picked !== i ? 0.35 : 1 }}>
+              <span className="block select-none" style={{ fontSize: MARKET_ITEM_SIZE, lineHeight: 1, animation: picked === i ? 'mktGive 1.1s ease-in forwards' : 'none' }}>{icon}</span>
+              <span className="mt-1 text-xs sm:text-sm font-bold text-amber-900">{label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+      {finished && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20 px-4">
+          <div className="bg-white text-gray-900 rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
+            <div className="text-5xl mb-2">👨‍👩‍👧🛍️</div>
+            <h2 className="text-2xl font-extrabold mb-1">Your family is so happy!</h2>
+            <p className="text-lg font-bold text-yellow-600 mb-4">{total > 0 ? `🪙 +${total} coins for your Shrine Room wallet` : (coinsLeft <= 0 ? 'You have already earned all the market coins for this lesson. Great job!' : 'No coins this time.')}</p>
+            <GameButton disabled={leaving} onClick={() => { setLeaving(true); onDone(total); }} className="bg-amber-500 hover:bg-amber-600 text-white w-full text-xl">Continue →</GameButton>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export const QUIZ_BREAK_GAMES = [BirdRescueGame, FlowerOfferingGame, LitterPickingGame, AnimalRescueGame, WoodcutterAxeGame, AntGatheringGame, WaterAnimalsGame, HelpFriendsGame, PayRespectGame, TenGiftsGame, ReturnLostItemsGame, HelpParentsGame, AlmsRoundGame, GoldenEggDuckGame, CunningHeronGame, ShareWaterGame, SchoolOfSkillsGame, TenDeedsGame, TenMeritGame, TigerInTrapGame, FinishProverbGame, BravePuppyGame, CleanHouseGame, CleanPagodaGame, MarketForParentsGame];
 const hashOf = (s) => { let h = 0; String(s ?? '').split('').forEach(ch => { h = (h * 31 + ch.charCodeAt(0)) >>> 0; }); return h; };
 export const quizBreakGameFor = (lessonId) => QUIZ_BREAK_GAMES[hashOf(lessonId) % QUIZ_BREAK_GAMES.length];
 export const QuizBreakGame = ({ lessonId, ...rest }) => {

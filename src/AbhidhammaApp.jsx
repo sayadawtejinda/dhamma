@@ -6,7 +6,7 @@ import {
   Trophy, Timer, Pause, ChevronDown, ChevronRight, Gamepad2, X, ExternalLink, Youtube, Music,
   User, Baby, Compass, Map, Ship, Globe, Sparkles, Wand2, Lock, CheckCheck, AlertCircle,
   ArrowUp, ArrowDown, Key, ChevronLeft, Users, UserCheck, UserX, Circle, Trash2, Bell,
-  ToggleLeft, ToggleRight, Plus, FolderOpen, ImageIcon, FileText, RefreshCw
+  ToggleLeft, ToggleRight, Plus, FolderOpen, ImageIcon, FileText, RefreshCw, LayoutGrid
 } from 'lucide-react';
 import { auth, db } from './firebase';
 import { presenceIntervalMs, isOnlineStatusDay } from './presenceDay';
@@ -1221,7 +1221,7 @@ export default function AbhidhammaApp({ entryRequest, onExit, isActive }) {
   useLayoutEffect(()=>{
     if(!entryRequest||!authReady)return;
     const sig=JSON.stringify({mode:entryRequest.mode,classId:entryRequest.classId||'',name:entryRequest.studentName||''});
-    if(sig===lastEntry.current)return;lastEntry.current=sig;
+    if(sig===lastEntry.current)return;lastEntry.current=sig;autoEnteredRef.current=false;
     if(entryRequest.mode==='teacher'){setIsTeacher(true);setRole('Teacher');localStorage.setItem('abhidhamma_isTeacher','true');}
     else if(entryRequest.mode==='student'&&entryRequest.studentName){
       const am={storyteller:'storytellers',explorer:'explorers',adventurer:'adventurers',voyager:'voyagers'};
@@ -1383,6 +1383,18 @@ export default function AbhidhammaApp({ entryRequest, onExit, isActive }) {
     setNewContent('');
     setEditingLesson(null);
   };
+
+  // The teacher sent this student to a class (entryRequest.classId): open that class straight away, so the student does not land
+  // on "Choose Your Class" and wonder what to do. Once per teacher send (autoEnteredRef is cleared in the entry effect above), so
+  // "back to the class list" still works afterwards; an old assignment remembered in localStorage never auto-opens.
+  const autoEnteredRef=useRef(false);
+  useEffect(()=>{
+    const target=pendingEntry?.classId||entryRequest?.classId;
+    if(!target||isTeacher||!studentProfile||classId||autoEnteredRef.current) return;
+    if(!allClasses.some(c=>c.id===target)) return;
+    autoEnteredRef.current=true;
+    enterClass(target);
+  },[pendingEntry,entryRequest,isTeacher,studentProfile,classId,allClasses]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Ping roster every 60s — skip if teacher mode. Keyed by effectiveUserId
   // (TutoringApp's verified identity, not the device's raw auth uid — see
@@ -1862,7 +1874,7 @@ export default function AbhidhammaApp({ entryRequest, onExit, isActive }) {
                 <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                   <h2 className="text-2xl font-bold text-white">Class: <span className="text-amber-400">{classId}</span></h2>
                   <button onClick={()=>{setClassId('');setClassData(null);setLessons([]);}}
-                    className="text-sm text-gray-400 hover:text-white underline">← Change Class</button>
+                    className="p-2 bg-blue-100 text-blue-700 rounded-full shadow-md hover:bg-blue-200 transition-colors" title="Choose a Different Class" aria-label="Choose a Different Class"><LayoutGrid className="w-6 h-6"/></button>
                 </div>
                                 {lessons.length===0&&<p className="text-center text-gray-500 py-6">No lessons yet.</p>}
                 {lessons.map(l=>(
