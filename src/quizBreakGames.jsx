@@ -3335,6 +3335,7 @@ export const WakeTheHareGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
             <div className="text-5xl mb-2">{phase === 'won' ? '🏆🐇' : '🐢🏁'}</div>
             <h2 className="text-2xl font-extrabold mb-1">{phase === 'won' ? 'The hare won the race!' : 'The tortoise won the race!'}</h2>
             <p className="text-gray-600 mb-2">{phase === 'won' ? 'You woke the hare 7 times in a row!' : `You woke the hare ${k} time${k === 1 ? '' : 's'} before it slept on.`}</p>
+            {phase !== 'won' && <p className="text-emerald-800 font-bold italic mb-2">Without effort, even a fast hare loses the race.</p>}
             <p className="text-lg font-bold text-yellow-600 mb-4">{total > 0 ? `🪙 +${total} coins for your Shrine Room wallet` : (coinsLeft <= 0 ? 'You have already earned all the race coins for this lesson. Great job!' : 'No coins this time.')}</p>
             <GameButton disabled={leaving} onClick={() => { setLeaving(true); onDone(total); }} className="bg-emerald-500 hover:bg-emerald-600 text-white w-full text-xl">Continue →</GameButton>
           </div>
