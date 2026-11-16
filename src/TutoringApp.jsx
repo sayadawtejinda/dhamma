@@ -8558,7 +8558,8 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       return;
     }
     if (url && url.startsWith('watchandlearn://')) {
-      if (onOpenWatchAndLearn) onOpenWatchAndLearn({ studentName: studentProfile?.name || '', studentUid });
+      const sentVideoKey = extractWatchLearnVideoKey(url);
+      if (onOpenWatchAndLearn) onOpenWatchAndLearn({ studentName: studentProfile?.name || '', studentUid, ...(sentVideoKey ? { videoKey: sentVideoKey } : {}) });
       return;
     }
     if (!url.startsWith('http://') && !url.startsWith('https://')) url = `https://${url}`;
@@ -8632,7 +8633,8 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
       const matchedScheme = groupSchemeOfLink(lesson.link) || (lesson.link.startsWith('watchandlearn://') ? 'watchandlearn://' : lesson.link);
       const opener = openerByLink[matchedScheme];
       const initialPart = extractGroupPartKey(lesson.link);
-      if (opener) opener({ studentName: studentProfile?.name || '', studentUid, ...(initialPart ? { initialPart } : {}) });
+      const sentVideoKey = matchedScheme === 'watchandlearn://' ? extractWatchLearnVideoKey(lesson.link) : null;
+      if (opener) opener({ studentName: studentProfile?.name || '', studentUid, ...(initialPart ? { initialPart } : {}), ...(sentVideoKey ? { videoKey: sentVideoKey } : {}) });
       if (lesson.status === 'pending') {
         try { await updateDoc(doc(db, `${publicDataPath}/lessons`, lesson.id), { status: 'started' }); } catch (e) {}
       }

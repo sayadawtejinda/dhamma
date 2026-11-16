@@ -1,5 +1,5 @@
 import { listenLiveOrOnce } from './presenceDay';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { collection, doc, addDoc, deleteDoc, getDoc, increment, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { presenceIntervalMs } from './presenceDay';
@@ -41,6 +41,18 @@ export default function WatchAndLearnApp({ entryRequest, onExit }) {
   const [newLink, setNewLink] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [coinBalance, setCoinBalance] = useState(0);
+  // The video the teacher sent (the lesson link carries the title with . # $ / [ ] replaced by _, same as TutoringApp's sanitizeKey)
+  const sentKey = isTeacherMode ? null : entryRequest?.videoKey;
+  const featured = sentKey ? videos.find(v => (v.title || '').replace(/[.#$/[\]]/g, '_') === sentKey) || null : null;
+
+  // The sent video opens by itself (like SmartStudy opening the sent class). If the browser blocks the new tab, the highlighted
+  // Watch button above the list is still there.
+  const autoOpenedRef = useRef(false);
+  useEffect(() => {
+    if (!featured || autoOpenedRef.current) return;
+    autoOpenedRef.current = true;
+    try { window.open(featured.link, '_blank', 'noopener,noreferrer'); } catch (e) { /* the Watch button still works */ }
+  }, [featured]);
 
   useEffect(() => {
     const q = query(videosCollection, orderBy('order', 'asc'));
@@ -151,7 +163,16 @@ export default function WatchAndLearnApp({ entryRequest, onExit }) {
           <p className="text-center text-orange-500">No videos yet.</p>
         ) : (
           <div className="space-y-3">
-            {videos.map((v) => (
+            {/* the video the teacher sent comes first, big and highlighted; the rest follow below */}
+            {featured && (
+              <div className="bg-white rounded-2xl shadow-lg p-5 border-2 border-orange-400 text-center">
+                <p className="text-sm font-bold text-orange-600 mb-1">📌 Your teacher sent you this video</p>
+                <p className="font-bold text-gray-800 text-lg mb-3">{featured.title}</p>
+                <a href={featured.link} target="_blank" rel="noopener noreferrer" className="inline-block bg-orange-500 hover:bg-orange-600 text-white font-bold text-lg px-8 py-3 rounded-xl shadow-md transition-transform hover:scale-105">▶️ Watch</a>
+              </div>
+            )}
+            {featured && videos.length > 1 && <p className="text-center text-sm text-orange-600 pt-3">More videos</p>}
+            {videos.filter(v => !featured || v.id !== featured.id).map((v) => (
               <div key={v.id} className="bg-white rounded-2xl shadow-md p-4 flex items-center justify-between gap-3 border border-orange-100">
                 <p className="font-semibold text-gray-800 flex-1">{v.title}</p>
                 <div className="flex items-center gap-2 flex-shrink-0">
