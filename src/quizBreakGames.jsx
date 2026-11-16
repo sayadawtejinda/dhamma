@@ -3224,7 +3224,127 @@ export const MarketForParentsGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
   );
 };
 
-export const QUIZ_BREAK_GAMES = [BirdRescueGame, FlowerOfferingGame, LitterPickingGame, AnimalRescueGame, WoodcutterAxeGame, AntGatheringGame, WaterAnimalsGame, HelpFriendsGame, PayRespectGame, TenGiftsGame, ReturnLostItemsGame, HelpParentsGame, AlmsRoundGame, GoldenEggDuckGame, CunningHeronGame, ShareWaterGame, SchoolOfSkillsGame, TenDeedsGame, TenMeritGame, TigerInTrapGame, FinishProverbGame, BravePuppyGame, CleanHouseGame, CleanPagodaGame, MarketForParentsGame];
+// ---------------------------------------------------------------------------------------------------------------
+// Game 26: the hare and the tortoise. The tortoise walks along at a steady pace. The hare runs a little way and falls asleep on the
+// track. The student must tap the sleeping hare within 2 seconds to wake it -- each wake-up pays 2 or 3 coins, then the hare runs a
+// bit further and falls asleep again. Wake it 7 times in a row and the hare reaches the finish first (the student wins). Miss one
+// (no tap within 2 seconds) and the hare sleeps on while the tortoise walks past and wins -- the coins already won are kept.
+const HARE_WAKES = 7;
+const HARE_RUN_MS = 1200;
+const HARE_WINDOW_MS = 2000;
+const HARE_TURTLE_TOTAL_MS = 28000;
+const HARE_SIZE = 'clamp(48px, 11vmin, 86px)';
+const hareStop = (k) => (k >= HARE_WAKES ? 1 : 0.1 + k * 0.11); // where the hare lies down after k wake-ups (0..1 along the track)
+const HARE_CHEERS = ['Zzz... oh! I am up!', 'Huh? Where am I?', 'Five more minutes... no!', 'I must run!', 'Thanks for waking me!', 'Zzz... what?', 'Run, run, run!'];
+export const WakeTheHareGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
+  const [phase, setPhase] = useState('start');   // start | running | asleep | won | lost
+  const [k, setK] = useState(0);                 // how many times the hare has been woken
+  const [won, setWon] = useState([]);
+  const [tx, setTx] = useState(0);               // tortoise position 0..1
+  const [finished, setFinished] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const [say, setSay] = useState('');
+  const soundRef = useRef(null);
+  const phaseRef = useRef('start');
+  const startedAt = useRef(Date.now());
+  const total = won.reduce((a, b) => a + b, 0);
+  const go = (p) => { phaseRef.current = p; setPhase(p); };
+
+  // the tortoise: steady all the way; once the hare has lost it simply strolls on to the flag a bit faster
+  useEffect(() => {
+    const t = setInterval(() => {
+      const p = phaseRef.current;
+      if (p === 'won') return;
+      if (p === 'lost') setTx(x => Math.min(1, x + 0.012));
+      else setTx(Math.min(1, (Date.now() - startedAt.current) / HARE_TURTLE_TOTAL_MS));
+    }, 100);
+    return () => clearInterval(t);
+  }, []);
+
+  useEffect(() => {
+    let t;
+    if (phase === 'start') t = setTimeout(() => go('running'), 700);
+    else if (phase === 'running') t = setTimeout(() => (k >= HARE_WAKES ? go('won') : go('asleep')), HARE_RUN_MS);
+    else if (phase === 'asleep') t = setTimeout(() => go('lost'), HARE_WINDOW_MS);
+    return () => clearTimeout(t);
+  }, [phase, k]);
+  useEffect(() => {
+    if (finished) return undefined;
+    if (phase === 'won') { const t = setTimeout(() => setFinished(true), 1500); return () => clearTimeout(t); }
+    if (phase === 'lost' && tx >= 1) { const t = setTimeout(() => setFinished(true), 900); return () => clearTimeout(t); }
+    return undefined;
+  }, [phase, tx, finished]);
+
+  const wake = () => {
+    if (phaseRef.current !== 'asleep') return;
+    const coins = Math.max(0, Math.min(2 + Math.floor(Math.random() * 2), coinsLeft - total)); // 2 or 3, never past the lesson's limit
+    setWon(w => [...w, coins]);
+    setSay(HARE_CHEERS[k % HARE_CHEERS.length]);
+    setK(x => x + 1);
+    go('running');
+    playCoinSound(soundRef);
+  };
+
+  const hareX = phase === 'start' ? 0 : hareStop(k);
+  const laneLeft = (x) => `calc(4% + ${x} * (92% - ${HARE_SIZE}))`;
+  const asleep = phase === 'asleep';
+
+  return (
+    <div className="relative overflow-hidden text-white h-screen" style={{ height: '100dvh', minHeight: 420, background: 'linear-gradient(180deg,#bae6fd 0%,#e0f2fe 45%,#bbf7d0 45%,#86efac 100%)' }}>
+      <style>{`
+        @keyframes hareZzz { 0% { transform: translateY(0) scale(.7); opacity: 0 } 30% { opacity: 1 } 100% { transform: translateY(-34px) scale(1.2); opacity: 0 } }
+        @keyframes hareHop { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-14px) } }
+        @keyframes hareWalk { 0%,100% { transform: rotate(-3deg) } 50% { transform: rotate(3deg) } }
+        @keyframes hareWindow { 0% { width: 100% } 100% { width: 0% } }
+        @keyframes harePulse { 0%,100% { transform: scale(1) } 50% { transform: scale(1.08) } }
+      `}</style>
+      <div className="absolute top-0 inset-x-0 flex items-center justify-between gap-2 px-3 py-3 z-10">
+        <div className="bg-white/80 text-emerald-900 font-bold text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 ml-12 sm:ml-16 min-w-0 truncate">🐇 Wake the hare! · {Math.min(k, HARE_WAKES)}/{HARE_WAKES}</div>
+        <div className="bg-yellow-300 text-yellow-900 font-black text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 shadow whitespace-nowrap flex-shrink-0">🪙 {total}{coinsLeft <= 0 ? ' (limit reached)' : ''}</div>
+      </div>
+      <div className="absolute inset-x-0 text-center px-4 text-emerald-900 font-bold" style={{ top: '16%' }}>
+        {asleep ? <span className="bg-white/90 rounded-full px-4 py-2 shadow inline-block" style={{ animation: 'harePulse .5s ease-in-out infinite' }}>Tap the hare to wake it up!</span>
+          : phase === 'lost' ? <span className="bg-white/90 rounded-full px-4 py-2 shadow inline-block">Too slow! The tortoise walks on...</span>
+            : say && phase === 'running' ? <span className="bg-white/90 rounded-full px-4 py-2 shadow inline-block">{say}</span> : null}
+      </div>
+      {/* the track: the hare's lane above, the tortoise's lane below, the flag at the end */}
+      <div className="absolute inset-x-0" style={{ top: '34%', height: '44%' }}>
+        <div className="absolute inset-x-0" style={{ top: '10%', height: '36%', background: 'rgba(180,140,80,.35)', borderTop: '3px dashed rgba(120,80,30,.4)', borderBottom: '3px dashed rgba(120,80,30,.4)' }} />
+        <div className="absolute inset-x-0" style={{ top: '54%', height: '36%', background: 'rgba(180,140,80,.35)', borderTop: '3px dashed rgba(120,80,30,.4)', borderBottom: '3px dashed rgba(120,80,30,.4)' }} />
+        <div className="absolute select-none" style={{ right: '1%', top: '2%', fontSize: HARE_SIZE, lineHeight: 1 }}>🏁</div>
+        {/* hare */}
+        <div className="absolute" style={{ top: '12%', left: laneLeft(hareX), transition: phase === 'running' ? `left ${HARE_RUN_MS}ms ease-in-out` : 'none', zIndex: 4 }}>
+          <button onClick={wake} disabled={!asleep} aria-label="Wake the hare" className="block relative" style={{ width: HARE_SIZE, height: HARE_SIZE }}>
+            <span className="block select-none" style={{ fontSize: HARE_SIZE, lineHeight: 1, filter: asleep ? 'saturate(.6) brightness(.9)' : 'none', transform: asleep ? 'rotate(90deg)' : 'none', animation: phase === 'running' ? `hareHop .3s ease-in-out ${Math.round(HARE_RUN_MS / 300)}` : 'none' }}>🐇</span>
+            {asleep && <span className="absolute font-black text-sky-700 select-none" style={{ right: '-6%', top: '-30%', fontSize: 'clamp(20px, 5vmin, 36px)', animation: 'hareZzz 1.2s ease-out infinite' }}>💤</span>}
+          </button>
+          {asleep && (
+            <div className="absolute bg-white/70 rounded-full overflow-hidden" style={{ left: 0, top: `calc(${HARE_SIZE} + 6px)`, width: HARE_SIZE, height: 8 }}>
+              <div key={k} className="h-full bg-orange-500" style={{ animation: `hareWindow ${HARE_WINDOW_MS}ms linear forwards` }} />
+            </div>
+          )}
+        </div>
+        {/* tortoise */}
+        <div className="absolute" style={{ top: '58%', left: laneLeft(tx), transition: 'left .1s linear', zIndex: 3 }}>
+          <span className="block select-none" style={{ fontSize: HARE_SIZE, lineHeight: 1, animation: phase === 'won' ? 'none' : 'hareWalk .8s ease-in-out infinite' }}>🐢</span>
+        </div>
+      </div>
+      {finished && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20 px-4">
+          <div className="bg-white text-gray-900 rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
+            <div className="text-5xl mb-2">{phase === 'won' ? '🏆🐇' : '🐢🏁'}</div>
+            <h2 className="text-2xl font-extrabold mb-1">{phase === 'won' ? 'The hare won the race!' : 'The tortoise won the race!'}</h2>
+            <p className="text-gray-600 mb-2">{phase === 'won' ? 'You woke the hare 7 times in a row!' : `You woke the hare ${k} time${k === 1 ? '' : 's'} before it slept on.`}</p>
+            <p className="text-lg font-bold text-yellow-600 mb-4">{total > 0 ? `🪙 +${total} coins for your Shrine Room wallet` : (coinsLeft <= 0 ? 'You have already earned all the race coins for this lesson. Great job!' : 'No coins this time.')}</p>
+            <GameButton disabled={leaving} onClick={() => { setLeaving(true); onDone(total); }} className="bg-emerald-500 hover:bg-emerald-600 text-white w-full text-xl">Continue →</GameButton>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export const QUIZ_BREAK_GAMES = [BirdRescueGame, FlowerOfferingGame, LitterPickingGame, AnimalRescueGame, WoodcutterAxeGame, AntGatheringGame, WaterAnimalsGame, HelpFriendsGame, PayRespectGame, TenGiftsGame, ReturnLostItemsGame, HelpParentsGame, AlmsRoundGame, GoldenEggDuckGame, CunningHeronGame, ShareWaterGame, SchoolOfSkillsGame, TenDeedsGame, TenMeritGame, TigerInTrapGame, FinishProverbGame, BravePuppyGame, CleanHouseGame, CleanPagodaGame, MarketForParentsGame, WakeTheHareGame];
 const hashOf = (s) => { let h = 0; String(s ?? '').split('').forEach(ch => { h = (h * 31 + ch.charCodeAt(0)) >>> 0; }); return h; };
 export const quizBreakGameFor = (lessonId) => QUIZ_BREAK_GAMES[hashOf(lessonId) % QUIZ_BREAK_GAMES.length];
 export const QuizBreakGame = ({ lessonId, ...rest }) => {
