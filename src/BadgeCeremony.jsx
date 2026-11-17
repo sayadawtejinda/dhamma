@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { badgeMeta } from './badgeDefs';
 import { BadgeSvg } from './Badges';
 import { AwardEmblem, AWARD_LIST_BY_KIND } from './Awards';
@@ -247,8 +248,9 @@ export default function BadgeCeremony({ queue, name, look, onSeen }) {
   const { entry, item } = first;
   const total = items.filter(x => x.item).length;
   const collect = () => onSeen(entry);
-  return (
-    <div className="fixed inset-0 z-[10100]" style={{ background: '#120a2e' }}>
+  // drawn straight into <body> so no parent element (a transform, filter or clipped box) can shrink the full-screen overlay
+  return createPortal((
+    <div className="fixed z-[10100]" style={{ background: '#120a2e', left: 0, top: 0, width: '100vw', height: '100dvh' }}>
       <style>{`
         @keyframes bcWiggle { 0%,100% { transform: translateX(-50%) rotate(-4deg) } 50% { transform: translateX(-50%) rotate(4deg) } }
         @keyframes bcBob { 0%,100% { margin-top: 0 } 50% { margin-top: 8px } }
@@ -266,5 +268,5 @@ export default function BadgeCeremony({ queue, name, look, onSeen }) {
       {item.style === 'stage' && <StageScene key={entry} item={item} name={name} look={look} onCollect={collect} />}
       {item.style === 'podium' && <PodiumScene key={entry} item={item} name={name} look={look} onCollect={collect} />}
     </div>
-  );
+  ), document.body);
 }
