@@ -15,6 +15,15 @@ import windChimesSound from '../audio/wind-chimes.mp3';
 import meditationBowlsSound from '../audio/meditation-bowls.mp3';
 import { MEDITATION_GUIDES } from './meditationGuides';
 const MEDITATION_LINE_SECONDS = 9;   // a new line every 9 seconds, with or without a recording (the recordings were made watching this)
+// Sunday 2:30-3:30 pm California time is the Paramita students' own sitting time: a short sit (5 minutes or less) begun then plays no
+// recording, so the voice does not disturb the others sitting at the same moment. The text still shows.
+const inClassSittingTime = () => {
+  try {
+    const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', weekday: 'short', hour: 'numeric', minute: 'numeric', hourCycle: 'h23' }).formatToParts(new Date()).map(x => [x.type, x.value]));
+    const mins = (parseInt(p.hour, 10) % 24) * 60 + parseInt(p.minute, 10);
+    return p.weekday === 'Sun' && mins >= 14 * 60 + 30 && mins < 15 * 60 + 30;
+  } catch (e) { return false; }
+};
 const MEDITATION_BLOCK_SECONDS = 300;   // each guide (its text and its recording) fills 5 minutes of the sit
 
 // A student's personal shrine room -- decorate an altar with offerings
@@ -965,7 +974,8 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   })();
   const activeGuide = blockGuideEntry.lines;
   const meditationLineIndex = Math.floor((sitElapsedSeconds % MEDITATION_BLOCK_SECONDS) / MEDITATION_LINE_SECONDS) % Math.max(1, activeGuide.length);
-  const meditationAudioSrc = meditatingMinutes != null ? (blockGuideEntry.audioUrl?.[meditationLanguage] || null) : null;
+  const meditationQuietRef = useRef(false); // set when the sit begins (see handleStartMeditation)
+  const meditationAudioSrc = meditatingMinutes != null && !meditationQuietRef.current ? (blockGuideEntry.audioUrl?.[meditationLanguage] || null) : null;
   const meditationAudioRef = useRef(null);
   useEffect(() => {
     if (meditatingMinutes == null) return undefined;
@@ -1690,6 +1700,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   const handleStartMeditation = () => {
     const minutes = Math.max(1, Math.min(90, parseInt(meditationMinutesInput, 10) || 5));
     setMeditationPickerOpen(false);
+    meditationQuietRef.current = minutes <= 5 && inClassSittingTime();
     setMeditatingMinutes(minutes);
     setMeditationRemainingSeconds(minutes * 60);
     meditationSessionLotusRef.current = 0;
