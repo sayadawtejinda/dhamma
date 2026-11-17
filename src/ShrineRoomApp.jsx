@@ -15,7 +15,7 @@ import windChimesSound from '../audio/wind-chimes.mp3';
 import meditationBowlsSound from '../audio/meditation-bowls.mp3';
 import { MEDITATION_GUIDES } from './meditationGuides';
 const MEDITATION_LINE_SECONDS = 9;   // a new line every 9 seconds, with or without a recording (the recordings were made watching this)
-const MEDITATION_AUDIO_MIN_MINUTES = 10;   // the recordings are played for sits of this many minutes or more
+const MEDITATION_BLOCK_SECONDS = 300;   // each guide (its text and its recording) fills 5 minutes of the sit
 
 // A student's personal shrine room -- decorate an altar with offerings
 // bought using coins, earned mainly by lighting the lamp once a day.
@@ -934,31 +934,10 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
   // Guided-meditation script language -- toggled once in the duration
   // picker (see MEDITATION_GUIDE above), defaults to English.
   const [meditationLanguage, setMeditationLanguage] = useState('en');
-  const [meditationLineIndex, setMeditationLineIndex] = useState(0);
   // 1 = the usual guide (always the default); 2 = the second reading, only if the student taps 2.
   const [meditationVersion, setMeditationVersion] = useState(MEDITATION_GUIDES[0].id);   // the guide chosen in the duration picker
   const activeGuideEntry = MEDITATION_GUIDES.find(g => g.id === meditationVersion) || MEDITATION_GUIDES[0];
-  const activeGuide = activeGuideEntry.lines;
   useEffect(() => { if (meditatingMinutes == null && !meditationPickerOpen) setMeditationVersion(MEDITATION_GUIDES[0].id); }, [meditatingMinutes, meditationPickerOpen]);
-  // The recording (Ryan's voice) for the chosen guide and language, if there is one: it plays from the moment the sit starts (the
-  // sit is started by a tap, so the browser lets it play), repeating until the sit ends -- finished or left early. The line on
-  // lines run on their own clock exactly as without a recording (a new line every 9 seconds from the start of the sit): the recordings were made watching that, so the recording never moves the lines.
-  // Only a sit of MEDITATION_AUDIO_MIN_MINUTES or more gets the recording; a shorter sit (5 minutes) shows the lines alone, a new one every 9 seconds.
-  const meditationAudioSrc = (meditatingMinutes != null && meditatingMinutes >= MEDITATION_AUDIO_MIN_MINUTES) ? (activeGuideEntry.audioUrl?.[meditationLanguage] || null) : null;
-  useEffect(() => {
-    if (meditatingMinutes == null) return undefined;
-    setMeditationLineIndex(0);
-    const interval = setInterval(() => {
-      setMeditationLineIndex(i => (i + 1) % Math.max(1, activeGuide.length));
-    }, MEDITATION_LINE_SECONDS * 1000);
-    return () => clearInterval(interval);
-  }, [meditatingMinutes, meditationVersion, meditationLanguage]);
-  useEffect(() => {
-    if (meditatingMinutes == null || !meditationAudioSrc) return undefined;
-    let audio = null;
-    try { audio = new Audio(meditationAudioSrc); audio.loop = true; audio.play().catch(() => {}); } catch (e) { /* the sit works without the voice */ }
-    return () => { try { if (audio) { audio.pause(); audio.src = ''; } } catch (e) { /* ignore */ } };
-  }, [meditatingMinutes != null, meditationAudioSrc]);
   // Keeps the screen from auto-locking while a meditation countdown is
   // running, so the student doesn't lose their place mid-sit -- degrades
   // silently on browsers without the Wake Lock API (e.g. older Safari)
@@ -974,6 +953,40 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     return () => { if (wakeLock) wakeLock.release().catch(() => {}); };
   }, [meditatingMinutes != null]);
   const [meditationRemainingSeconds, setMeditationRemainingSeconds] = useState(0);
+  // A sit is cut into 5-minute blocks. Block 1 is the guide chosen in the picker: its text and its recording together. A 10-minute sit
+  // goes on to the NEXT guide for its second 5 minutes (its own text and recording), a 15-minute sit to the one after, and so on.
+  // Inside a block the recording plays ONCE (never twice); only the text starts again from its first line if it is shorter than
+  // the block. A guide without a recording simply shows its text. Everything is worked out from the countdown, so text and voice stay together.
+  const sitElapsedSeconds = meditatingMinutes != null ? Math.max(0, meditatingMinutes * 60 - meditationRemainingSeconds) : 0;
+  const meditationBlock = Math.floor(sitElapsedSeconds / MEDITATION_BLOCK_SECONDS);
+  const blockGuideEntry = (() => {
+    const start = Math.max(0, MEDITATION_GUIDES.findIndex(g => g.id === activeGuideEntry.id));
+    return MEDITATION_GUIDES[(start + meditationBlock) % MEDITATION_GUIDES.length];
+  })();
+  const activeGuide = blockGuideEntry.lines;
+  const meditationLineIndex = Math.floor((sitElapsedSeconds % MEDITATION_BLOCK_SECONDS) / MEDITATION_LINE_SECONDS) % Math.max(1, activeGuide.length);
+  const meditationAudioSrc = meditatingMinutes != null ? (blockGuideEntry.audioUrl?.[meditationLanguage] || null) : null;
+  const meditationAudioRef = useRef(null);
+  useEffect(() => {
+    if (meditatingMinutes == null) return undefined;
+    // one sound element for the whole sit: the first block starts from the Start tap, and the same element carries on into the next block
+    if (meditationAudioSrc) {
+      try {
+        if (!meditationAudioRef.current) meditationAudioRef.current = new Audio();
+        const a = meditationAudioRef.current;
+        a.loop = false;
+        a.src = meditationAudioSrc;
+        a.play().catch(() => {});
+      } catch (e) { /* the sit works without the voice */ }
+    }
+    return () => { try { if (meditationAudioRef.current) meditationAudioRef.current.pause(); } catch (e) { /* ignore */ } };
+  }, [meditatingMinutes != null, meditationAudioSrc, meditationBlock]);
+  useEffect(() => {
+    if (meditatingMinutes == null && meditationAudioRef.current) {
+      try { meditationAudioRef.current.pause(); meditationAudioRef.current.removeAttribute('src'); meditationAudioRef.current.load(); } catch (e) { /* ignore */ }
+      meditationAudioRef.current = null;
+    }
+  }, [meditatingMinutes]);
   // Tapping the little countdown badge blacks out the screen and shows the
   // time left as a big green digital clock (easy to read from a distance on a
   // phone). The screen stays awake (the meditation wake lock above is still
@@ -2191,7 +2204,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
                     className="text-sm font-semibold text-emerald-900/80 leading-snug"
                     style={{ animation: 'shrineGuideLineFade 9s ease-in-out' }}
                   >
-                    {(activeGuide[meditationLineIndex % activeGuide.length] || activeGuide[0])[meditationLanguage]}
+                    {(activeGuide[meditationLineIndex] || activeGuide[0])[meditationLanguage]}
                   </p>
                 </div>
               )}
