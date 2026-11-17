@@ -2958,14 +2958,14 @@ export const BravePuppyGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
       })}
       {/* the puppy with the alms bowl, and its bark */}
       <div className="absolute select-none pointer-events-none" style={{ left: '50%', top: `${puppyY}%`, fontSize: 'clamp(40px, 10vmin, 70px)', lineHeight: 1, zIndex: 4, transition: 'top .8s ease', animation: 'puppyWag 1s ease-in-out infinite' }}>🐕</div>
-      <div className="absolute select-none pointer-events-none" style={{ left: '50%', top: `${puppyY + 15}%`, transform: 'translateX(-50%)', fontSize: 'clamp(40px, 10vmin, 70px)', lineHeight: 1, zIndex: 4, transition: 'top .8s ease' }}>🧘🥣</div>
+      <div className="absolute select-none pointer-events-none" style={{ left: '50%', top: `${puppyY + 11}%`, transform: 'translateX(-50%)', zIndex: 4, transition: 'top .8s ease' }}><MonkSvg size="clamp(44px, 10vmin, 76px)" /></div>
       {bark !== null && (
         <div className="absolute pointer-events-none bg-white text-gray-800 font-black rounded-2xl px-3 py-1 shadow-lg whitespace-nowrap" style={{ left: '50%', top: `${puppyY - 9}%`, transform: 'translateX(-50%)', zIndex: 7 }}>Woof! Woof! 🐶</div>
       )}
       {finished && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20 px-4">
           <div className="bg-white text-gray-900 rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
-            <div className="text-5xl mb-2">{fled >= PUPPY_COUNT ? '🐕' : '🧘'}</div>
+            <div className="text-5xl mb-2">{fled >= PUPPY_COUNT ? '🐕' : '🙏'}</div>
             <h2 className="text-2xl font-extrabold mb-1">{fled > 0 ? `${fled} beast${fled === 1 ? '' : 's'} sent away!` : 'Nice try!'}</h2>
             <p className="text-sm text-gray-600 mb-2">{fled >= PUPPY_COUNT
               ? 'The brave puppy led the Paccekabuddha safely along the path to collect alms food. Even a puppy can give the gift of a brave voice.'
