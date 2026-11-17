@@ -5,6 +5,7 @@ import { PeekName, AvatarThumb } from './AvatarPeek';
 import { useAwards, AwardEmblem, HallOfExcellence, saveGivenCopy } from './Awards';
 import { BadgeShelf } from './Badges';
 import BadgeCeremony from './BadgeCeremony';
+import BreakGamesButton from './BreakGamesButton';
 import { useBadgeData } from './badgeData';
 import { useTopThree, awardsFor, AWARD_LIST_BY_KIND } from './Awards';
 import { badgeMeta, BADGE_DEFS, BADGE_GROUPS, ladderOf, ladderRank } from './badgeDefs';
@@ -5447,6 +5448,8 @@ ${toSend.map(l => '• ' + l.title).join(', ')}`
             <span className="flex items-center text-lg font-bold text-orange-800">🎥 Watch & Learn app</span>
             <span className="text-orange-500 text-xl">→</span>
           </button>
+          {/* every short break game, for the teacher to try */}
+          <BreakGamesButton />
           {/* Festival apps -- the group of seasonal festivals. Opens the
               teacher's list where each festival's start/end dates are set
               and each one can be previewed. */}
