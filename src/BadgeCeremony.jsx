@@ -44,19 +44,23 @@ function Sparks({ fireworks = false, confetti = false }) {
     let raf; let last = performance.now(); let nextFw = 0;
     const burst = (cx, cy) => {
       const hue = Math.random() * 360;
-      for (let i = 0; i < 54; i++) {
+      for (let i = 0; i < 40; i++) {
         const a = Math.random() * Math.PI * 2; const s = 1.5 + Math.random() * 5.5;
         parts.push({ x: cx, y: cy, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 1, decay: 0.011 + Math.random() * 0.012, color: `hsl(${hue + Math.random() * 50},100%,62%)`, size: 2.4, g: 0.07 });
       }
     };
+    const MAX_PARTS = 220; // a weak phone cannot draw more than this smoothly
     const tick = (now) => {
+      // draw at most ~30 times a second: the full-screen canvas was too heavy for some phones
+      if (now - last < 32) { raf = requestAnimationFrame(tick); return; }
       const dt = now - last; last = now;
       x.clearRect(0, 0, W, H);
       if (fireworks) { nextFw -= dt; if (nextFw <= 0) { burst(W * (0.12 + Math.random() * 0.76), H * (0.1 + Math.random() * 0.4)); sounds.firework(); nextFw = 650 + Math.random() * 650; } }
-      if (confetti) for (let i = 0; i < 2; i++) parts.push({ x: Math.random() * W, y: -10, vx: (Math.random() - 0.5) * 2, vy: 2 + Math.random() * 3, life: 1.6, decay: 0.0028, color: `hsl(${Math.random() * 360},90%,60%)`, size: 7, g: 0.02, rect: true, rot: Math.random() * 6, vr: (Math.random() - 0.5) * 0.3 });
+      if (confetti && parts.length < MAX_PARTS) for (let i = 0; i < 2; i++) parts.push({ x: Math.random() * W, y: -10, vx: (Math.random() - 0.5) * 2, vy: 2 + Math.random() * 3, life: 1.6, decay: 0.0028, color: `hsl(${Math.random() * 360},90%,60%)`, size: 7, g: 0.02, rect: true, rot: Math.random() * 6, vr: (Math.random() - 0.5) * 0.3 });
       for (let i = parts.length - 1; i >= 0; i--) {
         const p = parts[i];
-        p.x += p.vx; p.y += p.vy; p.vy += p.g; p.life -= p.decay;
+        const f = Math.min(3, dt / 16.67); // keep the same speed at 30 frames a second
+        p.x += p.vx * f; p.y += p.vy * f; p.vy += p.g * f; p.life -= p.decay * f;
         if (p.life <= 0 || p.y > H + 20) { parts.splice(i, 1); continue; }
         x.globalAlpha = Math.max(0, Math.min(1, p.life));
         x.fillStyle = p.color;
