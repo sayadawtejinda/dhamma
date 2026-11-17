@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { doc, getDoc, setDoc, increment, collection, runTransaction, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, increment, collection, runTransaction, deleteField, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { db } from './firebase';
 import { appId } from './firebaseConfig';
 import { HOME_BACKGROUNDS, HOME_SHOP_MAX } from './homeBackgrounds';
@@ -113,6 +113,8 @@ function readNestedWithLegacyFallback(data, prefix) {
 }
 
 // A festival gift can be sold back for coins (frees room in the wardrobe): outfits 200, accessories 50.
+// A house is sold back for a flat 5,000 coins (it goes back on sale in the shop for the next student).
+const HOUSE_SELL_PRICE = 5000;
 const sellPriceFor = (categoryKey) => (categoryKey === 'outfit' ? 200 : 50);
 const DEFAULT_CONFIG = { skin: 'light', hair: 'short-black', outfit: 'blue', accessory: 'none', bg: 'sky', homeBackground: 'default' };
 export const AVATAR_DEFAULT_CONFIG = DEFAULT_CONFIG;
@@ -132,6 +134,7 @@ export default function AvatarApp({ entryRequest, onExit }) {
   const [loading, setLoading] = useState(true);
   const [coinBalance, setCoinBalance] = useState(isTeacherPreview ? 500 : 0);
   const [config, setConfig] = useState(DEFAULT_CONFIG);
+  const [housesOpen, setHousesOpen] = useState(false); // many houses: only the newest (or the one lived in) shows until this is opened
   const [giftsOpen, setGiftsOpen] = useState(false); // many gifts: only the newest shows until this is opened
   const [owned, setOwned] = useState({ hair: ['short-black'], outfit: ['blue'], accessory: ['none'], bg: ['sky'], homeBackground: ['default'] });
   const [activeCategory, setActiveCategory] = useState('hair');
@@ -364,6 +367,69 @@ Only ONE student can own each house. You have ${coinBalance.toLocaleString('en-U
       }
     } catch (e) {
       console.error('Error buying a house:', e);
+      showToast('Something went wrong. Please try again.');
+    }
+    setHomeBuying(false);
+  };
+
+  // Selling a house back: one transaction gives the coins, removes the house from this student and updates the owner record.
+  // One house, one owner. Houses bought before that rule can still have several owners (the record lists them in `owners`):
+  // each one who sells is taken off the list, and the LAST one left is the single owner; when he sells, the house goes back
+  // on sale. Nothing is changed for students who keep their house.
+  const sellHome = async (option) => {
+    if (homeBuying || !rosterRef || !studentUid || !(option.cost > 0)) return;
+    if (!window.confirm(`Sell "${option.name}" for ${HOUSE_SELL_PRICE.toLocaleString('en-US')} coins?
+
+The house goes back to the shop for another student. You can buy it again later only if nobody else has it.`)) return;
+    setHomeBuying(true);
+    try {
+      const claimsRef = doc(db, HOME_CLAIMS_PATH, 'owners');
+      const res = await runTransaction(db, async (tx) => {
+        const claimSnap = await tx.get(claimsRef);
+        const rosterSnap = await tx.get(rosterRef);
+        const claims = claimSnap.exists() ? claimSnap.data() : {};
+        const rd = rosterSnap.exists() ? rosterSnap.data() : {};
+        const ownedNow = readNestedWithLegacyFallback(rd, 'avatarOwned').homeBackground || [];
+        if (!ownedNow.includes(option.id)) return { ok: false };
+        const newOwned = ownedNow.filter(id => id !== option.id);
+        const wasWorn = readNestedWithLegacyFallback(rd, 'avatar').homeBackground === option.id;
+        const me = sanitizeShrineKey(studentName);
+        const c = claims[option.id];
+        let claimNext = 'same'; // 'same' | 'removed' | the new record
+        if (c) {
+          if (Array.isArray(c.owners)) {
+            const rest = c.owners.filter(n => sanitizeShrineKey(n) !== me);
+            if (rest.length === 0) claimNext = 'removed';
+            else if (rest.length !== c.owners.length) claimNext = { ...c, name: rest[0], owners: rest };
+          } else if (c.uid === studentUid || (c.name && sanitizeShrineKey(c.name) === me)) claimNext = 'removed';
+        }
+        tx.set(rosterRef, { studentName, coinBalance: increment(HOUSE_SELL_PRICE), avatarOwned: { homeBackground: newOwned }, ...(wasWorn ? { avatar: { homeBackground: 'default' } } : {}) }, { merge: true });
+        if (claimNext === 'removed') tx.update(claimsRef, { [option.id]: deleteField() });
+        else if (claimNext !== 'same') tx.set(claimsRef, { [option.id]: claimNext }, { merge: true });
+        return { ok: true, wasWorn, claimNext };
+      });
+      if (res.ok) {
+        setCoinBalance(b => b + HOUSE_SELL_PRICE);
+        setOwned(prev => ({ ...prev, homeBackground: (prev.homeBackground || []).filter(id => id !== option.id) }));
+        setHomeClaims(c => {
+          const next = { ...(c || {}) };
+          if (res.claimNext === 'removed') delete next[option.id];
+          else if (res.claimNext !== 'same') next[option.id] = res.claimNext;
+          return next;
+        });
+        if (res.wasWorn) {
+          setConfig(prev => ({ ...prev, homeBackground: 'default' }));
+          const look = {};
+          ['skin', 'hair', 'outfit', 'accessory', 'bg'].forEach(k => { if (config[k]) look[k] = config[k]; });
+          look.homeBackground = 'default';
+          setDoc(doc(db, STUDENTS_COLLECTION_PATH, studentUid), { homeBackground: 'default', avatarLook: look }, { merge: true }).catch(() => {});
+        }
+        showToast(`Sold ${option.name} for ${HOUSE_SELL_PRICE.toLocaleString('en-US')} 🪙`);
+      } else {
+        showToast('You do not own this house.');
+      }
+    } catch (e) {
+      console.error('Error selling a house:', e);
       showToast('Something went wrong. Please try again.');
     }
     setHomeBuying(false);
@@ -644,13 +710,25 @@ You have ${coinBalance.toLocaleString('en-US')} coins now and will have ${(coinB
           </button>
         ) : null;
       })()}
+      {(() => {
+        const nHouses = activeCategory === 'homeBackground' ? HOME_BACKGROUNDS.filter(h => h.cost > 0 && isOwned('homeBackground', h.id)).length : 0;
+        return nHouses > 1 && !isTeacherPreview ? (
+          <button type="button" onClick={() => setHousesOpen(o => !o)} className="mb-3 px-4 py-1.5 rounded-full text-sm font-bold text-indigo-800 bg-indigo-100 hover:bg-indigo-200 border border-indigo-300">
+            🏠 {nHouses} houses {housesOpen ? '▲ show only the newest' : '▼ show all'}
+          </button>
+        ) : null;
+      })()}
       <div className="w-full max-w-2xl grid grid-cols-2 sm:grid-cols-3 gap-3">
         {(() => {
           const list = owned[activeCategory] || [];
+          // houses: when several are owned, only the newest one and the one being lived in show until "show all" is tapped
+          const ownedHouses = activeCategory === 'homeBackground' ? HOME_BACKGROUNDS.filter(h => h.cost > 0 && list.includes(h.id)) : [];
+          const newestHouse = ownedHouses.slice().sort((a, b) => list.indexOf(b.id) - list.indexOf(a.id))[0];
+          const hiddenHouse = (o) => ownedHouses.length > 1 && !housesOpen && !isTeacherPreview && o.cost > 0 && list.includes(o.id) && o !== newestHouse && config.homeBackground !== o.id;
           const gifts = activeCat.options.filter(o => o.festival && (isTeacherPreview || list.includes(o.id)));
           // newest = the one added to the owned list last
           const newest = gifts.slice().sort((a, b) => list.indexOf(b.id) - list.indexOf(a.id))[0];
-          return activeCat.options.filter(o => (activeCategory !== 'homeBackground' || isTeacherPreview || o.cost === 0 || isOwned('homeBackground', o.id) || homesForSaleIds.has(o.id)) && (!o.festival || isTeacherPreview || (isOwned(activeCategory, o.id) && (giftsOpen || isTeacherPreview || gifts.length <= 1 || o === newest || config[activeCategory] === o.id))));
+          return activeCat.options.filter(o => !hiddenHouse(o) && (activeCategory !== 'homeBackground' || isTeacherPreview || o.cost === 0 || isOwned('homeBackground', o.id) || homesForSaleIds.has(o.id)) && (!o.festival || isTeacherPreview || (isOwned(activeCategory, o.id) && (giftsOpen || isTeacherPreview || gifts.length <= 1 || o === newest || config[activeCategory] === o.id))));
         })().sort((a, b) => (b.festival ? 1 : 0) - (a.festival ? 1 : 0)).map(option => {
           const owns = isTeacherPreview || isOwned(activeCategory, option.id);
           const equipped = config[activeCategory] === option.id;
@@ -678,6 +756,11 @@ You have ${coinBalance.toLocaleString('en-US')} coins now and will have ${(coinB
                 <span className="text-xs font-bold text-amber-600">🪙 {option.cost}</span>
               )}
             </button>
+            {activeCategory === 'homeBackground' && option.cost > 0 && owns && !isTeacherPreview && (
+              <button onClick={() => sellHome(option)} disabled={homeBuying} className="text-xs font-bold text-amber-700 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded-full py-1 disabled:opacity-60">
+                💰 Sell for {HOUSE_SELL_PRICE.toLocaleString('en-US')} 🪙
+              </button>
+            )}
             {option.festival && owns && !isTeacherPreview && (
               <button onClick={() => handleSell(activeCategory, option)} className="text-xs font-bold text-amber-700 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded-full py-1">
                 💰 Sell for {sellPriceFor(activeCategory)} 🪙
