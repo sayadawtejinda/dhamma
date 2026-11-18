@@ -1544,6 +1544,24 @@ const [sheetBAudio] = useState(new Audio());
       window.addEventListener('reader-sound-problem', bad);
       return () => window.removeEventListener('reader-sound-problem', bad);
   }, []);
+  // Get the sound files ready while the student is still reading: a short while after the page opens each sound element is asked to
+  // load, and the files are fetched quietly in the background so they are already on the device (an iPad loads nothing by itself
+  // before the first tap, which was the cause of the silent first taps). Sheet B's long recordings only when Sheet B is opened.
+  useEffect(() => {
+      const t = setTimeout(() => {
+          [level1AudioRef, level2AudioRef, qaAudioRef].forEach(r => { try { if (r.current && r.current.readyState < 1) r.current.load(); } catch (e) { /* ignore */ } });
+          [level1AudioRef, level2AudioRef, qaAudioRef].forEach(r => { try { if (r.current && r.current.src) fetch(r.current.src, { cache: 'force-cache' }).then(res => res.blob()).catch(() => {}); } catch (e) { /* ignore */ } });
+      }, 1500);
+      return () => clearTimeout(t);
+  }, []);
+  useEffect(() => {
+      if (appMode !== 'sheet' || currentSheetName !== 'B') return;
+      const t = setTimeout(() => {
+          [SHEET_B_AUDIO, SHEET_B_AUDIO2].forEach(u => { try { fetch(u, { cache: 'force-cache' }).then(res => res.blob()).catch(() => {}); } catch (e) { /* ignore */ } });
+          try { if (!sheetBAudio._sbSrc) { sheetBAudio._sbSrc = SHEET_B_AUDIO; sheetBAudio.src = SHEET_B_AUDIO; sheetBAudio.load(); } } catch (e) { /* ignore */ }
+      }, 800);
+      return () => clearTimeout(t);
+  }, [appMode, currentSheetName]);
   const handleRefreshSound = () => {
       const now = Date.now();
       if (now - lastSoundRefreshRef.current < 10000) {
