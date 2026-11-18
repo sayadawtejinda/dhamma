@@ -3767,7 +3767,7 @@ useEffect(() => {
 
       <div className="max-w-5xl mx-auto space-y-6">
         
-        <div className="bg-white rounded-3xl shadow-xl p-3 md:p-6 text-center sticky top-2 z-10 border border-gray-100 min-h-[250px] md:min-h-[300px] flex flex-col justify-between relative">
+        <div className="bg-white rounded-3xl shadow-xl p-3 md:p-6 text-center sticky top-2 z-10 border border-gray-100 flex flex-col justify-start relative">
           
           {appMode === 'lesson' && currentLessonIndex >= 0 && (
             <div className="absolute top-4 left-4 text-sm md:text-base font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-4 py-2 rounded-full shadow-sm animate-in fade-in slide-in-from-left-4 duration-300 z-10">
