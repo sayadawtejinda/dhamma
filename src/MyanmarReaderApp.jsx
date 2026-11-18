@@ -1,3 +1,4 @@
+import { prepareAudio, storedAudioUrl } from './readerAudioStore';
 import React, { useState, useRef, useEffect } from 'react';
 import { readerTrophyCount, readerProgressFromTrophies } from './readerProgress';
 import { Play, Volume2, VolumeX, Lock, Delete, RotateCcw, BookOpen, DownloadCloud, FileText, Settings, X, Plus, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -67,7 +68,7 @@ const SHEET_B_AUDIO2 = "https://raw.githubusercontent.com/nathantun93/bell/main/
 async function playSheetBClip(audio, src, t, durationMs) {
   clearTimeout(audio._sbTimeout);
   const token = (audio._sbToken = (audio._sbToken || 0) + 1);
-  if (audio._sbSrc !== src) { audio._sbSrc = src; audio.src = src; audio.load(); }
+  if (audio._sbSrc !== src) { audio._sbSrc = src; audio.src = storedAudioUrl(src) || src; audio.load(); }
   if (audio.readyState < 1) {
     await new Promise((res) => {
       const done = () => { audio.removeEventListener('loadedmetadata', done); res(); };
@@ -1547,18 +1548,20 @@ const [sheetBAudio] = useState(new Audio());
   // Get the sound files ready while the student is still reading: a short while after the page opens each sound element is asked to
   // load, and the files are fetched quietly in the background so they are already on the device (an iPad loads nothing by itself
   // before the first tap, which was the cause of the silent first taps). Sheet B's long recordings only when Sheet B is opened.
+  // kept on the device: after the first visit these play from the device itself (see readerAudioStore.js)
+  const useStored = (el, webSrc) => prepareAudio(webSrc).then(u => { try { if (u && el && el.paused && el.src !== u) { el.src = u; el.load(); } } catch (e) { /* the web address keeps working */ } });
   useEffect(() => {
       const t = setTimeout(() => {
           [level1AudioRef, level2AudioRef, qaAudioRef].forEach(r => { try { if (r.current && r.current.readyState < 1) r.current.load(); } catch (e) { /* ignore */ } });
-          [level1AudioRef, level2AudioRef, qaAudioRef].forEach(r => { try { if (r.current && r.current.src) fetch(r.current.src, { cache: 'force-cache' }).then(res => res.blob()).catch(() => {}); } catch (e) { /* ignore */ } });
+          [level1AudioRef, level2AudioRef, qaAudioRef].forEach(r => { try { if (r.current && r.current.src) useStored(r.current, r.current.src); } catch (e) { /* ignore */ } });
       }, 1500);
       return () => clearTimeout(t);
   }, []);
   useEffect(() => {
       if (appMode !== 'sheet' || currentSheetName !== 'B') return;
       const t = setTimeout(() => {
-          [SHEET_B_AUDIO, SHEET_B_AUDIO2].forEach(u => { try { fetch(u, { cache: 'force-cache' }).then(res => res.blob()).catch(() => {}); } catch (e) { /* ignore */ } });
-          try { if (!sheetBAudio._sbSrc) { sheetBAudio._sbSrc = SHEET_B_AUDIO; sheetBAudio.src = SHEET_B_AUDIO; sheetBAudio.load(); } } catch (e) { /* ignore */ }
+          [SHEET_B_AUDIO, SHEET_B_AUDIO2].forEach(u => { prepareAudio(u).then(blobUrl => { try { if (blobUrl && sheetBAudio._sbSrc === u && sheetBAudio.paused && sheetBAudio.src !== blobUrl) { sheetBAudio.src = blobUrl; sheetBAudio.load(); } } catch (e) { /* ignore */ } }); });
+          try { if (!sheetBAudio._sbSrc) { sheetBAudio._sbSrc = SHEET_B_AUDIO; sheetBAudio.src = storedAudioUrl(SHEET_B_AUDIO) || SHEET_B_AUDIO; sheetBAudio.load(); } } catch (e) { /* ignore */ }
       }, 800);
       return () => clearTimeout(t);
   }, [appMode, currentSheetName]);
