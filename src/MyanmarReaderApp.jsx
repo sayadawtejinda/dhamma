@@ -2682,27 +2682,43 @@ const closeQAPanel = () => {
   setQaAnswerShown(false);
 };
 
+  // Plays one piece (a letter or syllable) of a long sound file. On an iPad the old way often stayed silent: the jump to the piece
+  // was ignored while the file had not loaded enough (Safari loads nothing before the first tap), and a play() that never
+  // answered also left the "busy" flag on, so the next taps did nothing. Now it (1) makes the file load if it has not yet,
+  // (2) waits (up to 4 s) until it can be jumped in and until the jump is done, (3) plays, and (4) ALWAYS finishes by itself, even when
+  // the sound never starts, so the next tap works.
   const playAudioSprite = (audioElement, startTime, durationMs) => {
     return new Promise((resolve) => {
       if (!audioElement) return resolve(false);
-      try {
-        if (audioTimeoutRef.current) clearTimeout(audioTimeoutRef.current);
-        audioElement.currentTime = startTime;
-        const playPromise = audioElement.play();
-        if (playPromise !== undefined) {
-          playPromise.then(() => {
-            audioTimeoutRef.current = setTimeout(() => {
-              audioElement.pause();
-              resolve(true);
-            }, durationMs);
-            verifySoundStarted(audioElement, startTime);
-          }).catch(e => { if (e && e.name !== 'AbortError') noteSoundFailure(audioElement, 'rejected'); resolve(false); });
-        } else {
-          resolve(false);
+      if (audioTimeoutRef.current) clearTimeout(audioTimeoutRef.current);
+      const token = (audioElement._spToken = (audioElement._spToken || 0) + 1);
+      let finished = false;
+      const finish = (ok) => { if (finished) return; finished = true; clearTimeout(guard); resolve(ok); };
+      const guard = setTimeout(() => { try { if (audioElement._spToken === token) audioElement.pause(); } catch (e) { /* ignore */ } finish(false); }, durationMs + 5000);
+      const waitFor = (ev, ms) => new Promise((res) => {
+        const done = () => { audioElement.removeEventListener(ev, done); res(); };
+        audioElement.addEventListener(ev, done);
+        setTimeout(done, ms);
+      });
+      (async () => {
+        try {
+          if (audioElement.readyState < 1) {
+            if (audioElement.networkState === 0 || audioElement.networkState === 3) { try { audioElement.load(); } catch (e) { /* ignore */ } }
+            await waitFor('loadedmetadata', 4000);
+          }
+          if (audioElement._spToken !== token) return finish(false);   // a newer tap took over
+          try { audioElement.currentTime = startTime; } catch (e) { /* tried again after the metadata */ }
+          if (audioElement.seeking) await waitFor('seeked', 1500);
+          if (audioElement._spToken !== token) return finish(false);
+          await audioElement.play();
+          if (audioElement._spToken !== token) return finish(false);
+          audioTimeoutRef.current = setTimeout(() => { audioElement.pause(); finish(true); }, durationMs);
+          verifySoundStarted(audioElement, startTime);
+        } catch (e) {
+          if (e && e.name !== 'AbortError') noteSoundFailure(audioElement, 'rejected');
+          finish(false);
         }
-      } catch (e) {
-        resolve(false);
-      }
+      })();
     });
   };
 
