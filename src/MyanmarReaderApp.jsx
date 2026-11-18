@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { readerTrophyCount, readerProgressFromTrophies } from './readerProgress';
 import { Play, Volume2, VolumeX, Lock, Delete, RotateCcw, BookOpen, DownloadCloud, FileText, Settings, X, Plus, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { collection, doc, getDoc, getDocs, setDoc, updateDoc, onSnapshot, query, where, serverTimestamp, increment, Timestamp } from 'firebase/firestore';
+import { addDoc, collection, doc, getDoc, getDocs, setDoc, updateDoc, onSnapshot, query, where, serverTimestamp, increment, Timestamp } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { presenceIntervalMs, listenLiveOrOnce } from './presenceDay';
 import { rosterDocRefByUid, migrateNameKeyedRosterDoc } from './studentRosterIdentity';
@@ -21,6 +21,8 @@ const MYANMAR_READER_APP_ID = 'myanmar-reader-app';
 const TUTORING_APP_ID = 'dhamma-tutoring-app';
 const TUTORING_STUDENTS_PATH = `artifacts/${TUTORING_APP_ID}/public/data/students`;
 const READER_ROSTER_PATH = `artifacts/${MYANMAR_READER_APP_ID}/public/data/roster`;
+// why a sound did not play (file state, error, device): written by logSoundTrouble, read by the teacher/developer to find the cause
+const READER_SOUND_LOG_PATH = `artifacts/${MYANMAR_READER_APP_ID}/public/data/soundLogs`;
 const READER_SCORES_PATH = `artifacts/${MYANMAR_READER_APP_ID}/public/data/scores`;
 const sanitizeReaderKey = (key) => (key || 'unknown').replace(/[.$#/\[\]]/g, '_');
 // Key(s) that TutoringApp.jsx's "Fix Completed Chapter" box saves under, on
@@ -1527,7 +1529,37 @@ const [sheetBAudio] = useState(new Audio());
       setSoundProblem(true); setSoundHint(true);
       setTimeout(() => setSoundHint(false), 10000);
   };
+  const soundLogCountRef = useRef(0);
+  const logSoundTrouble = (el, why, extra) => {
+      try {
+          if (soundLogCountRef.current >= 8) return;   // a handful per visit is enough to see the pattern
+          soundLogCountRef.current += 1;
+          const file = (() => { try { return decodeURIComponent(String(el && el.src || '').split('/').pop()); } catch (e) { return String(el && el.src || ''); } })();
+          const ua = navigator.userAgent || '';
+          addDoc(collection(db, READER_SOUND_LOG_PATH), {
+              at: serverTimestamp(),
+              student: studentName || '',
+              why: String(why),
+              extra: extra ? String(extra).slice(0, 200) : '',
+              file,
+              fromDevice: String(el && el.src || '').startsWith('blob:'),
+              readyState: el ? el.readyState : -1,
+              networkState: el ? el.networkState : -1,
+              errorCode: el && el.error ? el.error.code : 0,
+              errorMsg: el && el.error ? String(el.error.message || '').slice(0, 120) : '',
+              currentTime: el ? Math.round(el.currentTime * 100) / 100 : -1,
+              duration: el && isFinite(el.duration) ? Math.round(el.duration) : -1,
+              paused: el ? !!el.paused : null,
+              online: navigator.onLine,
+              homeScreen: !!(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true,
+              device: /iPad/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1) ? 'iPad' : /iPhone/.test(ua) ? 'iPhone' : /Android/.test(ua) ? 'Android' : 'computer',
+              ua: ua.slice(0, 160),
+              page: appMode + (appMode === 'sheet' ? ' ' + currentSheetName : ''),
+          }).catch(() => {});
+      } catch (e) { /* the log must never disturb reading */ }
+  };
   const noteSoundFailure = (el, why) => {
+      logSoundTrouble(el, why);
       soundFailRef.current += 1;
       if (why === 'broken') { try { el.load(); } catch (e) { /* ignore */ } }
       if (soundFailRef.current >= 2 || why === 'rejected') raiseSoundProblem();
@@ -2715,7 +2747,7 @@ const closeQAPanel = () => {
       const token = (audioElement._spToken = (audioElement._spToken || 0) + 1);
       let finished = false;
       const finish = (ok) => { if (finished) return; finished = true; clearTimeout(guard); resolve(ok); };
-      const guard = setTimeout(() => { try { if (audioElement._spToken === token) audioElement.pause(); } catch (e) { /* ignore */ } finish(false); }, durationMs + 5000);
+      const guard = setTimeout(() => { logSoundTrouble(audioElement, 'gave-up'); try { if (audioElement._spToken === token) audioElement.pause(); } catch (e) { /* ignore */ } finish(false); }, durationMs + 5000);
       const waitFor = (ev, ms) => new Promise((res) => {
         const done = () => { audioElement.removeEventListener(ev, done); res(); };
         audioElement.addEventListener(ev, done);
@@ -2726,6 +2758,7 @@ const closeQAPanel = () => {
           if (audioElement.readyState < 1) {
             if (audioElement.networkState === 0 || audioElement.networkState === 3) { try { audioElement.load(); } catch (e) { /* ignore */ } }
             await waitFor('loadedmetadata', 4000);
+            if (audioElement.readyState < 1) logSoundTrouble(audioElement, 'not-loaded-4s');
           }
           if (audioElement._spToken !== token) return finish(false);   // a newer tap took over
           try { audioElement.currentTime = startTime; } catch (e) { /* tried again after the metadata */ }
