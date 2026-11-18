@@ -13,6 +13,7 @@ it asks you ("3x2" means 3 across, 2 down).
 """
 import os
 import re
+import json
 import sys
 import shutil
 import time
@@ -27,6 +28,11 @@ WORK = os.environ.get('LESSON_PICTURES') or os.path.join(DOWNLOADS, 'lesson-pict
 PREFIX = 'gemini_generated'
 NUMBERED = re.compile(r'^(\d{1,3})\.(?:png|jpe?g|webp)$')   # 01.jpg, 2.png ...
 KEEP = 5
+_LAYOUT_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sheet-layouts.json')
+try:
+    OVERRIDES = {k.lower(): v for k, v in json.load(open(_LAYOUT_FILE, encoding='utf8')).items() if not k.startswith('_')}
+except Exception:
+    OVERRIDES = {}   # sheets with an uneven layout (see sheet-layouts.json)
 
 
 def find_sheets():
@@ -168,7 +174,11 @@ def main():
         print('Sheet:', name)
         img = Image.open(sheet)
         img.load()
-        cols, rows = detect(img)
+        custom = OVERRIDES.get(name.lower())
+        if custom:
+            cols, rows = [(0, 1)] * len(custom), [(0, 1)]   # its boxes come from sheet-layouts.json
+        else:
+            cols, rows = detect(img)
         count = len(cols) * len(rows)
         if count < 2 or count > 12:
             print(f'  I could not find the pictures by their white lines ({count} found).')
@@ -189,6 +199,10 @@ def main():
         else:
             print(f'  Found {len(cols)} across x {len(rows)} down = {count} pictures.')
         boxes = [(c0, r0, c1, r1) for (r0, r1) in rows for (c0, c1) in cols]
+        if custom:
+            W, H = img.size
+            boxes = [(round(a * W), round(b * H), round(c * W), round(d * H)) for a, b, c, d in custom]
+            print('  (this sheet has its own layout in sheet-layouts.json)')
         # a new file name for every sheet (and every run): a picture viewer that still has the previous preview open locks that file
         pv_path = os.path.join(WORK, 'sheets', f'_preview_{os.path.splitext(name)[0]}_{int(time.time())}.png')
         preview(img, boxes, pv_path)
