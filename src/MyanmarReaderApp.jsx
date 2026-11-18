@@ -70,7 +70,12 @@ const SHEET_B_AUDIO2 = "https://raw.githubusercontent.com/nathantun93/bell/main/
 async function playSheetBClip(audio, src, t, durationMs) {
   clearTimeout(audio._sbTimeout);
   const token = (audio._sbToken = (audio._sbToken || 0) + 1);
-  if (audio._sbSrc !== src) { audio._sbSrc = src; audio.src = storedAudioUrl(src) || src; audio.load(); }
+  // play only from the copy kept on the device: wait (up to 25 s) until the whole file has been downloaded once, so no download
+  // happens during the lesson; if it cannot be stored, the web address is used as before
+  let real = storedAudioUrl(src);
+  if (!real) real = await Promise.race([prepareAudio(src), new Promise(r => setTimeout(() => r(null), 25000))]);
+  if (audio._sbToken !== token) return;
+  if (audio._sbSrc !== src || (real && audio.src !== real && audio.paused)) { audio._sbSrc = src; audio.src = real || src; audio.load(); }
   if (audio.readyState < 1) {
     await new Promise((res) => {
       const done = () => { audio.removeEventListener('loadedmetadata', done); res(); };
@@ -1581,7 +1586,7 @@ const [sheetBAudio] = useState(new Audio());
   // load, and the files are fetched quietly in the background so they are already on the device (an iPad loads nothing by itself
   // before the first tap, which was the cause of the silent first taps). Sheet B's long recordings only when Sheet B is opened.
   // kept on the device: after the first visit these play from the device itself (see readerAudioStore.js)
-  const useStored = (el, webSrc) => prepareAudio(webSrc).then(u => { try { if (u && el && el.paused && el.src !== u) { el.src = u; el.load(); } } catch (e) { /* the web address keeps working */ } });
+  const useStored = (el, webSrc) => { if (el && !el._webSrc) el._webSrc = webSrc; return prepareAudio(webSrc).then(u => { try { if (u && el && el.paused && el.src !== u) { el.src = u; el.load(); } } catch (e) { /* the web address keeps working */ } }); };
   useEffect(() => {
       const t = setTimeout(() => {
           [level1AudioRef, level2AudioRef, qaAudioRef].forEach(r => { try { if (r.current && r.current.readyState < 1) r.current.load(); } catch (e) { /* ignore */ } });
@@ -2747,7 +2752,7 @@ const closeQAPanel = () => {
       const token = (audioElement._spToken = (audioElement._spToken || 0) + 1);
       let finished = false;
       const finish = (ok) => { if (finished) return; finished = true; clearTimeout(guard); resolve(ok); };
-      const guard = setTimeout(() => { logSoundTrouble(audioElement, 'gave-up'); try { if (audioElement._spToken === token) audioElement.pause(); } catch (e) { /* ignore */ } finish(false); }, durationMs + 5000);
+      const guard = setTimeout(() => { logSoundTrouble(audioElement, 'gave-up'); try { if (audioElement._spToken === token) audioElement.pause(); } catch (e) { /* ignore */ } finish(false); }, durationMs + 32000);
       const waitFor = (ev, ms) => new Promise((res) => {
         const done = () => { audioElement.removeEventListener(ev, done); res(); };
         audioElement.addEventListener(ev, done);
@@ -2755,6 +2760,13 @@ const closeQAPanel = () => {
       });
       (async () => {
         try {
+          // the copy on the device first: wait (up to 25 s) until the file has been downloaded once, then play from it
+          if (!audioElement._webSrc && audioElement.src && !audioElement.src.startsWith('blob:')) audioElement._webSrc = audioElement.src;
+          if (audioElement._webSrc && !audioElement.src.startsWith('blob:')) {
+            const u = await Promise.race([prepareAudio(audioElement._webSrc), new Promise(r => setTimeout(() => r(null), 25000))]);
+            if (audioElement._spToken !== token) return finish(false);
+            if (u) { audioElement.src = u; audioElement.load(); }
+          }
           if (audioElement.readyState < 1) {
             if (audioElement.networkState === 0 || audioElement.networkState === 3) { try { audioElement.load(); } catch (e) { /* ignore */ } }
             await waitFor('loadedmetadata', 4000);
