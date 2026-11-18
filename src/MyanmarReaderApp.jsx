@@ -1324,7 +1324,9 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
   const [isFetchingSheet, setIsFetchingSheet] = useState(false);
   
   // Spell Mode Toggle
-  const [isSpellMode, setIsSpellMode] = useState(true);
+  // the student's chosen reading way (1 = spell it out, 2 = whole word) is remembered on this device, so nobody has to switch again
+  const [isSpellMode, setIsSpellMode] = useState(() => { try { return localStorage.getItem('readerReadingWay') !== '2'; } catch (e) { return true; } });
+  const wayBeforePracticeRef = useRef(null);
   const [showSpellModeConfirm, setShowSpellModeConfirm] = useState(false);
   
   // Custom Dictionary State
@@ -1335,6 +1337,8 @@ export default function MyanmarReaderApp({ entryRequest, onExit, isActive }) {
 
   // Practice Mode Toggle
   const [isPracticeMode, setIsPracticeMode] = useState(false);
+  // however keyboard practice ends, the way the student chose comes back
+  useEffect(() => { if (!isPracticeMode && wayBeforePracticeRef.current !== null) { setIsSpellMode(wayBeforePracticeRef.current); wayBeforePracticeRef.current = null; } }, [isPracticeMode]);
   const [practiceStep, setPracticeStep] = useState(0);
   const [expectedNextKey, setExpectedNextKey] = useState(null); 
   const [giftCount, setGiftCount] = useState(0);
@@ -2720,7 +2724,8 @@ const closeQAPanel = () => {
               return;
           }
           interruptPlayback();
-          setIsSpellMode(false); // keyboard practice reads the whole word: way 2
+          wayBeforePracticeRef.current = isSpellMode;
+          setIsSpellMode(false); // keyboard practice reads the whole word: way 2 (not saved; the chosen way comes back afterwards)
           setIsPracticeMode(true);
           setPracticeStep(0);
           setCurrentKeys([]);
@@ -3559,6 +3564,7 @@ useEffect(() => {
                      <button onClick={() => {
                          const newSpellMode = !isSpellMode;
                          setIsSpellMode(newSpellMode);
+                         try { localStorage.setItem('readerReadingWay', newSpellMode ? '1' : '2'); } catch (e) { /* optional */ }
                          setShowSpellModeConfirm(false);
                      }} className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold transition-colors shadow-md">Switch</button>
                  </div>
