@@ -1,5 +1,3 @@
 {
-  "_help": "Sheets whose pictures are not an even grid. Key = sheet file name (e.g. 01.jpg). Each box is [left, top, right, bottom] as a fraction (0-1) of the sheet, in story order (the numbers on the sheet). split-sheets.py uses these instead of looking for white lines.",
-  "01.jpg": [[0.02,0.018,0.975,0.166],[0.02,0.174,0.975,0.322],[0.02,0.33,0.975,0.467],[0.02,0.476,0.975,0.641],[0.02,0.65,0.975,0.805],[0.02,0.815,0.975,0.972]],
-  "08.jpg": [[0.007,0.065,0.327,0.505],[0.335,0.065,0.993,0.505],[0.007,0.522,0.247,0.983],[0.254,0.522,0.495,0.983],[0.504,0.522,0.744,0.983],[0.752,0.522,0.993,0.983]]
+  "_help": "Sheets whose pictures are not an even grid. Key = sheet file name (e.g. 01.jpg). Each box is [left, top, right, bottom] as a fraction (0-1) of the sheet, in story order (the numbers on the sheet). split-sheets.py uses these instead of looking for white lines. (The old 01.jpg and 08.jpg entries were removed: the sheets made by the Canvas tool are clean 3x2 grids and need none.)"
 }
