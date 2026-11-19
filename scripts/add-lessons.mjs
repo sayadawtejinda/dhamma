@@ -180,15 +180,18 @@ const needed = lessons.reduce((n, l) => n + needFor(l), 0);
 // 03 inside lesson-pictures); a lesson with none takes the next loose pictures, oldest first (the old way) unless the lessons file has
 // a picture plan (then every lesson must have named pictures). SmartStudy: the oldest pictures first, as before.
 let use;
-if (which === 'abhidhamma') {
+if (true) {
   const keyed = listKeyed(PICTURE_DIRS);
   const pool = listScreenshots();
-  const needs = lessons.map((l, i) => ({ no: i + 1, count: needFor(l) })).filter(n => n.count > 0);
+  // Abhidhamma: lesson i of the file is L<i>. SmartStudy: the lessons of a file often already have pictures (an old class's lessons), so
+  // the pictures are numbered by the lessons that NEED them: the first lesson without pictures takes L01-P1..P5, the next L02, and so on.
+  let rank = 0;
+  const needs = lessons.map((l, i) => ({ no: which === 'smartstudy' ? (needFor(l) > 0 ? ++rank : 0) : i + 1, idx: i + 1, count: needFor(l) })).filter(n => n.count > 0);
   const plan = planPictures(needs, keyed, pool, picturePlan);
   console.log(`The lessons need ${needed} picture(s) in ${SCREENSHOTS}; ${keyed.size} named and ${pool.length} loose picture(s) found.\n`);
   const label = { named: 'named pictures (L..-P..)', loose: 'loose pictures, oldest first', partial: 'INCOMPLETE named pictures', none: 'NO pictures', short: 'NOT ENOUGH loose pictures' };
   lessons.forEach((l, i) => {
-    const row = plan.rows.find(r => r.no === i + 1);
+    const row = which === 'smartstudy' ? plan.rows.find(r => needs.find(n => n.idx === i + 1 && n.no === r.no)) : plan.rows.find(r => r.no === i + 1);
     console.log(`  Lesson ${String(i + 1).padStart(2)}: ${row ? label[row.source] : 'has its pictures already'}   ${String(l.title || '').slice(0, 40)}`);
   });
   if (plan.problems.length) die(`\n${plan.problems.join('\n')}\nNothing was changed. Fix the pictures and run this again.`);
