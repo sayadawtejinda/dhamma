@@ -116,8 +116,10 @@ export function useOnlineRoster(rosterPath, filterDocs, lastSeenField = 'lastSee
   const warningCount = roster.filter(s => s._isWarning).length;
 
   // `rankField` (e.g. the Shrine Room's lotus count): EVERY student, the highest first, instead of just who was active this week
+  // rankField may also be a function (row => number), e.g. how many friends a student has sent a gift to
+  const rankValue = (r) => (typeof rankField === 'function' ? rankField(r) : (r[rankField] || 0)) || 0;
   const rankedAll = rankField
-    ? roster.filter(s => (s.studentName || s.name)).slice().sort((a, b) => (b[rankField] || 0) - (a[rankField] || 0))
+    ? roster.filter(s => (s.studentName || s.name)).slice().sort((a, b) => rankValue(b) - rankValue(a))
     : null;
   return { weeklyRosterList, onlineCount, warningCount, rankedAll };
 }
@@ -175,6 +177,8 @@ export default function OnlineStatusWidget({
   highlightSelf = false,
   // true: list every student the weekly file holds (the still-active students of this app), not only those seen in the last 7 days
   listAllActive = false,
+  // true (with rankField): places 1-3 wear a gold, silver and bronze medal instead of the Dhamma wheel
+  rankMedals = false,
 }) {
   const liveWatchOn = useLiveWatch();
   const { weeklyRosterList, onlineCount, warningCount: rawWarningCount, rankedAll } = useOnlineRoster(rosterPath, filterDocs, lastSeenField, isTeacherMode, rankField, sortField, listAllActive);
@@ -261,7 +265,7 @@ export default function OnlineStatusWidget({
                 return (
                 <div key={s.id} ref={isSelf ? selfRowRef : undefined} className={`flex items-center justify-between p-3 rounded-xl border ${isSelf ? 'bg-yellow-100 border-yellow-400 ring-2 ring-yellow-400' : isWarning ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-100'}`}>
                   <div className="flex items-center gap-2">
-                    {rankedAll && <HolyRankBadge rank={idx + 1} />}
+                    {rankedAll && (rankMedals ? <span className="w-8 text-center text-xl">{['🥇', '🥈', '🥉'][idx] || <span className="text-sm font-bold text-gray-400">{idx + 1}</span>}</span> : <HolyRankBadge rank={idx + 1} />)}
                     {!rankedAll && rankKind && sortField && (() => {
                       const place = 1 + shownList.filter(o => (o[sortField] || 0) > (s[sortField] || 0)).length;
                       return place <= 3 && (s[sortField] || 0) > 0

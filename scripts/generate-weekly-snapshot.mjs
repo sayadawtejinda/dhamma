@@ -448,7 +448,20 @@ async function main() {
       const snap = await getDocs(collection(db, target.path));
       // the three lessons lists keep every student who is still active in Tutoring (however long ago they last opened the app);
       // the other apps' pills only need the last 14 days
-      let docs = snap.docs.filter(d => target.lessons || msOf(d.data()[target.field]) > rosterCutoff).map(d => ({ id: d.id, ...plain(d.data()) }));
+      // the Shrine Room / Nature World list (same roster) keeps every student still active in Tutoring, so nobody
+      // drops out of the rankings only because they have not opened the app for 2 weeks; a student made inactive does drop out
+      const stillActive = (d) => {
+        const st = (d.tutoringStudentUid && lessonCtx.byUid.get(d.tutoringStudentUid)) || lessonCtx.byName.get(String(d.studentName || '').trim().toLowerCase());
+        return st ? st.isActive === true : null;
+      };
+      const keepAll = target.path === 'artifacts/shrine-room-app/public/data/roster';
+      let docs = snap.docs.filter(d => {
+        if (target.lessons) return true;
+        const recent = msOf(d.data()[target.field]) > rosterCutoff;
+        if (!keepAll) return recent;
+        const act = stillActive(d.data());
+        return act === null ? recent : act;
+      }).map(d => ({ id: d.id, ...plain(d.data()) }));
       if (target.lessons) {
         const ranked = rankRoster(target.lessons, docs.filter(target.keep), lessonCtx, target.nameOf, d => msOf(d[target.field]));
         docs = ranked.list;

@@ -707,8 +707,12 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
         teacherLabel="🧑‍🏫 Teacher"
         showInactiveWarning={false}
         guideKey="nature"
-        renderActivity={(s) => !isTeacherPreview && s.studentName !== studentName && (
+        rankField={(s) => (s.natureWorld?.giftedFriends || []).length}
+        rankMedals
+        renderActivity={(s) => (
           <span className="flex items-center gap-2 justify-end">
+            <span className="text-emerald-700 font-semibold" title="Friends this student has sent a gift to">🎁 {(s.natureWorld?.giftedFriends || []).length}</span>
+            {!isTeacherPreview && s.studentName !== studentName && (<>
             {/* A friend only ever receives one gift from me, so one already
                 visited is marked -- visit someone new to send another. */}
             {(world.giftedFriends || []).includes(s.studentName) ? (
@@ -731,6 +735,7 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
                 📦 🎁
               </button>
             )}
+            </>)}
           </span>
         )}
       />
