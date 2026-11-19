@@ -2141,11 +2141,12 @@ function TeacherDashboard({ user, announcements, onOpenSmartStudy, onOpenAbhidha
     }
   };
 
-  const loadSmartStudyClassList = async () => {
-    if (smartStudyClasses !== null) return smartStudyClasses; // already loaded/cached
+  const loadSmartStudyClassList = async (force = false) => {
+    if (force === true) { try { localStorage.removeItem('ssClassList_v1'); } catch (e) { /* ignore */ } } // 🔄 button: read the classes again (a class added in the last 6 hours)
+    else if (smartStudyClasses !== null) return smartStudyClasses; // already loaded/cached
     // Only the number of lessons per class is wanted, but it lives inside each class document (200-400 KB each, 2.4 MB in
     // all), so the list is remembered on this device for 6 hours instead of being read every time.
-    try {
+    if (force !== true) try {
       const cached = JSON.parse(localStorage.getItem('ssClassList_v1') || 'null');
       if (cached && Array.isArray(cached.list) && Date.now() - cached.at < 6 * 60 * 60 * 1000) { setSmartStudyClasses(cached.list); return cached.list; }
     } catch (e) { /* no cache */ }
@@ -5684,6 +5685,9 @@ ${toSend.map(l => '• ' + l.title).join(', ')}`
                       <option key={c.classId} value={c.classId}>{c.classId} ({c.lessonCount} lesson{c.lessonCount === 1 ? '' : 's'})</option>
                     ))}
                   </select>
+                )}
+                {smartStudyClasses !== null && !pickerLoading && (
+                  <button type="button" onClick={() => loadSmartStudyClassList(true)} className="mt-2 text-sm font-semibold text-sky-700 hover:underline">🔄 A new class is missing? Reload the list</button>
                 )}
               </div>
             );
