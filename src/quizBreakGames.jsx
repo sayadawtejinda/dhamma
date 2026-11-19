@@ -3345,7 +3345,104 @@ export const WakeTheHareGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
   );
 };
 
-export const QUIZ_BREAK_GAMES = [BirdRescueGame, FlowerOfferingGame, LitterPickingGame, AnimalRescueGame, WoodcutterAxeGame, AntGatheringGame, WaterAnimalsGame, HelpFriendsGame, PayRespectGame, TenGiftsGame, ReturnLostItemsGame, HelpParentsGame, AlmsRoundGame, GoldenEggDuckGame, CunningHeronGame, ShareWaterGame, SchoolOfSkillsGame, TenDeedsGame, TenMeritGame, TigerInTrapGame, FinishProverbGame, BravePuppyGame, CleanHouseGame, CleanPagodaGame, MarketForParentsGame, WakeTheHareGame];
+// ---------------------------------------------------------------------------------------------------------------
+// Game: Animal first aid. Hurt animals come one at a time; pick the right helper from the tray (cut the snare, bandage,
+// ointment, rope, tweezers, water). Some need two steps. A wrong tool only wiggles -- no penalty. 2 or 3 coins per animal.
+const AID_TOOLS = {
+  cut: { e: '✂️', n: 'Scissors' }, bandage: { e: '🩹', n: 'Bandage' }, ointment: { e: '🧴', n: 'Medicine' },
+  rope: { e: '🪢', n: 'Rope' }, tweezers: { e: '🤏', n: 'Tweezers' }, water: { e: '💧', n: 'Water' },
+};
+const AID_CASES = [
+  { a: '🐇', pain: '🪤', say: 'A snare is holding my leg!', steps: ['cut', 'bandage'], done: 'Free! Hop hop!' },
+  { a: '🐦', pain: '🕸️', say: 'I am tangled in a net!', steps: ['cut'], done: 'I can fly again!' },
+  { a: '🐕', pain: '🌵', say: 'A thorn is in my paw!', steps: ['tweezers', 'ointment'], done: 'Woof! It is out!' },
+  { a: '🐈', pain: '🩸', say: 'I scratched my leg!', steps: ['ointment', 'bandage'], done: 'Purr... thank you!' },
+  { a: '🐑', pain: '🕳️', say: 'I fell into a deep hole!', steps: ['rope'], done: 'Baa! I am out!' },
+  { a: '🦌', pain: '🥵', say: 'I am so hot and thirsty!', steps: ['water'], done: 'Ahh, so cool!' },
+  { a: '🐥', pain: '🪹', say: 'I fell from my nest! My wing hurts.', steps: ['bandage'], done: 'Cheep cheep!' },
+  { a: '🐿️', pain: '🔥', say: 'My tail is burnt a little!', steps: ['water', 'ointment'], done: 'It feels better!' },
+  { a: '🐢', pain: '🧵', say: 'A string is tied round me!', steps: ['cut'], done: 'So light now!' },
+  { a: '🐘', pain: '⛓️', say: 'A chain is hurting my foot!', steps: ['cut', 'ointment'], done: 'Thank you, friend!' },
+  { a: '🦆', pain: '🛢️', say: 'Oil is on my feathers!', steps: ['water'], done: 'Quack! Clean!' },
+  { a: '🐒', pain: '🪢', say: 'I am stuck high in a tree!', steps: ['rope'], done: 'Ooh ooh, thank you!' },
+];
+const AID_ROUNDS = 8;
+export const AnimalFirstAidGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
+  const [order] = useState(() => [...AID_CASES].sort(() => Math.random() - 0.5).slice(0, AID_ROUNDS));
+  const [idx, setIdx] = useState(0);
+  const [step, setStep] = useState(0);
+  const [healed, setHealed] = useState(false);
+  const [wrong, setWrong] = useState(null);
+  const [won, setWon] = useState([]);
+  const [finished, setFinished] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const soundRef = useRef(null);
+  const total = won.reduce((a, b) => a + b, 0);
+  const c = order[Math.min(idx, order.length - 1)];
+  const tools = Object.keys(AID_TOOLS);
+
+  const useTool = (t) => {
+    if (healed || finished) return;
+    if (t !== c.steps[step]) { setWrong(t); setTimeout(() => setWrong(null), 500); return; }
+    if (step + 1 < c.steps.length) { setStep(step + 1); playCoinSound(soundRef); return; }
+    const coins = Math.max(0, Math.min(2 + Math.floor(Math.random() * 2), coinsLeft - total));
+    setWon(w => [...w, coins]);
+    setHealed(true);
+    playCoinSound(soundRef);
+    setTimeout(() => {
+      if (idx + 1 >= order.length) setFinished(true);
+      else { setIdx(idx + 1); setStep(0); setHealed(false); }
+    }, 1400);
+  };
+
+  return (
+    <div className="relative overflow-hidden text-white h-screen" style={{ height: '100dvh', minHeight: 420, background: 'linear-gradient(180deg,#e0f2fe 0%,#dcfce7 55%,#86efac 100%)' }}>
+      <style>{`
+        @keyframes aidShake { 0%,100% { transform: translateX(0) } 25% { transform: translateX(-8px) } 75% { transform: translateX(8px) } }
+        @keyframes aidBob { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-6px) } }
+        @keyframes aidHeal { 0% { transform: scale(1) } 40% { transform: scale(1.25) rotate(-6deg) } 100% { transform: scale(1) } }
+      `}</style>
+      <div className="absolute top-0 inset-x-0 flex items-center justify-between gap-2 px-3 py-3 z-10">
+        <div className="bg-white/80 text-emerald-900 font-bold text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 ml-12 sm:ml-16 min-w-0 truncate">🩺 Animal first aid · {Math.min(idx + (healed ? 1 : 0), order.length)}/{order.length}</div>
+        <div className="bg-yellow-300 text-yellow-900 font-black text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 shadow whitespace-nowrap flex-shrink-0">🪙 {total}{coinsLeft <= 0 ? ' (limit reached)' : ''}</div>
+      </div>
+      <div className="absolute inset-x-0 flex flex-col items-center px-4 text-center" style={{ top: '14%' }}>
+        <div className="bg-white/90 text-emerald-900 font-bold rounded-full px-4 py-2 shadow inline-block mb-3">{healed ? c.done : c.say}</div>
+        <div className="relative" style={{ animation: healed ? 'aidHeal .8s ease-out' : 'aidBob 1.6s ease-in-out infinite' }}>
+          <span className="block select-none" style={{ fontSize: 'clamp(80px, 22vmin, 150px)', lineHeight: 1, filter: healed ? 'none' : 'saturate(.55)' }}>{c.a}</span>
+          <span className="absolute select-none" style={{ right: '-22%', bottom: '-4%', fontSize: 'clamp(34px, 9vmin, 64px)' }}>{healed ? '💖' : c.pain}</span>
+        </div>
+        {!healed && c.steps.length > 1 && <p className="mt-3 text-emerald-900 font-bold text-sm bg-white/70 rounded-full px-3 py-1">Step {step + 1} of {c.steps.length}</p>}
+      </div>
+      <div className="absolute inset-x-0 bottom-0 px-3 pb-4 pt-3 z-10 bg-white/70">
+        <p className="text-center text-emerald-900 font-bold text-sm mb-2">Choose the right helper</p>
+        <div className="flex flex-wrap justify-center gap-2 sm:gap-3">
+          {tools.map(t => (
+            <button key={t} type="button" onClick={() => useTool(t)} disabled={healed} aria-label={AID_TOOLS[t].n}
+              className="flex flex-col items-center bg-white text-emerald-900 rounded-2xl shadow-md border-2 border-emerald-200 active:scale-95 transition disabled:opacity-60"
+              style={{ width: 'clamp(64px, 17vmin, 96px)', padding: '6px 4px', animation: wrong === t ? 'aidShake .4s' : 'none' }}>
+              <span style={{ fontSize: 'clamp(28px, 8vmin, 44px)', lineHeight: 1 }}>{AID_TOOLS[t].e}</span>
+              <span className="text-[11px] sm:text-xs font-bold">{AID_TOOLS[t].n}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+      {finished && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20 px-4">
+          <div className="bg-white text-gray-900 rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
+            <div className="text-5xl mb-2">🩺💖</div>
+            <h2 className="text-2xl font-extrabold mb-1">All the animals are safe!</h2>
+            <p className="text-gray-600 mb-2">You helped {order.length} hurt animals with kindness.</p>
+            <p className="text-lg font-bold text-yellow-600 mb-4">{total > 0 ? `🪙 +${total} coins for your Shrine Room wallet` : (coinsLeft <= 0 ? 'You have already earned all the rescue coins for this lesson. Great job!' : 'No coins this time.')}</p>
+            <GameButton disabled={leaving} onClick={() => { setLeaving(true); onDone(total); }} className="bg-emerald-500 hover:bg-emerald-600 text-white w-full text-xl">Continue →</GameButton>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export const QUIZ_BREAK_GAMES = [BirdRescueGame, FlowerOfferingGame, LitterPickingGame, AnimalRescueGame, WoodcutterAxeGame, AntGatheringGame, WaterAnimalsGame, HelpFriendsGame, PayRespectGame, TenGiftsGame, ReturnLostItemsGame, HelpParentsGame, AlmsRoundGame, GoldenEggDuckGame, CunningHeronGame, ShareWaterGame, SchoolOfSkillsGame, TenDeedsGame, TenMeritGame, TigerInTrapGame, FinishProverbGame, BravePuppyGame, CleanHouseGame, CleanPagodaGame, MarketForParentsGame, WakeTheHareGame, AnimalFirstAidGame];
 const hashOf = (s) => { let h = 0; String(s ?? '').split('').forEach(ch => { h = (h * 31 + ch.charCodeAt(0)) >>> 0; }); return h; };
 export const quizBreakGameFor = (lessonId) => QUIZ_BREAK_GAMES[hashOf(lessonId) % QUIZ_BREAK_GAMES.length];
 export const QuizBreakGame = ({ lessonId, ...rest }) => {
