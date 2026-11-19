@@ -14,7 +14,7 @@ import { sounds } from './badgeSounds';
 // `queue` entries: 'b:<badgeId>' or 'a:<kind>:<tier>'. Nothing here reads from Firebase.
 
 const AWARD_LISTS = AWARD_LIST_BY_KIND;
-const AWARD_TEXT = { trophy: 'You have the most trophies!', holy: 'You have the most lotus flowers in the Shrine Room!', joy: 'You came to class the most this year!', ss: 'You finished the most Smart Study lessons!', abhi: 'You finished the most Abhidhamma lessons!', ds: 'You finished the most Dhammaschool lessons!' };
+const AWARD_TEXT = { trophy: 'You have the most trophies!', holy: 'You have the most lotus flowers in the Shrine Room!', joy: 'You came to class the most this year!', ss: 'You finished the most Smart Study lessons!', abhi: 'You finished the most Abhidhamma lessons!', ds: 'You finished the most Dhammaschool lessons!', nature: 'You sent gifts to the most friends in Nature World!' };
 
 export function parseEntry(entry) {
   if (entry.startsWith('a:')) {

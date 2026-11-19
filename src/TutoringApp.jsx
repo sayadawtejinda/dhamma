@@ -11744,7 +11744,7 @@ function TeacherRefreshButton() {
 // (badgesGiven), which this screen already holds live -- so working out who is waiting for what costs no read. Giving a badge writes
 // ONE small update on that student's record; their Home page shows the celebration when they open it (see BadgeCeremony).
 const AWARD_LISTS = AWARD_LIST_BY_KIND;
-const AWARD_WHAT = { trophy: 'Most trophies', holy: 'Most lotus flowers', joy: 'Most classes attended', ss: 'Most Smart Study lessons', abhi: 'Most Abhidhamma lessons', ds: 'Most Dhammaschool lessons' };
+const AWARD_WHAT = { trophy: 'Most trophies', holy: 'Most lotus flowers', joy: 'Most classes attended', ss: 'Most Smart Study lessons', abhi: 'Most Abhidhamma lessons', ds: 'Most Dhammaschool lessons', nature: 'Most Nature World gifts sent' };
 const badgeWeight = (b) => (b.master ? 0 : b.metal === 'gold' ? 1 : b.metal === 'silver' ? 2 : 3);
 function BadgeApprovals({ students, sessions }) {
   const [open, setOpen] = useState(false);

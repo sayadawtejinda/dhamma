@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { doc, getDoc, setDoc, increment, deleteField } from 'firebase/firestore';
 import { db } from './firebase';
+import { useAwards, AwardPlaque } from './Awards';
 import OnlineStatusWidget, { loadRosterSnapshot } from './OnlineStatusWidget';
 import { AvatarThumb, HomeVisitModal } from './AvatarPeek';
 
@@ -314,6 +315,7 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
   const isTeacherPreview = !entryRequest?.studentUid;
   const studentUid = entryRequest?.studentUid;
   const studentName = entryRequest?.studentName || 'Friend';
+  const natureAward = useAwards({ name: entryRequest?.studentName }).find(w => w.kind === 'nature');
   const [loading, setLoading] = useState(true);
   const [coinBalance, setCoinBalance] = useState(isTeacherPreview ? 500 : 0);
   const [world, setWorld] = useState(DEFAULT_WORLD);
@@ -693,6 +695,10 @@ export default function NatureWorldApp({ entryRequest, onExit }) {
       >
         🏡
       </button>
+
+      {natureAward && !isTeacherPreview && (
+        <div className="fixed left-2 top-[4.5rem] z-40 w-56 sm:w-64"><AwardPlaque award={natureAward} compact /></div>
+      )}
 
       <OnlineStatusWidget
         rosterPath={SHRINE_ROSTER_PATH}
