@@ -3543,7 +3543,119 @@ export const BanyanSaveTreeGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
   );
 };
 
-export const QUIZ_BREAK_GAMES = [BirdRescueGame, FlowerOfferingGame, LitterPickingGame, AnimalRescueGame, WoodcutterAxeGame, AntGatheringGame, WaterAnimalsGame, HelpFriendsGame, PayRespectGame, TenGiftsGame, ReturnLostItemsGame, HelpParentsGame, AlmsRoundGame, GoldenEggDuckGame, CunningHeronGame, ShareWaterGame, SchoolOfSkillsGame, TenDeedsGame, TenMeritGame, TigerInTrapGame, FinishProverbGame, BravePuppyGame, CleanHouseGame, CleanPagodaGame, MarketForParentsGame, WakeTheHareGame, AnimalFirstAidGame, BanyanSaveTreeGame];
+// ---------------------------------------------------------------------------------------------------------------
+// Game: the monkey and the beans (Jataka, "losing much for a little"). A monkey climbs a tree with a handful of beans. One bean
+// drops at a time and the monkey looks down. Tap the top of the tree to keep climbing (2 or 3 coins each time). If you do not tap
+// in time the monkey throws all the beans away to look for the one it lost, and the game is lost. 7 drops to get through.
+const MONKEY_DROPS = 7;
+const MONKEY_SECONDS = 3;
+export const MonkeyBeansGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
+  const [phase, setPhase] = useState('intro'); // intro | climbing | drop | won | lost
+  const [level, setLevel] = useState(0); // climbs made so far
+  const [dropKey, setDropKey] = useState(0);
+  const [won, setWon] = useState([]);
+  const [leaving, setLeaving] = useState(false);
+  const soundRef = useRef(null);
+  const timers = useRef([]);
+  const later = (fn, ms) => { const t = setTimeout(fn, ms); timers.current.push(t); return t; };
+  const clearAll = () => { timers.current.forEach(clearTimeout); timers.current = []; };
+  useEffect(() => clearAll, []);
+  const total = won.reduce((a, b) => a + b, 0);
+
+  const nextDrop = () => {
+    clearAll();
+    setDropKey(k => k + 1);
+    setPhase('drop');
+    later(() => setPhase('lost'), MONKEY_SECONDS * 1000);
+  };
+  const start = () => { setLevel(0); setWon([]); setLeaving(false); setPhase('climbing'); later(nextDrop, 900); };
+  const climb = () => {
+    if (phase !== 'drop') return;
+    clearAll();
+    playCoinSound(soundRef);
+    const n = level + 1;
+    setLevel(n);
+    setWon(w => [...w, Math.max(0, Math.min(2 + Math.floor(Math.random() * 2), coinsLeft - w.reduce((a, b) => a + b, 0)))]);
+    if (n >= MONKEY_DROPS) { setPhase('won'); return; }
+    setPhase('climbing');
+    later(nextDrop, 1100);
+  };
+  const monkeyBottom = phase === 'lost' ? 4 : 6 + level * (58 / MONKEY_DROPS);
+  const beansInHand = Math.max(0, 8 - level - (phase === 'drop' || phase === 'lost' ? 1 : 0));
+
+  return (
+    <div className="relative overflow-hidden text-white h-screen select-none" style={{ height: '100dvh', minHeight: 420, background: 'linear-gradient(180deg,#bae6fd 0%,#d9f99d 65%,#86efac 100%)' }}>
+      <style>{`
+        @keyframes monkeyBean { 0% { transform: translateY(0) rotate(0deg); opacity: 1 } 100% { transform: translateY(260px) rotate(300deg); opacity: .9 } }
+        @keyframes monkeyThrow { 0% { transform: translate(0,0) scale(1); opacity: 1 } 100% { transform: translate(var(--tx), 120px) scale(.8); opacity: 0 } }
+        @keyframes monkeyPulse { 0%,100% { transform: scale(1); opacity: .85 } 50% { transform: scale(1.08); opacity: 1 } }
+        @keyframes monkeyBar { 0% { width: 100% } 100% { width: 0% } }
+      `}</style>
+      <div className="absolute top-0 inset-x-0 flex items-center justify-between gap-2 px-3 py-3 z-10">
+        <div className="bg-white/80 text-emerald-900 font-bold text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 ml-12 sm:ml-16 min-w-0 truncate">🐒 Keep climbing · {level}/{MONKEY_DROPS}</div>
+        <div className="bg-yellow-300 text-yellow-900 font-black text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 shadow whitespace-nowrap flex-shrink-0">🪙 {total}{coinsLeft <= 0 ? ' (limit reached)' : ''}</div>
+      </div>
+
+      <div className="absolute inset-x-0 flex flex-col items-center" style={{ top: '9%' }}>
+        <div className="bg-white/90 text-emerald-900 font-bold rounded-full px-4 py-2 shadow text-center mb-2 mx-3">
+          {phase === 'drop' ? 'Oh no, a bean fell! Tap the top of the tree to keep climbing!' : phase === 'won' ? 'The monkey reached the top with its beans!' : phase === 'lost' ? 'The monkey threw all the beans away...' : 'The monkey is climbing with a handful of beans'}
+        </div>
+        <div className="relative" style={{ width: 'min(86vw, 340px)', height: 'min(66dvh, 470px)' }}>
+          {/* trunk */}
+          <div className="absolute left-1/2 -translate-x-1/2 bottom-0 rounded-t-2xl" style={{ width: '24%', height: '78%', background: 'linear-gradient(90deg,#92400e,#b45309 50%,#78350f)' }} />
+          {/* canopy: the place to tap */}
+          <button type="button" onClick={climb} aria-label="Tap the top of the tree to climb"
+            className="absolute left-0 right-0 top-0 border-0 bg-transparent p-0 flex items-center justify-center"
+            style={{ height: '34%', cursor: phase === 'drop' ? 'pointer' : 'default' }}>
+            <span className="absolute inset-0 rounded-full" style={{ background: 'radial-gradient(circle at 50% 55%, #16a34a 0%, #22c55e 55%, #4ade80 100%)', opacity: .95, boxShadow: phase === 'drop' ? '0 0 0 6px rgba(250,204,21,.9)' : 'none', animation: phase === 'drop' ? 'monkeyPulse .7s ease-in-out infinite' : 'none' }} />
+            <span className="relative font-black text-white text-lg drop-shadow" style={{ textShadow: '0 1px 3px rgba(0,0,0,.5)' }}>{phase === 'drop' ? '⬆️ TAP TO CLIMB' : '🍃'}</span>
+          </button>
+          {/* timer bar while a bean has dropped */}
+          {phase === 'drop' && (
+            <div key={dropKey} className="absolute left-1/2 -translate-x-1/2 h-2 bg-red-500 rounded-full" style={{ top: '35%', width: '40%', animation: `monkeyBar ${MONKEY_SECONDS}s linear forwards` }} />
+          )}
+          {/* the monkey */}
+          <div className="absolute left-1/2 -translate-x-1/2 text-center transition-all duration-700" style={{ bottom: `${monkeyBottom}%`, transform: 'translateX(-50%)' }}>
+            <div style={{ fontSize: 'min(16vw, 64px)', lineHeight: 1 }}>{phase === 'won' ? '😋' : phase === 'lost' ? '😭' : '🐒'}</div>
+            {phase !== 'lost' && phase !== 'won' && <div className="text-xs font-bold text-emerald-900 bg-white/80 rounded-full px-2">🫘 x {beansInHand}</div>}
+            {phase === 'drop' && <div className="absolute -right-12 -top-1 text-2xl" aria-hidden="true">👀⬇️</div>}
+          </div>
+          {phase === 'drop' && (
+            <span key={`b${dropKey}`} className="absolute select-none" style={{ left: '55%', bottom: `${monkeyBottom}%`, fontSize: 32, animation: 'monkeyBean 1s ease-in forwards' }}>🫘</span>
+          )}
+          {phase === 'lost' && ['-70px', '-30px', '20px', '60px', '-50px', '40px'].map((tx, i) => (
+            <span key={i} className="absolute select-none" style={{ left: '50%', bottom: `${monkeyBottom + 12}%`, fontSize: 26, '--tx': tx, animation: `monkeyThrow ${0.7 + i * 0.1}s ease-out forwards` }}>🫘</span>
+          ))}
+        </div>
+      </div>
+
+      {phase === 'intro' && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20 px-4">
+          <div className="bg-white text-gray-900 rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
+            <div className="text-5xl mb-2">🐒🫘🌳</div>
+            <h2 className="text-2xl font-extrabold mb-1">The monkey and the beans</h2>
+            <p className="text-gray-600 mb-4">A monkey climbs a tree with a handful of beans. Each time a bean falls, tap the top of the tree to keep climbing. If you wait, the monkey throws away ALL its beans to look for one. Do not lose much for a little!</p>
+            <GameButton onClick={start} className="bg-emerald-500 hover:bg-emerald-600 text-white w-full text-xl">Start</GameButton>
+          </div>
+        </div>
+      )}
+      {(phase === 'won' || phase === 'lost') && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20 px-4">
+          <div className="bg-white text-gray-900 rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
+            <div className="text-5xl mb-2">{phase === 'won' ? '🐒🫘💖' : '🐒😭'}</div>
+            <h2 className="text-2xl font-extrabold mb-1">{phase === 'won' ? 'You kept all the beans!' : 'All the beans are lost'}</h2>
+            <p className="text-gray-600 mb-2">{phase === 'won' ? 'Do not give up much for a little. Keep what is more important.' : 'The monkey lost many beans for one small bean. Do not lose much for a little!'}</p>
+            <p className="text-lg font-bold text-yellow-600 mb-4">{total > 0 ? `🪙 +${total} coins for your Shrine Room wallet` : (coinsLeft <= 0 ? 'You have already earned all the rescue coins for this lesson. Great job!' : 'No coins this time.')}</p>
+            {phase === 'lost' && <GameButton disabled={leaving} onClick={start} className="bg-amber-400 hover:bg-amber-500 text-amber-900 w-full text-xl mb-2">Try again</GameButton>}
+            <GameButton disabled={leaving} onClick={() => { setLeaving(true); onDone(total); }} className="bg-emerald-500 hover:bg-emerald-600 text-white w-full text-xl">Continue →</GameButton>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export const QUIZ_BREAK_GAMES = [BirdRescueGame, FlowerOfferingGame, LitterPickingGame, AnimalRescueGame, WoodcutterAxeGame, AntGatheringGame, WaterAnimalsGame, HelpFriendsGame, PayRespectGame, TenGiftsGame, ReturnLostItemsGame, HelpParentsGame, AlmsRoundGame, GoldenEggDuckGame, CunningHeronGame, ShareWaterGame, SchoolOfSkillsGame, TenDeedsGame, TenMeritGame, TigerInTrapGame, FinishProverbGame, BravePuppyGame, CleanHouseGame, CleanPagodaGame, MarketForParentsGame, WakeTheHareGame, AnimalFirstAidGame, BanyanSaveTreeGame, MonkeyBeansGame];
 const hashOf = (s) => { let h = 0; String(s ?? '').split('').forEach(ch => { h = (h * 31 + ch.charCodeAt(0)) >>> 0; }); return h; };
 export const quizBreakGameFor = (lessonId) => QUIZ_BREAK_GAMES[hashOf(lessonId) % QUIZ_BREAK_GAMES.length];
 export const QuizBreakGame = ({ lessonId, ...rest }) => {
