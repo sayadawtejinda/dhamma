@@ -3445,13 +3445,14 @@ export const AnimalFirstAidGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
 // ---------------------------------------------------------------------------------------------------------------
 // Game: the Poke tree and the baby Banyan (from the Jataka story). A bird eats a banyan fig, rests on the old tree and a baby
 // banyan sprouts from the droppings. Tap it to pull it out within 2 seconds. Pull out 7 and the old tree is saved; miss one and
-// the banyan swallows the tree. 1 coin per sprout pulled out, +3 for saving the tree.
+// the banyan swallows the tree. 2 or 3 coins per sprout pulled out (like the other games, kept under the lesson's coin limit).
 const BANYAN_NEEDED = 7;
 const BANYAN_SECONDS = 2;
 const BANYAN_SPOTS = [{ x: 22, y: 30 }, { x: 72, y: 26 }, { x: 40, y: 18 }, { x: 62, y: 44 }, { x: 28, y: 50 }, { x: 50, y: 34 }];
 export const BanyanSaveTreeGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
   const [phase, setPhase] = useState('intro'); // intro | bird | sprout | won | dead
   const [pulled, setPulled] = useState(0);
+  const [won, setWon] = useState([]);
   const [spot, setSpot] = useState(BANYAN_SPOTS[0]);
   const [sproutKey, setSproutKey] = useState(0);
   const [leaving, setLeaving] = useState(false);
@@ -3471,18 +3472,18 @@ export const BanyanSaveTreeGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
       later(() => setPhase('dead'), BANYAN_SECONDS * 1000);
     }, 1600);
   };
-  const start = () => { setPulled(0); setLeaving(false); callBird(0); };
+  const start = () => { setPulled(0); setWon([]); setLeaving(false); callBird(0); };
   const pull = () => {
     if (phase !== 'sprout') return;
     clearAll();
     playCoinSound(soundRef);
     const n = pulled + 1;
     setPulled(n);
+    setWon(w => [...w, Math.max(0, Math.min(2 + Math.floor(Math.random() * 2), coinsLeft - w.reduce((a, b) => a + b, 0)))]);
     if (n >= BANYAN_NEEDED) { setPhase('won'); return; }
     later(() => callBird(n), 600);
   };
-  const bonus = phase === 'won' ? 3 : 0;
-  const total = Math.max(0, Math.min(pulled + bonus, coinsLeft));
+  const total = won.reduce((a, b) => a + b, 0);
   const bigBanyan = phase === 'dead';
 
   return (
@@ -3494,7 +3495,7 @@ export const BanyanSaveTreeGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
       `}</style>
       <div className="absolute top-0 inset-x-0 flex items-center justify-between gap-2 px-3 py-3 z-10">
         <div className="bg-white/80 text-emerald-900 font-bold text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 ml-12 sm:ml-16 min-w-0 truncate">🌳 Save the old tree · {pulled}/{BANYAN_NEEDED}</div>
-        <div className="bg-yellow-300 text-yellow-900 font-black text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 shadow whitespace-nowrap flex-shrink-0">🪙 {Math.max(0, Math.min(pulled, coinsLeft))}{coinsLeft <= 0 ? ' (limit reached)' : ''}</div>
+        <div className="bg-yellow-300 text-yellow-900 font-black text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 shadow whitespace-nowrap flex-shrink-0">🪙 {total}{coinsLeft <= 0 ? ' (limit reached)' : ''}</div>
       </div>
 
       <div className="absolute left-1/2 -translate-x-1/2 text-center" style={{ top: '9%', width: 'min(92vw, 520px)' }}>
