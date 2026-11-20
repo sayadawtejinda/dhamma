@@ -3442,7 +3442,107 @@ export const AnimalFirstAidGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
   );
 };
 
-export const QUIZ_BREAK_GAMES = [BirdRescueGame, FlowerOfferingGame, LitterPickingGame, AnimalRescueGame, WoodcutterAxeGame, AntGatheringGame, WaterAnimalsGame, HelpFriendsGame, PayRespectGame, TenGiftsGame, ReturnLostItemsGame, HelpParentsGame, AlmsRoundGame, GoldenEggDuckGame, CunningHeronGame, ShareWaterGame, SchoolOfSkillsGame, TenDeedsGame, TenMeritGame, TigerInTrapGame, FinishProverbGame, BravePuppyGame, CleanHouseGame, CleanPagodaGame, MarketForParentsGame, WakeTheHareGame, AnimalFirstAidGame];
+// ---------------------------------------------------------------------------------------------------------------
+// Game: the Poke tree and the baby Banyan (from the Jataka story). A bird eats a banyan fig, rests on the old tree and a baby
+// banyan sprouts from the droppings. Tap it to pull it out within 2 seconds. Pull out 7 and the old tree is saved; miss one and
+// the banyan swallows the tree. 1 coin per sprout pulled out, +3 for saving the tree.
+const BANYAN_NEEDED = 7;
+const BANYAN_SECONDS = 2;
+const BANYAN_SPOTS = [{ x: 22, y: 30 }, { x: 72, y: 26 }, { x: 40, y: 18 }, { x: 62, y: 44 }, { x: 28, y: 50 }, { x: 50, y: 34 }];
+export const BanyanSaveTreeGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
+  const [phase, setPhase] = useState('intro'); // intro | bird | sprout | won | dead
+  const [pulled, setPulled] = useState(0);
+  const [spot, setSpot] = useState(BANYAN_SPOTS[0]);
+  const [sproutKey, setSproutKey] = useState(0);
+  const [leaving, setLeaving] = useState(false);
+  const soundRef = useRef(null);
+  const timers = useRef([]);
+  const later = (fn, ms) => { const t = setTimeout(fn, ms); timers.current.push(t); return t; };
+  const clearAll = () => { timers.current.forEach(clearTimeout); timers.current = []; };
+  useEffect(() => clearAll, []);
+
+  const callBird = (nextPulled) => {
+    clearAll();
+    setSpot(BANYAN_SPOTS[Math.floor(Math.random() * BANYAN_SPOTS.length)]);
+    setPhase('bird');
+    later(() => {
+      setSproutKey(k => k + 1);
+      setPhase('sprout');
+      later(() => setPhase('dead'), BANYAN_SECONDS * 1000);
+    }, 1600);
+  };
+  const start = () => { setPulled(0); setLeaving(false); callBird(0); };
+  const pull = () => {
+    if (phase !== 'sprout') return;
+    clearAll();
+    playCoinSound(soundRef);
+    const n = pulled + 1;
+    setPulled(n);
+    if (n >= BANYAN_NEEDED) { setPhase('won'); return; }
+    later(() => callBird(n), 600);
+  };
+  const bonus = phase === 'won' ? 3 : 0;
+  const total = Math.max(0, Math.min(pulled + bonus, coinsLeft));
+  const bigBanyan = phase === 'dead';
+
+  return (
+    <div className="relative overflow-hidden text-white h-screen select-none" style={{ height: '100dvh', minHeight: 420, background: 'linear-gradient(180deg,#bae6fd 0%,#d9f99d 60%,#86efac 100%)' }}>
+      <style>{`
+        @keyframes banyanGrow { 0% { transform: translate(-50%,-50%) scale(.35) } 100% { transform: translate(-50%,-50%) scale(1.7) } }
+        @keyframes banyanFly { 0% { left: -15%; top: 4% } 70% { left: var(--bx); top: var(--by) } 100% { left: var(--bx); top: var(--by) } }
+        @keyframes banyanEat { 0% { transform: scale(1) } 50% { transform: scale(1.3) } 100% { transform: scale(1) } }
+      `}</style>
+      <div className="absolute top-0 inset-x-0 flex items-center justify-between gap-2 px-3 py-3 z-10">
+        <div className="bg-white/80 text-emerald-900 font-bold text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 ml-12 sm:ml-16 min-w-0 truncate">🌳 Save the old tree · {pulled}/{BANYAN_NEEDED}</div>
+        <div className="bg-yellow-300 text-yellow-900 font-black text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 shadow whitespace-nowrap flex-shrink-0">🪙 {Math.max(0, Math.min(pulled, coinsLeft))}{coinsLeft <= 0 ? ' (limit reached)' : ''}</div>
+      </div>
+
+      <div className="absolute left-1/2 -translate-x-1/2 text-center" style={{ top: '9%', width: 'min(92vw, 520px)' }}>
+        <div className="relative mx-auto" style={{ width: 'min(88vw, 480px)', height: 'min(62dvh, 440px)' }}>
+          <span className="absolute inset-0 flex items-center justify-center select-none transition-all duration-700" style={{ fontSize: 'min(70vw, 300px)', lineHeight: 1, filter: bigBanyan ? 'brightness(.45) saturate(.5)' : 'none', transform: bigBanyan ? 'scale(.8)' : 'none' }}>🌳</span>
+          <span className="absolute left-1/2 -translate-x-1/2 bottom-0 select-none" style={{ fontSize: 'min(12vw, 48px)' }}>{bigBanyan ? '😢' : '🧚'}</span>
+          {phase === 'bird' && (
+            <span className="absolute select-none" style={{ fontSize: 'min(13vw, 54px)', '--bx': `${spot.x}%`, '--by': `${spot.y}%`, animation: 'banyanFly 1.6s ease-out forwards' }}>🐦</span>
+          )}
+          {phase === 'sprout' && (
+            <button type="button" onClick={pull} aria-label="Pull out the baby banyan" key={sproutKey}
+              className="absolute select-none bg-transparent border-0 p-3"
+              style={{ left: `${spot.x}%`, top: `${spot.y}%`, fontSize: 'min(14vw, 56px)', lineHeight: 1, animation: `banyanGrow ${BANYAN_SECONDS}s linear forwards`, transformOrigin: 'center' }}>🌱</button>
+          )}
+          {bigBanyan && <span className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ fontSize: 'min(45vw, 180px)' }}>🌿🌿</span>}
+        </div>
+        <div className="mt-2 inline-block bg-white/90 text-emerald-900 font-bold rounded-full px-4 py-2 shadow">
+          {phase === 'bird' ? 'A bird rests on the tree...' : phase === 'sprout' ? 'A baby banyan! Pull it out NOW!' : phase === 'won' ? 'The old tree is safe!' : phase === 'dead' ? 'Too slow...' : 'Pull out every baby banyan in 2 seconds!'}
+        </div>
+      </div>
+
+      {phase === 'intro' && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20 px-4">
+          <div className="bg-white text-gray-900 rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
+            <div className="text-5xl mb-2">🐦🌳🌱</div>
+            <h2 className="text-2xl font-extrabold mb-1">The Poke tree and the baby Banyan</h2>
+            <p className="text-gray-600 mb-4">A bird drops a banyan seed on the old tree. If the baby banyan grows, it will swallow the old tree. Tap each sprout within {BANYAN_SECONDS} seconds to pull it out. Save the tree 7 times!</p>
+            <GameButton onClick={start} className="bg-emerald-500 hover:bg-emerald-600 text-white w-full text-xl">Start</GameButton>
+          </div>
+        </div>
+      )}
+      {(phase === 'won' || phase === 'dead') && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20 px-4">
+          <div className="bg-white text-gray-900 rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
+            <div className="text-5xl mb-2">{phase === 'won' ? '🌳💖' : '🌿😢'}</div>
+            <h2 className="text-2xl font-extrabold mb-1">{phase === 'won' ? 'You saved the old tree!' : 'The banyan swallowed the tree'}</h2>
+            <p className="text-gray-600 mb-2">{phase === 'won' ? 'Listen to a good friend\'s warning and stop a small danger early.' : 'The tree spirit did not listen to the golden swan. A small danger must be stopped early.'}</p>
+            <p className="text-lg font-bold text-yellow-600 mb-4">{total > 0 ? `🪙 +${total} coins for your Shrine Room wallet` : (coinsLeft <= 0 ? 'You have already earned all the rescue coins for this lesson. Great job!' : 'No coins this time.')}</p>
+            {phase === 'dead' && <GameButton disabled={leaving} onClick={start} className="bg-amber-400 hover:bg-amber-500 text-amber-900 w-full text-xl mb-2">Try again</GameButton>}
+            <GameButton disabled={leaving} onClick={() => { setLeaving(true); onDone(total); }} className="bg-emerald-500 hover:bg-emerald-600 text-white w-full text-xl">Continue →</GameButton>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export const QUIZ_BREAK_GAMES = [BirdRescueGame, FlowerOfferingGame, LitterPickingGame, AnimalRescueGame, WoodcutterAxeGame, AntGatheringGame, WaterAnimalsGame, HelpFriendsGame, PayRespectGame, TenGiftsGame, ReturnLostItemsGame, HelpParentsGame, AlmsRoundGame, GoldenEggDuckGame, CunningHeronGame, ShareWaterGame, SchoolOfSkillsGame, TenDeedsGame, TenMeritGame, TigerInTrapGame, FinishProverbGame, BravePuppyGame, CleanHouseGame, CleanPagodaGame, MarketForParentsGame, WakeTheHareGame, AnimalFirstAidGame, BanyanSaveTreeGame];
 const hashOf = (s) => { let h = 0; String(s ?? '').split('').forEach(ch => { h = (h * 31 + ch.charCodeAt(0)) >>> 0; }); return h; };
 export const quizBreakGameFor = (lessonId) => QUIZ_BREAK_GAMES[hashOf(lessonId) % QUIZ_BREAK_GAMES.length];
 export const QuizBreakGame = ({ lessonId, ...rest }) => {
