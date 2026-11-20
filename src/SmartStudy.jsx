@@ -2011,7 +2011,7 @@ const LoadingView = React.memo(() => (
 ));
 
 
-const QuizView = React.memo(({ quiz, questionNumber, totalQuestions, timerValue, feedback, onAnswerSelect, onNext, userName, activeLesson, showPreview, totalScore, isLastQuestion, isSavingScore, competitors = [], roundNumber = 1, roundQuestionNumber = 1, roundTotal = 5, isPractice = false, nextLabel = 'Next' }) => {
+const QuizView = React.memo(({ quiz, questionNumber, totalQuestions, timerValue, feedback, onAnswerSelect, onNext, userName, activeLesson, showPreview, quickAnswers = false, onToggleQuick, totalScore, isLastQuestion, isSavingScore, competitors = [], roundNumber = 1, roundQuestionNumber = 1, roundTotal = 5, isPractice = false, nextLabel = 'Next' }) => {
   const answerStyles = [
     { bg: 'bg-red-600', hover: 'hover:bg-red-700', icon: <Triangle className="w-6 h-6 fill-white" /> },
     { bg: 'bg-blue-600', hover: 'hover:bg-blue-700', icon: <Square className="w-6 h-6 fill-white" /> },
@@ -2040,6 +2040,11 @@ const QuizView = React.memo(({ quiz, questionNumber, totalQuestions, timerValue,
         <div className="bg-black bg-opacity-30 px-4 py-2 rounded-lg text-yellow-300">{totalScore} Points</div>
         <div className="bg-black bg-opacity-30 px-4 py-2 rounded-lg truncate max-w-[100px] md:max-w-xs">{userName}</div>
       </div>
+      {!feedback && onToggleQuick && (
+        <div className="flex justify-center mb-2">
+          <button type="button" onClick={onToggleQuick} aria-pressed={quickAnswers} className={`px-4 py-1 rounded-full text-sm font-bold border-2 ${quickAnswers ? 'bg-yellow-300 text-gray-900 border-yellow-300' : 'bg-transparent text-yellow-200 border-yellow-300'}`}>⚡ Show answers right away: {quickAnswers ? 'ON' : 'OFF'}</button>
+        </div>
+      )}
       {isPractice && <div className="text-center text-sm font-bold text-yellow-300 mb-2">🔁 Practice round: no points. Get {Math.floor(totalQuestions * 0.8)} of {totalQuestions} right to finish!</div>}
       {!showPreview && !feedback && ( 
         <div className="relative w-full h-4 bg-gray-600 rounded-full overflow-hidden mb-4">
@@ -2081,6 +2086,11 @@ const QuizView = React.memo(({ quiz, questionNumber, totalQuestions, timerValue,
               </button>
             );
           })}
+        </div>
+      )}
+      {!showPreview && quickAnswers && questionNumber !== 1 && (
+        <div className="flex-grow min-h-0 flex items-center justify-center mt-3">
+          <img src={currentImageUrl} alt={`Hint for Q${questionNumber}`} className="max-w-full max-h-full object-contain rounded-xl shadow-lg" onError={(e) => { e.target.onerror = null; e.target.src = `https://placehold.co/600x300/fecaca/991b1b?text=Image+Not+Found`; }} />
         </div>
       )}
       {feedback && (
@@ -2209,7 +2219,11 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
   const [incorrectAnswerCount, setIncorrectAnswerCount] = useState(0);
   const [timerValue, setTimerValue] = useState(30);
   const [showFeedback, setShowFeedback] = useState(null);
-  const [showPreview, setShowPreview] = useState(true); 
+  const [showPreviewRaw, setShowPreview] = useState(true);
+  // "Answers right away": no 5-second picture first; the answers show at once and the picture sits under them (remembered on this device)
+  const [quickAnswers, setQuickAnswers] = useState(() => { try { return localStorage.getItem('ss_quick_answers') === '1'; } catch (e) { return false; } });
+  const toggleQuickAnswers = useCallback(() => setQuickAnswers(q => { const n = !q; try { localStorage.setItem('ss_quick_answers', n ? '1' : '0'); } catch (e) { /* ignore */ } return n; }), []);
+  const showPreview = showPreviewRaw && !quickAnswers;
   const [needsToStartQuiz, setNeedsToStartQuiz] = useState(false); 
   const [isSavingScore, setIsSavingScore] = useState(false); 
   const [quizCompetitors, setQuizCompetitors] = useState([]);
@@ -3884,7 +3898,7 @@ const SmartStudyApp = ({ entryRequest, onExit, isActive }) => {
         const quizOrigLen = quizOriginalRef.current.length || quizQuestions.length;
         const inPractice = currentQuestionIndex >= quizOrigLen;
         const roundLast = currentQuestionIndex === quizRoundEnd;
-        return <QuizView quiz={quizQuestions[currentQuestionIndex]} questionNumber={currentQuestionIndex + 1} totalQuestions={quizOrigLen} timerValue={timerValue} feedback={showFeedback} onAnswerSelect={handleAnswerSubmit} onNext={handleNextQuestion} isLastQuestion={roundLast && currentQuestionIndex >= quizOrigLen - 1} totalScore={currentQuizScore} userName={userName} activeLesson={currentLesson} showPreview={showPreview} isSavingScore={isSavingScore} competitors={inPractice ? [] : quizCompetitors} roundNumber={quizRound} roundQuestionNumber={currentQuestionIndex - quizRoundStart + 1} roundTotal={quizRoundEnd - quizRoundStart + 1} isPractice={inPractice} nextLabel={roundLast ? ((quizCoinsEligibleRef.current && !(currentQuestionIndex >= quizOrigLen - 1 && Object.values(quizMasteryRef.current).filter(Boolean).length >= Math.floor(quizOrigLen * 0.8))) ? 'Bird game 🐦' : (currentQuestionIndex >= quizOrigLen - 1 ? 'Finish' : 'Continue')) : 'Next'} />;
+        return <QuizView quiz={quizQuestions[currentQuestionIndex]} questionNumber={currentQuestionIndex + 1} totalQuestions={quizOrigLen} timerValue={timerValue} feedback={showFeedback} onAnswerSelect={handleAnswerSubmit} onNext={handleNextQuestion} isLastQuestion={roundLast && currentQuestionIndex >= quizOrigLen - 1} totalScore={currentQuizScore} userName={userName} activeLesson={currentLesson} showPreview={showPreview} quickAnswers={quickAnswers} onToggleQuick={toggleQuickAnswers} isSavingScore={isSavingScore} competitors={inPractice ? [] : quizCompetitors} roundNumber={quizRound} roundQuestionNumber={currentQuestionIndex - quizRoundStart + 1} roundTotal={quizRoundEnd - quizRoundStart + 1} isPractice={inPractice} nextLabel={roundLast ? ((quizCoinsEligibleRef.current && !(currentQuestionIndex >= quizOrigLen - 1 && Object.values(quizMasteryRef.current).filter(Boolean).length >= Math.floor(quizOrigLen * 0.8))) ? 'Bird game 🐦' : (currentQuestionIndex >= quizOrigLen - 1 ? 'Finish' : 'Continue')) : 'Next'} />;
       case 'quizBreak':
         return <QuizBreakGame key={quizRound} lessonId={currentLesson?.lessonId} coinsLeft={birdCoinsLeft} onDone={handleBirdGameDone} />;
       case 'studentProfile': return <StudentProfileView allScores={allScores} selectedName={selectedName} handleSetView={handleSetView} setSelectedLessonId={setSelectedLessonId} playClickSound={playClickSound} setSelectedAgeLevel={setSelectedAgeLevel} previousView={previousView} userName={userName} globalLeaderboardScores={globalLeaderboardScores} heartCounts={heartCounts} myTotalLessonsCompletedAllClasses={myTotalLessonsCompletedAllClasses}/>;
