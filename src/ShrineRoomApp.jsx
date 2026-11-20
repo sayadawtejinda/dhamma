@@ -1779,7 +1779,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
     <div className={`min-h-screen flex flex-col items-center px-4 pt-6 pb-16 transition-colors duration-1000 ${dimmed ? 'bg-gradient-to-b from-indigo-200 via-amber-100 to-amber-200' : 'bg-gradient-to-b from-sky-100 via-emerald-50 to-emerald-100'}`}>
       <style>{`
         @keyframes shrinePetalFall { 0% { transform: translate(0, 0) rotate(0deg); opacity: 0; } 8% { opacity: 0.9; } 92% { opacity: 0.9; } 100% { transform: translate(var(--petal-drift), 110vh) rotate(360deg); opacity: 0; } }
-        @keyframes shrineGuideLineFade { 0% { opacity: 0; transform: translateY(6px); } 15% { opacity: 1; transform: translateY(0); } 85% { opacity: 1; } 100% { opacity: 0; } }
+        @keyframes shrineGuideLineFade { 0% { opacity: 0; transform: translateY(6px); } 15% { opacity: 1; transform: translateY(0); } 85% { opacity: 1; } 97%, 100% { opacity: 0; } }
         @keyframes shrineHandUp { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-9px); } }
         @keyframes shrineHandRight { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(9px); } }
         @keyframes buttonSparkleRise { 0% { opacity: 0; transform: translateY(0) scale(0.5); } 25% { opacity: 1; } 100% { opacity: 0; transform: translateY(-32px) scale(1); } }
@@ -2213,7 +2213,7 @@ export default function ShrineRoomApp({ entryRequest, onExit }) {
                   <p
                     key={meditationLineIndex}
                     className="text-sm font-semibold text-emerald-900/80 leading-snug"
-                    style={{ animation: 'shrineGuideLineFade 9s ease-in-out' }}
+                    style={{ animation: 'shrineGuideLineFade 9s ease-in-out forwards' }}
                   >
                     {(activeGuide[meditationLineIndex] || activeGuide[0])[meditationLanguage]}
                   </p>
