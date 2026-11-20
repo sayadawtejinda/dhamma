@@ -441,6 +441,7 @@ const DHAMMASCHOOL_BODY_HTML = `
                     <button onclick="window.changeClass()" class="absolute left-0 top-1 text-sm font-bold text-slate-500 hover:text-orange-600 flex items-center gap-1"><i class="fas fa-arrow-left"></i> Change Class</button>
                     <h2 class="text-3xl font-black text-orange-700 mb-2">Available Lessons</h2>
                     <p class="text-slate-600 font-bold">Class: <span id="current-class-label" class="text-orange-600">-</span></p>
+                    <button id="poems-only-btn" onclick="window.startPoems(0)" class="mt-3 bg-pink-500 hover:bg-pink-600 text-white font-black px-5 py-2 rounded-full shadow btn-3d"><i class="fas fa-music mr-1"></i> Poems only</button>
                 </div>
                 <div id="student-lesson-grid" class="grid grid-cols-1 md:grid-cols-2 gap-6 pb-10">
                     <!-- Lessons injected here -->
@@ -453,6 +454,17 @@ const DHAMMASCHOOL_BODY_HTML = `
                 
                 <div class="absolute top-4 left-4 z-20">
                     <button onclick="goToLibrary()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 py-2 rounded-full font-bold text-sm shadow-sm flex items-center gap-2 transition"><i class="fas fa-arrow-left"></i> Back to Library</button>
+                </div>
+
+                <div id="poem-bar" class="hidden absolute top-4 right-4 z-20 flex items-center gap-2">
+                    <span id="poem-pos" class="bg-pink-100 text-pink-700 font-black text-sm px-3 py-2 rounded-full"></span>
+                    <button onclick="window.openPoemList()" class="bg-pink-500 hover:bg-pink-600 text-white px-4 py-2 rounded-full font-bold text-sm shadow-sm"><i class="fas fa-list"></i> List</button>
+                </div>
+                <div id="poem-list" class="hidden fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-3">
+                    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col">
+                        <div class="flex items-center justify-between p-4 border-b"><h3 class="text-xl font-black text-pink-700"><i class="fas fa-music"></i> Poems</h3><button onclick="window.closePoemList()" class="px-3 py-1 bg-slate-100 rounded-full font-bold">Close</button></div>
+                        <div id="poem-list-items" class="overflow-auto p-3 space-y-2"></div>
+                    </div>
                 </div>
 
                 <!-- Game Overlay -->
@@ -950,6 +962,7 @@ export default function DhammaschoolApp({ entryRequest, onExit, isActive }) {
         let isPreviewMode = false;
         let answersMap = {}; 
         let quizQuestions = [];
+        let poemMode = false, poemList = [], poemPos = 0, poemData = null; // Poems only: the confirmed poem steps of one class, one after another
         let lessonImages = []; 
         let editingIndex = null; 
         
@@ -2409,7 +2422,38 @@ document.getElementById('toggle-audio-btn').onclick = async () => {
             });
         }
 
+        // --- Poems only: the poems the teacher confirmed (public/dhammaschool-poems.json), shown on the same lesson page ---
+        const loadPoemData = async () => {
+            if (poemData) return poemData;
+            try { poemData = (await (await fetch(`${import.meta.env.BASE_URL}dhammaschool-poems.json`)).json()).classes || {}; } catch (e) { poemData = {}; }
+            return poemData;
+        };
+        window.gotoPoem = (pos) => {
+            const p = poemList[pos]; if (!p) return;
+            poemMode = true; poemPos = pos;
+            studentCurrentLessonId = p.l; currentStepIndex = 0; answersMap = {}; completedMatchSteps = {};
+            lessonSteps = []; quizQuestions = [];
+            els.studentLibrary.classList.add('hidden'); els.studentActiveLesson.classList.remove('hidden');
+            document.getElementById('poem-bar').classList.remove('hidden');
+            safeSetText('poem-pos', `Poem ${pos + 1} / ${poemList.length}`);
+            window.closePoemList();
+            setupLessonListener(p.l); setupMyAnswersListener();
+            window.scrollTo(0, 0);
+        };
+        window.startPoems = async (pos) => {
+            const d = await loadPoemData();
+            poemList = d[selectedClassId] || [];
+            if (!poemList.length) return alertMessage('No poems listed for this class yet.', 'error');
+            window.gotoPoem(pos || 0);
+        };
+        window.openPoemList = () => {
+            document.getElementById('poem-list-items').innerHTML = poemList.map((p, i) => `<button onclick="window.gotoPoem(${i})" class="w-full text-left p-3 rounded-xl border-2 ${i === poemPos ? 'border-pink-400 bg-pink-50' : 'border-slate-100 bg-white'} hover:bg-pink-50"><div class="font-black text-slate-800">${i + 1}. ${p.t}</div><div class="text-xs font-bold text-slate-400">${p.n}</div></button>`).join('');
+            document.getElementById('poem-list').classList.remove('hidden');
+        };
+        window.closePoemList = () => document.getElementById('poem-list').classList.add('hidden');
+
         window.goToLibrary = () => {
+            if (poemMode) { poemMode = false; document.getElementById('poem-bar').classList.add('hidden'); window.closePoemList(); }
             if (isPreviewMode) { window.exitPreview(); return; }
             if (isTeacher) return;
             els.studentLibrary.classList.remove('hidden'); els.studentActiveLesson.classList.add('hidden'); studentCurrentLessonId = null;
@@ -2480,6 +2524,7 @@ document.getElementById('toggle-audio-btn').onclick = async () => {
 
         // --- START FIX for Student Navigation Click ---
         els.nextStepBtn.onclick = () => {
+            if (poemMode) { if (poemPos >= poemList.length - 1) goToLibrary(); else window.gotoPoem(poemPos + 1); return; }
             const flowSteps = lessonSteps.filter(s => s.type !== 'quiz');
             if (currentStepIndex < flowSteps.length - 1) {
                 currentStepIndex++;
@@ -2493,6 +2538,7 @@ document.getElementById('toggle-audio-btn').onclick = async () => {
         };
 
         els.prevStepBtn.onclick = () => {
+            if (poemMode) { if (poemPos > 0) window.gotoPoem(poemPos - 1); return; }
             if (currentStepIndex > 0) {
                 currentStepIndex--;
                 localStorage.setItem('currentStepIndex', currentStepIndex.toString());
@@ -3507,9 +3553,9 @@ function renderClickableWords(text) {
                 const container = document.getElementById('lesson-steps-student-display');
                 // Filter out quiz types for lesson flow (they go to game)
                 // BUT keep Match type in flow
-                const flowSteps = lessonSteps.filter(s => s.type !== 'quiz');
+                const flowSteps = poemMode ? (lessonSteps[(poemList[poemPos] || {}).s] ? [lessonSteps[poemList[poemPos].s]] : []) : lessonSteps.filter(s => s.type !== 'quiz');
                 
-                if (flowSteps.length === 0) { container.innerHTML = '<p class="text-center py-20 text-slate-500 font-bold">This lesson is empty!</p>'; return; }
+                if (flowSteps.length === 0) { container.innerHTML = poemMode ? '<p class="text-center py-20 text-slate-500 font-bold">Loading poem...</p>' : '<p class="text-center py-20 text-slate-500 font-bold">This lesson is empty!</p>'; return; }
 
                 if (currentStepIndex < flowSteps.length) {
                     const step = flowSteps[currentStepIndex];
@@ -3770,7 +3816,7 @@ function renderClickableWords(text) {
                     
                     // --- START FIX for Next Button Logic (with Answer/Match Check) ---
                     const isLastStep = currentStepIndex === flowSteps.length - 1;
-                    const hasQuiz = quizQuestions.length > 0;
+                    const hasQuiz = !poemMode && quizQuestions.length > 0;
                     
                     let canProceed = false; // Default to false
                     
@@ -3809,6 +3855,13 @@ function renderClickableWords(text) {
                         els.startGameBtn.classList.add('hidden');
                     }
                     // --- END FIX for Next Button Logic ---
+                    if (poemMode) {
+                        els.startGameBtn.classList.add('hidden');
+                        els.prevStepBtn.disabled = poemPos === 0;
+                        els.nextStepBtn.classList.remove('hidden');
+                        els.nextStepBtn.disabled = false;
+                        els.nextStepBtn.innerHTML = poemPos >= poemList.length - 1 ? 'Finish <i class="fas fa-check"></i>' : 'Next poem <i class="fas fa-arrow-right ml-1"></i>';
+                    }
                 }
             }
         }
