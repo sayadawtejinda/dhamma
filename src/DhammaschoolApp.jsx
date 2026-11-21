@@ -2463,6 +2463,7 @@ document.getElementById('toggle-audio-btn').onclick = async () => {
             const pay = () => { awardDhammaschoolCoins(20); alertMessage('🪙 +20 coins for listening!', 'success'); };
             audio.addEventListener('play', () => {
                 stop();
+                if (audio.currentTime < 1) { readListenSecs = 0; readPoemPaid = false; } // started again from the beginning: it pays again
                 readTimer = setInterval(() => {
                     if (audio.paused) return;
                     readListenSecs++;
@@ -2494,7 +2495,6 @@ document.getElementById('toggle-audio-btn').onclick = async () => {
             const key = `${studentCurrentLessonId}:${idx}`;
             if (key !== readStepKey) return;
             const poem = isPoemStep(step, idx);
-            if ((Date.now() - readStepStart) / 1000 < (poem ? 6 : 20)) return;
             const today = new Date().toISOString().slice(0, 10);
             if (dsRecited[key] === today) return;
             readAsking = true;

@@ -3655,7 +3655,102 @@ export const MonkeyBeansGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
   );
 };
 
-export const QUIZ_BREAK_GAMES = [BirdRescueGame, FlowerOfferingGame, LitterPickingGame, AnimalRescueGame, WoodcutterAxeGame, AntGatheringGame, WaterAnimalsGame, HelpFriendsGame, PayRespectGame, TenGiftsGame, ReturnLostItemsGame, HelpParentsGame, AlmsRoundGame, GoldenEggDuckGame, CunningHeronGame, ShareWaterGame, SchoolOfSkillsGame, TenDeedsGame, TenMeritGame, TigerInTrapGame, FinishProverbGame, BravePuppyGame, CleanHouseGame, CleanPagodaGame, MarketForParentsGame, WakeTheHareGame, AnimalFirstAidGame, BanyanSaveTreeGame, MonkeyBeansGame];
+// ---------------------------------------------------------------------------------------------------------------
+// Game: the king and the spider (Robert the Bruce). A defeated king hides in a cave. A spider climbs the wall, slips and falls, over and
+// over. Every time it falls, tap it within 2 seconds so it tries again (2 or 3 coins each tap). After 7 taps it reaches the top. If you
+// do not tap in time it gives up and the game is lost.
+const SPIDER_TAPS = 7;
+const SPIDER_SECONDS = 2;
+export const SpiderClimbGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
+  const [phase, setPhase] = useState('intro'); // intro | climbing | fallen | won | lost
+  const [level, setLevel] = useState(0);
+  const [fallKey, setFallKey] = useState(0);
+  const [won, setWon] = useState([]);
+  const [leaving, setLeaving] = useState(false);
+  const soundRef = useRef(null);
+  const timers = useRef([]);
+  const later = (fn, ms) => { const t = setTimeout(fn, ms); timers.current.push(t); return t; };
+  const clearAll = () => { timers.current.forEach(clearTimeout); timers.current = []; };
+  useEffect(() => clearAll, []);
+  const total = won.reduce((a, b) => a + b, 0);
+
+  const tryClimb = () => {
+    clearAll();
+    setPhase('climbing');
+    later(() => {
+      setPhase('fallen');
+      setFallKey(k => k + 1);
+      later(() => setPhase('lost'), SPIDER_SECONDS * 1000);
+    }, 1300);
+  };
+  const start = () => { setLevel(0); setWon([]); setLeaving(false); tryClimb(); };
+  const tap = () => {
+    if (phase !== 'fallen') return;
+    clearAll();
+    playCoinSound(soundRef);
+    const n = level + 1;
+    setLevel(n);
+    setWon(w => [...w, Math.max(0, Math.min(2 + Math.floor(Math.random() * 2), coinsLeft - w.reduce((a, b) => a + b, 0)))]);
+    if (n >= SPIDER_TAPS) { setPhase('won'); return; }
+    tryClimb();
+  };
+  const base = 8 + level * (62 / SPIDER_TAPS);
+  const bottom = phase === 'won' ? 84 : phase === 'climbing' ? base + 16 : base;
+
+  return (
+    <div className="relative overflow-hidden text-white h-screen select-none" style={{ height: '100dvh', minHeight: 420, background: 'linear-gradient(180deg,#1e1b4b 0%,#312e81 55%,#44403c 100%)' }}>
+      <style>{`
+        @keyframes spiderPulse { 0%,100% { transform: translateX(-50%) scale(1) } 50% { transform: translateX(-50%) scale(1.15) } }
+        @keyframes spiderBar { 0% { width: 100% } 100% { width: 0% } }
+      `}</style>
+      <div className="absolute top-0 inset-x-0 flex items-center justify-between gap-2 px-3 py-3 z-10">
+        <div className="bg-white/80 text-indigo-900 font-bold text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 ml-12 sm:ml-16 min-w-0 truncate">🕷️ Try again · {level}/{SPIDER_TAPS}</div>
+        <div className="bg-yellow-300 text-yellow-900 font-black text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 shadow whitespace-nowrap flex-shrink-0">🪙 {total}{coinsLeft <= 0 ? ' (limit reached)' : ''}</div>
+      </div>
+
+      <div className="absolute inset-x-0 flex flex-col items-center" style={{ top: '10%' }}>
+        <div className="bg-white/90 text-indigo-900 font-bold rounded-full px-4 py-2 shadow text-center mb-2 mx-3">
+          {phase === 'fallen' ? 'It fell! Tap the spider quickly!' : phase === 'won' ? 'The spider reached the top!' : phase === 'lost' ? 'The spider gave up...' : 'The spider is climbing...'}
+        </div>
+        <div className="relative rounded-3xl overflow-hidden" style={{ width: 'min(86vw, 340px)', height: 'min(62dvh, 450px)', background: 'linear-gradient(180deg,#57534e,#292524)', boxShadow: 'inset 0 0 40px rgba(0,0,0,.6)' }}>
+          <div className="absolute top-0 inset-x-0 text-center text-3xl" style={{ opacity: phase === 'won' ? 1 : .35 }}>🕸️</div>
+          {phase === 'fallen' && <div key={fallKey} className="absolute left-1/2 -translate-x-1/2 h-2 bg-red-500 rounded-full z-10" style={{ top: '4%', width: '50%', animation: `spiderBar ${SPIDER_SECONDS}s linear forwards` }} />}
+          <button type="button" onClick={tap} aria-label="Tap the spider"
+            className="absolute border-0 bg-transparent p-4 z-10"
+            style={{ left: '50%', bottom: `${bottom}%`, transform: 'translateX(-50%)', fontSize: 'min(16vw, 62px)', lineHeight: 1, transition: phase === 'climbing' ? 'bottom 1.2s ease-out' : 'bottom .45s ease-in', animation: phase === 'fallen' ? 'spiderPulse .5s ease-in-out infinite' : 'none', cursor: phase === 'fallen' ? 'pointer' : 'default', filter: phase === 'fallen' ? 'drop-shadow(0 0 10px #facc15)' : 'none' }}>
+            🕷️
+          </button>
+          <div className="absolute bottom-1 left-2 text-4xl">{phase === 'won' ? '🤴😊' : phase === 'lost' ? '🤴😞' : '🤴😔'}</div>
+        </div>
+      </div>
+
+      {phase === 'intro' && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-20 px-4">
+          <div className="bg-white text-gray-900 rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
+            <div className="text-5xl mb-2">🤴🕷️⛰️</div>
+            <h2 className="text-2xl font-extrabold mb-1">The king and the spider</h2>
+            <p className="text-gray-600 mb-4">A defeated king hides in a cave and watches a spider climb the wall. It slips and falls, again and again. Tap the spider within {SPIDER_SECONDS} seconds every time it falls, so it can try again. After {SPIDER_TAPS} tries it reaches the top!</p>
+            <GameButton onClick={start} className="bg-indigo-500 hover:bg-indigo-600 text-white w-full text-xl">Start</GameButton>
+          </div>
+        </div>
+      )}
+      {(phase === 'won' || phase === 'lost') && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-20 px-4">
+          <div className="bg-white text-gray-900 rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
+            <div className="text-5xl mb-2">{phase === 'won' ? '🕷️🕸️💖' : '🕷️😞'}</div>
+            <h2 className="text-2xl font-extrabold mb-1">{phase === 'won' ? 'Never give up!' : 'The spider gave up'}</h2>
+            <p className="text-gray-600 mb-2">{phase === 'won' ? 'The spider tried again and again and reached the top. If at first you do not succeed, try, try again.' : 'You must tap quickly each time it falls. Try once more!'}</p>
+            <p className="text-lg font-bold text-yellow-600 mb-4">{total > 0 ? `🪙 +${total} coins for your Shrine Room wallet` : (coinsLeft <= 0 ? 'You have already earned all the rescue coins for this lesson. Great job!' : 'No coins this time.')}</p>
+            {phase === 'lost' && <GameButton disabled={leaving} onClick={start} className="bg-amber-400 hover:bg-amber-500 text-amber-900 w-full text-xl mb-2">Try again</GameButton>}
+            <GameButton disabled={leaving} onClick={() => { setLeaving(true); onDone(total); }} className="bg-emerald-500 hover:bg-emerald-600 text-white w-full text-xl">Continue →</GameButton>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export const QUIZ_BREAK_GAMES = [BirdRescueGame, FlowerOfferingGame, LitterPickingGame, AnimalRescueGame, WoodcutterAxeGame, AntGatheringGame, WaterAnimalsGame, HelpFriendsGame, PayRespectGame, TenGiftsGame, ReturnLostItemsGame, HelpParentsGame, AlmsRoundGame, GoldenEggDuckGame, CunningHeronGame, ShareWaterGame, SchoolOfSkillsGame, TenDeedsGame, TenMeritGame, TigerInTrapGame, FinishProverbGame, BravePuppyGame, CleanHouseGame, CleanPagodaGame, MarketForParentsGame, WakeTheHareGame, AnimalFirstAidGame, BanyanSaveTreeGame, MonkeyBeansGame, SpiderClimbGame];
 const hashOf = (s) => { let h = 0; String(s ?? '').split('').forEach(ch => { h = (h * 31 + ch.charCodeAt(0)) >>> 0; }); return h; };
 export const quizBreakGameFor = (lessonId) => QUIZ_BREAK_GAMES[hashOf(lessonId) % QUIZ_BREAK_GAMES.length];
 export const QuizBreakGame = ({ lessonId, ...rest }) => {
