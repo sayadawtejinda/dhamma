@@ -460,6 +460,21 @@ const DHAMMASCHOOL_BODY_HTML = `
                     <span id="poem-pos" class="bg-pink-100 text-pink-700 font-black text-sm px-3 py-2 rounded-full"></span>
                     <button onclick="window.openPoemList()" class="bg-pink-500 hover:bg-pink-600 text-white px-4 py-2 rounded-full font-bold text-sm shadow-sm"><i class="fas fa-list"></i> List</button>
                 </div>
+                <div id="read-ask-modal" style="display:none;" class="fixed inset-0 z-[200] bg-black/60 flex items-center justify-center p-4">
+                    <div class="bg-white rounded-3xl shadow-2xl p-6 max-w-sm w-full text-center">
+                        <p id="read-ask-question" class="text-lg font-bold text-gray-800 mb-4"></p>
+                        <div class="flex gap-4 justify-center">
+                            <button id="read-ask-yes" class="flex-1 flex flex-col items-center gap-2 bg-emerald-50 hover:bg-emerald-100 border-2 border-emerald-300 rounded-2xl p-4 transition transform hover:scale-105">
+                                <span id="read-ask-emoji" style="font-size:48px; line-height:1;">🎤😄</span>
+                                <span id="read-ask-yes-text" class="font-bold text-emerald-700 text-sm">Yes!</span>
+                            </button>
+                            <button id="read-ask-no" class="flex-1 flex flex-col items-center gap-2 bg-gray-50 hover:bg-gray-100 border-2 border-gray-300 rounded-2xl p-4 transition transform hover:scale-105">
+                                <span style="font-size:48px; line-height:1;">🤐</span>
+                                <span class="font-bold text-gray-600 text-sm">Not yet</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
                 <div id="poem-list" class="hidden fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-3">
                     <div class="bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col">
                         <div class="flex items-center justify-between p-4 border-b"><h3 class="text-xl font-black text-pink-700"><i class="fas fa-music"></i> Poems</h3><button onclick="window.closePoemList()" class="px-3 py-1 bg-slate-100 rounded-full font-bold">Close</button></div>
@@ -962,6 +977,9 @@ export default function DhammaschoolApp({ entryRequest, onExit, isActive }) {
         let isPreviewMode = false;
         let answersMap = {}; 
         let quizQuestions = [];
+        let readStepKey = null, readStepStart = 0, readListenSecs = 0, readPoemPaid = false, readTimer = null, readAsking = false; // reading/listening coins
+        let dsRecited = {}; // 'lessonId:stepIndex' -> date the student last said yes (sang it / told the teacher)
+        let poemKeySet = null; // 'lessonId:stepIndex' of the confirmed poems
         let poemMode = false, poemList = [], poemPos = 0, poemData = null; // Poems only: the confirmed poem steps of one class, one after another
         let lessonImages = []; 
         let editingIndex = null; 
@@ -1017,6 +1035,7 @@ export default function DhammaschoolApp({ entryRequest, onExit, isActive }) {
             if (coinBalanceUnsub) coinBalanceUnsub();
             coinBalanceUnsub = onSnapshot(doc(db, PATHS.roster, docId), (snap) => {
                 coinBalance = snap.data()?.coinBalance || 0;
+                dsRecited = snap.data()?.dsRecited || {};
                 syncRosterCtxFn();
             }, () => {});
         }
@@ -2422,6 +2441,73 @@ document.getElementById('toggle-audio-btn').onclick = async () => {
             });
         }
 
+        // --- Reading / listening coins, the same amounts as Myanmar Poems:
+        //   poem audio: +20 once it has played to the end or for 60 seconds; story audio: +20 for every full minute listened;
+        //   moving on from a step with audio: "Did you sing it yourself?" (poem) / "Did you tell your teacher?" (story) -> yes = +50,
+        //   once per step per day (remembered on the roster doc as dsRecited). Not for the teacher or the preview. ---
+        function isPoemStep(step, idx) {
+            if (poemKeySet && poemKeySet.has(`${studentCurrentLessonId}:${idx}`)) return true;
+            const lines = String(step.content || '').replace(/<[^>]*>/g, '').split(/\r?\n/).filter(l => l.trim());
+            return lines.length >= 4 && (lines.reduce((a, l) => a + l.length, 0) / lines.length) < 35;
+        }
+        function trackReadingStep(step, container) {
+            if (isTeacher || isPreviewMode || !studentName) return;
+            if (poemKeySet === null) { poemKeySet = new Set(); loadPoemData().then(d => Object.values(d).forEach(l => l.forEach(p => poemKeySet.add(`${p.l}:${p.s}`)))).catch(() => {}); }
+            const idx = lessonSteps.indexOf(step);
+            const key = `${studentCurrentLessonId}:${idx}`;
+            if (readStepKey !== key) { readStepKey = key; readStepStart = Date.now(); readListenSecs = 0; readPoemPaid = false; }
+            clearInterval(readTimer); readTimer = null;
+            const audio = step.audioUrl ? container.querySelector('audio') : null;
+            if (!audio) return;
+            const stop = () => { clearInterval(readTimer); readTimer = null; };
+            const pay = () => { awardDhammaschoolCoins(20); alertMessage('🪙 +20 coins for listening!', 'success'); };
+            audio.addEventListener('play', () => {
+                stop();
+                readTimer = setInterval(() => {
+                    if (audio.paused) return;
+                    readListenSecs++;
+                    if (isPoemStep(step, idx)) { if (!readPoemPaid && readListenSecs >= 60) { readPoemPaid = true; pay(); } }
+                    else if (readListenSecs % 60 === 0) pay();
+                }, 1000);
+            });
+            audio.addEventListener('pause', stop);
+            audio.addEventListener('ended', () => { stop(); if (isPoemStep(step, idx) && !readPoemPaid) { readPoemPaid = true; pay(); } });
+        }
+        function askReadingModal(isPoem) {
+            return new Promise((resolve) => {
+                const modal = document.getElementById('read-ask-modal');
+                document.getElementById('read-ask-question').textContent = isPoem ? 'Did you sing this yourself?' : 'Did you tell your teacher this story?';
+                document.getElementById('read-ask-emoji').textContent = isPoem ? '🎤😄' : '🗣️😄';
+                document.getElementById('read-ask-yes-text').textContent = isPoem ? 'Yes, I sang!' : 'Yes, I told my teacher!';
+                const yes = document.getElementById('read-ask-yes'), no = document.getElementById('read-ask-no');
+                modal.style.display = 'flex';
+                const done = (r) => { modal.style.display = 'none'; yes.removeEventListener('click', onYes); no.removeEventListener('click', onNo); resolve(r); };
+                const onYes = () => done(true), onNo = () => done(false);
+                yes.addEventListener('click', onYes); no.addEventListener('click', onNo);
+            });
+        }
+        async function askReadingCoins() {
+            if (readAsking || isTeacher || isPreviewMode || !studentName || !readStepKey) return;
+            const step = poemMode ? lessonSteps[(poemList[poemPos] || {}).s] : lessonSteps.filter(x => x.type !== 'quiz')[currentStepIndex];
+            if (!step || step.type !== 'narrative' || !step.audioUrl) return;
+            const idx = lessonSteps.indexOf(step);
+            const key = `${studentCurrentLessonId}:${idx}`;
+            if (key !== readStepKey) return;
+            const poem = isPoemStep(step, idx);
+            if ((Date.now() - readStepStart) / 1000 < (poem ? 6 : 20)) return;
+            const today = new Date().toISOString().slice(0, 10);
+            if (dsRecited[key] === today) return;
+            readAsking = true;
+            try {
+                if (await askReadingModal(poem)) {
+                    dsRecited[key] = today;
+                    awardDhammaschoolCoins(50);
+                    alertMessage('🪙 +50 coins! Well done!', 'success');
+                    setDoc(doc(db, PATHS.roster, myRosterDocId()), { classId: (selectedClassId && selectedClassId.trim()) ? selectedClassId.trim() : 'GENERAL', studentName, dsRecited: { [key]: today } }, { merge: true }).catch(() => {});
+                }
+            } finally { readAsking = false; }
+        }
+
         // --- Poems only: the poems the teacher confirmed (public/dhammaschool-poems.json), shown on the same lesson page ---
         const loadPoemData = async () => {
             if (poemData) return poemData;
@@ -2453,6 +2539,7 @@ document.getElementById('toggle-audio-btn').onclick = async () => {
         window.closePoemList = () => document.getElementById('poem-list').classList.add('hidden');
 
         window.goToLibrary = () => {
+            clearInterval(readTimer); readTimer = null; readStepKey = null;
             if (poemMode) { poemMode = false; document.getElementById('poem-bar').classList.add('hidden'); window.closePoemList(); }
             if (isPreviewMode) { window.exitPreview(); return; }
             if (isTeacher) return;
@@ -2523,7 +2610,8 @@ document.getElementById('toggle-audio-btn').onclick = async () => {
         };
 
         // --- START FIX for Student Navigation Click ---
-        els.nextStepBtn.onclick = () => {
+        els.nextStepBtn.onclick = async () => {
+            await askReadingCoins();
             if (poemMode) { if (poemPos >= poemList.length - 1) goToLibrary(); else window.gotoPoem(poemPos + 1); return; }
             const flowSteps = lessonSteps.filter(s => s.type !== 'quiz');
             if (currentStepIndex < flowSteps.length - 1) {
@@ -3766,6 +3854,7 @@ function renderClickableWords(text) {
                     }
                     container.innerHTML = html;
                     if (step.type === 'narrative') {
+                        try { trackReadingStep(step, container); } catch (e) { /* coins are optional */ }
                         if (lessonAudioEnabled && currentLanguageMode === 'mm') {
                             const readBtn = document.createElement('button');
                             readBtn.id = 'read-aloud-narrative';
