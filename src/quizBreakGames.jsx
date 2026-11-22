@@ -3236,6 +3236,34 @@ const HARE_TURTLE_TOTAL_MS = 28000;
 const HARE_SIZE = 'clamp(48px, 11vmin, 86px)';
 const hareStop = (k) => (k >= HARE_WAKES ? 1 : 0.1 + k * 0.11); // where the hare lies down after k wake-ups (0..1 along the track)
 const HARE_CHEERS = ['Zzz... oh! I am up!', 'Huh? Where am I?', 'Five more minutes... no!', 'I must run!', 'Thanks for waking me!', 'Zzz... what?', 'Run, run, run!'];
+// The hare and the tortoise are drawn here (always facing right, the way they run). The 🐇 / 🐢 emoji face left in some fonts, which made
+// them look as if they ran backwards.
+const HareSvg = ({ asleep }) => (
+  <svg viewBox="0 0 100 100" width="100%" height="100%" style={{ display: 'block', overflow: 'visible' }} aria-hidden="true">
+    <ellipse cx="62" cy="84" rx="13" ry="5" fill="#d1d5db" stroke="#6b7280" strokeWidth="1.5" />
+    <ellipse cx="30" cy="85" rx="11" ry="5" fill="#d1d5db" stroke="#6b7280" strokeWidth="1.5" />
+    <ellipse cx="44" cy="68" rx="31" ry="18" fill="#f3f4f6" stroke="#6b7280" strokeWidth="1.8" />
+    <circle cx="13" cy="62" r="7" fill="#fff" stroke="#6b7280" strokeWidth="1.5" />
+    <ellipse cx="72" cy="26" rx="5.5" ry="17" fill="#f3f4f6" stroke="#6b7280" strokeWidth="1.5" transform={asleep ? 'rotate(35 72 40)' : 'rotate(-8 72 40)'} />
+    <ellipse cx="72" cy="26" rx="2.5" ry="12" fill="#fbcfe8" transform={asleep ? 'rotate(35 72 40)' : 'rotate(-8 72 40)'} />
+    <ellipse cx="84" cy="28" rx="5.5" ry="17" fill="#f3f4f6" stroke="#6b7280" strokeWidth="1.5" transform={asleep ? 'rotate(55 84 42)' : 'rotate(10 84 42)'} />
+    <circle cx="78" cy="52" r="14" fill="#f3f4f6" stroke="#6b7280" strokeWidth="1.8" />
+    {asleep ? <path d="M79 48 Q84 52 89 48" stroke="#111" strokeWidth="2" fill="none" strokeLinecap="round" /> : <><circle cx="85" cy="48" r="3.2" fill="#111" /><circle cx="86" cy="47" r="1" fill="#fff" /></>}
+    <ellipse cx="91" cy="55" rx="3" ry="2.2" fill="#f472b6" />
+  </svg>
+);
+const TortoiseWalkSvg = () => (
+  <svg viewBox="0 0 100 80" width="100%" height="100%" style={{ display: 'block', overflow: 'visible' }} aria-hidden="true">
+    <path d="M10 56 L2 60 L10 62 Z" fill="#65a30d" />
+    <ellipse cx="30" cy="64" rx="9" ry="8" fill="#65a30d" stroke="#4d7c0f" strokeWidth="1.2" />
+    <ellipse cx="68" cy="64" rx="9" ry="8" fill="#65a30d" stroke="#4d7c0f" strokeWidth="1.2" />
+    <ellipse cx="90" cy="46" rx="11" ry="9" fill="#84cc16" stroke="#4d7c0f" strokeWidth="1.5" />
+    <circle cx="94" cy="43" r="2.6" fill="#fff" /><circle cx="95" cy="43" r="1.4" fill="#111" />
+    <path d="M86 52 Q92 55 98 51" stroke="#4d7c0f" strokeWidth="1.3" fill="none" />
+    <path d="M10 62 Q10 12 50 12 Q90 12 90 62 Z" fill="#16a34a" stroke="#14532d" strokeWidth="2" />
+    <path d="M50 14 L50 60 M30 26 L30 60 M70 26 L70 60 M16 44 L84 44" stroke="#14532d" strokeWidth="1.5" fill="none" opacity=".6" />
+  </svg>
+);
 export const WakeTheHareGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
   const [phase, setPhase] = useState('start');   // start | running | asleep | won | lost
   const [k, setK] = useState(0);                 // how many times the hare has been woken
@@ -3315,7 +3343,7 @@ export const WakeTheHareGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
         {/* hare */}
         <div className="absolute" style={{ top: '12%', left: laneLeft(hareX), transition: phase === 'running' ? `left ${HARE_RUN_MS}ms ease-in-out` : 'none', zIndex: 4 }}>
           <button onClick={wake} disabled={!asleep} aria-label="Wake the hare" className="block relative" style={{ width: HARE_SIZE, height: HARE_SIZE }}>
-            <span className="block select-none" style={{ fontSize: HARE_SIZE, lineHeight: 1, filter: asleep ? 'saturate(.6) brightness(.9)' : 'none', transform: asleep ? 'rotate(90deg)' : 'none', animation: phase === 'running' ? `hareHop .3s ease-in-out ${Math.round(HARE_RUN_MS / 300)}` : 'none' }}>🐇</span>
+            <span className="block select-none" style={{ width: HARE_SIZE, height: HARE_SIZE, filter: asleep ? 'saturate(.6) brightness(.9)' : 'none', animation: phase === 'running' ? `hareHop .3s ease-in-out ${Math.round(HARE_RUN_MS / 300)}` : 'none' }}><HareSvg asleep={asleep} /></span>
             {asleep && <span className="absolute font-black text-sky-700 select-none" style={{ right: '-6%', top: '-30%', fontSize: 'clamp(20px, 5vmin, 36px)', animation: 'hareZzz 1.2s ease-out infinite' }}>💤</span>}
           </button>
           {asleep && (
@@ -3326,7 +3354,7 @@ export const WakeTheHareGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
         </div>
         {/* tortoise */}
         <div className="absolute" style={{ top: '58%', left: laneLeft(tx), transition: 'left .1s linear', zIndex: 3 }}>
-          <span className="block select-none" style={{ fontSize: HARE_SIZE, lineHeight: 1, animation: phase === 'won' ? 'none' : 'hareWalk .8s ease-in-out infinite' }}>🐢</span>
+          <span className="block select-none" style={{ width: HARE_SIZE, height: HARE_SIZE, animation: phase === 'won' ? 'none' : 'hareWalk .8s ease-in-out infinite' }}><TortoiseWalkSvg /></span>
         </div>
       </div>
       {finished && (
