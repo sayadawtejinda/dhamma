@@ -3879,7 +3879,7 @@ export const EagleFriendsGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
 
 // ---------------------------------------------------------------------------------------------------------------
 // Game: the talkative tortoise and the two swans (Jataka, guard your tongue). Two swans carry a tortoise by a stick it bites. Cowherd boys
-// below tease it. Each time, an angry thought bubble pops up; tap the tortoise to keep its mouth shut within 3 seconds (2 or 3 coins).
+// below tease it. Each time, an angry thought bubble pops up; tap the tortoise to keep its mouth shut within 5 seconds (2 or 3 coins).
 // Too slow and it speaks, lets go and falls. 7 taunts to get through.
 const TORTOISE_TAUNTS = [
   ['Look! Two swans are carrying a tortoise!', 'I want to shout: I am not a baby!'],
@@ -3890,18 +3890,24 @@ const TORTOISE_TAUNTS = [
   ['Throw a stone at that tortoise!', 'I want to shout: Stop that, you rude boys!'],
   ['Let us eat that tortoise for dinner!', 'I want to shout: Do not dare!'],
 ];
-const TORTOISE_SECONDS = 3;
+const TORTOISE_SECONDS = 5;
 export const TortoiseSwansGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
   const [phase, setPhase] = useState('intro'); // intro | fly | talk | won | lost
   const [level, setLevel] = useState(0);
   const [key, setKey] = useState(0);
   const [won, setWon] = useState([]);
   const [leaving, setLeaving] = useState(false);
+  const [ended, setEnded] = useState(false); // after a fall: the end box waits until the tortoise has landed
   const soundRef = useRef(null);
   const timers = useRef([]);
   const later = (fn, ms) => { const t = setTimeout(fn, ms); timers.current.push(t); return t; };
   const clearAll = () => { timers.current.forEach(clearTimeout); timers.current = []; };
   useEffect(() => clearAll, []);
+  useEffect(() => {
+    if (phase !== 'lost') { setEnded(false); return undefined; }
+    const t = setTimeout(() => setEnded(true), 2300);
+    return () => clearTimeout(t);
+  }, [phase]);
   const total = won.reduce((a, b) => a + b, 0);
 
   const nextTaunt = () => {
@@ -3910,7 +3916,7 @@ export const TortoiseSwansGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
     setPhase('talk');
     later(() => setPhase('lost'), TORTOISE_SECONDS * 1000);
   };
-  const start = () => { setLevel(0); setWon([]); setLeaving(false); setPhase('fly'); later(nextTaunt, 1200); };
+  const start = () => { setLevel(0); setWon([]); setLeaving(false); setEnded(false); setPhase('fly'); later(nextTaunt, 1200); };
   const shut = () => {
     if (phase !== 'talk') return;
     clearAll();
@@ -3929,8 +3935,9 @@ export const TortoiseSwansGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
     <div className="relative overflow-hidden text-white h-screen select-none" style={{ height: '100dvh', minHeight: 420, background: 'linear-gradient(180deg,#7dd3fc 0%,#bae6fd 55%,#86efac 100%)' }}>
       <style>{`
         @keyframes tortoiseBob { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-8px) } }
-        @keyframes tortoiseFall { 0% { transform: translateY(0) rotate(0deg) } 100% { transform: translateY(300px) rotate(200deg) } }
+        @keyframes tortoiseFall { 0% { transform: translateY(0) rotate(0deg) } 85% { transform: translateY(calc(min(62dvh, 450px) * .6)) rotate(260deg) } 100% { transform: translateY(calc(min(62dvh, 450px) * .6)) rotate(180deg) } }
         @keyframes tortoiseBar { 0% { width: 100% } 100% { width: 0% } }
+        @keyframes tortoiseBang { 0% { opacity: 0; transform: scale(.2) } 60% { opacity: 1; transform: scale(1.4) } 100% { opacity: 1; transform: scale(1) } }
         @keyframes tortoisePulse { 0%,100% { transform: scale(1) } 50% { transform: scale(1.12) } }
       `}</style>
       <div className="absolute top-0 inset-x-0 flex items-center justify-between gap-2 px-3 py-3 z-10">
@@ -3939,9 +3946,6 @@ export const TortoiseSwansGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
       </div>
 
       <div className="absolute inset-x-0 flex flex-col items-center" style={{ top: '9%' }}>
-        <div className="bg-white/90 text-sky-900 font-bold rounded-full px-4 py-2 shadow text-center mb-2 mx-3">
-          {phase === 'talk' ? 'Quick! Close its mouth!' : phase === 'won' ? 'The tortoise reached home safely!' : lost ? 'Oh no, the tortoise spoke and fell!' : 'The swans are flying...'}
-        </div>
         <div className="relative" style={{ width: 'min(92vw, 380px)', height: 'min(62dvh, 450px)' }}>
           {/* swans and stick */}
           <div className="absolute inset-x-0" style={{ top: '14%', animation: lost ? 'none' : 'tortoiseBob 1.6s ease-in-out infinite' }}>
@@ -3951,7 +3955,7 @@ export const TortoiseSwansGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
             {/* tortoise: drawn by hand, hanging by its mouth from the stick */}
             <button type="button" onClick={shut} aria-label="Close the tortoise mouth"
               className="absolute border-0 bg-transparent p-0"
-              style={{ left: '50%', top: 'calc(min(12vw, 48px) + 5px - min(26vw, 104px) * 22 / 120)', marginLeft: 'calc(min(26vw, 104px) / -2)', width: 'min(26vw, 104px)', lineHeight: 0, cursor: phase === 'talk' ? 'pointer' : 'default', animation: lost ? 'tortoiseFall 1.2s ease-in forwards' : phase === 'talk' ? 'tortoisePulse .5s ease-in-out infinite' : 'none', filter: phase === 'talk' ? 'drop-shadow(0 0 10px #facc15)' : 'none' }}>
+              style={{ left: '50%', top: 'calc(min(12vw, 48px) + 5px - min(26vw, 104px) * 22 / 120)', marginLeft: 'calc(min(26vw, 104px) / -2)', width: 'min(26vw, 104px)', lineHeight: 0, cursor: phase === 'talk' ? 'pointer' : 'default', animation: lost ? 'tortoiseFall 1.3s cubic-bezier(.5,0,.9,.6) forwards' : phase === 'talk' ? 'tortoisePulse .5s ease-in-out infinite' : 'none', filter: phase === 'talk' ? 'drop-shadow(0 0 10px #facc15)' : 'none' }}>
               <svg viewBox="0 0 120 96" width="100%" style={{ display: 'block', overflow: 'visible' }}>
                 <ellipse cx="38" cy="84" rx="9" ry="7" fill="#65a30d" /><ellipse cx="84" cy="84" rx="9" ry="7" fill="#65a30d" />
                 <ellipse cx="14" cy="70" rx="7" ry="4" fill="#65a30d" />
@@ -3965,15 +3969,20 @@ export const TortoiseSwansGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
               </svg>
             </button>
           </div>
-          {/* thought bubble */}
+          {/* the tortoise's thought, next to the tortoise */}
           {phase === 'talk' && (
-            <div className="absolute left-1/2 -translate-x-1/2 bg-white text-gray-800 font-bold rounded-2xl shadow-lg px-3 py-2 text-center text-sm" style={{ top: '46%', width: '86%', border: '3px dashed #f87171' }}>
-              <div className="text-gray-500 mb-1">👦 {taunt[0]}</div>
-              <div className="text-red-600">💭 {taunt[1]}</div>
-              <div className="text-emerald-700 mt-1">👆 Tap the tortoise to keep quiet!</div>
-              <div key={key} className="h-2 bg-red-500 rounded-full mt-2" style={{ animation: `tortoiseBar ${TORTOISE_SECONDS}s linear forwards` }} />
+            <div className="absolute bg-white text-red-600 font-bold rounded-2xl shadow-lg px-3 py-2 text-center text-sm" style={{ left: '50%', transform: 'translateX(-50%)', top: '40%', maxWidth: '80%', border: '3px dashed #f87171' }}>
+              💭 {taunt[1].replace('I want to shout: ', '')}
+              <div key={key} className="h-1.5 bg-red-500 rounded-full mt-1" style={{ animation: `tortoiseBar ${TORTOISE_SECONDS}s linear forwards` }} />
             </div>
           )}
+          {/* what the boys say, beside the boys */}
+          {phase === 'talk' && (
+            <div className="absolute bg-yellow-100 text-gray-800 font-bold rounded-2xl shadow px-3 py-2 text-sm" style={{ left: '2%', bottom: 'min(15vw, 58px)', maxWidth: '78%', border: '2px solid #facc15' }}>
+              {taunt[0]}
+            </div>
+          )}
+          {lost && <div className="absolute left-1/2 select-none" style={{ bottom: 'min(14vw, 54px)', marginLeft: '-1em', fontSize: 'min(14vw, 54px)', lineHeight: 1, opacity: 0, animation: 'tortoiseBang .4s ease-out 1.15s forwards' }}>💥</div>}
           {/* cowherd boys */}
           <div className="absolute inset-x-0 bottom-0 text-center" style={{ fontSize: 'min(12vw, 46px)', lineHeight: 1 }}>{lost ? '😂👦👧🐄' : '👦👧🐄👦'}</div>
         </div>
@@ -3989,7 +3998,7 @@ export const TortoiseSwansGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
           </div>
         </div>
       )}
-      {(phase === 'won' || lost) && (
+      {(phase === 'won' || (lost && ended)) && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20 px-4">
           <div className="bg-white text-gray-900 rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
             <div className="text-5xl mb-2">{phase === 'won' ? '🐢🤐💖' : '🐢😵'}</div>
