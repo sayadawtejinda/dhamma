@@ -9,7 +9,7 @@ const NAMES = [
   '💧 Water for the animals', '🤝 Help friends', '🙏 Pay respect', '🎁 Ten gifts', '👜 Return lost things', '🏠 Help parents',
   '🍚 Alms round', '🦆 Golden egg duck', '🦩 Cunning heron', '🐘 Share the water', '🎓 School of skills', '⚖️ Ten deeds',
   '✨ Ten merits', '🐅 Tiger in the trap', '📜 Finish the proverb', '🐕 Brave puppy', '🧹 Clean the house', '🛕 Clean the pagoda',
-  '🛒 Market for parents', '🐇 Wake the hare', '🩺 Animal first aid', '🌳 Poke tree and baby banyan', '🐒 Monkey and the beans', '🕷️ King and the spider',
+  '🛒 Market for parents', '🐇 Wake the hare', '🩺 Animal first aid', '🌳 Poke tree and baby banyan', '🐒 Monkey and the beans', '🕷️ King and the spider', '🦅 Eagles and good friends',
 ];
 
 export default function BreakGamesGallery({ onClose }) {

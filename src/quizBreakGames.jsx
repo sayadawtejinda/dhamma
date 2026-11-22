@@ -3750,7 +3750,134 @@ export const SpiderClimbGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
   );
 };
 
-export const QUIZ_BREAK_GAMES = [BirdRescueGame, FlowerOfferingGame, LitterPickingGame, AnimalRescueGame, WoodcutterAxeGame, AntGatheringGame, WaterAnimalsGame, HelpFriendsGame, PayRespectGame, TenGiftsGame, ReturnLostItemsGame, HelpParentsGame, AlmsRoundGame, GoldenEggDuckGame, CunningHeronGame, ShareWaterGame, SchoolOfSkillsGame, TenDeedsGame, TenMeritGame, TigerInTrapGame, FinishProverbGame, BravePuppyGame, CleanHouseGame, CleanPagodaGame, MarketForParentsGame, WakeTheHareGame, AnimalFirstAidGame, BanyanSaveTreeGame, MonkeyBeansGame, SpiderClimbGame];
+// ---------------------------------------------------------------------------------------------------------------
+// Game: the eagles and their good friends (Jataka, good friends help each other). Hunters light a fire under the eagles' tree and climb it
+// to rob the nest. Four friends appear one after another (turtle, big bird, deer, lion). Tap each friend within 4 seconds: the eagle flies
+// to call it and it helps. 2 or 3 coins per friend. If a friend is not called in time the hunters reach the nest and the game is lost.
+const EAGLE_SECONDS = 4;
+const EAGLE_FRIENDS = [
+  { emoji: '🐢', name: 'the turtle', call: 'The turtle is in the pond. Tap it!', help: 'The turtle puts out the fire!' },
+  { emoji: '🐦', name: 'the big bird', call: 'The big bird is here. Tap it!', help: 'The big bird carries water in its beak and puts out the fire!' },
+  { emoji: '🦌', name: 'the deer', call: 'The deer is here. Tap it!', help: 'The deer pretends to be hurt and leads the hunters away!' },
+  { emoji: '🦁', name: 'the lion', call: 'The lion is here. Tap it!', help: 'The lion roars and all the hunters run away!' },
+];
+export const EagleFriendsGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
+  const [phase, setPhase] = useState('intro'); // intro | call | help | won | lost
+  const [step, setStep] = useState(0); // friends already called
+  const [callKey, setCallKey] = useState(0);
+  const [won, setWon] = useState([]);
+  const [leaving, setLeaving] = useState(false);
+  const soundRef = useRef(null);
+  const timers = useRef([]);
+  const later = (fn, ms) => { const t = setTimeout(fn, ms); timers.current.push(t); return t; };
+  const clearAll = () => { timers.current.forEach(clearTimeout); timers.current = []; };
+  useEffect(() => clearAll, []);
+  const total = won.reduce((a, b) => a + b, 0);
+
+  const waitForFriend = () => {
+    clearAll();
+    setCallKey(k => k + 1);
+    setPhase('call');
+    later(() => setPhase('lost'), EAGLE_SECONDS * 1000);
+  };
+  const start = () => { setStep(0); setWon([]); setLeaving(false); waitForFriend(); };
+  const callFriend = () => {
+    if (phase !== 'call') return;
+    clearAll();
+    playCoinSound(soundRef);
+    const n = step + 1;
+    setStep(n);
+    setWon(w => [...w, Math.max(0, Math.min(2 + Math.floor(Math.random() * 2), coinsLeft - w.reduce((a, b) => a + b, 0)))]);
+    setPhase('help');
+    later(() => { if (n >= EAGLE_FRIENDS.length) setPhase('won'); else waitForFriend(); }, 2200);
+  };
+  const cur = EAGLE_FRIENDS[Math.min(phase === 'help' ? step - 1 : step, EAGLE_FRIENDS.length - 1)];
+  const fire = phase === 'lost' ? 3 : step >= 2 ? 0 : step === 1 ? 1 : 3;
+  const hunterBottom = phase === 'lost' ? 62 : phase === 'won' ? 0 : step >= 3 ? 6 : 8 + step * 6 + (phase === 'call' ? 8 : 0);
+  const hunterGone = step >= 4 || phase === 'won';
+
+  return (
+    <div className="relative overflow-hidden text-white h-screen select-none" style={{ height: '100dvh', minHeight: 420, background: 'linear-gradient(180deg,#1e1b4b 0%,#3730a3 45%,#14532d 100%)' }}>
+      <style>{`
+        @keyframes eagleFly { 0% { transform: translate(0,0) } 40% { transform: translate(-90px,70px) scale(1.15) } 100% { transform: translate(0,0) } }
+        @keyframes eagleArrive { 0% { transform: translateX(120px) scale(.5); opacity: 0 } 100% { transform: translateX(0) scale(1); opacity: 1 } }
+        @keyframes eaglePulse { 0%,100% { transform: scale(1) } 50% { transform: scale(1.18) } }
+        @keyframes eagleBar { 0% { width: 100% } 100% { width: 0% } }
+        @keyframes eagleRun { 0% { transform: translateX(0) } 100% { transform: translateX(-160px); opacity: 0 } }
+      `}</style>
+      <div className="absolute top-0 inset-x-0 flex items-center justify-between gap-2 px-3 py-3 z-10">
+        <div className="bg-white/80 text-indigo-900 font-bold text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 ml-12 sm:ml-16 min-w-0 truncate">🦅 Call the friends · {step}/{EAGLE_FRIENDS.length}</div>
+        <div className="bg-yellow-300 text-yellow-900 font-black text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 shadow whitespace-nowrap flex-shrink-0">🪙 {total}{coinsLeft <= 0 ? ' (limit reached)' : ''}</div>
+      </div>
+
+      <div className="absolute inset-x-0 flex flex-col items-center" style={{ top: '9%' }}>
+        <div className="bg-white/90 text-indigo-900 font-bold rounded-full px-4 py-2 shadow text-center mb-2 mx-3">
+          {phase === 'call' ? `${cur.call} The hunters are climbing!` : phase === 'help' ? cur.help : phase === 'won' ? 'The eagle family is safe!' : phase === 'lost' ? 'The hunters reached the nest...' : 'Fire under the tree!'}
+        </div>
+        <div className="relative" style={{ width: 'min(92vw, 380px)', height: 'min(64dvh, 460px)' }}>
+          {/* tree */}
+          <div className="absolute left-1/2 -translate-x-1/2 bottom-0 rounded-t-2xl" style={{ width: '14%', height: '70%', background: 'linear-gradient(90deg,#92400e,#b45309 50%,#78350f)' }} />
+          <div className="absolute left-1/2 -translate-x-1/2 text-center" style={{ top: 0, fontSize: 'min(40vw, 150px)', lineHeight: 1 }}>🌳</div>
+          {/* nest with the eagles */}
+          <div className="absolute left-1/2 -translate-x-1/2 text-center" style={{ top: '14%' }}>
+            <div style={{ fontSize: 'min(10vw, 40px)', lineHeight: 1 }}>{phase === 'lost' ? '😱' : '🐣🐣'}</div>
+            <div style={{ fontSize: 'min(11vw, 44px)', lineHeight: 1 }}>🪺</div>
+          </div>
+          <div className="absolute" style={{ left: '56%', top: '8%', fontSize: 'min(12vw, 48px)', lineHeight: 1, animation: phase === 'help' ? 'eagleFly 1.4s ease-in-out' : 'none' }}>🦅</div>
+          {/* hunters */}
+          {!hunterGone && (
+            <div className="absolute" style={{ left: '30%', bottom: `${hunterBottom}%`, fontSize: 'min(10vw, 40px)', lineHeight: 1, transition: 'bottom 3.5s linear', animation: step >= 3 && phase === 'help' ? 'eagleRun 1.5s ease-in forwards' : 'none' }}>
+              🧑‍🌾🧑‍🌾
+            </div>
+          )}
+          {/* the fire */}
+          {fire > 0 && <div className="absolute left-1/2 -translate-x-1/2" style={{ bottom: '1%', fontSize: `min(${6 + fire * 2}vw, ${24 + fire * 8}px)`, lineHeight: 1 }}>{'🔥'.repeat(fire)}</div>}
+          {fire === 0 && phase !== 'lost' && <div className="absolute left-1/2 -translate-x-1/2" style={{ bottom: '1%', fontSize: 28 }}>💨</div>}
+          {/* the friend to tap */}
+          {phase === 'call' && (
+            <button type="button" onClick={callFriend} aria-label={`Call ${cur.name}`} key={callKey}
+              className="absolute border-0 bg-transparent p-2 z-10"
+              style={{ right: '2%', bottom: '4%', fontSize: 'min(18vw, 70px)', lineHeight: 1, animation: 'eaglePulse .6s ease-in-out infinite', filter: 'drop-shadow(0 0 12px #facc15)' }}>
+              {cur.emoji}
+            </button>
+          )}
+          {phase === 'help' && (
+            <div className="absolute" style={{ left: '52%', bottom: '4%', fontSize: 'min(18vw, 70px)', lineHeight: 1, animation: 'eagleArrive .8s ease-out forwards' }}>{cur.emoji}{step === 1 ? '💧' : step === 4 ? '📢' : ''}</div>
+          )}
+          {phase === 'call' && (
+            <div key={`bar${callKey}`} className="absolute h-2 bg-red-500 rounded-full" style={{ right: '4%', bottom: '0%', width: '30%', animation: `eagleBar ${EAGLE_SECONDS}s linear forwards` }} />
+          )}
+        </div>
+      </div>
+
+      {phase === 'intro' && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-20 px-4">
+          <div className="bg-white text-gray-900 rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
+            <div className="text-5xl mb-2">🦅🔥🐢🦁</div>
+            <h2 className="text-2xl font-extrabold mb-1">Good friends help each other</h2>
+            <p className="text-gray-600 mb-4">Hunters lit a fire under the eagles' tree and are climbing up to the nest. The eagle flies off to ask its good friends for help. Tap each friend (turtle, big bird, deer, lion) within {EAGLE_SECONDS} seconds when it appears, so it can come and help!</p>
+            <GameButton onClick={start} className="bg-indigo-500 hover:bg-indigo-600 text-white w-full text-xl">Start</GameButton>
+          </div>
+        </div>
+      )}
+      {(phase === 'won' || phase === 'lost') && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-20 px-4">
+          <div className="bg-white text-gray-900 rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
+            <div className="text-5xl mb-2">{phase === 'won' ? '🦅🐣💖' : '🦅😱'}</div>
+            <h2 className="text-2xl font-extrabold mb-1">{phase === 'won' ? 'Good friends saved the eagles!' : 'The friends came too late'}</h2>
+            <p className="text-gray-600 mb-2">{phase === 'won' ? 'The turtle, the big bird, the deer and the lion each helped. Good friends help each other in times of trouble.' : 'Call each friend quickly when it appears. Try once more!'}</p>
+            <p className="text-lg font-bold text-yellow-600 mb-4">{total > 0 ? `🪙 +${total} coins for your Shrine Room wallet` : (coinsLeft <= 0 ? 'You have already earned all the rescue coins for this lesson. Great job!' : 'No coins this time.')}</p>
+            {phase === 'lost' && <GameButton disabled={leaving} onClick={start} className="bg-amber-400 hover:bg-amber-500 text-amber-900 w-full text-xl mb-2">Try again</GameButton>}
+            <GameButton disabled={leaving} onClick={() => { setLeaving(true); onDone(total); }} className="bg-emerald-500 hover:bg-emerald-600 text-white w-full text-xl">Continue →</GameButton>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+
+export const QUIZ_BREAK_GAMES = [BirdRescueGame, FlowerOfferingGame, LitterPickingGame, AnimalRescueGame, WoodcutterAxeGame, AntGatheringGame, WaterAnimalsGame, HelpFriendsGame, PayRespectGame, TenGiftsGame, ReturnLostItemsGame, HelpParentsGame, AlmsRoundGame, GoldenEggDuckGame, CunningHeronGame, ShareWaterGame, SchoolOfSkillsGame, TenDeedsGame, TenMeritGame, TigerInTrapGame, FinishProverbGame, BravePuppyGame, CleanHouseGame, CleanPagodaGame, MarketForParentsGame, WakeTheHareGame, AnimalFirstAidGame, BanyanSaveTreeGame, MonkeyBeansGame, SpiderClimbGame, EagleFriendsGame];
 const hashOf = (s) => { let h = 0; String(s ?? '').split('').forEach(ch => { h = (h * 31 + ch.charCodeAt(0)) >>> 0; }); return h; };
 export const quizBreakGameFor = (lessonId) => QUIZ_BREAK_GAMES[hashOf(lessonId) % QUIZ_BREAK_GAMES.length];
 export const QuizBreakGame = ({ lessonId, ...rest }) => {
