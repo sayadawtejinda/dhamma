@@ -1692,95 +1692,111 @@ const MonkSvg = ({ size, mouth = false }) => (
 const AlmsLabel = ({ it }) => (
   <span className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap font-bold text-xs rounded-full px-2 py-0.5 shadow bg-orange-100" style={{ top: '100%', color: '#7c2d12' }}>{it.who}</span>
 );
-// A monk who was just offered food: it drops into the bowl and he blesses the giver.
-const BlessingMonk = ({ it, won }) => (
-  <div className="absolute pointer-events-none" style={{ zIndex: 6, left: `${it.x}%`, top: `${it.y}%`, transform: 'translate(-50%,-50%)' }}>
-    <MonkSvg size={it.who === 'Novice' ? `calc(${ALMS_SIZE} * 0.8)` : ALMS_SIZE} mouth />
-    <AlmsLabel it={it} />
-    <div className="absolute left-1/2 -translate-x-1/2 select-none" style={{ top: `calc(${ALMS_SIZE} * -0.9)`, fontSize: 'clamp(28px, 5.5vmin, 48px)', animation: 'almsDrop 1s ease-in forwards' }}>{it.food}</div>
-    <div className="absolute left-1/2 -translate-x-1/2 text-center whitespace-nowrap" style={{ top: `calc(${ALMS_SIZE} / -2 - 3.4rem)`, animation: 'almsBless 2.2s ease-out forwards' }}>
-      <div className="bg-white text-orange-900 font-bold text-sm rounded-full px-3 py-1 shadow">🙏 {it.bless}</div>
-      {won > 0 && <div className="font-black text-yellow-600 drop-shadow">+{won} 🪙</div>}
-    </div>
-  </div>
-);
+// The monks and novices walk in a line, the most senior first (they get a little smaller down the line). The first one stops at the
+// table, the student picks a food they like from the table and puts it in the bowl, the monk blesses them and walks on, and the next one
+// steps up. 7 monks and novices; every offering pays 2 or 3 coins.
+const ALMS_TABLE_FOODS = [
+  ['🍚', 'Rice'], ['🍛', 'Curry'], ['🍜', 'Noodles'], ['🍲', 'Soup'], ['🍞', 'Bread'], ['🥭', 'Mango'],
+  ['🍌', 'Banana'], ['🍎', 'Apple'], ['🍊', 'Orange'], ['🍉', 'Watermelon'], ['🥥', 'Coconut'], ['🍇', 'Grapes'],
+];
+const ALMS_LINE = [
+  { who: 'Senior monk', scale: 1 }, { who: 'Monk', scale: 0.96 }, { who: 'Monk', scale: 0.92 }, { who: 'Monk', scale: 0.88 },
+  { who: 'Novice', scale: 0.74 }, { who: 'Novice', scale: 0.7 }, { who: 'Novice', scale: 0.66 },
+];
 export const AlmsRoundGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
-  const [items] = useState(() => {
-    const foods = [...ALMS_FOODS].sort(() => Math.random() - 0.5);
-    const who = [...ALMS_WHO].sort(() => Math.random() - 0.5);
-    return almsSpots().map((p, i) => ({ id: i, x: p.x, y: p.y, who: who[i], food: foods[i % foods.length], bless: ALMS_BLESS[i % ALMS_BLESS.length] }));
-  });
-  const [state, setState] = useState(() => Array(ALMS_COUNT).fill('waiting')); // waiting | walking | offered | gone
+  const [started, setStarted] = useState(false);
+  const [idx, setIdx] = useState(0);              // the monk at the table now
+  const [phase, setPhase] = useState('wait');     // wait | bless
+  const [food, setFood] = useState(null);         // what was just put in the bowl
   const [won, setWon] = useState(() => Array(ALMS_COUNT).fill(0));
   const [finished, setFinished] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const total = won.reduce((a, b) => a + b, 0);
-  const offered = state.filter(v => v === 'offered').length;
   const soundRef = useRef(null);
+  const timers = useRef([]);
+  const later = (fn, ms) => { const t = setTimeout(fn, ms); timers.current.push(t); return t; };
+  useEffect(() => { later(() => setStarted(true), 150); return () => timers.current.forEach(clearTimeout); }, []);
 
-  useEffect(() => {
-    const timers = [];
-    items.forEach((it) => {
-      const start = ALMS_FIRST_MS + it.id * ALMS_EVERY_MS;
-      timers.push(setTimeout(() => setState(st => st.map((v, i) => (i === it.id && v === 'waiting' ? 'walking' : v))), start));
-      timers.push(setTimeout(() => setState(st => st.map((v, i) => (i === it.id && v === 'walking' ? 'gone' : v))), start + ALMS_VISIBLE_MS));
-    });
-    return () => timers.forEach(clearTimeout);
-  }, [items]);
-  useEffect(() => {
-    if (finished || !state.every(v => v === 'offered' || v === 'gone')) return undefined;
-    const t = setTimeout(() => setFinished(true), 1800); // let the last blessing finish
-    return () => clearTimeout(t);
-  }, [state, finished]);
-
-  const offer = (id) => {
-    if (state[id] !== 'walking') return;
+  const offer = (emoji) => {
+    if (phase !== 'wait' || !started || idx >= ALMS_COUNT) return;
     const coins = Math.max(0, Math.min(2 + Math.floor(Math.random() * 2), coinsLeft - total)); // 2 or 3, never past the lesson's limit
-    setState(st => st.map((v, i) => (i === id ? 'offered' : v)));
-    setWon(w => w.map((v, i) => (i === id ? coins : v)));
+    setFood(emoji);
+    setPhase('bless');
+    setWon(w => w.map((v, i) => (i === idx ? coins : v)));
     playCoinSound(soundRef);
+    later(() => {
+      if (idx + 1 >= ALMS_COUNT) { setIdx(ALMS_COUNT); setPhase('wait'); later(() => setFinished(true), 1600); }
+      else { setIdx(idx + 1); setPhase('wait'); }
+    }, 2100);
   };
+  const bless = ALMS_BLESS[Math.min(idx, ALMS_COUNT - 1) % ALMS_BLESS.length];
 
   return (
-    <div className="relative overflow-hidden text-white h-screen" style={{ height: '100dvh', minHeight: 420, background: 'linear-gradient(180deg,#fdba74 0%,#fed7aa 36%,#d6b98c 36%,#b08d5c 100%)' }}>
+    <div className="relative overflow-hidden text-white h-screen select-none" style={{ height: '100dvh', minHeight: 420, background: 'linear-gradient(180deg,#fdba74 0%,#fed7aa 36%,#d6b98c 36%,#b08d5c 100%)' }}>
       <style>{`
-        @keyframes almsPop { 0% { opacity: 0 } 100% { opacity: 1 } }
-        @keyframes almsWalk { 0% { transform: translateX(40px) } 100% { transform: translateX(-40px) } }
         @keyframes almsStep { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-5px) } }
         @keyframes almsDrop { 0% { transform: translate(-50%,-30px) scale(.8); opacity: 0 } 30% { opacity: 1 } 100% { transform: translate(-50%,40px) scale(.9); opacity: 0 } }
-        @keyframes almsBless { 0% { transform: translateY(0); opacity: 0 } 15% { opacity: 1 } 100% { transform: translateY(-46px); opacity: 0 } }
+        @keyframes almsBless { 0% { transform: translate(-50%,0); opacity: 0 } 15% { opacity: 1 } 100% { transform: translate(-50%,-40px); opacity: 0 } }
+        @keyframes almsHint { 0%,100% { transform: scale(1) } 50% { transform: scale(1.06) } }
       `}</style>
-      <div className="absolute top-0 inset-x-0 flex items-center justify-between gap-2 px-3 py-3 z-10">
-        <div className="bg-white/80 text-orange-900 font-bold text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 ml-12 sm:ml-16 min-w-0 truncate">🥣 Offer alms food to the Sangha</div>
+      <div className="absolute top-0 inset-x-0 flex items-center justify-between gap-2 px-3 py-3 z-30">
+        <div className="bg-white/80 text-orange-900 font-bold text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 ml-12 sm:ml-16 min-w-0 truncate">🥣 Alms round · {Math.min(idx + (phase === 'bless' ? 1 : 0), ALMS_COUNT)}/{ALMS_COUNT}</div>
         <div className="bg-yellow-300 text-yellow-900 font-black text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 shadow whitespace-nowrap flex-shrink-0">🪙 {total}{coinsLeft <= 0 ? ' (limit reached)' : ''}</div>
       </div>
-      <div className="absolute pointer-events-none" style={{ right: '8%', top: '10%', fontSize: 'clamp(40px, 9vmin, 80px)' }}>🌅</div>
-      <div className="absolute pointer-events-none" style={{ left: '4%', top: '20%', fontSize: 'clamp(34px, 8vmin, 66px)' }}>🌴</div>
-      {/* the giver's basket, with a counter */}
-      <div className="absolute pointer-events-none" style={{ left: '5%', bottom: '3%', fontSize: 'clamp(40px, 9vmin, 76px)', lineHeight: 1 }}>🧺
-        {offered > 0 && <span className="absolute -top-2 -right-3 bg-white text-orange-700 font-black text-sm rounded-full w-7 h-7 flex items-center justify-center shadow">{offered}</span>}
-      </div>
-      {items.map((it, i) => {
-        const st = state[i];
-        if (st === 'waiting' || st === 'gone') return null;
-        if (st === 'offered') return <BlessingMonk key={it.id} it={it} won={won[i]} />;
+      <div className="absolute pointer-events-none" style={{ right: '8%', top: '9%', fontSize: 'clamp(40px, 9vmin, 80px)' }}>🌅</div>
+      <div className="absolute pointer-events-none" style={{ left: '4%', top: '16%', fontSize: 'clamp(34px, 8vmin, 66px)' }}>🌴</div>
+
+      {phase === 'wait' && started && idx < ALMS_COUNT && (
+        <div className="absolute inset-x-0 text-center z-20" style={{ top: '14%' }}>
+          <span className="inline-block bg-white/90 text-orange-900 font-bold rounded-full px-4 py-2 shadow" style={{ animation: 'almsHint 1s ease-in-out infinite' }}>Choose a food you like and tap it!</span>
+        </div>
+      )}
+
+      {/* the line of monks and novices, on the road */}
+      {ALMS_LINE.map((m, i) => {
+        const k = i - idx;                                    // < 0: already left, 0: at the table, > 0: waiting in the line
+        const left = !started ? -30 - i * 4 : k < 0 ? 125 : 50 - k * 13;
+        const size = `calc(${ALMS_SIZE} * ${m.scale})`;
+        const active = k === 0;
+        const walking = !active || phase === 'bless';
         return (
-          <div key={it.id} className="absolute" style={{ left: `${it.x}%`, top: `${it.y}%`, zIndex: 5, transform: 'translate(-50%,-50%)' }}>
-            <div style={{ animation: `almsPop .35s ease-out, almsWalk ${ALMS_VISIBLE_MS}ms linear forwards` }}>
-              <button onClick={() => offer(it.id)} aria-label={`Offer food to the ${it.who}`} className="relative block">
-                <div style={{ animation: 'almsStep .6s ease-in-out infinite' }}><MonkSvg size={it.who === 'Novice' ? `calc(${ALMS_SIZE} * 0.8)` : ALMS_SIZE} /></div>
-                <AlmsLabel it={it} />
-              </button>
+          <div key={i} className="absolute" style={{ left: `${left}%`, top: '57%', transform: 'translate(-50%,-100%)', transition: 'left 1.5s ease-in-out', zIndex: active ? 25 : 10 - Math.abs(k) }}>
+            <div style={{ animation: walking && left > -20 && left < 120 ? 'almsStep .6s ease-in-out infinite' : 'none' }}>
+              <MonkSvg size={size} mouth={active && phase === 'bless'} />
             </div>
+            {active && <AlmsLabel it={m} />}
+            {active && phase === 'bless' && food && (
+              <>
+                <div className="absolute left-1/2 select-none" style={{ top: `calc(${size} * 0.88 - 40px)`, fontSize: 'clamp(28px, 5.5vmin, 48px)', animation: 'almsDrop 1s ease-in forwards' }}>{food}</div>
+                <div className="absolute left-1/2 text-center whitespace-nowrap" style={{ top: `calc(${size} * -0.25)`, animation: 'almsBless 2.1s ease-out forwards', zIndex: 20 }}>
+                  <div className="bg-white text-orange-900 font-bold text-sm rounded-full px-3 py-1 shadow">🙏 {bless}</div>
+                  {won[idx] > 0 && <div className="font-black text-yellow-600 drop-shadow">+{won[idx]} 🪙</div>}
+                </div>
+              </>
+            )}
           </div>
         );
       })}
+
+      {/* the table with the food laid out in rows */}
+      <div className="absolute inset-x-2 sm:inset-x-6 rounded-2xl shadow-xl z-20" style={{ top: '62%', bottom: '2%', background: 'linear-gradient(180deg,#fff7ed,#fde7c8)', border: '3px solid #9a3412' }}>
+        <div className="h-full flex flex-wrap items-center justify-center content-center gap-x-1 gap-y-1 sm:gap-2 p-2 overflow-hidden">
+          {ALMS_TABLE_FOODS.map(([e, n]) => (
+            <button key={e} type="button" onClick={() => offer(e)} aria-label={`Offer ${n}`} disabled={phase !== 'wait' || !started || idx >= ALMS_COUNT}
+              className="flex items-center justify-center rounded-xl bg-white/70 border border-orange-200 active:scale-90 transition"
+              style={{ width: 'clamp(40px, 15vw, 66px)', height: 'clamp(40px, 11vmin, 62px)', fontSize: 'clamp(26px, 8vmin, 42px)', lineHeight: 1, opacity: phase === 'wait' ? 1 : 0.6 }}>
+              {e}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {finished && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20 px-4">
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-40 px-4">
           <div className="bg-white text-gray-900 rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
-            <div className="text-5xl mb-2">{offered > 0 ? '🥣' : '🌤️'}</div>
-            <h2 className="text-2xl font-extrabold mb-1">{offered > 0 ? `You offered food to ${offered} monk${offered === 1 ? '' : 's'}!` : 'Nice try!'}</h2>
-            <p className="text-sm text-gray-600 mb-2">{offered > 0 ? 'Offering alms with a kind heart makes great merit.' : 'Be quick, the monks are walking by.'}</p>
+            <div className="text-5xl mb-2">🥣🙏</div>
+            <h2 className="text-2xl font-extrabold mb-1">You offered food to {ALMS_COUNT} monks and novices!</h2>
+            <p className="text-sm text-gray-600 mb-2">Offering alms with a kind heart makes great merit. They blessed you before they walked on.</p>
             <p className="text-lg font-bold text-yellow-600 mb-4">{total > 0 ? `🪙 +${total} coins for your Shrine Room wallet` : (coinsLeft <= 0 ? 'You have already earned all the coins for this lesson. Great job!' : 'No coins this time.')}</p>
             <GameButton disabled={leaving} onClick={() => { setLeaving(true); onDone(total); }} className="bg-orange-500 hover:bg-orange-600 text-white w-full text-xl">Continue →</GameButton>
           </div>
@@ -1789,6 +1805,7 @@ export const AlmsRoundGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
     </div>
   );
 };
+
 
 // ---------------------------------------------------------------------------------------------------------------
 // Game 14: the duck that lays a golden egg every day (greed). One day = about 2.6 seconds: the duck lays one golden egg, tap it to
