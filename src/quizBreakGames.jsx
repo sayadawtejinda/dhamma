@@ -3453,6 +3453,13 @@ const AID_CASES = [
   { a: '🐒', pain: '🪢', say: 'I am stuck high in a tree!', steps: ['rope'], done: 'Ooh ooh, thank you!' },
 ];
 const AID_ROUNDS = 8;
+const AID_CHOICE_MS = 5000; // time to pick one of the two helpers; then a new pair is shown
+// two helpers to choose from: the right one for this step and one wrong one, in a random order
+const aidPair = (right) => {
+  const others = Object.keys(AID_TOOLS).filter(k => k !== right);
+  const pair = [right, others[Math.floor(Math.random() * others.length)]];
+  return Math.random() < 0.5 ? pair : pair.reverse();
+};
 export const AnimalFirstAidGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
   const [order] = useState(() => [...AID_CASES].sort(() => Math.random() - 0.5).slice(0, AID_ROUNDS));
   const [idx, setIdx] = useState(0);
@@ -3465,11 +3472,21 @@ export const AnimalFirstAidGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
   const soundRef = useRef(null);
   const total = won.reduce((a, b) => a + b, 0);
   const c = order[Math.min(idx, order.length - 1)];
-  const tools = Object.keys(AID_TOOLS);
+  const [pair, setPair] = useState(() => aidPair(order[0].steps[0]));
+  const [pairKey, setPairKey] = useState(0);
+  const tools = pair;
+  const newPair = (i, st) => { setPair(aidPair(order[i].steps[st])); setPairKey(k => k + 1); };
+  // a new step or a new animal: a fresh pair. Time runs out: another pair.
+  useEffect(() => { if (idx < order.length) newPair(idx, step); }, [idx, step]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (healed || finished) return undefined;
+    const t = setTimeout(() => newPair(idx, step), AID_CHOICE_MS);
+    return () => clearTimeout(t);
+  }, [pairKey, healed, finished]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const useTool = (t) => {
     if (healed || finished) return;
-    if (t !== c.steps[step]) { setWrong(t); setTimeout(() => setWrong(null), 500); return; }
+    if (t !== c.steps[step]) { setWrong(t); setTimeout(() => { setWrong(null); newPair(idx, step); }, 500); return; }
     if (step + 1 < c.steps.length) { setStep(step + 1); playCoinSound(soundRef); return; }
     const coins = Math.max(0, Math.min(2 + Math.floor(Math.random() * 2), coinsLeft - total));
     setWon(w => [...w, coins]);
@@ -3486,6 +3503,7 @@ export const AnimalFirstAidGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
   return (
     <div className="relative overflow-hidden text-white h-screen" style={{ height: '100dvh', minHeight: 420, background: 'linear-gradient(180deg,#e0f2fe 0%,#dcfce7 55%,#86efac 100%)' }}>
       <style>{`
+        @keyframes aidBar { 0% { width: 100% } 100% { width: 0% } }
         @keyframes aidShake { 0%,100% { transform: translateX(0) } 25% { transform: translateX(-8px) } 75% { transform: translateX(8px) } }
         @keyframes aidBob { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-6px) } }
         @keyframes aidHeal { 0% { transform: scale(1) } 40% { transform: scale(1.25) rotate(-6deg) } 100% { transform: scale(1) } }
@@ -3504,13 +3522,14 @@ export const AnimalFirstAidGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
       </div>
       <div className="absolute inset-x-0 bottom-0 px-3 pb-4 pt-3 z-10 bg-white/70">
         <p className="text-center text-emerald-900 font-bold text-sm mb-2">Choose the right helper</p>
-        <div className="flex flex-wrap justify-center gap-2 sm:gap-3">
+        {!healed && <div className="mx-auto mb-2 bg-white/70 rounded-full overflow-hidden" style={{ width: 'min(60vw, 220px)', height: 8 }}><div key={pairKey} className="h-full bg-orange-500" style={{ animation: `aidBar ${AID_CHOICE_MS}ms linear forwards` }} /></div>}
+        <div className="flex justify-center gap-4 sm:gap-6">
           {tools.map(t => (
             <button key={t} type="button" onClick={() => useTool(t)} disabled={healed} aria-label={AID_TOOLS[t].n}
               className="flex flex-col items-center bg-white text-emerald-900 rounded-2xl shadow-md border-2 border-emerald-200 active:scale-95 transition disabled:opacity-60"
-              style={{ width: 'clamp(64px, 17vmin, 96px)', padding: '6px 4px', animation: wrong === t ? 'aidShake .4s' : 'none' }}>
-              <span style={{ fontSize: 'clamp(28px, 8vmin, 44px)', lineHeight: 1 }}>{AID_TOOLS[t].e}</span>
-              <span className="text-[11px] sm:text-xs font-bold">{AID_TOOLS[t].n}</span>
+              style={{ width: 'clamp(96px, 28vmin, 150px)', padding: '10px 6px', animation: wrong === t ? 'aidShake .4s' : 'none' }}>
+              <span style={{ fontSize: 'clamp(44px, 13vmin, 72px)', lineHeight: 1 }}>{AID_TOOLS[t].e}</span>
+              <span className="text-xs sm:text-sm font-bold">{AID_TOOLS[t].n}</span>
             </button>
           ))}
         </div>
