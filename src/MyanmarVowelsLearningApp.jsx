@@ -902,14 +902,28 @@ export default function MyanmarVowelsLearningApp({ entryRequest, onExit, hideOwn
                     const carried = await migrateNameKeyedRosterDoc(db, MVL_ROSTER_PATH, studentUid, studentName, sanitizeMvlKey);
                     if (carried) await setDoc(progressRosterRef, carried, { merge: true });
                 } catch (e) { console.error('Roster migration error:', e); }
-                getDocFromServer(progressRosterRef).then(snap => {
+                // If the read fails (weak wifi, a tablet that was offline for a moment) the student used to see NO finished
+                // games until the next visit, even though everything is safe on the server. So: retry, and show the menu again
+                // (with the green ticks) as soon as the progress arrives.
+                const applyProgress = (snap) => {
                     const data = snap.exists() ? snap.data() : {};
-                    completedGameIds = new Set(Array.isArray(data.completedGames) ? data.completedGames : []);
+                    // merge with anything won since opening, never replace it
+                    completedGameIds = new Set([...(Array.isArray(data.completedGames) ? data.completedGames : []), ...completedGameIds]);
                     coinBalanceRef.current = data.coinBalance || 0;
                     gameCoinsRef.current = data.gameCoins || 0;
                     setMyCoinBalance(coinBalanceRef.current);
                     updateModeButtonLockUI();
-                }).catch(e => console.error('Error loading Myanmar Vowels Learning progress:', e));
+                    try { if (gameMenuModal && !gameMenuModal.classList.contains('hidden')) openGameMenu(); } catch (e) { /* menu not ready */ }
+                };
+                const loadProgress = async (attempt) => {
+                    try { applyProgress(await getDocFromServer(progressRosterRef)); }
+                    catch (e) {
+                        console.error('Error loading Myanmar Vowels Learning progress:', e);
+                        if (attempt < 5) setTimeout(() => loadProgress(attempt + 1), 3000 * (attempt + 1));
+                        else getDoc(progressRosterRef).then(applyProgress).catch(() => {});
+                    }
+                };
+                loadProgress(0);
             })();
         }
 
