@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import coinDropSound from '../audio/coin-drop.mp3';
-import { playGameSound } from './gameSounds';
+import { playGameSound, playAnimalVoice } from './gameSounds';
 
 // The short coin games played between the two halves of a Smart Study quiz (and, later, any other app's quiz).
 // Every game takes the same props and works the same way, so a new game only has to be added to QUIZ_BREAK_GAMES below:
@@ -53,6 +53,7 @@ export const BirdRescueGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
     setState(st => st.map((v, i) => (i === id ? 'opened' : v)));
     setWon(w => w.map((v, i) => (i === id ? coins : v)));
     playCoinSound(soundRef);
+    playGameSound('bird', 0.8);
   };
 
   return (
@@ -940,6 +941,7 @@ export const WaterAnimalsGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
     setState(st => st.map((v, i) => (i === id ? 'watered' : v)));
     setWon(w => w.map((v, i) => (i === id ? coins : v)));
     playCoinSound(soundRef);
+    setTimeout(() => playAnimalVoice(items[id].icon, 0.8), 300);
   };
 
   return (
@@ -2167,6 +2169,8 @@ export const ShareWaterGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
     setInvite(id);
     setTimeout(() => setInvite(cur => (cur === id ? null : cur)), 1600);
     playCoinSound(soundRef);
+    playGameSound('elephant', 0.8);
+    setTimeout(() => playAnimalVoice(items[id].animal.e, 0.7), 900);
   };
 
   return (
@@ -2968,6 +2972,7 @@ export const BravePuppyGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
     setWon(w => w.map((v, k) => (k === i ? coins : v)));
     setBark(i); setTimeout(() => setBark(b => (b === i ? null : b)), 1000);
     playCoinSound(soundRef);
+    playGameSound('dog', 1);
   };
   // the puppy walks up the path a little with every beast sent away
   const puppyY = 70 - fled * 5;   // the puppy leads the way; the Paccekabuddha follows behind it with his own bowl
@@ -3552,6 +3557,7 @@ export const BanyanSaveTreeGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
     later(() => {
       setSproutKey(k => k + 1);
       setPhase('sprout');
+      playGameSound('bird', 0.8);
       later(() => setPhase('dead'), BANYAN_SECONDS * 1000);
     }, 1600);
   };
@@ -3838,6 +3844,8 @@ export const SpiderClimbGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
 // to rob the nest. Four friends appear one after another (turtle, big bird, deer, lion). Tap each friend within 4 seconds: the eagle flies
 // to call it and it helps. 2 or 3 coins per friend. If a friend is not called in time the hunters reach the nest and the game is lost.
 const EAGLE_SECONDS = 4;
+// where each friend can turn up (x = % from the left, y = % from the bottom of the scene); a different spot every time
+const EAGLE_SPOTS = [{ x: 4, y: 4 }, { x: 70, y: 4 }, { x: 8, y: 26 }, { x: 70, y: 28 }, { x: 58, y: 12 }, { x: 4, y: 48 }, { x: 72, y: 50 }, { x: 22, y: 14 }];
 const EAGLE_FRIENDS = [
   { emoji: '🐢', name: 'the turtle', call: 'The turtle is in the pond. Tap it!', help: 'The turtle puts out the fire!' },
   { emoji: '🐦', name: 'the big bird', call: 'The big bird is here. Tap it!', help: 'The big bird carries water in its beak and puts out the fire!' },
@@ -3848,6 +3856,7 @@ export const EagleFriendsGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
   const [phase, setPhase] = useState('intro'); // intro | call | help | won | lost
   const [step, setStep] = useState(0); // friends already called
   const [callKey, setCallKey] = useState(0);
+  const [spot, setSpot] = useState(EAGLE_SPOTS[1]);
   const [won, setWon] = useState([]);
   const [leaving, setLeaving] = useState(false);
   const soundRef = useRef(null);
@@ -3860,6 +3869,7 @@ export const EagleFriendsGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
   const waitForFriend = () => {
     clearAll();
     setCallKey(k => k + 1);
+    setSpot(prev => { let n; do { n = EAGLE_SPOTS[Math.floor(Math.random() * EAGLE_SPOTS.length)]; } while (n === prev && EAGLE_SPOTS.length > 1); return n; });
     setPhase('call');
     later(() => setPhase('lost'), EAGLE_SECONDS * 1000);
   };
@@ -3885,6 +3895,7 @@ export const EagleFriendsGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
     <div className="relative overflow-hidden text-white h-screen select-none" style={{ height: '100dvh', minHeight: 420, background: 'linear-gradient(180deg,#1e1b4b 0%,#3730a3 45%,#14532d 100%)' }}>
       <style>{`
         @keyframes eagleFly { 0% { transform: translate(0,0) } 40% { transform: translate(-90px,70px) scale(1.15) } 100% { transform: translate(0,0) } }
+        @keyframes eagleCheer { 0%,100% { transform: translateY(0) scale(1) } 50% { transform: translateY(-14px) scale(1.2) } }
         @keyframes eagleArrive { 0% { transform: translateX(120px) scale(.5); opacity: 0 } 100% { transform: translateX(0) scale(1); opacity: 1 } }
         @keyframes eaglePulse { 0%,100% { transform: scale(1) } 50% { transform: scale(1.18) } }
         @keyframes eagleBar { 0% { width: 100% } 100% { width: 0% } }
@@ -3922,15 +3933,15 @@ export const EagleFriendsGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
           {phase === 'call' && (
             <button type="button" onClick={callFriend} aria-label={`Call ${cur.name}`} key={callKey}
               className="absolute border-0 bg-transparent p-2 z-10"
-              style={{ right: '2%', bottom: '4%', fontSize: 'min(18vw, 70px)', lineHeight: 1, animation: 'eaglePulse .6s ease-in-out infinite', filter: 'drop-shadow(0 0 12px #facc15)' }}>
+              style={{ left: `${spot.x}%`, bottom: `${spot.y}%`, fontSize: 'min(18vw, 70px)', lineHeight: 1, animation: 'eaglePulse .6s ease-in-out infinite', filter: 'drop-shadow(0 0 12px #facc15)' }}>
               {cur.emoji}
             </button>
           )}
           {phase === 'help' && (
-            <div className="absolute" style={{ left: '52%', bottom: '4%', fontSize: 'min(18vw, 70px)', lineHeight: 1, animation: 'eagleArrive .8s ease-out forwards' }}>{cur.emoji}{step === 1 ? '💧' : step === 4 ? '📢' : ''}</div>
+            <div className="absolute" style={{ left: `${spot.x}%`, bottom: `${spot.y}%`, fontSize: 'min(18vw, 70px)', lineHeight: 1, animation: 'eagleCheer .8s ease-out 2' }}>{cur.emoji}{step === 1 ? '💧' : step === 4 ? '📢' : ''}</div>
           )}
           {phase === 'call' && (
-            <div key={`bar${callKey}`} className="absolute h-2 bg-red-500 rounded-full" style={{ right: '4%', bottom: '0%', width: '30%', animation: `eagleBar ${EAGLE_SECONDS}s linear forwards` }} />
+            <div key={`bar${callKey}`} className="absolute h-2 bg-red-500 rounded-full" style={{ left: `${spot.x}%`, bottom: `${Math.max(0, spot.y - 3)}%`, width: 'min(18vw, 70px)', animation: `eagleBar ${EAGLE_SECONDS}s linear forwards` }} />
           )}
         </div>
       </div>

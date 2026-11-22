@@ -17,3 +17,8 @@ export function playGameSound(name, volume = 1) {
 export function stopGameSound(name) {
   try { const a = players[name]; if (a) { a.pause(); a.currentTime = 0; } } catch (e) { /* ignore */ }
 }
+
+// the sound that goes with an animal emoji (or null)
+const VOICES = { '🐦': 'bird', '🐤': 'bird', '🐥': 'bird', '🕊️': 'bird', '🦜': 'parrot', '🐕': 'dog', '🐶': 'dog', '🐈': 'cat', '🐱': 'cat', '🐇': 'rabbit', '🐰': 'rabbit', '🐘': 'elephant', '🦌': 'deer', '🐑': 'sheep', '🐄': 'cow', '🐂': 'cow', '🐴': 'horse', '🐎': 'horse', '🦢': 'swan', '🦆': 'duck', '🦉': 'owl', '🐒': 'monkey', '🦁': 'lion', '🐅': 'tiger', '🐯': 'tiger', '🦊': 'fox', '🐼': 'panda' };
+export const voiceOf = (emoji) => VOICES[emoji] || null;
+export function playAnimalVoice(emoji, volume = 1) { const v = VOICES[emoji]; if (v) playGameSound(v, volume); }
