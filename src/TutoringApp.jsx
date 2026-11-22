@@ -9781,6 +9781,13 @@ const getEffectivePreviousUnit = (lessonKey, sessionForCalc) => {
   // list showing green on its own doesn't mean there's something new to
   // jump to right now, so it shouldn't make this button pulse either.
   const hasNewOrActiveLesson = !!activeSession || (availableLessons[0]?.status === 'pending' && !isLessonStale(availableLessons[0]));
+  // tell the app shell (see LessonFirefly) that a new lesson is waiting, so a firefly can remind the student in any other app
+  const lessonWaitingForFirefly = !studentProfile?.isVisitor && !activeSession && availableLessons[0]?.status === 'pending' && !isLessonStale(availableLessons[0]);
+  window.__tutoringOpenLatest = handleOpenLatestLesson;
+  useEffect(() => {
+    window.__lessonWaiting = lessonWaitingForFirefly;
+    window.dispatchEvent(new CustomEvent('tutoring-lesson-waiting', { detail: lessonWaitingForFirefly }));
+  }, [lessonWaitingForFirefly]);
 
   return (
     <div

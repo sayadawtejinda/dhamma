@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, Suspense } from 'react';
 import TutoringApp from './TutoringApp';
 import InstallAppBanner from './InstallAppBanner';
 import StarTicker from './StarTicker';
+import LessonFirefly from './LessonFirefly';
 import TeacherGiftPopup from './TeacherGiftPopup';
 
 // A React.lazy()+Suspense replacement. React.lazy's own resolution somehow
@@ -645,6 +646,7 @@ export default function App() {
   return (
     <div className="min-h-screen">
       <StarTicker />
+      <LessonFirefly activeApp={activeApp} onGoHome={() => setActiveApp('tutoring')} />
       {showUpdateToast && (
         <div className="fixed top-3 left-1/2 -translate-x-1/2 z-[9999] bg-indigo-600 text-white text-sm font-semibold px-4 py-2 rounded-full shadow-lg">
           🔄 Just updated the app — tap your subject again
