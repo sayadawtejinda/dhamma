@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import coinDropSound from '../audio/coin-drop.mp3';
+import { playGameSound } from './gameSounds';
 
 // The short coin games played between the two halves of a Smart Study quiz (and, later, any other app's quiz).
 // Every game takes the same props and works the same way, so a new game only has to be added to QUIZ_BREAK_GAMES below:
@@ -1884,6 +1885,7 @@ export const GoldenEggDuckGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
     setState(st => st.map((v, i) => (i === id ? 'got' : v)));
     setWon(w => w.map((v, i) => (i === id ? coins : v)));
     playCoinSound(soundRef);
+    playGameSound('duck', 0.7);
   };
   const missedByGreed = killed ? DUCK_DAYS - eggs - state.filter(v => v === 'missed').length : 0;
 
@@ -2564,6 +2566,7 @@ export const TenMeritGame = (props) => <ArcDeedsGame cfg={{
 const TIGER_ROUNDS = 7;
 const TIGER_ASK_MS = 5500;
 const TIGER_RESULT_MS = 2300;
+const TIGER_CHASE_MS = 3800; // when the tiger is let out: it leaps out and chases the child away
 const TIGER_PLEAS = [
   'Please save me! I promise I will never eat you!',
   'I am so hungry and weak... I am only a poor tiger. Please help me!',
@@ -2613,11 +2616,14 @@ export const TigerInTrapGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
     const t = setTimeout(() => {
       if (r + 1 >= TIGER_ROUNDS || outcome === 'fooled') setFinished(true); // saving the tiger ends the game
       else { setR(r + 1); setPhase('ask'); setOutcome(null); }
-    }, TIGER_RESULT_MS);
+    }, outcome === 'fooled' ? TIGER_CHASE_MS : TIGER_RESULT_MS);
     return () => clearTimeout(t);
   }, [r, phase, finished]);
 
+  // the tiger growls when the game starts
+  useEffect(() => { const t = setTimeout(() => playGameSound('tiger', 1), 500); return () => clearTimeout(t); }, []);
   function settle(kind, coins) {
+    if (kind === 'fooled') playGameSound('tiger', 1);
     setOutcome(kind);
     setOutcomes(o => [...o, kind]);
     setWon(w => [...w, coins]);
@@ -2642,6 +2648,9 @@ export const TigerInTrapGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
         @keyframes tigerIn { 0% { transform: translateY(-30px) scale(.6); opacity: 0 } 100% { transform: translateY(0) scale(1); opacity: 1 } }
         @keyframes tigerArc { 0% { left: var(--x0); top: 94%; animation-timing-function: cubic-bezier(.2,.7,.4,1) } 45% { left: var(--x1); top: var(--peak); animation-timing-function: cubic-bezier(.6,0,.8,.3) } 100% { left: var(--x2); top: 94% } }
         @keyframes tigerUp { 0% { transform: translateY(0); opacity: 0 } 15% { opacity: 1 } 100% { transform: translateY(-40px); opacity: 0 } }
+        @keyframes tigerChase { 0% { transform: translate(0,0) scale(1); opacity: 1 } 8% { transform: translate(8vw,-34px) scale(1.5); opacity: 1 } 20% { transform: translate(24vw,0) scale(1.5) } 35% { transform: translate(42vw,-28px) scale(1.5) } 50% { transform: translate(60vw,0) scale(1.5) } 65% { transform: translate(78vw,-28px) scale(1.5) } 100% { transform: translate(112vw,0) scale(1.5); opacity: 1 } }
+        @keyframes tigerRun { 0% { transform: translateX(0) } 100% { transform: translateX(115vw) } }
+        @keyframes tigerRoar { 0% { transform: scale(.3); opacity: 0 } 20% { transform: scale(1.3); opacity: 1 } 70% { opacity: 1 } 100% { transform: scale(1.1); opacity: 0 } }
         @keyframes tigerShake { 0%,100% { transform: translateX(0) } 25% { transform: translateX(-5px) } 75% { transform: translateX(5px) } }
       `}</style>
       <div className="absolute top-0 inset-x-0 flex items-center justify-between gap-2 px-3 py-3 z-10">
@@ -2651,9 +2660,17 @@ export const TigerInTrapGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
       <div className="absolute pointer-events-none bg-white font-black text-sm rounded-full px-3 py-1 shadow" style={{ left: '4%', bottom: '3%', color: fooled > 0 ? '#b91c1c' : '#047857', zIndex: 6 }}>{fooled > 0 ? `😢 Fooled ${fooled} ${fooled === 1 ? 'time' : 'times'}` : '🛡️ Not fooled yet'}</div>
       {/* the trap: a deep pit with the tiger inside, and the passer-by standing at the edge */}
       <div className="absolute left-1/2 -translate-x-1/2 rounded-[50%] flex items-center justify-center" style={{ bottom: '26%', width: 'min(70%, 300px)', height: 'clamp(60px, 13vh, 100px)', background: 'radial-gradient(circle at 50% 40%, #44403c, #1c1917)', border: '5px solid #92400e', boxShadow: 'inset 0 4px 12px rgba(0,0,0,.5)' }}>
-        <span className="select-none" style={{ fontSize: 'clamp(30px, 8vmin, 54px)', animation: !finished && phase === 'ask' ? 'tigerShake 1.2s ease-in-out infinite' : 'none' }}>{phase === 'result' && outcome === 'fooled' ? '🐅' : '🐯'}</span>
+        <span className="select-none" style={{ fontSize: 'clamp(30px, 8vmin, 54px)', animation: !finished && phase === 'ask' ? 'tigerShake 1.2s ease-in-out infinite' : 'none' }}>{phase === 'result' && outcome === 'fooled' ? '' : '🐯'}</span>
       </div>
-      <span className="absolute select-none" style={{ left: 'calc(50% + min(35%, 150px) - 8px)', bottom: '30%', fontSize: 'clamp(28px, 7vmin, 46px)' }}>🧑</span>
+      {phase === 'result' && outcome === 'fooled' && !finished ? (
+        <>
+          <span className="absolute select-none" style={{ left: 'calc(50% + min(35%, 150px) - 8px)', bottom: '30%', fontSize: 'clamp(28px, 7vmin, 46px)', zIndex: 7, animation: 'tigerRun 3s ease-in .5s forwards' }}>😱🏃</span>
+          <span className="absolute select-none" style={{ left: '50%', bottom: '30%', fontSize: 'clamp(40px, 10vmin, 70px)', zIndex: 6, animation: 'tigerChase 3.2s ease-in .4s forwards' }}>🐅</span>
+          <span className="absolute select-none font-black text-red-600" style={{ left: '50%', bottom: '46%', marginLeft: '-2.2em', fontSize: 'clamp(26px, 8vmin, 48px)', zIndex: 8, textShadow: '0 2px 0 #fff, 0 0 8px #fff', animation: 'tigerRoar 1.4s ease-out forwards' }}>ROAAR!</span>
+        </>
+      ) : (
+        <span className="absolute select-none" style={{ left: 'calc(50% + min(35%, 150px) - 8px)', bottom: '30%', fontSize: 'clamp(28px, 7vmin, 46px)' }}>🧑</span>
+      )}
       {!finished && it && (
         <>
           <div key={r} className="absolute left-1/2 text-center" style={{ top: '13%', transform: 'translateX(-50%)', width: 'min(90%, 420px)', zIndex: 5, animation: 'tigerIn .4s ease-out' }}>
@@ -3453,6 +3470,8 @@ export const AnimalFirstAidGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
     setWon(w => [...w, coins]);
     setHealed(true);
     playCoinSound(soundRef);
+    const voice = { '🐇': 'rabbit', '🐦': 'bird', '🐕': 'dog', '🐈': 'cat', '🐑': 'sheep', '🦌': 'deer', '🐥': 'bird' }[c.a];
+    if (voice) setTimeout(() => playGameSound(voice), 350);
     setTimeout(() => {
       if (idx + 1 >= order.length) setFinished(true);
       else { setIdx(idx + 1); setStep(0); setHealed(false); }
@@ -3630,7 +3649,7 @@ export const MonkeyBeansGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
     clearAll();
     setDropKey(k => k + 1);
     setPhase('drop');
-    later(() => setPhase('lost'), MONKEY_SECONDS * 1000);
+    later(() => { setPhase('lost'); playGameSound('monkey'); }, MONKEY_SECONDS * 1000);
   };
   const start = () => { setLevel(0); setWon([]); setLeaving(false); setPhase('climbing'); later(nextDrop, 900); };
   const climb = () => {
@@ -3853,6 +3872,8 @@ export const EagleFriendsGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
     setStep(n);
     setWon(w => [...w, Math.max(0, Math.min(2 + Math.floor(Math.random() * 2), coinsLeft - w.reduce((a, b) => a + b, 0)))]);
     setPhase('help');
+    const voice = [null, 'bird', 'deer', 'lion'][n - 1];
+    if (voice) later(() => playGameSound(voice), 500);
     later(() => { if (n >= EAGLE_FRIENDS.length) setPhase('won'); else waitForFriend(); }, 2200);
   };
   const cur = EAGLE_FRIENDS[Math.min(phase === 'help' ? step - 1 : step, EAGLE_FRIENDS.length - 1)];
@@ -3978,7 +3999,7 @@ export const TortoiseSwansGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
     clearAll();
     setKey(k => k + 1);
     setPhase('talk');
-    later(() => setPhase('lost'), TORTOISE_SECONDS * 1000);
+    later(() => { setPhase('lost'); playGameSound('swan'); }, TORTOISE_SECONDS * 1000);
   };
   const start = () => { setLevel(0); setWon([]); setLeaving(false); setEnded(false); setPhase('fly'); later(nextTaunt, 1200); };
   const shut = () => {
