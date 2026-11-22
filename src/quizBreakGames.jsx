@@ -3947,12 +3947,22 @@ export const TortoiseSwansGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
           <div className="absolute inset-x-0" style={{ top: '14%', animation: lost ? 'none' : 'tortoiseBob 1.6s ease-in-out infinite' }}>
             <div className="absolute" style={{ left: '4%', fontSize: 'min(16vw, 62px)', lineHeight: 1 }}>🦢</div>
             <div className="absolute" style={{ right: '4%', fontSize: 'min(16vw, 62px)', lineHeight: 1, transform: 'scaleX(-1)' }}>🦢</div>
-            <div className="absolute" style={{ left: '16%', right: '16%', top: 'min(12vw, 48px)', height: 8, borderRadius: 6, background: '#92400e' }} />
-            {/* tortoise */}
+            <div className="absolute pointer-events-none" style={{ left: '16%', right: '16%', top: 'min(12vw, 48px)', height: 10, borderRadius: 6, background: 'linear-gradient(180deg,#b45309,#78350f)', zIndex: 3, boxShadow: '0 1px 2px rgba(0,0,0,.4)' }} />
+            {/* tortoise: drawn by hand, hanging by its mouth from the stick */}
             <button type="button" onClick={shut} aria-label="Close the tortoise mouth"
-              className="absolute border-0 bg-transparent p-3"
-              style={{ left: '50%', top: 'min(12vw, 48px)', marginLeft: 'min(-10vw, -40px)', fontSize: 'min(18vw, 72px)', lineHeight: 1, cursor: phase === 'talk' ? 'pointer' : 'default', animation: lost ? 'tortoiseFall 1.2s ease-in forwards' : phase === 'talk' ? 'tortoisePulse .5s ease-in-out infinite' : 'none', filter: phase === 'talk' ? 'drop-shadow(0 0 10px #facc15)' : 'none' }}>
-              {lost ? '😮🐢' : phase === 'talk' ? '🐢' : '🐢🤐'}
+              className="absolute border-0 bg-transparent p-0"
+              style={{ left: '50%', top: 'calc(min(12vw, 48px) + 5px - min(26vw, 104px) * 22 / 120)', marginLeft: 'calc(min(26vw, 104px) / -2)', width: 'min(26vw, 104px)', lineHeight: 0, cursor: phase === 'talk' ? 'pointer' : 'default', animation: lost ? 'tortoiseFall 1.2s ease-in forwards' : phase === 'talk' ? 'tortoisePulse .5s ease-in-out infinite' : 'none', filter: phase === 'talk' ? 'drop-shadow(0 0 10px #facc15)' : 'none' }}>
+              <svg viewBox="0 0 120 96" width="100%" style={{ display: 'block', overflow: 'visible' }}>
+                <ellipse cx="38" cy="84" rx="9" ry="7" fill="#65a30d" /><ellipse cx="84" cy="84" rx="9" ry="7" fill="#65a30d" />
+                <ellipse cx="14" cy="70" rx="7" ry="4" fill="#65a30d" />
+                <path d="M64 52 Q74 40 84 24" stroke="#84cc16" strokeWidth="13" strokeLinecap="round" fill="none" />
+                <ellipse cx="86" cy="22" rx="15" ry="11" fill="#84cc16" stroke="#4d7c0f" strokeWidth="1.5" />
+                <circle cx="91" cy="16" r="3.2" fill="#fff" /><circle cx="92" cy="16" r="1.7" fill="#111" />
+                {lost && <ellipse cx="97" cy="25" rx="5" ry="4" fill="#7f1d1d" />}
+                <path d="M16 78 Q16 32 60 32 Q104 32 104 78 Z" fill="#16a34a" stroke="#14532d" strokeWidth="2" />
+                <path d="M60 34 L60 78 M36 46 L36 78 M84 46 L84 78 M24 62 L96 62" stroke="#14532d" strokeWidth="1.5" fill="none" opacity=".6" />
+                {phase === 'talk' && <text x="100" y="6" fontSize="18">💢</text>}
+              </svg>
             </button>
           </div>
           {/* thought bubble */}
