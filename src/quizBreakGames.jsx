@@ -1694,7 +1694,9 @@ const AlmsLabel = ({ it }) => (
 );
 // The monks and novices walk in a line, the most senior first (they get a little smaller down the line). The first one stops at the
 // table, the student picks a food they like from the table and puts it in the bowl, the monk blesses them and walks on, and the next one
-// steps up. 7 monks and novices; every offering pays 2 or 3 coins.
+// steps up. 7 monks and novices; every offering pays 2 or 3 coins. The student has 5 seconds per monk, otherwise the monk walks on
+// (no coins); after an offering the next monk needs about 3 seconds to step up, so nobody can rush through by tapping fast.
+const ALMS_WAIT_MS = 5000;
 const ALMS_TABLE_FOODS = [
   ['🍚', 'Rice'], ['🍛', 'Curry'], ['🍜', 'Noodles'], ['🍲', 'Soup'], ['🍞', 'Bread'], ['🥭', 'Mango'],
   ['🍌', 'Banana'], ['🍎', 'Apple'], ['🍊', 'Orange'], ['🍉', 'Watermelon'], ['🥥', 'Coconut'], ['🍇', 'Grapes'],
@@ -1706,7 +1708,8 @@ const ALMS_LINE = [
 export const AlmsRoundGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
   const [started, setStarted] = useState(false);
   const [idx, setIdx] = useState(0);              // the monk at the table now
-  const [phase, setPhase] = useState('wait');     // wait | bless
+  const [phase, setPhase] = useState('leave');    // wait | bless | leave (the first monk is still walking in)
+  const [got, setGot] = useState(() => Array(ALMS_COUNT).fill(false));
   const [food, setFood] = useState(null);         // what was just put in the bowl
   const [won, setWon] = useState(() => Array(ALMS_COUNT).fill(0));
   const [finished, setFinished] = useState(false);
@@ -1715,19 +1718,31 @@ export const AlmsRoundGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
   const soundRef = useRef(null);
   const timers = useRef([]);
   const later = (fn, ms) => { const t = setTimeout(fn, ms); timers.current.push(t); return t; };
-  useEffect(() => { later(() => setStarted(true), 150); return () => timers.current.forEach(clearTimeout); }, []);
+  useEffect(() => { later(() => setStarted(true), 150); later(() => setPhase('wait'), 1700); return () => timers.current.forEach(clearTimeout); }, []);
 
+  // after a monk has gone, the next one steps up (idx + 1); the table opens again after `pause` ms
+  const nextMonk = (from, pause) => {
+    setIdx(from + 1);
+    setPhase('leave');
+    if (from + 1 >= ALMS_COUNT) later(() => setFinished(true), 1600);
+    else later(() => setPhase('wait'), pause);
+  };
+  // 5 seconds to offer, or the monk walks on
+  useEffect(() => {
+    if (phase !== 'wait' || !started || idx >= ALMS_COUNT) return undefined;
+    const t = setTimeout(() => nextMonk(idx, 1500), ALMS_WAIT_MS);
+    return () => clearTimeout(t);
+  }, [phase, started, idx]);
   const offer = (emoji) => {
     if (phase !== 'wait' || !started || idx >= ALMS_COUNT) return;
     const coins = Math.max(0, Math.min(2 + Math.floor(Math.random() * 2), coinsLeft - total)); // 2 or 3, never past the lesson's limit
+    const me = idx;
     setFood(emoji);
     setPhase('bless');
-    setWon(w => w.map((v, i) => (i === idx ? coins : v)));
+    setGot(g => g.map((v, i) => (i === me ? true : v)));
+    setWon(w => w.map((v, i) => (i === me ? coins : v)));
     playCoinSound(soundRef);
-    later(() => {
-      if (idx + 1 >= ALMS_COUNT) { setIdx(ALMS_COUNT); setPhase('wait'); later(() => setFinished(true), 1600); }
-      else { setIdx(idx + 1); setPhase('wait'); }
-    }, 2100);
+    later(() => nextMonk(me, 900), 2100); // blessing 2.1 s + 0.9 s = one offering every 3 seconds at most
   };
   const bless = ALMS_BLESS[Math.min(idx, ALMS_COUNT - 1) % ALMS_BLESS.length];
 
@@ -1737,10 +1752,11 @@ export const AlmsRoundGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
         @keyframes almsStep { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-5px) } }
         @keyframes almsDrop { 0% { transform: translate(-50%,-30px) scale(.8); opacity: 0 } 30% { opacity: 1 } 100% { transform: translate(-50%,40px) scale(.9); opacity: 0 } }
         @keyframes almsBless { 0% { transform: translate(-50%,0); opacity: 0 } 15% { opacity: 1 } 100% { transform: translate(-50%,-40px); opacity: 0 } }
+        @keyframes almsBar { 0% { width: 100% } 100% { width: 0% } }
         @keyframes almsHint { 0%,100% { transform: scale(1) } 50% { transform: scale(1.06) } }
       `}</style>
       <div className="absolute top-0 inset-x-0 flex items-center justify-between gap-2 px-3 py-3 z-30">
-        <div className="bg-white/80 text-orange-900 font-bold text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 ml-12 sm:ml-16 min-w-0 truncate">🥣 Alms round · {Math.min(idx + (phase === 'bless' ? 1 : 0), ALMS_COUNT)}/{ALMS_COUNT}</div>
+        <div className="bg-white/80 text-orange-900 font-bold text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 ml-12 sm:ml-16 min-w-0 truncate">🥣 Alms round · {got.filter(Boolean).length}/{ALMS_COUNT}</div>
         <div className="bg-yellow-300 text-yellow-900 font-black text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 shadow whitespace-nowrap flex-shrink-0">🪙 {total}{coinsLeft <= 0 ? ' (limit reached)' : ''}</div>
       </div>
       <div className="absolute pointer-events-none" style={{ right: '8%', top: '9%', fontSize: 'clamp(40px, 9vmin, 80px)' }}>🌅</div>
@@ -1749,6 +1765,9 @@ export const AlmsRoundGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
       {phase === 'wait' && started && idx < ALMS_COUNT && (
         <div className="absolute inset-x-0 text-center z-20" style={{ top: '14%' }}>
           <span className="inline-block bg-white/90 text-orange-900 font-bold rounded-full px-4 py-2 shadow" style={{ animation: 'almsHint 1s ease-in-out infinite' }}>Choose a food you like and tap it!</span>
+          <div className="mx-auto mt-2 bg-white/60 rounded-full overflow-hidden" style={{ width: 'min(60vw, 220px)', height: 8 }}>
+            <div key={idx} className="h-full bg-orange-500" style={{ animation: `almsBar ${ALMS_WAIT_MS}ms linear forwards` }} />
+          </div>
         </div>
       )}
 
@@ -1758,7 +1777,7 @@ export const AlmsRoundGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
         const left = !started ? -30 - i * 4 : k < 0 ? 125 : 50 - k * 13;
         const size = `calc(${ALMS_SIZE} * ${m.scale})`;
         const active = k === 0;
-        const walking = !active || phase === 'bless';
+        const walking = !active || phase === 'bless' || phase === 'leave';
         return (
           <div key={i} className="absolute" style={{ left: `${left}%`, top: '57%', transform: 'translate(-50%,-100%)', transition: 'left 1.5s ease-in-out', zIndex: active ? 25 : 10 - Math.abs(k) }}>
             <div style={{ animation: walking && left > -20 && left < 120 ? 'almsStep .6s ease-in-out infinite' : 'none' }}>
@@ -1795,8 +1814,8 @@ export const AlmsRoundGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
         <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-40 px-4">
           <div className="bg-white text-gray-900 rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
             <div className="text-5xl mb-2">🥣🙏</div>
-            <h2 className="text-2xl font-extrabold mb-1">You offered food to {ALMS_COUNT} monks and novices!</h2>
-            <p className="text-sm text-gray-600 mb-2">Offering alms with a kind heart makes great merit. They blessed you before they walked on.</p>
+            <h2 className="text-2xl font-extrabold mb-1">{got.some(Boolean) ? `You offered food to ${got.filter(Boolean).length} of ${ALMS_COUNT} monks and novices!` : 'Nice try!'}</h2>
+            <p className="text-sm text-gray-600 mb-2">{got.every(Boolean) ? 'Offering alms with a kind heart makes great merit. They blessed you before they walked on.' : 'Be ready to offer when each monk steps up to the table, they walk on after 5 seconds.'}</p>
             <p className="text-lg font-bold text-yellow-600 mb-4">{total > 0 ? `🪙 +${total} coins for your Shrine Room wallet` : (coinsLeft <= 0 ? 'You have already earned all the coins for this lesson. Great job!' : 'No coins this time.')}</p>
             <GameButton disabled={leaving} onClick={() => { setLeaving(true); onDone(total); }} className="bg-orange-500 hover:bg-orange-600 text-white w-full text-xl">Continue →</GameButton>
           </div>
