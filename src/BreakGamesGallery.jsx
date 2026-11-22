@@ -12,7 +12,7 @@ const NAMES = [
   '🛒 Market for parents', '🐇 Wake the hare', '🩺 Animal first aid', '🌳 Poke tree and baby banyan', '🐒 Monkey and the beans', '🕷️ King and the spider', '🦅 Eagles and good friends', '🐢 Tortoise and two swans',
 ];
 
-export default function BreakGamesGallery({ onClose }) {
+export default function BreakGamesGallery({ onClose, standalone = false }) {
   const [playing, setPlaying] = useState(null);
   if (playing !== null) {
     const Game = QUIZ_BREAK_GAMES[playing];
@@ -28,7 +28,7 @@ export default function BreakGamesGallery({ onClose }) {
       <div className="max-w-xl mx-auto">
         <div className="flex items-center justify-between mb-2">
           <h1 className="text-2xl font-bold text-emerald-800">🎮 Break games ({QUIZ_BREAK_GAMES.length})</h1>
-          <button onClick={onClose} className="px-4 py-2 bg-gray-800 text-white rounded-full font-bold shadow">✕ Close</button>
+          {!standalone && <button onClick={onClose} className="px-4 py-2 bg-gray-800 text-white rounded-full font-bold shadow">✕ Close</button>}
         </div>
         <p className="text-sm text-gray-600 mb-4">Tap a game to try it. Nothing is saved and no coins are paid here.</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

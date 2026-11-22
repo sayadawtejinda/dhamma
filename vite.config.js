@@ -26,6 +26,7 @@ export default defineConfig({
         paramattha: resolve(__dirname, 'paramattha.html'),
         vithicitta: resolve(__dirname, 'vithicitta.html'),
         rupa: resolve(__dirname, 'rupa.html'),
+        games: resolve(__dirname, 'games.html'),
       },
     },
   },
