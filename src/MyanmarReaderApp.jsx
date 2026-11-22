@@ -4429,6 +4429,8 @@ useEffect(() => {
         <button
           key={li}
           onClick={async () => {
+  // red lock on: tapping a line of the paragraph does nothing, so students cannot read the lines one by one and skip the coins
+  if (autoReadMode) return;
   interruptPlayback();
   setSyllables(loadStringToSyllables(line));
 setCurrentKeys([]);
@@ -4448,7 +4450,7 @@ playSheetBClip(sheetBAudio, colIdx >= 15 ? SHEET_B_AUDIO2 : SHEET_B_AUDIO, t, du
           className={`text-left text-2xl px-3 py-1 rounded-xl transition-all font-bold
     ${li === sheetBLineIndex && sheetBParaIndex === sheetBParaIndex 
         ? 'bg-yellow-200 text-yellow-900 border-2 border-yellow-400 scale-105' 
-        : 'text-gray-800 hover:text-blue-600 hover:bg-blue-50'}`}
+        : `text-gray-800 ${autoReadMode ? 'cursor-default' : 'hover:text-blue-600 hover:bg-blue-50'}`}`}
         >
           {line}
         </button>
