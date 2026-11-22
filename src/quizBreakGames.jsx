@@ -3877,7 +3877,126 @@ export const EagleFriendsGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
 };
 
 
-export const QUIZ_BREAK_GAMES = [BirdRescueGame, FlowerOfferingGame, LitterPickingGame, AnimalRescueGame, WoodcutterAxeGame, AntGatheringGame, WaterAnimalsGame, HelpFriendsGame, PayRespectGame, TenGiftsGame, ReturnLostItemsGame, HelpParentsGame, AlmsRoundGame, GoldenEggDuckGame, CunningHeronGame, ShareWaterGame, SchoolOfSkillsGame, TenDeedsGame, TenMeritGame, TigerInTrapGame, FinishProverbGame, BravePuppyGame, CleanHouseGame, CleanPagodaGame, MarketForParentsGame, WakeTheHareGame, AnimalFirstAidGame, BanyanSaveTreeGame, MonkeyBeansGame, SpiderClimbGame, EagleFriendsGame];
+// ---------------------------------------------------------------------------------------------------------------
+// Game: the talkative tortoise and the two swans (Jataka, guard your tongue). Two swans carry a tortoise by a stick it bites. Cowherd boys
+// below tease it. Each time, an angry thought bubble pops up; tap the tortoise to keep its mouth shut within 3 seconds (2 or 3 coins).
+// Too slow and it speaks, lets go and falls. 7 taunts to get through.
+const TORTOISE_TAUNTS = [
+  ['Look! Two swans are carrying a tortoise!', 'I want to shout: I am not a baby!'],
+  ['Ha ha! A flying tortoise on a stick!', 'I want to shout: Do not laugh at me!'],
+  ['The poor slow tortoise cannot even fly!', 'I want to shout: I am not slow!'],
+  ['What an ugly shell it has!', 'I want to shout: My shell is beautiful!'],
+  ['The swans are doing all the work!', 'I want to shout: They are my friends!'],
+  ['Throw a stone at that tortoise!', 'I want to shout: Stop that, you rude boys!'],
+  ['Let us eat that tortoise for dinner!', 'I want to shout: Do not dare!'],
+];
+const TORTOISE_SECONDS = 3;
+export const TortoiseSwansGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
+  const [phase, setPhase] = useState('intro'); // intro | fly | talk | won | lost
+  const [level, setLevel] = useState(0);
+  const [key, setKey] = useState(0);
+  const [won, setWon] = useState([]);
+  const [leaving, setLeaving] = useState(false);
+  const soundRef = useRef(null);
+  const timers = useRef([]);
+  const later = (fn, ms) => { const t = setTimeout(fn, ms); timers.current.push(t); return t; };
+  const clearAll = () => { timers.current.forEach(clearTimeout); timers.current = []; };
+  useEffect(() => clearAll, []);
+  const total = won.reduce((a, b) => a + b, 0);
+
+  const nextTaunt = () => {
+    clearAll();
+    setKey(k => k + 1);
+    setPhase('talk');
+    later(() => setPhase('lost'), TORTOISE_SECONDS * 1000);
+  };
+  const start = () => { setLevel(0); setWon([]); setLeaving(false); setPhase('fly'); later(nextTaunt, 1200); };
+  const shut = () => {
+    if (phase !== 'talk') return;
+    clearAll();
+    playCoinSound(soundRef);
+    const n = level + 1;
+    setLevel(n);
+    setWon(w => [...w, Math.max(0, Math.min(2 + Math.floor(Math.random() * 2), coinsLeft - w.reduce((a, b) => a + b, 0)))]);
+    if (n >= TORTOISE_TAUNTS.length) { setPhase('won'); return; }
+    setPhase('fly');
+    later(nextTaunt, 1300);
+  };
+  const taunt = TORTOISE_TAUNTS[Math.min(level, TORTOISE_TAUNTS.length - 1)];
+  const lost = phase === 'lost';
+
+  return (
+    <div className="relative overflow-hidden text-white h-screen select-none" style={{ height: '100dvh', minHeight: 420, background: 'linear-gradient(180deg,#7dd3fc 0%,#bae6fd 55%,#86efac 100%)' }}>
+      <style>{`
+        @keyframes tortoiseBob { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-8px) } }
+        @keyframes tortoiseFall { 0% { transform: translateY(0) rotate(0deg) } 100% { transform: translateY(300px) rotate(200deg) } }
+        @keyframes tortoiseBar { 0% { width: 100% } 100% { width: 0% } }
+        @keyframes tortoisePulse { 0%,100% { transform: scale(1) } 50% { transform: scale(1.12) } }
+      `}</style>
+      <div className="absolute top-0 inset-x-0 flex items-center justify-between gap-2 px-3 py-3 z-10">
+        <div className="bg-white/80 text-sky-900 font-bold text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 ml-12 sm:ml-16 min-w-0 truncate">🤐 Keep quiet · {level}/{TORTOISE_TAUNTS.length}</div>
+        <div className="bg-yellow-300 text-yellow-900 font-black text-sm sm:text-base rounded-full px-3 sm:px-4 py-2 shadow whitespace-nowrap flex-shrink-0">🪙 {total}{coinsLeft <= 0 ? ' (limit reached)' : ''}</div>
+      </div>
+
+      <div className="absolute inset-x-0 flex flex-col items-center" style={{ top: '9%' }}>
+        <div className="bg-white/90 text-sky-900 font-bold rounded-full px-4 py-2 shadow text-center mb-2 mx-3">
+          {phase === 'talk' ? 'Quick! Close its mouth!' : phase === 'won' ? 'The tortoise reached home safely!' : lost ? 'Oh no, the tortoise spoke and fell!' : 'The swans are flying...'}
+        </div>
+        <div className="relative" style={{ width: 'min(92vw, 380px)', height: 'min(62dvh, 450px)' }}>
+          {/* swans and stick */}
+          <div className="absolute inset-x-0" style={{ top: '14%', animation: lost ? 'none' : 'tortoiseBob 1.6s ease-in-out infinite' }}>
+            <div className="absolute" style={{ left: '4%', fontSize: 'min(16vw, 62px)', lineHeight: 1 }}>🦢</div>
+            <div className="absolute" style={{ right: '4%', fontSize: 'min(16vw, 62px)', lineHeight: 1, transform: 'scaleX(-1)' }}>🦢</div>
+            <div className="absolute" style={{ left: '16%', right: '16%', top: 'min(12vw, 48px)', height: 8, borderRadius: 6, background: '#92400e' }} />
+            {/* tortoise */}
+            <button type="button" onClick={shut} aria-label="Close the tortoise mouth"
+              className="absolute border-0 bg-transparent p-3"
+              style={{ left: '50%', top: 'min(12vw, 48px)', marginLeft: 'min(-10vw, -40px)', fontSize: 'min(18vw, 72px)', lineHeight: 1, cursor: phase === 'talk' ? 'pointer' : 'default', animation: lost ? 'tortoiseFall 1.2s ease-in forwards' : phase === 'talk' ? 'tortoisePulse .5s ease-in-out infinite' : 'none', filter: phase === 'talk' ? 'drop-shadow(0 0 10px #facc15)' : 'none' }}>
+              {lost ? '😮🐢' : phase === 'talk' ? '🐢' : '🐢🤐'}
+            </button>
+          </div>
+          {/* thought bubble */}
+          {phase === 'talk' && (
+            <div className="absolute left-1/2 -translate-x-1/2 bg-white text-gray-800 font-bold rounded-2xl shadow-lg px-3 py-2 text-center text-sm" style={{ top: '46%', width: '86%', border: '3px dashed #f87171' }}>
+              <div className="text-gray-500 mb-1">👦 {taunt[0]}</div>
+              <div className="text-red-600">💭 {taunt[1]}</div>
+              <div className="text-emerald-700 mt-1">👆 Tap the tortoise to keep quiet!</div>
+              <div key={key} className="h-2 bg-red-500 rounded-full mt-2" style={{ animation: `tortoiseBar ${TORTOISE_SECONDS}s linear forwards` }} />
+            </div>
+          )}
+          {/* cowherd boys */}
+          <div className="absolute inset-x-0 bottom-0 text-center" style={{ fontSize: 'min(12vw, 46px)', lineHeight: 1 }}>{lost ? '😂👦👧🐄' : '👦👧🐄👦'}</div>
+        </div>
+      </div>
+
+      {phase === 'intro' && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20 px-4">
+          <div className="bg-white text-gray-900 rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
+            <div className="text-5xl mb-2">🦢🐢🦢</div>
+            <h2 className="text-2xl font-extrabold mb-1">The tortoise and the two swans</h2>
+            <p className="text-gray-600 mb-4">Two swans carry their friend the tortoise through the sky. It holds the stick in its mouth and must not speak. When the boys below tease it, the tortoise wants to answer back. Tap the tortoise within {TORTOISE_SECONDS} seconds to close its mouth, or it will fall!</p>
+            <GameButton onClick={start} className="bg-sky-500 hover:bg-sky-600 text-white w-full text-xl">Start</GameButton>
+          </div>
+        </div>
+      )}
+      {(phase === 'won' || lost) && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20 px-4">
+          <div className="bg-white text-gray-900 rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
+            <div className="text-5xl mb-2">{phase === 'won' ? '🐢🤐💖' : '🐢😵'}</div>
+            <h2 className="text-2xl font-extrabold mb-1">{phase === 'won' ? 'You kept the tortoise quiet!' : 'The tortoise spoke and fell'}</h2>
+            <p className="text-gray-600 mb-2">{phase === 'won' ? 'Guard your tongue. Do not answer angry words with angry words.' : 'Talking too much brings trouble. Keep your mouth closed and try again!'}</p>
+            <p className="text-lg font-bold text-yellow-600 mb-4">{total > 0 ? `🪙 +${total} coins for your Shrine Room wallet` : (coinsLeft <= 0 ? 'You have already earned all the rescue coins for this lesson. Great job!' : 'No coins this time.')}</p>
+            {lost && <GameButton disabled={leaving} onClick={start} className="bg-amber-400 hover:bg-amber-500 text-amber-900 w-full text-xl mb-2">Try again</GameButton>}
+            <GameButton disabled={leaving} onClick={() => { setLeaving(true); onDone(total); }} className="bg-emerald-500 hover:bg-emerald-600 text-white w-full text-xl">Continue →</GameButton>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+
+export const QUIZ_BREAK_GAMES = [BirdRescueGame, FlowerOfferingGame, LitterPickingGame, AnimalRescueGame, WoodcutterAxeGame, AntGatheringGame, WaterAnimalsGame, HelpFriendsGame, PayRespectGame, TenGiftsGame, ReturnLostItemsGame, HelpParentsGame, AlmsRoundGame, GoldenEggDuckGame, CunningHeronGame, ShareWaterGame, SchoolOfSkillsGame, TenDeedsGame, TenMeritGame, TigerInTrapGame, FinishProverbGame, BravePuppyGame, CleanHouseGame, CleanPagodaGame, MarketForParentsGame, WakeTheHareGame, AnimalFirstAidGame, BanyanSaveTreeGame, MonkeyBeansGame, SpiderClimbGame, EagleFriendsGame, TortoiseSwansGame];
 const hashOf = (s) => { let h = 0; String(s ?? '').split('').forEach(ch => { h = (h * 31 + ch.charCodeAt(0)) >>> 0; }); return h; };
 export const quizBreakGameFor = (lessonId) => QUIZ_BREAK_GAMES[hashOf(lessonId) % QUIZ_BREAK_GAMES.length];
 export const QuizBreakGame = ({ lessonId, ...rest }) => {
