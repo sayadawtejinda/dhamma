@@ -12,6 +12,7 @@ import OnlineStatusWidget from './OnlineStatusWidget';
 import { AvatarPeekModal } from './AvatarPeek';
 import { presenceIntervalMs, listenLiveOrOnce } from './presenceDay';
 import { cachedListen } from './cachedListen';
+import { spawnFlyingCoins, trackLastClickPoint } from './flyingCoins';
 
 // The vanilla script below tracks role/name/class as plain closure `let`s,
 // not React state, so this collection path is the only piece the shared
@@ -1041,8 +1042,12 @@ export default function DhammaschoolApp({ entryRequest, onExit, isActive }) {
         }
         // Fire-and-forget: the coinBalanceListener above will pick up the
         // real new value and update the UI once Firestore round-trips.
+        const coinClickTracker = trackLastClickPoint(document);
+        window.__dsStopCoinTracker = () => coinClickTracker.stop();
         function awardDhammaschoolCoins(amount) {
             if (!studentName || amount <= 0) return;
+            // coins fly up to the coin badge with the coin sound, like the other apps
+            try { spawnFlyingCoins(coinClickTracker.get(), Math.min(14, Math.max(6, amount))); } catch (e) { /* cosmetic */ }
             setDoc(doc(db, PATHS.roster, myRosterDocId()), {
                 classId: (selectedClassId && selectedClassId.trim()) ? selectedClassId.trim() : 'GENERAL',
                 studentName,
@@ -5047,6 +5052,7 @@ function renderClickableWords(text) {
       delete window.cancelMatchSelection;
       delete window.saveAndExitGame;
       delete window.depositDhammaschoolCoinsToShrineRoom;
+      if (window.__dsStopCoinTracker) { window.__dsStopCoinTracker(); delete window.__dsStopCoinTracker; }
       delete window.selectTeacherClass;
       delete window.backToClassPicker;
       delete window.createNewClass;
