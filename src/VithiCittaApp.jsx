@@ -25,7 +25,7 @@ const LANGUAGES = [
 export default function VithiCittaApp() {
   // No separate "choose a language" page -- the 🌐 button below cycles
   // straight through LANGUAGES in place (my -> en -> vi -> my -> ...).
-  const [langIdx, setLangIdx] = useState(0);
+  const [langIdx, setLangIdx] = useState(() => { try { const k = new URLSearchParams(location.search).get('lang'); const i = LANGUAGES.findIndex(l => l.key === k); return i >= 0 ? i : 0; } catch (e) { return 0; } }); // ?lang=my|en|vi opens that language (used by the Tipitaka reader)
   const current = LANGUAGES[langIdx];
   const Active = current.Component;
   const cycleLang = () => setLangIdx(prev => (prev + 1) % LANGUAGES.length);

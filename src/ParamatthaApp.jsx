@@ -46,7 +46,7 @@ export default function ParamatthaApp() {
   // straight through LANGUAGES in place (my -> vi -> my -> ...). Adding a
   // 3rd entry (e.g. 'en', once its translation coverage is ready) needs no
   // change here -- it just joins the cycle.
-  const [langIdx, setLangIdx] = useState(0);
+  const [langIdx, setLangIdx] = useState(() => { try { const k = new URLSearchParams(location.search).get('lang'); const i = LANGUAGES.findIndex(l => l.key === k); return i >= 0 ? i : 0; } catch (e) { return 0; } }); // ?lang=my|en|vi opens that language (used by the Tipitaka reader)
   useEffect(() => startFitCircles(), []);
   const current = LANGUAGES[langIdx];
   const Active = current.Component;
