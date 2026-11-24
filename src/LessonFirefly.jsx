@@ -1,12 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 
 // A friendly reminder that the teacher's new lesson is waiting (not opened yet) while the student is in
-// another app. It shows for 5 seconds, hides for 10, then comes back in a different style (10 styles:
+// another app. It shows for 14 seconds, hides for 10, then comes back in a different style (10 styles:
 // firefly, aeroplane with a banner, boy with a flag, balloon, ...). It is never in the way: it only
 // appears briefly, the student can drag it somewhere else, and tapping the note does the same as the
 // 📖 Latest Lesson button. TutoringApp reports the state through window.__lessonWaiting + the
 // 'tutoring-lesson-waiting' event and offers window.__tutoringOpenLatest.
-const SHOW_MS = 5000;
+const SHOW_MS = 14000; // long enough to read the note: it glides in, drifts slowly, then glides out
 const HIDE_MS = 10000;
 const NOTE = '📖 Your lesson is ready! Tap to study';
 
@@ -141,17 +141,17 @@ export default function LessonFirefly({ activeApp, onGoHome }) {
   return (
     <>
       <style>{`
-        @keyframes ffLR { from { transform: translateX(-110%) } to { transform: translateX(calc(100vw + 10%)) } }
-        @keyframes ffRL { from { transform: translateX(calc(100vw + 10%)) } to { transform: translateX(-110%) } }
-        @keyframes ffRise { from { transform: translateY(105vh) } to { transform: translateY(-30vh) } }
-        @keyframes ffDrift { 0% { transform: translate(0,0) } 25% { transform: translate(-14vw,-8vh) } 50% { transform: translate(-4vw,-16vh) } 75% { transform: translate(-18vw,-6vh) } 100% { transform: translate(-6vw,4vh) } }
+        @keyframes ffLR { 0% { transform: translateX(-110%) } 12% { transform: translateX(6vw) } 88% { transform: translateX(32vw) } 100% { transform: translateX(calc(100vw + 10%)) } }
+        @keyframes ffRL { 0% { transform: translateX(calc(100vw + 10%)) } 12% { transform: translateX(46vw) } 88% { transform: translateX(22vw) } 100% { transform: translateX(-110%) } }
+        @keyframes ffRise { 0% { transform: translateY(105vh) } 15% { transform: translateY(50vh) } 85% { transform: translateY(32vh) } 100% { transform: translateY(-30vh) } }
+        @keyframes ffDrift { 0% { transform: translate(0,0) } 25% { transform: translate(-6vw,-4vh) } 50% { transform: translate(-2vw,-8vh) } 75% { transform: translate(-8vw,-3vh) } 100% { transform: translate(-3vw,2vh) } }
         @keyframes ffGlow { 0%,100% { opacity: .55; filter: drop-shadow(0 0 4px #86efac) } 50% { opacity: 1; filter: drop-shadow(0 0 16px #4ade80) } }
         @keyframes ffBob { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-5px) } }
         @keyframes ffStep { 0%,100% { transform: translateY(0) rotate(-4deg) } 50% { transform: translateY(-4px) rotate(4deg) } }
         @keyframes ffWave { 0%,100% { transform: skewY(-3deg) } 50% { transform: skewY(3deg) } }
         @keyframes ffTag { 0%,100% { transform: rotate(-3deg) } 50% { transform: rotate(3deg) } }
       `}</style>
-      <div className="fixed z-[9990]" style={{ ...pos, animation: drag ? 'none' : `${anim} ${SHOW_MS}ms linear forwards`, touchAction: 'none' }}>
+      <div className="fixed z-[9990]" style={{ ...pos, animation: drag ? 'none' : `${anim} ${SHOW_MS}ms ease-in-out forwards`, touchAction: 'none' }}>
         <div
           role="button" aria-label="Your teacher sent a lesson - open it (or drag to move)"
           onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={() => { downRef.current = null; setDragging(false); }}
