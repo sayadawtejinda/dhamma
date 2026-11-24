@@ -11,7 +11,7 @@ const TUTORING_STUDENTS_PATH = 'artifacts/dhamma-tutoring-app/public/data/studen
 const POEMS_PER_TROPHY = 2;
 import OnlineStatusWidget from './OnlineStatusWidget';
 import { spawnFlyingCoins, trackLastClickPoint } from './flyingCoins';
-import { QUIZ_BREAK_GAMES } from './quizBreakGames';
+import { QUIZ_BREAK_GAMES, quizBreakNameAt } from './quizBreakGames';
 
 // ── Ported from the standalone "မြန်မာကဗျာ သင်ကြားရေး" (Myanmar Poems) HTML app ──
 // Same hybrid approach as the other ported apps in this project: the
@@ -2616,7 +2616,7 @@ export default function MyanmarPoemsApp({ entryRequest, onExit, hideOwnOnlineBad
         <div className="fixed top-16 left-1/2 -translate-x-1/2 z-[10040] bg-purple-600 text-white font-extrabold text-sm sm:text-base rounded-full px-4 py-2 shadow-xl pointer-events-none">🎮 You sang {POEM_GAME_EVERY} poems! A game is ready!</div>
       )}
       {gamesReady > 0 && !playingGame && studentName && (
-        <button onClick={() => setPlayingGame(true)} className="fixed left-3 bottom-20 z-[10040] bg-purple-600 hover:bg-purple-700 text-white font-extrabold rounded-full shadow-xl px-4 py-3 animate-bounce" aria-label="Play a game">🎮 Play a game{gamesReady > 1 ? ` (${gamesReady})` : ''}</button>
+        <button onClick={() => setPlayingGame(true)} className="fixed left-3 bottom-20 z-[10040] bg-purple-600 hover:bg-purple-700 text-white font-extrabold rounded-full shadow-xl px-4 py-3 animate-bounce" aria-label="Play a game">🎮 Play: {quizBreakNameAt(readGame().idx)}{gamesReady > 1 ? ` (${gamesReady})` : ''}</button>
       )}
       {playingGame && (() => {
         const Game = QUIZ_BREAK_GAMES[readGame().idx % QUIZ_BREAK_GAMES.length];

@@ -8,7 +8,7 @@ import { auth, db } from './firebase';
 import { presenceIntervalMs, listenLiveOrOnce } from './presenceDay';
 import { rosterDocRefByUid, migrateNameKeyedRosterDoc } from './studentRosterIdentity';
 import coinDropSound from '../audio/coin-drop.mp3';
-import { QUIZ_BREAK_GAMES } from './quizBreakGames';
+import { QUIZ_BREAK_GAMES, quizBreakNameAt } from './quizBreakGames';
 
 const MYANMAR_READER_APP_ID = 'myanmar-reader-app';
 
@@ -3617,7 +3617,7 @@ useEffect(() => {
           <div className="fixed top-16 left-1/2 -translate-x-1/2 z-[10040] bg-purple-600 text-white font-extrabold text-sm sm:text-base rounded-full px-4 py-2 shadow-xl pointer-events-none">🎮 You earned {READER_GAME_EVERY} points! A game is ready!</div>
       )}
       {gamesReady > 0 && !playingGame && studentName && !isTeacherMode && (
-          <button onClick={() => setPlayingGame(true)} className="fixed left-3 bottom-20 z-[10040] bg-purple-600 hover:bg-purple-700 text-white font-extrabold rounded-full shadow-xl px-4 py-3 flex items-center gap-2 animate-bounce" aria-label="Play a game">🎮 Play a game{gamesReady > 1 ? ` (${gamesReady})` : ''}</button>
+          <button onClick={() => setPlayingGame(true)} className="fixed left-3 bottom-20 z-[10040] bg-purple-600 hover:bg-purple-700 text-white font-extrabold rounded-full shadow-xl px-4 py-3 flex items-center gap-2 animate-bounce" aria-label="Play a game">🎮 Play: {quizBreakNameAt(readGameStore().idx)}{gamesReady > 1 ? ` (${gamesReady})` : ''}</button>
       )}
       {playingGame && (() => {
           const Game = QUIZ_BREAK_GAMES[readGameStore().idx % QUIZ_BREAK_GAMES.length];

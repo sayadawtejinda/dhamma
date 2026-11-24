@@ -5,7 +5,7 @@ import { presenceIntervalMs } from './presenceDay';
 import { rosterDocRefByUid, migrateNameKeyedRosterDoc } from './studentRosterIdentity';
 import OnlineStatusWidget from './OnlineStatusWidget';
 import { spawnFlyingCoins, trackLastClickPoint } from './flyingCoins';
-import { QUIZ_BREAK_GAMES } from './quizBreakGames';
+import { QUIZ_BREAK_GAMES, quizBreakNameAt } from './quizBreakGames';
 
 // Live "who's online" roster — same simple heartbeat pattern as
 // MyanmarReaderApp.jsx's READER_ROSTER_PATH (30s ping, 5-minute online
@@ -1754,7 +1754,7 @@ export default function BurmeseConsonantGameApp({ entryRequest, onExit, hideOwnO
         <div className="fixed top-16 left-1/2 -translate-x-1/2 z-[10040] bg-purple-600 text-white font-extrabold text-sm sm:text-base rounded-full px-4 py-2 shadow-xl pointer-events-none">🎮 The spider climbed {BCG_GAME_EVERY} steps! A game is ready!</div>
       )}
       {gamesReady > 0 && !playingGame && studentName && (
-        <button onClick={() => setPlayingGame(true)} className="fixed left-3 bottom-20 z-[10040] bg-purple-600 hover:bg-purple-700 text-white font-extrabold rounded-full shadow-xl px-4 py-3 flex items-center gap-2 animate-bounce" aria-label="Play a game">🎮 Play a game{gamesReady > 1 ? ` (${gamesReady})` : ''}</button>
+        <button onClick={() => setPlayingGame(true)} className="fixed left-3 bottom-20 z-[10040] bg-purple-600 hover:bg-purple-700 text-white font-extrabold rounded-full shadow-xl px-4 py-3 flex items-center gap-2 animate-bounce" aria-label="Play a game">🎮 Play: {quizBreakNameAt(readGameStore().idx)}{gamesReady > 1 ? ` (${gamesReady})` : ''}</button>
       )}
       {playingGame && (() => {
         const Game = QUIZ_BREAK_GAMES[readGameStore().idx % QUIZ_BREAK_GAMES.length];

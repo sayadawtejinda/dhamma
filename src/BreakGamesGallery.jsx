@@ -1,16 +1,9 @@
 import React, { useState } from 'react';
-import { QUIZ_BREAK_GAMES, BIRD_COIN_CAP } from './quizBreakGames';
+import { QUIZ_BREAK_GAMES, QUIZ_BREAK_GAME_NAMES as NAMES, BIRD_COIN_CAP } from './quizBreakGames';
 
 // Teacher page: every short coin game the students meet between the two halves of a Smart Study quiz (and in the other apps),
 // one button each, so the teacher can open and try any of them. Nothing here is saved and no coins are paid.
 // The names are in the same order as QUIZ_BREAK_GAMES in quizBreakGames.jsx: when a game is added there, add its name here.
-const NAMES = [
-  '🐦 Bird rescue', '🌸 Flower offering', '♻️ Litter picking', '🏹 Animal rescue', '🪓 Woodcutter and the axe', '🐜 Ant gathering',
-  '💧 Water for the animals', '🤝 Help friends', '🙏 Pay respect', '🎁 Ten gifts', '👜 Return lost things', '🏠 Help parents',
-  '🍚 Alms round', '🦆 Golden egg duck', '🦩 Cunning heron', '🐘 Share the water', '🎓 School of skills', '⚖️ Ten deeds',
-  '✨ Ten merits', '🐅 Tiger in the trap', '📜 Finish the proverb', '🐕 Brave puppy', '🧹 Clean the house', '🛕 Clean the pagoda',
-  '🛒 Market for parents', '🐇 Wake the hare', '🩺 Animal first aid', '🌳 Poke tree and baby banyan', '🐒 Monkey and the beans', '🕷️ King and the spider', '🦅 Eagles and good friends', '🐢 Tortoise and two swans',
-];
 
 export default function BreakGamesGallery({ onClose, standalone = false }) {
   const [playing, setPlaying] = useState(null);

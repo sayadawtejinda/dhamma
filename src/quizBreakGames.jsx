@@ -4135,6 +4135,16 @@ export const TortoiseSwansGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
 
 
 export const QUIZ_BREAK_GAMES = [BirdRescueGame, FlowerOfferingGame, LitterPickingGame, AnimalRescueGame, WoodcutterAxeGame, AntGatheringGame, WaterAnimalsGame, HelpFriendsGame, PayRespectGame, TenGiftsGame, ReturnLostItemsGame, HelpParentsGame, AlmsRoundGame, GoldenEggDuckGame, CunningHeronGame, ShareWaterGame, SchoolOfSkillsGame, TenDeedsGame, TenMeritGame, TigerInTrapGame, FinishProverbGame, BravePuppyGame, CleanHouseGame, CleanPagodaGame, MarketForParentsGame, WakeTheHareGame, AnimalFirstAidGame, BanyanSaveTreeGame, MonkeyBeansGame, SpiderClimbGame, EagleFriendsGame, TortoiseSwansGame];
+// The names of the games, in the same order as QUIZ_BREAK_GAMES above (add a name here whenever a game is added).
+export const QUIZ_BREAK_GAME_NAMES = [
+  '🐦 Bird rescue', '🌸 Flower offering', '♻️ Litter picking', '🏹 Animal rescue', '🪓 Woodcutter and the axe', '🐜 Ant gathering',
+  '💧 Water for the animals', '🤝 Help friends', '🙏 Pay respect', '🎁 Ten gifts', '👜 Return lost things', '🏠 Help parents',
+  '🍚 Alms round', '🦆 Golden egg duck', '🦩 Cunning heron', '🐘 Share the water', '🎓 School of skills', '⚖️ Ten deeds',
+  '✨ Ten merits', '🐅 Tiger in the trap', '📜 Finish the proverb', '🐕 Brave puppy', '🧹 Clean the house', '🛕 Clean the pagoda',
+  '🛒 Market for parents', '🐇 Wake the hare', '🩺 Animal first aid', '🌳 Poke tree and baby banyan', '🐒 Monkey and the beans', '🕷️ King and the spider', '🦅 Eagles and good friends', '🐢 Tortoise and two swans',
+];
+export const quizBreakNameAt = (i) => (QUIZ_BREAK_GAME_NAMES[i % QUIZ_BREAK_GAMES.length] || 'Game'); // with its emoji, e.g. '🍚 Alms round'
+export const quizBreakNameFor = (lessonId) => quizBreakNameAt(hashOf(lessonId) % QUIZ_BREAK_GAMES.length);
 const hashOf = (s) => { let h = 0; String(s ?? '').split('').forEach(ch => { h = (h * 31 + ch.charCodeAt(0)) >>> 0; }); return h; };
 export const quizBreakGameFor = (lessonId) => QUIZ_BREAK_GAMES[hashOf(lessonId) % QUIZ_BREAK_GAMES.length];
 export const QuizBreakGame = ({ lessonId, ...rest }) => {
