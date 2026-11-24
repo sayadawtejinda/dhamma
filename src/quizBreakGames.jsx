@@ -1127,9 +1127,9 @@ const RESPECT_WHO = [
   { icon: '🧘', name: 'Buddha', bless: 'May you be free from suffering!', holy: true },
   { icon: '☸️', name: 'Dhamma', bless: 'May you walk the path of peace!', holy: true },
   { icon: '🪷', name: 'Sangha', bless: 'May you be peaceful and happy!', holy: true },
-  { icon: '🧘', name: 'Paccekabuddha', bless: 'May you be free from suffering!', holy: true },
-  { icon: '🧘', name: 'Great Disciples', bless: DISCIPLE_BLESS, monk: true },
-  { icon: '🧘', name: 'Arahants', bless: DISCIPLE_BLESS, monk: true },
+  { icon: '🧘', name: 'Paccekabuddha', bless: 'May you be free from suffering!', holy: true, monkSvg: true },
+  { icon: '🧘', name: 'Great Disciples', bless: DISCIPLE_BLESS, monk: true, monkSvg: true },
+  { icon: '🧘', name: 'Arahants', bless: DISCIPLE_BLESS, monk: true, monkSvg: true },
   { icon: '🧓', name: 'Elder', bless: 'May you be healthy and happy!' },
   { icon: '📖', name: 'Dhamma Teacher', bless: 'May you walk the path of peace!' },
   { icon: '🎁', name: 'Benefactor', bless: 'May goodness come back to you!' },
@@ -1146,13 +1146,17 @@ const respectSpots = () => {
   }
   return out;
 };
+// the picture of a person: a monk holding an alms bowl for the Paccekabuddha and the Arahants, else an emoji
+const RespectIcon = ({ who }) => who.monkSvg
+  ? <span className="flex justify-center" style={{ height: RESPECT_SIZE }}><MonkSvg size={`calc(${RESPECT_SIZE} * 0.68)`} /></span>
+  : <span className="block select-none" style={{ fontSize: RESPECT_SIZE, lineHeight: 1 }}>{who.icon}</span>;
 const RespectLabel = ({ it }) => (
   <span className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap font-bold text-xs rounded-full px-2 py-0.5 shadow" style={{ top: '100%', background: it.who.holy ? '#fef3c7' : it.who.monk ? '#fed7aa' : '#ffffff', color: '#78350f' }}>{it.who.name}</span>
 );
 // Someone who was just honoured: they bow back with joined hands and bless the child.
 const HonouredPerson = ({ it, won }) => (
   <div className="absolute pointer-events-none" style={{ zIndex: 6, left: `${it.x}%`, top: `${it.y}%`, transform: 'translate(-50%,-50%)' }}>
-    <span className="block select-none" style={{ fontSize: RESPECT_SIZE, lineHeight: 1, animation: 'respectBow 1.4s ease-in-out both' }}>{it.who.icon}</span>
+    <div style={{ animation: 'respectBow 1.4s ease-in-out both' }}><RespectIcon who={it.who} /></div>
     <RespectLabel it={it} />
     <div className="absolute left-1/2 -translate-x-1/2 select-none" style={{ top: `calc(${RESPECT_SIZE} * -0.6)`, fontSize: 'clamp(28px, 5.5vmin, 48px)', animation: 'respectHands 1.2s ease-out forwards' }}>🙏</div>
     <div className="absolute left-1/2 -translate-x-1/2 text-center whitespace-nowrap" style={{ top: `calc(${RESPECT_SIZE} / -2 - 3.4rem)`, animation: 'respectBless 2.2s ease-out forwards' }}>
@@ -1218,7 +1222,7 @@ export const PayRespectGame = ({ onDone, coinsLeft = BIRD_COIN_CAP }) => {
         if (st === 'honoured') return <HonouredPerson key={it.id} it={it} won={won[i]} />;
         return (
           <button key={it.id} onClick={() => payRespect(it.id)} aria-label={`Pay respect to ${it.who.name}`} className="absolute" style={{ left: `${it.x}%`, top: `${it.y}%`, width: RESPECT_SIZE, height: RESPECT_SIZE, transform: 'translate(-50%,-50%)', animation: 'respectPop .35s ease-out', zIndex: 5 }}>
-            <span className="block select-none" style={{ fontSize: RESPECT_SIZE, lineHeight: 1 }}>{it.who.icon}</span>
+            <RespectIcon who={it.who} />
             <RespectLabel it={it} />
           </button>
         );
